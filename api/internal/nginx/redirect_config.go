@@ -26,7 +26,7 @@ server {
 
     # ACME HTTP-01 Challenge support
     location /.well-known/acme-challenge/ {
-        root /var/www/acme-challenge;
+        root /etc/nginx/acme-challenge;
         try_files $uri =404;
     }
 
