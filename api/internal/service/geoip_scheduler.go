@@ -16,14 +16,15 @@ import (
 
 // GeoIPScheduler handles automatic GeoIP database updates
 type GeoIPScheduler struct {
-	settingsRepo *repository.SystemSettingsRepository
-	historyRepo  *repository.GeoIPHistoryRepository
-	geoipService *GeoIPService
-	stopCh       chan struct{}
-	wg           sync.WaitGroup
-	mu           sync.Mutex
-	running      bool
-	checkInterval time.Duration
+	settingsRepo         *repository.SystemSettingsRepository
+	historyRepo          *repository.GeoIPHistoryRepository
+	geoipService         *GeoIPService
+	cloudProviderService *CloudProviderService
+	stopCh               chan struct{}
+	wg                   sync.WaitGroup
+	mu                   sync.Mutex
+	running              bool
+	checkInterval        time.Duration
 }
 
 // NewGeoIPScheduler creates a new GeoIP scheduler
@@ -69,6 +70,11 @@ func (s *GeoIPScheduler) Stop() {
 
 	s.wg.Wait()
 	log.Println("[GeoIP Scheduler] Stopped")
+}
+
+// SetCloudProviderService sets the cloud provider service for seeding
+func (s *GeoIPScheduler) SetCloudProviderService(svc *CloudProviderService) {
+	s.cloudProviderService = svc
 }
 
 func (s *GeoIPScheduler) run() {
@@ -170,6 +176,13 @@ func (s *GeoIPScheduler) RunUpdate(ctx context.Context, triggerType model.GeoIPT
 	// Reload GeoIP databases in memory
 	if s.geoipService != nil {
 		s.geoipService.LoadDatabases()
+	}
+
+	// Seed cloud providers when GeoIP is successfully updated
+	if s.cloudProviderService != nil {
+		if err := s.cloudProviderService.SeedDefaultProviders(ctx); err != nil {
+			log.Printf("[GeoIP Scheduler] Failed to seed cloud providers: %v", err)
+		}
 	}
 
 	log.Println("[GeoIP Scheduler] Update completed successfully")

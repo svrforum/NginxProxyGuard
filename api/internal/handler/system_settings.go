@@ -29,12 +29,13 @@ const (
 )
 
 type SystemSettingsHandler struct {
-	repo               *repository.SystemSettingsRepository
-	historyRepo        *repository.GeoIPHistoryRepository
-	nginxManager       *nginx.Manager
-	audit              *service.AuditService
-	dockerLogCollector *service.DockerLogCollector
-	geoipScheduler     *service.GeoIPScheduler
+	repo                 *repository.SystemSettingsRepository
+	historyRepo          *repository.GeoIPHistoryRepository
+	nginxManager         *nginx.Manager
+	audit                *service.AuditService
+	dockerLogCollector   *service.DockerLogCollector
+	geoipScheduler       *service.GeoIPScheduler
+	cloudProviderService *service.CloudProviderService
 }
 
 func NewSystemSettingsHandler(
@@ -44,14 +45,16 @@ func NewSystemSettingsHandler(
 	audit *service.AuditService,
 	dockerLogCollector *service.DockerLogCollector,
 	geoipScheduler *service.GeoIPScheduler,
+	cloudProviderService *service.CloudProviderService,
 ) *SystemSettingsHandler {
 	h := &SystemSettingsHandler{
-		repo:               repo,
-		historyRepo:        historyRepo,
-		nginxManager:       nginxManager,
-		audit:              audit,
-		dockerLogCollector: dockerLogCollector,
-		geoipScheduler:     geoipScheduler,
+		repo:                 repo,
+		historyRepo:          historyRepo,
+		nginxManager:         nginxManager,
+		audit:                audit,
+		dockerLogCollector:   dockerLogCollector,
+		geoipScheduler:       geoipScheduler,
+		cloudProviderService: cloudProviderService,
 	}
 
 	// Initialize raw log settings on startup
@@ -357,8 +360,10 @@ func (h *SystemSettingsHandler) UpdateGeoIPDatabases(c echo.Context) error {
 	}
 
 	// Run GeoIP update in background using scheduler
+	// Cloud provider seeding is now handled by the scheduler's RunUpdate
 	go func() {
 		bgCtx := context.Background()
+
 		if h.geoipScheduler != nil {
 			h.geoipScheduler.RunUpdate(bgCtx, model.GeoIPTriggerManual, licenseKey, accountID)
 		} else {
@@ -369,6 +374,13 @@ func (h *SystemSettingsHandler) UpdateGeoIPDatabases(c echo.Context) error {
 				h.repo.UpdateGeoIPStatus(bgCtx, time.Now(), "GeoLite2")
 				if h.nginxManager != nil {
 					h.nginxManager.ReloadNginx(bgCtx)
+				}
+			}
+
+			// Seed cloud providers in fallback path
+			if h.cloudProviderService != nil {
+				if err := h.cloudProviderService.SeedDefaultProviders(bgCtx); err != nil {
+					log.Printf("[GeoIP] Failed to seed cloud providers: %v", err)
 				}
 			}
 		}

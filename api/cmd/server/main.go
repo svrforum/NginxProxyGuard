@@ -198,12 +198,23 @@ func main() {
 	geoIPService := service.NewGeoIPServiceWithCache(redisCache)
 	defer geoIPService.Close()
 
+	// Initialize Cloud Provider service for auto-seeding and IP range updates
+	cloudProviderService := service.NewCloudProviderService(cloudProviderRepo)
+	// Set up callback to regenerate nginx configs when cloud provider IP ranges are updated
+	cloudProviderService.SetIPRangesUpdatedCallback(func(ctx context.Context, updatedProviders []string) error {
+		log.Printf("[CloudProvider] IP ranges updated for %v, regenerating affected nginx configs", updatedProviders)
+		return proxyHostService.RegenerateConfigsForCloudProviders(ctx, updatedProviders)
+	})
+	cloudProviderService.Start()
+	defer cloudProviderService.Stop()
+
 	// Initialize GeoIP scheduler for automatic updates
 	geoIPScheduler := service.NewGeoIPScheduler(systemSettingsRepo, geoIPHistoryRepo, geoIPService)
+	geoIPScheduler.SetCloudProviderService(cloudProviderService) // Wire for seeding on GeoIP update
 	geoIPScheduler.Start()
 	defer geoIPScheduler.Stop()
 
-	systemSettingsHandler := handler.NewSystemSettingsHandler(systemSettingsRepo, geoIPHistoryRepo, nginxManager, auditService, dockerLogCollector, geoIPScheduler)
+	systemSettingsHandler := handler.NewSystemSettingsHandler(systemSettingsRepo, geoIPHistoryRepo, nginxManager, auditService, dockerLogCollector, geoIPScheduler, cloudProviderService)
 	apiTokenHandler := handler.NewAPITokenHandler(apiTokenRepo, auditLogRepo)
 	auditLogHandler := handler.NewAuditLogHandler(auditLogRepo, apiTokenRepo)
 	challengeHandler := handler.NewChallengeHandler(challengeService, auditService)

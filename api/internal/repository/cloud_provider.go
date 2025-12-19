@@ -270,6 +270,17 @@ func (r *CloudProviderRepository) UpdateIPRanges(ctx context.Context, slug strin
 	return err
 }
 
+// UpdateIPRangesURL updates the IP ranges URL for a cloud provider
+func (r *CloudProviderRepository) UpdateIPRangesURL(ctx context.Context, slug, url string) error {
+	query := `
+		UPDATE cloud_providers
+		SET ip_ranges_url = $1, updated_at = NOW()
+		WHERE slug = $2`
+
+	_, err := r.db.ExecContext(ctx, query, url, slug)
+	return err
+}
+
 // CloudProviderBlockingSettings holds blocked providers and challenge mode setting
 type CloudProviderBlockingSettings struct {
 	BlockedProviders []string `json:"blocked_providers"`
@@ -410,4 +421,98 @@ func (r *CloudProviderRepository) GetCloudProviderChallengeMode(ctx context.Cont
 	}
 
 	return challengeMode, nil
+}
+
+// GetProxyHostIDsWithCloudProviderBlocking returns IDs of all proxy hosts with cloud provider blocking enabled
+// If providerSlugs is provided, only returns hosts blocking any of those providers
+// If providerSlugs is nil or empty, returns all hosts with any cloud provider blocking
+func (r *CloudProviderRepository) GetProxyHostIDsWithCloudProviderBlocking(ctx context.Context, providerSlugs []string) ([]string, error) {
+	var query string
+	var args []interface{}
+
+	if len(providerSlugs) == 0 {
+		// Get all hosts with any cloud provider blocking
+		query = `
+			SELECT proxy_host_id
+			FROM geo_restrictions
+			WHERE blocked_cloud_providers IS NOT NULL
+			  AND array_length(blocked_cloud_providers, 1) > 0`
+	} else {
+		// Get hosts blocking any of the specified providers
+		query = `
+			SELECT proxy_host_id
+			FROM geo_restrictions
+			WHERE blocked_cloud_providers IS NOT NULL
+			  AND blocked_cloud_providers && $1`
+		args = append(args, pq.Array(providerSlugs))
+	}
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get proxy hosts with cloud provider blocking: %w", err)
+	}
+	defer rows.Close()
+
+	var hostIDs []string
+	for rows.Next() {
+		var hostID string
+		if err := rows.Scan(&hostID); err != nil {
+			return nil, fmt.Errorf("failed to scan proxy host ID: %w", err)
+		}
+		hostIDs = append(hostIDs, hostID)
+	}
+
+	return hostIDs, nil
+}
+
+// ExistsBySlug checks if a cloud provider with the given slug exists
+func (r *CloudProviderRepository) ExistsBySlug(ctx context.Context, slug string) (bool, error) {
+	query := `SELECT EXISTS(SELECT 1 FROM cloud_providers WHERE slug = $1)`
+	var exists bool
+	err := r.db.QueryRowContext(ctx, query, slug).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("failed to check cloud provider existence: %w", err)
+	}
+	return exists, nil
+}
+
+// CreateCloudProviderRequest for internal use (without strict validation)
+type CreateCloudProviderRequest struct {
+	Name        string
+	Slug        string
+	Region      string
+	Description string
+	IPRanges    []string
+	IPRangesURL string
+}
+
+// CreateInternal creates a cloud provider (for internal use, allows empty IP ranges)
+func (r *CloudProviderRepository) CreateInternal(ctx context.Context, req *CreateCloudProviderRequest) (*model.CloudProvider, error) {
+	query := `
+		INSERT INTO cloud_providers (name, slug, region, description, ip_ranges, ip_ranges_url)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id, name, slug, region, description, ip_ranges, ip_ranges_url, last_updated, enabled, created_at, updated_at`
+
+	var p model.CloudProvider
+	var lastUpdated sql.NullTime
+	var desc, url sql.NullString
+
+	err := r.db.QueryRowContext(ctx, query,
+		req.Name, req.Slug, req.Region, req.Description, pq.Array(req.IPRanges), req.IPRangesURL,
+	).Scan(
+		&p.ID, &p.Name, &p.Slug, &p.Region, &desc,
+		pq.Array(&p.IPRanges), &url, &lastUpdated,
+		&p.Enabled, &p.CreatedAt, &p.UpdatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cloud provider: %w", err)
+	}
+
+	p.Description = desc.String
+	p.IPRangesURL = url.String
+	if lastUpdated.Valid {
+		p.LastUpdated = &lastUpdated.Time
+	}
+
+	return &p, nil
 }

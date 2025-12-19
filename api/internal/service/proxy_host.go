@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 
@@ -770,6 +771,64 @@ func (s *ProxyHostService) SyncAllConfigs(ctx context.Context) error {
 		return fmt.Errorf("failed to reload nginx: %w", err)
 	}
 
+	return nil
+}
+
+// RegenerateConfigsForCloudProviders regenerates nginx configs for proxy hosts
+// that have cloud provider blocking enabled for the specified providers
+// If updatedProviders is nil or empty, regenerates for all hosts with any cloud provider blocking
+func (s *ProxyHostService) RegenerateConfigsForCloudProviders(ctx context.Context, updatedProviders []string) error {
+	// Get proxy host IDs with cloud provider blocking
+	hostIDs, err := s.cloudProviderRepo.GetProxyHostIDsWithCloudProviderBlocking(ctx, updatedProviders)
+	if err != nil {
+		return fmt.Errorf("failed to get proxy hosts with cloud provider blocking: %w", err)
+	}
+
+	if len(hostIDs) == 0 {
+		log.Println("[CloudProvider] No proxy hosts with cloud provider blocking found")
+		return nil // No hosts to update
+	}
+
+	log.Printf("[CloudProvider] Regenerating configs for %d proxy hosts", len(hostIDs))
+
+	// Regenerate configs for all affected hosts
+	for _, hostID := range hostIDs {
+		host, err := s.repo.GetByID(ctx, hostID)
+		if err != nil {
+			log.Printf("[CloudProvider] Error getting proxy host %s: %v", hostID, err)
+			continue
+		}
+		if host == nil || !host.Enabled {
+			continue
+		}
+
+		configData := s.getHostConfigData(ctx, host)
+		if err := s.nginx.GenerateConfigFull(ctx, configData); err != nil {
+			return fmt.Errorf("failed to generate config for host %s: %w", hostID, err)
+		}
+
+		// Generate WAF config if WAF is enabled (includes global + host exclusions)
+		if host.WAFEnabled {
+			mergedExclusions, err := s.getMergedWAFExclusions(ctx, hostID)
+			if err != nil {
+				return fmt.Errorf("failed to get WAF exclusions for host %s: %w", hostID, err)
+			}
+			if err := s.nginx.GenerateHostWAFConfig(ctx, host, mergedExclusions); err != nil {
+				return fmt.Errorf("failed to generate WAF config for host %s: %w", hostID, err)
+			}
+		}
+	}
+
+	// Test and reload nginx
+	if err := s.nginx.TestConfig(ctx); err != nil {
+		return fmt.Errorf("nginx config test failed: %w", err)
+	}
+
+	if err := s.nginx.ReloadNginx(ctx); err != nil {
+		return fmt.Errorf("failed to reload nginx: %w", err)
+	}
+
+	log.Printf("[CloudProvider] Nginx configs regenerated and reloaded for %d hosts", len(hostIDs))
 	return nil
 }
 
