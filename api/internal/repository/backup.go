@@ -131,7 +131,7 @@ func (r *BackupRepository) List(ctx context.Context, page, perPage int) (*model.
 func (r *BackupRepository) UpdateStatus(ctx context.Context, id, status, errorMsg string) error {
 	query := `
 		UPDATE backups
-		SET status = $2, error_message = $3, updated_at = NOW()
+		SET status = $2, error_message = $3
 		WHERE id = $1
 	`
 	_, err := r.db.ExecContext(ctx, query, id, status, errorMsg)
