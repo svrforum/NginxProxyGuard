@@ -678,16 +678,16 @@ func (r *BackupRepository) importCloudProvider(ctx context.Context, tx *sql.Tx, 
 }
 
 func (r *BackupRepository) importExploitBlockRule(ctx context.Context, tx *sql.Tx, rule *model.ExploitBlockRuleExport) error {
-	// Skip builtin rules - they're already in the database
+	// Skip system rules - they're already in the database
 	if rule.IsBuiltin {
-		// Just update enabled status for builtin rules
-		query := `UPDATE exploit_block_rules SET enabled = $1, updated_at = NOW() WHERE id = $2 AND is_builtin = true`
+		// Just update enabled status for system rules
+		query := `UPDATE exploit_block_rules SET enabled = $1, updated_at = NOW() WHERE id = $2 AND is_system = true`
 		_, _ = tx.ExecContext(ctx, query, rule.Enabled, rule.ID)
 		return nil
 	}
 
 	query := `
-		INSERT INTO exploit_block_rules (name, category, pattern, pattern_type, description, severity, enabled, is_builtin)
+		INSERT INTO exploit_block_rules (name, category, pattern, pattern_type, description, severity, enabled, is_system)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, false)
 		ON CONFLICT (name, category) DO UPDATE SET
 			pattern = EXCLUDED.pattern,

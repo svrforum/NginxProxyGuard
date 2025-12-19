@@ -32,6 +32,8 @@ export default function BackupManager() {
   const queryClient = useQueryClient();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showProgressModal, setShowProgressModal] = useState(false);
+  const [currentBackupId, setCurrentBackupId] = useState<string | null>(null);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [newBackup, setNewBackup] = useState<CreateBackupRequest>({

@@ -824,7 +824,7 @@ func (r *BackupRepository) exportCloudProviders(ctx context.Context) ([]model.Cl
 
 func (r *BackupRepository) exportExploitBlockRules(ctx context.Context) ([]model.ExploitBlockRuleExport, error) {
 	query := `
-		SELECT id, name, category, pattern, pattern_type, description, severity, enabled, is_builtin
+		SELECT id, name, category, pattern, pattern_type, description, severity, enabled, is_system
 		FROM exploit_block_rules ORDER BY category, name
 	`
 
