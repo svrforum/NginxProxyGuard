@@ -9,7 +9,7 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 -- ENUM Types (wrapped in DO blocks to handle existing types)
 DO $$ BEGIN
     CREATE TYPE public.block_reason AS ENUM (
-        'none', 'waf', 'bot_filter', 'rate_limit', 'geo_block', 'exploit_block', 'banned_ip', 'uri_block', 'cloud_provider_challenge'
+        'none', 'waf', 'bot_filter', 'rate_limit', 'geo_block', 'exploit_block', 'banned_ip', 'uri_block', 'cloud_provider_challenge', 'cloud_provider_block'
     );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
@@ -2034,6 +2034,7 @@ ON CONFLICT (id) DO NOTHING;
 
 -- Enum upgrades
 ALTER TYPE public.block_reason ADD VALUE IF NOT EXISTS 'cloud_provider_challenge';
+ALTER TYPE public.block_reason ADD VALUE IF NOT EXISTS 'cloud_provider_block';
 
 -- proxy_hosts table upgrades
 ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS cache_static_only boolean DEFAULT true NOT NULL;
