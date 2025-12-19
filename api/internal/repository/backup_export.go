@@ -130,6 +130,13 @@ func (r *BackupRepository) ExportAllData(ctx context.Context) (*model.ExportData
 	}
 	export.HostExploitExclusions = hostExploitExclusions
 
+	// Export Global Challenge Config (CAPTCHA)
+	globalChallengeConfig, err := r.exportGlobalChallengeConfig(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to export global challenge config: %w", err)
+	}
+	export.GlobalChallengeConfig = globalChallengeConfig
+
 	return export, nil
 }
 
@@ -592,6 +599,8 @@ func (r *BackupRepository) exportWAFExclusions(ctx context.Context) ([]model.WAF
 func (r *BackupRepository) exportSystemSettings(ctx context.Context) (*model.SystemSettingsExport, error) {
 	query := `
 		SELECT geoip_enabled, geoip_auto_update, geoip_update_interval,
+		       COALESCE(maxmind_account_id, '') as maxmind_account_id,
+		       COALESCE(maxmind_license_key, '') as maxmind_license_key,
 		       acme_enabled, acme_email, acme_staging, acme_auto_renew, acme_renew_days_before,
 		       notification_email, notify_cert_expiry, notify_cert_expiry_days,
 		       notify_security_events, notify_backup_complete,
@@ -614,11 +623,13 @@ func (r *BackupRepository) exportSystemSettings(ctx context.Context) (*model.Sys
 	var ss model.SystemSettingsExport
 	var acmeEmail, notificationEmail sql.NullString
 	var geoipUpdateInterval, autoBackupSchedule, directIPAccessAction sql.NullString
+	var maxmindAccountID, maxmindLicenseKey sql.NullString
 	var botFilterDefaultCustomBlockedAgents sql.NullString
 	var botListBadBots, botListAIBots, botListSearchEngines, botListSuspiciousClients sql.NullString
 
 	err := r.db.QueryRowContext(ctx, query).Scan(
 		&ss.GeoIPEnabled, &ss.GeoIPAutoUpdate, &geoipUpdateInterval,
+		&maxmindAccountID, &maxmindLicenseKey,
 		&ss.ACMEEnabled, &acmeEmail, &ss.ACMEStaging, &ss.ACMEAutoRenew, &ss.ACMERenewDaysBefore,
 		&notificationEmail, &ss.NotifyCertExpiry, &ss.NotifyCertExpiryDays,
 		&ss.NotifySecurityEvents, &ss.NotifyBackupComplete,
@@ -644,6 +655,8 @@ func (r *BackupRepository) exportSystemSettings(ctx context.Context) (*model.Sys
 	}
 
 	ss.GeoIPUpdateInterval = geoipUpdateInterval.String
+	ss.MaxmindAccountID = maxmindAccountID.String
+	ss.MaxmindLicenseKey = maxmindLicenseKey.String
 	ss.ACMEEmail = acmeEmail.String
 	ss.NotificationEmail = notificationEmail.String
 	ss.AutoBackupSchedule = autoBackupSchedule.String
@@ -942,4 +955,27 @@ func (r *BackupRepository) exportHostExploitExclusions(ctx context.Context) ([]m
 	}
 
 	return exports, nil
+}
+
+func (r *BackupRepository) exportGlobalChallengeConfig(ctx context.Context) (*model.ChallengeConfigExport, error) {
+	query := `
+		SELECT enabled, challenge_type, site_key, secret_key, token_validity,
+		       min_score, apply_to, page_title, page_message, theme
+		FROM challenge_configs WHERE proxy_host_id IS NULL
+	`
+	var cc model.ChallengeConfigExport
+	var siteKey, secretKey sql.NullString
+	err := r.db.QueryRowContext(ctx, query).Scan(
+		&cc.Enabled, &cc.ChallengeType, &siteKey, &secretKey, &cc.TokenValidity,
+		&cc.MinScore, &cc.ApplyTo, &cc.PageTitle, &cc.PageMessage, &cc.Theme,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	cc.SiteKey = siteKey.String
+	cc.SecretKey = secretKey.String
+	return &cc, nil
 }

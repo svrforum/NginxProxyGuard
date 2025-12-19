@@ -192,6 +192,13 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 		}
 	}
 
+	// Import Global Challenge Config (CAPTCHA)
+	if data.GlobalChallengeConfig != nil {
+		if err := r.importGlobalChallengeConfig(ctx, tx, data.GlobalChallengeConfig); err != nil {
+			return fmt.Errorf("failed to import global challenge config: %w", err)
+		}
+	}
+
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
@@ -547,27 +554,29 @@ func (r *BackupRepository) importSystemSettings(ctx context.Context, tx *sql.Tx,
 	query := `
 		UPDATE system_settings SET
 			geoip_enabled = $1, geoip_auto_update = $2, geoip_update_interval = $3,
-			acme_enabled = $4, acme_email = $5, acme_staging = $6, acme_auto_renew = $7, acme_renew_days_before = $8,
-			notification_email = $9, notify_cert_expiry = $10, notify_cert_expiry_days = $11,
-			notify_security_events = $12, notify_backup_complete = $13,
-			log_retention_days = $14, stats_retention_days = $15, backup_retention_count = $16,
-			auto_backup_enabled = $17, auto_backup_schedule = $18,
-			access_log_retention_days = $19, waf_log_retention_days = $20, error_log_retention_days = $21,
-			system_log_retention_days = $22, audit_log_retention_days = $23,
-			raw_log_enabled = $24, raw_log_retention_days = $25, raw_log_max_size_mb = $26,
-			raw_log_rotate_count = $27, raw_log_compress_rotated = $28,
-			bot_filter_default_enabled = $29, bot_filter_default_block_bad_bots = $30,
-			bot_filter_default_block_ai_bots = $31, bot_filter_default_allow_search_engines = $32,
-			bot_filter_default_block_suspicious_clients = $33, bot_filter_default_challenge_suspicious = $34,
-			bot_filter_default_custom_blocked_agents = $35,
-			bot_list_bad_bots = $36, bot_list_ai_bots = $37, bot_list_search_engines = $38, bot_list_suspicious_clients = $39,
-			waf_auto_ban_enabled = $40, waf_auto_ban_threshold = $41, waf_auto_ban_window = $42, waf_auto_ban_duration = $43,
-			direct_ip_access_action = $44, system_logs_enabled = $45,
+			maxmind_account_id = $4, maxmind_license_key = $5,
+			acme_enabled = $6, acme_email = $7, acme_staging = $8, acme_auto_renew = $9, acme_renew_days_before = $10,
+			notification_email = $11, notify_cert_expiry = $12, notify_cert_expiry_days = $13,
+			notify_security_events = $14, notify_backup_complete = $15,
+			log_retention_days = $16, stats_retention_days = $17, backup_retention_count = $18,
+			auto_backup_enabled = $19, auto_backup_schedule = $20,
+			access_log_retention_days = $21, waf_log_retention_days = $22, error_log_retention_days = $23,
+			system_log_retention_days = $24, audit_log_retention_days = $25,
+			raw_log_enabled = $26, raw_log_retention_days = $27, raw_log_max_size_mb = $28,
+			raw_log_rotate_count = $29, raw_log_compress_rotated = $30,
+			bot_filter_default_enabled = $31, bot_filter_default_block_bad_bots = $32,
+			bot_filter_default_block_ai_bots = $33, bot_filter_default_allow_search_engines = $34,
+			bot_filter_default_block_suspicious_clients = $35, bot_filter_default_challenge_suspicious = $36,
+			bot_filter_default_custom_blocked_agents = $37,
+			bot_list_bad_bots = $38, bot_list_ai_bots = $39, bot_list_search_engines = $40, bot_list_suspicious_clients = $41,
+			waf_auto_ban_enabled = $42, waf_auto_ban_threshold = $43, waf_auto_ban_window = $44, waf_auto_ban_duration = $45,
+			direct_ip_access_action = $46, system_logs_enabled = $47,
 			updated_at = NOW()
 	`
 
 	_, err := tx.ExecContext(ctx, query,
 		ss.GeoIPEnabled, ss.GeoIPAutoUpdate, ss.GeoIPUpdateInterval,
+		ss.MaxmindAccountID, ss.MaxmindLicenseKey,
 		ss.ACMEEnabled, ss.ACMEEmail, ss.ACMEStaging, ss.ACMEAutoRenew, ss.ACMERenewDaysBefore,
 		ss.NotificationEmail, ss.NotifyCertExpiry, ss.NotifyCertExpiryDays,
 		ss.NotifySecurityEvents, ss.NotifyBackupComplete,
@@ -729,5 +738,19 @@ func (r *BackupRepository) importHostExploitExclusion(ctx context.Context, tx *s
 		ON CONFLICT (proxy_host_id, rule_id) DO NOTHING
 	`
 	_, err := tx.ExecContext(ctx, query, he.ProxyHostID, he.RuleID, he.Reason, he.DisabledBy)
+	return err
+}
+
+func (r *BackupRepository) importGlobalChallengeConfig(ctx context.Context, tx *sql.Tx, cc *model.ChallengeConfigExport) error {
+	query := `
+		INSERT INTO challenge_configs (
+			proxy_host_id, enabled, challenge_type, site_key, secret_key,
+			token_validity, min_score, apply_to, page_title, page_message, theme
+		) VALUES (NULL, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+	`
+	_, err := tx.ExecContext(ctx, query,
+		cc.Enabled, cc.ChallengeType, cc.SiteKey, cc.SecretKey,
+		cc.TokenValidity, cc.MinScore, cc.ApplyTo, cc.PageTitle, cc.PageMessage, cc.Theme,
+	)
 	return err
 }

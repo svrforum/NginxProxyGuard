@@ -613,10 +613,21 @@
     "tabs": {
       "worker": "Worker",
       "http": "HTTP",
+      "performance": "Performance",
       "compression": "Compression",
       "ssl": "SSL/TLS",
       "timeout": "Timeouts",
       "advanced": "Advanced"
+    },
+    "performance": {
+      "buffer": {
+        "title": "프록시 버퍼 설정",
+        "description": "업스트림 서버로부터의 응답을 버퍼링하는 방식을 설정합니다. 적절한 버퍼 크기는 메모리 사용량과 성능 사이의 균형을 맞춥니다."
+      },
+      "openFileCache": {
+        "title": "Open File Cache"
+      },
+      "tips": "Tip: 프록시 버퍼 크기가 너무 작으면 응답이 임시 파일에 기록되어 디스크 I/O가 발생합니다. 대용량 응답이 많은 경우 버퍼 크기를 늘리면 성능이 향상됩니다. Open File Cache는 정적 파일이 많은 경우 파일 디스크립터를 캐시하여 성능을 향상시킵니다."
     },
     "fields": {
       "worker_processes": {
@@ -779,6 +790,62 @@
       "custom_http_config": {
         "label": "커스텀 HTTP 설정",
         "description": "추가 nginx 설정을 직접 입력할 수 있습니다. 고급 사용자용입니다."
+      },
+      "proxy_buffer_size": {
+        "label": "프록시 버퍼 크기",
+        "description": "업스트림 서버 응답의 첫 부분(헤더)을 읽는 버퍼 크기입니다. 기본값: 8k"
+      },
+      "proxy_buffers": {
+        "label": "프록시 버퍼 수와 크기",
+        "description": "응답 버퍼의 개수와 크기입니다. 형식: '개수 크기' (예: 8 32k)"
+      },
+      "proxy_busy_buffers_size": {
+        "label": "Busy 버퍼 크기",
+        "description": "응답이 완전히 읽히지 않은 상태에서 클라이언트로 전송할 수 있는 버퍼 크기입니다."
+      },
+      "proxy_max_temp_file_size": {
+        "label": "최대 임시 파일 크기",
+        "description": "버퍼가 가득 찬 경우 응답을 저장할 임시 파일의 최대 크기입니다. 0으로 설정하면 임시 파일 사용을 비활성화합니다."
+      },
+      "proxy_temp_file_write_size": {
+        "label": "임시 파일 쓰기 크기",
+        "description": "임시 파일에 한 번에 쓸 수 있는 데이터 크기입니다."
+      },
+      "open_file_cache_enabled": {
+        "label": "Open File Cache 활성화",
+        "description": "열린 파일 디스크립터와 디렉토리 조회 결과를 캐시합니다. 정적 파일이 많은 경우 성능이 향상됩니다."
+      },
+      "open_file_cache_max": {
+        "label": "최대 캐시 항목 수",
+        "description": "캐시에 보관할 최대 항목 수입니다."
+      },
+      "open_file_cache_inactive": {
+        "label": "비활성 시간",
+        "description": "이 시간 동안 접근하지 않은 항목은 캐시에서 제거됩니다. (예: 20s, 60s)"
+      },
+      "open_file_cache_valid": {
+        "label": "유효성 검사 주기",
+        "description": "캐시된 항목의 유효성을 확인하는 주기입니다. (예: 30s, 60s)"
+      },
+      "open_file_cache_min_uses": {
+        "label": "최소 사용 횟수",
+        "description": "이 횟수만큼 접근된 파일만 캐시에 유지됩니다."
+      },
+      "open_file_cache_errors": {
+        "label": "오류 캐시",
+        "description": "파일을 찾을 수 없음 등의 오류도 캐시합니다. 존재하지 않는 파일에 대한 반복 요청 시 성능이 향상됩니다."
+      },
+      "reset_timedout_connection": {
+        "label": "타임아웃 연결 리셋",
+        "description": "타임아웃된 연결을 FIN 대신 RST로 종료하여 즉시 소켓을 해제합니다. 서버 리소스 절약에 도움됩니다."
+      },
+      "resolver_timeout": {
+        "label": "DNS 리졸버 타임아웃",
+        "description": "DNS 조회 시 응답을 기다리는 최대 시간입니다. (예: 30s)"
+      },
+      "custom_stream_config": {
+        "label": "커스텀 Stream 설정",
+        "description": "TCP/UDP 프록시를 위한 nginx stream 블록 설정입니다. 고급 사용자용입니다."
       }
     },
     "tips": {
@@ -831,6 +898,12 @@
           "after": "적용 시작 크기",
           "afterPlaceholder": "예: 500k, 1m"
         },
+        "bandwidthLimit": {
+          "title": "대역폭 제한",
+          "description": "클라이언트 다운로드 속도를 제한합니다. 0 = 무제한",
+          "rate": "속도 제한 (bytes/s)",
+          "after": "적용 시작 크기"
+        },
         "connectionReset": {
           "title": "타임아웃 연결 리셋",
           "description": "타임아웃된 연결을 즉시 리셋하여 리소스를 해제합니다."
@@ -840,6 +913,10 @@
           "description": "이 설정은 **모든 호스트에 기본 적용**됩니다. Proxy Host에서 설정하는 Rate Limit은 해당 호스트에만 **추가로 적용**되는 더 세밀한 제어입니다."
         }
       },
+      "nginxConfNote": {
+        "title": "참고: nginx.conf 수준 설정",
+        "description": "아래 설정들(Reset Timedout Connection, Resolver Timeout, Custom Stream Config)은 nginx.conf의 http/stream 블록에 적용되는 설정입니다. 변경 사항을 적용하려면 nginx를 재시작해야 합니다."
+      },
       "errorLogLevels": {
         "debug": "debug - 모든 정보 (개발용)",
         "info": "info - 일반 정보",
@@ -848,7 +925,8 @@
         "error": "error - 오류만",
         "crit": "crit - 심각한 오류만"
       },
-      "customConfigPlaceholder": "# 추가 nginx http 설정을 여기에 입력하세요"
+      "customConfigPlaceholder": "# 추가 nginx http 설정을 여기에 입력하세요",
+      "customStreamConfigPlaceholder": "# 추가 nginx stream 설정을 여기에 입력하세요"
     }
   },
   "apiTokens": {
@@ -1053,11 +1131,26 @@
       "error_log_level": "로그에 기록할 에러의 상세 수준입니다. 디버깅 목적이 아니면 'warn'이나 'error'를 권장합니다.",
       "access_log_enabled": "모든 접속 기록을 남깁니다. 디스크 공간 관리가 필요할 수 있습니다.",
       "custom_http_config": "Nginx http 블록에 추가할 사용자 정의 설정을 입력합니다.",
+      "proxy_buffer_size": "업스트림 서버에서 응답의 첫 부분(헤더)을 읽을 때 사용하는 버퍼 크기입니다.",
+      "proxy_buffers": "응답을 버퍼링하는 데 사용할 버퍼의 수와 크기입니다. 형식: '개수 크기'",
+      "proxy_busy_buffers_size": "아직 완전히 읽지 않은 응답을 클라이언트에 전송할 때 사용할 수 있는 버퍼 크기입니다.",
+      "proxy_max_temp_file_size": "버퍼가 가득 찬 경우 응답을 저장할 임시 파일의 최대 크기입니다. 0으로 설정하면 임시 파일을 사용하지 않습니다.",
+      "proxy_temp_file_write_size": "임시 파일에 한 번에 쓸 수 있는 데이터 크기입니다.",
+      "open_file_cache_enabled": "정적 파일에 대한 파일 디스크립터와 메타데이터를 캐시합니다. 정적 콘텐츠가 많은 사이트에서 성능이 향상됩니다.",
+      "open_file_cache_max": "캐시에 저장할 최대 항목 수입니다.",
+      "open_file_cache_inactive": "이 시간 동안 접근하지 않은 캐시 항목은 제거됩니다.",
+      "open_file_cache_valid": "캐시된 항목의 유효성을 다시 확인하는 주기입니다.",
+      "open_file_cache_min_uses": "비활성 시간 내에 이 횟수 이상 접근된 파일만 캐시에 유지됩니다.",
+      "open_file_cache_errors": "파일을 찾을 수 없음과 같은 오류도 캐시합니다.",
+      "reset_timedout_connection": "타임아웃된 연결을 RST 패킷으로 즉시 종료합니다. 소켓 리소스를 빠르게 해제하여 서버 성능이 향상됩니다.",
+      "resolver_timeout": "DNS 조회 시 응답을 기다리는 최대 시간입니다.",
+      "custom_stream_config": "TCP/UDP 로드 밸런싱을 위한 nginx stream 블록 설정입니다.",
       "ddos": {
         "connectionLimit": "동일 IP에서의 동시 연결 수를 제한하여 서버 자원을 보호합니다.",
         "requestLimit": "동일 IP에서의 초당 요청 수를 제한하여 과도한 요청을 차단합니다.",
         "responseLimit": "클라이언트 다운로드 속도를 제한하여 대역폭 독점을 방지합니다.",
-        "connectionReset": "타임아웃 발생 시 연결을 즉시 강제 종료합니다."
+        "connectionReset": "타임아웃 발생 시 연결을 즉시 강제 종료합니다.",
+        "bandwidthLimit": "클라이언트 다운로드 속도를 제한하여 대역폭을 공정하게 분배합니다."
       }
     },
     "geoip": {

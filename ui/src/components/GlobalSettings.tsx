@@ -9,7 +9,7 @@ import {
 } from '../api/settings';
 import type { GlobalSettings as GlobalSettingsType } from '../types/settings';
 
-type TabType = 'worker' | 'http' | 'compression' | 'ssl' | 'timeout' | 'advanced';
+type TabType = 'worker' | 'http' | 'performance' | 'compression' | 'ssl' | 'timeout' | 'advanced';
 
 export default function GlobalSettings() {
   const { t } = useTranslation('settings');
@@ -87,6 +87,7 @@ export default function GlobalSettings() {
   const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
     { id: 'worker', label: t('global.tabs.worker'), icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" /></svg> },
     { id: 'http', label: t('global.tabs.http'), icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg> },
+    { id: 'performance', label: t('global.tabs.performance'), icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg> },
     { id: 'compression', label: t('global.tabs.compression'), icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" /></svg> },
     { id: 'ssl', label: t('global.tabs.ssl'), icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg> },
     { id: 'timeout', label: t('global.tabs.timeout'), icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> },
@@ -303,6 +304,136 @@ export default function GlobalSettings() {
                   checked={getBoolValue('server_tokens')}
                   onChange={(checked) => handleChange('server_tokens', checked)}
                 />
+              </div>
+            </div>
+          )}
+
+          {/* Performance Settings (Proxy Buffer & File Cache) */}
+          {activeTab === 'performance' && (
+            <div className="space-y-8">
+              {/* Proxy Buffer Section */}
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                  <span className="px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs rounded">Buffer</span>
+                  {t('global.performance.buffer.title')}
+                </h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                  {t('global.performance.buffer.description')}
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <SettingField settingKey="proxy_buffer_size">
+                    <input
+                      type="text"
+                      value={getStringValue('proxy_buffer_size', '8k')}
+                      onChange={(e) => handleChange('proxy_buffer_size', e.target.value)}
+                      className={inputClass}
+                      placeholder="8k"
+                    />
+                  </SettingField>
+                  <SettingField settingKey="proxy_buffers">
+                    <input
+                      type="text"
+                      value={getStringValue('proxy_buffers', '8 32k')}
+                      onChange={(e) => handleChange('proxy_buffers', e.target.value)}
+                      className={inputClass}
+                      placeholder="8 32k"
+                    />
+                  </SettingField>
+                  <SettingField settingKey="proxy_busy_buffers_size">
+                    <input
+                      type="text"
+                      value={getStringValue('proxy_busy_buffers_size', '64k')}
+                      onChange={(e) => handleChange('proxy_busy_buffers_size', e.target.value)}
+                      className={inputClass}
+                      placeholder="64k"
+                    />
+                  </SettingField>
+                  <SettingField settingKey="proxy_max_temp_file_size">
+                    <input
+                      type="text"
+                      value={getStringValue('proxy_max_temp_file_size', '1024m')}
+                      onChange={(e) => handleChange('proxy_max_temp_file_size', e.target.value)}
+                      className={inputClass}
+                      placeholder="1024m"
+                    />
+                  </SettingField>
+                  <SettingField settingKey="proxy_temp_file_write_size">
+                    <input
+                      type="text"
+                      value={getStringValue('proxy_temp_file_write_size', '64k')}
+                      onChange={(e) => handleChange('proxy_temp_file_write_size', e.target.value)}
+                      className={inputClass}
+                      placeholder="64k"
+                    />
+                  </SettingField>
+                </div>
+              </div>
+
+              {/* Open File Cache Section */}
+              <div className="border-t border-slate-200 dark:border-slate-700 pt-6">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                  <span className="px-2 py-1 bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300 text-xs rounded">Cache</span>
+                  {t('global.performance.openFileCache.title')}
+                </h3>
+                <CheckboxField
+                  settingKey="open_file_cache_enabled"
+                  checked={getBoolValue('open_file_cache_enabled')}
+                  onChange={(checked) => handleChange('open_file_cache_enabled', checked)}
+                />
+                {getBoolValue('open_file_cache_enabled') && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                    <SettingField settingKey="open_file_cache_max">
+                      <input
+                        type="number"
+                        value={getNumberValue('open_file_cache_max', 1000)}
+                        onChange={(e) => handleChange('open_file_cache_max', parseInt(e.target.value))}
+                        className={inputClass}
+                        placeholder="1000"
+                      />
+                    </SettingField>
+                    <SettingField settingKey="open_file_cache_inactive">
+                      <input
+                        type="text"
+                        value={getStringValue('open_file_cache_inactive', '20s')}
+                        onChange={(e) => handleChange('open_file_cache_inactive', e.target.value)}
+                        className={inputClass}
+                        placeholder="20s"
+                      />
+                    </SettingField>
+                    <SettingField settingKey="open_file_cache_valid">
+                      <input
+                        type="text"
+                        value={getStringValue('open_file_cache_valid', '30s')}
+                        onChange={(e) => handleChange('open_file_cache_valid', e.target.value)}
+                        className={inputClass}
+                        placeholder="30s"
+                      />
+                    </SettingField>
+                    <SettingField settingKey="open_file_cache_min_uses">
+                      <input
+                        type="number"
+                        value={getNumberValue('open_file_cache_min_uses', 2)}
+                        onChange={(e) => handleChange('open_file_cache_min_uses', parseInt(e.target.value))}
+                        className={inputClass}
+                        placeholder="2"
+                      />
+                    </SettingField>
+                  </div>
+                )}
+                {getBoolValue('open_file_cache_enabled') && (
+                  <div className="mt-4">
+                    <CheckboxField
+                      settingKey="open_file_cache_errors"
+                      checked={getBoolValue('open_file_cache_errors')}
+                      onChange={(checked) => handleChange('open_file_cache_errors', checked)}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Proxy Buffer Tips */}
+              <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/20 rounded-lg p-4 text-sm text-blue-800 dark:text-blue-300">
+                {t('global.performance.tips')}
               </div>
             </div>
           )}
@@ -775,6 +906,90 @@ export default function GlobalSettings() {
                     </div>
                   )}
                 </div>
+
+                {/* Bandwidth Limiting */}
+                <div className="bg-slate-50 dark:bg-slate-700/30 rounded-xl border border-slate-200 dark:border-slate-700 p-4 mb-4">
+                  <div className="mb-3">
+                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+                      {t('global.advanced.ddos.bandwidthLimit.title')}
+                      <HelpTip contentKey="help.global.ddos.bandwidthLimit" ns="settings" />
+                    </span>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{t('global.advanced.ddos.bandwidthLimit.description')}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{t('global.advanced.ddos.bandwidthLimit.rate')}</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={getNumberValue('limit_rate', 0)}
+                        onChange={(e) => handleChange('limit_rate', parseInt(e.target.value) || 0)}
+                        className={inputClass}
+                        placeholder="0 (unlimited)"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{t('global.advanced.ddos.bandwidthLimit.after')}</label>
+                      <input
+                        type="text"
+                        value={getStringValue('limit_rate_after', '')}
+                        onChange={(e) => handleChange('limit_rate_after', e.target.value)}
+                        className={inputClass}
+                        placeholder="500k, 1m"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Warning for nginx.conf level settings */}
+                <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/20 rounded-xl p-4 mt-4">
+                  <div className="flex gap-3">
+                    <svg className="w-5 h-5 text-blue-500 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div className="text-sm text-blue-800 dark:text-blue-300">
+                      <p className="font-semibold">{t('global.advanced.nginxConfNote.title')}</p>
+                      <p className="mt-1">
+                        {t('global.advanced.nginxConfNote.description')}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Reset Timedout Connection */}
+                <div className="mt-4">
+                  <CheckboxField
+                    settingKey="reset_timedout_connection"
+                    checked={getBoolValue('reset_timedout_connection')}
+                    onChange={(checked) => handleChange('reset_timedout_connection', checked)}
+                  />
+                </div>
+              </div>
+
+              {/* Resolver Timeout */}
+              <div className="border-t border-slate-200 dark:border-slate-700 pt-6">
+                <SettingField settingKey="resolver_timeout">
+                  <input
+                    type="text"
+                    value={getStringValue('resolver_timeout', '30s')}
+                    onChange={(e) => handleChange('resolver_timeout', e.target.value)}
+                    className={inputClass}
+                    placeholder="30s"
+                  />
+                </SettingField>
+              </div>
+
+              {/* Custom Stream Config */}
+              <div className="border-t border-slate-200 dark:border-slate-700 pt-6">
+                <SettingField settingKey="custom_stream_config">
+                  <textarea
+                    value={getStringValue('custom_stream_config', '')}
+                    onChange={(e) => handleChange('custom_stream_config', e.target.value)}
+                    rows={5}
+                    className={`${inputClass} font-mono`}
+                    placeholder={t('global.advanced.customStreamConfigPlaceholder')}
+                  />
+                </SettingField>
               </div>
             </div>
           )}

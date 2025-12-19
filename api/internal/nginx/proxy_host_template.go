@@ -68,6 +68,14 @@ server {
     set $bot_category_var "-";
     set $geo_blocked 0;
 
+    {{if .GlobalSettings}}{{if .GlobalSettings.OpenFileCacheEnabled}}
+    # Open File Cache (from Global Settings)
+    open_file_cache max={{if .GlobalSettings.OpenFileCacheMax}}{{.GlobalSettings.OpenFileCacheMax}}{{else}}10000{{end}} inactive={{if .GlobalSettings.OpenFileCacheInactive}}{{.GlobalSettings.OpenFileCacheInactive}}{{else}}60s{{end}};
+    open_file_cache_valid {{if .GlobalSettings.OpenFileCacheValid}}{{.GlobalSettings.OpenFileCacheValid}}{{else}}30s{{end}};
+    open_file_cache_min_uses {{if .GlobalSettings.OpenFileCacheMinUses}}{{.GlobalSettings.OpenFileCacheMinUses}}{{else}}2{{end}};
+    open_file_cache_errors {{if .GlobalSettings.OpenFileCacheErrors}}on{{else}}off{{end}};
+    {{end}}{{end}}
+
     # Skip security checks for ACME HTTP-01 Challenge
     set $skip_security_for_acme 0;
     if ($request_uri ~ "^/.well-known/acme-challenge/") {
@@ -675,6 +683,11 @@ server {
         {{if .GlobalSettings.ProxyBufferSize}}proxy_buffer_size {{.GlobalSettings.ProxyBufferSize}};{{end}}
         {{if .GlobalSettings.ProxyBuffers}}proxy_buffers {{.GlobalSettings.ProxyBuffers}};{{end}}
         {{if .GlobalSettings.ProxyBusyBuffersSize}}proxy_busy_buffers_size {{.GlobalSettings.ProxyBusyBuffersSize}};{{end}}
+        {{if .GlobalSettings.ProxyMaxTempFileSize}}proxy_max_temp_file_size {{.GlobalSettings.ProxyMaxTempFileSize}};{{end}}
+        {{if .GlobalSettings.ProxyTempFileWriteSize}}proxy_temp_file_write_size {{.GlobalSettings.ProxyTempFileWriteSize}};{{end}}
+        # Bandwidth limiting (from Global Settings)
+        {{if gt .GlobalSettings.LimitRate 0}}limit_rate {{.GlobalSettings.LimitRate}};{{end}}
+        {{if .GlobalSettings.LimitRateAfter}}limit_rate_after {{.GlobalSettings.LimitRateAfter}};{{end}}
         {{end}}
         {{if .Host.AllowWebsocketUpgrade}}
         # WebSocket support (proxy_http_version already set in proxy_params.conf)
@@ -755,6 +768,11 @@ server {
         {{if .GlobalSettings.ProxyBufferSize}}proxy_buffer_size {{.GlobalSettings.ProxyBufferSize}};{{end}}
         {{if .GlobalSettings.ProxyBuffers}}proxy_buffers {{.GlobalSettings.ProxyBuffers}};{{end}}
         {{if .GlobalSettings.ProxyBusyBuffersSize}}proxy_busy_buffers_size {{.GlobalSettings.ProxyBusyBuffersSize}};{{end}}
+        {{if .GlobalSettings.ProxyMaxTempFileSize}}proxy_max_temp_file_size {{.GlobalSettings.ProxyMaxTempFileSize}};{{end}}
+        {{if .GlobalSettings.ProxyTempFileWriteSize}}proxy_temp_file_write_size {{.GlobalSettings.ProxyTempFileWriteSize}};{{end}}
+        # Bandwidth limiting (from Global Settings)
+        {{if gt .GlobalSettings.LimitRate 0}}limit_rate {{.GlobalSettings.LimitRate}};{{end}}
+        {{if .GlobalSettings.LimitRateAfter}}limit_rate_after {{.GlobalSettings.LimitRateAfter}};{{end}}
         {{end}}
         {{if .Host.AllowWebsocketUpgrade}}
         # WebSocket support (proxy_http_version already set in proxy_params.conf)
@@ -834,6 +852,14 @@ server {
     set $block_reason_var "-";
     set $bot_category_var "-";
     set $geo_blocked 0;
+
+    {{if .GlobalSettings}}{{if .GlobalSettings.OpenFileCacheEnabled}}
+    # Open File Cache (from Global Settings)
+    open_file_cache max={{if .GlobalSettings.OpenFileCacheMax}}{{.GlobalSettings.OpenFileCacheMax}}{{else}}10000{{end}} inactive={{if .GlobalSettings.OpenFileCacheInactive}}{{.GlobalSettings.OpenFileCacheInactive}}{{else}}60s{{end}};
+    open_file_cache_valid {{if .GlobalSettings.OpenFileCacheValid}}{{.GlobalSettings.OpenFileCacheValid}}{{else}}30s{{end}};
+    open_file_cache_min_uses {{if .GlobalSettings.OpenFileCacheMinUses}}{{.GlobalSettings.OpenFileCacheMinUses}}{{else}}2{{end}};
+    open_file_cache_errors {{if .GlobalSettings.OpenFileCacheErrors}}on{{else}}off{{end}};
+    {{end}}{{end}}
 
     # Skip security checks for ACME HTTP-01 Challenge (not typically used on HTTPS, but for consistency)
     set $skip_security_for_acme 0;
@@ -1445,6 +1471,11 @@ server {
         {{if .GlobalSettings.ProxyBufferSize}}proxy_buffer_size {{.GlobalSettings.ProxyBufferSize}};{{end}}
         {{if .GlobalSettings.ProxyBuffers}}proxy_buffers {{.GlobalSettings.ProxyBuffers}};{{end}}
         {{if .GlobalSettings.ProxyBusyBuffersSize}}proxy_busy_buffers_size {{.GlobalSettings.ProxyBusyBuffersSize}};{{end}}
+        {{if .GlobalSettings.ProxyMaxTempFileSize}}proxy_max_temp_file_size {{.GlobalSettings.ProxyMaxTempFileSize}};{{end}}
+        {{if .GlobalSettings.ProxyTempFileWriteSize}}proxy_temp_file_write_size {{.GlobalSettings.ProxyTempFileWriteSize}};{{end}}
+        # Bandwidth limiting (from Global Settings)
+        {{if gt .GlobalSettings.LimitRate 0}}limit_rate {{.GlobalSettings.LimitRate}};{{end}}
+        {{if .GlobalSettings.LimitRateAfter}}limit_rate_after {{.GlobalSettings.LimitRateAfter}};{{end}}
         {{end}}
         {{if .Host.AllowWebsocketUpgrade}}
         # WebSocket support (proxy_http_version already set in proxy_params.conf)

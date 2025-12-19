@@ -609,10 +609,21 @@
     "tabs": {
       "worker": "Worker",
       "http": "HTTP",
+      "performance": "Performance",
       "compression": "Compression",
       "ssl": "SSL/TLS",
       "timeout": "Timeouts",
       "advanced": "Advanced"
+    },
+    "performance": {
+      "buffer": {
+        "title": "Proxy Buffer Settings",
+        "description": "Configure how responses from upstream servers are buffered. Proper buffer sizing balances memory usage and performance."
+      },
+      "openFileCache": {
+        "title": "Open File Cache"
+      },
+      "tips": "Tip: If proxy buffer size is too small, responses will be written to temporary files, causing disk I/O. Increasing buffer size improves performance for large responses. Open File Cache caches file descriptors for static files to improve performance."
     },
     "fields": {
       "worker_processes": {
@@ -775,6 +786,62 @@
       "custom_http_config": {
         "label": "Custom HTTP Config",
         "description": "Directly input additional Nginx configuration. For advanced users."
+      },
+      "proxy_buffer_size": {
+        "label": "Proxy Buffer Size",
+        "description": "Buffer size for reading the first part (header) of upstream server response. Default: 8k"
+      },
+      "proxy_buffers": {
+        "label": "Proxy Buffers",
+        "description": "Number and size of response buffers. Format: 'count size' (e.g., 8 32k)"
+      },
+      "proxy_busy_buffers_size": {
+        "label": "Busy Buffers Size",
+        "description": "Buffer size that can be sent to client while response is not fully read."
+      },
+      "proxy_max_temp_file_size": {
+        "label": "Max Temp File Size",
+        "description": "Maximum size of temporary file for storing response when buffers are full. Set to 0 to disable temp files."
+      },
+      "proxy_temp_file_write_size": {
+        "label": "Temp File Write Size",
+        "description": "Size of data that can be written to temporary file at once."
+      },
+      "open_file_cache_enabled": {
+        "label": "Enable Open File Cache",
+        "description": "Cache open file descriptors and directory lookups. Improves performance for sites with many static files."
+      },
+      "open_file_cache_max": {
+        "label": "Max Cache Entries",
+        "description": "Maximum number of entries to keep in cache."
+      },
+      "open_file_cache_inactive": {
+        "label": "Inactive Time",
+        "description": "Entries not accessed within this time are removed from cache. (e.g., 20s, 60s)"
+      },
+      "open_file_cache_valid": {
+        "label": "Validation Interval",
+        "description": "How often to check if cached entries are still valid. (e.g., 30s, 60s)"
+      },
+      "open_file_cache_min_uses": {
+        "label": "Minimum Uses",
+        "description": "Only files accessed this many times are kept in cache."
+      },
+      "open_file_cache_errors": {
+        "label": "Cache Errors",
+        "description": "Also cache file-not-found errors. Improves performance for repeated requests to non-existent files."
+      },
+      "reset_timedout_connection": {
+        "label": "Reset Timedout Connections",
+        "description": "Close timed out connections with RST instead of FIN to immediately release sockets. Helps conserve server resources."
+      },
+      "resolver_timeout": {
+        "label": "DNS Resolver Timeout",
+        "description": "Maximum time to wait for DNS lookup response. (e.g., 30s)"
+      },
+      "custom_stream_config": {
+        "label": "Custom Stream Config",
+        "description": "Nginx stream block configuration for TCP/UDP proxying. For advanced users."
       }
     },
     "tips": {
@@ -827,6 +894,12 @@
           "after": "Apply after size",
           "afterPlaceholder": "e.g., 500k, 1m"
         },
+        "bandwidthLimit": {
+          "title": "Bandwidth Limit",
+          "description": "Limit client download speed. 0 = unlimited",
+          "rate": "Rate limit (bytes/s)",
+          "after": "Apply after size"
+        },
         "connectionReset": {
           "title": "Timeout Connection Reset",
           "description": "Immediately reset timed out connections to release resources."
@@ -836,6 +909,10 @@
           "description": "These settings are **applied to all hosts by default**. Rate Limits configured in Proxy Hosts are **additionally applied** as more granular control for that specific host."
         }
       },
+      "nginxConfNote": {
+        "title": "Note: nginx.conf level settings",
+        "description": "The settings below (Reset Timedout Connection, Resolver Timeout, Custom Stream Config) are applied to the http/stream block in nginx.conf. A nginx restart is required for changes to take effect."
+      },
       "errorLogLevels": {
         "debug": "debug - All info (development)",
         "info": "info - General info",
@@ -844,7 +921,8 @@
         "error": "error - Errors only",
         "crit": "crit - Critical errors only"
       },
-      "customConfigPlaceholder": "# Enter additional nginx http configuration here"
+      "customConfigPlaceholder": "# Enter additional nginx http configuration here",
+      "customStreamConfigPlaceholder": "# Enter additional nginx stream configuration here"
     }
   },
   "apiTokens": {
@@ -1049,11 +1127,26 @@
       "error_log_level": "Detail level of error logs. 'warn' or 'error' recommended unless debugging.",
       "access_log_enabled": "Logs all access records. May require disk space management.",
       "custom_http_config": "Enter custom configuration to add to Nginx http block.",
+      "proxy_buffer_size": "Buffer size for reading the first part (header) of upstream server response.",
+      "proxy_buffers": "Number and size of buffers for buffering responses. Format: 'count size'",
+      "proxy_busy_buffers_size": "Buffer size for sending partial response to client while upstream is still sending.",
+      "proxy_max_temp_file_size": "Maximum size of temp file for storing response when buffers are full. Set to 0 to disable temp files.",
+      "proxy_temp_file_write_size": "Size of data written to temp file at once.",
+      "open_file_cache_enabled": "Cache file descriptors and metadata for static files. Improves performance for sites with many static files.",
+      "open_file_cache_max": "Maximum number of entries to store in cache.",
+      "open_file_cache_inactive": "Cache entries not accessed within this time are removed.",
+      "open_file_cache_valid": "How often to check if cached entries are still valid.",
+      "open_file_cache_min_uses": "Only files accessed this many times within inactive time are kept in cache.",
+      "open_file_cache_errors": "Also cache file-not-found and similar errors.",
+      "reset_timedout_connection": "Close timed out connections with RST packet. Quickly frees socket resources to improve server performance.",
+      "resolver_timeout": "Maximum time to wait for DNS lookup response.",
+      "custom_stream_config": "Nginx stream block configuration for TCP/UDP load balancing.",
       "ddos": {
         "connectionLimit": "Limits concurrent connections from same IP to protect server resources.",
         "requestLimit": "Limits requests per second from same IP to block excessive requests.",
         "responseLimit": "Limits download speed to prevent bandwidth monopoly.",
-        "connectionReset": "Immediately terminates connection upon timeout."
+        "connectionReset": "Immediately terminates connection upon timeout.",
+        "bandwidthLimit": "Limits client download speed to fairly distribute bandwidth."
       }
     },
     "geoip": {

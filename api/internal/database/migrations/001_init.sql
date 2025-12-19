@@ -1998,7 +1998,10 @@ INSERT INTO public.users (id, email, username, password_hash, role, is_initial_s
 VALUES ('00000000-0000-0000-0000-000000000001', 'admin@localhost', 'admin', '$2a$10$kM9Su6aXZc8u3FHRvOsGAOwXVYL4WxVeYDcvlsFlU.S8GGWUwNWku', 'admin', true, 'ko', 'system')
 ON CONFLICT (id) DO NOTHING;
 
--- Default system settings (table uses default values, no INSERT needed)
+-- Default log settings
+INSERT INTO public.log_settings (id, retention_days, auto_cleanup_enabled, system_log_retention_days, enable_docker_logs, filter_health_checks)
+VALUES (gen_random_uuid(), 30, true, 7, true, true)
+ON CONFLICT DO NOTHING;
 
 -- Default exploit block rules (system rules)
 INSERT INTO public.exploit_block_rules (id, category, name, pattern, pattern_type, description, severity, enabled, is_system, sort_order) VALUES

@@ -157,6 +157,9 @@ type ExportData struct {
 
 	// Host Exploit Rule Exclusions
 	HostExploitExclusions []HostExploitExclusionExport `json:"host_exploit_exclusions,omitempty"`
+
+	// Global Challenge Config (CAPTCHA)
+	GlobalChallengeConfig *ChallengeConfigExport `json:"global_challenge_config,omitempty"`
 }
 
 // GlobalSettingsExport represents global settings for export
@@ -508,6 +511,8 @@ type SystemSettingsExport struct {
 	GeoIPEnabled        bool   `json:"geoip_enabled"`
 	GeoIPAutoUpdate     bool   `json:"geoip_auto_update"`
 	GeoIPUpdateInterval string `json:"geoip_update_interval"`
+	MaxmindAccountID    string `json:"maxmind_account_id,omitempty"`
+	MaxmindLicenseKey   string `json:"maxmind_license_key,omitempty"`
 
 	// ACME Settings
 	ACMEEnabled         bool   `json:"acme_enabled"`

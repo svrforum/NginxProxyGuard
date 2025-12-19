@@ -20,11 +20,26 @@ export interface GlobalSettings {
   types_hash_max_size: number;
   server_tokens: boolean;
 
-  // Buffer settings
+  // Client Buffer settings
   client_body_buffer_size: string;
   client_header_buffer_size: string;
   client_max_body_size: string;
   large_client_header_buffers: string;
+
+  // Proxy Buffer settings
+  proxy_buffer_size?: string;
+  proxy_buffers?: string;
+  proxy_busy_buffers_size?: string;
+  proxy_max_temp_file_size?: string;
+  proxy_temp_file_write_size?: string;
+
+  // Open File Cache settings
+  open_file_cache_enabled?: boolean;
+  open_file_cache_max?: number;
+  open_file_cache_inactive?: string;
+  open_file_cache_valid?: string;
+  open_file_cache_min_uses?: number;
+  open_file_cache_errors?: boolean;
 
   // Timeout settings
   client_body_timeout: number;
