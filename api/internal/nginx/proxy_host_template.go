@@ -578,12 +578,24 @@ server {
         proxy_set_header X-Proxy-Host-ID "{{.Host.ID}}";
         proxy_set_header X-Challenge-Token $cookie_ng_challenge;
         proxy_set_header X-Geo-Blocked $geo_blocked;
+        # Fast timeout - fail fast if API is down
+        proxy_connect_timeout 2s;
+        proxy_read_timeout 5s;
     }
 
     # Challenge page redirect for geo-blocked users
     location = /_challenge/page {
         internal;
         return 302 /api/v1/challenge/page?host={{.Host.ID}}&reason=geo_restriction&return=$scheme://$host$request_uri;
+    }
+
+    # API error fallback - allow traffic through when API is down
+    location @api_fallback {
+        # API is down - allow request to proceed (graceful degradation)
+        # Log this event for monitoring
+        access_log /etc/nginx/logs/access_raw.log main;
+        {{if .Upstream}}proxy_pass http://{{.Upstream.Name}};{{else}}proxy_pass {{.Host.ForwardScheme}}://{{.Host.ForwardHost}}:{{.Host.ForwardPort}};{{end}}
+        include /etc/nginx/includes/proxy_params.conf;
     }
 {{end}}{{end}}
 
@@ -619,6 +631,7 @@ server {
         # Note: API returns 200 for search bots, so they won't be redirected
         auth_request /_challenge/validate;
         error_page 401 = @challenge_redirect;
+        error_page 500 502 503 504 = @api_fallback;
 {{end}}{{end}}
         {{if .Upstream}}proxy_pass http://{{.Upstream.Name}};{{else}}proxy_pass {{.Host.ForwardScheme}}://{{.Host.ForwardHost}}:{{.Host.ForwardPort}};{{end}}
         include /etc/nginx/includes/proxy_params.conf;
@@ -698,6 +711,7 @@ server {
         # Note: API returns 200 for search bots, so they won't be redirected
         auth_request /_challenge/validate;
         error_page 401 = @challenge_redirect;
+        error_page 500 502 503 504 = @api_fallback;
 {{end}}{{end}}
         {{if .Upstream}}proxy_pass http://{{.Upstream.Name}};{{else}}proxy_pass {{.Host.ForwardScheme}}://{{.Host.ForwardHost}}:{{.Host.ForwardPort}};{{end}}
         include /etc/nginx/includes/proxy_params.conf;
@@ -1306,6 +1320,17 @@ server {
         proxy_set_header X-Proxy-Host-ID "{{.Host.ID}}";
         proxy_set_header X-Challenge-Token $cookie_ng_challenge;
         proxy_set_header X-Geo-Blocked $geo_blocked;
+        # Fast timeout - fail fast if API is down
+        proxy_connect_timeout 2s;
+        proxy_read_timeout 5s;
+    }
+
+    # API error fallback - allow traffic through when API is down
+    location @api_fallback {
+        # API is down - allow request to proceed (graceful degradation)
+        access_log /etc/nginx/logs/access_raw.log main;
+        {{if .Upstream}}proxy_pass http://{{.Upstream.Name}};{{else}}proxy_pass {{.Host.ForwardScheme}}://{{.Host.ForwardHost}}:{{.Host.ForwardPort}};{{end}}
+        include /etc/nginx/includes/proxy_params.conf;
     }
 
     # Challenge API - Bypass GeoIP and proxy to API service
@@ -1348,6 +1373,7 @@ server {
         # Note: API returns 200 for search bots, so they won't be redirected
         auth_request /_challenge/validate;
         error_page 401 = @challenge_redirect;
+        error_page 500 502 503 504 = @api_fallback;
 {{end}}{{end}}
         {{if .Upstream}}proxy_pass http://{{.Upstream.Name}};{{else}}proxy_pass {{.Host.ForwardScheme}}://{{.Host.ForwardHost}}:{{.Host.ForwardPort}};{{end}}
         include /etc/nginx/includes/proxy_params.conf;

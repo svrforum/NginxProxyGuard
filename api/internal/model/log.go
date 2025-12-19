@@ -16,13 +16,15 @@ const (
 type BlockReason string
 
 const (
-	BlockReasonNone         BlockReason = "none"
-	BlockReasonWAF          BlockReason = "waf"
-	BlockReasonBotFilter    BlockReason = "bot_filter"
-	BlockReasonRateLimit    BlockReason = "rate_limit"
-	BlockReasonGeoBlock     BlockReason = "geo_block"
-	BlockReasonExploitBlock BlockReason = "exploit_block"
-	BlockReasonBannedIP     BlockReason = "banned_ip"
+	BlockReasonNone                   BlockReason = "none"
+	BlockReasonWAF                    BlockReason = "waf"
+	BlockReasonBotFilter              BlockReason = "bot_filter"
+	BlockReasonRateLimit              BlockReason = "rate_limit"
+	BlockReasonGeoBlock               BlockReason = "geo_block"
+	BlockReasonExploitBlock           BlockReason = "exploit_block"
+	BlockReasonBannedIP               BlockReason = "banned_ip"
+	BlockReasonURIBlock               BlockReason = "uri_block"
+	BlockReasonCloudProviderChallenge BlockReason = "cloud_provider_challenge"
 )
 
 type LogSeverity string

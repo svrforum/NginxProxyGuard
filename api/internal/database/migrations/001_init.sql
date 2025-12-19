@@ -9,7 +9,7 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 -- ENUM Types (wrapped in DO blocks to handle existing types)
 DO $$ BEGIN
     CREATE TYPE public.block_reason AS ENUM (
-        'none', 'waf', 'bot_filter', 'rate_limit', 'geo_block', 'exploit_block', 'banned_ip', 'uri_block'
+        'none', 'waf', 'bot_filter', 'rate_limit', 'geo_block', 'exploit_block', 'banned_ip', 'uri_block', 'cloud_provider_challenge'
     );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
@@ -933,7 +933,7 @@ CREATE TABLE IF NOT EXISTS public.logs_p_default (
     bot_category text,
     exploit_rule character varying(50)
 );
-CREATE VIEW public.logs_unified AS
+CREATE OR REPLACE VIEW public.logs_unified AS
  SELECT logs.id,
     logs.log_type,
     logs."timestamp",
@@ -1548,16 +1548,16 @@ CREATE TABLE IF NOT EXISTS public.waf_rule_snapshots (
     created_by character varying(255),
     created_at timestamp with time zone DEFAULT now()
 );
-ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p2025_12 FOR VALUES FROM ('2025-12-01 00:00:00+00') TO ('2026-01-01 00:00:00+00');
-ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p2026_01 FOR VALUES FROM ('2026-01-01 00:00:00+00') TO ('2026-02-01 00:00:00+00');
-ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p2026_02 FOR VALUES FROM ('2026-02-01 00:00:00+00') TO ('2026-03-01 00:00:00+00');
-ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p2026_03 FOR VALUES FROM ('2026-03-01 00:00:00+00') TO ('2026-04-01 00:00:00+00');
-ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p_default DEFAULT;
-ALTER TABLE ONLY public.dashboard_stats_hourly_partitioned ATTACH PARTITION public.stats_hourly_p2025_12 FOR VALUES FROM ('2025-12-01 00:00:00+00') TO ('2026-01-01 00:00:00+00');
-ALTER TABLE ONLY public.dashboard_stats_hourly_partitioned ATTACH PARTITION public.stats_hourly_p2026_01 FOR VALUES FROM ('2026-01-01 00:00:00+00') TO ('2026-02-01 00:00:00+00');
-ALTER TABLE ONLY public.dashboard_stats_hourly_partitioned ATTACH PARTITION public.stats_hourly_p2026_02 FOR VALUES FROM ('2026-02-01 00:00:00+00') TO ('2026-03-01 00:00:00+00');
-ALTER TABLE ONLY public.dashboard_stats_hourly_partitioned ATTACH PARTITION public.stats_hourly_p2026_03 FOR VALUES FROM ('2026-03-01 00:00:00+00') TO ('2026-04-01 00:00:00+00');
-ALTER TABLE ONLY public.dashboard_stats_hourly_partitioned ATTACH PARTITION public.stats_hourly_p_default DEFAULT;
+DO $$ BEGIN ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p2025_12 FOR VALUES FROM ('2025-12-01 00:00:00+00') TO ('2026-01-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p2026_01 FOR VALUES FROM ('2026-01-01 00:00:00+00') TO ('2026-02-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p2026_02 FOR VALUES FROM ('2026-02-01 00:00:00+00') TO ('2026-03-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p2026_03 FOR VALUES FROM ('2026-03-01 00:00:00+00') TO ('2026-04-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p_default DEFAULT; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE ONLY public.dashboard_stats_hourly_partitioned ATTACH PARTITION public.stats_hourly_p2025_12 FOR VALUES FROM ('2025-12-01 00:00:00+00') TO ('2026-01-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE ONLY public.dashboard_stats_hourly_partitioned ATTACH PARTITION public.stats_hourly_p2026_01 FOR VALUES FROM ('2026-01-01 00:00:00+00') TO ('2026-02-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE ONLY public.dashboard_stats_hourly_partitioned ATTACH PARTITION public.stats_hourly_p2026_02 FOR VALUES FROM ('2026-02-01 00:00:00+00') TO ('2026-03-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE ONLY public.dashboard_stats_hourly_partitioned ATTACH PARTITION public.stats_hourly_p2026_03 FOR VALUES FROM ('2026-03-01 00:00:00+00') TO ('2026-04-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE ONLY public.dashboard_stats_hourly_partitioned ATTACH PARTITION public.stats_hourly_p_default DEFAULT; EXCEPTION WHEN OTHERS THEN NULL; END $$;
 ALTER TABLE ONLY public.access_list_items
     ADD CONSTRAINT access_list_items_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.access_lists
@@ -1871,51 +1871,51 @@ CREATE INDEX IF NOT EXISTS stats_hourly_p2026_03_proxy_host_id_hour_bucket_idx O
 CREATE INDEX IF NOT EXISTS stats_hourly_p_default_hour_bucket_idx ON public.stats_hourly_p_default USING btree (hour_bucket);
 CREATE INDEX IF NOT EXISTS stats_hourly_p_default_proxy_host_id_hour_bucket_idx ON public.stats_hourly_p_default USING btree (proxy_host_id, hour_bucket);
 CREATE UNIQUE INDEX IF NOT EXISTS users_username_key ON public.users USING btree (username);
-ALTER INDEX public.idx_logs_partitioned_exploit_rule ATTACH PARTITION public.logs_p2025_12_exploit_rule_idx;
-ALTER INDEX public.idx_logs_part_host ATTACH PARTITION public.logs_p2025_12_host_idx;
-ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.logs_p2025_12_log_type_idx;
-ALTER INDEX public.idx_logs_part_type_timestamp ATTACH PARTITION public.logs_p2025_12_log_type_timestamp_idx;
-ALTER INDEX public.logs_partitioned_pkey ATTACH PARTITION public.logs_p2025_12_pkey;
-ALTER INDEX public.idx_logs_part_timestamp ATTACH PARTITION public.logs_p2025_12_timestamp_idx;
-ALTER INDEX public.idx_logs_partitioned_exploit_rule ATTACH PARTITION public.logs_p2026_01_exploit_rule_idx;
-ALTER INDEX public.idx_logs_part_host ATTACH PARTITION public.logs_p2026_01_host_idx;
-ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.logs_p2026_01_log_type_idx;
-ALTER INDEX public.idx_logs_part_type_timestamp ATTACH PARTITION public.logs_p2026_01_log_type_timestamp_idx;
-ALTER INDEX public.logs_partitioned_pkey ATTACH PARTITION public.logs_p2026_01_pkey;
-ALTER INDEX public.idx_logs_part_timestamp ATTACH PARTITION public.logs_p2026_01_timestamp_idx;
-ALTER INDEX public.idx_logs_partitioned_exploit_rule ATTACH PARTITION public.logs_p2026_02_exploit_rule_idx;
-ALTER INDEX public.idx_logs_part_host ATTACH PARTITION public.logs_p2026_02_host_idx;
-ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.logs_p2026_02_log_type_idx;
-ALTER INDEX public.idx_logs_part_type_timestamp ATTACH PARTITION public.logs_p2026_02_log_type_timestamp_idx;
-ALTER INDEX public.logs_partitioned_pkey ATTACH PARTITION public.logs_p2026_02_pkey;
-ALTER INDEX public.idx_logs_part_timestamp ATTACH PARTITION public.logs_p2026_02_timestamp_idx;
-ALTER INDEX public.idx_logs_partitioned_exploit_rule ATTACH PARTITION public.logs_p2026_03_exploit_rule_idx;
-ALTER INDEX public.idx_logs_part_host ATTACH PARTITION public.logs_p2026_03_host_idx;
-ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.logs_p2026_03_log_type_idx;
-ALTER INDEX public.idx_logs_part_type_timestamp ATTACH PARTITION public.logs_p2026_03_log_type_timestamp_idx;
-ALTER INDEX public.logs_partitioned_pkey ATTACH PARTITION public.logs_p2026_03_pkey;
-ALTER INDEX public.idx_logs_part_timestamp ATTACH PARTITION public.logs_p2026_03_timestamp_idx;
-ALTER INDEX public.idx_logs_partitioned_exploit_rule ATTACH PARTITION public.logs_p_default_exploit_rule_idx;
-ALTER INDEX public.idx_logs_part_host ATTACH PARTITION public.logs_p_default_host_idx;
-ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.logs_p_default_log_type_idx;
-ALTER INDEX public.idx_logs_part_type_timestamp ATTACH PARTITION public.logs_p_default_log_type_timestamp_idx;
-ALTER INDEX public.logs_partitioned_pkey ATTACH PARTITION public.logs_p_default_pkey;
-ALTER INDEX public.idx_logs_part_timestamp ATTACH PARTITION public.logs_p_default_timestamp_idx;
-ALTER INDEX public.idx_stats_hourly_part_bucket ATTACH PARTITION public.stats_hourly_p2025_12_hour_bucket_idx;
-ALTER INDEX public.dashboard_stats_hourly_partitioned_pkey ATTACH PARTITION public.stats_hourly_p2025_12_pkey;
-ALTER INDEX public.idx_stats_hourly_part_host ATTACH PARTITION public.stats_hourly_p2025_12_proxy_host_id_hour_bucket_idx;
-ALTER INDEX public.idx_stats_hourly_part_bucket ATTACH PARTITION public.stats_hourly_p2026_01_hour_bucket_idx;
-ALTER INDEX public.dashboard_stats_hourly_partitioned_pkey ATTACH PARTITION public.stats_hourly_p2026_01_pkey;
-ALTER INDEX public.idx_stats_hourly_part_host ATTACH PARTITION public.stats_hourly_p2026_01_proxy_host_id_hour_bucket_idx;
-ALTER INDEX public.idx_stats_hourly_part_bucket ATTACH PARTITION public.stats_hourly_p2026_02_hour_bucket_idx;
-ALTER INDEX public.dashboard_stats_hourly_partitioned_pkey ATTACH PARTITION public.stats_hourly_p2026_02_pkey;
-ALTER INDEX public.idx_stats_hourly_part_host ATTACH PARTITION public.stats_hourly_p2026_02_proxy_host_id_hour_bucket_idx;
-ALTER INDEX public.idx_stats_hourly_part_bucket ATTACH PARTITION public.stats_hourly_p2026_03_hour_bucket_idx;
-ALTER INDEX public.dashboard_stats_hourly_partitioned_pkey ATTACH PARTITION public.stats_hourly_p2026_03_pkey;
-ALTER INDEX public.idx_stats_hourly_part_host ATTACH PARTITION public.stats_hourly_p2026_03_proxy_host_id_hour_bucket_idx;
-ALTER INDEX public.idx_stats_hourly_part_bucket ATTACH PARTITION public.stats_hourly_p_default_hour_bucket_idx;
-ALTER INDEX public.dashboard_stats_hourly_partitioned_pkey ATTACH PARTITION public.stats_hourly_p_default_pkey;
-ALTER INDEX public.idx_stats_hourly_part_host ATTACH PARTITION public.stats_hourly_p_default_proxy_host_id_hour_bucket_idx;
+DO $$ BEGIN ALTER INDEX public.idx_logs_partitioned_exploit_rule ATTACH PARTITION public.logs_p2025_12_exploit_rule_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_host ATTACH PARTITION public.logs_p2025_12_host_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.logs_p2025_12_log_type_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_type_timestamp ATTACH PARTITION public.logs_p2025_12_log_type_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.logs_partitioned_pkey ATTACH PARTITION public.logs_p2025_12_pkey; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_timestamp ATTACH PARTITION public.logs_p2025_12_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_partitioned_exploit_rule ATTACH PARTITION public.logs_p2026_01_exploit_rule_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_host ATTACH PARTITION public.logs_p2026_01_host_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.logs_p2026_01_log_type_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_type_timestamp ATTACH PARTITION public.logs_p2026_01_log_type_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.logs_partitioned_pkey ATTACH PARTITION public.logs_p2026_01_pkey; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_timestamp ATTACH PARTITION public.logs_p2026_01_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_partitioned_exploit_rule ATTACH PARTITION public.logs_p2026_02_exploit_rule_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_host ATTACH PARTITION public.logs_p2026_02_host_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.logs_p2026_02_log_type_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_type_timestamp ATTACH PARTITION public.logs_p2026_02_log_type_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.logs_partitioned_pkey ATTACH PARTITION public.logs_p2026_02_pkey; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_timestamp ATTACH PARTITION public.logs_p2026_02_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_partitioned_exploit_rule ATTACH PARTITION public.logs_p2026_03_exploit_rule_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_host ATTACH PARTITION public.logs_p2026_03_host_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.logs_p2026_03_log_type_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_type_timestamp ATTACH PARTITION public.logs_p2026_03_log_type_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.logs_partitioned_pkey ATTACH PARTITION public.logs_p2026_03_pkey; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_timestamp ATTACH PARTITION public.logs_p2026_03_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_partitioned_exploit_rule ATTACH PARTITION public.logs_p_default_exploit_rule_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_host ATTACH PARTITION public.logs_p_default_host_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.logs_p_default_log_type_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_type_timestamp ATTACH PARTITION public.logs_p_default_log_type_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.logs_partitioned_pkey ATTACH PARTITION public.logs_p_default_pkey; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_timestamp ATTACH PARTITION public.logs_p_default_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_stats_hourly_part_bucket ATTACH PARTITION public.stats_hourly_p2025_12_hour_bucket_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.dashboard_stats_hourly_partitioned_pkey ATTACH PARTITION public.stats_hourly_p2025_12_pkey; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_stats_hourly_part_host ATTACH PARTITION public.stats_hourly_p2025_12_proxy_host_id_hour_bucket_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_stats_hourly_part_bucket ATTACH PARTITION public.stats_hourly_p2026_01_hour_bucket_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.dashboard_stats_hourly_partitioned_pkey ATTACH PARTITION public.stats_hourly_p2026_01_pkey; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_stats_hourly_part_host ATTACH PARTITION public.stats_hourly_p2026_01_proxy_host_id_hour_bucket_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_stats_hourly_part_bucket ATTACH PARTITION public.stats_hourly_p2026_02_hour_bucket_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.dashboard_stats_hourly_partitioned_pkey ATTACH PARTITION public.stats_hourly_p2026_02_pkey; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_stats_hourly_part_host ATTACH PARTITION public.stats_hourly_p2026_02_proxy_host_id_hour_bucket_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_stats_hourly_part_bucket ATTACH PARTITION public.stats_hourly_p2026_03_hour_bucket_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.dashboard_stats_hourly_partitioned_pkey ATTACH PARTITION public.stats_hourly_p2026_03_pkey; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_stats_hourly_part_host ATTACH PARTITION public.stats_hourly_p2026_03_proxy_host_id_hour_bucket_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_stats_hourly_part_bucket ATTACH PARTITION public.stats_hourly_p_default_hour_bucket_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.dashboard_stats_hourly_partitioned_pkey ATTACH PARTITION public.stats_hourly_p_default_pkey; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_stats_hourly_part_host ATTACH PARTITION public.stats_hourly_p_default_proxy_host_id_hour_bucket_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
 CREATE TRIGGER trigger_api_tokens_updated_at BEFORE UPDATE ON public.api_tokens FOR EACH ROW EXECUTE FUNCTION public.update_api_tokens_updated_at();
 CREATE TRIGGER trigger_challenge_configs_updated_at BEFORE UPDATE ON public.challenge_configs FOR EACH ROW EXECUTE FUNCTION public.update_challenge_configs_updated_at();
 CREATE TRIGGER trigger_cloud_providers_updated_at BEFORE UPDATE ON public.cloud_providers FOR EACH ROW EXECUTE FUNCTION public.update_cloud_providers_updated_at();
@@ -2037,6 +2037,9 @@ ON CONFLICT (id) DO NOTHING;
 -- This section uses ADD COLUMN IF NOT EXISTS to safely add columns
 -- that may not exist in older database versions
 -- ============================================================================
+
+-- Enum upgrades
+ALTER TYPE public.block_reason ADD VALUE IF NOT EXISTS 'cloud_provider_challenge';
 
 -- proxy_hosts table upgrades
 ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS cache_static_only boolean DEFAULT true NOT NULL;
