@@ -30,11 +30,10 @@ geo $banned_ip_{{sanitizeID .Host.ID}} {
 
 {{if .BlockedCloudIPRanges}}
 # Blocked Cloud Provider IPs geo mapping for {{join .Host.DomainNames ", "}}
+# Using include file for efficiency ({{len .BlockedCloudIPRanges}} ranges)
 geo $blocked_cloud_{{sanitizeID .Host.ID}} {
     default 0;
-{{range .BlockedCloudIPRanges}}
-    {{.}} 1;
-{{end}}
+    include /etc/nginx/conf.d/includes/cloud_ips_{{.Host.ID}}.conf;
 }
 {{end}}
 
@@ -67,6 +66,14 @@ server {
     set $block_reason_var "-";
     set $bot_category_var "-";
     set $geo_blocked 0;
+
+{{if .SearchEnginesList}}
+    # Search bot detection (set once, used by GeoIP, CloudProvider, BotFilter)
+    set $is_search_bot 0;
+    if ($http_user_agent ~* ({{toRegexPattern .SearchEnginesList}})) {
+        set $is_search_bot 1;
+    }
+{{end}}
 
     {{if .GlobalSettings}}{{if .GlobalSettings.OpenFileCacheEnabled}}
     # Open File Cache (from Global Settings)
@@ -112,13 +119,6 @@ server {
 
 {{if .GeoRestriction}}{{if .GeoRestriction.Enabled}}{{if not .GeoRestriction.ChallengeMode}}
     # Geo Restriction ({{.GeoRestriction.Mode}}) - Direct Block Mode (processed BEFORE WAF for performance){{if .GeoRestriction.AllowPrivateIPs}} - Private IPs Allowed{{end}}{{if .GeoRestriction.AllowSearchBots}} - Search Bots Allowed{{end}}
-{{if .GeoRestriction.AllowSearchBots}}{{if .SearchEnginesList}}
-    # Check if request is from a search engine bot (uses dynamic list from system settings)
-    set $is_search_bot 0;
-    if ($http_user_agent ~* ({{toRegexPattern .SearchEnginesList}})) {
-        set $is_search_bot 1;
-    }
-{{end}}{{end}}
 {{if len .GeoRestriction.AllowedIPs}}
     # Priority Allow IPs/CIDRs - bypass geo restriction if matched
     set $geo_allowed_ip 0;
@@ -240,13 +240,6 @@ server {
 
 {{if .GeoRestriction}}{{if .GeoRestriction.Enabled}}{{if .GeoRestriction.ChallengeMode}}
     # Geo Restriction ({{.GeoRestriction.Mode}}) - Challenge Mode (processed AFTER WAF){{if .GeoRestriction.AllowPrivateIPs}} - Private IPs Allowed{{end}}{{if .GeoRestriction.AllowSearchBots}} - Search Bots Allowed{{end}}
-{{if .GeoRestriction.AllowSearchBots}}{{if .SearchEnginesList}}
-    # Check if request is from a search engine bot (uses dynamic list from system settings)
-    set $is_search_bot 0;
-    if ($http_user_agent ~* ({{toRegexPattern .SearchEnginesList}})) {
-        set $is_search_bot 1;
-    }
-{{end}}{{end}}
     # Challenge mode: show CAPTCHA instead of blocking
     set $geo_blocked 0;
 {{if eq .GeoRestriction.Mode "whitelist"}}
@@ -457,7 +450,7 @@ server {
 {{end}}
 {{if .CloudProviderAllowSearchBots}}{{if .SearchEnginesList}}
     # Allow search engine bots to bypass cloud provider blocking
-    if ($http_user_agent ~* ({{toRegexPattern .SearchEnginesList}})) {
+    if ($is_search_bot = 1) {
         set $is_priority_allow_cloud 1;
     }
 {{end}}{{end}}
@@ -498,7 +491,7 @@ server {
 {{end}}
 {{if .BotFilter.AllowSearchEngines}}{{if .SearchEnginesList}}
     # Allow search engine bots to bypass bot filter
-    if ($http_user_agent ~* ({{toRegexPattern .SearchEnginesList}})) {
+    if ($is_search_bot = 1) {
         set $priority_allow 1;
     }
 {{end}}{{end}}
@@ -853,6 +846,14 @@ server {
     set $bot_category_var "-";
     set $geo_blocked 0;
 
+{{if .SearchEnginesList}}
+    # Search bot detection (set once, used by GeoIP, CloudProvider, BotFilter)
+    set $is_search_bot 0;
+    if ($http_user_agent ~* ({{toRegexPattern .SearchEnginesList}})) {
+        set $is_search_bot 1;
+    }
+{{end}}
+
     {{if .GlobalSettings}}{{if .GlobalSettings.OpenFileCacheEnabled}}
     # Open File Cache (from Global Settings)
     open_file_cache max={{if .GlobalSettings.OpenFileCacheMax}}{{.GlobalSettings.OpenFileCacheMax}}{{else}}10000{{end}} inactive={{if .GlobalSettings.OpenFileCacheInactive}}{{.GlobalSettings.OpenFileCacheInactive}}{{else}}60s{{end}};
@@ -900,13 +901,6 @@ server {
 
 {{if .GeoRestriction}}{{if .GeoRestriction.Enabled}}{{if not .GeoRestriction.ChallengeMode}}
     # Geo Restriction ({{.GeoRestriction.Mode}}) - Direct Block Mode (processed BEFORE WAF for performance){{if .GeoRestriction.AllowPrivateIPs}} - Private IPs Allowed{{end}}{{if .GeoRestriction.AllowSearchBots}} - Search Bots Allowed{{end}}
-{{if .GeoRestriction.AllowSearchBots}}{{if .SearchEnginesList}}
-    # Check if request is from a search engine bot (uses dynamic list from system settings)
-    set $is_search_bot 0;
-    if ($http_user_agent ~* ({{toRegexPattern .SearchEnginesList}})) {
-        set $is_search_bot 1;
-    }
-{{end}}{{end}}
 {{if len .GeoRestriction.AllowedIPs}}
     # Priority Allow IPs/CIDRs - bypass geo restriction if matched
     set $geo_allowed_ip 0;
@@ -1028,13 +1022,6 @@ server {
 
 {{if .GeoRestriction}}{{if .GeoRestriction.Enabled}}{{if .GeoRestriction.ChallengeMode}}
     # Geo Restriction ({{.GeoRestriction.Mode}}) - Challenge Mode (processed AFTER WAF){{if .GeoRestriction.AllowPrivateIPs}} - Private IPs Allowed{{end}}{{if .GeoRestriction.AllowSearchBots}} - Search Bots Allowed{{end}}
-{{if .GeoRestriction.AllowSearchBots}}{{if .SearchEnginesList}}
-    # Check if request is from a search engine bot (uses dynamic list from system settings)
-    set $is_search_bot 0;
-    if ($http_user_agent ~* ({{toRegexPattern .SearchEnginesList}})) {
-        set $is_search_bot 1;
-    }
-{{end}}{{end}}
     # Challenge mode: show CAPTCHA instead of blocking
     set $geo_blocked 0;
 {{if eq .GeoRestriction.Mode "whitelist"}}
@@ -1245,7 +1232,7 @@ server {
 {{end}}
 {{if .CloudProviderAllowSearchBots}}{{if .SearchEnginesList}}
     # Allow search engine bots to bypass cloud provider blocking
-    if ($http_user_agent ~* ({{toRegexPattern .SearchEnginesList}})) {
+    if ($is_search_bot = 1) {
         set $is_priority_allow_cloud 1;
     }
 {{end}}{{end}}
@@ -1286,7 +1273,7 @@ server {
 {{end}}
 {{if .BotFilter.AllowSearchEngines}}{{if .SearchEnginesList}}
     # Allow search engine bots to bypass bot filter
-    if ($http_user_agent ~* ({{toRegexPattern .SearchEnginesList}})) {
+    if ($is_search_bot = 1) {
         set $priority_allow 1;
     }
 {{end}}{{end}}

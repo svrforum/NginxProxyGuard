@@ -304,6 +304,17 @@ func (m *Manager) GenerateConfigFull(ctx context.Context, data ProxyHostConfigDa
 	}
 	_ = sslTemporarilyDisabled // Will be used for adding comments to config in future
 
+	// Generate cloud IPs include file if there are blocked cloud providers
+	// This significantly reduces the main config file size
+	if len(data.BlockedCloudIPRanges) > 0 {
+		if err := m.GenerateCloudIPsInclude(data.Host.ID, data.BlockedCloudIPRanges); err != nil {
+			return fmt.Errorf("failed to generate cloud IPs include: %w", err)
+		}
+	} else {
+		// Remove the include file if no cloud IPs to block
+		_ = m.RemoveCloudIPsInclude(data.Host.ID)
+	}
+
 	tmpl, err := template.New("proxy_host").Funcs(funcMap).Parse(proxyHostTemplate)
 	if err != nil {
 		return fmt.Errorf("failed to parse template: %w", err)
@@ -333,6 +344,9 @@ func (m *Manager) RemoveConfig(ctx context.Context, host *model.ProxyHost) error
 	if err := os.Remove(configFile); err != nil {
 		return fmt.Errorf("failed to remove config file: %w", err)
 	}
+
+	// Also remove the cloud IPs include file if it exists
+	_ = m.RemoveCloudIPsInclude(host.ID)
 
 	return nil
 }
