@@ -42,7 +42,7 @@ services:
 
   # Go API Server
   api:
-    image: svrforum/nginxproxyguard-api:1.0.0
+    image: svrforum/nginxproxyguard-api:latest
     # build:
     #   context: ./api
     #   dockerfile: Dockerfile
@@ -85,7 +85,7 @@ services:
 
   # React UI (Production) - Admin Panel on port 81 (HTTPS)
   ui:
-    image: svrforum/nginxproxyguard-ui:1.0.0
+    image: svrforum/nginxproxyguard-ui:latest
     # build:
     #   context: ./ui
     #   dockerfile: Dockerfile
@@ -102,7 +102,7 @@ services:
 
   # Nginx Reverse Proxy with HTTP/3, ModSecurity v3, OWASP CRS, and GeoIP2
   nginx:
-    image: svrforum/nginxproxyguard-nginx:1.0.0
+    image: svrforum/nginxproxyguard-nginx:latest
     # build:
     #   context: ./nginx
     #   dockerfile: Dockerfile
