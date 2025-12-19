@@ -4,16 +4,15 @@ import (
 	"embed"
 	"fmt"
 	"log"
-	"sort"
-	"strings"
 )
 
 //go:embed migrations/*.sql
 var migrationFS embed.FS
 
-// RunMigrations executes all pending database migrations
+// RunMigrations executes the idempotent schema migration
+// Only 001_init.sql is used - it's designed to be run multiple times safely
 func (db *DB) RunMigrations() error {
-	// Create migrations tracking table
+	// Create migrations tracking table (for version tracking only)
 	_, err := db.Exec(`
 		CREATE TABLE IF NOT EXISTS schema_migrations (
 			version VARCHAR(255) PRIMARY KEY,
@@ -24,59 +23,29 @@ func (db *DB) RunMigrations() error {
 		return fmt.Errorf("failed to create migrations table: %w", err)
 	}
 
-	// Get list of migration files
-	entries, err := migrationFS.ReadDir("migrations")
+	// Always run 001_init.sql - it's fully idempotent
+	// Uses CREATE TABLE IF NOT EXISTS, ADD COLUMN IF NOT EXISTS, etc.
+	content, err := migrationFS.ReadFile("migrations/001_init.sql")
 	if err != nil {
-		return fmt.Errorf("failed to read migrations directory: %w", err)
+		return fmt.Errorf("failed to read 001_init.sql: %w", err)
 	}
 
-	// Sort migrations by filename (which should be prefixed with numbers)
-	var migrations []string
-	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".sql") {
-			migrations = append(migrations, entry.Name())
-		}
-	}
-	sort.Strings(migrations)
-
-	// Apply each migration
-	for _, migration := range migrations {
-		version := strings.TrimSuffix(migration, ".sql")
-
-		// Check if already applied
-		var exists bool
-		err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = $1)", version).Scan(&exists)
-		if err != nil {
-			return fmt.Errorf("failed to check migration status: %w", err)
-		}
-
-		if exists {
-			log.Printf("Migration %s already applied, skipping", version)
-			continue
-		}
-
-		// Read migration file
-		content, err := migrationFS.ReadFile("migrations/" + migration)
-		if err != nil {
-			return fmt.Errorf("failed to read migration %s: %w", migration, err)
-		}
-
-		// Execute migration
-		log.Printf("Applying migration: %s", migration)
-		_, err = db.Exec(string(content))
-		if err != nil {
-			return fmt.Errorf("failed to apply migration %s: %w", migration, err)
-		}
-
-		// Record migration
-		_, err = db.Exec("INSERT INTO schema_migrations (version) VALUES ($1)", version)
-		if err != nil {
-			return fmt.Errorf("failed to record migration %s: %w", migration, err)
-		}
-
-		log.Printf("Migration %s applied successfully", migration)
+	log.Println("Running schema migration (001_init.sql)...")
+	_, err = db.Exec(string(content))
+	if err != nil {
+		return fmt.Errorf("failed to apply schema migration: %w", err)
 	}
 
-	log.Println("All migrations completed")
+	// Update version tracking
+	_, err = db.Exec(`
+		INSERT INTO schema_migrations (version, applied_at)
+		VALUES ('001_init', NOW())
+		ON CONFLICT (version) DO UPDATE SET applied_at = NOW()
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to update migration version: %w", err)
+	}
+
+	log.Println("Schema migration completed successfully")
 	return nil
 }

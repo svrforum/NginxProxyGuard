@@ -1,57 +1,44 @@
 -- Nginx Proxy Guard - Initial Schema
--- Generated from current production schema
--- Version: 1.0.0
+-- This file is IDEMPOTENT - safe to run multiple times
+-- Uses IF NOT EXISTS for all objects
 
 -- Extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
-CREATE TYPE public.block_reason AS ENUM (
-    'none',
-    'waf',
-    'bot_filter',
-    'rate_limit',
-    'geo_block',
-    'exploit_block',
-    'banned_ip',
-    'uri_block'
-);
-CREATE TYPE public.log_severity AS ENUM (
-    'debug',
-    'info',
-    'notice',
-    'warn',
-    'error',
-    'crit',
-    'alert',
-    'emerg'
-);
-CREATE TYPE public.log_type AS ENUM (
-    'access',
-    'error',
-    'modsec'
-);
-CREATE TYPE public.system_log_level AS ENUM (
-    'debug',
-    'info',
-    'warn',
-    'error',
-    'fatal'
-);
-CREATE TYPE public.system_log_source AS ENUM (
-    'docker_api',
-    'docker_nginx',
-    'docker_db',
-    'docker_ui',
-    'health_check',
-    'internal',
-    'scheduler',
-    'backup',
-    'certificate',
-    'audit',
-    'api_token'
-);
-CREATE FUNCTION public.cleanup_expired_challenge_tokens() RETURNS integer
+-- ENUM Types (wrapped in DO blocks to handle existing types)
+DO $$ BEGIN
+    CREATE TYPE public.block_reason AS ENUM (
+        'none', 'waf', 'bot_filter', 'rate_limit', 'geo_block', 'exploit_block', 'banned_ip', 'uri_block'
+    );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE public.log_severity AS ENUM (
+        'debug', 'info', 'notice', 'warn', 'error', 'crit', 'alert', 'emerg'
+    );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE public.log_type AS ENUM ('access', 'error', 'modsec');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE public.system_log_level AS ENUM ('debug', 'info', 'warn', 'error', 'fatal');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE public.system_log_source AS ENUM (
+        'docker_api', 'docker_nginx', 'docker_db', 'docker_ui', 'health_check',
+        'internal', 'scheduler', 'backup', 'certificate', 'audit', 'api_token'
+    );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+CREATE OR REPLACE FUNCTION public.cleanup_expired_challenge_tokens() RETURNS integer
     LANGUAGE plpgsql
     AS $$
 DECLARE
@@ -63,7 +50,7 @@ BEGIN
     RETURN deleted_count;
 END;
 $$;
-CREATE FUNCTION public.cleanup_old_logs(retention_days integer DEFAULT 30) RETURNS integer
+CREATE OR REPLACE FUNCTION public.cleanup_old_logs(retention_days integer DEFAULT 30) RETURNS integer
     LANGUAGE plpgsql
     AS $$
 DECLARE
@@ -75,7 +62,7 @@ BEGIN
     RETURN deleted_count;
 END;
 $$;
-CREATE FUNCTION public.cleanup_system_logs(retention_days integer DEFAULT 7) RETURNS integer
+CREATE OR REPLACE FUNCTION public.cleanup_system_logs(retention_days integer DEFAULT 7) RETURNS integer
     LANGUAGE plpgsql
     AS $$
 DECLARE
@@ -87,7 +74,7 @@ BEGIN
     RETURN deleted_count;
 END;
 $$;
-CREATE FUNCTION public.create_monthly_partitions(table_name text, partition_prefix text, months_ahead integer DEFAULT 3) RETURNS void
+CREATE OR REPLACE FUNCTION public.create_monthly_partitions(table_name text, partition_prefix text, months_ahead integer DEFAULT 3) RETURNS void
     LANGUAGE plpgsql
     AS $$
 DECLARE
@@ -113,7 +100,7 @@ BEGIN
     END LOOP;
 END;
 $$;
-CREATE FUNCTION public.drop_old_partitions(partition_prefix text, retention_months integer DEFAULT 3) RETURNS integer
+CREATE OR REPLACE FUNCTION public.drop_old_partitions(partition_prefix text, retention_months integer DEFAULT 3) RETURNS integer
     LANGUAGE plpgsql
     AS $$
 DECLARE
@@ -137,7 +124,7 @@ BEGIN
     RETURN dropped_count;
 END;
 $$;
-CREATE FUNCTION public.update_api_tokens_updated_at() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.update_api_tokens_updated_at() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 BEGIN
@@ -145,7 +132,7 @@ BEGIN
     RETURN NEW;
 END;
 $$;
-CREATE FUNCTION public.update_challenge_configs_updated_at() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.update_challenge_configs_updated_at() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 BEGIN
@@ -153,7 +140,7 @@ BEGIN
     RETURN NEW;
 END;
 $$;
-CREATE FUNCTION public.update_cloud_providers_updated_at() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.update_cloud_providers_updated_at() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 BEGIN
@@ -161,7 +148,7 @@ BEGIN
     RETURN NEW;
 END;
 $$;
-CREATE FUNCTION public.update_updated_at_column() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.update_updated_at_column() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 BEGIN
@@ -169,7 +156,7 @@ BEGIN
     RETURN NEW;
 END;
 $$;
-CREATE TABLE public.access_list_items (
+CREATE TABLE IF NOT EXISTS public.access_list_items (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     access_list_id uuid NOT NULL,
     directive character varying(10) NOT NULL,
@@ -179,7 +166,7 @@ CREATE TABLE public.access_list_items (
     created_at timestamp with time zone DEFAULT now(),
     CONSTRAINT access_list_items_directive_check CHECK (((directive)::text = ANY ((ARRAY['allow'::character varying, 'deny'::character varying])::text[])))
 );
-CREATE TABLE public.access_lists (
+CREATE TABLE IF NOT EXISTS public.access_lists (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     name character varying(255) NOT NULL,
     description text,
@@ -188,7 +175,7 @@ CREATE TABLE public.access_lists (
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now()
 );
-CREATE TABLE public.api_token_usage (
+CREATE TABLE IF NOT EXISTS public.api_token_usage (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     token_id uuid NOT NULL,
     endpoint character varying(255) NOT NULL,
@@ -200,7 +187,7 @@ CREATE TABLE public.api_token_usage (
     response_time_ms integer,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
-CREATE TABLE public.api_tokens (
+CREATE TABLE IF NOT EXISTS public.api_tokens (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     name character varying(255) NOT NULL,
@@ -219,7 +206,7 @@ CREATE TABLE public.api_tokens (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
-CREATE TABLE public.audit_logs (
+CREATE TABLE IF NOT EXISTS public.audit_logs (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid,
     username character varying(255) NOT NULL,
@@ -232,7 +219,7 @@ CREATE TABLE public.audit_logs (
     user_agent text,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
-CREATE TABLE public.auth_sessions (
+CREATE TABLE IF NOT EXISTS public.auth_sessions (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     token_hash character varying(255) NOT NULL,
@@ -241,7 +228,7 @@ CREATE TABLE public.auth_sessions (
     expires_at timestamp with time zone NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
-CREATE TABLE public.backups (
+CREATE TABLE IF NOT EXISTS public.backups (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     filename character varying(255) NOT NULL,
     file_size bigint DEFAULT 0 NOT NULL,
@@ -257,7 +244,7 @@ CREATE TABLE public.backups (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     completed_at timestamp with time zone
 );
-CREATE TABLE public.banned_ips (
+CREATE TABLE IF NOT EXISTS public.banned_ips (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     proxy_host_id uuid,
     ip_address character varying(45) NOT NULL,
@@ -269,7 +256,7 @@ CREATE TABLE public.banned_ips (
     created_at timestamp with time zone DEFAULT now(),
     is_auto_banned boolean DEFAULT false
 );
-CREATE TABLE public.bot_filters (
+CREATE TABLE IF NOT EXISTS public.bot_filters (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     proxy_host_id uuid NOT NULL,
     enabled boolean DEFAULT true,
@@ -283,7 +270,7 @@ CREATE TABLE public.bot_filters (
     updated_at timestamp with time zone DEFAULT now(),
     block_suspicious_clients boolean DEFAULT false
 );
-CREATE TABLE public.certificates (
+CREATE TABLE IF NOT EXISTS public.certificates (
     id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
     domain_names text[] NOT NULL,
     expires_at timestamp with time zone,
@@ -308,7 +295,7 @@ COMMENT ON COLUMN public.certificates.acme_account IS 'ACME account registration
 COMMENT ON COLUMN public.certificates.certificate_pem IS 'Full certificate chain in PEM format';
 COMMENT ON COLUMN public.certificates.private_key_pem IS 'Private key in PEM format (encrypted at rest)';
 COMMENT ON COLUMN public.certificates.issuer_certificate_pem IS 'Issuer/CA certificate';
-CREATE TABLE public.certificate_history (
+CREATE TABLE IF NOT EXISTS public.certificate_history (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     certificate_id uuid NOT NULL,
     action character varying(50) NOT NULL,
@@ -324,7 +311,7 @@ COMMENT ON TABLE public.certificate_history IS 'Certificate issuance and renewal
 COMMENT ON COLUMN public.certificate_history.action IS 'Action type: issued, renewed, error, expired';
 COMMENT ON COLUMN public.certificate_history.status IS 'Result status: success, error';
 COMMENT ON COLUMN public.certificate_history.logs IS 'JSON array of log entries from ACME process';
-CREATE TABLE public.challenge_configs (
+CREATE TABLE IF NOT EXISTS public.challenge_configs (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     proxy_host_id uuid,
     enabled boolean DEFAULT true,
@@ -340,7 +327,7 @@ CREATE TABLE public.challenge_configs (
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now()
 );
-CREATE TABLE public.challenge_logs (
+CREATE TABLE IF NOT EXISTS public.challenge_logs (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     proxy_host_id uuid,
     client_ip character varying(45) NOT NULL,
@@ -351,7 +338,7 @@ CREATE TABLE public.challenge_logs (
     solve_time integer,
     created_at timestamp with time zone DEFAULT now()
 );
-CREATE TABLE public.challenge_tokens (
+CREATE TABLE IF NOT EXISTS public.challenge_tokens (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     proxy_host_id uuid,
     token_hash character varying(64) NOT NULL,
@@ -366,7 +353,7 @@ CREATE TABLE public.challenge_tokens (
     revoked_at timestamp with time zone,
     revoked_reason character varying(255)
 );
-CREATE TABLE public.cloud_providers (
+CREATE TABLE IF NOT EXISTS public.cloud_providers (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     name character varying(100) NOT NULL,
     slug character varying(50) NOT NULL,
@@ -379,7 +366,7 @@ CREATE TABLE public.cloud_providers (
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now()
 );
-CREATE TABLE public.dashboard_stats_daily (
+CREATE TABLE IF NOT EXISTS public.dashboard_stats_daily (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     proxy_host_id uuid,
     day_bucket date NOT NULL,
@@ -397,7 +384,7 @@ CREATE TABLE public.dashboard_stats_daily (
     bot_blocked bigint DEFAULT 0 NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
-CREATE TABLE public.dashboard_stats_hourly (
+CREATE TABLE IF NOT EXISTS public.dashboard_stats_hourly (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     proxy_host_id uuid,
     hour_bucket timestamp with time zone NOT NULL,
@@ -422,7 +409,7 @@ CREATE TABLE public.dashboard_stats_hourly (
     top_ips jsonb DEFAULT '[]'::jsonb,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
-CREATE TABLE public.dashboard_stats_hourly_partitioned (
+CREATE TABLE IF NOT EXISTS public.dashboard_stats_hourly_partitioned (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     proxy_host_id uuid,
     hour_bucket timestamp with time zone NOT NULL,
@@ -448,7 +435,7 @@ CREATE TABLE public.dashboard_stats_hourly_partitioned (
     created_at timestamp with time zone DEFAULT now() NOT NULL
 )
 PARTITION BY RANGE (hour_bucket);
-CREATE TABLE public.dns_providers (
+CREATE TABLE IF NOT EXISTS public.dns_providers (
     id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
     name character varying(100) NOT NULL,
     provider_type character varying(50) NOT NULL,
@@ -460,7 +447,7 @@ CREATE TABLE public.dns_providers (
 COMMENT ON TABLE public.dns_providers IS 'Stores DNS provider API credentials for ACME DNS-01 challenges';
 COMMENT ON COLUMN public.dns_providers.provider_type IS 'DNS provider type: cloudflare, route53, manual, etc.';
 COMMENT ON COLUMN public.dns_providers.credentials IS 'Encrypted JSON containing API tokens/keys';
-CREATE TABLE public.exploit_block_rules (
+CREATE TABLE IF NOT EXISTS public.exploit_block_rules (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     category character varying(50) NOT NULL,
     name character varying(100) NOT NULL,
@@ -477,7 +464,7 @@ CREATE TABLE public.exploit_block_rules (
 COMMENT ON TABLE public.exploit_block_rules IS 'Database-managed exploit blocking rules (replaces hardcoded block_exploits)';
 COMMENT ON COLUMN public.exploit_block_rules.pattern_type IS 'Where to apply the pattern: query_string, request_uri, user_agent, request_method';
 COMMENT ON COLUMN public.exploit_block_rules.is_system IS 'System rules cannot be deleted, only disabled';
-CREATE TABLE public.fail2ban_configs (
+CREATE TABLE IF NOT EXISTS public.fail2ban_configs (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     proxy_host_id uuid NOT NULL,
     enabled boolean DEFAULT true,
@@ -489,7 +476,7 @@ CREATE TABLE public.fail2ban_configs (
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now()
 );
-CREATE TABLE public.geo_restrictions (
+CREATE TABLE IF NOT EXISTS public.geo_restrictions (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     proxy_host_id uuid NOT NULL,
     mode character varying(20) DEFAULT 'blacklist'::character varying NOT NULL,
@@ -507,7 +494,7 @@ CREATE TABLE public.geo_restrictions (
 );
 COMMENT ON COLUMN public.geo_restrictions.allowed_ips IS 'IP addresses or CIDR ranges that bypass geo restrictions (priority override)';
 COMMENT ON COLUMN public.geo_restrictions.challenge_cloud_providers IS 'If true, show challenge (CAPTCHA) instead of blocking cloud provider IPs';
-CREATE TABLE public.geoip_update_history (
+CREATE TABLE IF NOT EXISTS public.geoip_update_history (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     status character varying(20) DEFAULT 'pending'::character varying NOT NULL,
     trigger_type character varying(20) DEFAULT 'manual'::character varying NOT NULL,
@@ -520,7 +507,7 @@ CREATE TABLE public.geoip_update_history (
     error_message text,
     created_at timestamp with time zone DEFAULT now()
 );
-CREATE TABLE public.global_exploit_rule_exclusions (
+CREATE TABLE IF NOT EXISTS public.global_exploit_rule_exclusions (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     rule_id uuid NOT NULL,
     reason text,
@@ -528,7 +515,7 @@ CREATE TABLE public.global_exploit_rule_exclusions (
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP
 );
 COMMENT ON TABLE public.global_exploit_rule_exclusions IS 'Global rule exclusions applying to all hosts';
-CREATE TABLE public.global_settings (
+CREATE TABLE IF NOT EXISTS public.global_settings (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     worker_processes integer DEFAULT 0 NOT NULL,
     worker_connections integer DEFAULT 1024 NOT NULL,
@@ -612,7 +599,7 @@ COMMENT ON COLUMN public.global_settings.proxy_buffers IS 'Number and size of bu
 COMMENT ON COLUMN public.global_settings.open_file_cache_enabled IS 'Enable file descriptor caching for better static file performance';
 COMMENT ON COLUMN public.global_settings.brotli_static IS 'Serve pre-compressed .br files if available';
 COMMENT ON COLUMN public.global_settings.brotli_min_length IS 'Minimum response size to apply Brotli compression (bytes)';
-CREATE TABLE public.global_uri_blocks (
+CREATE TABLE IF NOT EXISTS public.global_uri_blocks (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     enabled boolean DEFAULT true,
     rules jsonb DEFAULT '[]'::jsonb,
@@ -621,7 +608,7 @@ CREATE TABLE public.global_uri_blocks (
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now()
 );
-CREATE TABLE public.global_waf_policy_history (
+CREATE TABLE IF NOT EXISTS public.global_waf_policy_history (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     rule_id character varying(20) NOT NULL,
     rule_category character varying(255),
@@ -631,7 +618,7 @@ CREATE TABLE public.global_waf_policy_history (
     changed_by character varying(255),
     created_at timestamp with time zone DEFAULT now()
 );
-CREATE TABLE public.global_waf_rule_exclusions (
+CREATE TABLE IF NOT EXISTS public.global_waf_rule_exclusions (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     rule_id character varying(20) NOT NULL,
     rule_category character varying(255),
@@ -641,7 +628,7 @@ CREATE TABLE public.global_waf_rule_exclusions (
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now()
 );
-CREATE TABLE public.host_exploit_rule_exclusions (
+CREATE TABLE IF NOT EXISTS public.host_exploit_rule_exclusions (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     proxy_host_id uuid NOT NULL,
     rule_id uuid NOT NULL,
@@ -650,7 +637,7 @@ CREATE TABLE public.host_exploit_rule_exclusions (
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP
 );
 COMMENT ON TABLE public.host_exploit_rule_exclusions IS 'Per-host rule exclusions';
-CREATE TABLE public.ip_ban_history (
+CREATE TABLE IF NOT EXISTS public.ip_ban_history (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     event_type character varying(10) NOT NULL,
     ip_address character varying(45) NOT NULL,
@@ -668,7 +655,7 @@ CREATE TABLE public.ip_ban_history (
     metadata jsonb,
     created_at timestamp with time zone DEFAULT now()
 );
-CREATE TABLE public.log_settings (
+CREATE TABLE IF NOT EXISTS public.log_settings (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     retention_days integer DEFAULT 30 NOT NULL,
     max_logs_per_type bigint,
@@ -679,14 +666,14 @@ CREATE TABLE public.log_settings (
     enable_docker_logs boolean DEFAULT true NOT NULL,
     filter_health_checks boolean DEFAULT true NOT NULL
 );
-CREATE TABLE public.login_attempts (
+CREATE TABLE IF NOT EXISTS public.login_attempts (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     ip_address character varying(45) NOT NULL,
     username character varying(255),
     success boolean DEFAULT false NOT NULL,
     attempted_at timestamp with time zone DEFAULT now() NOT NULL
 );
-CREATE TABLE public.logs (
+CREATE TABLE IF NOT EXISTS public.logs (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     log_type public.log_type NOT NULL,
     "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
@@ -728,7 +715,7 @@ COMMENT ON COLUMN public.logs.geo_city IS 'City name from GeoIP lookup';
 COMMENT ON COLUMN public.logs.geo_asn IS 'Autonomous System Number';
 COMMENT ON COLUMN public.logs.geo_org IS 'Organization/ISP name from ASN lookup';
 COMMENT ON COLUMN public.logs.exploit_rule IS 'Specific exploit block rule ID (e.g., SQLI-001, RFI-001, VCS-001)';
-CREATE TABLE public.logs_partitioned (
+CREATE TABLE IF NOT EXISTS public.logs_partitioned (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     log_type public.log_type NOT NULL,
     "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
@@ -766,7 +753,7 @@ CREATE TABLE public.logs_partitioned (
 )
 PARTITION BY RANGE (created_at);
 COMMENT ON COLUMN public.logs_partitioned.exploit_rule IS 'Specific exploit block rule ID (e.g., SQLI-001, RFI-001, VCS-001)';
-CREATE TABLE public.logs_p2025_12 (
+CREATE TABLE IF NOT EXISTS public.logs_p2025_12 (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     log_type public.log_type NOT NULL,
     "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
@@ -802,7 +789,7 @@ CREATE TABLE public.logs_p2025_12 (
     bot_category text,
     exploit_rule character varying(50)
 );
-CREATE TABLE public.logs_p2026_01 (
+CREATE TABLE IF NOT EXISTS public.logs_p2026_01 (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     log_type public.log_type NOT NULL,
     "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
@@ -838,7 +825,7 @@ CREATE TABLE public.logs_p2026_01 (
     bot_category text,
     exploit_rule character varying(50)
 );
-CREATE TABLE public.logs_p2026_02 (
+CREATE TABLE IF NOT EXISTS public.logs_p2026_02 (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     log_type public.log_type NOT NULL,
     "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
@@ -874,7 +861,7 @@ CREATE TABLE public.logs_p2026_02 (
     bot_category text,
     exploit_rule character varying(50)
 );
-CREATE TABLE public.logs_p2026_03 (
+CREATE TABLE IF NOT EXISTS public.logs_p2026_03 (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     log_type public.log_type NOT NULL,
     "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
@@ -910,7 +897,7 @@ CREATE TABLE public.logs_p2026_03 (
     bot_category text,
     exploit_rule character varying(50)
 );
-CREATE TABLE public.logs_p_default (
+CREATE TABLE IF NOT EXISTS public.logs_p_default (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     log_type public.log_type NOT NULL,
     "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
@@ -1016,7 +1003,7 @@ UNION ALL
     logs_partitioned.raw_log,
     logs_partitioned.created_at
    FROM public.logs_partitioned;
-CREATE TABLE public.proxy_hosts (
+CREATE TABLE IF NOT EXISTS public.proxy_hosts (
     id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
     domain_names text[] NOT NULL,
     forward_scheme character varying(10) DEFAULT 'http'::character varying NOT NULL,
@@ -1064,7 +1051,7 @@ COMMENT ON COLUMN public.proxy_hosts.waf_anomaly_threshold IS 'Anomaly score thr
 COMMENT ON COLUMN public.proxy_hosts.block_exploits_exceptions IS 'Newline-separated regex patterns for URI paths that bypass RFI/exploit blocking. Example: ^/wp-json/';
 COMMENT ON COLUMN public.proxy_hosts.cache_static_only IS 'Only cache static assets (js, css, images, fonts) - excludes API paths';
 COMMENT ON COLUMN public.proxy_hosts.cache_ttl IS 'Cache duration for static assets (e.g., 1h, 7d, 30m)';
-CREATE TABLE public.rate_limits (
+CREATE TABLE IF NOT EXISTS public.rate_limits (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     proxy_host_id uuid NOT NULL,
     enabled boolean DEFAULT true,
@@ -1077,7 +1064,7 @@ CREATE TABLE public.rate_limits (
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now()
 );
-CREATE TABLE public.redirect_hosts (
+CREATE TABLE IF NOT EXISTS public.redirect_hosts (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     domain_names text[] DEFAULT '{}'::text[] NOT NULL,
     forward_scheme character varying(10) DEFAULT 'auto'::character varying NOT NULL,
@@ -1095,11 +1082,11 @@ CREATE TABLE public.redirect_hosts (
     updated_at timestamp with time zone DEFAULT now(),
     CONSTRAINT redirect_hosts_redirect_code_check CHECK ((redirect_code = ANY (ARRAY[301, 302, 307, 308])))
 );
-CREATE TABLE public.schema_migrations (
+CREATE TABLE IF NOT EXISTS public.schema_migrations (
     version character varying(255) NOT NULL,
     applied_at timestamp with time zone DEFAULT now()
 );
-CREATE TABLE public.security_headers (
+CREATE TABLE IF NOT EXISTS public.security_headers (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     proxy_host_id uuid NOT NULL,
     enabled boolean DEFAULT true,
@@ -1117,12 +1104,12 @@ CREATE TABLE public.security_headers (
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now()
 );
-CREATE TABLE public.settings (
+CREATE TABLE IF NOT EXISTS public.settings (
     key character varying(255) NOT NULL,
     value jsonb NOT NULL,
     updated_at timestamp with time zone DEFAULT now()
 );
-CREATE TABLE public.stats_hourly_p2025_12 (
+CREATE TABLE IF NOT EXISTS public.stats_hourly_p2025_12 (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     proxy_host_id uuid,
     hour_bucket timestamp with time zone NOT NULL,
@@ -1147,7 +1134,7 @@ CREATE TABLE public.stats_hourly_p2025_12 (
     top_ips jsonb DEFAULT '[]'::jsonb,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
-CREATE TABLE public.stats_hourly_p2026_01 (
+CREATE TABLE IF NOT EXISTS public.stats_hourly_p2026_01 (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     proxy_host_id uuid,
     hour_bucket timestamp with time zone NOT NULL,
@@ -1172,7 +1159,7 @@ CREATE TABLE public.stats_hourly_p2026_01 (
     top_ips jsonb DEFAULT '[]'::jsonb,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
-CREATE TABLE public.stats_hourly_p2026_02 (
+CREATE TABLE IF NOT EXISTS public.stats_hourly_p2026_02 (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     proxy_host_id uuid,
     hour_bucket timestamp with time zone NOT NULL,
@@ -1197,7 +1184,7 @@ CREATE TABLE public.stats_hourly_p2026_02 (
     top_ips jsonb DEFAULT '[]'::jsonb,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
-CREATE TABLE public.stats_hourly_p2026_03 (
+CREATE TABLE IF NOT EXISTS public.stats_hourly_p2026_03 (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     proxy_host_id uuid,
     hour_bucket timestamp with time zone NOT NULL,
@@ -1222,7 +1209,7 @@ CREATE TABLE public.stats_hourly_p2026_03 (
     top_ips jsonb DEFAULT '[]'::jsonb,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
-CREATE TABLE public.stats_hourly_p_default (
+CREATE TABLE IF NOT EXISTS public.stats_hourly_p_default (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     proxy_host_id uuid,
     hour_bucket timestamp with time zone NOT NULL,
@@ -1247,7 +1234,7 @@ CREATE TABLE public.stats_hourly_p_default (
     top_ips jsonb DEFAULT '[]'::jsonb,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
-CREATE TABLE public.system_health (
+CREATE TABLE IF NOT EXISTS public.system_health (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     recorded_at timestamp with time zone DEFAULT now() NOT NULL,
     nginx_status character varying(20) DEFAULT 'unknown'::character varying NOT NULL,
@@ -1280,7 +1267,7 @@ CREATE TABLE public.system_health (
     platform character varying(100) DEFAULT ''::character varying,
     kernel_version character varying(255) DEFAULT ''::character varying
 );
-CREATE TABLE public.system_logs (
+CREATE TABLE IF NOT EXISTS public.system_logs (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     source public.system_log_source NOT NULL,
     level public.system_log_level DEFAULT 'info'::public.system_log_level NOT NULL,
@@ -1290,7 +1277,7 @@ CREATE TABLE public.system_logs (
     component character varying(100),
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
-CREATE TABLE public.system_settings (
+CREATE TABLE IF NOT EXISTS public.system_settings (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     geoip_enabled boolean DEFAULT false NOT NULL,
     maxmind_license_key character varying(255) DEFAULT ''::character varying,
@@ -1438,7 +1425,7 @@ COMMENT ON COLUMN public.system_settings.raw_log_max_size_mb IS 'Maximum size of
 COMMENT ON COLUMN public.system_settings.raw_log_rotate_count IS 'Number of rotated log files to keep (default: 5)';
 COMMENT ON COLUMN public.system_settings.raw_log_compress_rotated IS 'Compress rotated log files with gzip (default: true)';
 COMMENT ON COLUMN public.system_settings.global_block_exploits_exceptions IS 'Global regex patterns for URI paths that bypass RFI/exploit blocking (one per line). Applied to all hosts with block_exploits enabled.';
-CREATE TABLE public.upstream_servers (
+CREATE TABLE IF NOT EXISTS public.upstream_servers (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     upstream_id uuid NOT NULL,
     address character varying(255) NOT NULL,
@@ -1454,7 +1441,7 @@ CREATE TABLE public.upstream_servers (
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now()
 );
-CREATE TABLE public.upstreams (
+CREATE TABLE IF NOT EXISTS public.upstreams (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     proxy_host_id uuid NOT NULL,
     name character varying(255) NOT NULL,
@@ -1471,7 +1458,7 @@ CREATE TABLE public.upstreams (
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now()
 );
-CREATE TABLE public.uri_blocks (
+CREATE TABLE IF NOT EXISTS public.uri_blocks (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     proxy_host_id uuid NOT NULL,
     enabled boolean DEFAULT true,
@@ -1481,7 +1468,7 @@ CREATE TABLE public.uri_blocks (
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now()
 );
-CREATE TABLE public.users (
+CREATE TABLE IF NOT EXISTS public.users (
     id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
     email character varying(255) NOT NULL,
     password_hash character varying(255) NOT NULL,
@@ -1501,7 +1488,7 @@ CREATE TABLE public.users (
     language character varying(10) DEFAULT 'ko'::character varying,
     font_family character varying(100) DEFAULT 'system'::character varying
 );
-CREATE TABLE public.waf_policy_history (
+CREATE TABLE IF NOT EXISTS public.waf_policy_history (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     proxy_host_id uuid NOT NULL,
     rule_id integer NOT NULL,
@@ -1514,7 +1501,7 @@ CREATE TABLE public.waf_policy_history (
 );
 COMMENT ON TABLE public.waf_policy_history IS 'Audit log for WAF policy changes';
 COMMENT ON COLUMN public.waf_policy_history.action IS 'disabled: rule was disabled, enabled: rule was re-enabled';
-CREATE TABLE public.waf_rule_change_events (
+CREATE TABLE IF NOT EXISTS public.waf_rule_change_events (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     proxy_host_id uuid,
     rule_id character varying(20) NOT NULL,
@@ -1525,7 +1512,7 @@ CREATE TABLE public.waf_rule_change_events (
     changed_by character varying(255),
     created_at timestamp with time zone DEFAULT now()
 );
-CREATE TABLE public.waf_rule_exclusions (
+CREATE TABLE IF NOT EXISTS public.waf_rule_exclusions (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     proxy_host_id uuid NOT NULL,
     rule_id integer NOT NULL,
@@ -1538,7 +1525,7 @@ CREATE TABLE public.waf_rule_exclusions (
 COMMENT ON TABLE public.waf_rule_exclusions IS 'Per-host WAF rule exclusions for OWASP CRS rules';
 COMMENT ON COLUMN public.waf_rule_exclusions.rule_id IS 'OWASP CRS rule ID (e.g., 941100)';
 COMMENT ON COLUMN public.waf_rule_exclusions.rule_category IS 'Rule category like XSS, SQLI, RCE, etc.';
-CREATE TABLE public.waf_rule_snapshot_details (
+CREATE TABLE IF NOT EXISTS public.waf_rule_snapshot_details (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     snapshot_id uuid NOT NULL,
     rule_id character varying(20) NOT NULL,
@@ -1547,7 +1534,7 @@ CREATE TABLE public.waf_rule_snapshot_details (
     is_disabled boolean DEFAULT false,
     reason text
 );
-CREATE TABLE public.waf_rule_snapshots (
+CREATE TABLE IF NOT EXISTS public.waf_rule_snapshots (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     proxy_host_id uuid,
     version_number integer NOT NULL,
@@ -1727,163 +1714,163 @@ ALTER TABLE ONLY public.waf_rule_snapshot_details
     ADD CONSTRAINT waf_rule_snapshot_details_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.waf_rule_snapshots
     ADD CONSTRAINT waf_rule_snapshots_pkey PRIMARY KEY (id);
-CREATE INDEX idx_access_list_items_list_id ON public.access_list_items USING btree (access_list_id);
-CREATE INDEX idx_api_token_usage_created_at ON public.api_token_usage USING btree (created_at);
-CREATE INDEX idx_api_token_usage_token_id ON public.api_token_usage USING btree (token_id);
-CREATE INDEX idx_api_tokens_is_active ON public.api_tokens USING btree (is_active) WHERE (is_active = true);
-CREATE INDEX idx_api_tokens_token_hash ON public.api_tokens USING btree (token_hash);
-CREATE INDEX idx_api_tokens_user_id ON public.api_tokens USING btree (user_id);
-CREATE INDEX idx_audit_logs_action ON public.audit_logs USING btree (action);
-CREATE INDEX idx_audit_logs_created_at ON public.audit_logs USING btree (created_at DESC);
-CREATE INDEX idx_audit_logs_resource_type ON public.audit_logs USING btree (resource_type);
-CREATE INDEX idx_audit_logs_user_created ON public.audit_logs USING btree (user_id, created_at DESC);
-CREATE INDEX idx_audit_logs_user_id ON public.audit_logs USING btree (user_id);
-CREATE INDEX idx_auth_sessions_expires_at ON public.auth_sessions USING btree (expires_at);
-CREATE INDEX idx_auth_sessions_token_hash ON public.auth_sessions USING btree (token_hash);
-CREATE INDEX idx_auth_sessions_user_id ON public.auth_sessions USING btree (user_id);
-CREATE INDEX idx_backups_created ON public.backups USING btree (created_at);
-CREATE INDEX idx_banned_ips_auto ON public.banned_ips USING btree (is_auto_banned, expires_at);
-CREATE INDEX idx_banned_ips_expires ON public.banned_ips USING btree (expires_at);
-CREATE UNIQUE INDEX idx_banned_ips_ip_global_unique ON public.banned_ips USING btree (ip_address) WHERE (proxy_host_id IS NULL);
-CREATE UNIQUE INDEX idx_banned_ips_ip_host_unique ON public.banned_ips USING btree (ip_address, proxy_host_id) WHERE (proxy_host_id IS NOT NULL);
-CREATE INDEX idx_banned_ips_lookup ON public.banned_ips USING btree (ip_address, expires_at, is_permanent);
-CREATE INDEX idx_banned_ips_proxy_host ON public.banned_ips USING btree (proxy_host_id);
-CREATE INDEX idx_certificates_auto_renew ON public.certificates USING btree (auto_renew) WHERE (auto_renew = true);
-CREATE INDEX idx_certificates_domain_names ON public.certificates USING gin (domain_names);
-CREATE INDEX idx_certificates_expires_at ON public.certificates USING btree (expires_at);
-CREATE INDEX idx_certificates_status ON public.certificates USING btree (status);
-CREATE INDEX idx_certificate_history_certificate_id ON public.certificate_history USING btree (certificate_id);
-CREATE INDEX idx_certificate_history_created_at ON public.certificate_history USING btree (created_at DESC);
-CREATE INDEX idx_certificate_history_action ON public.certificate_history USING btree (action);
-CREATE INDEX idx_challenge_logs_created ON public.challenge_logs USING btree (created_at);
-CREATE INDEX idx_challenge_logs_ip ON public.challenge_logs USING btree (client_ip);
-CREATE INDEX idx_challenge_logs_proxy_host ON public.challenge_logs USING btree (proxy_host_id);
-CREATE INDEX idx_challenge_tokens_expires ON public.challenge_tokens USING btree (expires_at);
-CREATE INDEX idx_challenge_tokens_hash ON public.challenge_tokens USING btree (token_hash);
-CREATE INDEX idx_challenge_tokens_ip ON public.challenge_tokens USING btree (client_ip);
-CREATE INDEX idx_challenge_tokens_proxy_host ON public.challenge_tokens USING btree (proxy_host_id);
-CREATE INDEX idx_cloud_providers_enabled ON public.cloud_providers USING btree (enabled);
-CREATE INDEX idx_cloud_providers_region ON public.cloud_providers USING btree (region);
-CREATE INDEX idx_cloud_providers_slug ON public.cloud_providers USING btree (slug);
-CREATE UNIQUE INDEX idx_dns_providers_default ON public.dns_providers USING btree (is_default) WHERE (is_default = true);
-CREATE INDEX idx_exploit_rules_category ON public.exploit_block_rules USING btree (category);
-CREATE INDEX idx_exploit_rules_enabled ON public.exploit_block_rules USING btree (enabled);
-CREATE INDEX idx_geo_restrictions_blocked_cloud ON public.geo_restrictions USING gin (blocked_cloud_providers);
-CREATE INDEX idx_geo_restrictions_proxy_host ON public.geo_restrictions USING btree (proxy_host_id);
-CREATE INDEX idx_geoip_update_history_created_at ON public.geoip_update_history USING btree (created_at DESC);
-CREATE INDEX idx_geoip_update_history_status ON public.geoip_update_history USING btree (status);
-CREATE UNIQUE INDEX idx_global_uri_blocks_singleton ON public.global_uri_blocks USING btree ((true));
-CREATE INDEX idx_global_waf_policy_history_created_at ON public.global_waf_policy_history USING btree (created_at DESC);
-CREATE INDEX idx_global_waf_policy_history_rule_id ON public.global_waf_policy_history USING btree (rule_id);
-CREATE INDEX idx_global_waf_rule_exclusions_rule_id ON public.global_waf_rule_exclusions USING btree (rule_id);
-CREATE INDEX idx_host_exploit_exclusions_host ON public.host_exploit_rule_exclusions USING btree (proxy_host_id);
-CREATE INDEX idx_host_exploit_exclusions_rule ON public.host_exploit_rule_exclusions USING btree (rule_id);
-CREATE INDEX idx_ip_ban_history_created_at ON public.ip_ban_history USING btree (created_at DESC);
-CREATE INDEX idx_ip_ban_history_event_type ON public.ip_ban_history USING btree (event_type);
-CREATE INDEX idx_ip_ban_history_ip ON public.ip_ban_history USING btree (ip_address);
-CREATE INDEX idx_ip_ban_history_ip_created ON public.ip_ban_history USING btree (ip_address, created_at DESC);
-CREATE INDEX idx_ip_ban_history_proxy_host ON public.ip_ban_history USING btree (proxy_host_id);
-CREATE INDEX idx_ip_ban_history_source ON public.ip_ban_history USING btree (source);
-CREATE INDEX idx_ip_ban_history_user ON public.ip_ban_history USING btree (user_id);
-CREATE INDEX idx_login_attempts_ip ON public.login_attempts USING btree (ip_address, attempted_at);
-CREATE INDEX idx_logs_access_timestamp ON public.logs USING btree ("timestamp" DESC) WHERE (log_type = 'access'::public.log_type);
-CREATE INDEX idx_logs_block_reason ON public.logs USING btree (block_reason) WHERE (block_reason <> 'none'::public.block_reason);
-CREATE INDEX idx_logs_block_reason_created ON public.logs USING btree (block_reason, created_at DESC) WHERE ((block_reason IS NOT NULL) AND (block_reason <> 'none'::public.block_reason));
-CREATE INDEX idx_logs_bot_filter ON public.logs USING btree (block_reason, bot_category, "timestamp" DESC) WHERE (block_reason = 'bot_filter'::public.block_reason);
-CREATE INDEX idx_logs_client_ip ON public.logs USING btree (client_ip);
-CREATE INDEX idx_logs_created_at_desc ON public.logs USING btree (created_at DESC);
-CREATE INDEX idx_logs_created_host ON public.logs USING btree (created_at DESC, host) WHERE (host IS NOT NULL);
-CREATE INDEX idx_logs_created_ip ON public.logs USING btree (created_at DESC, client_ip) WHERE (client_ip IS NOT NULL);
-CREATE INDEX idx_logs_created_status ON public.logs USING btree (created_at DESC, status_code) WHERE (status_code IS NOT NULL);
-CREATE INDEX idx_logs_created_type ON public.logs USING btree (created_at DESC, log_type);
-CREATE INDEX idx_logs_exploit_rule ON public.logs USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
-CREATE INDEX idx_logs_geo_asn ON public.logs USING btree (geo_asn);
-CREATE INDEX idx_logs_geo_country ON public.logs USING btree (geo_country_code, created_at DESC) WHERE (geo_country_code IS NOT NULL);
-CREATE INDEX idx_logs_geo_country_code ON public.logs USING btree (geo_country_code);
-CREATE INDEX idx_logs_geo_timestamp ON public.logs USING btree ("timestamp" DESC, geo_country_code) WHERE ((log_type = 'access'::public.log_type) AND (geo_country_code IS NOT NULL));
-CREATE INDEX idx_logs_host ON public.logs USING btree (host);
-CREATE INDEX idx_logs_host_timestamp ON public.logs USING btree (host, "timestamp" DESC);
-CREATE INDEX idx_logs_host_trgm ON public.logs USING gin (host public.gin_trgm_ops) WHERE (host IS NOT NULL);
-CREATE INDEX idx_logs_log_type ON public.logs USING btree (log_type);
-CREATE INDEX idx_logs_modsec_created ON public.logs USING btree (created_at DESC) WHERE (log_type = 'modsec'::public.log_type);
-CREATE INDEX idx_logs_part_host ON ONLY public.logs_partitioned USING btree (host);
-CREATE INDEX idx_logs_part_log_type ON ONLY public.logs_partitioned USING btree (log_type);
-CREATE INDEX idx_logs_part_timestamp ON ONLY public.logs_partitioned USING btree ("timestamp" DESC);
-CREATE INDEX idx_logs_part_type_timestamp ON ONLY public.logs_partitioned USING btree (log_type, "timestamp" DESC);
-CREATE INDEX idx_logs_partitioned_exploit_rule ON ONLY public.logs_partitioned USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
-CREATE INDEX idx_logs_proxy_host_id ON public.logs USING btree (proxy_host_id) WHERE (proxy_host_id IS NOT NULL);
-CREATE INDEX idx_logs_request_uri_trgm ON public.logs USING gin (request_uri public.gin_trgm_ops) WHERE (request_uri IS NOT NULL);
-CREATE INDEX idx_logs_rule_id ON public.logs USING btree (rule_id) WHERE (rule_id IS NOT NULL);
-CREATE INDEX idx_logs_severity ON public.logs USING btree (severity) WHERE (severity IS NOT NULL);
-CREATE INDEX idx_logs_status_code ON public.logs USING btree (status_code) WHERE (status_code IS NOT NULL);
-CREATE INDEX idx_logs_timestamp ON public.logs USING btree ("timestamp" DESC);
-CREATE INDEX idx_logs_type_timestamp ON public.logs USING btree (log_type, "timestamp" DESC);
-CREATE INDEX idx_proxy_hosts_created_at ON public.proxy_hosts USING btree (created_at DESC);
-CREATE INDEX idx_proxy_hosts_domain_names ON public.proxy_hosts USING gin (domain_names);
-CREATE INDEX idx_proxy_hosts_enabled ON public.proxy_hosts USING btree (enabled);
-CREATE INDEX idx_redirect_hosts_domains ON public.redirect_hosts USING gin (domain_names);
-CREATE INDEX idx_stats_daily_bucket ON public.dashboard_stats_daily USING btree (day_bucket);
-CREATE INDEX idx_stats_daily_host_bucket ON public.dashboard_stats_daily USING btree (proxy_host_id, day_bucket);
-CREATE INDEX idx_stats_hourly_bucket ON public.dashboard_stats_hourly USING btree (hour_bucket);
-CREATE INDEX idx_stats_hourly_host_bucket ON public.dashboard_stats_hourly USING btree (proxy_host_id, hour_bucket);
-CREATE INDEX idx_stats_hourly_part_bucket ON ONLY public.dashboard_stats_hourly_partitioned USING btree (hour_bucket);
-CREATE INDEX idx_stats_hourly_part_host ON ONLY public.dashboard_stats_hourly_partitioned USING btree (proxy_host_id, hour_bucket);
-CREATE INDEX idx_system_health_recorded ON public.system_health USING btree (recorded_at);
-CREATE INDEX idx_system_logs_container ON public.system_logs USING btree (container_name, created_at DESC) WHERE (container_name IS NOT NULL);
-CREATE INDEX idx_system_logs_created ON public.system_logs USING btree (created_at DESC);
-CREATE INDEX idx_system_logs_level ON public.system_logs USING btree (level);
-CREATE INDEX idx_system_logs_source ON public.system_logs USING btree (source);
-CREATE INDEX idx_system_logs_source_created ON public.system_logs USING btree (source, created_at DESC);
-CREATE INDEX idx_system_logs_source_level_created ON public.system_logs USING btree (source, level, created_at DESC);
-CREATE INDEX idx_system_settings_updated ON public.system_settings USING btree (updated_at);
-CREATE INDEX idx_upstream_servers_upstream ON public.upstream_servers USING btree (upstream_id);
-CREATE UNIQUE INDEX idx_uri_blocks_proxy_host ON public.uri_blocks USING btree (proxy_host_id);
-CREATE INDEX idx_users_totp_enabled ON public.users USING btree (totp_enabled) WHERE (totp_enabled = true);
-CREATE INDEX idx_waf_policy_history_proxy_host ON public.waf_policy_history USING btree (proxy_host_id, created_at DESC);
-CREATE INDEX idx_waf_policy_history_rule ON public.waf_policy_history USING btree (rule_id);
-CREATE INDEX idx_waf_rule_changes_proxy_host ON public.waf_rule_change_events USING btree (proxy_host_id, created_at DESC);
-CREATE INDEX idx_waf_rule_changes_rule ON public.waf_rule_change_events USING btree (rule_id, created_at DESC);
-CREATE INDEX idx_waf_rule_exclusions_proxy_host ON public.waf_rule_exclusions USING btree (proxy_host_id);
-CREATE INDEX idx_waf_rule_exclusions_rule_id ON public.waf_rule_exclusions USING btree (rule_id);
-CREATE INDEX idx_waf_snapshot_details_snapshot ON public.waf_rule_snapshot_details USING btree (snapshot_id);
-CREATE INDEX idx_waf_snapshots_created_at ON public.waf_rule_snapshots USING btree (created_at DESC);
-CREATE INDEX idx_waf_snapshots_proxy_host_version ON public.waf_rule_snapshots USING btree (proxy_host_id, version_number DESC);
-CREATE INDEX logs_p2025_12_exploit_rule_idx ON public.logs_p2025_12 USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
-CREATE INDEX logs_p2025_12_host_idx ON public.logs_p2025_12 USING btree (host);
-CREATE INDEX logs_p2025_12_log_type_idx ON public.logs_p2025_12 USING btree (log_type);
-CREATE INDEX logs_p2025_12_log_type_timestamp_idx ON public.logs_p2025_12 USING btree (log_type, "timestamp" DESC);
-CREATE INDEX logs_p2025_12_timestamp_idx ON public.logs_p2025_12 USING btree ("timestamp" DESC);
-CREATE INDEX logs_p2026_01_exploit_rule_idx ON public.logs_p2026_01 USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
-CREATE INDEX logs_p2026_01_host_idx ON public.logs_p2026_01 USING btree (host);
-CREATE INDEX logs_p2026_01_log_type_idx ON public.logs_p2026_01 USING btree (log_type);
-CREATE INDEX logs_p2026_01_log_type_timestamp_idx ON public.logs_p2026_01 USING btree (log_type, "timestamp" DESC);
-CREATE INDEX logs_p2026_01_timestamp_idx ON public.logs_p2026_01 USING btree ("timestamp" DESC);
-CREATE INDEX logs_p2026_02_exploit_rule_idx ON public.logs_p2026_02 USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
-CREATE INDEX logs_p2026_02_host_idx ON public.logs_p2026_02 USING btree (host);
-CREATE INDEX logs_p2026_02_log_type_idx ON public.logs_p2026_02 USING btree (log_type);
-CREATE INDEX logs_p2026_02_log_type_timestamp_idx ON public.logs_p2026_02 USING btree (log_type, "timestamp" DESC);
-CREATE INDEX logs_p2026_02_timestamp_idx ON public.logs_p2026_02 USING btree ("timestamp" DESC);
-CREATE INDEX logs_p2026_03_exploit_rule_idx ON public.logs_p2026_03 USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
-CREATE INDEX logs_p2026_03_host_idx ON public.logs_p2026_03 USING btree (host);
-CREATE INDEX logs_p2026_03_log_type_idx ON public.logs_p2026_03 USING btree (log_type);
-CREATE INDEX logs_p2026_03_log_type_timestamp_idx ON public.logs_p2026_03 USING btree (log_type, "timestamp" DESC);
-CREATE INDEX logs_p2026_03_timestamp_idx ON public.logs_p2026_03 USING btree ("timestamp" DESC);
-CREATE INDEX logs_p_default_exploit_rule_idx ON public.logs_p_default USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
-CREATE INDEX logs_p_default_host_idx ON public.logs_p_default USING btree (host);
-CREATE INDEX logs_p_default_log_type_idx ON public.logs_p_default USING btree (log_type);
-CREATE INDEX logs_p_default_log_type_timestamp_idx ON public.logs_p_default USING btree (log_type, "timestamp" DESC);
-CREATE INDEX logs_p_default_timestamp_idx ON public.logs_p_default USING btree ("timestamp" DESC);
-CREATE INDEX stats_hourly_p2025_12_hour_bucket_idx ON public.stats_hourly_p2025_12 USING btree (hour_bucket);
-CREATE INDEX stats_hourly_p2025_12_proxy_host_id_hour_bucket_idx ON public.stats_hourly_p2025_12 USING btree (proxy_host_id, hour_bucket);
-CREATE INDEX stats_hourly_p2026_01_hour_bucket_idx ON public.stats_hourly_p2026_01 USING btree (hour_bucket);
-CREATE INDEX stats_hourly_p2026_01_proxy_host_id_hour_bucket_idx ON public.stats_hourly_p2026_01 USING btree (proxy_host_id, hour_bucket);
-CREATE INDEX stats_hourly_p2026_02_hour_bucket_idx ON public.stats_hourly_p2026_02 USING btree (hour_bucket);
-CREATE INDEX stats_hourly_p2026_02_proxy_host_id_hour_bucket_idx ON public.stats_hourly_p2026_02 USING btree (proxy_host_id, hour_bucket);
-CREATE INDEX stats_hourly_p2026_03_hour_bucket_idx ON public.stats_hourly_p2026_03 USING btree (hour_bucket);
-CREATE INDEX stats_hourly_p2026_03_proxy_host_id_hour_bucket_idx ON public.stats_hourly_p2026_03 USING btree (proxy_host_id, hour_bucket);
-CREATE INDEX stats_hourly_p_default_hour_bucket_idx ON public.stats_hourly_p_default USING btree (hour_bucket);
-CREATE INDEX stats_hourly_p_default_proxy_host_id_hour_bucket_idx ON public.stats_hourly_p_default USING btree (proxy_host_id, hour_bucket);
-CREATE UNIQUE INDEX users_username_key ON public.users USING btree (username);
+CREATE INDEX IF NOT EXISTS idx_access_list_items_list_id ON public.access_list_items USING btree (access_list_id);
+CREATE INDEX IF NOT EXISTS idx_api_token_usage_created_at ON public.api_token_usage USING btree (created_at);
+CREATE INDEX IF NOT EXISTS idx_api_token_usage_token_id ON public.api_token_usage USING btree (token_id);
+CREATE INDEX IF NOT EXISTS idx_api_tokens_is_active ON public.api_tokens USING btree (is_active) WHERE (is_active = true);
+CREATE INDEX IF NOT EXISTS idx_api_tokens_token_hash ON public.api_tokens USING btree (token_hash);
+CREATE INDEX IF NOT EXISTS idx_api_tokens_user_id ON public.api_tokens USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON public.audit_logs USING btree (action);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON public.audit_logs USING btree (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_resource_type ON public.audit_logs USING btree (resource_type);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user_created ON public.audit_logs USING btree (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON public.audit_logs USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires_at ON public.auth_sessions USING btree (expires_at);
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_token_hash ON public.auth_sessions USING btree (token_hash);
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id ON public.auth_sessions USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_backups_created ON public.backups USING btree (created_at);
+CREATE INDEX IF NOT EXISTS idx_banned_ips_auto ON public.banned_ips USING btree (is_auto_banned, expires_at);
+CREATE INDEX IF NOT EXISTS idx_banned_ips_expires ON public.banned_ips USING btree (expires_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_banned_ips_ip_global_unique ON public.banned_ips USING btree (ip_address) WHERE (proxy_host_id IS NULL);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_banned_ips_ip_host_unique ON public.banned_ips USING btree (ip_address, proxy_host_id) WHERE (proxy_host_id IS NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_banned_ips_lookup ON public.banned_ips USING btree (ip_address, expires_at, is_permanent);
+CREATE INDEX IF NOT EXISTS idx_banned_ips_proxy_host ON public.banned_ips USING btree (proxy_host_id);
+CREATE INDEX IF NOT EXISTS idx_certificates_auto_renew ON public.certificates USING btree (auto_renew) WHERE (auto_renew = true);
+CREATE INDEX IF NOT EXISTS idx_certificates_domain_names ON public.certificates USING gin (domain_names);
+CREATE INDEX IF NOT EXISTS idx_certificates_expires_at ON public.certificates USING btree (expires_at);
+CREATE INDEX IF NOT EXISTS idx_certificates_status ON public.certificates USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_certificate_history_certificate_id ON public.certificate_history USING btree (certificate_id);
+CREATE INDEX IF NOT EXISTS idx_certificate_history_created_at ON public.certificate_history USING btree (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_certificate_history_action ON public.certificate_history USING btree (action);
+CREATE INDEX IF NOT EXISTS idx_challenge_logs_created ON public.challenge_logs USING btree (created_at);
+CREATE INDEX IF NOT EXISTS idx_challenge_logs_ip ON public.challenge_logs USING btree (client_ip);
+CREATE INDEX IF NOT EXISTS idx_challenge_logs_proxy_host ON public.challenge_logs USING btree (proxy_host_id);
+CREATE INDEX IF NOT EXISTS idx_challenge_tokens_expires ON public.challenge_tokens USING btree (expires_at);
+CREATE INDEX IF NOT EXISTS idx_challenge_tokens_hash ON public.challenge_tokens USING btree (token_hash);
+CREATE INDEX IF NOT EXISTS idx_challenge_tokens_ip ON public.challenge_tokens USING btree (client_ip);
+CREATE INDEX IF NOT EXISTS idx_challenge_tokens_proxy_host ON public.challenge_tokens USING btree (proxy_host_id);
+CREATE INDEX IF NOT EXISTS idx_cloud_providers_enabled ON public.cloud_providers USING btree (enabled);
+CREATE INDEX IF NOT EXISTS idx_cloud_providers_region ON public.cloud_providers USING btree (region);
+CREATE INDEX IF NOT EXISTS idx_cloud_providers_slug ON public.cloud_providers USING btree (slug);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_dns_providers_default ON public.dns_providers USING btree (is_default) WHERE (is_default = true);
+CREATE INDEX IF NOT EXISTS idx_exploit_rules_category ON public.exploit_block_rules USING btree (category);
+CREATE INDEX IF NOT EXISTS idx_exploit_rules_enabled ON public.exploit_block_rules USING btree (enabled);
+CREATE INDEX IF NOT EXISTS idx_geo_restrictions_blocked_cloud ON public.geo_restrictions USING gin (blocked_cloud_providers);
+CREATE INDEX IF NOT EXISTS idx_geo_restrictions_proxy_host ON public.geo_restrictions USING btree (proxy_host_id);
+CREATE INDEX IF NOT EXISTS idx_geoip_update_history_created_at ON public.geoip_update_history USING btree (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_geoip_update_history_status ON public.geoip_update_history USING btree (status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_global_uri_blocks_singleton ON public.global_uri_blocks USING btree ((true));
+CREATE INDEX IF NOT EXISTS idx_global_waf_policy_history_created_at ON public.global_waf_policy_history USING btree (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_global_waf_policy_history_rule_id ON public.global_waf_policy_history USING btree (rule_id);
+CREATE INDEX IF NOT EXISTS idx_global_waf_rule_exclusions_rule_id ON public.global_waf_rule_exclusions USING btree (rule_id);
+CREATE INDEX IF NOT EXISTS idx_host_exploit_exclusions_host ON public.host_exploit_rule_exclusions USING btree (proxy_host_id);
+CREATE INDEX IF NOT EXISTS idx_host_exploit_exclusions_rule ON public.host_exploit_rule_exclusions USING btree (rule_id);
+CREATE INDEX IF NOT EXISTS idx_ip_ban_history_created_at ON public.ip_ban_history USING btree (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ip_ban_history_event_type ON public.ip_ban_history USING btree (event_type);
+CREATE INDEX IF NOT EXISTS idx_ip_ban_history_ip ON public.ip_ban_history USING btree (ip_address);
+CREATE INDEX IF NOT EXISTS idx_ip_ban_history_ip_created ON public.ip_ban_history USING btree (ip_address, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ip_ban_history_proxy_host ON public.ip_ban_history USING btree (proxy_host_id);
+CREATE INDEX IF NOT EXISTS idx_ip_ban_history_source ON public.ip_ban_history USING btree (source);
+CREATE INDEX IF NOT EXISTS idx_ip_ban_history_user ON public.ip_ban_history USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_login_attempts_ip ON public.login_attempts USING btree (ip_address, attempted_at);
+CREATE INDEX IF NOT EXISTS idx_logs_access_timestamp ON public.logs USING btree ("timestamp" DESC) WHERE (log_type = 'access'::public.log_type);
+CREATE INDEX IF NOT EXISTS idx_logs_block_reason ON public.logs USING btree (block_reason) WHERE (block_reason <> 'none'::public.block_reason);
+CREATE INDEX IF NOT EXISTS idx_logs_block_reason_created ON public.logs USING btree (block_reason, created_at DESC) WHERE ((block_reason IS NOT NULL) AND (block_reason <> 'none'::public.block_reason));
+CREATE INDEX IF NOT EXISTS idx_logs_bot_filter ON public.logs USING btree (block_reason, bot_category, "timestamp" DESC) WHERE (block_reason = 'bot_filter'::public.block_reason);
+CREATE INDEX IF NOT EXISTS idx_logs_client_ip ON public.logs USING btree (client_ip);
+CREATE INDEX IF NOT EXISTS idx_logs_created_at_desc ON public.logs USING btree (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_logs_created_host ON public.logs USING btree (created_at DESC, host) WHERE (host IS NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_logs_created_ip ON public.logs USING btree (created_at DESC, client_ip) WHERE (client_ip IS NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_logs_created_status ON public.logs USING btree (created_at DESC, status_code) WHERE (status_code IS NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_logs_created_type ON public.logs USING btree (created_at DESC, log_type);
+CREATE INDEX IF NOT EXISTS idx_logs_exploit_rule ON public.logs USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
+CREATE INDEX IF NOT EXISTS idx_logs_geo_asn ON public.logs USING btree (geo_asn);
+CREATE INDEX IF NOT EXISTS idx_logs_geo_country ON public.logs USING btree (geo_country_code, created_at DESC) WHERE (geo_country_code IS NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_logs_geo_country_code ON public.logs USING btree (geo_country_code);
+CREATE INDEX IF NOT EXISTS idx_logs_geo_timestamp ON public.logs USING btree ("timestamp" DESC, geo_country_code) WHERE ((log_type = 'access'::public.log_type) AND (geo_country_code IS NOT NULL));
+CREATE INDEX IF NOT EXISTS idx_logs_host ON public.logs USING btree (host);
+CREATE INDEX IF NOT EXISTS idx_logs_host_timestamp ON public.logs USING btree (host, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS idx_logs_host_trgm ON public.logs USING gin (host public.gin_trgm_ops) WHERE (host IS NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_logs_log_type ON public.logs USING btree (log_type);
+CREATE INDEX IF NOT EXISTS idx_logs_modsec_created ON public.logs USING btree (created_at DESC) WHERE (log_type = 'modsec'::public.log_type);
+CREATE INDEX IF NOT EXISTS idx_logs_part_host ON ONLY public.logs_partitioned USING btree (host);
+CREATE INDEX IF NOT EXISTS idx_logs_part_log_type ON ONLY public.logs_partitioned USING btree (log_type);
+CREATE INDEX IF NOT EXISTS idx_logs_part_timestamp ON ONLY public.logs_partitioned USING btree ("timestamp" DESC);
+CREATE INDEX IF NOT EXISTS idx_logs_part_type_timestamp ON ONLY public.logs_partitioned USING btree (log_type, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS idx_logs_partitioned_exploit_rule ON ONLY public.logs_partitioned USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
+CREATE INDEX IF NOT EXISTS idx_logs_proxy_host_id ON public.logs USING btree (proxy_host_id) WHERE (proxy_host_id IS NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_logs_request_uri_trgm ON public.logs USING gin (request_uri public.gin_trgm_ops) WHERE (request_uri IS NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_logs_rule_id ON public.logs USING btree (rule_id) WHERE (rule_id IS NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_logs_severity ON public.logs USING btree (severity) WHERE (severity IS NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_logs_status_code ON public.logs USING btree (status_code) WHERE (status_code IS NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON public.logs USING btree ("timestamp" DESC);
+CREATE INDEX IF NOT EXISTS idx_logs_type_timestamp ON public.logs USING btree (log_type, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS idx_proxy_hosts_created_at ON public.proxy_hosts USING btree (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_proxy_hosts_domain_names ON public.proxy_hosts USING gin (domain_names);
+CREATE INDEX IF NOT EXISTS idx_proxy_hosts_enabled ON public.proxy_hosts USING btree (enabled);
+CREATE INDEX IF NOT EXISTS idx_redirect_hosts_domains ON public.redirect_hosts USING gin (domain_names);
+CREATE INDEX IF NOT EXISTS idx_stats_daily_bucket ON public.dashboard_stats_daily USING btree (day_bucket);
+CREATE INDEX IF NOT EXISTS idx_stats_daily_host_bucket ON public.dashboard_stats_daily USING btree (proxy_host_id, day_bucket);
+CREATE INDEX IF NOT EXISTS idx_stats_hourly_bucket ON public.dashboard_stats_hourly USING btree (hour_bucket);
+CREATE INDEX IF NOT EXISTS idx_stats_hourly_host_bucket ON public.dashboard_stats_hourly USING btree (proxy_host_id, hour_bucket);
+CREATE INDEX IF NOT EXISTS idx_stats_hourly_part_bucket ON ONLY public.dashboard_stats_hourly_partitioned USING btree (hour_bucket);
+CREATE INDEX IF NOT EXISTS idx_stats_hourly_part_host ON ONLY public.dashboard_stats_hourly_partitioned USING btree (proxy_host_id, hour_bucket);
+CREATE INDEX IF NOT EXISTS idx_system_health_recorded ON public.system_health USING btree (recorded_at);
+CREATE INDEX IF NOT EXISTS idx_system_logs_container ON public.system_logs USING btree (container_name, created_at DESC) WHERE (container_name IS NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_system_logs_created ON public.system_logs USING btree (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_system_logs_level ON public.system_logs USING btree (level);
+CREATE INDEX IF NOT EXISTS idx_system_logs_source ON public.system_logs USING btree (source);
+CREATE INDEX IF NOT EXISTS idx_system_logs_source_created ON public.system_logs USING btree (source, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_system_logs_source_level_created ON public.system_logs USING btree (source, level, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_system_settings_updated ON public.system_settings USING btree (updated_at);
+CREATE INDEX IF NOT EXISTS idx_upstream_servers_upstream ON public.upstream_servers USING btree (upstream_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_uri_blocks_proxy_host ON public.uri_blocks USING btree (proxy_host_id);
+CREATE INDEX IF NOT EXISTS idx_users_totp_enabled ON public.users USING btree (totp_enabled) WHERE (totp_enabled = true);
+CREATE INDEX IF NOT EXISTS idx_waf_policy_history_proxy_host ON public.waf_policy_history USING btree (proxy_host_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_waf_policy_history_rule ON public.waf_policy_history USING btree (rule_id);
+CREATE INDEX IF NOT EXISTS idx_waf_rule_changes_proxy_host ON public.waf_rule_change_events USING btree (proxy_host_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_waf_rule_changes_rule ON public.waf_rule_change_events USING btree (rule_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_waf_rule_exclusions_proxy_host ON public.waf_rule_exclusions USING btree (proxy_host_id);
+CREATE INDEX IF NOT EXISTS idx_waf_rule_exclusions_rule_id ON public.waf_rule_exclusions USING btree (rule_id);
+CREATE INDEX IF NOT EXISTS idx_waf_snapshot_details_snapshot ON public.waf_rule_snapshot_details USING btree (snapshot_id);
+CREATE INDEX IF NOT EXISTS idx_waf_snapshots_created_at ON public.waf_rule_snapshots USING btree (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_waf_snapshots_proxy_host_version ON public.waf_rule_snapshots USING btree (proxy_host_id, version_number DESC);
+CREATE INDEX IF NOT EXISTS logs_p2025_12_exploit_rule_idx ON public.logs_p2025_12 USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
+CREATE INDEX IF NOT EXISTS logs_p2025_12_host_idx ON public.logs_p2025_12 USING btree (host);
+CREATE INDEX IF NOT EXISTS logs_p2025_12_log_type_idx ON public.logs_p2025_12 USING btree (log_type);
+CREATE INDEX IF NOT EXISTS logs_p2025_12_log_type_timestamp_idx ON public.logs_p2025_12 USING btree (log_type, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2025_12_timestamp_idx ON public.logs_p2025_12 USING btree ("timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2026_01_exploit_rule_idx ON public.logs_p2026_01 USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
+CREATE INDEX IF NOT EXISTS logs_p2026_01_host_idx ON public.logs_p2026_01 USING btree (host);
+CREATE INDEX IF NOT EXISTS logs_p2026_01_log_type_idx ON public.logs_p2026_01 USING btree (log_type);
+CREATE INDEX IF NOT EXISTS logs_p2026_01_log_type_timestamp_idx ON public.logs_p2026_01 USING btree (log_type, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2026_01_timestamp_idx ON public.logs_p2026_01 USING btree ("timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2026_02_exploit_rule_idx ON public.logs_p2026_02 USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
+CREATE INDEX IF NOT EXISTS logs_p2026_02_host_idx ON public.logs_p2026_02 USING btree (host);
+CREATE INDEX IF NOT EXISTS logs_p2026_02_log_type_idx ON public.logs_p2026_02 USING btree (log_type);
+CREATE INDEX IF NOT EXISTS logs_p2026_02_log_type_timestamp_idx ON public.logs_p2026_02 USING btree (log_type, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2026_02_timestamp_idx ON public.logs_p2026_02 USING btree ("timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2026_03_exploit_rule_idx ON public.logs_p2026_03 USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
+CREATE INDEX IF NOT EXISTS logs_p2026_03_host_idx ON public.logs_p2026_03 USING btree (host);
+CREATE INDEX IF NOT EXISTS logs_p2026_03_log_type_idx ON public.logs_p2026_03 USING btree (log_type);
+CREATE INDEX IF NOT EXISTS logs_p2026_03_log_type_timestamp_idx ON public.logs_p2026_03 USING btree (log_type, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2026_03_timestamp_idx ON public.logs_p2026_03 USING btree ("timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p_default_exploit_rule_idx ON public.logs_p_default USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
+CREATE INDEX IF NOT EXISTS logs_p_default_host_idx ON public.logs_p_default USING btree (host);
+CREATE INDEX IF NOT EXISTS logs_p_default_log_type_idx ON public.logs_p_default USING btree (log_type);
+CREATE INDEX IF NOT EXISTS logs_p_default_log_type_timestamp_idx ON public.logs_p_default USING btree (log_type, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p_default_timestamp_idx ON public.logs_p_default USING btree ("timestamp" DESC);
+CREATE INDEX IF NOT EXISTS stats_hourly_p2025_12_hour_bucket_idx ON public.stats_hourly_p2025_12 USING btree (hour_bucket);
+CREATE INDEX IF NOT EXISTS stats_hourly_p2025_12_proxy_host_id_hour_bucket_idx ON public.stats_hourly_p2025_12 USING btree (proxy_host_id, hour_bucket);
+CREATE INDEX IF NOT EXISTS stats_hourly_p2026_01_hour_bucket_idx ON public.stats_hourly_p2026_01 USING btree (hour_bucket);
+CREATE INDEX IF NOT EXISTS stats_hourly_p2026_01_proxy_host_id_hour_bucket_idx ON public.stats_hourly_p2026_01 USING btree (proxy_host_id, hour_bucket);
+CREATE INDEX IF NOT EXISTS stats_hourly_p2026_02_hour_bucket_idx ON public.stats_hourly_p2026_02 USING btree (hour_bucket);
+CREATE INDEX IF NOT EXISTS stats_hourly_p2026_02_proxy_host_id_hour_bucket_idx ON public.stats_hourly_p2026_02 USING btree (proxy_host_id, hour_bucket);
+CREATE INDEX IF NOT EXISTS stats_hourly_p2026_03_hour_bucket_idx ON public.stats_hourly_p2026_03 USING btree (hour_bucket);
+CREATE INDEX IF NOT EXISTS stats_hourly_p2026_03_proxy_host_id_hour_bucket_idx ON public.stats_hourly_p2026_03 USING btree (proxy_host_id, hour_bucket);
+CREATE INDEX IF NOT EXISTS stats_hourly_p_default_hour_bucket_idx ON public.stats_hourly_p_default USING btree (hour_bucket);
+CREATE INDEX IF NOT EXISTS stats_hourly_p_default_proxy_host_id_hour_bucket_idx ON public.stats_hourly_p_default USING btree (proxy_host_id, hour_bucket);
+CREATE UNIQUE INDEX IF NOT EXISTS users_username_key ON public.users USING btree (username);
 ALTER INDEX public.idx_logs_partitioned_exploit_rule ATTACH PARTITION public.logs_p2025_12_exploit_rule_idx;
 ALTER INDEX public.idx_logs_part_host ATTACH PARTITION public.logs_p2025_12_host_idx;
 ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.logs_p2025_12_log_type_idx;
@@ -2044,3 +2031,17 @@ INSERT INTO public.exploit_block_rules (id, category, name, pattern, pattern_typ
 ('e78e2ef1-d710-409b-8a44-a03db3999b19', 'scanner', 'WebInspect', 'webinspect', 'user_agent', 'Blocks HP WebInspect', 'warning', true, true, 41),
 ('8ec83a35-dea8-4f51-9185-37035f0a4501', 'http_method', 'Dangerous Methods', '^(TRACE|TRACK|DEBUG|CONNECT)$', 'request_method', 'Blocks dangerous HTTP methods', 'warning', true, true, 50)
 ON CONFLICT (id) DO NOTHING;
+
+-- ============================================================================
+-- UPGRADE SECTION: Add new columns for existing installations
+-- This section uses ADD COLUMN IF NOT EXISTS to safely add columns
+-- that may not exist in older database versions
+-- ============================================================================
+
+-- proxy_hosts table upgrades
+ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS cache_static_only boolean DEFAULT true NOT NULL;
+ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS cache_ttl character varying(20) DEFAULT '7d'::character varying NOT NULL;
+
+-- Add column comments
+COMMENT ON COLUMN public.proxy_hosts.cache_static_only IS 'Only cache static assets (js, css, images, fonts) - excludes API paths';
+COMMENT ON COLUMN public.proxy_hosts.cache_ttl IS 'Cache duration for static assets (e.g., 1h, 7d, 30m)';
