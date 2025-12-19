@@ -57,3 +57,7 @@ temp/
 
 # Backups
 backups/
+test/.env
+
+# Test environment
+test/

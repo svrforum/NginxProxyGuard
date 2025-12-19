@@ -1994,14 +1994,11 @@ ALTER TABLE ONLY public.waf_rule_snapshots
 -- Default data
 
 -- Default admin user (password: admin)
-INSERT INTO public.users (id, username, password_hash, role, is_initial_setup, language, font_family)
-VALUES ('00000000-0000-0000-0000-000000000001', 'admin', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'admin', true, 'ko', 'system')
+INSERT INTO public.users (id, email, username, password_hash, role, is_initial_setup, language, font_family)
+VALUES ('00000000-0000-0000-0000-000000000001', 'admin@localhost', 'admin', '$2a$10$kM9Su6aXZc8u3FHRvOsGAOwXVYL4WxVeYDcvlsFlU.S8GGWUwNWku', 'admin', true, 'ko', 'system')
 ON CONFLICT (id) DO NOTHING;
 
--- Default system settings
-INSERT INTO public.system_settings (id, direct_ip_action, ssl_protocols, ssl_ciphers, ssl_prefer_server_ciphers, ssl_session_cache, ssl_session_timeout, proxy_connect_timeout, proxy_send_timeout, proxy_read_timeout, client_max_body_size, global_block_exploits_exceptions)
-VALUES (1, 'allow', 'TLSv1.2 TLSv1.3', 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384', true, 'shared:SSL:50m', '1d', 60, 60, 60, '50m', E'^/wp-json/\n^/api/v1/challenge/')
-ON CONFLICT (id) DO NOTHING;
+-- Default system settings (table uses default values, no INSERT needed)
 
 -- Default exploit block rules (system rules)
 INSERT INTO public.exploit_block_rules (id, category, name, pattern, pattern_type, description, severity, enabled, is_system, sort_order) VALUES

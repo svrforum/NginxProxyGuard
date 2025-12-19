@@ -264,7 +264,7 @@ export function useProxyHostForm(host: ProxyHost | null | undefined, onClose: ()
       }
 
       // Save geo restriction if geo blocking enabled OR if priority allow IPs exist
-      if ((geoData.enabled && geoData.countries.length > 0) || geoData.allowed_ips.length > 0) {
+      if ((geoData.enabled && geoData.countries.length > 0) || (geoData.allowed_ips?.length ?? 0) > 0) {
         additionalSettingsPromises.push(
           setGeoRestriction(newHost.id, {
             mode: geoData.mode,
@@ -334,7 +334,7 @@ export function useProxyHostForm(host: ProxyHost | null | undefined, onClose: ()
         (async () => {
           try {
             const hasGeoBlocking = geoData.enabled && geoData.countries.length > 0
-            const hasPriorityAllowIPs = geoData.allowed_ips.length > 0
+            const hasPriorityAllowIPs = (geoData.allowed_ips?.length ?? 0) > 0
 
             if (hasGeoBlocking || hasPriorityAllowIPs) {
               await setGeoRestriction(variables.id, {
