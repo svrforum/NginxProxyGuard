@@ -1,7 +1,19 @@
 import type { LogListResponse, LogStats, LogSettings, LogFilter, CountryStat } from '../types/log';
-import { getAuthHeaders } from './auth';
+import { getAuthHeaders, clearToken } from './auth';
 
 const API_BASE = '/api/v1';
+
+// Handle 401 responses by clearing token and redirecting
+async function handleResponse<T>(res: Response): Promise<T> {
+  if (!res.ok) {
+    if (res.status === 401) {
+      clearToken();
+      window.location.reload();
+    }
+    throw new Error(`HTTP ${res.status}`);
+  }
+  return res.json();
+}
 
 export async function fetchLogs(
   page = 1,
@@ -81,8 +93,7 @@ export async function fetchLogs(
   const res = await fetch(`${API_BASE}/logs?${params}`, {
     headers: getAuthHeaders(),
   });
-  if (!res.ok) throw new Error('Failed to fetch logs');
-  return res.json();
+  return handleResponse<LogListResponse>(res);
 }
 
 export async function fetchLogStats(filter?: LogFilter): Promise<LogStats> {
@@ -143,16 +154,14 @@ export async function fetchLogStats(filter?: LogFilter): Promise<LogStats> {
   const res = await fetch(`${API_BASE}/logs/stats?${params}`, {
     headers: getAuthHeaders(),
   });
-  if (!res.ok) throw new Error('Failed to fetch log stats');
-  return res.json();
+  return handleResponse<LogStats>(res);
 }
 
 export async function fetchLogSettings(): Promise<LogSettings> {
   const res = await fetch(`${API_BASE}/logs/settings`, {
     headers: getAuthHeaders(),
   });
-  if (!res.ok) throw new Error('Failed to fetch log settings');
-  return res.json();
+  return handleResponse<LogSettings>(res);
 }
 
 export async function updateLogSettings(
@@ -163,8 +172,7 @@ export async function updateLogSettings(
     headers: getAuthHeaders(),
     body: JSON.stringify(settings),
   });
-  if (!res.ok) throw new Error('Failed to update log settings');
-  return res.json();
+  return handleResponse<LogSettings>(res);
 }
 
 export async function cleanupLogs(): Promise<{ deleted: number; message: string }> {
@@ -172,8 +180,7 @@ export async function cleanupLogs(): Promise<{ deleted: number; message: string 
     method: 'POST',
     headers: getAuthHeaders(),
   });
-  if (!res.ok) throw new Error('Failed to cleanup logs');
-  return res.json();
+  return handleResponse<{ deleted: number; message: string }>(res);
 }
 
 // Autocomplete API functions
@@ -186,8 +193,7 @@ export async function fetchDistinctHosts(search?: string, limit = 20): Promise<s
   const res = await fetch(`${API_BASE}/logs/autocomplete/hosts?${params}`, {
     headers: getAuthHeaders(),
   });
-  if (!res.ok) throw new Error('Failed to fetch hosts');
-  return res.json();
+  return handleResponse<string[]>(res);
 }
 
 export async function fetchDistinctIPs(search?: string, limit = 20): Promise<string[]> {
@@ -198,8 +204,7 @@ export async function fetchDistinctIPs(search?: string, limit = 20): Promise<str
   const res = await fetch(`${API_BASE}/logs/autocomplete/ips?${params}`, {
     headers: getAuthHeaders(),
   });
-  if (!res.ok) throw new Error('Failed to fetch IPs');
-  return res.json();
+  return handleResponse<string[]>(res);
 }
 
 export async function fetchDistinctUserAgents(search?: string, limit = 20): Promise<string[]> {
@@ -210,16 +215,14 @@ export async function fetchDistinctUserAgents(search?: string, limit = 20): Prom
   const res = await fetch(`${API_BASE}/logs/autocomplete/user-agents?${params}`, {
     headers: getAuthHeaders(),
   });
-  if (!res.ok) throw new Error('Failed to fetch user agents');
-  return res.json();
+  return handleResponse<string[]>(res);
 }
 
 export async function fetchDistinctCountries(): Promise<CountryStat[]> {
   const res = await fetch(`${API_BASE}/logs/autocomplete/countries`, {
     headers: getAuthHeaders(),
   });
-  if (!res.ok) throw new Error('Failed to fetch countries');
-  return res.json();
+  return handleResponse<CountryStat[]>(res);
 }
 
 export async function fetchDistinctURIs(search?: string, limit = 20): Promise<string[]> {
@@ -230,14 +233,12 @@ export async function fetchDistinctURIs(search?: string, limit = 20): Promise<st
   const res = await fetch(`${API_BASE}/logs/autocomplete/uris?${params}`, {
     headers: getAuthHeaders(),
   });
-  if (!res.ok) throw new Error('Failed to fetch URIs');
-  return res.json();
+  return handleResponse<string[]>(res);
 }
 
 export async function fetchDistinctMethods(): Promise<string[]> {
   const res = await fetch(`${API_BASE}/logs/autocomplete/methods`, {
     headers: getAuthHeaders(),
   });
-  if (!res.ok) throw new Error('Failed to fetch methods');
-  return res.json();
+  return handleResponse<string[]>(res);
 }
