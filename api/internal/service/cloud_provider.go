@@ -76,7 +76,8 @@ var defaultCloudProviders = []DefaultCloudProvider{
 	{Name: "Smileserv (CloudV/iwinv)", Slug: "smileserv", Region: "kr", Description: "Korean cloud hosting (CloudV, iwinv)", IPRangesURL: "", ASNs: []uint{17858, 38661}},
 	// Naver Cloud: AS23576 is the primary ASN (verified 2025)
 	{Name: "Naver Cloud", Slug: "naver", Region: "kr", Description: "Naver Cloud Platform", IPRangesURL: "", ASNs: []uint{23576}},
-	{Name: "KT Cloud", Slug: "kt", Region: "kr", Description: "KT Cloud (Korea Telecom)", IPRangesURL: "", ASNs: []uint{4766, 9318, 17853}},
+	// KT Cloud: AS9947 is the cloud service ASN (NOT AS4766 which is general KT ISP)
+	{Name: "KT Cloud", Slug: "kt", Region: "kr", Description: "KT Cloud (Korea Telecom IDC)", IPRangesURL: "", ASNs: []uint{9947}},
 }
 
 // NewCloudProviderService creates a new cloud provider service
