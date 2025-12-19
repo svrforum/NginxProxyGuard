@@ -1083,10 +1083,7 @@ CREATE TABLE IF NOT EXISTS public.redirect_hosts (
     updated_at timestamp with time zone DEFAULT now(),
     CONSTRAINT redirect_hosts_redirect_code_check CHECK ((redirect_code = ANY (ARRAY[301, 302, 307, 308])))
 );
-CREATE TABLE IF NOT EXISTS public.schema_migrations (
-    version character varying(255) NOT NULL,
-    applied_at timestamp with time zone DEFAULT now()
-);
+-- Note: schema_migrations table is created by migration.go, not here
 CREATE TABLE IF NOT EXISTS public.security_headers (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     proxy_host_id uuid NOT NULL,
@@ -1667,8 +1664,7 @@ ALTER TABLE ONLY public.rate_limits
     ADD CONSTRAINT rate_limits_proxy_host_id_key UNIQUE (proxy_host_id);
 ALTER TABLE ONLY public.redirect_hosts
     ADD CONSTRAINT redirect_hosts_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY public.schema_migrations
-    ADD CONSTRAINT schema_migrations_pkey PRIMARY KEY (version);
+-- Note: schema_migrations PRIMARY KEY is created by migration.go
 ALTER TABLE ONLY public.security_headers
     ADD CONSTRAINT security_headers_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.security_headers
