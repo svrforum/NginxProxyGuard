@@ -73,6 +73,10 @@ server {
     if ($request_uri ~ "^/.well-known/acme-challenge/") {
         set $skip_security_for_acme 1;
     }
+    # Also skip for challenge page to prevent redirect loops
+    if ($request_uri ~ "^/api/v1/challenge/") {
+        set $skip_security_for_acme 1;
+    }
 
     # ACME HTTP-01 Challenge support (bypass all security checks)
     location /.well-known/acme-challenge/ {
@@ -427,40 +431,42 @@ server {
 
 {{if .BlockedCloudIPRanges}}
     # Blocked Cloud Provider IPs check
+    # Skip for ACME challenge and challenge page (prevents redirect loops)
+    # Priority Allow IPs bypass cloud provider blocking
+    set $is_priority_allow_cloud $skip_security_for_acme;
+{{if and .GeoRestriction (len .GeoRestriction.AllowedIPs)}}
+{{range .GeoRestriction.AllowedIPs}}
+{{if isCIDR .}}
+    if ($remote_addr ~ "{{cidrToNginxPattern .}}") {
+        set $is_priority_allow_cloud 1;
+    }
+{{else}}
+    if ($remote_addr = "{{.}}") {
+        set $is_priority_allow_cloud 1;
+    }
+{{end}}
+{{end}}
+{{end}}
 {{if .CloudProviderAllowSearchBots}}{{if .SearchEnginesList}}
     # Allow search engine bots to bypass cloud provider blocking
-    set $is_search_bot_cloud 0;
     if ($http_user_agent ~* ({{toRegexPattern .SearchEnginesList}})) {
-        set $is_search_bot_cloud 1;
+        set $is_priority_allow_cloud 1;
     }
-    set $cloud_block_check_{{sanitizeID .Host.ID}} "${blocked_cloud_{{sanitizeID .Host.ID}}}${is_search_bot_cloud}";
+{{end}}{{end}}
+    set $cloud_block_check_{{sanitizeID .Host.ID}} "${blocked_cloud_{{sanitizeID .Host.ID}}}${is_priority_allow_cloud}";
 {{if .CloudProviderChallengeMode}}
-    # Challenge mode - redirect to challenge page instead of blocking (skip for search bots)
+    # Challenge mode - redirect to challenge page instead of blocking (skip for priority IPs, search bots, and ACME/challenge paths)
     if ($cloud_block_check_{{sanitizeID .Host.ID}} = "10") {
         set $block_reason_var "cloud_provider_challenge";
         return 418; # Use 418 as internal marker for cloud challenge redirect
     }
     error_page 418 = @cloud_challenge;
 {{else}}
+    # Block mode (skip for priority IPs, search bots, and ACME/challenge paths)
     if ($cloud_block_check_{{sanitizeID .Host.ID}} = "10") {
         set $block_reason_var "cloud_provider_block";
         return 403;
     }
-{{end}}
-{{end}}{{else}}
-{{if .CloudProviderChallengeMode}}
-    # Challenge mode - redirect to challenge page instead of blocking
-    if ($blocked_cloud_{{sanitizeID .Host.ID}} = 1) {
-        set $block_reason_var "cloud_provider_challenge";
-        return 418; # Use 418 as internal marker for cloud challenge redirect
-    }
-    error_page 418 = @cloud_challenge;
-{{else}}
-    if ($blocked_cloud_{{sanitizeID .Host.ID}} = 1) {
-        set $block_reason_var "cloud_provider_block";
-        return 403;
-    }
-{{end}}
 {{end}}
 {{end}}
 
@@ -834,6 +840,10 @@ server {
     if ($request_uri ~ "^/.well-known/acme-challenge/") {
         set $skip_security_for_acme 1;
     }
+    # Also skip for challenge page to prevent redirect loops
+    if ($request_uri ~ "^/api/v1/challenge/") {
+        set $skip_security_for_acme 1;
+    }
 
     # SSL configuration
     ssl_certificate /etc/nginx/certs/{{certPath .Host}}/fullchain.pem;
@@ -1191,40 +1201,42 @@ server {
 
 {{if .BlockedCloudIPRanges}}
     # Blocked Cloud Provider IPs check
+    # Skip for ACME challenge and challenge page (prevents redirect loops)
+    # Priority Allow IPs bypass cloud provider blocking
+    set $is_priority_allow_cloud $skip_security_for_acme;
+{{if and .GeoRestriction (len .GeoRestriction.AllowedIPs)}}
+{{range .GeoRestriction.AllowedIPs}}
+{{if isCIDR .}}
+    if ($remote_addr ~ "{{cidrToNginxPattern .}}") {
+        set $is_priority_allow_cloud 1;
+    }
+{{else}}
+    if ($remote_addr = "{{.}}") {
+        set $is_priority_allow_cloud 1;
+    }
+{{end}}
+{{end}}
+{{end}}
 {{if .CloudProviderAllowSearchBots}}{{if .SearchEnginesList}}
     # Allow search engine bots to bypass cloud provider blocking
-    set $is_search_bot_cloud 0;
     if ($http_user_agent ~* ({{toRegexPattern .SearchEnginesList}})) {
-        set $is_search_bot_cloud 1;
+        set $is_priority_allow_cloud 1;
     }
-    set $cloud_block_check_{{sanitizeID .Host.ID}} "${blocked_cloud_{{sanitizeID .Host.ID}}}${is_search_bot_cloud}";
+{{end}}{{end}}
+    set $cloud_block_check_{{sanitizeID .Host.ID}} "${blocked_cloud_{{sanitizeID .Host.ID}}}${is_priority_allow_cloud}";
 {{if .CloudProviderChallengeMode}}
-    # Challenge mode - redirect to challenge page instead of blocking (skip for search bots)
+    # Challenge mode - redirect to challenge page instead of blocking (skip for priority IPs, search bots, and ACME/challenge paths)
     if ($cloud_block_check_{{sanitizeID .Host.ID}} = "10") {
         set $block_reason_var "cloud_provider_challenge";
         return 418; # Use 418 as internal marker for cloud challenge redirect
     }
     error_page 418 = @cloud_challenge;
 {{else}}
+    # Block mode (skip for priority IPs, search bots, and ACME/challenge paths)
     if ($cloud_block_check_{{sanitizeID .Host.ID}} = "10") {
         set $block_reason_var "cloud_provider_block";
         return 403;
     }
-{{end}}
-{{end}}{{else}}
-{{if .CloudProviderChallengeMode}}
-    # Challenge mode - redirect to challenge page instead of blocking
-    if ($blocked_cloud_{{sanitizeID .Host.ID}} = 1) {
-        set $block_reason_var "cloud_provider_challenge";
-        return 418; # Use 418 as internal marker for cloud challenge redirect
-    }
-    error_page 418 = @cloud_challenge;
-{{else}}
-    if ($blocked_cloud_{{sanitizeID .Host.ID}} = 1) {
-        set $block_reason_var "cloud_provider_block";
-        return 403;
-    }
-{{end}}
 {{end}}
 {{end}}
 
