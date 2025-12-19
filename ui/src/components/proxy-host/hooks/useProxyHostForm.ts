@@ -263,7 +263,8 @@ export function useProxyHostForm(host: ProxyHost | null | undefined, onClose: ()
         )
       }
 
-      if (geoData.enabled && geoData.countries.length > 0) {
+      // Save geo restriction if geo blocking enabled OR if priority allow IPs exist
+      if ((geoData.enabled && geoData.countries.length > 0) || geoData.allowed_ips.length > 0) {
         additionalSettingsPromises.push(
           setGeoRestriction(newHost.id, {
             mode: geoData.mode,
@@ -271,7 +272,7 @@ export function useProxyHostForm(host: ProxyHost | null | undefined, onClose: ()
             allowed_ips: geoData.allowed_ips,
             allow_private_ips: geoData.allow_private_ips,
             allow_search_bots: geoData.allow_search_bots,
-            enabled: true,
+            enabled: geoData.enabled && geoData.countries.length > 0,
             challenge_mode: geoData.challenge_mode,
           }, true).catch(err => console.error('Failed to save geo restriction:', err))
         )
@@ -329,19 +330,24 @@ export function useProxyHostForm(host: ProxyHost | null | undefined, onClose: ()
           .catch(err => console.error('Failed to save bot filter:', err)),
 
         // Geo restriction (skip reload)
+        // Save if geo blocking enabled OR if priority allow IPs exist
         (async () => {
           try {
-            if (geoData.enabled && geoData.countries.length > 0) {
+            const hasGeoBlocking = geoData.enabled && geoData.countries.length > 0
+            const hasPriorityAllowIPs = geoData.allowed_ips.length > 0
+
+            if (hasGeoBlocking || hasPriorityAllowIPs) {
               await setGeoRestriction(variables.id, {
                 mode: geoData.mode,
                 countries: geoData.countries,
                 allowed_ips: geoData.allowed_ips,
                 allow_private_ips: geoData.allow_private_ips,
                 allow_search_bots: geoData.allow_search_bots,
-                enabled: true,
+                enabled: hasGeoBlocking,
                 challenge_mode: geoData.challenge_mode,
               }, true)
             } else if (existingGeoRestriction) {
+              // Only delete if no geo blocking AND no priority allow IPs
               await deleteGeoRestriction(variables.id, true)
             }
             queryClient.invalidateQueries({ queryKey: ['geoRestriction', variables.id] })

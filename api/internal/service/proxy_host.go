@@ -131,9 +131,10 @@ func (s *ProxyHostService) getAccessControlData(ctx context.Context, host *model
 	}
 
 	// Fetch geo restriction if exists
+	// Load if enabled OR if has AllowedIPs (priority allow IPs are used for cloud blocking too)
 	if s.geoRepo != nil {
 		geo, err := s.geoRepo.GetByProxyHostID(ctx, host.ID)
-		if err == nil && geo != nil && geo.Enabled {
+		if err == nil && geo != nil && (geo.Enabled || len(geo.AllowedIPs) > 0) {
 			geoRestriction = geo
 		}
 	}
@@ -166,12 +167,13 @@ func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.Pr
 	}
 
 	// Fetch geo restriction if exists
+	// Load if enabled OR if has AllowedIPs (priority allow IPs are used for cloud blocking too)
 	if s.geoRepo != nil {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			geo, err := s.geoRepo.GetByProxyHostID(ctx, host.ID)
-			if err == nil && geo != nil && geo.Enabled {
+			if err == nil && geo != nil && (geo.Enabled || len(geo.AllowedIPs) > 0) {
 				mu.Lock()
 				data.GeoRestriction = geo
 				mu.Unlock()
