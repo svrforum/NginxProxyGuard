@@ -649,8 +649,14 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
   const [isTestLoading, setIsTestLoading] = useState(false)
   const [toggleConfirmHost, setToggleConfirmHost] = useState<ProxyHost | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [sortBy, setSortBy] = useState<SortBy>('name')
-  const [sortOrder, setSortOrder] = useState<SortOrder>('asc')
+  const [sortBy, setSortBy] = useState<SortBy>(() => {
+    const saved = localStorage.getItem('proxyHostSortBy')
+    return (saved as SortBy) || 'name'
+  })
+  const [sortOrder, setSortOrder] = useState<SortOrder>(() => {
+    const saved = localStorage.getItem('proxyHostSortOrder')
+    return (saved as SortOrder) || 'asc'
+  })
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['proxy-hosts'],
@@ -838,6 +844,8 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
               const [by, order] = e.target.value.split('-') as [SortBy, SortOrder]
               setSortBy(by)
               setSortOrder(order)
+              localStorage.setItem('proxyHostSortBy', by)
+              localStorage.setItem('proxyHostSortOrder', order)
             }}
             className="px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           >

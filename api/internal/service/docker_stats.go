@@ -192,15 +192,132 @@ func parseSizeToBytes(s string) int64 {
 	return 0
 }
 
+// VolumeStats represents Docker volume statistics
+type VolumeStats struct {
+	Name       string `json:"name"`
+	Driver     string `json:"driver"`
+	Mountpoint string `json:"mountpoint"`
+	Size       int64  `json:"size"`
+	SizeHuman  string `json:"size_human"`
+}
+
 // Summary returns a summary of container resource usage
 type DockerStatsSummary struct {
-	Containers     []ContainerStats  `json:"containers"`
-	TotalCPU       float64           `json:"total_cpu_percent"`
-	TotalMemory    int64             `json:"total_memory_usage"`
-	TotalMemLimit  int64             `json:"total_memory_limit"`
-	ContainerCount int               `json:"container_count"`
-	HealthyCount   int               `json:"healthy_count"`
-	UpdatedAt      time.Time         `json:"updated_at"`
+	Containers     []ContainerStats `json:"containers"`
+	Volumes        []VolumeStats    `json:"volumes"`
+	TotalCPU       float64          `json:"total_cpu_percent"`
+	TotalMemory    int64            `json:"total_memory_usage"`
+	TotalMemLimit  int64            `json:"total_memory_limit"`
+	TotalVolumeSize int64           `json:"total_volume_size"`
+	ContainerCount int              `json:"container_count"`
+	HealthyCount   int              `json:"healthy_count"`
+	UpdatedAt      time.Time        `json:"updated_at"`
+}
+
+// GetVolumeStats retrieves Docker volume statistics for npg volumes
+func (s *DockerStatsService) GetVolumeStats(ctx context.Context) ([]VolumeStats, error) {
+	// Get list of npg_ volumes
+	cmd := exec.CommandContext(ctx, "docker", "volume", "ls", "--filter", "name=npg_", "--format", "{{.Name}}")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list volumes: %w", err)
+	}
+
+	var volumes []VolumeStats
+	names := strings.Split(strings.TrimSpace(string(output)), "\n")
+
+	for _, name := range names {
+		if name == "" {
+			continue
+		}
+
+		vol := VolumeStats{
+			Name:   name,
+			Driver: "local",
+		}
+
+		// Get volume size using ephemeral alpine container with du
+		// This is faster than docker system df -v
+		sizeCmd := exec.CommandContext(ctx, "docker", "run", "--rm",
+			"-v", name+":/data:ro",
+			"alpine", "sh", "-c", "du -sb /data | cut -f1")
+
+		if sizeOutput, err := sizeCmd.Output(); err == nil {
+			var size int64
+			fmt.Sscanf(strings.TrimSpace(string(sizeOutput)), "%d", &size)
+			vol.Size = size
+			vol.SizeHuman = formatBytes(size)
+		}
+
+		volumes = append(volumes, vol)
+	}
+
+	return volumes, nil
+}
+
+// getVolumeListFallback gets volume info without size (fallback method)
+func (s *DockerStatsService) getVolumeListFallback(ctx context.Context) ([]VolumeStats, error) {
+	cmd := exec.CommandContext(ctx, "docker", "volume", "ls", "--filter", "name=npg_",
+		"--format", `{"name":"{{.Name}}","driver":"{{.Driver}}","mountpoint":"{{.Mountpoint}}"}`)
+
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get volume list: %w", err)
+	}
+
+	var volumes []VolumeStats
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+
+		var vol struct {
+			Name       string `json:"name"`
+			Driver     string `json:"driver"`
+			Mountpoint string `json:"mountpoint"`
+		}
+
+		if err := json.Unmarshal([]byte(line), &vol); err != nil {
+			continue
+		}
+
+		volumes = append(volumes, VolumeStats{
+			Name:       vol.Name,
+			Driver:     vol.Driver,
+			Mountpoint: vol.Mountpoint,
+		})
+	}
+
+	// Try to get sizes using du command for each volume
+	for i := range volumes {
+		if volumes[i].Mountpoint != "" {
+			sizeCmd := exec.CommandContext(ctx, "du", "-sb", volumes[i].Mountpoint)
+			if sizeOutput, err := sizeCmd.Output(); err == nil {
+				var size int64
+				fmt.Sscanf(string(sizeOutput), "%d", &size)
+				volumes[i].Size = size
+				volumes[i].SizeHuman = formatBytes(size)
+			}
+		}
+	}
+
+	return volumes, nil
+}
+
+// formatBytes formats bytes to human readable string
+func formatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
 // GetStatsSummary returns a summary of all container stats
@@ -211,9 +328,11 @@ func (s *DockerStatsService) GetStatsSummary(ctx context.Context) (*DockerStatsS
 	}
 
 	status, _ := s.GetContainerStatus(ctx)
+	volumes, _ := s.GetVolumeStats(ctx)
 
 	summary := &DockerStatsSummary{
 		Containers:     stats,
+		Volumes:        volumes,
 		ContainerCount: len(stats),
 		UpdatedAt:      time.Now(),
 	}
@@ -230,6 +349,11 @@ func (s *DockerStatsService) GetStatsSummary(ctx context.Context) (*DockerStatsS
 				summary.HealthyCount++
 			}
 		}
+	}
+
+	// Calculate total volume size
+	for _, vol := range volumes {
+		summary.TotalVolumeSize += vol.Size
 	}
 
 	return summary, nil

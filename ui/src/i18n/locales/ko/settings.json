@@ -930,28 +930,30 @@
     }
   },
   "apiTokens": {
-    "title": "API Tokens",
+    "title": "API 토큰",
     "subtitle": "프로그래밍 방식으로 API에 접근하기 위한 토큰을 관리합니다.",
-    "apiDocs": "API Documentation",
+    "apiDocs": "API 문서",
     "createToken": "토큰 생성",
     "createNew": "새 토큰 생성",
     "form": {
       "tokenName": "토큰 이름",
-      "tokenNamePlaceholder": "My API Token",
+      "tokenNamePlaceholder": "내 API 토큰",
+      "createTitle": "새 API 토큰 생성",
       "permissionGroups": "권한 그룹",
       "individualPermissions": "개별 권한",
       "allowedIps": "허용 IP (선택사항)",
+      "allowedIpsEdit": "허용 IP",
       "allowedIpsPlaceholder": "192.168.1.1, 10.0.0.0/8",
-      "allowedIpsHelp": "쉼표로 구분",
-      "allowedIpsEmptyHelp": "쉼표로 구분, 비워두면 모든 IP에서 접근 가능",
-      "rateLimit": "Rate Limit (req/hour)",
+      "allowedIpsHelp": "쉼표로 구분, 비워두면 모든 IP 허용",
+      "commaSeparated": "쉼표로 구분",
+      "rateLimit": "요청 제한 (시간당)",
       "expiresIn": "만료 기간"
     },
-    "expires": {
-      "7d": "7일",
-      "30d": "30일",
-      "90d": "90일",
-      "1y": "1년",
+    "expiration": {
+      "7days": "7일",
+      "30days": "30일",
+      "90days": "90일",
+      "1year": "1년",
       "never": "만료 없음"
     },
     "table": {
@@ -960,37 +962,70 @@
       "permissions": "권한",
       "lastUsed": "마지막 사용",
       "status": "상태",
-      "actions": "작업"
+      "actions": "작업",
+      "empty": "아직 생성된 API 토큰이 없습니다."
     },
     "status": {
       "active": "활성",
       "revoked": "취소됨",
-      "expired": "만료됨"
+      "expired": "만료됨",
+      "never": "사용 안함"
     },
-    "actions": {
+    "buttons": {
       "edit": "수정",
       "revoke": "비활성화",
       "delete": "삭제",
       "save": "저장",
       "cancel": "취소",
       "copy": "복사",
-      "close": "닫기"
+      "close": "닫기",
+      "creating": "생성 중..."
     },
     "modal": {
-      "created": "API Token 생성됨",
-      "createdWarning": "이 토큰은 다시 표시되지 않습니다. 안전한 곳에 복사해두세요."
+      "created": "API 토큰 생성됨",
+      "tokenWarning": "이 토큰은 다시 표시되지 않습니다. 안전한 곳에 복사해두세요."
     },
     "confirm": {
       "revoke": "이 토큰을 비활성화하시겠습니까?",
       "delete": "이 토큰을 영구적으로 삭제하시겠습니까?"
     },
-    "empty": "아직 생성된 API 토큰이 없습니다.",
     "usage": {
       "title": "API 사용 방법",
-      "description": "API 요청 시 Authorization 헤더에 토큰을 포함하세요:",
-      "example": "Authorization: Bearer ng_your_token_here"
+      "description": "API 요청 시 Authorization 헤더에 토큰을 포함하세요:"
     },
-    "more": "+{{count}}개 더"
+    "more": "더보기",
+    "permissionGroups": {
+      "read_only": {
+        "label": "읽기 전용",
+        "description": "모든 리소스를 조회할 수 있지만 변경할 수 없습니다."
+      },
+      "operator": {
+        "label": "운영자",
+        "description": "Proxy Host, 인증서, WAF 등을 관리할 수 있습니다."
+      },
+      "admin": {
+        "label": "전체 권한",
+        "description": "모든 권한을 가집니다."
+      }
+    },
+    "permissions": {
+      "*": "모든 권한",
+      "proxy:read": "프록시 호스트 (읽기)",
+      "proxy:write": "프록시 호스트 (쓰기)",
+      "proxy:delete": "프록시 호스트 (삭제)",
+      "certificate:read": "인증서 (읽기)",
+      "certificate:write": "인증서 (쓰기)",
+      "certificate:delete": "인증서 (삭제)",
+      "waf:read": "WAF (읽기)",
+      "waf:write": "WAF (쓰기)",
+      "logs:read": "로그 (읽기)",
+      "settings:read": "설정 (읽기)",
+      "settings:write": "설정 (쓰기)",
+      "backup:read": "백업 (읽기)",
+      "backup:create": "백업 (생성)",
+      "backup:restore": "백업 (복원)",
+      "user:read": "사용자 (읽기)"
+    }
   },
   "backupManager": {
     "title": "백업 및 복원",

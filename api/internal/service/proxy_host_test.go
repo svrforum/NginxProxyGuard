@@ -58,7 +58,7 @@ func TestCreateProxyHostValidation(t *testing.T) {
 
 // TestUpdateProxyHostValidation tests the input validation logic of the Update method
 func TestUpdateProxyHostValidation(t *testing.T) {
-	service := &ProxyHostService{}
+	invalidConf := "invalid_nginx_directive"
 
 	tests := []struct {
 		name        string
@@ -68,13 +68,13 @@ func TestUpdateProxyHostValidation(t *testing.T) {
 		{
 			name: "Advanced Config Invalid",
 			req: &model.UpdateProxyHostRequest{
-				AdvancedConfig: &[]string{"invalid_nginx_directive"}, // specific to ValidateAdvancedConfig implementation
+				AdvancedConfig: &invalidConf,
 			},
 			// The current codebase uses model.ValidateAdvancedConfig.
 			// If that function is strict, this might fail. We assume basic string check for now.
 			// If ValidateAdvancedConfig is not actually validating syntax deeply without Nginx, this test might pass unexpectedly.
 			// Let's stick to Empty Domain which we know is validated.
-			expectedErr: "", 
+			expectedErr: "",
 		},
 	}
 

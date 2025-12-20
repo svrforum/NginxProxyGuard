@@ -841,9 +841,16 @@ function ContainerStatsSection({ containerStats }: {
       block_o: number;
       status: string;
     }>;
+    volumes?: Array<{
+      name: string;
+      driver: string;
+      size: number;
+      size_human: string;
+    }>;
     total_cpu_percent: number;
     total_memory_usage: number;
     total_memory_limit: number;
+    total_volume_size?: number;
     container_count: number;
     healthy_count: number;
   }
@@ -865,13 +872,16 @@ function ContainerStatsSection({ containerStats }: {
           </div>
           <div className="text-left">
             <h2 className="text-lg font-semibold dark:text-white">{t('containers.title')}</h2>
-            <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-3">
+            <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-3 flex-wrap">
               <span className="flex items-center gap-1">
                 <span className="w-2 h-2 rounded-full bg-green-500"></span>
                 {t('containers.running', { healthy: containerStats.healthy_count, total: containerStats.container_count })}
               </span>
               <span>{t('containers.cpu')}: {containerStats.total_cpu_percent.toFixed(1)}%</span>
               <span>{t('containers.memory')}: {formatBytes(containerStats.total_memory_usage)}</span>
+              {containerStats.total_volume_size !== undefined && containerStats.total_volume_size > 0 && (
+                <span>{t('containers.storage', 'Storage')}: {formatBytes(containerStats.total_volume_size)}</span>
+              )}
             </div>
           </div>
         </div>
@@ -901,7 +911,7 @@ function ContainerStatsSection({ containerStats }: {
                     {container.status}
                   </span>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
                   <div>
                     <div className="text-gray-500 dark:text-gray-400 mb-1">{t('containers.cpu')}</div>
                     <div className="flex items-center gap-2">
@@ -930,6 +940,24 @@ function ContainerStatsSection({ containerStats }: {
                     </div>
                   </div>
                   <div>
+                    <div className="text-gray-500 dark:text-gray-400 mb-1">{t('containers.storage', 'Storage')}</div>
+                    <div className="text-xs font-mono dark:text-gray-300">
+                      {(() => {
+                        // Map container name to volume name
+                        const volumeMap: Record<string, string> = {
+                          'npg-db': 'npg_postgres_data',
+                          'npg-proxy': 'npg_nginx_data',
+                          'npg-api': 'npg_api_data',
+                          'npg-ui': 'npg_ui_data',
+                          'npg-valkey': 'npg_valkey_data',
+                        };
+                        const volumeName = volumeMap[container.container_name];
+                        const volume = containerStats.volumes?.find(v => v.name === volumeName);
+                        return volume ? (volume.size_human || formatBytes(volume.size)) : '-';
+                      })()}
+                    </div>
+                  </div>
+                  <div>
                     <div className="text-gray-500 dark:text-gray-400 mb-1">{t('containers.networkIo')}</div>
                     <div className="text-xs font-mono">
                       <span className="text-green-600 dark:text-green-500">↓ {formatBytes(container.net_i)}</span>
@@ -949,9 +977,12 @@ function ContainerStatsSection({ containerStats }: {
               </div>
             ))}
           </div>
-          <div className="p-3 bg-gray-50 dark:bg-slate-700/50 border-t dark:border-slate-700 text-xs text-gray-500 dark:text-gray-400 flex justify-between">
+          <div className="p-3 bg-gray-50 dark:bg-slate-700/50 border-t dark:border-slate-700 text-xs text-gray-500 dark:text-gray-400 flex justify-between flex-wrap gap-2">
             <span>{t('containers.totalCpu')} {containerStats.total_cpu_percent.toFixed(1)}%</span>
-            <span>{t('containers.totalMemory')} {formatBytes(containerStats.total_memory_usage)} / {formatBytes(containerStats.total_memory_limit)}</span>
+            <span>{t('containers.totalMemory')} {formatBytes(containerStats.total_memory_usage)}</span>
+            {containerStats.total_volume_size !== undefined && containerStats.total_volume_size > 0 && (
+              <span>{t('containers.totalStorage', 'Storage')}: {formatBytes(containerStats.total_volume_size)}</span>
+            )}
           </div>
         </>
       )}

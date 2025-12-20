@@ -934,20 +934,22 @@
     "form": {
       "tokenName": "Token Name",
       "tokenNamePlaceholder": "My API Token",
+      "createTitle": "Create New API Token",
       "permissionGroups": "Permission Groups",
       "individualPermissions": "Individual Permissions",
       "allowedIps": "Allowed IPs (Optional)",
+      "allowedIpsEdit": "Allowed IPs",
       "allowedIpsPlaceholder": "192.168.1.1, 10.0.0.0/8",
-      "allowedIpsHelp": "Comma separated",
-      "allowedIpsEmptyHelp": "Comma separated, leave empty to allow all IPs",
+      "allowedIpsHelp": "Comma separated, leave empty to allow all IPs",
+      "commaSeparated": "Comma separated",
       "rateLimit": "Rate Limit (req/hour)",
       "expiresIn": "Expires In"
     },
-    "expires": {
-      "7d": "7 Days",
-      "30d": "30 Days",
-      "90d": "90 Days",
-      "1y": "1 Year",
+    "expiration": {
+      "7days": "7 Days",
+      "30days": "30 Days",
+      "90days": "90 Days",
+      "1year": "1 Year",
       "never": "Never"
     },
     "table": {
@@ -956,37 +958,70 @@
       "permissions": "Permissions",
       "lastUsed": "Last Used",
       "status": "Status",
-      "actions": "Actions"
+      "actions": "Actions",
+      "empty": "No API tokens created yet."
     },
     "status": {
       "active": "Active",
       "revoked": "Revoked",
-      "expired": "Expired"
+      "expired": "Expired",
+      "never": "Never used"
     },
-    "actions": {
+    "buttons": {
       "edit": "Edit",
       "revoke": "Revoke",
       "delete": "Delete",
       "save": "Save",
       "cancel": "Cancel",
       "copy": "Copy",
-      "close": "Close"
+      "close": "Close",
+      "creating": "Creating..."
     },
     "modal": {
       "created": "API Token Created",
-      "createdWarning": "This token won't be shown again. Copy it to a safe place."
+      "tokenWarning": "This token won't be shown again. Copy it to a safe place."
     },
     "confirm": {
       "revoke": "Are you sure you want to revoke this token?",
       "delete": "Are you sure you want to permanently delete this token?"
     },
-    "empty": "No API tokens created yet.",
     "usage": {
       "title": "How to use the API",
-      "description": "Include the token in the Authorization header when making API requests:",
-      "example": "Authorization: Bearer ng_your_token_here"
+      "description": "Include the token in the Authorization header when making API requests:"
     },
-    "more": "+{{count}} more"
+    "more": "more",
+    "permissionGroups": {
+      "read_only": {
+        "label": "Read Only",
+        "description": "Can view all resources but cannot make changes."
+      },
+      "operator": {
+        "label": "Operator",
+        "description": "Can manage Proxy Hosts, Certificates, WAF, etc."
+      },
+      "admin": {
+        "label": "Full Access",
+        "description": "Has all permissions."
+      }
+    },
+    "permissions": {
+      "*": "All Permissions",
+      "proxy:read": "Proxy Hosts (Read)",
+      "proxy:write": "Proxy Hosts (Write)",
+      "proxy:delete": "Proxy Hosts (Delete)",
+      "certificate:read": "Certificates (Read)",
+      "certificate:write": "Certificates (Write)",
+      "certificate:delete": "Certificates (Delete)",
+      "waf:read": "WAF (Read)",
+      "waf:write": "WAF (Write)",
+      "logs:read": "Logs (Read)",
+      "settings:read": "Settings (Read)",
+      "settings:write": "Settings (Write)",
+      "backup:read": "Backups (Read)",
+      "backup:create": "Backups (Create)",
+      "backup:restore": "Backups (Restore)",
+      "user:read": "Users (Read)"
+    }
   },
   "backupManager": {
     "title": "Backup & Restore",
