@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -33,8 +34,10 @@ func DefaultAPIRateLimitConfig() APIRateLimitConfig {
 			return c.RealIP()
 		},
 		Skipper: func(c echo.Context) bool {
-			// Skip health check endpoint
-			return c.Path() == "/health"
+			path := c.Path()
+			// Skip health check and challenge endpoints (auth_request from nginx)
+			return path == "/health" ||
+				strings.HasPrefix(path, "/api/v1/challenge/")
 		},
 	}
 }
