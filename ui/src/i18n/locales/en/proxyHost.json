@@ -39,7 +39,18 @@
       "active": "Active",
       "disabled": "Disabled"
     },
-    "showing": "Showing {{count}} of {{total}} proxy hosts"
+    "showing": "Showing {{count}} of {{total}} proxy hosts",
+    "noResults": "No results found",
+    "noResultsDescription": "No proxy hosts match '{{query}}'",
+    "clearSearch": "Clear search",
+    "sort": {
+      "nameAsc": "Name (A-Z)",
+      "nameDesc": "Name (Z-A)",
+      "updatedDesc": "Recently updated",
+      "updatedAsc": "Oldest updated",
+      "createdDesc": "Recently created",
+      "createdAsc": "Oldest created"
+    }
   },
   "form": {
     "addTitle": "Add Proxy Host",

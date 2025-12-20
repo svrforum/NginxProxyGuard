@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { fetchProxyHosts, deleteProxyHost, testProxyHost, updateProxyHost, testProxyHostConfig } from '../api/proxy-hosts'
@@ -636,6 +636,9 @@ function DetailRow({ label, value, description, highlight, help }: { label: stri
   )
 }
 
+type SortBy = 'name' | 'updated' | 'created'
+type SortOrder = 'asc' | 'desc'
+
 export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
   const { t } = useTranslation('proxyHost')
   const queryClient = useQueryClient()
@@ -645,10 +648,13 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
   const [testError, setTestError] = useState<string | null>(null)
   const [isTestLoading, setIsTestLoading] = useState(false)
   const [toggleConfirmHost, setToggleConfirmHost] = useState<ProxyHost | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [sortBy, setSortBy] = useState<SortBy>('name')
+  const [sortOrder, setSortOrder] = useState<SortOrder>('asc')
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['proxy-hosts'],
-    queryFn: () => fetchProxyHosts(1, 50),
+    queryFn: () => fetchProxyHosts(1, 200), // Increased limit for client-side filtering
   })
 
   const deleteMutation = useMutation({
@@ -762,32 +768,124 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
     )
   }
 
-  const hosts = data?.data || []
+  // Filter and sort hosts
+  const hosts = useMemo(() => {
+    let filtered = data?.data || []
+
+    // Search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase()
+      filtered = filtered.filter(host =>
+        host.domain_names.some(domain => domain.toLowerCase().includes(query)) ||
+        host.forward_host.toLowerCase().includes(query)
+      )
+    }
+
+    // Sort
+    filtered = [...filtered].sort((a, b) => {
+      let comparison = 0
+      switch (sortBy) {
+        case 'name':
+          comparison = a.domain_names[0].localeCompare(b.domain_names[0])
+          break
+        case 'updated':
+          comparison = new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+          break
+        case 'created':
+          comparison = new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          break
+      }
+      return sortOrder === 'asc' ? comparison : -comparison
+    })
+
+    return filtered
+  }, [data?.data, searchQuery, sortBy, sortOrder])
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
         <h2 className="text-lg font-semibold text-slate-900 dark:text-white">{t('list.title')}</h2>
-        <button
-          onClick={onAdd}
-          className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          {t('list.addNew')}
-        </button>
+
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          {/* Search */}
+          <div className="relative flex-1 sm:flex-none">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t('list.search')}
+              className="w-full sm:w-48 pl-9 pr-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+
+          {/* Sort */}
+          <select
+            value={`${sortBy}-${sortOrder}`}
+            onChange={(e) => {
+              const [by, order] = e.target.value.split('-') as [SortBy, SortOrder]
+              setSortBy(by)
+              setSortOrder(order)
+            }}
+            className="px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          >
+            <option value="name-asc">{t('list.sort.nameAsc')}</option>
+            <option value="name-desc">{t('list.sort.nameDesc')}</option>
+            <option value="updated-desc">{t('list.sort.updatedDesc')}</option>
+            <option value="updated-asc">{t('list.sort.updatedAsc')}</option>
+            <option value="created-desc">{t('list.sort.createdDesc')}</option>
+            <option value="created-asc">{t('list.sort.createdAsc')}</option>
+          </select>
+
+          <button
+            onClick={onAdd}
+            className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            {t('list.addNew')}
+          </button>
+        </div>
       </div>
 
       {hosts.length === 0 ? (
         <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-8 text-center border border-dashed border-slate-200 dark:border-slate-700">
           <div className="w-12 h-12 bg-slate-200 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+              {searchQuery ? (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+              )}
             </svg>
           </div>
-          <h3 className="text-slate-600 dark:text-slate-300 font-medium mb-1">{t('list.empty')}</h3>
-          <p className="text-slate-400 text-sm">{t('list.emptyDescription')}</p>
+          <h3 className="text-slate-600 dark:text-slate-300 font-medium mb-1">
+            {searchQuery ? t('list.noResults') : t('list.empty')}
+          </h3>
+          <p className="text-slate-400 text-sm">
+            {searchQuery ? t('list.noResultsDescription', { query: searchQuery }) : t('list.emptyDescription')}
+          </p>
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="mt-3 text-sm text-primary-600 hover:text-primary-700 font-medium"
+            >
+              {t('list.clearSearch')}
+            </button>
+          )}
         </div>
       ) : (
         <div className="bg-white dark:bg-slate-800 shadow overflow-hidden overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">

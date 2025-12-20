@@ -39,7 +39,18 @@
       "active": "활성",
       "disabled": "비활성"
     },
-    "showing": "{{count}}개 / 총 {{total}}개 프록시 호스트"
+    "showing": "{{count}}개 / 총 {{total}}개 프록시 호스트",
+    "noResults": "검색 결과가 없습니다",
+    "noResultsDescription": "'{{query}}'에 해당하는 프록시 호스트가 없습니다",
+    "clearSearch": "검색 초기화",
+    "sort": {
+      "nameAsc": "이름순 (A-Z)",
+      "nameDesc": "이름순 (Z-A)",
+      "updatedDesc": "최근 수정순",
+      "updatedAsc": "오래된 수정순",
+      "createdDesc": "최근 등록순",
+      "createdAsc": "오래된 등록순"
+    }
   },
   "form": {
     "addTitle": "프록시 호스트 추가",
