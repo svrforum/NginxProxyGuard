@@ -66,10 +66,10 @@ server {
     set $block_reason_var "-";
     set $bot_category_var "-";
     set $geo_blocked 0;
+    set $is_search_bot 0;
 
 {{if .SearchEnginesList}}
     # Search bot detection (set once, used by GeoIP, CloudProvider, BotFilter)
-    set $is_search_bot 0;
     if ($http_user_agent ~* ({{toRegexPattern .SearchEnginesList}})) {
         set $is_search_bot 1;
     }
@@ -845,10 +845,10 @@ server {
     set $block_reason_var "-";
     set $bot_category_var "-";
     set $geo_blocked 0;
+    set $is_search_bot 0;
 
 {{if .SearchEnginesList}}
     # Search bot detection (set once, used by GeoIP, CloudProvider, BotFilter)
-    set $is_search_bot 0;
     if ($http_user_agent ~* ({{toRegexPattern .SearchEnginesList}})) {
         set $is_search_bot 1;
     }

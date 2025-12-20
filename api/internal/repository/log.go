@@ -1044,8 +1044,38 @@ func (r *LogRepository) GetSettings(ctx context.Context) (*model.LogSettings, er
 		&settings.ID, &settings.RetentionDays, &maxLogsPerType,
 		&settings.AutoCleanupEnabled, &settings.CreatedAt, &settings.UpdatedAt,
 	)
+	if err == sql.ErrNoRows {
+		// Auto-create default settings if not exists
+		return r.createDefaultSettings(ctx)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to get log settings: %w", err)
+	}
+
+	if maxLogsPerType.Valid {
+		settings.MaxLogsPerType = &maxLogsPerType.Int64
+	}
+
+	return &settings, nil
+}
+
+// createDefaultSettings creates default log settings if none exist
+func (r *LogRepository) createDefaultSettings(ctx context.Context) (*model.LogSettings, error) {
+	query := `
+		INSERT INTO log_settings (retention_days, auto_cleanup_enabled, system_log_retention_days, enable_docker_logs, filter_health_checks)
+		VALUES (30, true, 7, true, true)
+		RETURNING id, retention_days, max_logs_per_type, auto_cleanup_enabled, created_at, updated_at
+	`
+
+	var settings model.LogSettings
+	var maxLogsPerType sql.NullInt64
+
+	err := r.db.QueryRowContext(ctx, query).Scan(
+		&settings.ID, &settings.RetentionDays, &maxLogsPerType,
+		&settings.AutoCleanupEnabled, &settings.CreatedAt, &settings.UpdatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create default log settings: %w", err)
 	}
 
 	if maxLogsPerType.Valid {
