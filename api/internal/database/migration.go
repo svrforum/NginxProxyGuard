@@ -71,8 +71,9 @@ func (db *DB) RunMigrations() error {
 	}
 
 
-	// Migrate logs table to logs_partitioned (for existing installations)
-	db.migrateLogsToPartitioned()
+	// Migrate logs table to logs_partitioned in background (for existing installations)
+	// This allows API to start immediately while migration runs
+	go db.migrateLogsToPartitioned()
 
 	log.Println("Schema migration completed")
 	return nil
