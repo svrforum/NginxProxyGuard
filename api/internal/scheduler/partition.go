@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"log"
+	"strings"
 	"time"
 
 	"nginx-proxy-guard/internal/repository"
@@ -235,6 +236,10 @@ func (s *PartitionScheduler) cleanupLogsTable() {
 		`, retentionDays, batchSize)
 
 		if err != nil {
+			// Table might have been dropped by migration, silently return
+			if strings.Contains(err.Error(), "does not exist") {
+				return
+			}
 			log.Printf("[PartitionScheduler] Failed to cleanup logs table: %v", err)
 			return
 		}

@@ -63,14 +63,14 @@ func (r *DashboardRepository) GetSummary(ctx context.Context) (*model.DashboardS
 	`, last24h)
 	row.Scan(&summary.WAFBlocked24h, &summary.RateLimited24h, &summary.BotBlocked24h)
 
-	// Fallback: Get security stats from logs table if dashboard_stats_hourly is empty
+	// Fallback: Get security stats from logs_partitioned table if dashboard_stats_hourly is empty
 	if summary.WAFBlocked24h == 0 && summary.RateLimited24h == 0 && summary.BotBlocked24h == 0 {
 		row = r.db.QueryRowContext(ctx, `
 			SELECT
 				COUNT(*) FILTER (WHERE block_reason = 'waf'),
 				COUNT(*) FILTER (WHERE block_reason = 'rate_limit'),
 				COUNT(*) FILTER (WHERE block_reason = 'bot_filter')
-			FROM logs
+			FROM logs_partitioned
 			WHERE created_at >= $1
 		`, last24h)
 		row.Scan(&summary.WAFBlocked24h, &summary.RateLimited24h, &summary.BotBlocked24h)
@@ -79,7 +79,7 @@ func (r *DashboardRepository) GetSummary(ctx context.Context) (*model.DashboardS
 	// Banned IPs count
 	r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM banned_ips WHERE (expires_at > NOW() OR is_permanent = TRUE)").Scan(&summary.BannedIPs)
 
-	// Blocked requests stats (from logs table)
+	// Blocked requests stats (from logs_partitioned table)
 	// Only count security blocks: 403 Forbidden, modsec logs
 	// Also get total requests, bandwidth, response time, error rate from logs for fallback
 	row = r.db.QueryRowContext(ctx, `
@@ -91,7 +91,7 @@ func (r *DashboardRepository) GetSummary(ctx context.Context) (*model.DashboardS
 			COALESCE(AVG(request_time) FILTER (WHERE log_type = 'access' AND request_time > 0), 0),
 			COUNT(*) FILTER (WHERE log_type = 'access' AND status_code >= 400),
 			COUNT(*) FILTER (WHERE log_type = 'access')
-		FROM logs
+		FROM logs_partitioned
 		WHERE created_at >= $1
 	`, last24h)
 	var totalFromLogs, bandwidthFromLogs, errorsFromLogs, totalAccessLogs int64
@@ -252,11 +252,11 @@ func (r *DashboardRepository) getTopHosts(ctx context.Context, since time.Time) 
 		}
 	}
 
-	// Fallback: aggregate from logs table directly using host column
+	// Fallback: aggregate from logs_partitioned table directly using host column
 	// Exclude health check hosts (nginx, localhost, IPs, _, 0.0.0.0)
 	rows, err = r.db.QueryContext(ctx, `
 		SELECT COALESCE(proxy_host_id::TEXT, ''), host, COUNT(*) as total
-		FROM logs
+		FROM logs_partitioned
 		WHERE created_at >= $1
 		  AND log_type = 'access'
 		  AND host IS NOT NULL
@@ -285,7 +285,7 @@ func (r *DashboardRepository) getTopIPs(ctx context.Context, since time.Time) []
 	// Exclude local/internal IPs (127.x.x.x, ::1, 172.16-31.x.x, 10.x.x.x, 192.168.x.x)
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT HOST(client_ip), COUNT(*) as total
-		FROM logs
+		FROM logs_partitioned
 		WHERE created_at >= $1
 		  AND log_type = 'access'
 		  AND client_ip IS NOT NULL
@@ -338,12 +338,12 @@ func (r *DashboardRepository) getTopCountries(ctx context.Context, since time.Ti
 	return stats
 }
 
-// GetGeoIPStats returns detailed GeoIP statistics from logs table
+// GetGeoIPStats returns detailed GeoIP statistics from logs_partitioned table
 func (r *DashboardRepository) GetGeoIPStats(ctx context.Context, since time.Time) ([]model.GeoIPStat, int64, error) {
 	// Get total count first
 	var totalCount int64
 	err := r.db.QueryRowContext(ctx, `
-		SELECT COUNT(*) FROM logs
+		SELECT COUNT(*) FROM logs_partitioned
 		WHERE log_type = 'access'
 		AND timestamp >= $1
 		AND geo_country_code IS NOT NULL
@@ -359,7 +359,7 @@ func (r *DashboardRepository) GetGeoIPStats(ctx context.Context, since time.Time
 			geo_country_code,
 			COALESCE(geo_country, geo_country_code) as country_name,
 			COUNT(*) as request_count
-		FROM logs
+		FROM logs_partitioned
 		WHERE log_type = 'access'
 		AND timestamp >= $1
 		AND geo_country_code IS NOT NULL
@@ -464,7 +464,7 @@ func (r *DashboardRepository) getTopUserAgents(ctx context.Context, since time.T
 		SELECT
 			COALESCE(http_user_agent, 'Unknown') as ua,
 			COUNT(*) as total
-		FROM logs
+		FROM logs_partitioned
 		WHERE created_at >= $1
 		  AND log_type = 'access'
 		  AND http_user_agent IS NOT NULL

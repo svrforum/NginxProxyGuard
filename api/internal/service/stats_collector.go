@@ -367,7 +367,7 @@ func (sc *StatsCollector) aggregateStatsFromDB() AggregatedStats {
 	// Only include requests to actual proxy hosts (exclude internal like localhost, nginx)
 	query := `
 		SELECT status_code, body_bytes_sent, request_time, host, request_uri
-		FROM logs
+		FROM logs_partitioned
 		WHERE log_type = 'access'
 		  AND created_at > NOW() - INTERVAL '35 seconds'
 		  AND host IS NOT NULL
