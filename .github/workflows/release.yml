@@ -10,12 +10,15 @@ env:
   IMAGE_PREFIX: svrforum/nginxproxyguard
 
 jobs:
-  # Build images and run E2E tests before pushing
+  # Detect changes and build only what's needed
   build-and-test:
     name: Build, Test, and Release
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      api_changed: ${{ steps.changes.outputs.api }}
+      ui_changed: ${{ steps.changes.outputs.ui }}
+      nginx_changed: ${{ steps.changes.outputs.nginx }}
 
     steps:
       - name: Checkout
@@ -30,11 +33,52 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Building version: $VERSION"
 
+      - name: Detect changes since last tag
+        id: changes
+        run: |
+          # Get previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          if [ -z "$PREV_TAG" ]; then
+            echo "No previous tag found, building all images"
+            echo "api=true" >> $GITHUB_OUTPUT
+            echo "ui=true" >> $GITHUB_OUTPUT
+            echo "nginx=true" >> $GITHUB_OUTPUT
+          else
+            echo "Comparing with previous tag: $PREV_TAG"
+
+            # Check each directory for changes
+            if git diff --name-only $PREV_TAG HEAD | grep -q "^api/"; then
+              echo "api=true" >> $GITHUB_OUTPUT
+              echo "API: changes detected"
+            else
+              echo "api=false" >> $GITHUB_OUTPUT
+              echo "API: no changes"
+            fi
+
+            if git diff --name-only $PREV_TAG HEAD | grep -q "^ui/"; then
+              echo "ui=true" >> $GITHUB_OUTPUT
+              echo "UI: changes detected"
+            else
+              echo "ui=false" >> $GITHUB_OUTPUT
+              echo "UI: no changes"
+            fi
+
+            if git diff --name-only $PREV_TAG HEAD | grep -q "^nginx/"; then
+              echo "nginx=true" >> $GITHUB_OUTPUT
+              echo "Nginx: changes detected"
+            else
+              echo "nginx=false" >> $GITHUB_OUTPUT
+              echo "Nginx: no changes"
+            fi
+          fi
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Build images locally (not pushed yet)
+      # Build images locally (only changed ones, but all needed for testing)
       - name: Build API image
+        if: steps.changes.outputs.api == 'true'
         uses: docker/build-push-action@v6
         with:
           context: ./api
@@ -42,7 +86,14 @@ jobs:
           tags: ${{ env.IMAGE_PREFIX }}-api:${{ steps.version.outputs.version }}
           cache-from: type=gha,scope=api
 
+      - name: Pull existing API image (if not changed)
+        if: steps.changes.outputs.api == 'false'
+        run: |
+          docker pull ${{ env.IMAGE_PREFIX }}-api:latest || true
+          docker tag ${{ env.IMAGE_PREFIX }}-api:latest ${{ env.IMAGE_PREFIX }}-api:${{ steps.version.outputs.version }} || true
+
       - name: Build UI image
+        if: steps.changes.outputs.ui == 'true'
         uses: docker/build-push-action@v6
         with:
           context: ./ui
@@ -50,13 +101,26 @@ jobs:
           tags: ${{ env.IMAGE_PREFIX }}-ui:${{ steps.version.outputs.version }}
           cache-from: type=gha,scope=ui
 
+      - name: Pull existing UI image (if not changed)
+        if: steps.changes.outputs.ui == 'false'
+        run: |
+          docker pull ${{ env.IMAGE_PREFIX }}-ui:latest || true
+          docker tag ${{ env.IMAGE_PREFIX }}-ui:latest ${{ env.IMAGE_PREFIX }}-ui:${{ steps.version.outputs.version }} || true
+
       - name: Build Nginx image
+        if: steps.changes.outputs.nginx == 'true'
         uses: docker/build-push-action@v6
         with:
           context: ./nginx
           load: true
           tags: ${{ env.IMAGE_PREFIX }}-nginx:${{ steps.version.outputs.version }}
           cache-from: type=gha,scope=nginx
+
+      - name: Pull existing Nginx image (if not changed)
+        if: steps.changes.outputs.nginx == 'false'
+        run: |
+          docker pull ${{ env.IMAGE_PREFIX }}-nginx:latest || true
+          docker tag ${{ env.IMAGE_PREFIX }}-nginx:latest ${{ env.IMAGE_PREFIX }}-nginx:${{ steps.version.outputs.version }} || true
 
       # Run E2E tests with built images
       - name: Start test environment
@@ -101,23 +165,19 @@ jobs:
         run: |
           docker compose -f docker-compose.release-test.yml down -v
 
-      # Push images to Docker Hub (only if tests passed)
+      # Push images to Docker Hub (only changed ones, only if tests passed)
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # TODO: Re-enable QEMU for multi-platform builds when arm64 is needed
-      # - name: Set up QEMU (for multi-platform)
-      #   uses: docker/setup-qemu-action@v3
-
       - name: Push API image
+        if: steps.changes.outputs.api == 'true'
         uses: docker/build-push-action@v6
         with:
           context: ./api
           platforms: linux/amd64
-          # platforms: linux/amd64,linux/arm64  # TODO: Re-enable arm64
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}-api:${{ steps.version.outputs.version }}
@@ -126,11 +186,11 @@ jobs:
           cache-to: type=gha,mode=max,scope=api
 
       - name: Push UI image
+        if: steps.changes.outputs.ui == 'true'
         uses: docker/build-push-action@v6
         with:
           context: ./ui
           platforms: linux/amd64
-          # platforms: linux/amd64,linux/arm64  # TODO: Re-enable arm64
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}-ui:${{ steps.version.outputs.version }}
@@ -139,11 +199,11 @@ jobs:
           cache-to: type=gha,mode=max,scope=ui
 
       - name: Push Nginx image
+        if: steps.changes.outputs.nginx == 'true'
         uses: docker/build-push-action@v6
         with:
           context: ./nginx
           platforms: linux/amd64
-          # platforms: linux/amd64,linux/arm64  # TODO: Re-enable arm64
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}-nginx:${{ steps.version.outputs.version }}
@@ -189,6 +249,13 @@ jobs:
             docker pull svrforum/nginxproxyguard-ui:${{ needs.build-and-test.outputs.version }}
             docker pull svrforum/nginxproxyguard-nginx:${{ needs.build-and-test.outputs.version }}
             ```
+
+            ## Build Summary
+            | Component | Status |
+            |-----------|--------|
+            | API | ${{ needs.build-and-test.outputs.api_changed == 'true' && '✅ Built & Pushed' || '⏭️ Skipped (no changes)' }} |
+            | UI | ${{ needs.build-and-test.outputs.ui_changed == 'true' && '✅ Built & Pushed' || '⏭️ Skipped (no changes)' }} |
+            | Nginx | ${{ needs.build-and-test.outputs.nginx_changed == 'true' && '✅ Built & Pushed' || '⏭️ Skipped (no changes)' }} |
 
             ## E2E Test
             ✅ All integration tests passed before release
