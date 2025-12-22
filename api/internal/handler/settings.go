@@ -761,84 +761,32 @@ func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Back
 		}
 	}
 
-	// Open the backup file
-	file, err := os.Open(backup.FilePath)
-	if err != nil {
-		return fmt.Errorf("failed to open backup file: %w", err)
-	}
-	defer file.Close()
-
-	// Create gzip reader
-	gzReader, err := gzip.NewReader(file)
-	if err != nil {
-		return fmt.Errorf("failed to create gzip reader: %w", err)
-	}
-	defer gzReader.Close()
-
-	// Create tar reader
-	tarReader := tar.NewReader(gzReader)
-
+	// PHASE 1: Read and import database data FIRST
+	// This ensures DB is consistent before touching any files
 	var exportData *model.ExportData
-
-	// Extract files
-	for {
-		header, err := tarReader.Next()
-		if err == io.EOF {
-			break
-		}
+	if backup.IncludesDatabase {
+		data, err := h.extractExportJSON(backup.FilePath)
 		if err != nil {
-			return fmt.Errorf("failed to read tar entry: %w", err)
+			return fmt.Errorf("failed to read export.json: %w", err)
 		}
-
-		// Skip directories and symlinks
-		if header.Typeflag == tar.TypeDir || header.Typeflag == tar.TypeSymlink || header.Typeflag == tar.TypeLink {
-			continue
-		}
-
-		// Skip entries with zero size (likely directories without proper type flag)
-		if header.Size == 0 && header.Name != "data/export.json" {
-			continue
-		}
-
-		switch {
-		case header.Name == "data/export.json":
-			// Parse database export
-			data, err := io.ReadAll(tarReader)
-			if err != nil {
-				return fmt.Errorf("failed to read export.json: %w", err)
-			}
-
+		if data != nil {
 			exportData = &model.ExportData{}
 			if err := json.Unmarshal(data, exportData); err != nil {
 				return fmt.Errorf("failed to parse export.json: %w", err)
 			}
-
-		case filepath.Dir(header.Name) == "config/conf.d":
-			// Restore config files (skip if it looks like a directory)
-			if backup.IncludesConfig && !strings.HasSuffix(header.Name, "/") {
-				destPath := filepath.Join("/etc/nginx/conf.d", filepath.Base(header.Name))
-				if err := h.extractFile(tarReader, destPath, header); err != nil {
-					return fmt.Errorf("failed to restore config file %s: %w", header.Name, err)
-				}
+			// Import database data first - if this fails, no files are touched
+			if err := h.backupRepo.ImportAllData(ctx, exportData); err != nil {
+				return fmt.Errorf("failed to import database data: %w", err)
 			}
-
-		case filepath.HasPrefix(header.Name, "certs/"):
-			// Restore certificates (skip directories - they end with / or have no extension)
-			if backup.IncludesCertificates && !strings.HasSuffix(header.Name, "/") && strings.Contains(filepath.Base(header.Name), ".") {
-				relPath := header.Name[6:] // Remove "certs/" prefix
-				destPath := filepath.Join("/etc/nginx/certs", relPath)
-				if err := h.extractFile(tarReader, destPath, header); err != nil {
-					return fmt.Errorf("failed to restore certificate file %s: %w", header.Name, err)
-				}
-			}
+			log.Printf("[Backup] Database import completed successfully")
 		}
 	}
 
-	// Import database data
-	if backup.IncludesDatabase && exportData != nil {
-		if err := h.backupRepo.ImportAllData(ctx, exportData); err != nil {
-			return fmt.Errorf("failed to import database data: %w", err)
-		}
+	// PHASE 2: Restore files only after DB import succeeds
+	if err := h.restoreFilesFromBackup(backup); err != nil {
+		// DB is already imported, log warning but continue
+		// Files will be regenerated from DB anyway
+		log.Printf("[Backup] Warning: file restoration had issues: %v", err)
 	}
 
 	// Regenerate nginx configs from restored database
@@ -876,20 +824,27 @@ func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Back
 			}
 		}
 
-		// Regenerate Proxy Host configs
+		// Regenerate Proxy Host configs with safe error handling
+		var failedHosts []string
 		if h.proxyHostRepo != nil {
-			proxyHosts, _, err := h.proxyHostRepo.List(ctx, 1, 1000)
+			proxyHosts, _, err := h.proxyHostRepo.List(ctx, 1, 1000, "")
 			if err != nil {
 				log.Printf("[Backup] Warning: failed to list proxy hosts for config regeneration: %v", err)
 			} else if len(proxyHosts) > 0 {
-				if err := h.nginxManager.GenerateAllConfigs(ctx, proxyHosts); err != nil {
-					log.Printf("[Backup] Warning: failed to regenerate proxy host configs: %v", err)
-				}
-				// Generate WAF configs for hosts with WAF enabled
+				// Generate configs one by one so we can handle failures gracefully
 				for _, host := range proxyHosts {
+					if err := h.nginxManager.GenerateConfig(ctx, &host); err != nil {
+						log.Printf("[Backup] Warning: failed to regenerate config for host %s: %v", host.ID, err)
+						failedHosts = append(failedHosts, host.ID)
+						continue
+					}
+					// Generate WAF config if enabled
 					if host.WAFEnabled {
 						if err := h.nginxManager.GenerateHostWAFConfig(ctx, &host, nil); err != nil {
 							log.Printf("[Backup] Warning: failed to regenerate WAF config for host %s: %v", host.ID, err)
+							// Remove the main config if WAF config fails
+							_ = h.nginxManager.RemoveConfig(ctx, &host)
+							failedHosts = append(failedHosts, host.ID)
 						}
 					}
 				}
@@ -908,9 +863,33 @@ func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Back
 			}
 		}
 
-		// Reload nginx
+		// Test nginx config before reload
+		if err := h.nginxManager.TestConfig(ctx); err != nil {
+			log.Printf("[Backup] ERROR: nginx config test failed: %v", err)
+			log.Printf("[Backup] Attempting to remove failed host configs and retry...")
+
+			// Remove configs for failed hosts
+			for _, hostID := range failedHosts {
+				configFile := filepath.Join("/etc/nginx/conf.d", fmt.Sprintf("proxy_host_%s.conf", hostID))
+				if err := os.Remove(configFile); err != nil && !os.IsNotExist(err) {
+					log.Printf("[Backup] Warning: failed to remove config for host %s: %v", hostID, err)
+				}
+			}
+
+			// Test again after removing failed configs
+			if err := h.nginxManager.TestConfig(ctx); err != nil {
+				log.Printf("[Backup] ERROR: nginx config test still failing: %v", err)
+				log.Printf("[Backup] nginx reload skipped to prevent container issues")
+				return nil // Don't fail the restore, but skip reload
+			}
+		}
+
+		// Reload nginx only if config test passes
 		if err := h.nginxManager.ReloadNginx(ctx); err != nil {
 			log.Printf("[Backup] Warning: failed to reload nginx after restore: %v", err)
+			// Don't return error - restore was successful, just reload failed
+		} else {
+			log.Printf("[Backup] nginx reloaded successfully")
 		}
 	}
 
@@ -950,6 +929,109 @@ func (h *SettingsHandler) extractFile(tarReader *tar.Reader, destPath string, he
 
 	if written != header.Size {
 		return fmt.Errorf("size mismatch: wrote %d bytes, expected %d", written, header.Size)
+	}
+
+	return nil
+}
+
+// extractExportJSON reads only the export.json from a backup file
+func (h *SettingsHandler) extractExportJSON(backupPath string) ([]byte, error) {
+	file, err := os.Open(backupPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open backup file: %w", err)
+	}
+	defer file.Close()
+
+	gzReader, err := gzip.NewReader(file)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create gzip reader: %w", err)
+	}
+	defer gzReader.Close()
+
+	tarReader := tar.NewReader(gzReader)
+
+	for {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to read tar entry: %w", err)
+		}
+
+		if header.Name == "data/export.json" {
+			return io.ReadAll(tarReader)
+		}
+	}
+
+	return nil, nil // No export.json found
+}
+
+// restoreFilesFromBackup restores config and certificate files from backup
+func (h *SettingsHandler) restoreFilesFromBackup(backup *model.Backup) error {
+	file, err := os.Open(backup.FilePath)
+	if err != nil {
+		return fmt.Errorf("failed to open backup file: %w", err)
+	}
+	defer file.Close()
+
+	gzReader, err := gzip.NewReader(file)
+	if err != nil {
+		return fmt.Errorf("failed to create gzip reader: %w", err)
+	}
+	defer gzReader.Close()
+
+	tarReader := tar.NewReader(gzReader)
+	var restoreErrors []string
+
+	for {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("failed to read tar entry: %w", err)
+		}
+
+		// Skip directories and symlinks
+		if header.Typeflag == tar.TypeDir || header.Typeflag == tar.TypeSymlink || header.Typeflag == tar.TypeLink {
+			continue
+		}
+
+		// Skip entries with zero size (likely directories without proper type flag)
+		if header.Size == 0 {
+			continue
+		}
+
+		// Skip export.json (already processed in phase 1)
+		if header.Name == "data/export.json" {
+			continue
+		}
+
+		switch {
+		case filepath.Dir(header.Name) == "config/conf.d":
+			// Restore config files
+			if backup.IncludesConfig && !strings.HasSuffix(header.Name, "/") {
+				destPath := filepath.Join("/etc/nginx/conf.d", filepath.Base(header.Name))
+				if err := h.extractFile(tarReader, destPath, header); err != nil {
+					restoreErrors = append(restoreErrors, fmt.Sprintf("config %s: %v", header.Name, err))
+				}
+			}
+
+		case filepath.HasPrefix(header.Name, "certs/"):
+			// Restore certificates
+			if backup.IncludesCertificates && !strings.HasSuffix(header.Name, "/") && strings.Contains(filepath.Base(header.Name), ".") {
+				relPath := header.Name[6:] // Remove "certs/" prefix
+				destPath := filepath.Join("/etc/nginx/certs", relPath)
+				if err := h.extractFile(tarReader, destPath, header); err != nil {
+					restoreErrors = append(restoreErrors, fmt.Sprintf("cert %s: %v", header.Name, err))
+				}
+			}
+		}
+	}
+
+	if len(restoreErrors) > 0 {
+		return fmt.Errorf("file restore errors: %v", restoreErrors)
 	}
 
 	return nil

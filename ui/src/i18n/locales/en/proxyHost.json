@@ -39,7 +39,8 @@
       "active": "Active",
       "disabled": "Disabled"
     },
-    "showing": "Showing {{count}} of {{total}} proxy hosts",
+    "showing": "{{from}}-{{to}} of {{total}}",
+    "perPage": "Show",
     "noResults": "No results found",
     "noResultsDescription": "No proxy hosts match '{{query}}'",
     "clearSearch": "Clear search",

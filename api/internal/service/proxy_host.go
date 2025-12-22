@@ -424,12 +424,18 @@ func (s *ProxyHostService) Create(ctx context.Context, req *model.CreateProxyHos
 		}
 
 		// Generate WAF config if WAF is enabled (new hosts may have global exclusions)
+		// FAIL-SAFE: If WAF config generation fails, we MUST remove the main config
+		// to prevent Nginx from trying to load a non-existent WAF rule file
 		if host.WAFEnabled {
 			mergedExclusions, err := s.getMergedWAFExclusions(ctx, host.ID)
 			if err != nil {
+				// Rollback: Remove the main config we just created
+				_ = s.nginx.RemoveConfig(ctx, host)
 				return nil, fmt.Errorf("failed to get WAF exclusions: %w", err)
 			}
 			if err := s.nginx.GenerateHostWAFConfig(ctx, host, mergedExclusions); err != nil {
+				// Rollback: Remove the main config we just created
+				_ = s.nginx.RemoveConfig(ctx, host)
 				return nil, fmt.Errorf("failed to generate WAF config: %w", err)
 			}
 		}
@@ -456,8 +462,8 @@ func (s *ProxyHostService) GetByDomain(ctx context.Context, domain string) (*mod
 	return s.repo.GetByDomain(ctx, domain)
 }
 
-func (s *ProxyHostService) List(ctx context.Context, page, perPage int) (*model.ProxyHostListResponse, error) {
-	hosts, total, err := s.repo.List(ctx, page, perPage)
+func (s *ProxyHostService) List(ctx context.Context, page, perPage int, search string) (*model.ProxyHostListResponse, error) {
+	hosts, total, err := s.repo.List(ctx, page, perPage, search)
 	if err != nil {
 		return nil, err
 	}

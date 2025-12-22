@@ -260,7 +260,7 @@ func (r *ProxyHostRepository) GetByID(ctx context.Context, id string) (*model.Pr
 	return &host, nil
 }
 
-func (r *ProxyHostRepository) List(ctx context.Context, page, perPage int) ([]model.ProxyHost, int, error) {
+func (r *ProxyHostRepository) List(ctx context.Context, page, perPage int, search string) ([]model.ProxyHost, int, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -269,15 +269,27 @@ func (r *ProxyHostRepository) List(ctx context.Context, page, perPage int) ([]mo
 	}
 	offset := (page - 1) * perPage
 
+	// Build WHERE clause for search
+	var whereClause string
+	var args []interface{}
+	argIndex := 1
+
+	if search != "" {
+		// Search in domain_names array and forward_host
+		whereClause = fmt.Sprintf(" WHERE (array_to_string(domain_names, ',') ILIKE $%d OR forward_host ILIKE $%d)", argIndex, argIndex)
+		args = append(args, "%"+search+"%")
+		argIndex++
+	}
+
 	// Get total count
 	var total int
-	countQuery := `SELECT COUNT(*) FROM proxy_hosts`
-	if err := r.db.QueryRowContext(ctx, countQuery).Scan(&total); err != nil {
+	countQuery := `SELECT COUNT(*) FROM proxy_hosts` + whereClause
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("failed to count proxy hosts: %w", err)
 	}
 
 	// Get paginated data
-	query := `
+	query := fmt.Sprintf(`
 		SELECT id, domain_names, forward_scheme, forward_host, forward_port,
 			ssl_enabled, ssl_force_https, ssl_http2, ssl_http3, certificate_id,
 			allow_websocket_upgrade, cache_enabled,
@@ -289,11 +301,13 @@ func (r *ProxyHostRepository) List(ctx context.Context, page, perPage int) ([]mo
 			waf_paranoia_level, waf_anomaly_threshold,
 			access_list_id, enabled, meta, created_at, updated_at
 		FROM proxy_hosts
+		%s
 		ORDER BY created_at DESC
-		LIMIT $1 OFFSET $2
-	`
+		LIMIT $%d OFFSET $%d
+	`, whereClause, argIndex, argIndex+1)
 
-	rows, err := r.db.QueryContext(ctx, query, perPage, offset)
+	args = append(args, perPage, offset)
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to list proxy hosts: %w", err)
 	}

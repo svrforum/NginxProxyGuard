@@ -639,6 +639,8 @@ function DetailRow({ label, value, description, highlight, help }: { label: stri
 type SortBy = 'name' | 'updated' | 'created'
 type SortOrder = 'asc' | 'desc'
 
+const PER_PAGE_OPTIONS = [10, 20, 50] as const
+
 export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
   const { t } = useTranslation('proxyHost')
   const queryClient = useQueryClient()
@@ -649,6 +651,11 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
   const [isTestLoading, setIsTestLoading] = useState(false)
   const [toggleConfirmHost, setToggleConfirmHost] = useState<ProxyHost | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [perPage, setPerPage] = useState<number>(() => {
+    const saved = localStorage.getItem('proxyHostPerPage')
+    return saved ? parseInt(saved, 10) : 20
+  })
   const [sortBy, setSortBy] = useState<SortBy>(() => {
     const saved = localStorage.getItem('proxyHostSortBy')
     return (saved as SortBy) || 'name'
@@ -659,8 +666,8 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
   })
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['proxy-hosts'],
-    queryFn: () => fetchProxyHosts(1, 200), // Increased limit for client-side filtering
+    queryKey: ['proxy-hosts', currentPage, perPage, searchQuery],
+    queryFn: () => fetchProxyHosts(currentPage, perPage, searchQuery),
   })
 
   const deleteMutation = useMutation({
@@ -744,21 +751,12 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
     return `${sslEnabled ? 'https' : 'http'}://${domain}`
   }
 
-  // Filter and sort hosts (must be before any early returns to follow hooks rules)
+  // Sort hosts (search is now done server-side)
   const hosts = useMemo(() => {
-    let filtered = data?.data || []
+    const items = data?.data || []
 
-    // Search filter
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase()
-      filtered = filtered.filter(host =>
-        host.domain_names.some(domain => domain.toLowerCase().includes(query)) ||
-        host.forward_host.toLowerCase().includes(query)
-      )
-    }
-
-    // Sort
-    filtered = [...filtered].sort((a, b) => {
+    // Sort (client-side sorting for current page)
+    return [...items].sort((a, b) => {
       let comparison = 0
       switch (sortBy) {
         case 'name':
@@ -773,9 +771,24 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
       }
       return sortOrder === 'asc' ? comparison : -comparison
     })
+  }, [data?.data, sortBy, sortOrder])
 
-    return filtered
-  }, [data?.data, searchQuery, sortBy, sortOrder])
+  // Reset to page 1 when search changes
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value)
+    setCurrentPage(1)
+  }
+
+  // Handle per page change
+  const handlePerPageChange = (value: number) => {
+    setPerPage(value)
+    setCurrentPage(1)
+    localStorage.setItem('proxyHostPerPage', value.toString())
+  }
+
+  // Pagination helpers
+  const totalPages = data?.total_pages || 1
+  const total = data?.total || 0
 
   const getHealthDot = (hostId: string) => {
     const status = healthStatus[hostId]
@@ -821,13 +834,13 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               placeholder={t('list.search')}
               className="w-full sm:w-48 pl-9 pr-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
             {searchQuery && (
               <button
-                onClick={() => setSearchQuery('')}
+                onClick={() => handleSearchChange('')}
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600"
               >
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1082,13 +1095,108 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
       )
       }
 
-      {
-        data && data.total > 0 && (
-          <div className="mt-3 text-sm text-slate-500 text-center">
-            {t('list.showing', { count: hosts.length, total: data.total })}
+      {/* Pagination */}
+      {total > 0 && (
+        <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="text-sm text-slate-500 dark:text-slate-400">
+              {t('list.showing', {
+                from: (currentPage - 1) * perPage + 1,
+                to: Math.min(currentPage * perPage, total),
+                total
+              })}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-slate-500 dark:text-slate-400">{t('list.perPage')}:</span>
+              <select
+                value={perPage}
+                onChange={(e) => handlePerPageChange(Number(e.target.value))}
+                className="px-2 py-1 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              >
+                {PER_PAGE_OPTIONS.map(option => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+            </div>
           </div>
-        )
-      }
+          <div className="flex items-center gap-1">
+            {/* First Page */}
+            <button
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+              className="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              title={t('list.pagination.first')}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+              </svg>
+            </button>
+            {/* Previous Page */}
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              title={t('list.pagination.previous')}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+
+            {/* Page Numbers */}
+            <div className="flex items-center gap-1 px-2">
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum: number
+                if (totalPages <= 5) {
+                  pageNum = i + 1
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i
+                } else {
+                  pageNum = currentPage - 2 + i
+                }
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`min-w-[32px] h-8 px-2 text-sm font-medium rounded-lg transition-colors ${
+                      currentPage === pageNum
+                        ? 'bg-primary-600 text-white'
+                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Next Page */}
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              title={t('list.pagination.next')}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+            {/* Last Page */}
+            <button
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage === totalPages}
+              className="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              title={t('list.pagination.last')}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Test Result Modal */}
       {

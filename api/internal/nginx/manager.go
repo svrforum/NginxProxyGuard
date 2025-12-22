@@ -338,11 +338,21 @@ func (m *Manager) RemoveConfig(ctx context.Context, host *model.ProxyHost) error
 
 	// Check if file exists before removing
 	if _, err := os.Stat(configFile); os.IsNotExist(err) {
-		return nil // File doesn't exist, nothing to remove
+		// Even if main config doesn't exist, try to remove WAF config to be safe
+		_ = m.RemoveHostWAFConfig(ctx, host.ID)
+		_ = m.RemoveCloudIPsInclude(host.ID)
+		return nil
 	}
 
 	if err := os.Remove(configFile); err != nil {
 		return fmt.Errorf("failed to remove config file: %w", err)
+	}
+
+	// Remove WAF config if it exists
+	// We verify WAF status but try to remove file anyway to ensure cleanup
+	if err := m.RemoveHostWAFConfig(ctx, host.ID); err != nil {
+		log.Printf("[WARN] Failed to remove WAF config for host %s: %v", host.ID, err)
+		// Don't return error here, as main config removal was successful
 	}
 
 	// Also remove the cloud IPs include file if it exists

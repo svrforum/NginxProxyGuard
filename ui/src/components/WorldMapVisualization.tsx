@@ -246,7 +246,7 @@ function WorldMapVisualization({ data, isLoading }: WorldMapVisualizationProps) 
           Traffic by Region
         </div>
 
-        <div className="flex-1 space-y-2 overflow-auto">
+        <div className="flex-1 space-y-2 overflow-auto pr-3">
           {sortedRegions.length > 0 ? (
             sortedRegions.map(([regionId, region]) => (
               <div key={regionId} className="group">

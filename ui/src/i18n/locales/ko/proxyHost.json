@@ -39,7 +39,8 @@
       "active": "활성",
       "disabled": "비활성"
     },
-    "showing": "{{count}}개 / 총 {{total}}개 프록시 호스트",
+    "showing": "{{from}}-{{to}} / {{total}}개",
+    "perPage": "표시",
     "noResults": "검색 결과가 없습니다",
     "noResultsDescription": "'{{query}}'에 해당하는 프록시 호스트가 없습니다",
     "clearSearch": "검색 초기화",

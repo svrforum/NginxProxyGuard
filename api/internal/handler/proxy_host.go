@@ -113,8 +113,9 @@ func (h *ProxyHostHandler) GetByDomain(c echo.Context) error {
 
 func (h *ProxyHostHandler) List(c echo.Context) error {
 	page, perPage := ParsePaginationParams(c)
+	search := c.QueryParam("search")
 
-	response, err := h.service.List(c.Request().Context(), page, perPage)
+	response, err := h.service.List(c.Request().Context(), page, perPage, search)
 	if err != nil {
 		return databaseError(c, "list proxy hosts", err)
 	}

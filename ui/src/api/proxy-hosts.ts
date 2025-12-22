@@ -11,10 +11,18 @@ const API_BASE = '/api/v1'
 
 export async function fetchProxyHosts(
   page = 1,
-  perPage = 20
+  perPage = 20,
+  search = ''
 ): Promise<ProxyHostListResponse> {
+  const params = new URLSearchParams({
+    page: page.toString(),
+    per_page: perPage.toString(),
+  })
+  if (search.trim()) {
+    params.append('search', search.trim())
+  }
   return apiGet<ProxyHostListResponse>(
-    `${API_BASE}/proxy-hosts?page=${page}&per_page=${perPage}`
+    `${API_BASE}/proxy-hosts?${params.toString()}`
   )
 }
 
