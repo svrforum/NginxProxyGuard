@@ -300,7 +300,7 @@ export default function Dashboard() {
             <h2 className="text-lg font-semibold text-white">{t('geo.title')}</h2>
             <span className="text-xs text-slate-400">{t('geo.subtitle')}</span>
           </div>
-          <div className="h-[350px]">
+          <div className="h-[380px]">
             <WorldMapVisualization
               data={geoIPStats?.data || []}
               isLoading={geoIPLoading}
@@ -310,7 +310,7 @@ export default function Dashboard() {
 
         {/* Top Countries List */}
         <div className="bg-white dark:bg-slate-800 rounded-lg shadow">
-          <div className="p-4 border-b dark:border-slate-700">
+          <div className="p-4 border-b dark:border-slate-700 flex items-center justify-between">
             <h2 className="text-lg font-semibold dark:text-white">{t('geo.topCountries')}</h2>
             {geoIPStats && (
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
