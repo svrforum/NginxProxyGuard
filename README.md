@@ -85,7 +85,7 @@ mkdir -p ~/nginx-proxy-guard && cd ~/nginx-proxy-guard
 
 # 2. Download files
 wget https://raw.githubusercontent.com/svrforum/nginxproxyguard/main/docker-compose.yml
-wget -O .env https://raw.githubusercontent.com/svrforum/nginxproxyguard/main/.env.example
+wget -O .env https://raw.githubusercontent.com/svrforum/nginxproxyguard/main/env.example
 
 # 3. Auto-generate secure secrets
 sed -i "s/DB_PASSWORD=.*/DB_PASSWORD=$(openssl rand -base64 24)/" .env
