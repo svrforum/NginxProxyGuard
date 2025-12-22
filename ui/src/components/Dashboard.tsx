@@ -313,7 +313,7 @@ export default function Dashboard() {
           <div className="p-4 border-b dark:border-slate-700 flex items-center justify-between">
             <h2 className="text-lg font-semibold dark:text-white">{t('geo.topCountries')}</h2>
             {geoIPStats && (
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
                 Total: {formatNumber(geoIPStats.total_count)} requests
               </p>
             )}
