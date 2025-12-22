@@ -85,7 +85,7 @@ mkdir -p ~/nginx-proxy-guard && cd ~/nginx-proxy-guard
 
 # 2. 파일 다운로드
 wget https://raw.githubusercontent.com/svrforum/nginxproxyguard/main/docker-compose.yml
-wget -O .env https://raw.githubusercontent.com/svrforum/nginxproxyguard/main/.env.example
+wget -O .env https://raw.githubusercontent.com/svrforum/nginxproxyguard/main/env.example
 
 # 3. 보안 시크릿 자동 생성
 sed -i "s/DB_PASSWORD=.*/DB_PASSWORD=$(openssl rand -base64 24)/" .env
