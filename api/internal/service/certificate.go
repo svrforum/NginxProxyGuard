@@ -21,13 +21,13 @@ import (
 type CertificateReadyCallback func(ctx context.Context, certificateID string) error
 
 type CertificateService struct {
-	repo          *repository.CertificateRepository
-	dnsRepo       *repository.DNSProviderRepository
-	acmeService   *acme.Service
-	certsPath     string
-	acmeEmail     string
-	onCertReady   CertificateReadyCallback
-	redisCache    *cache.RedisClient
+	repo                *repository.CertificateRepository
+	dnsRepo             *repository.DNSProviderRepository
+	systemSettingsRepo  *repository.SystemSettingsRepository
+	certsPath           string
+	defaultACMEEmail    string
+	onCertReady         CertificateReadyCallback
+	redisCache          *cache.RedisClient
 }
 
 const (
@@ -40,19 +40,40 @@ const (
 func NewCertificateService(
 	repo *repository.CertificateRepository,
 	dnsRepo *repository.DNSProviderRepository,
-	acmeService *acme.Service,
+	systemSettingsRepo *repository.SystemSettingsRepository,
 	certsPath string,
-	acmeEmail string,
+	defaultACMEEmail string,
 	redisCache *cache.RedisClient,
 ) *CertificateService {
 	return &CertificateService{
-		repo:        repo,
-		dnsRepo:     dnsRepo,
-		acmeService: acmeService,
-		certsPath:   certsPath,
-		acmeEmail:   acmeEmail,
-		redisCache:  redisCache,
+		repo:               repo,
+		dnsRepo:            dnsRepo,
+		systemSettingsRepo: systemSettingsRepo,
+		certsPath:          certsPath,
+		defaultACMEEmail:   defaultACMEEmail,
+		redisCache:         redisCache,
 	}
+}
+
+// getACMEService creates an ACME service with current settings from database
+// This ensures staging/production setting changes take effect immediately
+func (s *CertificateService) getACMEService(ctx context.Context) (*acme.Service, string) {
+	// Get current settings from database
+	settings, err := s.systemSettingsRepo.Get(ctx)
+	if err != nil {
+		log.Printf("[CertificateService] Failed to get system settings, using defaults: %v", err)
+		// Fallback to production (safer default)
+		return acme.NewService(false, s.certsPath), s.defaultACMEEmail
+	}
+
+	// Use email from settings if available, otherwise use default
+	email := s.defaultACMEEmail
+	if settings.ACMEEmail != "" {
+		email = settings.ACMEEmail
+	}
+
+	// Create ACME service with current staging setting
+	return acme.NewService(settings.ACMEStaging, s.certsPath), email
 }
 
 // SetCertificateReadyCallback sets the callback to be called when a certificate is ready
@@ -125,6 +146,10 @@ func (s *CertificateService) obtainLetsEncryptCert(certID string, domains []stri
 		return
 	}
 
+	// Get ACME service with current settings from database
+	// This ensures staging/production changes take effect immediately
+	acmeService, acmeEmail := s.getACMEService(ctx)
+
 	var result *acme.CertificateResult
 	var user *acme.ACMEUser
 
@@ -141,7 +166,7 @@ func (s *CertificateService) obtainLetsEncryptCert(certID string, domains []stri
 		s.addCertLog(certID, "info", fmt.Sprintf("DNS provider: %s (%s)", dnsProvider.Name, dnsProvider.ProviderType), "challenge")
 		s.addCertLog(certID, "info", "Requesting certificate from Let's Encrypt...", "acme")
 
-		result, user, err = s.acmeService.ObtainCertificate(s.acmeEmail, domains, dnsProvider, nil)
+		result, user, err = acmeService.ObtainCertificate(acmeEmail, domains, dnsProvider, nil)
 		if err != nil {
 			s.updateCertError(ctx, certID, fmt.Sprintf("failed to obtain certificate via DNS-01: %v", err))
 			return
@@ -152,7 +177,7 @@ func (s *CertificateService) obtainLetsEncryptCert(certID string, domains []stri
 		s.addCertLog(certID, "info", "Requesting certificate from Let's Encrypt...", "acme")
 		s.addCertLog(certID, "warn", "Make sure the domain points to this server and port 80 is accessible", "validation")
 
-		result, user, err = s.acmeService.ObtainCertificateHTTP(s.acmeEmail, domains, nil)
+		result, user, err = acmeService.ObtainCertificateHTTP(acmeEmail, domains, nil)
 		if err != nil {
 			s.updateCertError(ctx, certID, fmt.Sprintf("failed to obtain certificate via HTTP-01: %v", err))
 			return
@@ -163,7 +188,7 @@ func (s *CertificateService) obtainLetsEncryptCert(certID string, domains []stri
 
 	// Save certificate files
 	s.addCertLog(certID, "info", "Saving certificate files...", "save")
-	certPath, keyPath, err := s.acmeService.SaveCertificateFiles(certID, result.CertificatePEM, result.PrivateKeyPEM, result.IssuerCertificatePEM)
+	certPath, keyPath, err := acmeService.SaveCertificateFiles(certID, result.CertificatePEM, result.PrivateKeyPEM, result.IssuerCertificatePEM)
 	if err != nil {
 		s.updateCertError(ctx, certID, fmt.Sprintf("failed to save certificate files: %v", err))
 		return
@@ -213,9 +238,12 @@ func (s *CertificateService) generateSelfSignedCert(certID string, domains []str
 		return
 	}
 
+	// Get ACME service (for file operations, staging setting doesn't matter for self-signed)
+	acmeService, _ := s.getACMEService(ctx)
+
 	// Generate self-signed certificate
 	s.addCertLog(certID, "info", fmt.Sprintf("Generating self-signed certificate (validity: %d days)", validityDays), "generate")
-	result, err := s.acmeService.GenerateSelfSigned(domains, validityDays, "nginx-guard", "US")
+	result, err := acmeService.GenerateSelfSigned(domains, validityDays, "nginx-guard", "US")
 	if err != nil {
 		s.updateCertError(ctx, certID, fmt.Sprintf("failed to generate self-signed certificate: %v", err))
 		return
@@ -224,7 +252,7 @@ func (s *CertificateService) generateSelfSignedCert(certID string, domains []str
 
 	// Save certificate files
 	s.addCertLog(certID, "info", "Saving certificate files...", "save")
-	certPath, keyPath, err := s.acmeService.SaveCertificateFiles(certID, result.CertificatePEM, result.PrivateKeyPEM, result.IssuerCertificatePEM)
+	certPath, keyPath, err := acmeService.SaveCertificateFiles(certID, result.CertificatePEM, result.PrivateKeyPEM, result.IssuerCertificatePEM)
 	if err != nil {
 		s.updateCertError(ctx, certID, fmt.Sprintf("failed to save certificate files: %v", err))
 		return
@@ -290,8 +318,9 @@ func (s *CertificateService) UploadCustom(ctx context.Context, req *model.Upload
 		return nil, fmt.Errorf("failed to create certificate record: %w", err)
 	}
 
-	// Save files
-	certPath, keyPath, err := s.acmeService.SaveCertificateFiles(cert.ID, req.CertificatePEM, req.PrivateKeyPEM, req.IssuerPEM)
+	// Save files (use any ACME service instance, staging setting doesn't matter for file operations)
+	acmeService, _ := s.getACMEService(ctx)
+	certPath, keyPath, err := acmeService.SaveCertificateFiles(cert.ID, req.CertificatePEM, req.PrivateKeyPEM, req.IssuerPEM)
 	if err != nil {
 		return nil, fmt.Errorf("failed to save certificate files: %w", err)
 	}
@@ -331,8 +360,9 @@ func (s *CertificateService) List(ctx context.Context, page, perPage int) (*mode
 
 // Delete removes a certificate
 func (s *CertificateService) Delete(ctx context.Context, id string) error {
-	// Delete certificate files
-	if err := s.acmeService.DeleteCertificateFiles(id); err != nil {
+	// Delete certificate files (use any ACME service instance, staging setting doesn't matter)
+	acmeService, _ := s.getACMEService(ctx)
+	if err := acmeService.DeleteCertificateFiles(id); err != nil {
 		// Log but continue - files might not exist
 	}
 
@@ -422,6 +452,10 @@ func (s *CertificateService) renewLetsEncrypt(ctx context.Context, cert *model.C
 	// Add logging for renewal process (logs are already cleared in Renew())
 	s.addCertLog(cert.ID, "info", fmt.Sprintf("Starting renewal for domains: %v", []string(cert.DomainNames)), "init")
 
+	// Get ACME service with current settings from database
+	// This ensures staging/production changes take effect immediately
+	acmeService, acmeEmail := s.getACMEService(ctx)
+
 	// Reconstruct ACME user
 	var user acme.ACMEUser
 	var hasValidUser bool
@@ -451,7 +485,7 @@ func (s *CertificateService) renewLetsEncrypt(ctx context.Context, cert *model.C
 		if hasValidUser {
 			// Try renewal with existing account
 			s.addCertLog(cert.ID, "info", "Attempting certificate renewal...", "acme")
-			result, renewErr = s.acmeService.RenewCertificate(cert.CertificatePEM, cert.PrivateKeyPEM, dnsProvider, &user)
+			result, renewErr = acmeService.RenewCertificate(cert.CertificatePEM, cert.PrivateKeyPEM, dnsProvider, &user)
 		}
 
 		// If renewal failed or no valid user, obtain new certificate
@@ -461,7 +495,7 @@ func (s *CertificateService) renewLetsEncrypt(ctx context.Context, cert *model.C
 			} else {
 				s.addCertLog(cert.ID, "info", "No valid ACME account, obtaining new certificate", "acme")
 			}
-			result, newUser, renewErr = s.acmeService.ObtainCertificate(s.acmeEmail, []string(cert.DomainNames), dnsProvider, nil)
+			result, newUser, renewErr = acmeService.ObtainCertificate(acmeEmail, []string(cert.DomainNames), dnsProvider, nil)
 		}
 
 		if renewErr != nil {
@@ -475,7 +509,7 @@ func (s *CertificateService) renewLetsEncrypt(ctx context.Context, cert *model.C
 		if hasValidUser {
 			// Try renewal with existing account
 			s.addCertLog(cert.ID, "info", "Attempting certificate renewal...", "acme")
-			result, renewErr = s.acmeService.RenewCertificateHTTP(cert.CertificatePEM, cert.PrivateKeyPEM, &user)
+			result, renewErr = acmeService.RenewCertificateHTTP(cert.CertificatePEM, cert.PrivateKeyPEM, &user)
 		}
 
 		// If renewal failed or no valid user, obtain new certificate
@@ -485,7 +519,7 @@ func (s *CertificateService) renewLetsEncrypt(ctx context.Context, cert *model.C
 			} else {
 				s.addCertLog(cert.ID, "info", "No valid ACME account, obtaining new certificate", "acme")
 			}
-			result, newUser, renewErr = s.acmeService.ObtainCertificateHTTP(s.acmeEmail, []string(cert.DomainNames), nil)
+			result, newUser, renewErr = acmeService.ObtainCertificateHTTP(acmeEmail, []string(cert.DomainNames), nil)
 		}
 
 		if renewErr != nil {
@@ -498,7 +532,7 @@ func (s *CertificateService) renewLetsEncrypt(ctx context.Context, cert *model.C
 
 	// Save new certificate files
 	s.addCertLog(cert.ID, "info", "Saving certificate files...", "save")
-	certPath, keyPath, err := s.acmeService.SaveCertificateFiles(cert.ID, result.CertificatePEM, result.PrivateKeyPEM, result.IssuerCertificatePEM)
+	certPath, keyPath, err := acmeService.SaveCertificateFiles(cert.ID, result.CertificatePEM, result.PrivateKeyPEM, result.IssuerCertificatePEM)
 	if err != nil {
 		s.updateCertError(ctx, cert.ID, fmt.Sprintf("failed to save renewed certificate files: %v", err))
 		return

@@ -69,12 +69,12 @@ services:
       BACKUP_PATH: ${BACKUP_PATH:-/app/data/backups}
       ACME_EMAIL: ${ACME_EMAIL:-}
       ACME_STAGING: ${ACME_STAGING:-false}
+      # Docker API version - leave empty for auto-detection (recommended)
+      DOCKER_API_VERSION: ${DOCKER_API_VERSION:-}
     volumes:
       - nginx_data:/etc/nginx:rw
       - api_data:/app/data:rw
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /etc/os-release:/host/etc/os-release:ro
-      - /etc/hostname:/host/etc/hostname:ro
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
       interval: 30s

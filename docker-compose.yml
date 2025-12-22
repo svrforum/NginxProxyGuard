@@ -61,15 +61,15 @@ services:
       NGINX_STATUS_URL: "http://nginx:8080/nginx_status"
       NGINX_ACCESS_LOG: "/var/log/nginx/access.log"
       BACKUP_PATH: ${BACKUP_PATH:-/app/data/backups}
+      # Docker API version - leave empty for auto-detection (recommended)
+      # For Synology DSM or older Docker hosts, this will be auto-detected
+      DOCKER_API_VERSION: ${DOCKER_API_VERSION:-}
     volumes:
       # Consolidated nginx data volume (shared with nginx container)
       - nginx_data:/etc/nginx:rw
       # Consolidated API data volume (config + backups)
       - api_data:/app/data:rw
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      # Host OS info for system monitoring
-      - /etc/os-release:/host/etc/os-release:ro
-      - /etc/hostname:/host/etc/hostname:ro
     depends_on:
       db:
         condition: service_healthy
