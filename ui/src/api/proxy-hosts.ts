@@ -11,7 +11,7 @@ const API_BASE = '/api/v1'
 
 export async function fetchProxyHosts(
   page = 1,
-  perPage = 20
+  perPage = 200
 ): Promise<ProxyHostListResponse> {
   return apiGet<ProxyHostListResponse>(
     `${API_BASE}/proxy-hosts?page=${page}&per_page=${perPage}`
