@@ -790,6 +790,16 @@ func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Back
 			return fmt.Errorf("failed to read tar entry: %w", err)
 		}
 
+		// Skip directories and symlinks
+		if header.Typeflag == tar.TypeDir || header.Typeflag == tar.TypeSymlink || header.Typeflag == tar.TypeLink {
+			continue
+		}
+
+		// Skip entries with zero size (likely directories without proper type flag)
+		if header.Size == 0 && header.Name != "data/export.json" {
+			continue
+		}
+
 		switch {
 		case header.Name == "data/export.json":
 			// Parse database export
@@ -804,8 +814,8 @@ func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Back
 			}
 
 		case filepath.Dir(header.Name) == "config/conf.d":
-			// Restore config files
-			if backup.IncludesConfig {
+			// Restore config files (skip if it looks like a directory)
+			if backup.IncludesConfig && !strings.HasSuffix(header.Name, "/") {
 				destPath := filepath.Join("/etc/nginx/conf.d", filepath.Base(header.Name))
 				if err := h.extractFile(tarReader, destPath, header); err != nil {
 					return fmt.Errorf("failed to restore config file %s: %w", header.Name, err)
@@ -813,8 +823,8 @@ func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Back
 			}
 
 		case filepath.HasPrefix(header.Name, "certs/"):
-			// Restore certificates
-			if backup.IncludesCertificates {
+			// Restore certificates (skip directories - they end with / or have no extension)
+			if backup.IncludesCertificates && !strings.HasSuffix(header.Name, "/") && strings.Contains(filepath.Base(header.Name), ".") {
 				relPath := header.Name[6:] // Remove "certs/" prefix
 				destPath := filepath.Join("/etc/nginx/certs", relPath)
 				if err := h.extractFile(tarReader, destPath, header); err != nil {
