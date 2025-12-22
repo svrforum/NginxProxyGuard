@@ -111,7 +111,7 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-3xl h-[800px] max-h-[90vh] overflow-hidden flex flex-col transition-colors">
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-3xl min-h-[600px] max-h-[90vh] overflow-hidden flex flex-col transition-colors">
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between bg-slate-50 dark:bg-slate-800/50">
           <div className="flex items-center gap-4">
