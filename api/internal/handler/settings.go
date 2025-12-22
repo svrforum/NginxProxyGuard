@@ -609,31 +609,48 @@ func (h *SettingsHandler) addDirectoryToTar(tw *tar.Writer, srcDir, destPrefix s
 			return nil // Skip errors
 		}
 
+		// Skip directories
 		if info.IsDir() {
+			return nil
+		}
+
+		// Skip symlinks to avoid size mismatch issues
+		if info.Mode()&os.ModeSymlink != 0 {
 			return nil
 		}
 
 		relPath, _ := filepath.Rel(srcDir, path)
 		destPath := filepath.Join(destPrefix, relPath)
 
-		file, err := os.Open(path)
+		// Read entire file content first to ensure size accuracy
+		content, err := os.ReadFile(path)
 		if err != nil {
+			log.Printf("[Backup] Warning: failed to read file %s: %v", path, err)
 			return nil
 		}
-		defer file.Close()
 
 		header := &tar.Header{
 			Name:    destPath,
 			Mode:    int64(info.Mode()),
-			Size:    info.Size(),
+			Size:    int64(len(content)), // Use actual content size
 			ModTime: info.ModTime(),
 		}
 
 		if err := tw.WriteHeader(header); err != nil {
+			log.Printf("[Backup] Warning: failed to write tar header for %s: %v", path, err)
 			return nil
 		}
 
-		io.Copy(tw, file)
+		written, err := tw.Write(content)
+		if err != nil {
+			log.Printf("[Backup] Warning: failed to write tar content for %s: %v", path, err)
+			return nil
+		}
+
+		if written != len(content) {
+			log.Printf("[Backup] Warning: incomplete write for %s: wrote %d of %d bytes", path, written, len(content))
+		}
+
 		return nil
 	})
 }
@@ -914,9 +931,15 @@ func (h *SettingsHandler) extractFile(tarReader *tar.Reader, destPath string, he
 	}
 	defer outFile.Close()
 
-	// Copy contents
-	if _, err := io.Copy(outFile, tarReader); err != nil {
-		return err
+	// Use LimitReader to read exactly the expected amount
+	limitReader := io.LimitReader(tarReader, header.Size)
+	written, err := io.Copy(outFile, limitReader)
+	if err != nil {
+		return fmt.Errorf("copy error after %d bytes (expected %d): %w", written, header.Size, err)
+	}
+
+	if written != header.Size {
+		return fmt.Errorf("size mismatch: wrote %d bytes, expected %d", written, header.Size)
 	}
 
 	return nil
