@@ -384,7 +384,7 @@ function AppContent({ user, onLogout }: AppContentProps) {
             </div>
             <div className="flex items-center gap-4">
               <a
-                href="https://github.com/nginx-proxy-guard/nginx-proxy-guard"
+                href="https://github.com/svrforum/NginxProxyGuard"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-slate-700 dark:hover:text-slate-200 transition-colors flex items-center gap-1"
@@ -396,7 +396,7 @@ function AppContent({ user, onLogout }: AppContentProps) {
               </a>
               <span className="text-slate-300 dark:text-slate-600">|</span>
               <a
-                href="https://github.com/nginx-proxy-guard/nginx-proxy-guard/wiki"
+                href="https://github.com/svrforum/NginxProxyGuard/wiki"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
