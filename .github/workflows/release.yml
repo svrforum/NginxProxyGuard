@@ -257,16 +257,37 @@ jobs:
 
       - name: Generate changelog
         id: changelog
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           if [ -n "$PREV_TAG" ]; then
-            CHANGELOG=$(git log --pretty=format:"- %s" $PREV_TAG..HEAD)
+            # Get full commit messages (subject + body) for each commit
+            CHANGELOG=$(git log --pretty=format:"### %s%n%b" $PREV_TAG..HEAD | sed '/^$/d')
           else
-            CHANGELOG=$(git log --pretty=format:"- %s" -20)
+            CHANGELOG=$(git log --pretty=format:"### %s%n%b" -20 | sed '/^$/d')
           fi
           echo "changelog<<EOF" >> $GITHUB_OUTPUT
           echo "$CHANGELOG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
+
+          # Get contributors from merged PRs
+          CONTRIBUTORS=""
+          if [ -n "$PREV_TAG" ]; then
+            # Find merged PR numbers from commit messages
+            PR_NUMBERS=$(git log --pretty=format:"%s %b" $PREV_TAG..HEAD | grep -oE '#[0-9]+' | sort -u | tr -d '#')
+            for PR in $PR_NUMBERS; do
+              PR_AUTHOR=$(gh pr view $PR --json author --jq '.author.login' 2>/dev/null || echo "")
+              if [ -n "$PR_AUTHOR" ] && [ "$PR_AUTHOR" != "svrforum" ]; then
+                if [ -z "$CONTRIBUTORS" ]; then
+                  CONTRIBUTORS="@$PR_AUTHOR"
+                else
+                  CONTRIBUTORS="$CONTRIBUTORS, @$PR_AUTHOR"
+                fi
+              fi
+            done
+          fi
+          echo "contributors=$CONTRIBUTORS" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -281,17 +302,27 @@ jobs:
             docker pull svrforum/nginxproxyguard-nginx:${{ needs.build-and-test.outputs.version }}
             ```
 
-            ## Build Summary
+            ## Build Summary / 빌드 요약
             | Component | Status |
             |-----------|--------|
             | API | ${{ needs.build-and-test.outputs.api_changed == 'true' && '✅ Built & Pushed' || '⏭️ Skipped (no changes)' }} |
             | UI | ${{ needs.build-and-test.outputs.ui_changed == 'true' && '✅ Built & Pushed' || '⏭️ Skipped (no changes)' }} |
             | Nginx | ${{ needs.build-and-test.outputs.nginx_changed == 'true' && '✅ Built & Pushed' || '⏭️ Skipped (no changes)' }} |
 
-            ## E2E Test
+            ## E2E Test / E2E 테스트
             ✅ All integration tests passed before release
+            ✅ 릴리즈 전 모든 통합 테스트 통과
 
-            ## Changes
+            ${{ steps.changelog.outputs.contributors != '' && format('## Thanks to Contributors / 기여해주신 분들 🙏\nThank you for your contributions! / 기여해주셔서 감사합니다!\n{0}\n', steps.changelog.outputs.contributors) || '' }}
+
+            ---
+
+            ## Changes (English)
+            ${{ steps.changelog.outputs.changelog }}
+
+            ---
+
+            ## 변경사항 (한국어)
             ${{ steps.changelog.outputs.changelog }}
           draft: false
           prerelease: ${{ contains(github.ref, '-rc') || contains(github.ref, '-beta') || contains(github.ref, '-alpha') }}
