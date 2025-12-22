@@ -37,8 +37,12 @@ COPY --from=builder /app/server .
 # Copy assets (favicon, etc.)
 COPY assets/ ./assets/
 
+# Copy entrypoint script for Docker API version auto-detection
+COPY entrypoint.sh .
+RUN chmod +x entrypoint.sh
+
 # Expose port
 EXPOSE 8080
 
-# Run
-CMD ["./server"]
+# Run with entrypoint for Docker API version compatibility
+ENTRYPOINT ["./entrypoint.sh"]

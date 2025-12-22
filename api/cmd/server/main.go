@@ -25,7 +25,6 @@ import (
 	"nginx-proxy-guard/internal/repository"
 	"nginx-proxy-guard/internal/scheduler"
 	"nginx-proxy-guard/internal/service"
-	"nginx-proxy-guard/pkg/acme"
 	"nginx-proxy-guard/pkg/cache"
 )
 
@@ -60,9 +59,6 @@ func main() {
 		cfg.NginxConfigPath,
 		cfg.NginxCertsPath,
 	)
-
-	// Initialize ACME service
-	acmeService := acme.NewService(cfg.ACMEStaging, cfg.NginxCertsPath)
 
 	// Initialize repositories
 	proxyHostRepo := repository.NewProxyHostRepository(db)
@@ -112,7 +108,7 @@ func main() {
 	certificateService := service.NewCertificateService(
 		certificateRepo,
 		dnsProviderRepo,
-		acmeService,
+		systemSettingsRepo,
 		cfg.NginxCertsPath,
 		cfg.ACMEEmail,
 		redisCache,
