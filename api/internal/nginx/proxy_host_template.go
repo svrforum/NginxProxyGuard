@@ -68,6 +68,11 @@ server {
     set $geo_blocked 0;
     set $is_search_bot 0;
 
+    # NPM-compatible variables for custom config
+    set $forward_scheme {{.Host.ForwardScheme}};
+    set $server "{{.Host.ForwardHost}}";
+    set $port {{.Host.ForwardPort}};
+
 {{if .SearchEnginesList}}
     # Search bot detection (set once, used by GeoIP, CloudProvider, BotFilter)
     if ($http_user_agent ~* ({{toRegexPattern .SearchEnginesList}})) {
@@ -631,10 +636,13 @@ server {
 {{if .Host.SSLEnabled}}
     # Redirect HTTP to HTTPS
     {{if .Host.SSLForceHTTPS}}
+{{if not .HasCustomLocationRoot}}
     location / {
         return 301 https://$host$request_uri;
     }
+{{end}}
     {{else}}
+{{if not .HasCustomLocationRoot}}
     location / {
 {{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}
         # Check challenge token for geo-blocked users (skip for search bots)
@@ -718,8 +726,10 @@ server {
         return 302 /api/v1/challenge/page?host={{.Host.ID}}&reason=geo_restriction&return=$scheme://$host$request_uri;
     }
 {{end}}{{end}}
+{{end}}
     {{end}}
 {{else}}
+{{if not .HasCustomLocationRoot}}
     location / {
 {{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}
         # Check challenge token for geo-blocked users (skip for search bots)
@@ -803,6 +813,7 @@ server {
         return 302 /api/v1/challenge/page?host={{.Host.ID}}&reason=geo_restriction&return=$scheme://$host$request_uri;
     }
 {{end}}{{end}}
+{{end}}
 {{end}}
 
 {{if .RateLimit}}{{if .RateLimit.Enabled}}
@@ -846,6 +857,11 @@ server {
     set $bot_category_var "-";
     set $geo_blocked 0;
     set $is_search_bot 0;
+
+    # NPM-compatible variables for custom config
+    set $forward_scheme {{.Host.ForwardScheme}};
+    set $server "{{.Host.ForwardHost}}";
+    set $port {{.Host.ForwardPort}};
 
 {{if .SearchEnginesList}}
     # Search bot detection (set once, used by GeoIP, CloudProvider, BotFilter)
@@ -1417,6 +1433,7 @@ server {
     }
 {{end}}{{end}}
 
+{{if not .HasCustomLocationRoot}}
     location / {
 {{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}
         # Check challenge token for geo-blocked users (skip for search bots)
@@ -1529,6 +1546,7 @@ server {
         return 302 /api/v1/challenge/page?host={{.Host.ID}}&reason=geo_restriction&return=$scheme://$host$request_uri;
     }
 {{end}}{{end}}
+{{end}}
 
 {{if .RateLimit}}{{if .RateLimit.Enabled}}
     # Rate limited response handler
@@ -1575,4 +1593,5 @@ type ProxyHostConfigData struct {
 	URIBlock                      *model.URIBlock       // URI path blocking settings
 	GlobalBlockExploitsExceptions string                // Global newline-separated list of exploit exceptions from system settings
 	ExploitBlockRules             []model.ExploitBlockRule // Dynamic exploit blocking rules from database
+	HasCustomLocationRoot         bool                  // True if AdvancedConfig contains a location / block
 }
