@@ -84,6 +84,9 @@ func (db *DB) RunMigrations() error {
 	// Migrate to TimescaleDB hypertable in background (for existing installations)
 	go db.migrateToTimescaleDB()
 
+	// Migrate other log tables to hypertables
+	go db.migrateLogTablesToHypertables()
+
 	log.Println("Schema migration completed")
 	return nil
 }
@@ -429,6 +432,207 @@ func (db *DB) migrateToTimescaleDB() {
 
 	// Clean up backup table after successful migration (optional - keep for safety)
 	log.Println("[TimescaleDB] Backup table 'logs_partitioned_backup' kept for safety. Drop manually when verified.")
+}
+
+// migrateLogTablesToHypertables migrates system_logs, challenge_logs, audit_logs to hypertables
+func (db *DB) migrateLogTablesToHypertables() {
+	// Wait for main migration to complete
+	time.Sleep(10 * time.Second)
+
+	if !db.isTimescaleDBAvailable() {
+		log.Println("[TimescaleDB] Extension not available, skipping log tables migration")
+		return
+	}
+
+	// Define log tables to migrate
+	logTables := []struct {
+		name      string
+		segmentBy string
+	}{
+		{"system_logs", "source, level"},
+		{"challenge_logs", "result"},
+		{"audit_logs", "action"},
+	}
+
+	for _, table := range logTables {
+		db.migrateTableToHypertable(table.name, table.segmentBy)
+	}
+}
+
+// migrateTableToHypertable converts a regular table to a TimescaleDB hypertable
+func (db *DB) migrateTableToHypertable(tableName, segmentBy string) {
+	migrationKey := fmt.Sprintf("timescaledb_%s", tableName)
+
+	// Check if already migrated
+	var migrated bool
+	err := db.QueryRow(`SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = $1)`, migrationKey).Scan(&migrated)
+	if err == nil && migrated {
+		log.Printf("[TimescaleDB] %s already migrated to hypertable", tableName)
+		db.setupTableCompression(tableName, segmentBy)
+		return
+	}
+
+	// Check if table exists
+	var tableExists bool
+	err = db.QueryRow(`
+		SELECT EXISTS(
+			SELECT 1 FROM information_schema.tables
+			WHERE table_schema = 'public' AND table_name = $1
+		)
+	`, tableName).Scan(&tableExists)
+	if err != nil || !tableExists {
+		log.Printf("[TimescaleDB] Table %s not found, skipping", tableName)
+		return
+	}
+
+	// Check if already a hypertable
+	if db.isHypertable(tableName) {
+		log.Printf("[TimescaleDB] %s is already a hypertable", tableName)
+		db.setupTableCompression(tableName, segmentBy)
+		db.Exec(`INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT DO NOTHING`, migrationKey)
+		return
+	}
+
+	log.Printf("[TimescaleDB] Starting migration of %s to hypertable...", tableName)
+
+	// Get row count
+	var rowCount int64
+	db.QueryRow(fmt.Sprintf(`SELECT COUNT(*) FROM %s`, tableName)).Scan(&rowCount)
+	log.Printf("[TimescaleDB] %s has %d rows", tableName, rowCount)
+
+	// For tables with foreign keys, we need to handle them carefully
+	// Drop foreign key constraints temporarily
+	var fkConstraints []struct {
+		name       string
+		definition string
+	}
+	rows, err := db.Query(`
+		SELECT conname, pg_get_constraintdef(oid)
+		FROM pg_constraint
+		WHERE conrelid = $1::regclass AND contype = 'f'
+	`, tableName)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var name, def string
+			rows.Scan(&name, &def)
+			fkConstraints = append(fkConstraints, struct {
+				name       string
+				definition string
+			}{name, def})
+		}
+	}
+
+	// Drop primary key (will recreate with created_at)
+	db.Exec(fmt.Sprintf(`ALTER TABLE %s DROP CONSTRAINT IF EXISTS %s_pkey`, tableName, tableName))
+
+	// Drop foreign keys temporarily
+	for _, fk := range fkConstraints {
+		log.Printf("[TimescaleDB] Dropping FK %s temporarily", fk.name)
+		db.Exec(fmt.Sprintf(`ALTER TABLE %s DROP CONSTRAINT IF EXISTS %s`, tableName, fk.name))
+	}
+
+	// Convert to hypertable
+	_, err = db.Exec(fmt.Sprintf(`
+		SELECT create_hypertable(
+			'%s',
+			by_range('created_at', INTERVAL '1 day'),
+			migrate_data => true,
+			if_not_exists => true
+		)
+	`, tableName))
+	if err != nil {
+		log.Printf("[TimescaleDB] Failed to convert %s to hypertable: %v", tableName, err)
+		// Restore primary key
+		db.Exec(fmt.Sprintf(`ALTER TABLE %s ADD PRIMARY KEY (id)`, tableName))
+		// Restore foreign keys
+		for _, fk := range fkConstraints {
+			db.Exec(fmt.Sprintf(`ALTER TABLE %s ADD CONSTRAINT %s %s`, tableName, fk.name, fk.definition))
+		}
+		return
+	}
+
+	log.Printf("[TimescaleDB] %s converted to hypertable successfully", tableName)
+
+	// Recreate primary key with created_at (required for hypertables)
+	db.Exec(fmt.Sprintf(`ALTER TABLE %s ADD PRIMARY KEY (id, created_at)`, tableName))
+
+	// Restore foreign keys
+	for _, fk := range fkConstraints {
+		log.Printf("[TimescaleDB] Restoring FK %s", fk.name)
+		_, err := db.Exec(fmt.Sprintf(`ALTER TABLE %s ADD CONSTRAINT %s %s`, tableName, fk.name, fk.definition))
+		if err != nil {
+			log.Printf("[TimescaleDB] Warning: failed to restore FK %s: %v", fk.name, err)
+		}
+	}
+
+	// Mark as migrated
+	db.Exec(`INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT DO NOTHING`, migrationKey)
+
+	// Setup compression
+	db.setupTableCompression(tableName, segmentBy)
+}
+
+// setupTableCompression sets up compression for a specific hypertable
+func (db *DB) setupTableCompression(tableName, segmentBy string) {
+	if !db.isHypertable(tableName) {
+		return
+	}
+
+	// Check if compression is already enabled
+	var compressionEnabled bool
+	db.QueryRow(`
+		SELECT compression_enabled
+		FROM timescaledb_information.hypertables
+		WHERE hypertable_name = $1
+	`, tableName).Scan(&compressionEnabled)
+
+	if compressionEnabled {
+		log.Printf("[TimescaleDB] Compression already enabled for %s", tableName)
+		return
+	}
+
+	log.Printf("[TimescaleDB] Setting up compression for %s...", tableName)
+
+	// Enable compression
+	_, err := db.Exec(fmt.Sprintf(`
+		ALTER TABLE %s SET (
+			timescaledb.compress,
+			timescaledb.compress_segmentby = '%s',
+			timescaledb.compress_orderby = 'created_at DESC'
+		)
+	`, tableName, segmentBy))
+	if err != nil {
+		log.Printf("[TimescaleDB] Warning: failed to enable compression for %s: %v", tableName, err)
+		return
+	}
+
+	// Add compression policy
+	_, err = db.Exec(fmt.Sprintf(`
+		SELECT add_compression_policy('%s', INTERVAL '7 days', if_not_exists => true)
+	`, tableName))
+	if err != nil {
+		log.Printf("[TimescaleDB] Warning: failed to add compression policy for %s: %v", tableName, err)
+		return
+	}
+
+	log.Printf("[TimescaleDB] Compression enabled for %s", tableName)
+
+	// Compress existing old chunks immediately
+	db.Exec(fmt.Sprintf(`SELECT compress_chunk(c) FROM show_chunks('%s', older_than => INTERVAL '7 days') c`, tableName))
+
+	// Show compression status
+	var compressedChunks, totalChunks int
+	err = db.QueryRow(`
+		SELECT
+			COUNT(*) FILTER (WHERE is_compressed) as compressed,
+			COUNT(*) as total
+		FROM timescaledb_information.chunks
+		WHERE hypertable_name = $1
+	`, tableName).Scan(&compressedChunks, &totalChunks)
+	if err == nil && totalChunks > 0 {
+		log.Printf("[TimescaleDB] %s compression status: %d/%d chunks compressed", tableName, compressedChunks, totalChunks)
+	}
 }
 
 // setupTimescaleDBCompression sets up compression policy for the hypertable
