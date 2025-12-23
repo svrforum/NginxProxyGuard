@@ -396,7 +396,7 @@ function AppContent({ user, onLogout }: AppContentProps) {
               </a>
               <span className="text-slate-300 dark:text-slate-600">|</span>
               <a
-                href="https://github.com/svrforum/NginxProxyGuard/wiki"
+                href="https://nginxproxyguard.com/en/docs/introduction"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
