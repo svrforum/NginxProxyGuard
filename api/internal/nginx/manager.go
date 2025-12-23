@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"text/template"
 
@@ -313,6 +314,14 @@ func (m *Manager) GenerateConfigFull(ctx context.Context, data ProxyHostConfigDa
 	} else {
 		// Remove the include file if no cloud IPs to block
 		_ = m.RemoveCloudIPsInclude(data.Host.ID)
+	}
+
+	// Check if AdvancedConfig contains a custom location / block
+	// If so, skip generating the default location / block to avoid duplicates
+	if data.Host.AdvancedConfig != "" {
+		// Check for location / { pattern (with flexible whitespace)
+		locationPattern := regexp.MustCompile(`(?m)^\s*location\s+/\s*\{`)
+		data.HasCustomLocationRoot = locationPattern.MatchString(data.Host.AdvancedConfig)
 	}
 
 	tmpl, err := template.New("proxy_host").Funcs(funcMap).Parse(proxyHostTemplate)
