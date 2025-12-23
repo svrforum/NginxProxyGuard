@@ -4,6 +4,12 @@ Nginx Proxy Guard uses the following third-party software:
 
 ## Core Components
 
+### TimescaleDB
+- **License**: Timescale License (TSL)
+- **Website**: https://github.com/timescale/timescaledb
+- **License URL**: https://github.com/timescale/timescaledb/blob/main/tsl/LICENSE-TIMESCALE
+- **Note**: TimescaleDB Community Edition is used for time-series data storage and compression. The Timescale License allows use with open source projects. See license for details.
+
 ### Nginx
 - **License**: BSD-2-Clause
 - **Website**: https://nginx.org/

@@ -1,7 +1,7 @@
 services:
-  # PostgreSQL Database
+  # TimescaleDB (PostgreSQL with time-series optimization)
   db:
-    image: postgres:17-alpine
+    image: timescale/timescaledb:latest-pg17
     container_name: npg-db
     restart: unless-stopped
     environment:
@@ -9,7 +9,7 @@ services:
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
       POSTGRES_DB: ${DB_NAME:-nginx_proxy_guard}
-    command: postgres -c timezone=${TZ:-UTC} -c log_timezone=${TZ:-UTC}
+    command: postgres -c timezone=${TZ:-UTC} -c log_timezone=${TZ:-UTC} -c shared_preload_libraries=timescaledb -c timescaledb.telemetry_level=off
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

@@ -4,9 +4,9 @@
 #   Development: docker compose -f docker-compose.dev.yml up -d --build
 #   Rebuild specific service: docker compose -f docker-compose.dev.yml up -d --build api
 services:
-  # PostgreSQL Database (only starts with --profile infra)
+  # TimescaleDB (only starts with --profile infra)
   db:
-    image: postgres:17-alpine
+    image: timescale/timescaledb:latest-pg17
     container_name: npg-db
     restart: unless-stopped
     profiles: ["infra"]
@@ -15,7 +15,7 @@ services:
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
       POSTGRES_DB: ${DB_NAME:-nginx_proxy_guard}
-    command: postgres -c timezone=${TZ:-UTC} -c log_timezone=${TZ:-UTC}
+    command: postgres -c timezone=${TZ:-UTC} -c log_timezone=${TZ:-UTC} -c shared_preload_libraries=timescaledb -c timescaledb.telemetry_level=off
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
