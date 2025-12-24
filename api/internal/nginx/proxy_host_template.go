@@ -73,6 +73,9 @@ server {
     set $server "{{.Host.ForwardHost}}";
     set $port {{.Host.ForwardPort}};
 
+    # Resolver for dynamic proxy_pass with variables
+    resolver 127.0.0.11 valid=30s;
+
 {{if .SearchEnginesList}}
     # Search bot detection (set once, used by GeoIP, CloudProvider, BotFilter)
     if ($http_user_agent ~* ({{toRegexPattern .SearchEnginesList}})) {
@@ -862,6 +865,9 @@ server {
     set $forward_scheme {{.Host.ForwardScheme}};
     set $server "{{.Host.ForwardHost}}";
     set $port {{.Host.ForwardPort}};
+
+    # Resolver for dynamic proxy_pass with variables
+    resolver 127.0.0.11 valid=30s;
 
 {{if .SearchEnginesList}}
     # Search bot detection (set once, used by GeoIP, CloudProvider, BotFilter)
