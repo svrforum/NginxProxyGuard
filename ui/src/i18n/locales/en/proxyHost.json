@@ -347,6 +347,8 @@
       "title": "WAF (Web Application Firewall)",
       "enabled": "Enable WAF",
       "description": "Enable ModSecurity web application firewall",
+      "memoryWarningTitle": "System Requirements",
+      "memoryWarningDescription": "WAF requires minimum 2GB RAM. Nginx may restart if memory is insufficient.",
       "mode": "Mode",
       "modeBlocking": "Blocking",
       "modeBlockingDescription": "Block attacks",
