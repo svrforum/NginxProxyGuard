@@ -106,7 +106,7 @@ services:
     #   context: ./nginx
     #   dockerfile: Dockerfile
     container_name: npg-proxy
-    restart: unless-stopped
+    restart: always
     environment:
       TZ: ${TZ:-UTC}
     ports:
@@ -126,9 +126,10 @@ services:
       - api
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/health"]
-      interval: 60s
-      timeout: 10s
+      interval: 15s
+      timeout: 5s
       retries: 3
+      start_period: 10s
 
 volumes:
   postgres_data:
