@@ -255,6 +255,22 @@ func (r *DNSProviderRepository) TestConnection(ctx context.Context, providerType
 		if creds.AccessKeyID == "" || creds.SecretAccessKey == "" {
 			return model.ErrInvalidCredentials
 		}
+	case model.DNSProviderDuckDNS:
+		var creds model.DuckDNSCredentials
+		if err := json.Unmarshal(credentials, &creds); err != nil {
+			return fmt.Errorf("invalid duckdns credentials: %w", err)
+		}
+		if creds.Token == "" {
+			return model.ErrInvalidCredentials
+		}
+	case model.DNSProviderDynu:
+		var creds model.DynuCredentials
+		if err := json.Unmarshal(credentials, &creds); err != nil {
+			return fmt.Errorf("invalid dynu credentials: %w", err)
+		}
+		if creds.APIKey == "" {
+			return model.ErrInvalidCredentials
+		}
 	}
 	return nil
 }

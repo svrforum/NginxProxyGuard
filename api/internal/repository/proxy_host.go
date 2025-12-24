@@ -641,6 +641,11 @@ func (r *ProxyHostRepository) GetByDomain(ctx context.Context, domain string) (*
 			COALESCE(block_exploits_exceptions, '') as block_exploits_exceptions,
 			custom_locations, advanced_config, waf_enabled, waf_mode,
 			waf_paranoia_level, waf_anomaly_threshold,
+			COALESCE(proxy_connect_timeout, 0) as proxy_connect_timeout,
+			COALESCE(proxy_send_timeout, 0) as proxy_send_timeout,
+			COALESCE(proxy_read_timeout, 0) as proxy_read_timeout,
+			COALESCE(proxy_buffering, '') as proxy_buffering,
+			COALESCE(client_max_body_size, '') as client_max_body_size,
 			access_list_id, enabled, meta, created_at, updated_at
 		FROM proxy_hosts WHERE $1 = ANY(domain_names)
 		LIMIT 1
@@ -673,6 +678,11 @@ func (r *ProxyHostRepository) GetByDomain(ctx context.Context, domain string) (*
 		&host.WAFMode,
 		&host.WAFParanoiaLevel,
 		&host.WAFAnomalyThreshold,
+		&host.ProxyConnectTimeout,
+		&host.ProxySendTimeout,
+		&host.ProxyReadTimeout,
+		&host.ProxyBuffering,
+		&host.ClientMaxBodySize,
 		&accessListID,
 		&host.Enabled,
 		&meta,
