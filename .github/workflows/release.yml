@@ -271,9 +271,10 @@ jobs:
           echo "$CHANGELOG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-          # Extract Korean changelog from tag message (between "## 변경사항" and next "##" or end)
+          # Extract Korean changelog from tag message
+          # Look for lines starting with Korean type prefixes (- 기능:, - 수정:, - 성능:, etc.)
           TAG_MSG=$(git tag -l --format='%(contents)' ${GITHUB_REF#refs/tags/})
-          CHANGELOG_KO=$(echo "$TAG_MSG" | sed -n '/^## 변경사항/,/^##/p' | grep -v "^##" | sed '/^$/d')
+          CHANGELOG_KO=$(echo "$TAG_MSG" | grep -E '^- (기능|수정|성능|문서|기타|리팩토링|테스트):' || echo "")
           if [ -z "$CHANGELOG_KO" ]; then
             # Fallback: use English changelog with Korean type prefixes
             CHANGELOG_KO=$(echo "$CHANGELOG" | \

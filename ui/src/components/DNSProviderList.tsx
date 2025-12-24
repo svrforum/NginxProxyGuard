@@ -10,6 +10,8 @@ function ProviderTypeBadge({ type }: { type: DNSProvider['provider_type'] }) {
   const colors: Record<DNSProvider['provider_type'], string> = {
     cloudflare: 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300',
     route53: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300',
+    duckdns: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300',
+    dynu: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300',
     manual: 'bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-300',
   };
 
