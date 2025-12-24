@@ -135,6 +135,13 @@ type ProxyHost struct {
 	CustomLocations json.RawMessage `json:"custom_locations,omitempty"`
 	AdvancedConfig  string          `json:"advanced_config,omitempty"`
 
+	// Host-level proxy settings (override global settings if set)
+	ProxyConnectTimeout int    `json:"proxy_connect_timeout,omitempty"` // seconds, 0 = use global
+	ProxySendTimeout    int    `json:"proxy_send_timeout,omitempty"`    // seconds, 0 = use global
+	ProxyReadTimeout    int    `json:"proxy_read_timeout,omitempty"`    // seconds, 0 = use global
+	ProxyBuffering      string `json:"proxy_buffering,omitempty"`       // "on", "off", "" = use global
+	ClientMaxBodySize   string `json:"client_max_body_size,omitempty"`  // e.g. "100m", "" = use global
+
 	// WAF configuration
 	WAFEnabled          bool   `json:"waf_enabled"`
 	WAFMode             string `json:"waf_mode"`
@@ -175,6 +182,11 @@ type CreateProxyHostRequest struct {
 	WAFAnomalyThreshold     int      `json:"waf_anomaly_threshold"`
 	AccessListID            *string  `json:"access_list_id,omitempty"`
 	AdvancedConfig          string   `json:"advanced_config,omitempty"`
+	ProxyConnectTimeout     int      `json:"proxy_connect_timeout,omitempty"`
+	ProxySendTimeout        int      `json:"proxy_send_timeout,omitempty"`
+	ProxyReadTimeout        int      `json:"proxy_read_timeout,omitempty"`
+	ProxyBuffering          string   `json:"proxy_buffering,omitempty"`
+	ClientMaxBodySize       string   `json:"client_max_body_size,omitempty"`
 	Enabled                 bool     `json:"enabled"`
 }
 
@@ -200,6 +212,11 @@ type UpdateProxyHostRequest struct {
 	WAFAnomalyThreshold     *int    `json:"waf_anomaly_threshold,omitempty"`
 	AccessListID            *string `json:"access_list_id,omitempty"`
 	AdvancedConfig          *string `json:"advanced_config,omitempty"`
+	ProxyConnectTimeout     *int    `json:"proxy_connect_timeout,omitempty"`
+	ProxySendTimeout        *int    `json:"proxy_send_timeout,omitempty"`
+	ProxyReadTimeout        *int    `json:"proxy_read_timeout,omitempty"`
+	ProxyBuffering          *string `json:"proxy_buffering,omitempty"`
+	ClientMaxBodySize       *string `json:"client_max_body_size,omitempty"`
 	Enabled                 *bool   `json:"enabled,omitempty"`
 }
 

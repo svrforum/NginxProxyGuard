@@ -322,6 +322,11 @@ func (m *Manager) GenerateConfigFull(ctx context.Context, data ProxyHostConfigDa
 		// Check for location / { pattern (with flexible whitespace)
 		locationPattern := regexp.MustCompile(`(?m)^\s*location\s+/\s*\{`)
 		data.HasCustomLocationRoot = locationPattern.MatchString(data.Host.AdvancedConfig)
+
+		// Check if AdvancedConfig contains ANY location directive
+		// If so, we cannot inject it inside location / block (would cause nested location error)
+		anyLocationPattern := regexp.MustCompile(`(?m)^\s*location\s+`)
+		data.AdvancedConfigHasLocation = anyLocationPattern.MatchString(data.Host.AdvancedConfig)
 	}
 
 	tmpl, err := template.New("proxy_host").Funcs(funcMap).Parse(proxyHostTemplate)

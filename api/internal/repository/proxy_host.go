@@ -54,14 +54,17 @@ func (r *ProxyHostRepository) Create(ctx context.Context, req *model.CreateProxy
 			allow_websocket_upgrade, cache_enabled, cache_static_only, cache_ttl,
 			block_exploits, block_exploits_exceptions,
 			waf_enabled, waf_mode, waf_paranoia_level, waf_anomaly_threshold,
-			advanced_config, enabled
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+			advanced_config, proxy_connect_timeout, proxy_send_timeout, proxy_read_timeout,
+			proxy_buffering, client_max_body_size, enabled
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
 		RETURNING id, domain_names, forward_scheme, forward_host, forward_port,
 			ssl_enabled, ssl_force_https, ssl_http2, ssl_http3, certificate_id,
 			allow_websocket_upgrade, cache_enabled, cache_static_only, cache_ttl,
 			block_exploits, block_exploits_exceptions,
 			custom_locations, advanced_config, waf_enabled, waf_mode,
 			waf_paranoia_level, waf_anomaly_threshold,
+			proxy_connect_timeout, proxy_send_timeout, proxy_read_timeout,
+			proxy_buffering, client_max_body_size,
 			access_list_id, enabled, meta, created_at, updated_at
 	`
 
@@ -124,6 +127,11 @@ func (r *ProxyHostRepository) Create(ctx context.Context, req *model.CreateProxy
 		paranoiaLevel,
 		anomalyThreshold,
 		req.AdvancedConfig,
+		req.ProxyConnectTimeout,
+		req.ProxySendTimeout,
+		req.ProxyReadTimeout,
+		req.ProxyBuffering,
+		req.ClientMaxBodySize,
 		req.Enabled,
 	).Scan(
 		&host.ID,
@@ -148,6 +156,11 @@ func (r *ProxyHostRepository) Create(ctx context.Context, req *model.CreateProxy
 		&host.WAFMode,
 		&host.WAFParanoiaLevel,
 		&host.WAFAnomalyThreshold,
+		&host.ProxyConnectTimeout,
+		&host.ProxySendTimeout,
+		&host.ProxyReadTimeout,
+		&host.ProxyBuffering,
+		&host.ClientMaxBodySize,
 		&accessListID,
 		&host.Enabled,
 		&meta,
@@ -196,6 +209,11 @@ func (r *ProxyHostRepository) GetByID(ctx context.Context, id string) (*model.Pr
 			COALESCE(block_exploits_exceptions, '') as block_exploits_exceptions,
 			custom_locations, advanced_config, waf_enabled, waf_mode,
 			waf_paranoia_level, waf_anomaly_threshold,
+			COALESCE(proxy_connect_timeout, 0) as proxy_connect_timeout,
+			COALESCE(proxy_send_timeout, 0) as proxy_send_timeout,
+			COALESCE(proxy_read_timeout, 0) as proxy_read_timeout,
+			COALESCE(proxy_buffering, '') as proxy_buffering,
+			COALESCE(client_max_body_size, '') as client_max_body_size,
 			access_list_id, enabled, meta, created_at, updated_at
 		FROM proxy_hosts WHERE id = $1
 	`
@@ -227,6 +245,11 @@ func (r *ProxyHostRepository) GetByID(ctx context.Context, id string) (*model.Pr
 		&host.WAFMode,
 		&host.WAFParanoiaLevel,
 		&host.WAFAnomalyThreshold,
+		&host.ProxyConnectTimeout,
+		&host.ProxySendTimeout,
+		&host.ProxyReadTimeout,
+		&host.ProxyBuffering,
+		&host.ClientMaxBodySize,
 		&accessListID,
 		&host.Enabled,
 		&meta,
@@ -299,6 +322,11 @@ func (r *ProxyHostRepository) List(ctx context.Context, page, perPage int, searc
 			COALESCE(block_exploits_exceptions, '') as block_exploits_exceptions,
 			custom_locations, advanced_config, waf_enabled, waf_mode,
 			waf_paranoia_level, waf_anomaly_threshold,
+			COALESCE(proxy_connect_timeout, 0) as proxy_connect_timeout,
+			COALESCE(proxy_send_timeout, 0) as proxy_send_timeout,
+			COALESCE(proxy_read_timeout, 0) as proxy_read_timeout,
+			COALESCE(proxy_buffering, '') as proxy_buffering,
+			COALESCE(client_max_body_size, '') as client_max_body_size,
 			access_list_id, enabled, meta, created_at, updated_at
 		FROM proxy_hosts
 		%s
@@ -342,6 +370,11 @@ func (r *ProxyHostRepository) List(ctx context.Context, page, perPage int, searc
 			&host.WAFMode,
 			&host.WAFParanoiaLevel,
 			&host.WAFAnomalyThreshold,
+			&host.ProxyConnectTimeout,
+			&host.ProxySendTimeout,
+			&host.ProxyReadTimeout,
+			&host.ProxyBuffering,
+			&host.ClientMaxBodySize,
 			&accessListID,
 			&host.Enabled,
 			&meta,
@@ -442,6 +475,21 @@ func (r *ProxyHostRepository) Update(ctx context.Context, id string, req *model.
 	if req.AdvancedConfig != nil {
 		existing.AdvancedConfig = *req.AdvancedConfig
 	}
+	if req.ProxyConnectTimeout != nil {
+		existing.ProxyConnectTimeout = *req.ProxyConnectTimeout
+	}
+	if req.ProxySendTimeout != nil {
+		existing.ProxySendTimeout = *req.ProxySendTimeout
+	}
+	if req.ProxyReadTimeout != nil {
+		existing.ProxyReadTimeout = *req.ProxyReadTimeout
+	}
+	if req.ProxyBuffering != nil {
+		existing.ProxyBuffering = *req.ProxyBuffering
+	}
+	if req.ClientMaxBodySize != nil {
+		existing.ClientMaxBodySize = *req.ClientMaxBodySize
+	}
 	if req.Enabled != nil {
 		existing.Enabled = *req.Enabled
 	}
@@ -468,8 +516,13 @@ func (r *ProxyHostRepository) Update(ctx context.Context, id string, req *model.
 			waf_paranoia_level = $18,
 			waf_anomaly_threshold = $19,
 			advanced_config = $20,
-			enabled = $21
-		WHERE id = $22
+			proxy_connect_timeout = $21,
+			proxy_send_timeout = $22,
+			proxy_read_timeout = $23,
+			proxy_buffering = $24,
+			client_max_body_size = $25,
+			enabled = $26
+		WHERE id = $27
 		RETURNING updated_at
 	`
 
@@ -500,6 +553,11 @@ func (r *ProxyHostRepository) Update(ctx context.Context, id string, req *model.
 		existing.WAFParanoiaLevel,
 		existing.WAFAnomalyThreshold,
 		existing.AdvancedConfig,
+		existing.ProxyConnectTimeout,
+		existing.ProxySendTimeout,
+		existing.ProxyReadTimeout,
+		existing.ProxyBuffering,
+		existing.ClientMaxBodySize,
 		existing.Enabled,
 		id,
 	).Scan(&existing.UpdatedAt)
@@ -652,6 +710,11 @@ func (r *ProxyHostRepository) GetAllEnabled(ctx context.Context) ([]model.ProxyH
 			COALESCE(block_exploits_exceptions, '') as block_exploits_exceptions,
 			custom_locations, advanced_config, waf_enabled, waf_mode,
 			waf_paranoia_level, waf_anomaly_threshold,
+			COALESCE(proxy_connect_timeout, 0) as proxy_connect_timeout,
+			COALESCE(proxy_send_timeout, 0) as proxy_send_timeout,
+			COALESCE(proxy_read_timeout, 0) as proxy_read_timeout,
+			COALESCE(proxy_buffering, '') as proxy_buffering,
+			COALESCE(client_max_body_size, '') as client_max_body_size,
 			access_list_id, enabled, meta, created_at, updated_at
 		FROM proxy_hosts
 		WHERE enabled = true
@@ -693,6 +756,11 @@ func (r *ProxyHostRepository) GetAllEnabled(ctx context.Context) ([]model.ProxyH
 			&host.WAFMode,
 			&host.WAFParanoiaLevel,
 			&host.WAFAnomalyThreshold,
+			&host.ProxyConnectTimeout,
+			&host.ProxySendTimeout,
+			&host.ProxyReadTimeout,
+			&host.ProxyBuffering,
+			&host.ClientMaxBodySize,
 			&accessListID,
 			&host.Enabled,
 			&meta,
@@ -723,10 +791,18 @@ func (r *ProxyHostRepository) GetByCertificateID(ctx context.Context, certificat
 	query := `
 		SELECT id, domain_names, forward_scheme, forward_host, forward_port,
 			ssl_enabled, ssl_force_https, ssl_http2, ssl_http3, certificate_id,
-			allow_websocket_upgrade, cache_enabled, block_exploits,
+			allow_websocket_upgrade, cache_enabled,
+			COALESCE(cache_static_only, true) as cache_static_only,
+			COALESCE(cache_ttl, '7d') as cache_ttl,
+			block_exploits,
 			COALESCE(block_exploits_exceptions, '') as block_exploits_exceptions,
 			custom_locations, advanced_config, waf_enabled, waf_mode,
 			waf_paranoia_level, waf_anomaly_threshold,
+			COALESCE(proxy_connect_timeout, 0) as proxy_connect_timeout,
+			COALESCE(proxy_send_timeout, 0) as proxy_send_timeout,
+			COALESCE(proxy_read_timeout, 0) as proxy_read_timeout,
+			COALESCE(proxy_buffering, '') as proxy_buffering,
+			COALESCE(client_max_body_size, '') as client_max_body_size,
 			access_list_id, enabled, meta, created_at, updated_at
 		FROM proxy_hosts
 		WHERE certificate_id = $1
@@ -758,6 +834,8 @@ func (r *ProxyHostRepository) GetByCertificateID(ctx context.Context, certificat
 			&certificateID,
 			&host.AllowWebsocketUpgrade,
 			&host.CacheEnabled,
+			&host.CacheStaticOnly,
+			&host.CacheTTL,
 			&host.BlockExploits,
 			&host.BlockExploitsExceptions,
 			&customLocations,
@@ -766,6 +844,11 @@ func (r *ProxyHostRepository) GetByCertificateID(ctx context.Context, certificat
 			&host.WAFMode,
 			&host.WAFParanoiaLevel,
 			&host.WAFAnomalyThreshold,
+			&host.ProxyConnectTimeout,
+			&host.ProxySendTimeout,
+			&host.ProxyReadTimeout,
+			&host.ProxyBuffering,
+			&host.ClientMaxBodySize,
 			&accessListID,
 			&host.Enabled,
 			&meta,
