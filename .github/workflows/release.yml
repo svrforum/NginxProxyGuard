@@ -259,6 +259,8 @@ jobs:
         id: changelog
         env:
           GH_TOKEN: ${{ github.token }}
+          LANG: C.UTF-8
+          LC_ALL: C.UTF-8
         run: |
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           if [ -n "$PREV_TAG" ]; then
@@ -274,7 +276,8 @@ jobs:
           # Extract Korean changelog from tag message
           # Look for lines starting with Korean type prefixes (- 기능:, - 수정:, - 성능:, etc.)
           TAG_MSG=$(git tag -l --format='%(contents)' ${GITHUB_REF#refs/tags/})
-          CHANGELOG_KO=$(echo "$TAG_MSG" | grep -E '^- (기능|수정|성능|문서|기타|리팩토링|테스트):' || echo "")
+          # Use grep with PCRE for better Unicode support
+          CHANGELOG_KO=$(echo "$TAG_MSG" | grep -P '^- (기능|수정|성능|문서|기타|리팩토링|테스트):' 2>/dev/null || echo "$TAG_MSG" | grep '^- 기능:\|^- 수정:\|^- 성능:\|^- 문서:\|^- 기타:\|^- 리팩토링:\|^- 테스트:' || echo "")
           if [ -z "$CHANGELOG_KO" ]; then
             # Fallback: use English changelog with Korean type prefixes
             CHANGELOG_KO=$(echo "$CHANGELOG" | \

@@ -1036,6 +1036,11 @@ CREATE TABLE IF NOT EXISTS public.proxy_hosts (
     waf_paranoia_level integer DEFAULT 1,
     waf_anomaly_threshold integer DEFAULT 5,
     block_exploits_exceptions text DEFAULT ''::text,
+    proxy_connect_timeout integer DEFAULT 0,
+    proxy_send_timeout integer DEFAULT 0,
+    proxy_read_timeout integer DEFAULT 0,
+    proxy_buffering character varying(10) DEFAULT ''::character varying,
+    client_max_body_size character varying(20) DEFAULT ''::character varying,
     CONSTRAINT chk_waf_anomaly_threshold CHECK (((waf_anomaly_threshold >= 1) AND (waf_anomaly_threshold <= 100))),
     CONSTRAINT chk_waf_paranoia_level CHECK (((waf_paranoia_level >= 1) AND (waf_paranoia_level <= 4)))
 );
