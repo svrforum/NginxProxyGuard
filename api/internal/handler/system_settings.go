@@ -202,7 +202,8 @@ func (h *SystemSettingsHandler) applyRawLogSettings(settings *model.SystemSettin
 # Logs stored in /etc/nginx/logs for API access via consolidated volume
 
 # Additional access log to file (main format)
-access_log /etc/nginx/logs/access_raw.log main;
+# Buffer reduces disk I/O: 64k buffer, flush every 5 seconds
+access_log /etc/nginx/logs/access_raw.log main buffer=64k flush=5s;
 
 # Note: error_log can only have one destination in nginx main context
 # For error logs, we log to both via Dockerfile symlink trick is not possible

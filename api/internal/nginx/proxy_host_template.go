@@ -630,7 +630,7 @@ server {
     location @api_fallback {
         # API is down - allow request to proceed (graceful degradation)
         # Log this event for monitoring
-        access_log /etc/nginx/logs/access_raw.log main;
+        access_log /etc/nginx/logs/access_raw.log main buffer=64k flush=5s;
         {{if .Upstream}}proxy_pass http://{{.Upstream.Name}};{{else}}proxy_pass {{.Host.ForwardScheme}}://{{.Host.ForwardHost}}:{{.Host.ForwardPort}};{{end}}
         include /etc/nginx/includes/proxy_params.conf;
     }
@@ -1419,7 +1419,7 @@ server {
     # API error fallback - allow traffic through when API is down
     location @api_fallback {
         # API is down - allow request to proceed (graceful degradation)
-        access_log /etc/nginx/logs/access_raw.log main;
+        access_log /etc/nginx/logs/access_raw.log main buffer=64k flush=5s;
         {{if .Upstream}}proxy_pass http://{{.Upstream.Name}};{{else}}proxy_pass {{.Host.ForwardScheme}}://{{.Host.ForwardHost}}:{{.Host.ForwardPort}};{{end}}
         include /etc/nginx/includes/proxy_params.conf;
     }
