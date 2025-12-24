@@ -111,6 +111,8 @@
     "types": {
       "cloudflare": "Cloudflare",
       "route53": "AWS Route 53",
+      "duckdns": "DuckDNS",
+      "dynu": "Dynu",
       "manual": "수동 설정"
     },
     "default": "기본값",
@@ -156,6 +158,18 @@
         "secretAccessKey": "Secret Access Key",
         "region": "리전",
         "hostedZoneId": "Hosted Zone ID (선택사항)"
+      },
+      "duckdns": {
+        "title": "DuckDNS 자격 증명",
+        "token": "API 토큰",
+        "tokenPlaceholder": "DuckDNS 토큰 입력",
+        "tokenHelp": "https://www.duckdns.org 에서 토큰을 확인하세요"
+      },
+      "dynu": {
+        "title": "Dynu 자격 증명",
+        "apiKey": "API 키",
+        "apiKeyPlaceholder": "Dynu API 키 입력",
+        "apiKeyHelp": "Dynu 제어판 > API Credentials에서 API 키를 확인하세요"
       },
       "test": {
         "button": "연결 테스트",

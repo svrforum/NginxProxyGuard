@@ -36,7 +36,7 @@ export interface UploadCertificateRequest {
 export interface DNSProvider {
   id: string;
   name: string;
-  provider_type: 'cloudflare' | 'route53' | 'manual';
+  provider_type: 'cloudflare' | 'route53' | 'duckdns' | 'dynu' | 'manual';
   is_default: boolean;
   has_credentials: boolean;
   created_at: string;
@@ -52,7 +52,7 @@ export interface CloudflareCredentials {
 
 export interface CreateDNSProviderRequest {
   name: string;
-  provider_type: 'cloudflare' | 'route53' | 'manual';
+  provider_type: 'cloudflare' | 'route53' | 'duckdns' | 'dynu' | 'manual';
   credentials: CloudflareCredentials | Record<string, string>;
   is_default?: boolean;
 }

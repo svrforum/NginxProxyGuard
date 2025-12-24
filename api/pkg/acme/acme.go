@@ -20,8 +20,11 @@ import (
 
 	"github.com/go-acme/lego/v4/certcrypto"
 	"github.com/go-acme/lego/v4/certificate"
+	"github.com/go-acme/lego/v4/challenge"
 	"github.com/go-acme/lego/v4/lego"
 	"github.com/go-acme/lego/v4/providers/dns/cloudflare"
+	"github.com/go-acme/lego/v4/providers/dns/duckdns"
+	"github.com/go-acme/lego/v4/providers/dns/dynu"
 	"github.com/go-acme/lego/v4/registration"
 
 	"nginx-proxy-guard/internal/model"
@@ -557,7 +560,7 @@ func (s *Service) createUser(email string) (*ACMEUser, error) {
 }
 
 // createDNSProvider creates a DNS provider based on type and credentials
-func (s *Service) createDNSProvider(provider *model.DNSProvider) (*cloudflare.DNSProvider, error) {
+func (s *Service) createDNSProvider(provider *model.DNSProvider) (challenge.Provider, error) {
 	if provider == nil {
 		return nil, fmt.Errorf("DNS provider is required")
 	}
@@ -582,6 +585,28 @@ func (s *Service) createDNSProvider(provider *model.DNSProvider) (*cloudflare.DN
 		}
 
 		return cloudflare.NewDNSProvider()
+
+	case model.DNSProviderDuckDNS:
+		var creds model.DuckDNSCredentials
+		if err := json.Unmarshal(provider.Credentials, &creds); err != nil {
+			return nil, fmt.Errorf("invalid duckdns credentials: %w", err)
+		}
+
+		// Set environment variable for DuckDNS provider
+		os.Setenv("DUCKDNS_TOKEN", creds.Token)
+
+		return duckdns.NewDNSProvider()
+
+	case model.DNSProviderDynu:
+		var creds model.DynuCredentials
+		if err := json.Unmarshal(provider.Credentials, &creds); err != nil {
+			return nil, fmt.Errorf("invalid dynu credentials: %w", err)
+		}
+
+		// Set environment variable for Dynu provider
+		os.Setenv("DYNU_API_KEY", creds.APIKey)
+
+		return dynu.NewDNSProvider()
 
 	default:
 		return nil, fmt.Errorf("unsupported DNS provider type: %s", provider.ProviderType)

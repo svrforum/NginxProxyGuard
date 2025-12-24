@@ -9,6 +9,8 @@ import (
 const (
 	DNSProviderCloudflare = "cloudflare"
 	DNSProviderRoute53    = "route53"
+	DNSProviderDuckDNS    = "duckdns"
+	DNSProviderDynu       = "dynu"
 	DNSProviderManual     = "manual"
 )
 
@@ -42,10 +44,20 @@ type Route53Credentials struct {
 	HostedZoneID    string `json:"hosted_zone_id,omitempty"`
 }
 
+// DuckDNSCredentials represents DuckDNS API credentials
+type DuckDNSCredentials struct {
+	Token string `json:"token"` // DuckDNS API token
+}
+
+// DynuCredentials represents Dynu API credentials
+type DynuCredentials struct {
+	APIKey string `json:"api_key"` // Dynu API key
+}
+
 // CreateDNSProviderRequest is the request body for creating a DNS provider
 type CreateDNSProviderRequest struct {
 	Name         string          `json:"name" validate:"required"`
-	ProviderType string          `json:"provider_type" validate:"required,oneof=cloudflare route53 manual"`
+	ProviderType string          `json:"provider_type" validate:"required,oneof=cloudflare route53 duckdns dynu manual"`
 	Credentials  json.RawMessage `json:"credentials" validate:"required"`
 	IsDefault    bool            `json:"is_default"`
 }
@@ -92,6 +104,22 @@ func (p *DNSProvider) ValidateCredentials() error {
 			return err
 		}
 		if creds.AccessKeyID == "" || creds.SecretAccessKey == "" {
+			return ErrInvalidCredentials
+		}
+	case DNSProviderDuckDNS:
+		var creds DuckDNSCredentials
+		if err := json.Unmarshal(p.Credentials, &creds); err != nil {
+			return err
+		}
+		if creds.Token == "" {
+			return ErrInvalidCredentials
+		}
+	case DNSProviderDynu:
+		var creds DynuCredentials
+		if err := json.Unmarshal(p.Credentials, &creds); err != nil {
+			return err
+		}
+		if creds.APIKey == "" {
 			return ErrInvalidCredentials
 		}
 	case DNSProviderManual:

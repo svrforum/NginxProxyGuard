@@ -111,6 +111,8 @@
     "types": {
       "cloudflare": "Cloudflare",
       "route53": "AWS Route 53",
+      "duckdns": "DuckDNS",
+      "dynu": "Dynu",
       "manual": "Manual"
     },
     "default": "Default",
@@ -156,6 +158,18 @@
         "secretAccessKey": "Secret Access Key",
         "region": "Region",
         "hostedZoneId": "Hosted Zone ID (Optional)"
+      },
+      "duckdns": {
+        "title": "DuckDNS Credentials",
+        "token": "API Token",
+        "tokenPlaceholder": "Enter your DuckDNS token",
+        "tokenHelp": "Get your token from https://www.duckdns.org"
+      },
+      "dynu": {
+        "title": "Dynu Credentials",
+        "apiKey": "API Key",
+        "apiKeyPlaceholder": "Enter your Dynu API key",
+        "apiKeyHelp": "Get your API key from Dynu Control Panel > API Credentials"
       },
       "test": {
         "button": "Test Connection",
