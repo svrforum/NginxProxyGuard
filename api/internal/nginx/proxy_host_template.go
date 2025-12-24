@@ -676,13 +676,14 @@ server {
         {{if .Upstream}}proxy_pass http://{{.Upstream.Name}};{{else}}proxy_pass {{.Host.ForwardScheme}}://{{.Host.ForwardHost}}:{{.Host.ForwardPort}};{{end}}
         include /etc/nginx/includes/proxy_params.conf;
         {{if .GlobalSettings}}
-        # Global proxy settings
-        {{if gt .GlobalSettings.ProxyConnectTimeout 0}}proxy_connect_timeout {{.GlobalSettings.ProxyConnectTimeout}}s;{{end}}
-        {{if gt .GlobalSettings.ProxySendTimeout 0}}proxy_send_timeout {{.GlobalSettings.ProxySendTimeout}}s;{{end}}
-        {{if gt .GlobalSettings.ProxyReadTimeout 0}}proxy_read_timeout {{.GlobalSettings.ProxyReadTimeout}}s;{{end}}
+        # Proxy settings (Host-level overrides Global)
+        {{if gt .Host.ProxyConnectTimeout 0}}proxy_connect_timeout {{.Host.ProxyConnectTimeout}}s;{{else if gt .GlobalSettings.ProxyConnectTimeout 0}}proxy_connect_timeout {{.GlobalSettings.ProxyConnectTimeout}}s;{{end}}
+        {{if gt .Host.ProxySendTimeout 0}}proxy_send_timeout {{.Host.ProxySendTimeout}}s;{{else if gt .GlobalSettings.ProxySendTimeout 0}}proxy_send_timeout {{.GlobalSettings.ProxySendTimeout}}s;{{end}}
+        {{if gt .Host.ProxyReadTimeout 0}}proxy_read_timeout {{.Host.ProxyReadTimeout}}s;{{else if gt .GlobalSettings.ProxyReadTimeout 0}}proxy_read_timeout {{.GlobalSettings.ProxyReadTimeout}}s;{{end}}
         {{if gt .GlobalSettings.ClientBodyTimeout 0}}client_body_timeout {{.GlobalSettings.ClientBodyTimeout}}s;{{end}}
         {{if gt .GlobalSettings.SendTimeout 0}}send_timeout {{.GlobalSettings.SendTimeout}}s;{{end}}
-        {{if .GlobalSettings.ClientMaxBodySize}}client_max_body_size {{.GlobalSettings.ClientMaxBodySize}};{{end}}
+        {{if .Host.ClientMaxBodySize}}client_max_body_size {{.Host.ClientMaxBodySize}};{{else if .GlobalSettings.ClientMaxBodySize}}client_max_body_size {{.GlobalSettings.ClientMaxBodySize}};{{end}}
+        {{if .Host.ProxyBuffering}}proxy_buffering {{.Host.ProxyBuffering}};{{end}}
         # Proxy buffer settings (from Global Settings)
         {{if .GlobalSettings.ProxyBufferSize}}proxy_buffer_size {{.GlobalSettings.ProxyBufferSize}};{{end}}
         {{if .GlobalSettings.ProxyBuffers}}proxy_buffers {{.GlobalSettings.ProxyBuffers}};{{end}}
@@ -763,13 +764,14 @@ server {
         {{if .Upstream}}proxy_pass http://{{.Upstream.Name}};{{else}}proxy_pass {{.Host.ForwardScheme}}://{{.Host.ForwardHost}}:{{.Host.ForwardPort}};{{end}}
         include /etc/nginx/includes/proxy_params.conf;
         {{if .GlobalSettings}}
-        # Global proxy settings
-        {{if gt .GlobalSettings.ProxyConnectTimeout 0}}proxy_connect_timeout {{.GlobalSettings.ProxyConnectTimeout}}s;{{end}}
-        {{if gt .GlobalSettings.ProxySendTimeout 0}}proxy_send_timeout {{.GlobalSettings.ProxySendTimeout}}s;{{end}}
-        {{if gt .GlobalSettings.ProxyReadTimeout 0}}proxy_read_timeout {{.GlobalSettings.ProxyReadTimeout}}s;{{end}}
+        # Proxy settings (Host-level overrides Global)
+        {{if gt .Host.ProxyConnectTimeout 0}}proxy_connect_timeout {{.Host.ProxyConnectTimeout}}s;{{else if gt .GlobalSettings.ProxyConnectTimeout 0}}proxy_connect_timeout {{.GlobalSettings.ProxyConnectTimeout}}s;{{end}}
+        {{if gt .Host.ProxySendTimeout 0}}proxy_send_timeout {{.Host.ProxySendTimeout}}s;{{else if gt .GlobalSettings.ProxySendTimeout 0}}proxy_send_timeout {{.GlobalSettings.ProxySendTimeout}}s;{{end}}
+        {{if gt .Host.ProxyReadTimeout 0}}proxy_read_timeout {{.Host.ProxyReadTimeout}}s;{{else if gt .GlobalSettings.ProxyReadTimeout 0}}proxy_read_timeout {{.GlobalSettings.ProxyReadTimeout}}s;{{end}}
         {{if gt .GlobalSettings.ClientBodyTimeout 0}}client_body_timeout {{.GlobalSettings.ClientBodyTimeout}}s;{{end}}
         {{if gt .GlobalSettings.SendTimeout 0}}send_timeout {{.GlobalSettings.SendTimeout}}s;{{end}}
-        {{if .GlobalSettings.ClientMaxBodySize}}client_max_body_size {{.GlobalSettings.ClientMaxBodySize}};{{end}}
+        {{if .Host.ClientMaxBodySize}}client_max_body_size {{.Host.ClientMaxBodySize}};{{else if .GlobalSettings.ClientMaxBodySize}}client_max_body_size {{.GlobalSettings.ClientMaxBodySize}};{{end}}
+        {{if .Host.ProxyBuffering}}proxy_buffering {{.Host.ProxyBuffering}};{{end}}
         # Proxy buffer settings (from Global Settings)
         {{if .GlobalSettings.ProxyBufferSize}}proxy_buffer_size {{.GlobalSettings.ProxyBufferSize}};{{end}}
         {{if .GlobalSettings.ProxyBuffers}}proxy_buffers {{.GlobalSettings.ProxyBuffers}};{{end}}
@@ -1470,13 +1472,14 @@ server {
         {{if .Upstream}}proxy_pass http://{{.Upstream.Name}};{{else}}proxy_pass {{.Host.ForwardScheme}}://{{.Host.ForwardHost}}:{{.Host.ForwardPort}};{{end}}
         include /etc/nginx/includes/proxy_params.conf;
         {{if .GlobalSettings}}
-        # Global proxy settings
-        {{if gt .GlobalSettings.ProxyConnectTimeout 0}}proxy_connect_timeout {{.GlobalSettings.ProxyConnectTimeout}}s;{{end}}
-        {{if gt .GlobalSettings.ProxySendTimeout 0}}proxy_send_timeout {{.GlobalSettings.ProxySendTimeout}}s;{{end}}
-        {{if gt .GlobalSettings.ProxyReadTimeout 0}}proxy_read_timeout {{.GlobalSettings.ProxyReadTimeout}}s;{{end}}
+        # Proxy settings (Host-level overrides Global)
+        {{if gt .Host.ProxyConnectTimeout 0}}proxy_connect_timeout {{.Host.ProxyConnectTimeout}}s;{{else if gt .GlobalSettings.ProxyConnectTimeout 0}}proxy_connect_timeout {{.GlobalSettings.ProxyConnectTimeout}}s;{{end}}
+        {{if gt .Host.ProxySendTimeout 0}}proxy_send_timeout {{.Host.ProxySendTimeout}}s;{{else if gt .GlobalSettings.ProxySendTimeout 0}}proxy_send_timeout {{.GlobalSettings.ProxySendTimeout}}s;{{end}}
+        {{if gt .Host.ProxyReadTimeout 0}}proxy_read_timeout {{.Host.ProxyReadTimeout}}s;{{else if gt .GlobalSettings.ProxyReadTimeout 0}}proxy_read_timeout {{.GlobalSettings.ProxyReadTimeout}}s;{{end}}
         {{if gt .GlobalSettings.ClientBodyTimeout 0}}client_body_timeout {{.GlobalSettings.ClientBodyTimeout}}s;{{end}}
         {{if gt .GlobalSettings.SendTimeout 0}}send_timeout {{.GlobalSettings.SendTimeout}}s;{{end}}
-        {{if .GlobalSettings.ClientMaxBodySize}}client_max_body_size {{.GlobalSettings.ClientMaxBodySize}};{{end}}
+        {{if .Host.ClientMaxBodySize}}client_max_body_size {{.Host.ClientMaxBodySize}};{{else if .GlobalSettings.ClientMaxBodySize}}client_max_body_size {{.GlobalSettings.ClientMaxBodySize}};{{end}}
+        {{if .Host.ProxyBuffering}}proxy_buffering {{.Host.ProxyBuffering}};{{end}}
         # Proxy buffer settings (from Global Settings)
         {{if .GlobalSettings.ProxyBufferSize}}proxy_buffer_size {{.GlobalSettings.ProxyBufferSize}};{{end}}
         {{if .GlobalSettings.ProxyBuffers}}proxy_buffers {{.GlobalSettings.ProxyBuffers}};{{end}}
@@ -1600,4 +1603,5 @@ type ProxyHostConfigData struct {
 	GlobalBlockExploitsExceptions string                // Global newline-separated list of exploit exceptions from system settings
 	ExploitBlockRules             []model.ExploitBlockRule // Dynamic exploit blocking rules from database
 	HasCustomLocationRoot         bool                  // True if AdvancedConfig contains a location / block
+	AdvancedConfigHasLocation     bool                  // True if AdvancedConfig contains any location directive
 }
