@@ -190,6 +190,13 @@ jobs:
         run: |
           docker compose -f docker-compose.release-test.yml down -v
 
+      - name: Delete tag on failure
+        if: failure()
+        run: |
+          echo "E2E tests failed. Deleting tag ${GITHUB_REF#refs/tags/}..."
+          git push origin :refs/tags/${GITHUB_REF#refs/tags/}
+          echo "Tag deleted. Please fix the issues and create a new tag."
+
       # Push only changed images with source hash label
       - name: Push API image
         if: steps.check-api.outputs.changed == 'true'
