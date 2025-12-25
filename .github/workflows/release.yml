@@ -259,8 +259,6 @@ jobs:
         id: changelog
         env:
           GH_TOKEN: ${{ github.token }}
-          LANG: C.UTF-8
-          LC_ALL: C.UTF-8
         run: |
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           if [ -n "$PREV_TAG" ]; then
@@ -271,26 +269,6 @@ jobs:
           fi
           echo "changelog<<EOF" >> $GITHUB_OUTPUT
           echo "$CHANGELOG" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-          # Extract Korean changelog from tag message
-          # Look for lines starting with Korean type prefixes (- 기능:, - 수정:, - 성능:, etc.)
-          TAG_MSG=$(git tag -l --format='%(contents)' ${GITHUB_REF#refs/tags/})
-          # Use grep with PCRE for better Unicode support
-          CHANGELOG_KO=$(echo "$TAG_MSG" | grep -P '^- (기능|수정|성능|문서|기타|리팩토링|테스트):' 2>/dev/null || echo "$TAG_MSG" | grep '^- 기능:\|^- 수정:\|^- 성능:\|^- 문서:\|^- 기타:\|^- 리팩토링:\|^- 테스트:' || echo "")
-          if [ -z "$CHANGELOG_KO" ]; then
-            # Fallback: use English changelog with Korean type prefixes
-            CHANGELOG_KO=$(echo "$CHANGELOG" | \
-              sed 's/^- feat:/- 기능:/g' | \
-              sed 's/^- fix:/- 수정:/g' | \
-              sed 's/^- perf:/- 성능:/g' | \
-              sed 's/^- docs:/- 문서:/g' | \
-              sed 's/^- chore:/- 기타:/g' | \
-              sed 's/^- refactor:/- 리팩토링:/g' | \
-              sed 's/^- test:/- 테스트:/g')
-          fi
-          echo "changelog_ko<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGELOG_KO" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
           # Get contributors from merged PRs
@@ -324,27 +302,19 @@ jobs:
             docker pull svrforum/nginxproxyguard-nginx:${{ needs.build-and-test.outputs.version }}
             ```
 
-            ## Build Summary / 빌드 요약
+            ## Build Summary
             | Component | Status |
             |-----------|--------|
             | API | ${{ needs.build-and-test.outputs.api_changed == 'true' && '✅ Built & Pushed' || '⏭️ Skipped (no changes)' }} |
             | UI | ${{ needs.build-and-test.outputs.ui_changed == 'true' && '✅ Built & Pushed' || '⏭️ Skipped (no changes)' }} |
             | Nginx | ${{ needs.build-and-test.outputs.nginx_changed == 'true' && '✅ Built & Pushed' || '⏭️ Skipped (no changes)' }} |
 
-            ## E2E Test / E2E 테스트
+            ## E2E Test
             ✅ All integration tests passed before release
-            ✅ 릴리즈 전 모든 통합 테스트 통과
 
-            ${{ steps.changelog.outputs.contributors != '' && format('## Thanks to Contributors / 기여해주신 분들 🙏\nThank you for your contributions! / 기여해주셔서 감사합니다!\n{0}\n', steps.changelog.outputs.contributors) || '' }}
+            ${{ steps.changelog.outputs.contributors != '' && format('## Thanks to Contributors 🙏\nThank you for your contributions!\n{0}\n', steps.changelog.outputs.contributors) || '' }}
 
-            ---
-
-            ## Changes (English)
+            ## Changes
             ${{ steps.changelog.outputs.changelog }}
-
-            ---
-
-            ## 변경사항 (한국어)
-            ${{ steps.changelog.outputs.changelog_ko }}
           draft: false
           prerelease: ${{ contains(github.ref, '-rc') || contains(github.ref, '-beta') || contains(github.ref, '-alpha') }}
