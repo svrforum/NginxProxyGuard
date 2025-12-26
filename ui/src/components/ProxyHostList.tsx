@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { fetchProxyHosts, deleteProxyHost, testProxyHost, updateProxyHost, testProxyHostConfig } from '../api/proxy-hosts'
@@ -666,8 +666,8 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
   })
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['proxy-hosts', currentPage, perPage, searchQuery],
-    queryFn: () => fetchProxyHosts(currentPage, perPage, searchQuery),
+    queryKey: ['proxy-hosts', currentPage, perPage, searchQuery, sortBy, sortOrder],
+    queryFn: () => fetchProxyHosts(currentPage, perPage, searchQuery, sortBy, sortOrder),
   })
 
   const deleteMutation = useMutation({
@@ -751,27 +751,8 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
     return `${sslEnabled ? 'https' : 'http'}://${domain}`
   }
 
-  // Sort hosts (search is now done server-side)
-  const hosts = useMemo(() => {
-    const items = data?.data || []
-
-    // Sort (client-side sorting for current page)
-    return [...items].sort((a, b) => {
-      let comparison = 0
-      switch (sortBy) {
-        case 'name':
-          comparison = a.domain_names[0].localeCompare(b.domain_names[0])
-          break
-        case 'updated':
-          comparison = new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()
-          break
-        case 'created':
-          comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-          break
-      }
-      return sortOrder === 'asc' ? comparison : -comparison
-    })
-  }, [data?.data, sortBy, sortOrder])
+  // Hosts are now sorted server-side
+  const hosts = data?.data || []
 
   // Reset to page 1 when search changes
   const handleSearchChange = (value: string) => {
@@ -857,6 +838,7 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
               const [by, order] = e.target.value.split('-') as [SortBy, SortOrder]
               setSortBy(by)
               setSortOrder(order)
+              setCurrentPage(1)
               localStorage.setItem('proxyHostSortBy', by)
               localStorage.setItem('proxyHostSortOrder', order)
             }}

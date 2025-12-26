@@ -34,6 +34,10 @@ export function useProxyHostForm(host: ProxyHost | null | undefined, onClose: ()
     cache_static_only: true,
     cache_ttl: '7d',
     block_exploits: true,
+    // Host-level proxy settings (empty = use global)
+    client_max_body_size: '',
+    proxy_max_temp_file_size: '',
+    proxy_buffering: '',
     waf_enabled: false,
     waf_mode: 'blocking',
     waf_paranoia_level: 1,
@@ -224,6 +228,10 @@ export function useProxyHostForm(host: ProxyHost | null | undefined, onClose: ()
         cache_static_only: host.cache_static_only ?? true,
         cache_ttl: host.cache_ttl || '7d',
         block_exploits: host.block_exploits,
+        // Host-level proxy settings
+        client_max_body_size: host.client_max_body_size || '',
+        proxy_max_temp_file_size: host.proxy_max_temp_file_size || '',
+        proxy_buffering: host.proxy_buffering || '',
         waf_enabled: host.waf_enabled,
         waf_mode: (host.waf_mode as 'blocking' | 'detection') || 'blocking',
         waf_paranoia_level: host.waf_paranoia_level || 1,

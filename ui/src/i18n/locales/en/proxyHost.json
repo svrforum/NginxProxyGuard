@@ -335,6 +335,24 @@
         "connectTimeout": "Connect Timeout",
         "readTimeout": "Read Timeout",
         "sendTimeout": "Send Timeout"
+      },
+      "proxySettings": {
+        "title": "Proxy Settings Override",
+        "description": "Override global settings for this host. Leave empty to use global values.",
+        "clientMaxBodySize": "Client Max Body Size",
+        "clientMaxBodySizeDesc": "Maximum allowed size of client request body. Use 0 for unlimited.",
+        "proxyMaxTempFileSize": "Proxy Max Temp File Size",
+        "proxyMaxTempFileSizeDesc": "Maximum size of temp file for buffering. Use 0 for unlimited (large downloads).",
+        "proxyBuffering": "Proxy Buffering",
+        "proxyBufferingDesc": "Disable buffering for real-time streaming or very large file transfers.",
+        "useGlobal": "Use global setting",
+        "example": "e.g.",
+        "bufferingOn": "On (buffer responses)",
+        "bufferingOff": "Off (stream directly)",
+        "infoTitle": "Large file transfer tips:",
+        "infoUpload": "For large uploads: increase client_max_body_size (e.g., 10g or 0 for unlimited)",
+        "infoDownload": "For large downloads: set proxy_max_temp_file_size to 0",
+        "infoStreaming": "For streaming: set proxy_buffering to off"
       }
     },
     "advanced": {
@@ -404,7 +422,11 @@
       "cacheStaticOnly": "Caches only static files (js, css, images, fonts). API responses and HTML are not cached, ensuring dynamic content stays fresh.",
       "cacheTTL": "How long cached files are stored. Use shorter durations for frequently updated sites, longer for static sites.",
       "compression": "Compresses responses to reduce data usage and improve speed.",
-      "websocket": "Enables WebSocket support (Upgrade header) for real-time communication."
+      "websocket": "Enables WebSocket support (Upgrade header) for real-time communication.",
+      "proxyOverride": "Override global proxy settings for this specific host. Useful for hosts that need different limits than the global defaults.",
+      "clientMaxBodySize": "Controls the maximum allowed size for uploads. Set to 0 for unlimited, or use values like 100m, 1g. Affects file uploads and API requests with large payloads.",
+      "proxyMaxTempFileSize": "Controls how large a temp file can grow during buffering. Set to 0 to allow unlimited (required for very large downloads like 10GB+). Only used when proxy_buffering is on.",
+      "proxyBuffering": "When ON, nginx buffers the entire response before sending to client. When OFF, responses stream directly. Turn OFF for SSE, large downloads, or real-time streaming."
     },
     "advanced": {
       "customConfig": "For experts. Inject custom Nginx directives into the location / { ... } block."

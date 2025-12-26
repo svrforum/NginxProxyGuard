@@ -288,6 +288,11 @@ function WAFRulesModal({
     let totalRules = 0;
     let disabledRules = 0;
 
+    // Handle null categories (when no rules exist)
+    if (!rulesQuery.data.categories) {
+      return { categories: [], totalRules: 0, disabledRules: 0 };
+    }
+
     const categories = rulesQuery.data.categories
       .map((cat) => {
         let rules = cat.rules || [];
@@ -465,7 +470,7 @@ function WAFRulesModal({
                   >
                     {t('policyManager.allCategories')}
                   </button>
-                  {rulesQuery.data?.categories.map((cat) => {
+                  {rulesQuery.data?.categories?.map((cat) => {
                     const disabledCount = cat.rules?.filter((r) => !r.enabled).length || 0;
                     return (
                       <button
@@ -1131,6 +1136,11 @@ function GlobalWAFSettings() {
     let totalRules = 0;
     let disabledRules = 0;
 
+    // Handle null categories (when no rules exist)
+    if (!rulesQuery.data.categories) {
+      return { categories: [], totalRules: 0, disabledRules: 0 };
+    }
+
     const categories = rulesQuery.data.categories
       .map((cat) => {
         let rules = cat.rules || [];
@@ -1280,7 +1290,7 @@ function GlobalWAFSettings() {
                 >
                   {t('policyManager.allCategories')}
                 </button>
-                {rulesQuery.data?.categories.map((cat) => {
+                {rulesQuery.data?.categories?.map((cat) => {
                   const disabledCount = cat.rules?.filter((r) => r.globally_disabled).length || 0;
                   return (
                     <button

@@ -688,7 +688,7 @@ server {
         {{if .GlobalSettings.ProxyBufferSize}}proxy_buffer_size {{.GlobalSettings.ProxyBufferSize}};{{end}}
         {{if .GlobalSettings.ProxyBuffers}}proxy_buffers {{.GlobalSettings.ProxyBuffers}};{{end}}
         {{if .GlobalSettings.ProxyBusyBuffersSize}}proxy_busy_buffers_size {{.GlobalSettings.ProxyBusyBuffersSize}};{{end}}
-        {{if .GlobalSettings.ProxyMaxTempFileSize}}proxy_max_temp_file_size {{.GlobalSettings.ProxyMaxTempFileSize}};{{end}}
+        {{if .Host.ProxyMaxTempFileSize}}proxy_max_temp_file_size {{.Host.ProxyMaxTempFileSize}};{{else if .GlobalSettings.ProxyMaxTempFileSize}}proxy_max_temp_file_size {{.GlobalSettings.ProxyMaxTempFileSize}};{{end}}
         {{if .GlobalSettings.ProxyTempFileWriteSize}}proxy_temp_file_write_size {{.GlobalSettings.ProxyTempFileWriteSize}};{{end}}
         # Bandwidth limiting (from Global Settings)
         {{if gt .GlobalSettings.LimitRate 0}}limit_rate {{.GlobalSettings.LimitRate}};{{end}}
@@ -776,7 +776,7 @@ server {
         {{if .GlobalSettings.ProxyBufferSize}}proxy_buffer_size {{.GlobalSettings.ProxyBufferSize}};{{end}}
         {{if .GlobalSettings.ProxyBuffers}}proxy_buffers {{.GlobalSettings.ProxyBuffers}};{{end}}
         {{if .GlobalSettings.ProxyBusyBuffersSize}}proxy_busy_buffers_size {{.GlobalSettings.ProxyBusyBuffersSize}};{{end}}
-        {{if .GlobalSettings.ProxyMaxTempFileSize}}proxy_max_temp_file_size {{.GlobalSettings.ProxyMaxTempFileSize}};{{end}}
+        {{if .Host.ProxyMaxTempFileSize}}proxy_max_temp_file_size {{.Host.ProxyMaxTempFileSize}};{{else if .GlobalSettings.ProxyMaxTempFileSize}}proxy_max_temp_file_size {{.GlobalSettings.ProxyMaxTempFileSize}};{{end}}
         {{if .GlobalSettings.ProxyTempFileWriteSize}}proxy_temp_file_write_size {{.GlobalSettings.ProxyTempFileWriteSize}};{{end}}
         # Bandwidth limiting (from Global Settings)
         {{if gt .GlobalSettings.LimitRate 0}}limit_rate {{.GlobalSettings.LimitRate}};{{end}}
@@ -1484,7 +1484,7 @@ server {
         {{if .GlobalSettings.ProxyBufferSize}}proxy_buffer_size {{.GlobalSettings.ProxyBufferSize}};{{end}}
         {{if .GlobalSettings.ProxyBuffers}}proxy_buffers {{.GlobalSettings.ProxyBuffers}};{{end}}
         {{if .GlobalSettings.ProxyBusyBuffersSize}}proxy_busy_buffers_size {{.GlobalSettings.ProxyBusyBuffersSize}};{{end}}
-        {{if .GlobalSettings.ProxyMaxTempFileSize}}proxy_max_temp_file_size {{.GlobalSettings.ProxyMaxTempFileSize}};{{end}}
+        {{if .Host.ProxyMaxTempFileSize}}proxy_max_temp_file_size {{.Host.ProxyMaxTempFileSize}};{{else if .GlobalSettings.ProxyMaxTempFileSize}}proxy_max_temp_file_size {{.GlobalSettings.ProxyMaxTempFileSize}};{{end}}
         {{if .GlobalSettings.ProxyTempFileWriteSize}}proxy_temp_file_write_size {{.GlobalSettings.ProxyTempFileWriteSize}};{{end}}
         # Bandwidth limiting (from Global Settings)
         {{if gt .GlobalSettings.LimitRate 0}}limit_rate {{.GlobalSettings.LimitRate}};{{end}}

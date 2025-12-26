@@ -17,6 +17,13 @@ export interface ProxyHost {
   block_exploits_exceptions?: string
   custom_locations?: unknown[]
   advanced_config?: string
+  // Host-level proxy settings (override global)
+  proxy_connect_timeout?: number
+  proxy_send_timeout?: number
+  proxy_read_timeout?: number
+  proxy_buffering?: string
+  client_max_body_size?: string
+  proxy_max_temp_file_size?: string
   waf_enabled: boolean
   waf_mode: string
   waf_paranoia_level: number
@@ -45,6 +52,13 @@ export interface CreateProxyHostRequest {
   cache_ttl?: string
   block_exploits?: boolean
   block_exploits_exceptions?: string
+  // Host-level proxy settings (override global)
+  proxy_connect_timeout?: number
+  proxy_send_timeout?: number
+  proxy_read_timeout?: number
+  proxy_buffering?: string
+  client_max_body_size?: string
+  proxy_max_temp_file_size?: string
   waf_enabled?: boolean
   waf_mode?: 'blocking' | 'detection'
   waf_paranoia_level?: number
@@ -69,6 +83,13 @@ export interface UpdateProxyHostRequest {
   cache_ttl?: string
   block_exploits?: boolean
   block_exploits_exceptions?: string
+  // Host-level proxy settings (override global)
+  proxy_connect_timeout?: number
+  proxy_send_timeout?: number
+  proxy_read_timeout?: number
+  proxy_buffering?: string
+  client_max_body_size?: string
+  proxy_max_temp_file_size?: string
   waf_enabled?: boolean
   waf_mode?: 'blocking' | 'detection'
   waf_paranoia_level?: number

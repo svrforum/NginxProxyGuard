@@ -827,7 +827,7 @@ func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Back
 		// Regenerate Proxy Host configs with safe error handling
 		var failedHosts []string
 		if h.proxyHostRepo != nil {
-			proxyHosts, _, err := h.proxyHostRepo.List(ctx, 1, 1000, "")
+			proxyHosts, _, err := h.proxyHostRepo.List(ctx, 1, 1000, "", "", "")
 			if err != nil {
 				log.Printf("[Backup] Warning: failed to list proxy hosts for config regeneration: %v", err)
 			} else if len(proxyHosts) > 0 {

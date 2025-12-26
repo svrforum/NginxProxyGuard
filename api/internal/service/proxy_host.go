@@ -467,8 +467,8 @@ func (s *ProxyHostService) GetByDomain(ctx context.Context, domain string) (*mod
 	return s.repo.GetByDomain(ctx, domain)
 }
 
-func (s *ProxyHostService) List(ctx context.Context, page, perPage int, search string) (*model.ProxyHostListResponse, error) {
-	hosts, total, err := s.repo.List(ctx, page, perPage, search)
+func (s *ProxyHostService) List(ctx context.Context, page, perPage int, search, sortBy, sortOrder string) (*model.ProxyHostListResponse, error) {
+	hosts, total, err := s.repo.List(ctx, page, perPage, search, sortBy, sortOrder)
 	if err != nil {
 		return nil, err
 	}
@@ -955,6 +955,100 @@ func (s *ProxyHostService) RegenerateConfigsForCloudProviders(ctx context.Contex
 	}
 
 	log.Printf("[CloudProvider] Nginx configs regenerated and reloaded for %d hosts", len(hostIDs))
+	return nil
+}
+
+// RegenerateConfigsForExploitRules regenerates nginx configs for all proxy hosts
+// that have block_exploits enabled. Called when exploit rules are modified.
+func (s *ProxyHostService) RegenerateConfigsForExploitRules(ctx context.Context) error {
+	// Get all hosts with block_exploits enabled
+	hosts, _, err := s.repo.List(ctx, 1, 10000, "", "", "")
+	if err != nil {
+		return fmt.Errorf("failed to list proxy hosts: %w", err)
+	}
+
+	var hostsToUpdate []*model.ProxyHost
+	for i := range hosts {
+		if hosts[i].BlockExploits {
+			hostsToUpdate = append(hostsToUpdate, &hosts[i])
+		}
+	}
+
+	if len(hostsToUpdate) == 0 {
+		log.Printf("[ExploitRules] No hosts with block_exploits enabled, skipping regeneration")
+		return nil
+	}
+
+	log.Printf("[ExploitRules] Regenerating nginx configs for %d hosts with block_exploits enabled", len(hostsToUpdate))
+
+	for _, host := range hostsToUpdate {
+		configData := s.getHostConfigData(ctx, host)
+		if err := s.nginx.GenerateConfigFull(ctx, configData); err != nil {
+			return fmt.Errorf("failed to generate config for host %s: %w", host.ID, err)
+		}
+
+		// Also regenerate WAF config if enabled
+		if host.WAFEnabled {
+			mergedExclusions, err := s.getMergedWAFExclusions(ctx, host.ID)
+			if err != nil {
+				return fmt.Errorf("failed to get WAF exclusions for host %s: %w", host.ID, err)
+			}
+			if err := s.nginx.GenerateHostWAFConfig(ctx, host, mergedExclusions); err != nil {
+				return fmt.Errorf("failed to generate WAF config for host %s: %w", host.ID, err)
+			}
+		}
+	}
+
+	// Test and reload nginx
+	if err := s.nginx.TestConfig(ctx); err != nil {
+		return fmt.Errorf("nginx config test failed: %w", err)
+	}
+
+	if err := s.nginx.ReloadNginx(ctx); err != nil {
+		return fmt.Errorf("failed to reload nginx: %w", err)
+	}
+
+	log.Printf("[ExploitRules] Nginx configs regenerated and reloaded for %d hosts", len(hostsToUpdate))
+	return nil
+}
+
+// RegenerateConfigForHost regenerates nginx config for a single host by ID
+// Used when a host-specific exploit rule exclusion is added or removed
+func (s *ProxyHostService) RegenerateConfigForHost(ctx context.Context, hostID string) error {
+	host, err := s.repo.GetByID(ctx, hostID)
+	if err != nil {
+		return fmt.Errorf("failed to get proxy host %s: %w", hostID, err)
+	}
+	if host == nil {
+		return fmt.Errorf("proxy host %s not found", hostID)
+	}
+
+	configData := s.getHostConfigData(ctx, host)
+	if err := s.nginx.GenerateConfigFull(ctx, configData); err != nil {
+		return fmt.Errorf("failed to generate config for host %s: %w", hostID, err)
+	}
+
+	// Also regenerate WAF config if enabled
+	if host.WAFEnabled {
+		mergedExclusions, err := s.getMergedWAFExclusions(ctx, hostID)
+		if err != nil {
+			return fmt.Errorf("failed to get WAF exclusions for host %s: %w", hostID, err)
+		}
+		if err := s.nginx.GenerateHostWAFConfig(ctx, host, mergedExclusions); err != nil {
+			return fmt.Errorf("failed to generate WAF config for host %s: %w", hostID, err)
+		}
+	}
+
+	// Test and reload nginx
+	if err := s.nginx.TestConfig(ctx); err != nil {
+		return fmt.Errorf("nginx config test failed: %w", err)
+	}
+
+	if err := s.nginx.ReloadNginx(ctx); err != nil {
+		return fmt.Errorf("failed to reload nginx: %w", err)
+	}
+
+	log.Printf("[ExploitRules] Nginx config regenerated and reloaded for host %s", hostID)
 	return nil
 }
 

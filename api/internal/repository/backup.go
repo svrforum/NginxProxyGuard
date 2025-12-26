@@ -153,6 +153,51 @@ func (r *BackupRepository) Delete(ctx context.Context, id string) error {
 	return err
 }
 
+// ListByType returns all backups of a specific type (manual, auto, scheduled)
+func (r *BackupRepository) ListByType(ctx context.Context, backupType string) ([]model.Backup, error) {
+	query := `
+		SELECT id, filename, file_size, file_path, includes_config, includes_certificates,
+		       includes_database, backup_type, description, status, error_message,
+		       checksum_sha256, created_at, completed_at
+		FROM backups
+		WHERE backup_type = $1
+		ORDER BY created_at DESC
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, backupType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var backups []model.Backup
+	for rows.Next() {
+		var b model.Backup
+		var description, errorMsg, checksum sql.NullString
+		var completedAt sql.NullTime
+
+		err := rows.Scan(
+			&b.ID, &b.Filename, &b.FileSize, &b.FilePath, &b.IncludesConfig, &b.IncludesCertificates,
+			&b.IncludesDatabase, &b.BackupType, &description, &b.Status, &errorMsg,
+			&checksum, &b.CreatedAt, &completedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		b.Description = description.String
+		b.ErrorMessage = errorMsg.String
+		b.ChecksumSHA256 = checksum.String
+		if completedAt.Valid {
+			b.CompletedAt = &completedAt.Time
+		}
+
+		backups = append(backups, b)
+	}
+
+	return backups, nil
+}
+
 func (r *BackupRepository) GetStats(ctx context.Context) (*model.BackupStats, error) {
 	stats := &model.BackupStats{}
 

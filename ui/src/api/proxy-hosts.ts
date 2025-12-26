@@ -12,7 +12,9 @@ const API_BASE = '/api/v1'
 export async function fetchProxyHosts(
   page = 1,
   perPage = 20,
-  search = ''
+  search = '',
+  sortBy = '',
+  sortOrder = ''
 ): Promise<ProxyHostListResponse> {
   const params = new URLSearchParams({
     page: page.toString(),
@@ -20,6 +22,12 @@ export async function fetchProxyHosts(
   })
   if (search.trim()) {
     params.append('search', search.trim())
+  }
+  if (sortBy) {
+    params.append('sort_by', sortBy)
+  }
+  if (sortOrder) {
+    params.append('sort_order', sortOrder)
   }
   return apiGet<ProxyHostListResponse>(
     `${API_BASE}/proxy-hosts?${params.toString()}`
