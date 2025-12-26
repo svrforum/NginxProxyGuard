@@ -326,7 +326,7 @@ func main() {
 		ContentTypeNosniff:    "nosniff",
 		XFrameOptions:         "SAMEORIGIN",
 		HSTSMaxAge:            config.HSTSMaxAge,
-		ContentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://www.google.com https://www.gstatic.com; style-src 'self' 'unsafe-inline'; frame-src https://challenges.cloudflare.com https://www.google.com",
+		ContentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://www.google.com https://www.gstatic.com https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data: https://validator.swagger.io; connect-src 'self' https://unpkg.com; frame-src https://challenges.cloudflare.com https://www.google.com",
 		ReferrerPolicy:        "strict-origin-when-cross-origin",
 	}))
 
