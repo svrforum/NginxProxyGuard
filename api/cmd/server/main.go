@@ -182,7 +182,7 @@ func main() {
 	logHandler := handler.NewLogHandler(logRepo)
 	wafTestHandler := handler.NewWAFTestHandler()
 	wafHandler := handler.NewWAFHandler(wafRepo, proxyHostRepo, nginxManager)
-	exploitBlockRuleHandler := handler.NewExploitBlockRuleHandler(exploitBlockRuleRepo, proxyHostRepo)
+	exploitBlockRuleHandler := handler.NewExploitBlockRuleHandler(exploitBlockRuleRepo, proxyHostRepo, proxyHostService)
 	accessListHandler := handler.NewAccessListHandler(accessListRepo)
 	redirectHostHandler := handler.NewRedirectHostHandler(redirectHostRepo, nginxManager, auditService)
 	geoHandler := handler.NewGeoHandler(geoRepo, proxyHostRepo, nginxManager, accessListRepo, rateLimitRepo, securityHeadersRepo, botFilterRepo, upstreamRepo)
@@ -251,6 +251,10 @@ func main() {
 	// Initialize log rotate scheduler (rotates raw nginx logs daily)
 	logRotateScheduler := scheduler.NewLogRotateScheduler()
 	logRotateScheduler.Start()
+
+	// Initialize backup scheduler (auto backups based on cron schedule)
+	backupScheduler := scheduler.NewBackupScheduler(backupRepo, systemSettingsRepo, cfg.BackupPath)
+	backupScheduler.Start()
 
 	// Start log collector (use context for graceful shutdown)
 	ctx, cancel := context.WithCancel(context.Background())

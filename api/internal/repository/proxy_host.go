@@ -55,8 +55,8 @@ func (r *ProxyHostRepository) Create(ctx context.Context, req *model.CreateProxy
 			block_exploits, block_exploits_exceptions,
 			waf_enabled, waf_mode, waf_paranoia_level, waf_anomaly_threshold,
 			advanced_config, proxy_connect_timeout, proxy_send_timeout, proxy_read_timeout,
-			proxy_buffering, client_max_body_size, enabled
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
+			proxy_buffering, client_max_body_size, proxy_max_temp_file_size, enabled
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
 		RETURNING id, domain_names, forward_scheme, forward_host, forward_port,
 			ssl_enabled, ssl_force_https, ssl_http2, ssl_http3, certificate_id,
 			allow_websocket_upgrade, cache_enabled, cache_static_only, cache_ttl,
@@ -64,7 +64,7 @@ func (r *ProxyHostRepository) Create(ctx context.Context, req *model.CreateProxy
 			custom_locations, advanced_config, waf_enabled, waf_mode,
 			waf_paranoia_level, waf_anomaly_threshold,
 			proxy_connect_timeout, proxy_send_timeout, proxy_read_timeout,
-			proxy_buffering, client_max_body_size,
+			proxy_buffering, client_max_body_size, COALESCE(proxy_max_temp_file_size, '') as proxy_max_temp_file_size,
 			access_list_id, enabled, meta, created_at, updated_at
 	`
 
@@ -132,6 +132,7 @@ func (r *ProxyHostRepository) Create(ctx context.Context, req *model.CreateProxy
 		req.ProxyReadTimeout,
 		req.ProxyBuffering,
 		req.ClientMaxBodySize,
+		req.ProxyMaxTempFileSize,
 		req.Enabled,
 	).Scan(
 		&host.ID,
@@ -161,6 +162,7 @@ func (r *ProxyHostRepository) Create(ctx context.Context, req *model.CreateProxy
 		&host.ProxyReadTimeout,
 		&host.ProxyBuffering,
 		&host.ClientMaxBodySize,
+		&host.ProxyMaxTempFileSize,
 		&accessListID,
 		&host.Enabled,
 		&meta,
@@ -214,6 +216,7 @@ func (r *ProxyHostRepository) GetByID(ctx context.Context, id string) (*model.Pr
 			COALESCE(proxy_read_timeout, 0) as proxy_read_timeout,
 			COALESCE(proxy_buffering, '') as proxy_buffering,
 			COALESCE(client_max_body_size, '') as client_max_body_size,
+			COALESCE(proxy_max_temp_file_size, '') as proxy_max_temp_file_size,
 			access_list_id, enabled, meta, created_at, updated_at
 		FROM proxy_hosts WHERE id = $1
 	`
@@ -250,6 +253,7 @@ func (r *ProxyHostRepository) GetByID(ctx context.Context, id string) (*model.Pr
 		&host.ProxyReadTimeout,
 		&host.ProxyBuffering,
 		&host.ClientMaxBodySize,
+		&host.ProxyMaxTempFileSize,
 		&accessListID,
 		&host.Enabled,
 		&meta,
@@ -283,7 +287,7 @@ func (r *ProxyHostRepository) GetByID(ctx context.Context, id string) (*model.Pr
 	return &host, nil
 }
 
-func (r *ProxyHostRepository) List(ctx context.Context, page, perPage int, search string) ([]model.ProxyHost, int, error) {
+func (r *ProxyHostRepository) List(ctx context.Context, page, perPage int, search, sortBy, sortOrder string) ([]model.ProxyHost, int, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -311,6 +315,21 @@ func (r *ProxyHostRepository) List(ctx context.Context, page, perPage int, searc
 		return nil, 0, fmt.Errorf("failed to count proxy hosts: %w", err)
 	}
 
+	// Build ORDER BY clause
+	orderByClause := "created_at DESC" // default
+	validSortFields := map[string]string{
+		"name":    "domain_names[1]",
+		"created": "created_at",
+		"updated": "updated_at",
+	}
+	if sortField, ok := validSortFields[sortBy]; ok {
+		order := "ASC"
+		if sortOrder == "desc" {
+			order = "DESC"
+		}
+		orderByClause = fmt.Sprintf("%s %s", sortField, order)
+	}
+
 	// Get paginated data
 	query := fmt.Sprintf(`
 		SELECT id, domain_names, forward_scheme, forward_host, forward_port,
@@ -327,12 +346,13 @@ func (r *ProxyHostRepository) List(ctx context.Context, page, perPage int, searc
 			COALESCE(proxy_read_timeout, 0) as proxy_read_timeout,
 			COALESCE(proxy_buffering, '') as proxy_buffering,
 			COALESCE(client_max_body_size, '') as client_max_body_size,
+			COALESCE(proxy_max_temp_file_size, '') as proxy_max_temp_file_size,
 			access_list_id, enabled, meta, created_at, updated_at
 		FROM proxy_hosts
 		%s
-		ORDER BY created_at DESC
+		ORDER BY %s
 		LIMIT $%d OFFSET $%d
-	`, whereClause, argIndex, argIndex+1)
+	`, whereClause, orderByClause, argIndex, argIndex+1)
 
 	args = append(args, perPage, offset)
 	rows, err := r.db.QueryContext(ctx, query, args...)
@@ -375,6 +395,7 @@ func (r *ProxyHostRepository) List(ctx context.Context, page, perPage int, searc
 			&host.ProxyReadTimeout,
 			&host.ProxyBuffering,
 			&host.ClientMaxBodySize,
+			&host.ProxyMaxTempFileSize,
 			&accessListID,
 			&host.Enabled,
 			&meta,
@@ -490,6 +511,9 @@ func (r *ProxyHostRepository) Update(ctx context.Context, id string, req *model.
 	if req.ClientMaxBodySize != nil {
 		existing.ClientMaxBodySize = *req.ClientMaxBodySize
 	}
+	if req.ProxyMaxTempFileSize != nil {
+		existing.ProxyMaxTempFileSize = *req.ProxyMaxTempFileSize
+	}
 	if req.Enabled != nil {
 		existing.Enabled = *req.Enabled
 	}
@@ -521,8 +545,9 @@ func (r *ProxyHostRepository) Update(ctx context.Context, id string, req *model.
 			proxy_read_timeout = $23,
 			proxy_buffering = $24,
 			client_max_body_size = $25,
-			enabled = $26
-		WHERE id = $27
+			proxy_max_temp_file_size = $26,
+			enabled = $27
+		WHERE id = $28
 		RETURNING updated_at
 	`
 
@@ -558,6 +583,7 @@ func (r *ProxyHostRepository) Update(ctx context.Context, id string, req *model.
 		existing.ProxyReadTimeout,
 		existing.ProxyBuffering,
 		existing.ClientMaxBodySize,
+		existing.ProxyMaxTempFileSize,
 		existing.Enabled,
 		id,
 	).Scan(&existing.UpdatedAt)
@@ -646,6 +672,7 @@ func (r *ProxyHostRepository) GetByDomain(ctx context.Context, domain string) (*
 			COALESCE(proxy_read_timeout, 0) as proxy_read_timeout,
 			COALESCE(proxy_buffering, '') as proxy_buffering,
 			COALESCE(client_max_body_size, '') as client_max_body_size,
+			COALESCE(proxy_max_temp_file_size, '') as proxy_max_temp_file_size,
 			access_list_id, enabled, meta, created_at, updated_at
 		FROM proxy_hosts WHERE $1 = ANY(domain_names)
 		LIMIT 1
@@ -683,6 +710,7 @@ func (r *ProxyHostRepository) GetByDomain(ctx context.Context, domain string) (*
 		&host.ProxyReadTimeout,
 		&host.ProxyBuffering,
 		&host.ClientMaxBodySize,
+		&host.ProxyMaxTempFileSize,
 		&accessListID,
 		&host.Enabled,
 		&meta,
@@ -725,6 +753,7 @@ func (r *ProxyHostRepository) GetAllEnabled(ctx context.Context) ([]model.ProxyH
 			COALESCE(proxy_read_timeout, 0) as proxy_read_timeout,
 			COALESCE(proxy_buffering, '') as proxy_buffering,
 			COALESCE(client_max_body_size, '') as client_max_body_size,
+			COALESCE(proxy_max_temp_file_size, '') as proxy_max_temp_file_size,
 			access_list_id, enabled, meta, created_at, updated_at
 		FROM proxy_hosts
 		WHERE enabled = true
@@ -771,6 +800,7 @@ func (r *ProxyHostRepository) GetAllEnabled(ctx context.Context) ([]model.ProxyH
 			&host.ProxyReadTimeout,
 			&host.ProxyBuffering,
 			&host.ClientMaxBodySize,
+			&host.ProxyMaxTempFileSize,
 			&accessListID,
 			&host.Enabled,
 			&meta,
@@ -813,6 +843,7 @@ func (r *ProxyHostRepository) GetByCertificateID(ctx context.Context, certificat
 			COALESCE(proxy_read_timeout, 0) as proxy_read_timeout,
 			COALESCE(proxy_buffering, '') as proxy_buffering,
 			COALESCE(client_max_body_size, '') as client_max_body_size,
+			COALESCE(proxy_max_temp_file_size, '') as proxy_max_temp_file_size,
 			access_list_id, enabled, meta, created_at, updated_at
 		FROM proxy_hosts
 		WHERE certificate_id = $1
@@ -859,6 +890,7 @@ func (r *ProxyHostRepository) GetByCertificateID(ctx context.Context, certificat
 			&host.ProxyReadTimeout,
 			&host.ProxyBuffering,
 			&host.ClientMaxBodySize,
+			&host.ProxyMaxTempFileSize,
 			&accessListID,
 			&host.Enabled,
 			&meta,

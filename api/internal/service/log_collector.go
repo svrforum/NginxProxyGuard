@@ -155,7 +155,7 @@ func (c *LogCollector) getHostIDByDomain(ctx context.Context, domain string) str
 
 	if time.Since(c.domainCacheTime) > 60*time.Second {
 		// Refresh entire cache
-		hosts, _, err := c.proxyHostRepo.List(ctx, 1, 1000, "")
+		hosts, _, err := c.proxyHostRepo.List(ctx, 1, 1000, "", "", "")
 		if err == nil {
 			c.domainCache = make(map[string]string)
 			for _, host := range hosts {

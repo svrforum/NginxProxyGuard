@@ -337,6 +337,24 @@
         "connectTimeout": "연결 타임아웃",
         "readTimeout": "읽기 타임아웃",
         "sendTimeout": "전송 타임아웃"
+      },
+      "proxySettings": {
+        "title": "프록시 설정 오버라이드",
+        "description": "이 호스트의 전역 설정을 재정의합니다. 비워두면 전역 값을 사용합니다.",
+        "clientMaxBodySize": "클라이언트 최대 본문 크기",
+        "clientMaxBodySizeDesc": "클라이언트 요청 본문의 최대 허용 크기입니다. 무제한은 0을 사용하세요.",
+        "proxyMaxTempFileSize": "프록시 최대 임시 파일 크기",
+        "proxyMaxTempFileSizeDesc": "버퍼링용 임시 파일의 최대 크기입니다. 대용량 다운로드를 위해 0(무제한)을 사용하세요.",
+        "proxyBuffering": "프록시 버퍼링",
+        "proxyBufferingDesc": "실시간 스트리밍이나 대용량 파일 전송을 위해 버퍼링을 비활성화하세요.",
+        "useGlobal": "전역 설정 사용",
+        "example": "예:",
+        "bufferingOn": "켜기 (응답 버퍼링)",
+        "bufferingOff": "끄기 (직접 스트리밍)",
+        "infoTitle": "대용량 파일 전송 팁:",
+        "infoUpload": "대용량 업로드: client_max_body_size를 늘리세요 (예: 10g 또는 무제한은 0)",
+        "infoDownload": "대용량 다운로드: proxy_max_temp_file_size를 0으로 설정하세요",
+        "infoStreaming": "스트리밍: proxy_buffering을 off로 설정하세요"
       }
     },
     "advanced": {
@@ -406,7 +424,11 @@
       "cache": "이미지나 CSS 같은 파일들을 잠시 저장해두었다가, 다음 방문 때 빠르게 보여주는 기능입니다.",
       "cacheStaticOnly": "정적 파일(js, css, 이미지, 폰트)만 캐시합니다. API 응답이나 HTML은 캐시하지 않아 동적 콘텐츠가 항상 최신 상태로 유지됩니다.",
       "cacheTTL": "캐시된 파일이 얼마나 오래 저장될지 설정합니다. 자주 변경되는 사이트는 짧게, 정적 사이트는 길게 설정하세요.",
-      "compression": "데이터를 압축해서 전송합니다. 인터넷 데이터를 아끼고 속도도 빨라집니다."
+      "compression": "데이터를 압축해서 전송합니다. 인터넷 데이터를 아끼고 속도도 빨라집니다.",
+      "proxyOverride": "이 호스트에 대해 전역 프록시 설정을 재정의합니다. 기본값과 다른 제한이 필요한 호스트에 유용합니다.",
+      "clientMaxBodySize": "업로드 최대 허용 크기를 설정합니다. 무제한은 0, 또는 100m, 1g 같은 값을 사용하세요. 파일 업로드 및 대용량 API 요청에 영향을 줍니다.",
+      "proxyMaxTempFileSize": "버퍼링 중 임시 파일이 커질 수 있는 최대 크기입니다. 10GB 이상의 대용량 다운로드를 위해 0(무제한)으로 설정하세요. proxy_buffering이 켜져 있을 때만 사용됩니다.",
+      "proxyBuffering": "켜면 nginx가 전체 응답을 버퍼링한 후 클라이언트에 전송합니다. 끄면 응답이 직접 스트리밍됩니다. SSE, 대용량 다운로드, 실시간 스트리밍에는 끄세요."
     },
     "advanced": {
       "customConfig": "Nginx 설정을 직접 작성할 수 있는 전문가용 기능입니다. location / { ... } 블록 안에 들어갈 내용을 입력하세요."

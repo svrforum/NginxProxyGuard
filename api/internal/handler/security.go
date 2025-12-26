@@ -327,7 +327,7 @@ func (h *SecurityHandler) BanIP(c echo.Context) error {
 				h.proxyHostService.Update(ctx, *req.ProxyHostID, &model.UpdateProxyHostRequest{})
 			} else {
 				// For global ban, regenerate all enabled hosts in parallel
-				hosts, _, err := h.proxyHostRepo.List(ctx, 1, config.MaxWAFRulesLimit, "")
+				hosts, _, err := h.proxyHostRepo.List(ctx, 1, config.MaxWAFRulesLimit, "", "", "")
 				if err == nil && hosts != nil {
 					var wg sync.WaitGroup
 					for _, host := range hosts {
@@ -394,7 +394,7 @@ func (h *SecurityHandler) UnbanIP(c echo.Context) error {
 		defer cancel()
 
 		if h.proxyHostService != nil && h.proxyHostRepo != nil {
-			hosts, _, err := h.proxyHostRepo.List(ctx, 1, config.MaxWAFRulesLimit, "")
+			hosts, _, err := h.proxyHostRepo.List(ctx, 1, config.MaxWAFRulesLimit, "", "", "")
 			if err == nil && hosts != nil {
 				var wg sync.WaitGroup
 				for _, host := range hosts {
@@ -459,7 +459,7 @@ func (h *SecurityHandler) UnbanIPByAddress(c echo.Context) error {
 		defer cancel()
 
 		if h.proxyHostService != nil && h.proxyHostRepo != nil {
-			hosts, _, err := h.proxyHostRepo.List(ctx, 1, config.MaxWAFRulesLimit, "")
+			hosts, _, err := h.proxyHostRepo.List(ctx, 1, config.MaxWAFRulesLimit, "", "", "")
 			if err == nil && hosts != nil {
 				var wg sync.WaitGroup
 				for _, host := range hosts {

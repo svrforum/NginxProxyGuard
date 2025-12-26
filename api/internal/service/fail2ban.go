@@ -88,7 +88,7 @@ func (s *Fail2banService) Start(ctx context.Context) {
 // refreshConfigs reloads fail2ban configs from database for all hosts
 func (s *Fail2banService) refreshConfigs(ctx context.Context) {
 	// Get all proxy hosts
-	hosts, _, err := s.proxyHostRepo.List(ctx, 1, 1000, "")
+	hosts, _, err := s.proxyHostRepo.List(ctx, 1, 1000, "", "", "")
 	if err != nil {
 		log.Printf("[Fail2ban] Failed to list proxy hosts: %v", err)
 		return
@@ -488,7 +488,7 @@ func (s *Fail2banService) cleanupExpiredBans(ctx context.Context) {
 
 	if hasGlobalBan {
 		// Global ban expired - need to regenerate all enabled proxy hosts
-		hosts, _, err := s.proxyHostRepo.List(ctx, 1, 1000, "")
+		hosts, _, err := s.proxyHostRepo.List(ctx, 1, 1000, "", "", "")
 		if err != nil {
 			log.Printf("[Fail2ban] Failed to list proxy hosts for config regeneration: %v", err)
 			return
