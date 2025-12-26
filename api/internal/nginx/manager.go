@@ -383,12 +383,24 @@ func (m *Manager) TestConfig(ctx context.Context) error {
 	// Try docker exec first (for containerized environments)
 	cmd := exec.CommandContext(ctx, "docker", "exec", m.nginxContainer, "nginx", "-t")
 	output, err := cmd.CombinedOutput()
+	outputStr := strings.TrimSpace(string(output))
+
 	if err != nil {
+		// If we got nginx output, return it
+		if outputStr != "" {
+			return fmt.Errorf("nginx config test failed: %s", outputStr)
+		}
+		// If output is empty, try to capture error details
+		log.Printf("[TestConfig] docker exec failed with empty output, err: %v", err)
 		// Fallback to direct nginx command (for non-containerized environments)
 		cmd = exec.CommandContext(ctx, "nginx", "-t")
 		output, err = cmd.CombinedOutput()
 		if err != nil {
-			return fmt.Errorf("nginx config test failed: %s", string(output))
+			fallbackOutput := strings.TrimSpace(string(output))
+			if fallbackOutput != "" {
+				return fmt.Errorf("nginx config test failed: %s", fallbackOutput)
+			}
+			return fmt.Errorf("nginx config test failed: %v", err)
 		}
 	}
 	return nil

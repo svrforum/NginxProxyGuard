@@ -19,19 +19,27 @@ const (
 	ErrMsgValidationFailed = "Validation failed"
 )
 
+// ErrorResponse is the standard error response structure
+type ErrorResponse struct {
+	Error   string `json:"error"`
+	Details string `json:"details,omitempty"`
+}
+
 // internalError logs the actual error and returns a generic message to the client
 func internalError(c echo.Context, operation string, err error) error {
 	log.Printf("[ERROR] %s: %v", operation, err)
-	return c.JSON(http.StatusInternalServerError, map[string]string{
-		"error": ErrMsgInternalError,
+	return c.JSON(http.StatusInternalServerError, ErrorResponse{
+		Error:   ErrMsgInternalError,
+		Details: err.Error(),
 	})
 }
 
 // databaseError logs the database error and returns a generic message
 func databaseError(c echo.Context, operation string, err error) error {
 	log.Printf("[DB ERROR] %s: %v", operation, err)
-	return c.JSON(http.StatusInternalServerError, map[string]string{
-		"error": ErrMsgDatabaseError,
+	return c.JSON(http.StatusInternalServerError, ErrorResponse{
+		Error:   ErrMsgDatabaseError,
+		Details: err.Error(),
 	})
 }
 

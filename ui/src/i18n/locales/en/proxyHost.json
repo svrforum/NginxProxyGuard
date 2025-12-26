@@ -2,6 +2,8 @@
   "saveProgress": {
     "titleCreate": "Creating Proxy Host",
     "titleUpdate": "Updating Proxy Host",
+    "showDetails": "Show Details",
+    "hideDetails": "Hide Details",
     "steps": {
       "server": "Processing on Server",
       "serverDesc": "Saving to DB, generating config, testing, reloading Nginx...",

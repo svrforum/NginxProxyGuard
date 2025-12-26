@@ -194,5 +194,17 @@
   "actions": {
     "syncAll": "전체 설정 동기화",
     "syncAllConfirm": "모든 Proxy Host 및 Redirect Host의 Nginx 설정을 재생성하시겠습니까?"
+  },
+  "sync": {
+    "syncing": "설정 동기화 중...",
+    "success": "동기화 완료",
+    "failed": "동기화 실패",
+    "summary": "{{total}}개 중 {{success}}개 동기화 완료 ({{failed}}개 실패)",
+    "testFailed": "Nginx 설정 테스트 실패 - 설정이 적용되지 않음",
+    "reloadFailed": "Nginx 리로드 실패 - 설정이 적용되지 않음",
+    "configGeneration": "설정 파일 생성",
+    "nginxTest": "Nginx 설정 테스트",
+    "nginxReload": "Nginx 리로드",
+    "hostDetails": "호스트별 상세"
   }
 }

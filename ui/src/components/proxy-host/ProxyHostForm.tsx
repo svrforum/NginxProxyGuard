@@ -358,6 +358,7 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
         isEditing={isEditing}
         currentStep={saveProgress.currentStep}
         error={saveProgress.error}
+        errorDetails={saveProgress.errorDetails}
         onClose={closeSaveProgress}
       />
 
