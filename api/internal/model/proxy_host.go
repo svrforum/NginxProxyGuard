@@ -18,15 +18,56 @@ var dangerousDirectives = []string{
 	"perl_",              // Perl scripting
 	"js_",                // JavaScript scripting
 	"njs_",               // njs scripting
-	"set_by_lua",         // Lua code execution
-	"content_by_lua",     // Lua code execution
-	"access_by_lua",      // Lua code execution
-	"worker_processes",   // Global directive
-	"worker_connections", // Global directive
-	"daemon",             // Global directive
-	"master_process",     // Global directive
-	"pid",                // Global directive
-	"user",               // Global directive
+	// Lua code execution directives (both inline and block variants)
+	"set_by_lua",
+	"set_by_lua_block",
+	"set_by_lua_file",
+	"content_by_lua",
+	"content_by_lua_block",
+	"content_by_lua_file",
+	"access_by_lua",
+	"access_by_lua_block",
+	"access_by_lua_file",
+	"rewrite_by_lua",
+	"rewrite_by_lua_block",
+	"rewrite_by_lua_file",
+	"header_filter_by_lua",
+	"header_filter_by_lua_block",
+	"header_filter_by_lua_file",
+	"body_filter_by_lua",
+	"body_filter_by_lua_block",
+	"body_filter_by_lua_file",
+	"log_by_lua",
+	"log_by_lua_block",
+	"log_by_lua_file",
+	"balancer_by_lua",
+	"balancer_by_lua_block",
+	"balancer_by_lua_file",
+	"ssl_certificate_by_lua",
+	"ssl_certificate_by_lua_block",
+	"ssl_certificate_by_lua_file",
+	"ssl_session_fetch_by_lua",
+	"ssl_session_fetch_by_lua_block",
+	"ssl_session_fetch_by_lua_file",
+	"ssl_session_store_by_lua",
+	"ssl_session_store_by_lua_block",
+	"ssl_session_store_by_lua_file",
+	"init_by_lua",
+	"init_by_lua_block",
+	"init_by_lua_file",
+	"init_worker_by_lua",
+	"init_worker_by_lua_block",
+	"init_worker_by_lua_file",
+	"exit_worker_by_lua",
+	"exit_worker_by_lua_block",
+	"exit_worker_by_lua_file",
+	// Global directives
+	"worker_processes",
+	"worker_connections",
+	"daemon",
+	"master_process",
+	"pid",
+	"user",
 	"env",                // Environment variables
 	"error_log",          // Could redirect logs
 	"access_log",         // Could redirect logs (in root context)
