@@ -194,5 +194,17 @@
   "actions": {
     "syncAll": "Sync All Configs",
     "syncAllConfirm": "Regenerate all Nginx configs for Proxy Hosts and Redirect Hosts?"
+  },
+  "sync": {
+    "syncing": "Syncing configurations...",
+    "success": "Sync Completed Successfully",
+    "failed": "Sync Failed",
+    "summary": "{{success}}/{{total}} hosts synced ({{failed}} failed)",
+    "testFailed": "Nginx config test failed - configs not applied",
+    "reloadFailed": "Nginx reload failed - configs not applied",
+    "configGeneration": "Config Generation",
+    "nginxTest": "Nginx Config Test",
+    "nginxReload": "Nginx Reload",
+    "hostDetails": "Host Details"
   }
 }

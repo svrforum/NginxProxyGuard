@@ -192,13 +192,12 @@ func (h *ProxyHostHandler) Delete(c echo.Context) error {
 }
 
 func (h *ProxyHostHandler) SyncAll(c echo.Context) error {
-	if err := h.service.SyncAllConfigs(c.Request().Context()); err != nil {
+	result, err := h.service.SyncAllConfigsWithDetails(c.Request().Context())
+	if err != nil {
 		return internalError(c, "sync all proxy configs", err)
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{
-		"message": "All configs synced successfully",
-	})
+	return c.JSON(http.StatusOK, result)
 }
 
 // TestHost tests a proxy host configuration by making HTTP requests
