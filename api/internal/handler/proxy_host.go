@@ -3,6 +3,7 @@ package handler
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"nginx-proxy-guard/internal/model"
 	"nginx-proxy-guard/internal/service"
@@ -60,6 +61,14 @@ func (h *ProxyHostHandler) Create(c echo.Context) error {
 
 	host, err := h.service.Create(c.Request().Context(), &req)
 	if err != nil {
+		errMsg := err.Error()
+		// Handle specific error cases with appropriate HTTP status codes
+		if strings.Contains(errMsg, "already exist") {
+			return conflictError(c, errMsg)
+		}
+		if strings.Contains(errMsg, "invalid") || strings.Contains(errMsg, "required") {
+			return badRequestError(c, errMsg)
+		}
 		return internalError(c, "create proxy host", err)
 	}
 
@@ -145,6 +154,14 @@ func (h *ProxyHostHandler) Update(c echo.Context) error {
 
 	host, err := h.service.Update(c.Request().Context(), id, &req)
 	if err != nil {
+		errMsg := err.Error()
+		// Handle specific error cases with appropriate HTTP status codes
+		if strings.Contains(errMsg, "already exist") {
+			return conflictError(c, errMsg)
+		}
+		if strings.Contains(errMsg, "invalid") || strings.Contains(errMsg, "required") {
+			return badRequestError(c, errMsg)
+		}
 		return internalError(c, "update proxy host", err)
 	}
 

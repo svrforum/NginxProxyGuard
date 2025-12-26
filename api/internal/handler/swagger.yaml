@@ -19,7 +19,7 @@ info:
     - `X-RateLimit-Remaining`: Remaining requests
     - `X-RateLimit-Reset`: Window reset time
 
-  version: 1.0.0
+  version: 1.3.7
   contact:
     name: Nginx Proxy Guard Support
     url: https://github.com/svrforum/nginxproxyguard
@@ -36,22 +36,36 @@ tags:
     description: Authentication and user management
   - name: Proxy Hosts
     description: Reverse proxy host management
+  - name: Redirect Hosts
+    description: HTTP redirect management
   - name: Certificates
     description: SSL/TLS certificate management
+  - name: DNS Providers
+    description: DNS provider management for wildcard certificates
   - name: Security
     description: Security features (Rate Limit, Bot Filter, Headers, etc.)
   - name: WAF
     description: Web Application Firewall management
+  - name: Exploit Rules
+    description: Exploit blocking rules management
   - name: GeoIP
     description: Geographic IP restrictions
+  - name: Challenge
+    description: CAPTCHA challenge configuration
+  - name: Cloud Providers
+    description: Cloud provider IP blocking
+  - name: Access Lists
+    description: IP-based access control lists
   - name: Settings
     description: Global settings and dashboard
   - name: Backups
     description: Backup and restore operations
   - name: Logs
-    description: System and audit logs
+    description: System, audit, and access logs
   - name: API Tokens
     description: API token management
+  - name: Nginx
+    description: Nginx configuration management
 
 paths:
   # ============================================================================
@@ -211,6 +225,8 @@ paths:
                 $ref: '#/components/schemas/ProxyHost'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Domain already exists
 
   /proxy-hosts/{id}:
     get:
@@ -1167,6 +1183,918 @@ paths:
         '204':
           description: IP unbanned
 
+  # ============================================================================
+  # DNS Providers
+  # ============================================================================
+  /dns-providers:
+    get:
+      tags: [DNS Providers]
+      summary: List DNS providers
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of DNS providers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DNSProvider'
+
+    post:
+      tags: [DNS Providers]
+      summary: Create DNS provider
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDNSProvider'
+      responses:
+        '201':
+          description: DNS provider created
+
+  /dns-providers/{id}:
+    get:
+      tags: [DNS Providers]
+      summary: Get DNS provider
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: DNS provider details
+
+    put:
+      tags: [DNS Providers]
+      summary: Update DNS provider
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDNSProvider'
+      responses:
+        '200':
+          description: DNS provider updated
+
+    delete:
+      tags: [DNS Providers]
+      summary: Delete DNS provider
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: DNS provider deleted
+
+  /dns-providers/test:
+    post:
+      tags: [DNS Providers]
+      summary: Test DNS provider credentials
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDNSProvider'
+      responses:
+        '200':
+          description: Credentials valid
+        '400':
+          description: Credentials invalid
+
+  # ============================================================================
+  # Redirect Hosts
+  # ============================================================================
+  /redirect-hosts:
+    get:
+      tags: [Redirect Hosts]
+      summary: List redirect hosts
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of redirect hosts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RedirectHost'
+
+    post:
+      tags: [Redirect Hosts]
+      summary: Create redirect host
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRedirectHost'
+      responses:
+        '201':
+          description: Redirect host created
+
+  /redirect-hosts/{id}:
+    get:
+      tags: [Redirect Hosts]
+      summary: Get redirect host
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Redirect host details
+
+    put:
+      tags: [Redirect Hosts]
+      summary: Update redirect host
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRedirectHost'
+      responses:
+        '200':
+          description: Redirect host updated
+
+    delete:
+      tags: [Redirect Hosts]
+      summary: Delete redirect host
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Redirect host deleted
+
+  # ============================================================================
+  # Access Lists
+  # ============================================================================
+  /access-lists:
+    get:
+      tags: [Access Lists]
+      summary: List access lists
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of access lists
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AccessList'
+
+    post:
+      tags: [Access Lists]
+      summary: Create access list
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAccessList'
+      responses:
+        '201':
+          description: Access list created
+
+  /access-lists/{id}:
+    get:
+      tags: [Access Lists]
+      summary: Get access list
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Access list details
+
+    put:
+      tags: [Access Lists]
+      summary: Update access list
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAccessList'
+      responses:
+        '200':
+          description: Access list updated
+
+    delete:
+      tags: [Access Lists]
+      summary: Delete access list
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Access list deleted
+
+  # ============================================================================
+  # Challenge (CAPTCHA)
+  # ============================================================================
+  /proxy-hosts/{id}/challenge:
+    get:
+      tags: [Challenge]
+      summary: Get challenge config for proxy host
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProxyHostId'
+      responses:
+        '200':
+          description: Challenge configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChallengeConfig'
+
+    put:
+      tags: [Challenge]
+      summary: Update challenge config
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProxyHostId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChallengeConfig'
+      responses:
+        '200':
+          description: Challenge config updated
+
+    delete:
+      tags: [Challenge]
+      summary: Delete challenge config
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProxyHostId'
+      responses:
+        '204':
+          description: Challenge config deleted
+
+  /challenge/verify:
+    post:
+      tags: [Challenge]
+      summary: Verify CAPTCHA solution
+      description: Public endpoint for CAPTCHA verification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, solution]
+              properties:
+                token:
+                  type: string
+                solution:
+                  type: string
+      responses:
+        '200':
+          description: Verification result
+
+  # ============================================================================
+  # Cloud Providers
+  # ============================================================================
+  /cloud-providers:
+    get:
+      tags: [Cloud Providers]
+      summary: List cloud providers
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of cloud providers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CloudProvider'
+
+    post:
+      tags: [Cloud Providers]
+      summary: Create cloud provider
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCloudProvider'
+      responses:
+        '201':
+          description: Cloud provider created
+
+  /cloud-providers/{slug}:
+    get:
+      tags: [Cloud Providers]
+      summary: Get cloud provider by slug
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cloud provider details
+
+    put:
+      tags: [Cloud Providers]
+      summary: Update cloud provider
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCloudProvider'
+      responses:
+        '200':
+          description: Cloud provider updated
+
+    delete:
+      tags: [Cloud Providers]
+      summary: Delete cloud provider
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Cloud provider deleted
+
+  /proxy-hosts/{id}/cloud-blocking:
+    get:
+      tags: [Cloud Providers]
+      summary: Get cloud blocking config for proxy host
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProxyHostId'
+      responses:
+        '200':
+          description: Cloud blocking configuration
+
+    put:
+      tags: [Cloud Providers]
+      summary: Update cloud blocking config
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProxyHostId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+                blocked_providers:
+                  type: array
+                  items:
+                    type: string
+                challenge_mode:
+                  type: boolean
+      responses:
+        '200':
+          description: Cloud blocking config updated
+
+  # ============================================================================
+  # Exploit Rules
+  # ============================================================================
+  /exploit-rules:
+    get:
+      tags: [Exploit Rules]
+      summary: List exploit block rules
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of exploit rules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ExploitRule'
+
+    post:
+      tags: [Exploit Rules]
+      summary: Create exploit rule
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateExploitRule'
+      responses:
+        '201':
+          description: Exploit rule created
+
+  /exploit-rules/{id}:
+    get:
+      tags: [Exploit Rules]
+      summary: Get exploit rule
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Exploit rule details
+
+    put:
+      tags: [Exploit Rules]
+      summary: Update exploit rule
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateExploitRule'
+      responses:
+        '200':
+          description: Exploit rule updated
+
+    delete:
+      tags: [Exploit Rules]
+      summary: Delete exploit rule
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Exploit rule deleted
+
+  /exploit-rules/{id}/toggle:
+    post:
+      tags: [Exploit Rules]
+      summary: Toggle exploit rule enabled status
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Rule toggled
+
+  # ============================================================================
+  # URI Blocking
+  # ============================================================================
+  /proxy-hosts/{id}/uri-block:
+    get:
+      tags: [Security]
+      summary: Get URI block config for proxy host
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProxyHostId'
+      responses:
+        '200':
+          description: URI block configuration
+
+    put:
+      tags: [Security]
+      summary: Update URI block config
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProxyHostId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/URIBlockConfig'
+      responses:
+        '200':
+          description: URI block config updated
+
+  /global-uri-block:
+    get:
+      tags: [Security]
+      summary: Get global URI block settings
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Global URI block settings
+
+    put:
+      tags: [Security]
+      summary: Update global URI block settings
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GlobalURIBlockConfig'
+      responses:
+        '200':
+          description: Global URI block settings updated
+
+  # ============================================================================
+  # Fail2ban
+  # ============================================================================
+  /proxy-hosts/{id}/fail2ban:
+    get:
+      tags: [Security]
+      summary: Get fail2ban config for proxy host
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProxyHostId'
+      responses:
+        '200':
+          description: Fail2ban configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Fail2banConfig'
+
+    put:
+      tags: [Security]
+      summary: Update fail2ban config
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProxyHostId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Fail2banConfig'
+      responses:
+        '200':
+          description: Fail2ban config updated
+
+  # ============================================================================
+  # IP Ban History
+  # ============================================================================
+  /ip-ban-history:
+    get:
+      tags: [Security]
+      summary: Get IP ban history
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: ip
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+      responses:
+        '200':
+          description: IP ban history
+
+  /ip-ban-history/stats:
+    get:
+      tags: [Security]
+      summary: Get IP ban statistics
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Ban statistics
+
+  # ============================================================================
+  # Logs (Enhanced)
+  # ============================================================================
+  /logs:
+    get:
+      tags: [Logs]
+      summary: Get access logs
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: host
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: integer
+        - name: method
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Access log entries
+
+  /logs/stats:
+    get:
+      tags: [Logs]
+      summary: Get log statistics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [1h, 24h, 7d, 30d]
+            default: 24h
+      responses:
+        '200':
+          description: Log statistics
+
+  /logs/settings:
+    get:
+      tags: [Logs]
+      summary: Get log settings
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Log settings
+
+    put:
+      tags: [Logs]
+      summary: Update log settings
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogSettings'
+      responses:
+        '200':
+          description: Log settings updated
+
+  # ============================================================================
+  # Nginx Management
+  # ============================================================================
+  /nginx/sync:
+    post:
+      tags: [Nginx]
+      summary: Sync nginx configuration
+      description: Regenerate all nginx configs and reload
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Sync completed
+
+  /nginx/reload:
+    post:
+      tags: [Nginx]
+      summary: Reload nginx
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Nginx reloaded
+
+  /nginx/test:
+    post:
+      tags: [Nginx]
+      summary: Test nginx configuration
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Configuration valid
+        '400':
+          description: Configuration invalid
+
+  # ============================================================================
+  # Certificate History
+  # ============================================================================
+  /certificates/{id}/history:
+    get:
+      tags: [Certificates]
+      summary: Get certificate renewal history
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Certificate history
+
+  # ============================================================================
+  # Dashboard (Enhanced)
+  # ============================================================================
+  /dashboard/geoip-stats:
+    get:
+      tags: [Settings]
+      summary: Get GeoIP statistics for dashboard
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: GeoIP statistics by country
+
+  /dashboard/hourly-stats:
+    get:
+      tags: [Settings]
+      summary: Get hourly request statistics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: hours
+          in: query
+          schema:
+            type: integer
+            default: 24
+      responses:
+        '200':
+          description: Hourly statistics
+
+  # ============================================================================
+  # Bots
+  # ============================================================================
+  /bots/known:
+    get:
+      tags: [Security]
+      summary: Get list of known bots
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of known bots (good and bad)
+
+  # ============================================================================
+  # Security Headers Presets
+  # ============================================================================
+  /security-headers/presets:
+    get:
+      tags: [Security]
+      summary: Get security header presets
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Available presets
+
+  /proxy-hosts/{id}/security-headers/preset/{preset}:
+    post:
+      tags: [Security]
+      summary: Apply security header preset
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProxyHostId'
+        - name: preset
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [strict, balanced, relaxed]
+      responses:
+        '200':
+          description: Preset applied
+
 # ============================================================================
 # Components
 # ============================================================================
@@ -1610,6 +2538,310 @@ components:
         created_at:
           type: string
           format: date-time
+
+    DNSProvider:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          type: string
+          enum: [cloudflare, duckdns, dynu]
+        is_default:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    CreateDNSProvider:
+      type: object
+      required: [name, type, credentials]
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [cloudflare, duckdns, dynu]
+        credentials:
+          type: object
+          description: Provider-specific credentials
+        is_default:
+          type: boolean
+
+    RedirectHost:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        domain_names:
+          type: array
+          items:
+            type: string
+        forward_scheme:
+          type: string
+          enum: [http, https, auto]
+        forward_domain:
+          type: string
+        preserve_path:
+          type: boolean
+        redirect_code:
+          type: integer
+          enum: [301, 302, 307, 308]
+        enabled:
+          type: boolean
+        ssl_enabled:
+          type: boolean
+        certificate_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+
+    CreateRedirectHost:
+      type: object
+      required: [domain_names, forward_domain]
+      properties:
+        domain_names:
+          type: array
+          items:
+            type: string
+        forward_scheme:
+          type: string
+          enum: [http, https, auto]
+          default: auto
+        forward_domain:
+          type: string
+        preserve_path:
+          type: boolean
+          default: true
+        redirect_code:
+          type: integer
+          enum: [301, 302, 307, 308]
+          default: 301
+
+    AccessList:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        mode:
+          type: string
+          enum: [allow, deny]
+        entries:
+          type: array
+          items:
+            type: object
+            properties:
+              ip:
+                type: string
+              description:
+                type: string
+        created_at:
+          type: string
+          format: date-time
+
+    CreateAccessList:
+      type: object
+      required: [name, mode]
+      properties:
+        name:
+          type: string
+        mode:
+          type: string
+          enum: [allow, deny]
+        entries:
+          type: array
+          items:
+            type: object
+            properties:
+              ip:
+                type: string
+              description:
+                type: string
+
+    ChallengeConfig:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        type:
+          type: string
+          enum: [captcha, js_challenge]
+        difficulty:
+          type: string
+          enum: [easy, medium, hard]
+        expiry:
+          type: integer
+          description: Challenge validity in seconds
+        exempt_search_bots:
+          type: boolean
+        exempt_ips:
+          type: array
+          items:
+            type: string
+
+    CloudProvider:
+      type: object
+      properties:
+        slug:
+          type: string
+        name:
+          type: string
+        enabled:
+          type: boolean
+        ip_ranges:
+          type: array
+          items:
+            type: string
+        last_updated:
+          type: string
+          format: date-time
+
+    CreateCloudProvider:
+      type: object
+      required: [slug, name]
+      properties:
+        slug:
+          type: string
+        name:
+          type: string
+        enabled:
+          type: boolean
+        ip_ranges:
+          type: array
+          items:
+            type: string
+        ip_source_url:
+          type: string
+
+    ExploitRule:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        pattern:
+          type: string
+        action:
+          type: string
+          enum: [block, log, challenge]
+        enabled:
+          type: boolean
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+
+    CreateExploitRule:
+      type: object
+      required: [name, pattern]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        pattern:
+          type: string
+        action:
+          type: string
+          enum: [block, log, challenge]
+        enabled:
+          type: boolean
+          default: true
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+
+    URIBlockConfig:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        rules:
+          type: array
+          items:
+            type: object
+            properties:
+              pattern:
+                type: string
+              is_regex:
+                type: boolean
+              action:
+                type: string
+                enum: [block, challenge]
+
+    GlobalURIBlockConfig:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        rules:
+          type: array
+          items:
+            type: object
+            properties:
+              pattern:
+                type: string
+              is_regex:
+                type: boolean
+              action:
+                type: string
+                enum: [block, challenge]
+              description:
+                type: string
+
+    Fail2banConfig:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        max_retries:
+          type: integer
+          minimum: 1
+        find_time:
+          type: integer
+          description: Time window in seconds
+        ban_time:
+          type: integer
+          description: Ban duration in seconds
+        filter_patterns:
+          type: array
+          items:
+            type: string
+
+    LogSettings:
+      type: object
+      properties:
+        retention_days:
+          type: integer
+        compression_enabled:
+          type: boolean
+        exclude_paths:
+          type: array
+          items:
+            type: string
+        exclude_user_agents:
+          type: array
+          items:
+            type: string
+        log_body:
+          type: boolean
+        log_headers:
+          type: boolean
 
 security:
   - BearerAuth: []

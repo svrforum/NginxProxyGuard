@@ -1416,7 +1416,8 @@ geckodriver'::text,
     ui_font_family character varying(50) DEFAULT 'system'::character varying,
     global_block_exploits_exceptions text DEFAULT '^/wp-json/
 ^/api/v1/challenge/
-^/wp-admin/admin-ajax.php'::text
+^/wp-admin/admin-ajax.php
+^/webapi/'::text
 );
 COMMENT ON COLUMN public.system_settings.access_log_retention_days IS 'Retention period for access logs in days (default: 3 years)';
 COMMENT ON COLUMN public.system_settings.waf_log_retention_days IS 'Retention period for WAF/ModSecurity logs in days (default: 3 months)';
