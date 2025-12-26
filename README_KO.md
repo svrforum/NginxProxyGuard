@@ -8,6 +8,7 @@
 
 <img src="./NPG_banner.png" alt="Nginx Proxy Guard" width="800">
 
+[![Version](https://img.shields.io/badge/Version-1.3.7-brightgreen?style=for-the-badge)]()
 [![Nginx](https://img.shields.io/badge/Nginx-1.28.0-009639?style=for-the-badge&logo=nginx&logoColor=white)](https://nginx.org/)
 [![ModSecurity](https://img.shields.io/badge/ModSecurity-v3.0.14-red?style=for-the-badge)](https://modsecurity.org/)
 [![OWASP CRS](https://img.shields.io/badge/OWASP_CRS-v4.21.0-orange?style=for-the-badge)](https://coreruleset.org/)
@@ -22,7 +23,8 @@
   <a href="https://nginxproxyguard.com">웹사이트</a> •
   <a href="#-주요-기능">기능</a> •
   <a href="#-빠른-시작">빠른 시작</a> •
-  <a href="#-기술-스택">기술 스택</a>
+  <a href="#-기술-스택">기술 스택</a> •
+  <a href="#-api-문서">API</a>
 </p>
 
 ---
@@ -33,23 +35,53 @@
 
 **강력한 보안, 쉬운 관리** - Nginx의 복잡함은 줄이고, 보안은 극대화
 
-### SSL 자동화
-Let's Encrypt 통합 및 자동 갱신. DNS-01 챌린지(Cloudflare)를 통한 와일드카드 인증서 지원.
+### 🔒 SSL 자동화
+Let's Encrypt 통합 및 자동 갱신. DNS-01 챌린지를 통한 와일드카드 인증서 지원. **Cloudflare**, **DuckDNS**, **Dynu** 등 다양한 DNS 프로바이더 지원.
 
-### 봇 보호
-80개 이상의 악성 봇과 50개 이상의 AI 크롤러를 자동 차단. 검색 엔진 허용 목록으로 정상 트래픽 보장.
+### 🤖 봇 보호
+80개 이상의 악성 봇과 50개 이상의 AI 크롤러를 자동 차단. 검색 엔진 허용 목록으로 정상 트래픽 보장. 의심스러운 요청에 대한 CAPTCHA 챌린지 모드.
 
-### 직관적인 대시보드
-실시간 트래픽 모니터링, 차단 로그, 서버 상태를 한눈에 확인.
+### 📊 직관적인 대시보드
+실시간 트래픽 모니터링, 보안 차단 로그, 인증서 상태, 서버 상태를 한눈에 확인.
 
-### GeoIP 접근 제어
-국가별 트래픽 차단/허용 및 인터랙티브 지도 시각화. MaxMind GeoIP2 통합.
+### 🌍 GeoIP 접근 제어
+국가별 트래픽 차단/허용 및 인터랙티브 세계 지도 시각화. MaxMind GeoIP2 통합 및 자동 업데이트.
 
-### 로그 뷰어 & 분석
-강력한 필터링과 제외 패턴으로 Nginx 접근/에러 로그 분석.
+### 📝 로그 뷰어 & 분석
+강력한 필터링과 제외 패턴으로 Nginx 접근/에러 로그 분석. **TimescaleDB** 시계열 최적화 및 자동 압축.
 
-### 웹 애플리케이션 방화벽
-ModSecurity v3 + OWASP Core Rule Set v4.21. Paranoia Level 1-4, 호스트별 룰 예외 처리.
+### 🛡️ 웹 애플리케이션 방화벽
+ModSecurity v3 + OWASP Core Rule Set v4.21. Paranoia Level 1-4, 호스트별 룰 예외 처리, 익스플로잇 차단 규칙.
+
+### ⚡ 요청 속도 제한
+IP, URI, 또는 IP+URI 조합별 설정 가능한 속도 제한으로 DDoS 및 무차별 대입 공격 방어.
+
+### 🔀 로드 밸런싱 & 업스트림
+라운드 로빈, 최소 연결, IP 해시, 가중치 분산으로 다중 백엔드 서버 지원. 헬스 체크 포함.
+
+### 🔐 보안 헤더
+HSTS, X-Frame-Options, X-Content-Type-Options, X-XSS-Protection, Referrer-Policy, Content-Security-Policy.
+
+### 📋 접근 목록
+화이트리스트 또는 블랙리스트를 위한 IP 기반 접근 제어 목록. CIDR 표기법 지원.
+
+### 💾 백업 & 복원
+인증서, 설정, 데이터베이스를 포함한 전체 구성 백업. 예약된 자동 백업 지원.
+
+### 🔑 API 토큰 관리
+세분화된 권한, IP 제한, 만료 기간이 있는 API 토큰 생성. CI/CD 통합에 적합.
+
+### 🔄 리다이렉트 호스트
+HTTP에서 HTTPS 리다이렉트, 도메인 리다이렉트, 커스텀 리다이렉트 규칙.
+
+### 📜 감사 로그
+사용자 귀속 및 타임스탬프와 함께 모든 구성 변경 사항 추적.
+
+### 🔐 2단계 인증
+TOTP(Google Authenticator, Authy 등)를 사용한 관리자 계정용 선택적 2FA.
+
+### 🌐 HTTP/3 & QUIC
+UDP를 통한 더 빠르고 안정적인 연결을 위한 최신 프로토콜 지원.
 
 ---
 
@@ -59,12 +91,13 @@ ModSecurity v3 + OWASP Core Rule Set v4.21. Paranoia Level 1-4, 호스트별 룰
 
 | 기술 | 용도 |
 |------|------|
-| **Nginx** | HTTP/3 & QUIC 지원 고성능 리버스 프록시 코어 |
-| **PostgreSQL** | 설정 및 로그 데이터의 안전한 저장, 쿼리 최적화 |
-| **Valkey (Redis)** | 고속 캐싱, 세션 관리, 실시간 데이터 처리 |
-| **Go (Golang)** | 효율적인 리소스 관리와 동시성 처리 백엔드 API |
-| **React & TypeScript** | 타입 안전성과 컴포넌트 기반의 모던 UI |
-| **ModSecurity** | OWASP Core Rule Set 기반 웹 애플리케이션 방화벽 |
+| **Nginx 1.28** | HTTP/3 & QUIC 지원 고성능 리버스 프록시 코어 |
+| **TimescaleDB** | 로그 압축을 위한 시계열 최적화 PostgreSQL |
+| **Valkey 8** | Redis 호환 고속 캐싱 및 세션 관리 |
+| **Go 1.23** | 효율적인 리소스 관리와 동시성 처리 백엔드 API |
+| **React 18 & TypeScript** | 타입 안전성과 컴포넌트 기반의 모던 UI |
+| **ModSecurity 3** | OWASP Core Rule Set v4.21 기반 웹 애플리케이션 방화벽 |
+| **MaxMind GeoIP2** | 국가별 접근 제어를 위한 지리 IP 데이터베이스 |
 
 ---
 
@@ -111,6 +144,51 @@ docker compose up -d
 docker compose pull
 docker compose up -d
 ```
+
+---
+
+## 📚 API 문서
+
+Nginx Proxy Guard는 자동화 및 통합을 위한 포괄적인 REST API를 제공합니다.
+
+### 인증
+
+모든 API 엔드포인트는 다음을 통해 인증이 필요합니다:
+- **JWT 토큰**: `Authorization: Bearer <jwt_token>` (로그인에서 획득)
+- **API 토큰**: `Authorization: Bearer ng_<api_token>` (자동화용)
+
+### 주요 엔드포인트
+
+| 엔드포인트 | 설명 |
+|----------|------|
+| `POST /api/v1/auth/login` | 인증 및 JWT 토큰 획득 |
+| `GET /api/v1/proxy-hosts` | 모든 프록시 호스트 목록 |
+| `POST /api/v1/proxy-hosts` | 새 프록시 호스트 생성 |
+| `GET /api/v1/certificates` | SSL 인증서 목록 |
+| `POST /api/v1/certificates` | 새 인증서 요청 |
+| `GET /api/v1/waf/rules` | WAF 규칙 목록 |
+| `POST /api/v1/backups` | 백업 생성 |
+| `GET /api/v1/dashboard` | 대시보드 통계 |
+
+### Swagger UI
+
+다음에서 대화형 API 문서에 접근하세요:
+```
+https://localhost:81/api/v1/swagger
+```
+
+---
+
+## ⚙️ 환경 변수
+
+| 변수 | 설명 | 기본값 |
+|------|------|--------|
+| `DB_PASSWORD` | PostgreSQL 비밀번호 | (필수) |
+| `JWT_SECRET` | JWT 토큰용 시크릿 | (필수) |
+| `TZ` | 시간대 | `UTC` |
+| `DB_USER` | PostgreSQL 사용자 | `postgres` |
+| `DB_NAME` | 데이터베이스 이름 | `nginx_proxy_guard` |
+| `DOCKER_API_VERSION` | Docker API 버전 (시놀로지용) | 자동 감지 |
 
 ---
 
