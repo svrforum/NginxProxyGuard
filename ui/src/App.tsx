@@ -39,6 +39,7 @@ import { getAuthStatus, logout, getToken, User } from './api/auth'
 import { apiPost } from './api/client'
 import type { ProxyHost } from './types/proxy-host'
 import { useDarkMode } from './hooks/useDarkMode'
+import { SyncProgressModal, SyncAllResult } from './components/SyncProgressModal'
 
 interface HealthResponse {
   status: string
@@ -86,24 +87,54 @@ function AppContent({ user, onLogout }: AppContentProps) {
   const [initialFormTab, setInitialFormTab] = useState<'basic' | 'ssl' | 'security' | 'performance' | 'advanced' | 'protection'>('basic')
   const [showAccountSettings, setShowAccountSettings] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
+  const [showSyncModal, setShowSyncModal] = useState(false)
+  const [syncResult, setSyncResult] = useState<SyncAllResult | null>(null)
 
   const health = useQuery({ queryKey: ['health'], queryFn: fetchHealth, refetchInterval: 10000 })
 
   const handleSyncAll = async () => {
     if (isSyncing) return
 
-    const confirmed = confirm(t('common:actions.syncAllConfirm', 'Regenerate all Nginx configs for Proxy Hosts and Redirect Hosts?'))
-    if (!confirmed) return
-
+    // Show modal immediately
+    setShowSyncModal(true)
+    setSyncResult(null)
     setIsSyncing(true)
+
     try {
-      await apiPost('/api/v1/proxy-hosts/sync')
-      await apiPost('/api/v1/redirect-hosts/sync')
+      // Sync proxy hosts
+      const proxyResult = await apiPost<SyncAllResult>('/api/v1/proxy-hosts/sync')
+
+      // Sync redirect hosts (this uses the simpler endpoint)
+      try {
+        await apiPost('/api/v1/redirect-hosts/sync')
+      } catch (redirectError) {
+        // If redirect sync fails, add it to the result but don't override proxy result
+        console.error('Redirect hosts sync failed:', redirectError)
+        // Proxy result already has the nginx test/reload status
+      }
+
+      setSyncResult(proxyResult)
     } catch (error) {
       console.error('Sync failed:', error)
+      // Create a minimal error result
+      const apiError = error as { message: string; details?: string }
+      setSyncResult({
+        total_hosts: 0,
+        success_count: 0,
+        failed_count: 1,
+        hosts: [],
+        test_success: false,
+        test_error: apiError.details || apiError.message,
+        reload_success: false,
+      })
     } finally {
       setIsSyncing(false)
     }
+  }
+
+  const closeSyncModal = () => {
+    setShowSyncModal(false)
+    setSyncResult(null)
   }
 
   const handleEdit = (host: ProxyHost, tab?: 'basic' | 'ssl' | 'security' | 'performance' | 'advanced' | 'protection') => {
@@ -372,6 +403,14 @@ function AppContent({ user, onLogout }: AppContentProps) {
           onLogout={handleLogout}
         />
       )}
+
+      {/* Sync Progress Modal */}
+      <SyncProgressModal
+        isOpen={showSyncModal}
+        isLoading={isSyncing}
+        result={syncResult}
+        onClose={closeSyncModal}
+      />
 
       {/* Footer */}
       <footer className="mt-auto border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">

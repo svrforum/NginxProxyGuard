@@ -11,14 +11,29 @@ export function getAuthHeaders(): HeadersInit {
   return headers
 }
 
+// Custom error class to include details from server
+export class ApiError extends Error {
+  details?: string
+  status: number
+
+  constructor(message: string, status: number, details?: string) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.details = details
+  }
+}
+
 export async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     if (response.status === 401) {
       clearToken()
       window.location.reload()
     }
-    const error = await response.json().catch(() => ({ error: 'Unknown error' }))
-    throw new Error(error.error || `HTTP ${response.status}`)
+    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+    const message = errorData.error || `HTTP ${response.status}`
+    const details = errorData.details
+    throw new ApiError(message, response.status, details)
   }
   return response.json()
 }

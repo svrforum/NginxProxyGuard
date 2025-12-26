@@ -7,7 +7,7 @@ import { listDNSProviders } from '../../../api/dns-providers'
 import { getAccessLists, getGeoRestriction, setGeoRestriction, deleteGeoRestriction, getCountryCodes } from '../../../api/access'
 import { getBotFilter, updateBotFilter } from '../../../api/security'
 import { getGeoIPStatus } from '../../../api/settings'
-import { api } from '../../../api/client'
+import { api, ApiError } from '../../../api/client'
 import type { ProxyHost, CreateProxyHostRequest } from '../../../types/proxy-host'
 import type { CreateCertificateRequest } from '../../../types/certificate'
 import type { BotFilterState, GeoDataState, FormErrors, CertificateState } from '../types'
@@ -55,6 +55,7 @@ export function useProxyHostForm(host: ProxyHost | null | undefined, onClose: ()
     isOpen: false,
     currentStep: 0,
     error: null as string | null,
+    errorDetails: null as string | null,
   })
 
   // Certificate state
@@ -237,7 +238,7 @@ export function useProxyHostForm(host: ProxyHost | null | undefined, onClose: ()
   // Helper to close progress modal after delay
   const closeProgressWithDelay = (delay = 800) => {
     setTimeout(() => {
-      setSaveProgress({ isOpen: false, currentStep: 0, error: null })
+      setSaveProgress({ isOpen: false, currentStep: 0, error: null, errorDetails: null })
       onClose()
     }, delay)
   }
@@ -304,9 +305,11 @@ export function useProxyHostForm(host: ProxyHost | null | undefined, onClose: ()
       closeProgressWithDelay()
     },
     onError: (error) => {
+      const isApiError = error instanceof ApiError
       setSaveProgress(prev => ({
         ...prev,
         error: error instanceof Error ? error.message : 'Failed to create proxy host',
+        errorDetails: isApiError ? error.details || null : null,
       }))
     },
   })
@@ -381,9 +384,11 @@ export function useProxyHostForm(host: ProxyHost | null | undefined, onClose: ()
       closeProgressWithDelay()
     },
     onError: (error) => {
+      const isApiError = error instanceof ApiError
       setSaveProgress(prev => ({
         ...prev,
         error: error instanceof Error ? error.message : 'Failed to update proxy host',
+        errorDetails: isApiError ? error.details || null : null,
       }))
     },
   })
@@ -461,10 +466,10 @@ export function useProxyHostForm(host: ProxyHost | null | undefined, onClose: ()
     e.preventDefault()
 
     // Step 0: Validation
-    setSaveProgress({ isOpen: true, currentStep: 0, error: null })
+    setSaveProgress({ isOpen: true, currentStep: 0, error: null, errorDetails: null })
 
     if (!validate()) {
-      setSaveProgress({ isOpen: false, currentStep: 0, error: null })
+      setSaveProgress({ isOpen: false, currentStep: 0, error: null, errorDetails: null })
       return
     }
 
@@ -474,7 +479,7 @@ export function useProxyHostForm(host: ProxyHost | null | undefined, onClose: ()
     if (formData.ssl_enabled && certMode === 'create') {
       if (domains.length === 0) {
         setErrors({ domain_names: t('validation.addDomainsBeforeCert') })
-        setSaveProgress({ isOpen: false, currentStep: 0, error: null })
+        setSaveProgress({ isOpen: false, currentStep: 0, error: null, errorDetails: null })
         return
       }
 
@@ -484,7 +489,7 @@ export function useProxyHostForm(host: ProxyHost | null | undefined, onClose: ()
       setCertProgress('Creating certificate request...')
       setCertElapsedTime(0)
       // Close save progress modal while cert is being created
-      setSaveProgress({ isOpen: false, currentStep: 0, error: null })
+      setSaveProgress({ isOpen: false, currentStep: 0, error: null, errorDetails: null })
 
       try {
         const certData: CreateCertificateRequest = {
@@ -524,7 +529,7 @@ export function useProxyHostForm(host: ProxyHost | null | undefined, onClose: ()
       setCertProgress(null)
       queryClient.invalidateQueries({ queryKey: ['certificates'] })
       // Re-open save progress modal after cert is created
-      setSaveProgress({ isOpen: true, currentStep: 0, error: null })
+      setSaveProgress({ isOpen: true, currentStep: 0, error: null, errorDetails: null })
     }
 
     const data = {
@@ -545,7 +550,7 @@ export function useProxyHostForm(host: ProxyHost | null | undefined, onClose: ()
 
   // Close progress modal on error
   const closeSaveProgress = () => {
-    setSaveProgress({ isOpen: false, currentStep: 0, error: null })
+    setSaveProgress({ isOpen: false, currentStep: 0, error: null, errorDetails: null })
   }
 
   // Close certificate log modal

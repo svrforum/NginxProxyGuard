@@ -2,6 +2,8 @@
   "saveProgress": {
     "titleCreate": "프록시 호스트 생성 중",
     "titleUpdate": "프록시 호스트 수정 중",
+    "showDetails": "상세 보기",
+    "hideDetails": "상세 숨기기",
     "steps": {
       "server": "서버 처리 중",
       "serverDesc": "DB 저장, 설정 생성, 테스트, Nginx 리로드 중...",

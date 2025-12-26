@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -441,12 +442,16 @@ func (s *ProxyHostService) Create(ctx context.Context, req *model.CreateProxyHos
 		}
 
 		if err := s.nginx.TestConfig(ctx); err != nil {
-			// Rollback config on test failure
+			// Rollback config and DB record on test failure
 			_ = s.nginx.RemoveConfig(ctx, host)
+			_ = s.repo.Delete(ctx, host.ID)
 			return nil, fmt.Errorf("nginx config test failed: %w", err)
 		}
 
 		if err := s.nginx.ReloadNginx(ctx); err != nil {
+			// Rollback config and DB record on reload failure
+			_ = s.nginx.RemoveConfig(ctx, host)
+			_ = s.repo.Delete(ctx, host.ID)
 			return nil, fmt.Errorf("failed to reload nginx: %w", err)
 		}
 	}
@@ -744,40 +749,155 @@ func (s *ProxyHostService) RegenerateConfigsForCertificate(ctx context.Context, 
 	return nil
 }
 
+// SyncHostResult represents the result of syncing a single host
+type SyncHostResult struct {
+	HostID      string   `json:"host_id"`
+	DomainNames []string `json:"domain_names"`
+	Success     bool     `json:"success"`
+	Error       string   `json:"error,omitempty"`
+}
+
+// SyncAllResult represents the result of syncing all hosts
+type SyncAllResult struct {
+	TotalHosts   int              `json:"total_hosts"`
+	SuccessCount int              `json:"success_count"`
+	FailedCount  int              `json:"failed_count"`
+	Hosts        []SyncHostResult `json:"hosts"`
+	TestSuccess  bool             `json:"test_success"`
+	TestError    string           `json:"test_error,omitempty"`
+	ReloadSuccess bool            `json:"reload_success"`
+	ReloadError   string          `json:"reload_error,omitempty"`
+}
+
+// parseNginxErrorForHost parses nginx test error to find which host's config file caused the failure
+// Returns the domain name extracted from the config filename (e.g., "proxy_host_seres.conf" -> "seres")
+func parseNginxErrorForHost(errorMsg string) string {
+	// Pattern matches config filenames like "proxy_host_example_com.conf:123" or "/etc/nginx/conf.d/proxy_host_example_com.conf:123"
+	re := regexp.MustCompile(`proxy_host_([a-zA-Z0-9_-]+(?:_[a-zA-Z0-9_-]+)*)\.conf`)
+	matches := re.FindStringSubmatch(errorMsg)
+	if len(matches) > 1 {
+		// Convert underscores back to dots (filename uses underscores, domain uses dots)
+		return strings.ReplaceAll(matches[1], "_", ".")
+	}
+	return ""
+}
+
+// findHostByDomain finds which host in the results matches the given domain
+// Returns the index in the hosts slice, or -1 if not found
+func findHostByDomain(hosts []SyncHostResult, domain string) int {
+	domain = strings.ToLower(domain)
+	for i, host := range hosts {
+		for _, d := range host.DomainNames {
+			if strings.ToLower(d) == domain || strings.HasPrefix(strings.ToLower(d), domain+".") || strings.HasPrefix(domain, strings.ToLower(d)+".") {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
 func (s *ProxyHostService) SyncAllConfigs(ctx context.Context) error {
+	result, _ := s.SyncAllConfigsWithDetails(ctx)
+	if result.FailedCount > 0 || !result.TestSuccess || !result.ReloadSuccess {
+		if result.TestError != "" {
+			return fmt.Errorf("nginx config test failed: %s", result.TestError)
+		}
+		if result.ReloadError != "" {
+			return fmt.Errorf("nginx reload failed: %s", result.ReloadError)
+		}
+		for _, h := range result.Hosts {
+			if !h.Success {
+				return fmt.Errorf("failed to generate config for host %s: %s", h.DomainNames[0], h.Error)
+			}
+		}
+	}
+	return nil
+}
+
+func (s *ProxyHostService) SyncAllConfigsWithDetails(ctx context.Context) (*SyncAllResult, error) {
+	result := &SyncAllResult{
+		Hosts: []SyncHostResult{},
+	}
+
 	hosts, err := s.repo.GetAllEnabled(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get enabled hosts: %w", err)
+		return result, fmt.Errorf("failed to get enabled hosts: %w", err)
 	}
+
+	result.TotalHosts = len(hosts)
 
 	// Generate configs for all hosts with full configuration data
 	for _, host := range hosts {
+		hostResult := SyncHostResult{
+			HostID:      host.ID,
+			DomainNames: host.DomainNames,
+			Success:     true,
+		}
+
 		configData := s.getHostConfigData(ctx, &host)
 		if err := s.nginx.GenerateConfigFull(ctx, configData); err != nil {
-			return fmt.Errorf("failed to generate config for host %s: %w", host.ID, err)
+			hostResult.Success = false
+			hostResult.Error = fmt.Sprintf("failed to generate config: %v", err)
+			result.FailedCount++
+			result.Hosts = append(result.Hosts, hostResult)
+			continue
 		}
 
 		// Generate WAF config if WAF is enabled (includes global + host exclusions)
 		if host.WAFEnabled {
 			mergedExclusions, err := s.getMergedWAFExclusions(ctx, host.ID)
 			if err != nil {
-				return fmt.Errorf("failed to get WAF exclusions for host %s: %w", host.ID, err)
+				hostResult.Success = false
+				hostResult.Error = fmt.Sprintf("failed to get WAF exclusions: %v", err)
+				result.FailedCount++
+				result.Hosts = append(result.Hosts, hostResult)
+				continue
 			}
 			if err := s.nginx.GenerateHostWAFConfig(ctx, &host, mergedExclusions); err != nil {
-				return fmt.Errorf("failed to generate WAF config for host %s: %w", host.ID, err)
+				hostResult.Success = false
+				hostResult.Error = fmt.Sprintf("failed to generate WAF config: %v", err)
+				result.FailedCount++
+				result.Hosts = append(result.Hosts, hostResult)
+				continue
 			}
 		}
+
+		result.SuccessCount++
+		result.Hosts = append(result.Hosts, hostResult)
 	}
 
+	// Test nginx config
 	if err := s.nginx.TestConfig(ctx); err != nil {
-		return fmt.Errorf("nginx config test failed: %w", err)
-	}
+		result.TestSuccess = false
+		result.TestError = err.Error()
 
+		// Parse error to identify which host caused the failure
+		failingDomain := parseNginxErrorForHost(err.Error())
+		if failingDomain != "" {
+			hostIdx := findHostByDomain(result.Hosts, failingDomain)
+			if hostIdx >= 0 {
+				// Mark the host as failed and update counts
+				if result.Hosts[hostIdx].Success {
+					result.Hosts[hostIdx].Success = false
+					result.Hosts[hostIdx].Error = err.Error()
+					result.SuccessCount--
+					result.FailedCount++
+				}
+			}
+		}
+		return result, nil
+	}
+	result.TestSuccess = true
+
+	// Reload nginx
 	if err := s.nginx.ReloadNginx(ctx); err != nil {
-		return fmt.Errorf("failed to reload nginx: %w", err)
+		result.ReloadSuccess = false
+		result.ReloadError = err.Error()
+		return result, nil
 	}
+	result.ReloadSuccess = true
 
-	return nil
+	return result, nil
 }
 
 // RegenerateConfigsForCloudProviders regenerates nginx configs for proxy hosts
