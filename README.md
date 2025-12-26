@@ -8,6 +8,7 @@
 
 <img src="./NPG_banner.png" alt="Nginx Proxy Guard" width="800">
 
+[![Version](https://img.shields.io/badge/Version-1.3.7-brightgreen?style=for-the-badge)]()
 [![Nginx](https://img.shields.io/badge/Nginx-1.28.0-009639?style=for-the-badge&logo=nginx&logoColor=white)](https://nginx.org/)
 [![ModSecurity](https://img.shields.io/badge/ModSecurity-v3.0.14-red?style=for-the-badge)](https://modsecurity.org/)
 [![OWASP CRS](https://img.shields.io/badge/OWASP_CRS-v4.21.0-orange?style=for-the-badge)](https://coreruleset.org/)
@@ -22,7 +23,8 @@
   <a href="https://nginxproxyguard.com">Website</a> •
   <a href="#-key-features">Features</a> •
   <a href="#-quick-start">Quick Start</a> •
-  <a href="#-tech-stack">Tech Stack</a>
+  <a href="#-tech-stack">Tech Stack</a> •
+  <a href="#-api-documentation">API</a>
 </p>
 
 ---
@@ -33,23 +35,53 @@
 
 **Robust Security, Easy Management** - Reduced Nginx complexity, maximized security
 
-### SSL Automation
-Let's Encrypt integration with automatic renewal. Supports wildcard certificates via DNS-01 challenge (Cloudflare).
+### 🔒 SSL Automation
+Let's Encrypt integration with automatic renewal. Supports wildcard certificates via DNS-01 challenge. Multiple DNS providers supported: **Cloudflare**, **DuckDNS**, **Dynu**.
 
-### Bot Protection
-Block 80+ malicious bots and 50+ AI crawlers automatically. Search engine allowlist ensures legitimate traffic.
+### 🤖 Bot Protection
+Block 80+ malicious bots and 50+ AI crawlers automatically. Search engine allowlist ensures legitimate traffic. CAPTCHA challenge mode for suspicious requests.
 
-### Intuitive Dashboard
-Real-time traffic monitoring, block logs, and server status at a glance.
+### 📊 Intuitive Dashboard
+Real-time traffic monitoring, security block logs, certificate status, and server health at a glance.
 
-### GeoIP Access Control
-Block or allow traffic by country with interactive map visualization. MaxMind GeoIP2 integration.
+### 🌍 GeoIP Access Control
+Block or allow traffic by country with interactive world map visualization. MaxMind GeoIP2 integration with auto-update.
 
-### Log Viewer & Analytics
-Analyze Nginx access/error logs with powerful filtering and exclusion patterns.
+### 📝 Log Viewer & Analytics
+Analyze Nginx access/error logs with powerful filtering and exclusion patterns. **TimescaleDB** time-series optimization with automatic compression.
 
-### Web Application Firewall
-ModSecurity v3 with OWASP Core Rule Set v4.21. Paranoia Level 1-4, per-host rule exceptions.
+### 🛡️ Web Application Firewall
+ModSecurity v3 with OWASP Core Rule Set v4.21. Paranoia Level 1-4, per-host rule exceptions, exploit blocking rules.
+
+### ⚡ Rate Limiting
+Protect against DDoS and brute-force attacks with configurable rate limits per IP, URI, or IP+URI combination.
+
+### 🔀 Load Balancing & Upstream
+Multiple backend servers with round-robin, least connections, IP hash, or weighted distribution. Health checks included.
+
+### 🔐 Security Headers
+HSTS, X-Frame-Options, X-Content-Type-Options, X-XSS-Protection, Referrer-Policy, and Content-Security-Policy.
+
+### 📋 Access Lists
+IP-based access control lists for whitelisting or blacklisting. Support for CIDR notation.
+
+### 💾 Backup & Restore
+Full configuration backup including certificates, settings, and database. Scheduled auto-backup support.
+
+### 🔑 API Token Management
+Create API tokens with granular permissions, IP restrictions, and expiration. Perfect for CI/CD integration.
+
+### 🔄 Redirect Hosts
+HTTP to HTTPS redirects, domain redirects, and custom redirect rules.
+
+### 📜 Audit Logs
+Track all configuration changes with user attribution and timestamps.
+
+### 🔐 Two-Factor Authentication
+Optional 2FA for admin accounts using TOTP (Google Authenticator, Authy, etc.).
+
+### 🌐 HTTP/3 & QUIC
+Modern protocol support for faster, more reliable connections over UDP.
 
 ---
 
@@ -59,12 +91,13 @@ ModSecurity v3 with OWASP Core Rule Set v4.21. Paranoia Level 1-4, per-host rule
 
 | Technology | Purpose |
 |------------|---------|
-| **Nginx** | High-performance reverse proxy core with HTTP/3 & QUIC support |
-| **PostgreSQL** | Secure storage for configurations and logs with optimized queries |
-| **Valkey (Redis)** | High-speed caching, session management, real-time data processing |
-| **Go (Golang)** | Backend API with efficient resource management and concurrency |
-| **React & TypeScript** | Type-safe, component-based modern UI |
-| **ModSecurity** | Web Application Firewall with OWASP Core Rule Set |
+| **Nginx 1.28** | High-performance reverse proxy core with HTTP/3 & QUIC support |
+| **TimescaleDB** | PostgreSQL with time-series optimization for log compression |
+| **Valkey 8** | Redis-compatible high-speed caching and session management |
+| **Go 1.23** | Backend API with efficient resource management and concurrency |
+| **React 18 & TypeScript** | Type-safe, component-based modern UI |
+| **ModSecurity 3** | Web Application Firewall with OWASP Core Rule Set v4.21 |
+| **MaxMind GeoIP2** | Geographic IP database for country-level access control |
 
 ---
 
@@ -111,6 +144,51 @@ docker compose up -d
 docker compose pull
 docker compose up -d
 ```
+
+---
+
+## 📚 API Documentation
+
+Nginx Proxy Guard provides a comprehensive REST API for automation and integration.
+
+### Authentication
+
+All API endpoints require authentication via:
+- **JWT Token**: `Authorization: Bearer <jwt_token>` (from login)
+- **API Token**: `Authorization: Bearer ng_<api_token>` (for automation)
+
+### Key Endpoints
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /api/v1/auth/login` | Authenticate and get JWT token |
+| `GET /api/v1/proxy-hosts` | List all proxy hosts |
+| `POST /api/v1/proxy-hosts` | Create new proxy host |
+| `GET /api/v1/certificates` | List SSL certificates |
+| `POST /api/v1/certificates` | Request new certificate |
+| `GET /api/v1/waf/rules` | List WAF rules |
+| `POST /api/v1/backups` | Create backup |
+| `GET /api/v1/dashboard` | Get dashboard stats |
+
+### Swagger UI
+
+Access the interactive API documentation at:
+```
+https://localhost:81/api/v1/swagger
+```
+
+---
+
+## ⚙️ Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DB_PASSWORD` | PostgreSQL password | (required) |
+| `JWT_SECRET` | Secret for JWT tokens | (required) |
+| `TZ` | Timezone | `UTC` |
+| `DB_USER` | PostgreSQL user | `postgres` |
+| `DB_NAME` | Database name | `nginx_proxy_guard` |
+| `DOCKER_API_VERSION` | Docker API version (for Synology) | auto-detect |
 
 ---
 

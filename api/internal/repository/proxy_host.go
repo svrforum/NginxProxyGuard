@@ -97,7 +97,7 @@ func (r *ProxyHostRepository) Create(ctx context.Context, req *model.CreateProxy
 	// Set default block_exploits_exceptions when block_exploits is enabled
 	blockExploitsExceptions := req.BlockExploitsExceptions
 	if req.BlockExploits && blockExploitsExceptions == "" {
-		blockExploitsExceptions = "^/wp-json/\n^/api/v1/challenge/"
+		blockExploitsExceptions = "^/wp-json/\n^/api/v1/challenge/\n^/webapi/"
 	}
 
 	// Set default cache TTL if not provided

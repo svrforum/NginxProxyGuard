@@ -79,7 +79,8 @@ func (r *SystemSettingsRepository) getFromDB(ctx context.Context) (*model.System
 		       COALESCE(waf_auto_ban_duration, 3600) as waf_auto_ban_duration,
 		       COALESCE(global_block_exploits_exceptions, '^/wp-json/
 ^/api/v1/challenge/
-^/wp-admin/admin-ajax.php') as global_block_exploits_exceptions,
+^/wp-admin/admin-ajax.php
+^/webapi/') as global_block_exploits_exceptions,
 		       COALESCE(direct_ip_access_action, 'allow') as direct_ip_access_action,
 		       COALESCE(ui_font_family, 'system') as ui_font_family,
 		       COALESCE(system_logs_enabled, true) as system_logs_enabled,
