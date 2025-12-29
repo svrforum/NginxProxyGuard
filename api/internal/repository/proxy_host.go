@@ -55,8 +55,8 @@ func (r *ProxyHostRepository) Create(ctx context.Context, req *model.CreateProxy
 			block_exploits, block_exploits_exceptions,
 			waf_enabled, waf_mode, waf_paranoia_level, waf_anomaly_threshold,
 			advanced_config, proxy_connect_timeout, proxy_send_timeout, proxy_read_timeout,
-			proxy_buffering, client_max_body_size, proxy_max_temp_file_size, enabled
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
+			proxy_buffering, client_max_body_size, proxy_max_temp_file_size, access_list_id, enabled
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
 		RETURNING id, domain_names, forward_scheme, forward_host, forward_port,
 			ssl_enabled, ssl_force_https, ssl_http2, ssl_http3, certificate_id,
 			allow_websocket_upgrade, cache_enabled, cache_static_only, cache_ttl,
@@ -76,6 +76,12 @@ func (r *ProxyHostRepository) Create(ctx context.Context, req *model.CreateProxy
 	var certIDParam sql.NullString
 	if req.CertificateID != nil && *req.CertificateID != "" {
 		certIDParam = sql.NullString{String: *req.CertificateID, Valid: true}
+	}
+
+	// Convert access_list_id to NullString
+	var accessListIDParam sql.NullString
+	if req.AccessListID != nil && *req.AccessListID != "" {
+		accessListIDParam = sql.NullString{String: *req.AccessListID, Valid: true}
 	}
 
 	// Set default WAF mode if not provided
@@ -133,6 +139,7 @@ func (r *ProxyHostRepository) Create(ctx context.Context, req *model.CreateProxy
 		req.ProxyBuffering,
 		req.ClientMaxBodySize,
 		req.ProxyMaxTempFileSize,
+		accessListIDParam,
 		req.Enabled,
 	).Scan(
 		&host.ID,
@@ -517,6 +524,9 @@ func (r *ProxyHostRepository) Update(ctx context.Context, id string, req *model.
 	if req.Enabled != nil {
 		existing.Enabled = *req.Enabled
 	}
+	if req.AccessListID != nil {
+		existing.AccessListID = req.AccessListID
+	}
 
 	query := `
 		UPDATE proxy_hosts SET
@@ -546,8 +556,9 @@ func (r *ProxyHostRepository) Update(ctx context.Context, id string, req *model.
 			proxy_buffering = $24,
 			client_max_body_size = $25,
 			proxy_max_temp_file_size = $26,
-			enabled = $27
-		WHERE id = $28
+			enabled = $27,
+			access_list_id = $28
+		WHERE id = $29
 		RETURNING updated_at
 	`
 
@@ -555,6 +566,12 @@ func (r *ProxyHostRepository) Update(ctx context.Context, id string, req *model.
 	var certIDParam sql.NullString
 	if existing.CertificateID != nil && *existing.CertificateID != "" {
 		certIDParam = sql.NullString{String: *existing.CertificateID, Valid: true}
+	}
+
+	// Convert access_list_id to NullString for update
+	var accessListIDParam sql.NullString
+	if existing.AccessListID != nil && *existing.AccessListID != "" {
+		accessListIDParam = sql.NullString{String: *existing.AccessListID, Valid: true}
 	}
 
 	err = r.db.QueryRowContext(ctx, query,
@@ -585,6 +602,7 @@ func (r *ProxyHostRepository) Update(ctx context.Context, id string, req *model.
 		existing.ClientMaxBodySize,
 		existing.ProxyMaxTempFileSize,
 		existing.Enabled,
+		accessListIDParam,
 		id,
 	).Scan(&existing.UpdatedAt)
 
