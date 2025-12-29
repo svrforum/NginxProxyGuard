@@ -262,6 +262,15 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Get tag message
+        id: tag_message
+        run: |
+          # Get the annotated tag message (excluding the tag name line)
+          TAG_MSG=$(git tag -l --format='%(contents)' ${GITHUB_REF#refs/tags/} | tail -n +2)
+          echo "message<<EOF" >> $GITHUB_OUTPUT
+          echo "$TAG_MSG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Generate changelog
         id: changelog
         env:
@@ -269,47 +278,27 @@ jobs:
         run: |
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
 
-          # Generate full changelog with commit subject and body
-          generate_changelog() {
-            local range="$1"
-            local changelog=""
-
-            # Get commit hashes
-            local commits=$(git log --pretty=format:"%H" $range)
-
-            for hash in $commits; do
-              # Get subject (first line)
-              local subject=$(git log -1 --pretty=format:"%s" $hash)
-
-              # Skip version bump commits
-              if echo "$subject" | grep -q "^chore: Bump version"; then
-                continue
-              fi
-
-              # Get body (remaining lines, trimmed)
-              local body=$(git log -1 --pretty=format:"%b" $hash | sed '/^$/d' | sed 's/^/  /')
-
-              # Add to changelog
-              if [ -n "$body" ]; then
-                changelog="${changelog}### ${subject}
-
-${body}
-
-"
-              else
-                changelog="${changelog}- ${subject}
-"
-              fi
-            done
-
-            echo "$changelog"
-          }
-
+          # Generate changelog with full commit messages
           if [ -n "$PREV_TAG" ]; then
-            CHANGELOG=$(generate_changelog "$PREV_TAG..HEAD")
+            RANGE="$PREV_TAG..HEAD"
           else
-            CHANGELOG=$(generate_changelog "-20")
+            RANGE="-20"
           fi
+
+          CHANGELOG=""
+          for hash in $(git log --pretty=format:"%H" $RANGE); do
+            subject=$(git log -1 --pretty=format:"%s" $hash)
+            # Skip version bump commits
+            if echo "$subject" | grep -q "^chore: Bump version"; then
+              continue
+            fi
+            body=$(git log -1 --pretty=format:"%b" $hash | sed '/^$/d' | sed 's/^/  /')
+            if [ -n "$body" ]; then
+              CHANGELOG="${CHANGELOG}### ${subject}"$'\n\n'"${body}"$'\n\n'
+            else
+              CHANGELOG="${CHANGELOG}- ${subject}"$'\n'
+            fi
+          done
 
           echo "changelog<<EOF" >> $GITHUB_OUTPUT
           echo "$CHANGELOG" >> $GITHUB_OUTPUT
@@ -338,6 +327,10 @@ ${body}
         with:
           name: v${{ needs.build-and-test.outputs.version }}
           body: |
+            ${{ steps.tag_message.outputs.message }}
+
+            ---
+
             ## Docker Images
 
             ```bash
@@ -358,7 +351,7 @@ ${body}
 
             ${{ steps.changelog.outputs.contributors != '' && format('## Thanks to Contributors 🙏\nThank you for your contributions!\n{0}\n', steps.changelog.outputs.contributors) || '' }}
 
-            ## Changes
+            ## Commits
             ${{ steps.changelog.outputs.changelog }}
           draft: false
           prerelease: ${{ contains(github.ref, '-rc') || contains(github.ref, '-beta') || contains(github.ref, '-alpha') }}
