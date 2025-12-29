@@ -692,7 +692,7 @@ CREATE TABLE IF NOT EXISTS public.logs (
     http_x_forwarded_for text,
     severity public.log_severity,
     error_message text,
-    rule_id integer,
+    rule_id bigint,
     rule_message text,
     rule_severity text,
     rule_data text,
@@ -734,7 +734,7 @@ CREATE TABLE IF NOT EXISTS public.logs_partitioned (
     http_x_forwarded_for text,
     severity public.log_severity,
     error_message text,
-    rule_id integer,
+    rule_id bigint,
     rule_message text,
     rule_severity text,
     rule_data text,
@@ -772,7 +772,7 @@ CREATE TABLE IF NOT EXISTS public.logs_p2025_12 (
     http_x_forwarded_for text,
     severity public.log_severity,
     error_message text,
-    rule_id integer,
+    rule_id bigint,
     rule_message text,
     rule_severity text,
     rule_data text,
@@ -808,7 +808,7 @@ CREATE TABLE IF NOT EXISTS public.logs_p2026_01 (
     http_x_forwarded_for text,
     severity public.log_severity,
     error_message text,
-    rule_id integer,
+    rule_id bigint,
     rule_message text,
     rule_severity text,
     rule_data text,
@@ -844,7 +844,7 @@ CREATE TABLE IF NOT EXISTS public.logs_p2026_02 (
     http_x_forwarded_for text,
     severity public.log_severity,
     error_message text,
-    rule_id integer,
+    rule_id bigint,
     rule_message text,
     rule_severity text,
     rule_data text,
@@ -880,7 +880,7 @@ CREATE TABLE IF NOT EXISTS public.logs_p2026_03 (
     http_x_forwarded_for text,
     severity public.log_severity,
     error_message text,
-    rule_id integer,
+    rule_id bigint,
     rule_message text,
     rule_severity text,
     rule_data text,
@@ -916,7 +916,7 @@ CREATE TABLE IF NOT EXISTS public.logs_p_default (
     http_x_forwarded_for text,
     severity public.log_severity,
     error_message text,
-    rule_id integer,
+    rule_id bigint,
     rule_message text,
     rule_severity text,
     rule_data text,
@@ -2053,3 +2053,104 @@ ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS cache_ttl character vary
 -- Add column comments
 COMMENT ON COLUMN public.proxy_hosts.cache_static_only IS 'Only cache static assets (js, css, images, fonts) - excludes API paths';
 COMMENT ON COLUMN public.proxy_hosts.cache_ttl IS 'Cache duration for static assets (e.g., 1h, 7d, 30m)';
+
+-- ============================================================================
+-- BUG FIXES (v1.3.9+)
+-- ============================================================================
+
+-- Fix 1: rule_id integer overflow (ModSecurity rules can exceed 2147483647)
+-- Change rule_id from INTEGER to BIGINT for logs_partitioned (TimescaleDB hypertable)
+-- This requires decompressing all chunks first if compression is enabled
+DO $$
+DECLARE
+    current_type TEXT;
+    chunk_record RECORD;
+    is_timescaledb BOOLEAN := FALSE;
+    cutoff_date TIMESTAMP WITH TIME ZONE := NOW() - INTERVAL '3 days';
+BEGIN
+    -- Check if rule_id is already BIGINT
+    SELECT data_type INTO current_type
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+    AND table_name = 'logs_partitioned'
+    AND column_name = 'rule_id';
+
+    IF current_type = 'bigint' THEN
+        RAISE NOTICE 'rule_id is already BIGINT, skipping migration';
+        RETURN;
+    END IF;
+
+    -- Check if TimescaleDB is being used
+    SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname = 'timescaledb') INTO is_timescaledb;
+
+    IF is_timescaledb THEN
+        -- Step 1: Decompress all compressed chunks
+        RAISE NOTICE 'TimescaleDB detected, decompressing chunks...';
+        FOR chunk_record IN
+            SELECT format('%I.%I', chunk_schema, chunk_name) as chunk_full_name
+            FROM timescaledb_information.chunks
+            WHERE hypertable_name = 'logs_partitioned'
+            AND is_compressed = true
+        LOOP
+            BEGIN
+                EXECUTE format('SELECT decompress_chunk(%L, true)', chunk_record.chunk_full_name);
+                RAISE NOTICE 'Decompressed: %', chunk_record.chunk_full_name;
+            EXCEPTION WHEN OTHERS THEN
+                RAISE NOTICE 'Failed to decompress: %, error: %', chunk_record.chunk_full_name, SQLERRM;
+            END;
+        END LOOP;
+
+        -- Step 2: Alter the hypertable column
+        RAISE NOTICE 'Altering rule_id to BIGINT...';
+        ALTER TABLE public.logs_partitioned ALTER COLUMN rule_id TYPE BIGINT;
+        RAISE NOTICE 'Column type changed to BIGINT';
+
+        -- Step 3: Recompress old chunks (older than 3 days)
+        RAISE NOTICE 'Recompressing old chunks...';
+        FOR chunk_record IN
+            SELECT format('%I.%I', chunk_schema, chunk_name) as chunk_full_name
+            FROM timescaledb_information.chunks
+            WHERE hypertable_name = 'logs_partitioned'
+            AND is_compressed = false
+            AND range_end < cutoff_date
+        LOOP
+            BEGIN
+                EXECUTE format('SELECT compress_chunk(%L)', chunk_record.chunk_full_name);
+                RAISE NOTICE 'Compressed: %', chunk_record.chunk_full_name;
+            EXCEPTION WHEN OTHERS THEN
+                RAISE NOTICE 'Failed to compress: %, error: %', chunk_record.chunk_full_name, SQLERRM;
+            END;
+        END LOOP;
+        RAISE NOTICE 'Migration completed successfully';
+    ELSE
+        -- Standard PostgreSQL partitioned table
+        BEGIN
+            ALTER TABLE public.logs_partitioned ALTER COLUMN rule_id TYPE BIGINT;
+        EXCEPTION WHEN OTHERS THEN
+            RAISE NOTICE 'Failed to alter logs_partitioned: %', SQLERRM;
+        END;
+
+        -- Update native PostgreSQL partitions if they exist
+        FOR chunk_record IN
+            SELECT tablename FROM pg_tables
+            WHERE schemaname = 'public' AND tablename LIKE 'logs_p%'
+        LOOP
+            BEGIN
+                EXECUTE format('ALTER TABLE public.%I ALTER COLUMN rule_id TYPE BIGINT', chunk_record.tablename);
+            EXCEPTION WHEN OTHERS THEN NULL;
+            END;
+        END LOOP;
+    END IF;
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'Migration error: %. Continuing...', SQLERRM;
+END $$;
+
+-- Fix 2: Update challenge_tokens FK to SET NULL (prevents FK error when proxy_host is deleted)
+-- First drop the existing constraint, then recreate with SET NULL
+DO $$ BEGIN
+    ALTER TABLE public.challenge_tokens DROP CONSTRAINT IF EXISTS challenge_tokens_proxy_host_id_fkey;
+    ALTER TABLE public.challenge_tokens
+        ADD CONSTRAINT challenge_tokens_proxy_host_id_fkey
+        FOREIGN KEY (proxy_host_id) REFERENCES public.proxy_hosts(id) ON DELETE SET NULL;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
