@@ -64,6 +64,10 @@ services:
       # Docker API version - leave empty for auto-detection (recommended)
       # For Synology DSM or older Docker hosts, this will be auto-detected
       DOCKER_API_VERSION: ${DOCKER_API_VERSION:-}
+      # Custom nginx listen ports for host network mode (e.g., Synology DSM)
+      # Leave empty to use default ports (80/443)
+      NGINX_HTTP_PORT: ${NGINX_HTTP_PORT:-}
+      NGINX_HTTPS_PORT: ${NGINX_HTTPS_PORT:-}
     volumes:
       # Consolidated nginx data volume (shared with nginx container)
       - nginx_data:/etc/nginx:rw
@@ -93,7 +97,7 @@ services:
     environment:
       TZ: ${TZ:-UTC}
     ports:
-      - "81:443"
+      - "${UI_PORT:-81}:443"
     volumes:
       - ui_data:/app/ssl:rw
     depends_on:

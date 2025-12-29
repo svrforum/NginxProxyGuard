@@ -16,8 +16,8 @@ const defaultServerTemplate = `# Default server - catch-all for unmatched reques
 
 # HTTP default server
 server {
-    listen 80 default_server;
-    listen [::]:80 default_server;
+    listen {{.HTTPPort}} default_server;
+    listen [::]:{{.HTTPPort}} default_server;
     server_name _;
 
     # Health check endpoint (always allowed)
@@ -89,8 +89,8 @@ server {
 
 # HTTPS default server - reject SSL handshake for unknown/disabled hosts
 server {
-    listen 443 ssl default_server;
-    listen [::]:443 ssl default_server;
+    listen {{.HTTPSPort}} ssl default_server;
+    listen [::]:{{.HTTPSPort}} ssl default_server;
     server_name _;
 
     # Reject SSL handshake immediately - no certificate warning, just connection reset
@@ -100,7 +100,9 @@ server {
 
 // DefaultServerConfigData holds data for default server config generation
 type DefaultServerConfigData struct {
-	Action string // allow, block_403, block_444
+	Action    string // allow, block_403, block_444
+	HTTPPort  string // HTTP listen port (default: 80)
+	HTTPSPort string // HTTPS listen port (default: 443)
 }
 
 // GenerateDefaultServerConfig generates the default server config based on settings
@@ -117,7 +119,11 @@ func (m *Manager) GenerateDefaultServerConfig(ctx context.Context, action string
 		return fmt.Errorf("failed to parse default server template: %w", err)
 	}
 
-	data := DefaultServerConfigData{Action: action}
+	data := DefaultServerConfigData{
+		Action:    action,
+		HTTPPort:  m.httpPort,
+		HTTPSPort: m.httpsPort,
+	}
 
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {
