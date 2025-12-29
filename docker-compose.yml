@@ -114,9 +114,9 @@ services:
     environment:
       TZ: ${TZ:-UTC}
     ports:
-      - "80:80"
-      - "443:443/tcp"
-      - "443:443/udp"
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443/tcp"
+      - "${NGINX_HTTPS_PORT:-443}:443/udp"
     sysctls:
       - net.core.somaxconn=65535
     ulimits:
