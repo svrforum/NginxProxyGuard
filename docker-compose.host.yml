@@ -78,7 +78,8 @@ services:
       NGINX_HTTP_PORT: ${NGINX_HTTP_PORT:-8080}
       NGINX_HTTPS_PORT: ${NGINX_HTTPS_PORT:-8443}
     ports:
-      - "127.0.0.1:8080:8080"
+      # API host port - MUST NOT conflict with NGINX_HTTP_PORT
+      - "127.0.0.1:${API_HOST_PORT:-9080}:8080"
     volumes:
       - nginx_data:/etc/nginx:rw
       - api_data:/app/data:rw
@@ -117,8 +118,7 @@ services:
     network_mode: host
     environment:
       TZ: ${TZ:-UTC}
-    sysctls:
-      - net.core.somaxconn=65535
+    # sysctls not allowed in host network mode
     ulimits:
       nofile:
         soft: 65535
