@@ -58,7 +58,7 @@ server {
 
     # Public API proxy (for font settings, etc.) - always available
     location /api/v1/public/ {
-        proxy_pass http://api:8080/api/v1/public/;
+        proxy_pass {{.APIURL}}/api/v1/public/;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -103,6 +103,7 @@ type DefaultServerConfigData struct {
 	Action    string // allow, block_403, block_444
 	HTTPPort  string // HTTP listen port (default: 80)
 	HTTPSPort string // HTTPS listen port (default: 443)
+	APIURL    string // API URL for nginx to reach API (default: http://api:8080)
 }
 
 // GenerateDefaultServerConfig generates the default server config based on settings
@@ -123,6 +124,7 @@ func (m *Manager) GenerateDefaultServerConfig(ctx context.Context, action string
 		Action:    action,
 		HTTPPort:  m.httpPort,
 		HTTPSPort: m.httpsPort,
+		APIURL:    m.apiURL,
 	}
 
 	var buf bytes.Buffer
