@@ -22,6 +22,8 @@ type Manager struct {
 	modsecPath     string // Path to ModSecurity config directory
 	nginxContainer string // Docker container name for nginx
 	skipTest       bool   // Skip nginx test/reload (for development)
+	httpPort       string // HTTP listen port (default: 80)
+	httpsPort      string // HTTPS listen port (default: 443)
 }
 
 func NewManager(configPath, certsPath string) *Manager {
@@ -37,13 +39,35 @@ func NewManager(configPath, certsPath string) *Manager {
 
 	skipTest := os.Getenv("NGINX_SKIP_TEST") == "true"
 
+	// Custom listen ports for host network mode (e.g., Synology DSM)
+	httpPort := os.Getenv("NGINX_HTTP_PORT")
+	if httpPort == "" {
+		httpPort = "80"
+	}
+	httpsPort := os.Getenv("NGINX_HTTPS_PORT")
+	if httpsPort == "" {
+		httpsPort = "443"
+	}
+
 	return &Manager{
 		configPath:     configPath,
 		certsPath:      certsPath,
 		modsecPath:     modsecPath,
 		nginxContainer: nginxContainer,
 		skipTest:       skipTest,
+		httpPort:       httpPort,
+		httpsPort:      httpsPort,
 	}
+}
+
+// GetHTTPPort returns the HTTP listen port
+func (m *Manager) GetHTTPPort() string {
+	return m.httpPort
+}
+
+// GetHTTPSPort returns the HTTPS listen port
+func (m *Manager) GetHTTPSPort() string {
+	return m.httpsPort
 }
 
 
@@ -66,6 +90,10 @@ func (m *Manager) GenerateConfigWithAccessControl(ctx context.Context, host *mod
 func (m *Manager) GenerateConfigFull(ctx context.Context, data ProxyHostConfigData) error {
 	// Note: WAF config is generated separately by the service layer
 	// to properly include any rule exclusions
+
+	// Set listen ports from manager config
+	data.HTTPPort = m.httpPort
+	data.HTTPSPort = m.httpsPort
 
 	// Get API host from environment or default
 	apiHostValue := os.Getenv("API_HOST")

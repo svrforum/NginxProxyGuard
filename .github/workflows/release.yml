@@ -268,12 +268,49 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          # Generate full changelog with commit subject and body
+          generate_changelog() {
+            local range="$1"
+            local changelog=""
+
+            # Get commit hashes
+            local commits=$(git log --pretty=format:"%H" $range)
+
+            for hash in $commits; do
+              # Get subject (first line)
+              local subject=$(git log -1 --pretty=format:"%s" $hash)
+
+              # Skip version bump commits
+              if echo "$subject" | grep -q "^chore: Bump version"; then
+                continue
+              fi
+
+              # Get body (remaining lines, trimmed)
+              local body=$(git log -1 --pretty=format:"%b" $hash | sed '/^$/d' | sed 's/^/  /')
+
+              # Add to changelog
+              if [ -n "$body" ]; then
+                changelog="${changelog}### ${subject}
+
+${body}
+
+"
+              else
+                changelog="${changelog}- ${subject}
+"
+              fi
+            done
+
+            echo "$changelog"
+          }
+
           if [ -n "$PREV_TAG" ]; then
-            # Get full commit messages (subject + body) for each commit
-            CHANGELOG=$(git log --pretty=format:"- %s" $PREV_TAG..HEAD | grep -v "^- chore: Bump version")
+            CHANGELOG=$(generate_changelog "$PREV_TAG..HEAD")
           else
-            CHANGELOG=$(git log --pretty=format:"- %s" -20 | grep -v "^- chore: Bump version")
+            CHANGELOG=$(generate_changelog "-20")
           fi
+
           echo "changelog<<EOF" >> $GITHUB_OUTPUT
           echo "$CHANGELOG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT

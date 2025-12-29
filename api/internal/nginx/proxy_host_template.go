@@ -58,8 +58,8 @@ upstream {{.Upstream.Name}} {
 
 {{if .Host.Enabled}}
 server {
-    listen 80;
-    listen [::]:80;
+    listen {{.HTTPPort}};
+    listen [::]:{{.HTTPPort}};
     server_name {{join .Host.DomainNames " "}};
 
     # Initialize tracking variables
@@ -844,16 +844,16 @@ server {
 
 {{if .Host.SSLEnabled}}
 server {
-    listen 443 ssl;
-    listen [::]:443 ssl;
+    listen {{.HTTPSPort}} ssl;
+    listen [::]:{{.HTTPSPort}} ssl;
 {{if .Host.SSLHTTP2}}
     # HTTP/2 over TCP (new directive style)
     http2 on;
 {{end}}
 {{if .Host.SSLHTTP3}}
     # HTTP/3 over QUIC (UDP)
-    listen 443 quic;
-    listen [::]:443 quic;
+    listen {{.HTTPSPort}} quic;
+    listen [::]:{{.HTTPSPort}} quic;
 {{end}}
     server_name {{join .Host.DomainNames " "}};
 
@@ -1497,7 +1497,7 @@ server {
         {{end}}
         {{if .Host.SSLHTTP3}}
         # HTTP/3 Alt-Svc header
-        add_header Alt-Svc 'h3=":443"; ma=86400' always;
+        add_header Alt-Svc 'h3=":{{$.HTTPSPort}}"; ma=86400' always;
         {{end}}
         {{if .Host.CacheEnabled}}
         # Caching
@@ -1604,4 +1604,6 @@ type ProxyHostConfigData struct {
 	ExploitBlockRules             []model.ExploitBlockRule // Dynamic exploit blocking rules from database
 	HasCustomLocationRoot         bool                  // True if AdvancedConfig contains a location / block
 	AdvancedConfigHasLocation     bool                  // True if AdvancedConfig contains any location directive
+	HTTPPort                      string                // HTTP listen port (default: 80)
+	HTTPSPort                     string                // HTTPS listen port (default: 443)
 }

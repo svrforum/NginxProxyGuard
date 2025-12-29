@@ -71,6 +71,9 @@ services:
       ACME_STAGING: ${ACME_STAGING:-false}
       # Docker API version - leave empty for auto-detection (recommended)
       DOCKER_API_VERSION: ${DOCKER_API_VERSION:-}
+      # Custom nginx listen ports for host network mode
+      NGINX_HTTP_PORT: ${NGINX_HTTP_PORT:-}
+      NGINX_HTTPS_PORT: ${NGINX_HTTPS_PORT:-}
     volumes:
       - nginx_data:/etc/nginx:rw
       - api_data:/app/data:rw
