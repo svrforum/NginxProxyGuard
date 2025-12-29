@@ -1,0 +1,26 @@
+# Host Network Mode Override for Synology DSM, etc.
+# Use when other services (Web Station) occupy ports 80/443
+#
+# Usage:
+#   1. Set env vars in .env:
+#      NGINX_HTTP_PORT=8080
+#      NGINX_HTTPS_PORT=8443
+#
+#   2. Run with override:
+#      docker compose -f docker-compose.yml -f docker-compose.host.yml up -d
+#
+# This enables real client IP logging instead of Docker gateway IP (172.x.x.1)
+
+services:
+  nginx:
+    network_mode: host
+    ports: !reset []
+    extra_hosts:
+      - "api:127.0.0.1"
+      - "db:127.0.0.1"
+      - "valkey:127.0.0.1"
+
+  # API needs to bind to host for nginx to reach it
+  api:
+    ports:
+      - "127.0.0.1:8080:8080"
