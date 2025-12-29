@@ -113,7 +113,7 @@ func (s *WAFAutoBanService) refreshSettings(ctx context.Context) {
 }
 
 // RecordWAFEvent records a WAF event for an IP and checks if it should be banned
-func (s *WAFAutoBanService) RecordWAFEvent(ctx context.Context, clientIP string, host string, ruleID int, ruleMessage string) {
+func (s *WAFAutoBanService) RecordWAFEvent(ctx context.Context, clientIP string, host string, ruleID int64, ruleMessage string) {
 	s.settingsMu.RLock()
 	enabled := s.enabled
 	threshold := s.threshold

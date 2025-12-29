@@ -59,7 +59,8 @@ func (r *LogRepository) Create(ctx context.Context, req *model.CreateLogRequest)
 	var log model.Log
 	var host, clientIP, requestMethod, requestURI, requestProtocol sql.NullString
 	var geoCountry, geoCountryCode, geoCity, geoASN, geoOrg sql.NullString
-	var statusCode, ruleID sql.NullInt32
+	var statusCode sql.NullInt32
+	var ruleID sql.NullInt64
 	var bodyBytesSent sql.NullInt64
 	var requestTime, upstreamResponseTime sql.NullFloat64
 	var httpReferer, httpUserAgent, httpXForwardedFor sql.NullString
@@ -153,7 +154,7 @@ func (r *LogRepository) Create(ctx context.Context, req *model.CreateLogRequest)
 		log.ErrorMessage = &errorMessage.String
 	}
 	if ruleID.Valid {
-		id := int(ruleID.Int32)
+		id := ruleID.Int64
 		log.RuleID = &id
 	}
 	if ruleMessage.Valid {
@@ -552,7 +553,8 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 		var log model.Log
 		var host, clientIP, requestMethod, requestURI, requestProtocol sql.NullString
 		var geoCountry, geoCountryCode, geoCity, geoASN, geoOrg sql.NullString
-		var statusCode, ruleID sql.NullInt32
+		var statusCode sql.NullInt32
+		var ruleID sql.NullInt64
 		var bodyBytesSent sql.NullInt64
 		var requestTime, upstreamResponseTime sql.NullFloat64
 		var httpReferer, httpUserAgent, httpXForwardedFor sql.NullString
@@ -638,7 +640,7 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 			log.ErrorMessage = &errorMessage.String
 		}
 		if ruleID.Valid {
-			id := int(ruleID.Int32)
+			id := ruleID.Int64
 			log.RuleID = &id
 		}
 		if ruleMessage.Valid {
