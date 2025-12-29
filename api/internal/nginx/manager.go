@@ -24,6 +24,7 @@ type Manager struct {
 	skipTest       bool   // Skip nginx test/reload (for development)
 	httpPort       string // HTTP listen port (default: 80)
 	httpsPort      string // HTTPS listen port (default: 443)
+	apiURL         string // API URL for nginx to reach API (default: http://api:8080)
 }
 
 func NewManager(configPath, certsPath string) *Manager {
@@ -49,6 +50,16 @@ func NewManager(configPath, certsPath string) *Manager {
 		httpsPort = "443"
 	}
 
+	// API URL for nginx to reach API
+	// In host network mode, nginx can't use Docker service names
+	// Use API_HOST_PORT env var to determine the correct URL
+	apiURL := "http://api:8080" // Default for bridge network mode
+	apiHostPort := os.Getenv("API_HOST_PORT")
+	if apiHostPort != "" {
+		// Host network mode - use localhost with the exposed API port
+		apiURL = "http://127.0.0.1:" + apiHostPort
+	}
+
 	return &Manager{
 		configPath:     configPath,
 		certsPath:      certsPath,
@@ -57,6 +68,7 @@ func NewManager(configPath, certsPath string) *Manager {
 		skipTest:       skipTest,
 		httpPort:       httpPort,
 		httpsPort:      httpsPort,
+		apiURL:         apiURL,
 	}
 }
 
