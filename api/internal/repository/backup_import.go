@@ -24,10 +24,11 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 	}
 
 	// Create ID mappings for foreign key references
-	certificateIDMap := make(map[string]string) // old ID -> new ID
-	accessListIDMap := make(map[string]string)  // old ID -> new ID
-	dnsProviderIDMap := make(map[string]string) // old ID -> new ID
-	proxyHostIDMap := make(map[string]string)   // old ID -> new ID
+	certificateIDMap := make(map[string]string)    // old ID -> new ID
+	accessListIDMap := make(map[string]string)     // old ID -> new ID
+	dnsProviderIDMap := make(map[string]string)    // old ID -> new ID
+	proxyHostIDMap := make(map[string]string)      // old ID -> new ID
+	exploitRuleIDMap := make(map[string]string)    // old ID -> new ID
 
 	// Import Global Settings (update existing)
 	if data.GlobalSettings != nil {
@@ -162,8 +163,12 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 
 	// Import Exploit Block Rules
 	for _, rule := range data.ExploitBlockRules {
-		if err := r.importExploitBlockRule(ctx, tx, &rule); err != nil {
+		newID, err := r.importExploitBlockRule(ctx, tx, &rule)
+		if err != nil {
 			return fmt.Errorf("failed to import exploit block rule %s: %w", rule.Name, err)
+		}
+		if newID != "" {
+			exploitRuleIDMap[rule.ID] = newID
 		}
 	}
 
@@ -176,6 +181,13 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 
 	// Import Global Exploit Exclusions
 	for _, ee := range data.GlobalExploitExclusions {
+		// Remap rule ID
+		if newID, ok := exploitRuleIDMap[ee.RuleID]; ok {
+			ee.RuleID = newID
+		} else {
+			// Skip if rule doesn't exist
+			continue
+		}
 		if err := r.importGlobalExploitExclusion(ctx, tx, &ee); err != nil {
 			return fmt.Errorf("failed to import global exploit exclusion for rule %s: %w", ee.RuleID, err)
 		}
@@ -186,6 +198,13 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 		// Remap proxy host ID
 		if newID, ok := proxyHostIDMap[he.ProxyHostID]; ok {
 			he.ProxyHostID = newID
+		}
+		// Remap rule ID
+		if newID, ok := exploitRuleIDMap[he.RuleID]; ok {
+			he.RuleID = newID
+		} else {
+			// Skip if rule doesn't exist (might be a deleted rule)
+			continue
 		}
 		if err := r.importHostExploitExclusion(ctx, tx, &he); err != nil {
 			return fmt.Errorf("failed to import host exploit exclusion: %w", err)
@@ -237,7 +256,14 @@ func (r *BackupRepository) clearExistingData(ctx context.Context, tx *sql.Tx) er
 	}
 
 	for _, table := range tables {
-		_, err := tx.ExecContext(ctx, fmt.Sprintf("DELETE FROM %s", table))
+		var query string
+		if table == "exploit_block_rules" {
+			// Keep system rules, only delete user-defined rules
+			query = "DELETE FROM exploit_block_rules WHERE is_system = false"
+		} else {
+			query = fmt.Sprintf("DELETE FROM %s", table)
+		}
+		_, err := tx.ExecContext(ctx, query)
 		if err != nil {
 			return fmt.Errorf("failed to clear %s: %w", table, err)
 		}
@@ -686,13 +712,14 @@ func (r *BackupRepository) importCloudProvider(ctx context.Context, tx *sql.Tx, 
 	return err
 }
 
-func (r *BackupRepository) importExploitBlockRule(ctx context.Context, tx *sql.Tx, rule *model.ExploitBlockRuleExport) error {
+func (r *BackupRepository) importExploitBlockRule(ctx context.Context, tx *sql.Tx, rule *model.ExploitBlockRuleExport) (string, error) {
 	// Skip system rules - they're already in the database
 	if rule.IsBuiltin {
-		// Just update enabled status for system rules
+		// Just update enabled status for system rules and return the same ID
 		query := `UPDATE exploit_block_rules SET enabled = $1, updated_at = NOW() WHERE id = $2 AND is_system = true`
 		_, _ = tx.ExecContext(ctx, query, rule.Enabled, rule.ID)
-		return nil
+		// For system rules, the ID remains the same
+		return rule.ID, nil
 	}
 
 	query := `
@@ -705,10 +732,12 @@ func (r *BackupRepository) importExploitBlockRule(ctx context.Context, tx *sql.T
 			severity = EXCLUDED.severity,
 			enabled = EXCLUDED.enabled,
 			updated_at = NOW()
+		RETURNING id
 	`
-	_, err := tx.ExecContext(ctx, query, rule.Name, rule.Category, rule.Pattern, rule.PatternType,
-		rule.Description, rule.Severity, rule.Enabled)
-	return err
+	var newID string
+	err := tx.QueryRowContext(ctx, query, rule.Name, rule.Category, rule.Pattern, rule.PatternType,
+		rule.Description, rule.Severity, rule.Enabled).Scan(&newID)
+	return newID, err
 }
 
 func (r *BackupRepository) importGlobalWAFExclusion(ctx context.Context, tx *sql.Tx, we *model.GlobalWAFExclusionExport) error {
