@@ -310,7 +310,7 @@ func (c *LogCollector) flushRedisBuffer(ctx context.Context) ([]model.CreateLogR
 		// Parse extra fields for WAF logs
 		if entry.Extra != nil {
 			if ruleID, ok := entry.Extra["rule_id"]; ok {
-				logReq.RuleID, _ = strconv.Atoi(ruleID)
+				logReq.RuleID, _ = strconv.ParseInt(ruleID, 10, 64)
 			}
 			logReq.RuleMessage = entry.Extra["rule_message"]
 			logReq.RuleSeverity = entry.Extra["rule_severity"]
@@ -668,7 +668,7 @@ func (c *LogCollector) parseModSecLog(line string) (*model.CreateLogRequest, err
 	}
 
 	// Get first meaningful rule info (skip the final anomaly evaluation rule)
-	var ruleID int
+	var ruleID int64
 	var ruleMessage, ruleSeverity, ruleData, attackType string
 	for _, msg := range tx.Messages {
 		// Skip the anomaly evaluation message, we want the actual attack rule
@@ -678,7 +678,7 @@ func (c *LogCollector) parseModSecLog(line string) (*model.CreateLogRequest, err
 		ruleMessage = msg.Message
 		ruleSeverity = msg.Details.Severity
 		ruleData = msg.Details.Data
-		if id, err := strconv.Atoi(msg.Details.RuleID); err == nil {
+		if id, err := strconv.ParseInt(msg.Details.RuleID, 10, 64); err == nil {
 			ruleID = id
 		}
 		// Extract attack type from tags
@@ -698,7 +698,7 @@ func (c *LogCollector) parseModSecLog(line string) (*model.CreateLogRequest, err
 	if ruleID == 0 && len(tx.Messages) > 0 {
 		msg := tx.Messages[0]
 		ruleMessage = msg.Message
-		if id, err := strconv.Atoi(msg.Details.RuleID); err == nil {
+		if id, err := strconv.ParseInt(msg.Details.RuleID, 10, 64); err == nil {
 			ruleID = id
 		}
 	}

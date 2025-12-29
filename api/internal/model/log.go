@@ -25,6 +25,7 @@ const (
 	BlockReasonBannedIP               BlockReason = "banned_ip"
 	BlockReasonURIBlock               BlockReason = "uri_block"
 	BlockReasonCloudProviderChallenge BlockReason = "cloud_provider_challenge"
+	BlockReasonCloudProviderBlock     BlockReason = "cloud_provider_block"
 )
 
 type LogSeverity string
@@ -73,7 +74,7 @@ type Log struct {
 	ErrorMessage *string      `json:"error_message,omitempty"`
 
 	// ModSecurity WAF fields
-	RuleID       *int    `json:"rule_id,omitempty"`
+	RuleID       *int64  `json:"rule_id,omitempty"`
 	RuleMessage  *string `json:"rule_message,omitempty"`
 	RuleSeverity *string `json:"rule_severity,omitempty"`
 	RuleData     *string `json:"rule_data,omitempty"`
@@ -124,7 +125,7 @@ type CreateLogRequest struct {
 	ErrorMessage string      `json:"error_message,omitempty"`
 
 	// ModSecurity WAF fields
-	RuleID       int    `json:"rule_id,omitempty"`
+	RuleID       int64  `json:"rule_id,omitempty"`
 	RuleMessage  string `json:"rule_message,omitempty"`
 	RuleSeverity string `json:"rule_severity,omitempty"`
 	RuleData     string `json:"rule_data,omitempty"`
@@ -147,7 +148,7 @@ type LogFilter struct {
 	ClientIP    *string      `json:"client_ip,omitempty"`
 	StatusCode  *int         `json:"status_code,omitempty"`
 	Severity    *LogSeverity `json:"severity,omitempty"`
-	RuleID      *int         `json:"rule_id,omitempty"`
+	RuleID      *int64       `json:"rule_id,omitempty"`
 	ProxyHostID *string      `json:"proxy_host_id,omitempty"`
 	StartTime   *time.Time   `json:"start_time,omitempty"`
 	EndTime     *time.Time   `json:"end_time,omitempty"`
@@ -224,7 +225,7 @@ type URIStat struct {
 }
 
 type RuleIDStat struct {
-	RuleID  int    `json:"rule_id"`
+	RuleID  int64  `json:"rule_id"`
 	Message string `json:"message"`
 	Count   int64  `json:"count"`
 }

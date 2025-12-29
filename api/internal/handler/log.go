@@ -78,7 +78,7 @@ func (h *LogHandler) List(w http.ResponseWriter, r *http.Request) {
 		filter.Severity = &sev
 	}
 	if ruleID := r.URL.Query().Get("rule_id"); ruleID != "" {
-		if id, err := strconv.Atoi(ruleID); err == nil {
+		if id, err := strconv.ParseInt(ruleID, 10, 64); err == nil {
 			filter.RuleID = &id
 		}
 	}
