@@ -20,6 +20,19 @@ func NewLogRepository(db *database.DB) *LogRepository {
 	return &LogRepository{db: db}
 }
 
+// buildHostFilter converts a host filter pattern to SQL condition and value.
+// - "example.com" -> exact match (host = 'example.com')
+// - "*.example.com" -> wildcard match (host LIKE '%.example.com')
+func buildHostFilter(host string, argIndex int) (condition string, value string, isExact bool) {
+	if strings.HasPrefix(host, "*") {
+		// Wildcard pattern: *.example.com -> %.example.com
+		pattern := "%" + strings.TrimPrefix(host, "*")
+		return fmt.Sprintf("host LIKE $%d", argIndex), pattern, false
+	}
+	// Exact match
+	return fmt.Sprintf("host = $%d", argIndex), host, true
+}
+
 func (r *LogRepository) Create(ctx context.Context, req *model.CreateLogRequest) (*model.Log, error) {
 	query := `
 		INSERT INTO logs_partitioned (
@@ -277,8 +290,9 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 			}
 		}
 		if filter.Host != nil && *filter.Host != "" {
-			conditions = append(conditions, fmt.Sprintf("host ILIKE $%d", argIndex))
-			args = append(args, "%"+*filter.Host+"%")
+			condition, value, _ := buildHostFilter(*filter.Host, argIndex)
+			conditions = append(conditions, condition)
+			args = append(args, value)
 			argIndex++
 		}
 		if filter.ClientIP != nil && *filter.ClientIP != "" {
@@ -366,8 +380,9 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 		if len(filter.Hosts) > 0 {
 			orConditions := make([]string, len(filter.Hosts))
 			for i, host := range filter.Hosts {
-				orConditions[i] = fmt.Sprintf("host ILIKE $%d", argIndex)
-				args = append(args, "%"+host+"%")
+				condition, value, _ := buildHostFilter(host, argIndex)
+				orConditions[i] = condition
+				args = append(args, value)
 				argIndex++
 			}
 			conditions = append(conditions, fmt.Sprintf("(%s)", strings.Join(orConditions, " OR ")))
@@ -704,9 +719,10 @@ func (r *LogRepository) GetStatsWithFilter(ctx context.Context, filter *model.Lo
 			args = append(args, *filter.LogType)
 			argIndex++
 		}
-		if filter.Host != nil {
-			whereClause += fmt.Sprintf(" AND host ILIKE $%d", argIndex)
-			args = append(args, "%"+*filter.Host+"%")
+		if filter.Host != nil && *filter.Host != "" {
+			condition, value, _ := buildHostFilter(*filter.Host, argIndex)
+			whereClause += " AND " + condition
+			args = append(args, value)
 			argIndex++
 		}
 		if filter.ClientIP != nil {
@@ -728,8 +744,9 @@ func (r *LogRepository) GetStatsWithFilter(ctx context.Context, filter *model.Lo
 		if len(filter.Hosts) > 0 {
 			orConditions := make([]string, len(filter.Hosts))
 			for i, host := range filter.Hosts {
-				orConditions[i] = fmt.Sprintf("host ILIKE $%d", argIndex)
-				args = append(args, "%"+host+"%")
+				condition, value, _ := buildHostFilter(host, argIndex)
+				orConditions[i] = condition
+				args = append(args, value)
 				argIndex++
 			}
 			whereClause += fmt.Sprintf(" AND (%s)", strings.Join(orConditions, " OR "))
