@@ -124,7 +124,7 @@ func APITokenAuth(tokenRepo *repository.APITokenRepository, auditRepo *repositor
 					StatusCode:      statusCode,
 					ClientIP:        clientIP,
 					UserAgent:       userAgent,
-					RequestBodySize: int(contentLength),
+					RequestBodySize: contentLength,
 					ResponseTimeMs:  int(responseTime),
 				}
 				tokenRepo.LogUsage(ctx, usage)
