@@ -2075,8 +2075,9 @@ BEGIN
     AND table_name = 'logs_partitioned'
     AND column_name = 'rule_id';
 
-    IF current_type = 'bigint' THEN
-        RAISE NOTICE 'rule_id is already BIGINT, skipping migration';
+    -- Skip if table doesn't exist yet (new installation) or already BIGINT
+    IF current_type IS NULL OR current_type = 'bigint' THEN
+        RAISE NOTICE 'rule_id migration skipped (current type: %)', COALESCE(current_type, 'table not found');
         RETURN;
     END IF;
 
@@ -2085,7 +2086,7 @@ BEGIN
 
     IF is_timescaledb THEN
         -- Step 1: Decompress all compressed chunks
-        RAISE NOTICE 'TimescaleDB detected, decompressing chunks...';
+        RAISE NOTICE 'TimescaleDB detected, decompressing chunks for rule_id migration...';
         FOR chunk_record IN
             SELECT format('%I.%I', chunk_schema, chunk_name) as chunk_full_name
             FROM timescaledb_information.chunks
@@ -2143,6 +2144,93 @@ BEGIN
     END IF;
 EXCEPTION WHEN OTHERS THEN
     RAISE NOTICE 'Migration error: %. Continuing...', SQLERRM;
+END $$;
+
+-- Fix 1b: body_bytes_sent integer overflow (large file downloads can exceed 2GB)
+-- Change body_bytes_sent from INTEGER to BIGINT for logs_partitioned
+DO $$
+DECLARE
+    current_type TEXT;
+    chunk_record RECORD;
+    is_timescaledb BOOLEAN := FALSE;
+    cutoff_date TIMESTAMP WITH TIME ZONE := NOW() - INTERVAL '3 days';
+BEGIN
+    -- Check if body_bytes_sent is already BIGINT
+    SELECT data_type INTO current_type
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+    AND table_name = 'logs_partitioned'
+    AND column_name = 'body_bytes_sent';
+
+    -- Skip if table doesn't exist yet (new installation) or already BIGINT
+    IF current_type IS NULL OR current_type = 'bigint' THEN
+        RAISE NOTICE 'body_bytes_sent migration skipped (current type: %)', COALESCE(current_type, 'table not found');
+        RETURN;
+    END IF;
+
+    -- Check if TimescaleDB is being used
+    SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname = 'timescaledb') INTO is_timescaledb;
+
+    IF is_timescaledb THEN
+        -- Step 1: Decompress all compressed chunks
+        RAISE NOTICE 'TimescaleDB detected, decompressing chunks for body_bytes_sent migration...';
+        FOR chunk_record IN
+            SELECT format('%I.%I', chunk_schema, chunk_name) as chunk_full_name
+            FROM timescaledb_information.chunks
+            WHERE hypertable_name = 'logs_partitioned'
+            AND is_compressed = true
+        LOOP
+            BEGIN
+                EXECUTE format('SELECT decompress_chunk(%L, true)', chunk_record.chunk_full_name);
+                RAISE NOTICE 'Decompressed: %', chunk_record.chunk_full_name;
+            EXCEPTION WHEN OTHERS THEN
+                RAISE NOTICE 'Failed to decompress: %, error: %', chunk_record.chunk_full_name, SQLERRM;
+            END;
+        END LOOP;
+
+        -- Step 2: Alter the hypertable column
+        RAISE NOTICE 'Altering body_bytes_sent to BIGINT...';
+        ALTER TABLE public.logs_partitioned ALTER COLUMN body_bytes_sent TYPE BIGINT;
+        RAISE NOTICE 'body_bytes_sent column type changed to BIGINT';
+
+        -- Step 3: Recompress old chunks (older than 3 days)
+        RAISE NOTICE 'Recompressing old chunks...';
+        FOR chunk_record IN
+            SELECT format('%I.%I', chunk_schema, chunk_name) as chunk_full_name
+            FROM timescaledb_information.chunks
+            WHERE hypertable_name = 'logs_partitioned'
+            AND is_compressed = false
+            AND range_end < cutoff_date
+        LOOP
+            BEGIN
+                EXECUTE format('SELECT compress_chunk(%L)', chunk_record.chunk_full_name);
+                RAISE NOTICE 'Compressed: %', chunk_record.chunk_full_name;
+            EXCEPTION WHEN OTHERS THEN
+                RAISE NOTICE 'Failed to compress: %, error: %', chunk_record.chunk_full_name, SQLERRM;
+            END;
+        END LOOP;
+        RAISE NOTICE 'body_bytes_sent migration completed successfully';
+    ELSE
+        -- Standard PostgreSQL partitioned table
+        BEGIN
+            ALTER TABLE public.logs_partitioned ALTER COLUMN body_bytes_sent TYPE BIGINT;
+        EXCEPTION WHEN OTHERS THEN
+            RAISE NOTICE 'Failed to alter logs_partitioned: %', SQLERRM;
+        END;
+
+        -- Update native PostgreSQL partitions if they exist
+        FOR chunk_record IN
+            SELECT tablename FROM pg_tables
+            WHERE schemaname = 'public' AND tablename LIKE 'logs_p%'
+        LOOP
+            BEGIN
+                EXECUTE format('ALTER TABLE public.%I ALTER COLUMN body_bytes_sent TYPE BIGINT', chunk_record.tablename);
+            EXCEPTION WHEN OTHERS THEN NULL;
+            END;
+        END LOOP;
+    END IF;
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'body_bytes_sent migration error: %. Continuing...', SQLERRM;
 END $$;
 
 -- Fix 2: Update challenge_tokens FK to SET NULL (prevents FK error when proxy_host is deleted)
