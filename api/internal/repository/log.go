@@ -48,10 +48,10 @@ func (r *LogRepository) Create(ctx context.Context, req *model.CreateLogRequest)
 			$1, $2, NULLIF($3, ''), NULLIF($4, '')::inet,
 			NULLIF($5, ''), NULLIF($6, ''), NULLIF($7, ''), NULLIF($8, ''), NULLIF($9, ''),
 			NULLIF($10, ''), NULLIF($11, ''), NULLIF($12, ''), NULLIF($13, 0),
-			NULLIF($14, 0), NULLIF($15::numeric, 0), NULLIF($16::numeric, 0),
+			NULLIF($14::bigint, 0), NULLIF($15::numeric, 0), NULLIF($16::numeric, 0),
 			NULLIF($17, ''), NULLIF($18, ''), NULLIF($19, ''),
 			NULLIF($20, '')::log_severity, NULLIF($21, ''),
-			NULLIF($22, 0), NULLIF($23, ''), NULLIF($24, ''), NULLIF($25, ''), NULLIF($26, ''), NULLIF($27, ''),
+			NULLIF($22::bigint, 0), NULLIF($23, ''), NULLIF($24, ''), NULLIF($25, ''), NULLIF($26, ''), NULLIF($27, ''),
 			NULLIF($28, '')::uuid, NULLIF($29, '')
 		)
 		RETURNING id, log_type, timestamp, host, client_ip,
@@ -221,10 +221,10 @@ func (r *LogRepository) CreateBatch(ctx context.Context, logs []model.CreateLogR
 			$1, $2, NULLIF($3, ''), NULLIF($4, '')::inet,
 			NULLIF($5, ''), NULLIF($6, ''), NULLIF($7, ''), NULLIF($8, ''), NULLIF($9, ''),
 			NULLIF($10, ''), NULLIF($11, ''), NULLIF($12, ''), NULLIF($13, 0),
-			NULLIF($14, 0), NULLIF($15::numeric, 0), NULLIF($16::numeric, 0),
+			NULLIF($14::bigint, 0), NULLIF($15::numeric, 0), NULLIF($16::numeric, 0),
 			NULLIF($17, ''), NULLIF($18, ''), NULLIF($19, ''),
 			NULLIF($20, '')::log_severity, NULLIF($21, ''),
-			NULLIF($22, 0), NULLIF($23, ''), NULLIF($24, ''), NULLIF($25, ''), NULLIF($26, ''), NULLIF($27, ''),
+			NULLIF($22::bigint, 0), NULLIF($23, ''), NULLIF($24, ''), NULLIF($25, ''), NULLIF($26, ''), NULLIF($27, ''),
 			COALESCE(NULLIF($28, '')::block_reason, 'none'), NULLIF($29, ''), NULLIF($30, ''),
 			NULLIF($31, '')::uuid, NULLIF($32, '')
 		)
