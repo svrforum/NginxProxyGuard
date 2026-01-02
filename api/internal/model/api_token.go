@@ -152,7 +152,7 @@ type APITokenUsage struct {
 	StatusCode      int       `json:"status_code" db:"status_code"`
 	ClientIP        string    `json:"client_ip" db:"client_ip"`
 	UserAgent       string    `json:"user_agent,omitempty" db:"user_agent"`
-	RequestBodySize int       `json:"request_body_size" db:"request_body_size"`
+	RequestBodySize int64     `json:"request_body_size" db:"request_body_size"`
 	ResponseTimeMs  int       `json:"response_time_ms" db:"response_time_ms"`
 	CreatedAt       time.Time `json:"created_at" db:"created_at"`
 }

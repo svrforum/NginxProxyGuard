@@ -183,7 +183,7 @@ CREATE TABLE IF NOT EXISTS public.api_token_usage (
     status_code integer,
     client_ip character varying(45),
     user_agent text,
-    request_body_size integer,
+    request_body_size bigint,
     response_time_ms integer,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -2231,6 +2231,29 @@ BEGIN
     END IF;
 EXCEPTION WHEN OTHERS THEN
     RAISE NOTICE 'body_bytes_sent migration error: %. Continuing...', SQLERRM;
+END $$;
+
+-- Fix 1c: request_body_size integer overflow (large file uploads can exceed 2GB)
+-- Change request_body_size from INTEGER to BIGINT for api_token_usage
+DO $$
+DECLARE
+    current_type TEXT;
+BEGIN
+    SELECT data_type INTO current_type
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+    AND table_name = 'api_token_usage'
+    AND column_name = 'request_body_size';
+
+    IF current_type IS NULL OR current_type = 'bigint' THEN
+        RAISE NOTICE 'request_body_size migration skipped (current type: %)', COALESCE(current_type, 'table not found');
+        RETURN;
+    END IF;
+
+    ALTER TABLE public.api_token_usage ALTER COLUMN request_body_size TYPE BIGINT;
+    RAISE NOTICE 'request_body_size migrated to BIGINT';
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'request_body_size migration error: %. Continuing...', SQLERRM;
 END $$;
 
 -- Fix 2: Update challenge_tokens FK to SET NULL (prevents FK error when proxy_host is deleted)
