@@ -521,10 +521,19 @@ func (r *BackupRepository) importSecurityHeaders(ctx context.Context, tx *sql.Tx
 
 func (r *BackupRepository) importGeoRestriction(ctx context.Context, tx *sql.Tx, proxyHostID string, gr *model.GeoRestrictionExport) error {
 	query := `
-		INSERT INTO geo_restrictions (proxy_host_id, mode, countries, enabled)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO geo_restrictions (proxy_host_id, mode, countries, enabled, challenge_mode, allow_private_ips, allow_search_bots)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		ON CONFLICT (proxy_host_id) DO UPDATE SET
+			mode = EXCLUDED.mode,
+			countries = EXCLUDED.countries,
+			enabled = EXCLUDED.enabled,
+			challenge_mode = EXCLUDED.challenge_mode,
+			allow_private_ips = EXCLUDED.allow_private_ips,
+			allow_search_bots = EXCLUDED.allow_search_bots,
+			updated_at = NOW()
 	`
-	_, err := tx.ExecContext(ctx, query, proxyHostID, gr.Mode, pq.Array(gr.Countries), gr.Enabled)
+	_, err := tx.ExecContext(ctx, query, proxyHostID, gr.Mode, pq.Array(gr.Countries), gr.Enabled,
+		gr.ChallengeMode, gr.AllowPrivateIPs, gr.AllowSearchBots)
 	return err
 }
 
@@ -536,6 +545,17 @@ func (r *BackupRepository) importUpstream(ctx context.Context, tx *sql.Tx, proxy
 		                       health_check_interval, health_check_timeout, health_check_path,
 		                       health_check_expected_status, keepalive)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		ON CONFLICT (proxy_host_id) DO UPDATE SET
+			name = EXCLUDED.name,
+			servers = EXCLUDED.servers,
+			load_balance = EXCLUDED.load_balance,
+			health_check_enabled = EXCLUDED.health_check_enabled,
+			health_check_interval = EXCLUDED.health_check_interval,
+			health_check_timeout = EXCLUDED.health_check_timeout,
+			health_check_path = EXCLUDED.health_check_path,
+			health_check_expected_status = EXCLUDED.health_check_expected_status,
+			keepalive = EXCLUDED.keepalive,
+			updated_at = NOW()
 	`
 	_, err := tx.ExecContext(ctx, query, proxyHostID, u.Name, servers, u.LoadBalance,
 		u.HealthCheckEnabled, u.HealthCheckInterval, u.HealthCheckTimeout, u.HealthCheckPath,
@@ -624,16 +644,34 @@ func (r *BackupRepository) importSystemSettings(ctx context.Context, tx *sql.Tx,
 }
 
 func (r *BackupRepository) importBannedIP(ctx context.Context, tx *sql.Tx, bip *model.BannedIPExport) error {
-	query := `
-		INSERT INTO banned_ips (proxy_host_id, ip_address, reason, fail_count, banned_at, expires_at, is_permanent, is_auto_banned)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		ON CONFLICT (ip_address) DO NOTHING
-	`
-
+	// Check if already exists (partial unique indexes require manual check)
+	var exists bool
 	var proxyHostID interface{}
 	if bip.ProxyHostID != "" {
 		proxyHostID = bip.ProxyHostID
+		err := tx.QueryRowContext(ctx,
+			"SELECT EXISTS(SELECT 1 FROM banned_ips WHERE ip_address = $1 AND proxy_host_id = $2)",
+			bip.IPAddress, proxyHostID).Scan(&exists)
+		if err != nil {
+			return err
+		}
+	} else {
+		err := tx.QueryRowContext(ctx,
+			"SELECT EXISTS(SELECT 1 FROM banned_ips WHERE ip_address = $1 AND proxy_host_id IS NULL)",
+			bip.IPAddress).Scan(&exists)
+		if err != nil {
+			return err
+		}
 	}
+
+	if exists {
+		return nil // Skip duplicate
+	}
+
+	query := `
+		INSERT INTO banned_ips (proxy_host_id, ip_address, reason, fail_count, banned_at, expires_at, is_permanent, is_auto_banned)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	`
 
 	_, err := tx.ExecContext(ctx, query, proxyHostID, bip.IPAddress, bip.Reason, bip.FailCount,
 		bip.BannedAt, bip.ExpiresAt, bip.IsPermanent, bip.IsAutoBanned)
