@@ -351,11 +351,14 @@ func (r *BackupRepository) getProxyHostSecurityHeaders(ctx context.Context, prox
 
 func (r *BackupRepository) getProxyHostGeoRestriction(ctx context.Context, proxyHostID string) (*model.GeoRestrictionExport, error) {
 	query := `
-		SELECT mode, countries, enabled
+		SELECT mode, countries, enabled, challenge_mode, allow_private_ips, allow_search_bots
 		FROM geo_restrictions WHERE proxy_host_id = $1
 	`
 	var gr model.GeoRestrictionExport
-	err := r.db.QueryRowContext(ctx, query, proxyHostID).Scan(&gr.Mode, pq.Array(&gr.Countries), &gr.Enabled)
+	err := r.db.QueryRowContext(ctx, query, proxyHostID).Scan(
+		&gr.Mode, pq.Array(&gr.Countries), &gr.Enabled,
+		&gr.ChallengeMode, &gr.AllowPrivateIPs, &gr.AllowSearchBots,
+	)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
