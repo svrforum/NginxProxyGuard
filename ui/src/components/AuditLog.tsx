@@ -270,7 +270,7 @@ export default function AuditLog() {
               {auditData?.logs?.map((log) => (
                 <tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
                   <td className="px-4 py-3 whitespace-nowrap">
-                    <div className="text-sm text-slate-900">{formatRelativeTime(log.created_at)}</div>
+                    <div className="text-sm text-slate-900 dark:text-white">{formatRelativeTime(log.created_at)}</div>
                     <div className="text-xs text-slate-500">{formatTime(log.created_at)}</div>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
