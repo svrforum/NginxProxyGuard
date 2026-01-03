@@ -1,7 +1,18 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { listAllURIBlocks, updateURIBlock, removeURIBlockRule, addURIBlockRule, bulkAddURIBlockRule, type URIBlockWithHost, getGlobalURIBlock, updateGlobalURIBlock, type GlobalURIBlock } from '../api/security'
+import { 
+  listAllURIBlocks, 
+  updateURIBlock, 
+  removeURIBlockRule, 
+  addURIBlockRule, 
+  bulkAddURIBlockRule, 
+  deleteURIBlock,
+  type URIBlockWithHost, 
+  getGlobalURIBlock, 
+  updateGlobalURIBlock, 
+  type GlobalURIBlock 
+} from '../api/security'
 import { fetchProxyHosts } from '../api/proxy-hosts'
 import { api } from '../api/client'
 import type { URIBlockRule, URIMatchType, AddURIBlockRuleRequest } from '../types/security'
@@ -264,7 +275,17 @@ export function URIBlockManager() {
     },
   })
 
-  // Note: addGlobalRuleMutation and removeGlobalRuleMutation removed - now using pending state
+  // Delete URI block mutation
+  const deleteURIBlockMutation = useMutation({
+    mutationFn: async (proxyHostId: string) => {
+      return deleteURIBlock(proxyHostId)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['uri-blocks'] })
+      queryClient.invalidateQueries({ queryKey: ['uri-block-history'] })
+      closeHostModal()
+    },
+  })
 
   const openHostModal = (block: URIBlockWithHost) => {
     setEditingBlock(block)
@@ -909,15 +930,39 @@ export function URIBlockManager() {
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); openHostModal(block); }}
-                      className="text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-300"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                    </button>
+                  <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => openHostModal(block)}
+                        className="p-1.5 text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded transition-colors"
+                        title={t('common:edit')}
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (confirm(t('uriBlock.confirmDeleteHost', { host: block.domain_names[0] }) || `Are you sure you want to delete URI blocking for ${block.domain_names[0]}?`)) {
+                            deleteURIBlockMutation.mutate(block.proxy_host_id);
+                          }
+                        }}
+                        disabled={deleteURIBlockMutation.isPending}
+                        className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={t('common:delete')}
+                      >
+                        {deleteURIBlockMutation.isPending ? (
+                          <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          </svg>
+                        ) : (
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1298,7 +1343,24 @@ export function URIBlockManager() {
             </div>
 
             {/* Modal Footer */}
-            <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 flex justify-end">
+            <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 flex justify-between">
+              <button
+                onClick={() => {
+                  if (confirm(t('uriBlock.confirmDeleteHost', { host: editingBlock.domain_names[0] }) || `Are you sure you want to delete URI blocking for ${editingBlock.domain_names[0]}? This action cannot be undone.`)) {
+                    deleteURIBlockMutation.mutate(editingBlock.proxy_host_id);
+                  }
+                }}
+                disabled={deleteURIBlockMutation.isPending}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+              >
+                {deleteURIBlockMutation.isPending && (
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                )}
+                {t('common:delete')}
+              </button>
               <button
                 onClick={closeHostModal}
                 className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors"
