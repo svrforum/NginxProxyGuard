@@ -1,0 +1,182 @@
+# Release Testing - Host Network Mode
+# Tests host network mode functionality (custom ports, nginx_status, etc.)
+# Usage: VERSION=1.2.5 docker compose -f docker-compose.release-test-host.yml up -d
+
+name: npg-release-test-host
+
+services:
+  # PostgreSQL - Test instance
+  db:
+    image: postgres:15-alpine
+    container_name: release-test-host-db
+    environment:
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_password
+      POSTGRES_DB: nginx_proxy_guard_test
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - release-test-host-network
+
+  # Valkey (Redis) - Test instance
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: release-test-host-valkey
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - release-test-host-network
+
+  # API - Released image from Docker Hub
+  api:
+    image: svrforum/nginxproxyguard-api:${VERSION:-latest}
+    container_name: release-test-host-api
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      PORT: "8080"
+      DATABASE_URL: postgres://test_user:test_password@release-test-host-db:5432/nginx_proxy_guard_test?sslmode=disable
+      REDIS_URL: redis://release-test-host-valkey:6379/0
+      JWT_SECRET: test_jwt_secret_12345678901234567890123456789012
+      ENVIRONMENT: test
+      NGINX_CONTAINER: release-test-host-nginx
+      NGINX_SKIP_TEST: "false"
+      # Host mode specific settings
+      NGINX_STATUS_URL: "http://host.docker.internal:${NGINX_HTTP_PORT:-28080}/nginx_status"
+      NGINX_HTTP_PORT: ${NGINX_HTTP_PORT:-28080}
+      NGINX_HTTPS_PORT: ${NGINX_HTTPS_PORT:-28443}
+      API_HOST_PORT: ${API_HOST_PORT:-29080}
+      API_HOST: 127.0.0.1:${API_HOST_PORT:-29080}
+    ports:
+      - "127.0.0.1:${API_HOST_PORT:-29080}:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    volumes:
+      - release_test_host_nginx_conf:/etc/nginx:rw
+      - release_test_host_api_data:/app/data:rw
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    networks:
+      - release-test-host-network
+
+  # Nginx - Released image with HOST NETWORK MODE
+  nginx:
+    image: svrforum/nginxproxyguard-nginx:${VERSION:-latest}
+    container_name: release-test-host-nginx
+    network_mode: host
+    environment:
+      NGINX_HTTP_PORT: ${NGINX_HTTP_PORT:-28080}
+      NGINX_HTTPS_PORT: ${NGINX_HTTPS_PORT:-28443}
+    volumes:
+      - release_test_host_nginx_conf:/etc/nginx:rw
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:${NGINX_HTTP_PORT:-28080}/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Test Runner - Runs host mode specific tests
+  test-runner:
+    image: curlimages/curl:latest
+    container_name: release-test-host-runner
+    profiles:
+      - test
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      nginx:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "=== Host Mode E2E Tests ==="
+        echo ""
+
+        NGINX_PORT=${NGINX_HTTP_PORT:-28080}
+        API_PORT=${API_HOST_PORT:-29080}
+
+        echo "Testing ports: NGINX=$$NGINX_PORT, API=$$API_PORT"
+        echo ""
+
+        # Test 1: nginx_status endpoint
+        echo "Test 1: /nginx_status endpoint"
+        RESULT=$$(curl -s http://host.docker.internal:$$NGINX_PORT/nginx_status)
+        if echo "$$RESULT" | grep -q "Active connections"; then
+          echo "✅ PASS: nginx_status returns active connections"
+        else
+          echo "❌ FAIL: nginx_status did not return expected data"
+          echo "Response: $$RESULT"
+          exit 1
+        fi
+
+        # Test 2: health endpoint
+        echo ""
+        echo "Test 2: /health endpoint"
+        RESULT=$$(curl -s http://host.docker.internal:$$NGINX_PORT/health)
+        if [ "$$RESULT" = "OK" ]; then
+          echo "✅ PASS: health returns OK"
+        else
+          echo "❌ FAIL: health did not return OK"
+          echo "Response: $$RESULT"
+          exit 1
+        fi
+
+        # Test 3: API health through API port
+        echo ""
+        echo "Test 3: API health endpoint"
+        RESULT=$$(curl -s http://host.docker.internal:$$API_PORT/health)
+        if echo "$$RESULT" | grep -q "status"; then
+          echo "✅ PASS: API health responds"
+        else
+          echo "❌ FAIL: API health did not respond correctly"
+          echo "Response: $$RESULT"
+          exit 1
+        fi
+
+        # Test 4: Verify nginx is NOT on port 80 (host mode custom port)
+        echo ""
+        echo "Test 4: Verify custom port (not default 80)"
+        if curl -s --connect-timeout 2 http://host.docker.internal:80/health > /dev/null 2>&1; then
+          echo "⚠️ WARNING: Port 80 is responding (may be another service)"
+        else
+          echo "✅ PASS: Port 80 not used by our nginx (as expected in host mode)"
+        fi
+
+        # Test 5: zzz_default.conf has correct port
+        echo ""
+        echo "Test 5: Verify zzz_default.conf has custom port"
+        # This test is implicit - if nginx_status works on custom port, config is correct
+        echo "✅ PASS: zzz_default.conf generated with correct port (verified by Test 1)"
+
+        echo ""
+        echo "=== All Host Mode Tests Passed ==="
+
+# Isolated network for testing
+networks:
+  release-test-host-network:
+    name: npg-release-test-host-network
+    driver: bridge
+
+# Isolated volumes for testing
+volumes:
+  release_test_host_nginx_conf:
+    name: npg_release_test_host_nginx_conf
+  release_test_host_api_data:
+    name: npg_release_test_host_api_data

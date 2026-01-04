@@ -147,14 +147,16 @@ jobs:
           docker pull ${{ env.IMAGE_PREFIX }}-nginx:latest
           docker tag ${{ env.IMAGE_PREFIX }}-nginx:latest ${{ env.IMAGE_PREFIX }}-nginx:${{ steps.version.outputs.version }}
 
-      # Run E2E tests
-      - name: Start test environment
+      # ================================================================
+      # E2E Tests - Bridge Mode (Default)
+      # ================================================================
+      - name: "[Bridge] Start test environment"
         run: |
           VERSION=${{ steps.version.outputs.version }}
           export VERSION
           docker compose -f docker-compose.release-test.yml up -d db valkey api nginx whoami httpbin
 
-      - name: Wait for services to be healthy
+      - name: "[Bridge] Wait for services to be healthy"
         run: |
           echo "Waiting for API..."
           timeout 120s bash -c '
@@ -170,25 +172,76 @@ jobs:
           '
           docker compose -f docker-compose.release-test.yml ps
 
-      - name: Run E2E integration tests
+      - name: "[Bridge] Run E2E integration tests"
         run: |
           VERSION=${{ steps.version.outputs.version }}
           export VERSION
           docker compose -f docker-compose.release-test.yml run --rm test-runner
 
-      - name: Get container logs (on failure)
+      - name: "[Bridge] Get container logs (on failure)"
         if: failure()
         run: |
-          echo "=== API Logs ==="
+          echo "=== Bridge Mode - API Logs ==="
           docker compose -f docker-compose.release-test.yml logs api
           echo ""
-          echo "=== Nginx Logs ==="
+          echo "=== Bridge Mode - Nginx Logs ==="
           docker compose -f docker-compose.release-test.yml logs nginx
 
-      - name: Teardown test environment
+      - name: "[Bridge] Teardown test environment"
         if: always()
         run: |
           docker compose -f docker-compose.release-test.yml down -v
+
+      # ================================================================
+      # E2E Tests - Host Network Mode
+      # ================================================================
+      - name: "[Host] Start test environment"
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          export VERSION
+          export NGINX_HTTP_PORT=28080
+          export NGINX_HTTPS_PORT=28443
+          export API_HOST_PORT=29080
+          docker compose -f docker-compose.release-test-host.yml up -d db valkey api nginx
+
+      - name: "[Host] Wait for services to be healthy"
+        run: |
+          echo "Waiting for API..."
+          timeout 120s bash -c '
+            until docker compose -f docker-compose.release-test-host.yml ps 2>/dev/null | grep -E "release-test-host-api.*healthy"; do
+              sleep 5
+            done
+          '
+          echo "Waiting for Nginx..."
+          timeout 60s bash -c '
+            until docker compose -f docker-compose.release-test-host.yml ps 2>/dev/null | grep -E "release-test-host-nginx.*healthy"; do
+              sleep 5
+            done
+          '
+          docker compose -f docker-compose.release-test-host.yml ps
+
+      - name: "[Host] Run E2E tests"
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          export VERSION
+          export NGINX_HTTP_PORT=28080
+          export NGINX_HTTPS_PORT=28443
+          export API_HOST_PORT=29080
+          docker compose -f docker-compose.release-test-host.yml run --rm test-runner
+
+      - name: "[Host] Get container logs (on failure)"
+        if: failure()
+        run: |
+          echo "=== Host Mode - API Logs ==="
+          docker compose -f docker-compose.release-test-host.yml logs api
+          echo ""
+          echo "=== Host Mode - Nginx Logs ==="
+          docker compose -f docker-compose.release-test-host.yml logs nginx
+
+      - name: "[Host] Teardown test environment"
+        if: always()
+        run: |
+          docker compose -f docker-compose.release-test-host.yml down -v
 
       - name: Delete tag on failure
         if: failure()
