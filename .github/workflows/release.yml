@@ -202,7 +202,8 @@ jobs:
           export NGINX_HTTP_PORT=28080
           export NGINX_HTTPS_PORT=28443
           export API_HOST_PORT=29080
-          docker compose -f docker-compose.release-test-host.yml up -d db valkey api nginx
+          export WHOAMI_PORT=28888
+          docker compose -f docker-compose.release-test-host.yml up -d db valkey api nginx whoami
 
       - name: "[Host] Wait for services to be healthy"
         run: |
@@ -218,6 +219,12 @@ jobs:
               sleep 5
             done
           '
+          echo "Waiting for Whoami upstream..."
+          timeout 30s bash -c '
+            until docker compose -f docker-compose.release-test-host.yml ps 2>/dev/null | grep -E "release-test-host-whoami.*healthy"; do
+              sleep 3
+            done
+          '
           docker compose -f docker-compose.release-test-host.yml ps
 
       - name: "[Host] Run E2E tests"
@@ -227,6 +234,7 @@ jobs:
           export NGINX_HTTP_PORT=28080
           export NGINX_HTTPS_PORT=28443
           export API_HOST_PORT=29080
+          export WHOAMI_PORT=28888
           docker compose -f docker-compose.release-test-host.yml run --rm test-runner
 
       - name: "[Host] Get container logs (on failure)"
@@ -237,6 +245,9 @@ jobs:
           echo ""
           echo "=== Host Mode - Nginx Logs ==="
           docker compose -f docker-compose.release-test-host.yml logs nginx
+          echo ""
+          echo "=== Host Mode - Whoami Logs ==="
+          docker compose -f docker-compose.release-test-host.yml logs whoami
 
       - name: "[Host] Teardown test environment"
         if: always()
