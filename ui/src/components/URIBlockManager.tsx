@@ -285,6 +285,10 @@ export function URIBlockManager() {
       queryClient.invalidateQueries({ queryKey: ['uri-block-history'] })
       closeHostModal()
     },
+    onError: (error) => {
+      console.error('Failed to delete URI block:', error)
+      alert(t('common:error') + ': ' + (error instanceof Error ? error.message : 'Unknown error'))
+    },
   })
 
   const openHostModal = (block: URIBlockWithHost) => {

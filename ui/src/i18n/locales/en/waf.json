@@ -409,6 +409,7 @@
       "regex": "Regex"
     },
     "confirmDelete": "Are you sure you want to delete this rule?",
+    "confirmDeleteHost": "Are you sure you want to delete URI blocking for {{host}}?",
     "exceptionIPs": "Exception IPs",
     "allowPrivateIPs": "Allow Private IPs",
     "updatedAt": "Updated",
