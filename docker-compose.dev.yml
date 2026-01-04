@@ -78,9 +78,11 @@ services:
       NGINX_HTTP_PORT: ${NGINX_HTTP_PORT:-80}
       NGINX_HTTPS_PORT: ${NGINX_HTTPS_PORT:-443}
       # API host port - for host network mode (nginx uses this to reach API)
+      # IMPORTANT: If you change API_HOST_PORT, also update API_HOST to match
       API_HOST_PORT: ${API_HOST_PORT:-9080}
       # API host for nginx config generation (required for host network mode)
-      API_HOST: ${API_HOST:-127.0.0.1:9080}
+      # Must match API_HOST_PORT. Example: API_HOST=127.0.0.1:9080
+      API_HOST: ${API_HOST:-127.0.0.1:${API_HOST_PORT:-9080}}
     ports:
       # API host port - MUST NOT conflict with NGINX_HTTP_PORT
       - "127.0.0.1:${API_HOST_PORT:-9080}:8080"
