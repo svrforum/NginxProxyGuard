@@ -409,6 +409,7 @@
       "regex": "정규식"
     },
     "confirmDelete": "이 규칙을 삭제하시겠습니까?",
+    "confirmDeleteHost": "{{host}}의 URI 차단 설정을 삭제하시겠습니까?",
     "exceptionIPs": "예외 IP",
     "allowPrivateIPs": "사설 IP 허용",
     "updatedAt": "수정일",
