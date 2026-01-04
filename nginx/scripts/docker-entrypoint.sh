@@ -267,35 +267,6 @@ mkdir -p /var/www/acme-challenge
 # Set permissions
 chown -R nginx:nginx /var/cache/nginx /tmp/modsecurity /var/www/acme-challenge 2>/dev/null || true
 
-# Update internal status server port based on NGINX_HTTP_PORT
-# This is needed for host network mode where a custom port is used
-update_status_port() {
-    local status_port="${NGINX_HTTP_PORT:-80}"
-    local nginx_conf="/etc/nginx/nginx.conf"
-
-    # Update the status server listen port to match NGINX_HTTP_PORT
-    # The status server shares the HTTP port for /health and /nginx_status
-    # Handle both old (8080) and new (80) default ports
-    if [ "$status_port" != "80" ]; then
-        # Update from 80 or 8080 to the custom port
-        # Note: nginx.conf only has one "listen 80;" in the status server block
-        if grep -q "listen 80;" "$nginx_conf" 2>/dev/null; then
-            echo "[Entrypoint] Updating internal status server port from 80 to $status_port..."
-            sed -i "s/listen 80;/listen $status_port;/" "$nginx_conf"
-        elif grep -q "listen 8080;" "$nginx_conf" 2>/dev/null; then
-            echo "[Entrypoint] Updating internal status server port from 8080 to $status_port..."
-            sed -i "s/listen 8080;/listen $status_port;/" "$nginx_conf"
-        fi
-    else
-        # Revert 8080 to 80 if NGINX_HTTP_PORT is default
-        if grep -q "listen 8080;" "$nginx_conf" 2>/dev/null; then
-            echo "[Entrypoint] Updating internal status server port from 8080 to 80..."
-            sed -i "s/listen 8080;/listen 80;/" "$nginx_conf"
-        fi
-    fi
-}
-update_status_port
-
 # Test nginx configuration
 echo "[Entrypoint] Testing nginx configuration..."
 if nginx -t; then

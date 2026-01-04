@@ -27,6 +27,18 @@ server {
         add_header Content-Type text/plain;
     }
 
+    # Nginx status endpoint (for API stats collection)
+    location /nginx_status {
+        stub_status;
+        access_log off;
+        allow 127.0.0.1;
+        allow ::1;
+        allow 172.16.0.0/12;
+        allow 192.168.0.0/16;
+        allow 10.0.0.0/8;
+        deny all;
+    }
+
     # ACME HTTP-01 Challenge support (for Let's Encrypt)
     location /.well-known/acme-challenge/ {
         root /etc/nginx/acme-challenge;
