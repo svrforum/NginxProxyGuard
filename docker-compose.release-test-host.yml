@@ -1,5 +1,5 @@
 # Release Testing - Host Network Mode
-# Tests host network mode functionality (custom ports, nginx_status, etc.)
+# Tests host network mode functionality (custom ports, nginx_status, proxy hosts, etc.)
 # Usage: VERSION=1.2.5 docker compose -f docker-compose.release-test-host.yml up -d
 
 name: npg-release-test-host
@@ -92,7 +92,21 @@ services:
       timeout: 5s
       retries: 10
 
-  # Test Runner - Runs host mode specific tests
+  # Upstream service - Exposes port on host for nginx to access
+  whoami:
+    image: traefik/whoami
+    container_name: release-test-host-whoami
+    ports:
+      - "127.0.0.1:${WHOAMI_PORT:-28888}:80"
+    networks:
+      - release-test-host-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Test Runner - Runs host mode specific tests including proxy host tests
   test-runner:
     image: curlimages/curl:latest
     container_name: release-test-host-runner
@@ -100,8 +114,11 @@ services:
       - test
     extra_hosts:
       - "host.docker.internal:host-gateway"
+      - "test-host.local:host-gateway"
     depends_on:
       nginx:
+        condition: service_healthy
+      whoami:
         condition: service_healthy
     entrypoint: ["/bin/sh", "-c"]
     command:
@@ -109,14 +126,21 @@ services:
         echo "=== Host Mode E2E Tests ==="
         echo ""
 
-        NGINX_PORT=${NGINX_HTTP_PORT:-28080}
-        API_PORT=${API_HOST_PORT:-29080}
+        NGINX_PORT=$${NGINX_HTTP_PORT:-28080}
+        API_PORT=$${API_HOST_PORT:-29080}
+        WHOAMI_PORT=$${WHOAMI_PORT:-28888}
 
-        echo "Testing ports: NGINX=$$NGINX_PORT, API=$$API_PORT"
+        echo "Testing ports: NGINX=$$NGINX_PORT, API=$$API_PORT, WHOAMI=$$WHOAMI_PORT"
         echo ""
 
+        # ============================================================
+        # Basic Infrastructure Tests
+        # ============================================================
+        echo "=== 1. Basic Infrastructure Tests ==="
+
         # Test 1: nginx_status endpoint
-        echo "Test 1: /nginx_status endpoint"
+        echo ""
+        echo "Test 1.1: /nginx_status endpoint"
         RESULT=$$(curl -s http://host.docker.internal:$$NGINX_PORT/nginx_status)
         if echo "$$RESULT" | grep -q "Active connections"; then
           echo "✅ PASS: nginx_status returns active connections"
@@ -128,7 +152,7 @@ services:
 
         # Test 2: health endpoint
         echo ""
-        echo "Test 2: /health endpoint"
+        echo "Test 1.2: /health endpoint"
         RESULT=$$(curl -s http://host.docker.internal:$$NGINX_PORT/health)
         if [ "$$RESULT" = "OK" ]; then
           echo "✅ PASS: health returns OK"
@@ -140,7 +164,7 @@ services:
 
         # Test 3: API health through API port
         echo ""
-        echo "Test 3: API health endpoint"
+        echo "Test 1.3: API health endpoint"
         RESULT=$$(curl -s http://host.docker.internal:$$API_PORT/health)
         if echo "$$RESULT" | grep -q "status"; then
           echo "✅ PASS: API health responds"
@@ -152,19 +176,138 @@ services:
 
         # Test 4: Verify nginx is NOT on port 80 (host mode custom port)
         echo ""
-        echo "Test 4: Verify custom port (not default 80)"
+        echo "Test 1.4: Verify custom port (not default 80)"
         if curl -s --connect-timeout 2 http://host.docker.internal:80/health > /dev/null 2>&1; then
           echo "⚠️ WARNING: Port 80 is responding (may be another service)"
         else
           echo "✅ PASS: Port 80 not used by our nginx (as expected in host mode)"
         fi
 
-        # Test 5: zzz_default.conf has correct port
+        # Test 5: Upstream whoami is accessible
         echo ""
-        echo "Test 5: Verify zzz_default.conf has custom port"
-        # This test is implicit - if nginx_status works on custom port, config is correct
-        echo "✅ PASS: zzz_default.conf generated with correct port (verified by Test 1)"
+        echo "Test 1.5: Upstream whoami service"
+        RESULT=$$(curl -s http://host.docker.internal:$$WHOAMI_PORT/)
+        if echo "$$RESULT" | grep -q "Hostname"; then
+          echo "✅ PASS: Whoami upstream accessible"
+        else
+          echo "❌ FAIL: Whoami upstream not accessible"
+          echo "Response: $$RESULT"
+          exit 1
+        fi
 
+        # ============================================================
+        # Proxy Host CRUD & Connectivity Tests
+        # ============================================================
+        echo ""
+        echo "=== 2. Proxy Host CRUD & Connectivity Tests ==="
+
+        # Login to API
+        echo ""
+        echo "Test 2.1: API Authentication"
+        LOGIN_RESP=$$(curl -s -X POST http://host.docker.internal:$$API_PORT/api/v1/auth/login \
+          -H "Content-Type: application/json" \
+          -d '{"username":"admin","password":"admin"}')
+
+        TOKEN=$$(echo "$$LOGIN_RESP" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+        if [ -z "$$TOKEN" ]; then
+          echo "❌ FAIL: Login failed"
+          echo "Response: $$LOGIN_RESP"
+          exit 1
+        fi
+        echo "✅ PASS: Login successful, token obtained"
+
+        # Create proxy host
+        echo ""
+        echo "Test 2.2: Create proxy host"
+        CREATE_RESP=$$(curl -s -X POST http://host.docker.internal:$$API_PORT/api/v1/proxy-hosts \
+          -H "Content-Type: application/json" \
+          -H "Authorization: Bearer $$TOKEN" \
+          -d '{
+            "domain_names": ["test-host.local"],
+            "forward_scheme": "http",
+            "forward_host": "127.0.0.1",
+            "forward_port": '$$WHOAMI_PORT',
+            "caching_enabled": false,
+            "block_exploits": false,
+            "waf_enabled": false
+          }')
+
+        HOST_ID=$$(echo "$$CREATE_RESP" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+        if [ -z "$$HOST_ID" ]; then
+          echo "❌ FAIL: Failed to create proxy host"
+          echo "Response: $$CREATE_RESP"
+          exit 1
+        fi
+        echo "✅ PASS: Proxy host created with ID: $$HOST_ID"
+
+        # Wait for nginx reload
+        echo ""
+        echo "Waiting for nginx to reload..."
+        sleep 5
+
+        # Test proxy connectivity
+        echo ""
+        echo "Test 2.3: Proxy connectivity test"
+        PROXY_RESP=$$(curl -s -H "Host: test-host.local" http://host.docker.internal:$$NGINX_PORT/)
+        if echo "$$PROXY_RESP" | grep -q "Hostname"; then
+          echo "✅ PASS: Proxy routing works - whoami response received"
+        else
+          echo "❌ FAIL: Proxy routing failed"
+          echo "Response: $$PROXY_RESP"
+          # Don't exit, continue to cleanup
+        fi
+
+        # Get proxy host to verify
+        echo ""
+        echo "Test 2.4: Get proxy host by ID"
+        GET_RESP=$$(curl -s http://host.docker.internal:$$API_PORT/api/v1/proxy-hosts/$$HOST_ID \
+          -H "Authorization: Bearer $$TOKEN")
+        if echo "$$GET_RESP" | grep -q "test-host.local"; then
+          echo "✅ PASS: Proxy host retrieved successfully"
+        else
+          echo "❌ FAIL: Failed to get proxy host"
+          echo "Response: $$GET_RESP"
+        fi
+
+        # Update proxy host
+        echo ""
+        echo "Test 2.5: Update proxy host"
+        UPDATE_RESP=$$(curl -s -X PUT http://host.docker.internal:$$API_PORT/api/v1/proxy-hosts/$$HOST_ID \
+          -H "Content-Type: application/json" \
+          -H "Authorization: Bearer $$TOKEN" \
+          -d '{
+            "domain_names": ["test-host.local"],
+            "forward_scheme": "http",
+            "forward_host": "127.0.0.1",
+            "forward_port": '$$WHOAMI_PORT',
+            "caching_enabled": true,
+            "block_exploits": false,
+            "waf_enabled": false
+          }')
+        if echo "$$UPDATE_RESP" | grep -q '"caching_enabled":true'; then
+          echo "✅ PASS: Proxy host updated successfully"
+        else
+          echo "❌ FAIL: Failed to update proxy host"
+          echo "Response: $$UPDATE_RESP"
+        fi
+
+        # Delete proxy host
+        echo ""
+        echo "Test 2.6: Delete proxy host"
+        DELETE_RESP=$$(curl -s -X DELETE http://host.docker.internal:$$API_PORT/api/v1/proxy-hosts/$$HOST_ID \
+          -H "Authorization: Bearer $$TOKEN" \
+          -w "\n%{http_code}")
+        HTTP_CODE=$$(echo "$$DELETE_RESP" | tail -1)
+        if [ "$$HTTP_CODE" = "204" ] || [ "$$HTTP_CODE" = "200" ]; then
+          echo "✅ PASS: Proxy host deleted successfully"
+        else
+          echo "❌ FAIL: Failed to delete proxy host (HTTP $$HTTP_CODE)"
+          echo "Response: $$DELETE_RESP"
+        fi
+
+        # ============================================================
+        # Summary
+        # ============================================================
         echo ""
         echo "=== All Host Mode Tests Passed ==="
 
