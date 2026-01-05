@@ -317,30 +317,34 @@ func (h *SecurityHandler) BanIP(c echo.Context) error {
 	}
 
 	// Regenerate nginx config to apply banned IP (in background for speed)
+	// FIXED: Use debounced reload instead of updating all hosts individually
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), config.ContextTimeout)
 		defer cancel()
 
 		if h.proxyHostService != nil {
 			if req.ProxyHostID != nil {
-				// Regenerate specific host config
-				h.proxyHostService.Update(ctx, *req.ProxyHostID, &model.UpdateProxyHostRequest{})
+				// Regenerate specific host config without immediate reload
+				if _, err := h.proxyHostService.UpdateWithoutReload(ctx, *req.ProxyHostID, &model.UpdateProxyHostRequest{}); err != nil {
+					c.Logger().Errorf("Failed to update config for host: %v", err)
+					return
+				}
 			} else {
-				// For global ban, regenerate all enabled hosts in parallel
+				// For global ban, regenerate all enabled hosts without reload
 				hosts, _, err := h.proxyHostRepo.List(ctx, 1, config.MaxWAFRulesLimit, "", "", "")
 				if err == nil && hosts != nil {
-					var wg sync.WaitGroup
 					for _, host := range hosts {
 						if host.Enabled {
-							wg.Add(1)
-							go func(hostID string) {
-								defer wg.Done()
-								h.proxyHostService.Update(ctx, hostID, &model.UpdateProxyHostRequest{})
-							}(host.ID)
+							if _, err := h.proxyHostService.UpdateWithoutReload(ctx, host.ID, &model.UpdateProxyHostRequest{}); err != nil {
+								c.Logger().Errorf("Failed to update config for host %s: %v", host.ID, err)
+							}
 						}
 					}
-					wg.Wait()
 				}
+			}
+			// Request single debounced reload after all configs are generated
+			if h.nginxReloader != nil {
+				h.nginxReloader.RequestReload(ctx)
 			}
 		}
 	}()
@@ -389,6 +393,7 @@ func (h *SecurityHandler) UnbanIP(c echo.Context) error {
 	}
 
 	// Regenerate all enabled host configs in background for speed
+	// FIXED: Use debounced reload instead of parallel goroutines per host
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), config.ContextTimeout)
 		defer cancel()
@@ -396,17 +401,18 @@ func (h *SecurityHandler) UnbanIP(c echo.Context) error {
 		if h.proxyHostService != nil && h.proxyHostRepo != nil {
 			hosts, _, err := h.proxyHostRepo.List(ctx, 1, config.MaxWAFRulesLimit, "", "", "")
 			if err == nil && hosts != nil {
-				var wg sync.WaitGroup
+				// Update all host configs sequentially WITHOUT reload
 				for _, host := range hosts {
 					if host.Enabled {
-						wg.Add(1)
-						go func(hostID string) {
-							defer wg.Done()
-							h.proxyHostService.Update(ctx, hostID, &model.UpdateProxyHostRequest{})
-						}(host.ID)
+						if _, err := h.proxyHostService.UpdateWithoutReload(ctx, host.ID, &model.UpdateProxyHostRequest{}); err != nil {
+							c.Logger().Errorf("Failed to update config for host %s: %v", host.ID, err)
+						}
 					}
 				}
-				wg.Wait()
+				// Request single debounced reload after all configs are updated
+				if h.nginxReloader != nil {
+					h.nginxReloader.RequestReload(ctx)
+				}
 			}
 		}
 	}()
