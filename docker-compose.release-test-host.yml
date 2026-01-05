@@ -54,7 +54,7 @@ services:
       API_HOST_PORT: ${API_HOST_PORT:-29080}
       API_HOST: 127.0.0.1:${API_HOST_PORT:-29080}
     ports:
-      - "127.0.0.1:${API_HOST_PORT:-29080}:8080"
+      - "${API_HOST_PORT:-29080}:8080"  # Bind to all interfaces for test access
     depends_on:
       db:
         condition: service_healthy
