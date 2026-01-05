@@ -342,7 +342,6 @@ func (h *SecurityHandler) BanIP(c echo.Context) error {
 					}
 				}
 			}
-			
 			// Request single debounced reload after all configs are generated
 			if h.nginxReloader != nil {
 				h.nginxReloader.RequestReload(ctx)
