@@ -107,8 +107,11 @@ services:
     environment:
       API_BASE_URL: http://release-test-api:8080
       NGINX_URL: http://release-test-nginx:80
+      DATABASE_URL: postgres://test_user:test_password@release-test-db:5432/nginx_proxy_guard_test?sslmode=disable
       CGO_ENABLED: "0"
     depends_on:
+      db:
+        condition: service_healthy
       api:
         condition: service_healthy
       nginx:
