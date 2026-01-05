@@ -146,7 +146,9 @@ func (m *Manager) GenerateDefaultServerConfig(ctx context.Context, action string
 
 	// Use zzz_ prefix to ensure this loads last (after proxy host configs)
 	configFile := filepath.Join(m.configPath, "zzz_default.conf")
-	if err := os.WriteFile(configFile, buf.Bytes(), 0644); err != nil {
+	
+	// Use atomic write to prevent nginx from reading partial config
+	if err := m.writeFileAtomic(configFile, buf.Bytes(), 0644); err != nil {
 		return fmt.Errorf("failed to write default server config file: %w", err)
 	}
 

@@ -10,10 +10,15 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"text/template"
 
 	"nginx-proxy-guard/internal/model"
 )
+
+// globalNginxMutex ensures all nginx config operations (write/test/reload) are serialized globally
+// This prevents race conditions where nginx reads partially-written config files
+var globalNginxMutex sync.Mutex
 
 // Manager handles nginx configuration generation and operations
 type Manager struct {
@@ -81,6 +86,186 @@ func (m *Manager) GetHTTPPort() string {
 func (m *Manager) GetHTTPSPort() string {
 	return m.httpsPort
 }
+
+// writeFileAtomic writes data to a file atomically using temp file + fsync + rename
+// This ensures nginx never reads partially-written config files
+func (m *Manager) writeFileAtomic(filePath string, data []byte, perm os.FileMode) error {
+	// Ensure parent directory exists
+	dir := filepath.Dir(filePath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	// Create temp file in the same directory (required for atomic rename)
+	tmpFile, err := os.CreateTemp(dir, ".tmp-*")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+
+	// Cleanup temp file on error
+	defer func() {
+		if tmpFile != nil {
+			tmpFile.Close()
+			os.Remove(tmpPath)
+		}
+	}()
+
+	// Write all data
+	if _, err := tmpFile.Write(data); err != nil {
+		return fmt.Errorf("failed to write to temp file: %w", err)
+	}
+
+	// Fsync to ensure data is on disk
+	if err := tmpFile.Sync(); err != nil {
+		return fmt.Errorf("failed to sync temp file: %w", err)
+	}
+
+	// Close file before rename
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temp file: %w", err)
+	}
+	tmpFile = nil // Mark as closed for defer cleanup
+
+	// Set correct permissions
+	if err := os.Chmod(tmpPath, perm); err != nil {
+		return fmt.Errorf("failed to set permissions: %w", err)
+	}
+
+	// Atomic rename
+	if err := os.Rename(tmpPath, filePath); err != nil {
+		return fmt.Errorf("failed to rename temp file: %w", err)
+	}
+
+	return nil
+}
+
+// executeWithLock runs a function with the global nginx mutex locked
+// This ensures all config operations are serialized
+func (m *Manager) executeWithLock(ctx context.Context, fn func() error) error {
+	globalNginxMutex.Lock()
+	defer globalNginxMutex.Unlock()
+	
+	return fn()
+}
+
+// testAndReloadNginx tests and reloads nginx configuration
+// Must be called within executeWithLock
+func (m *Manager) testAndReloadNginx(ctx context.Context) error {
+	if m.skipTest {
+		return nil
+	}
+
+	// Test configuration first
+	if err := m.testConfigInternal(ctx); err != nil {
+		return err
+	}
+
+	// Reload nginx
+	return m.reloadNginxInternal(ctx)
+}
+
+// GenerateConfigAndReload generates proxy host config, WAF config, tests and reloads nginx
+// This is a centralized operation that ensures all file writes complete before test/reload
+func (m *Manager) GenerateConfigAndReload(ctx context.Context, data ProxyHostConfigData, wafExclusions []model.WAFRuleExclusion) error {
+	return m.executeWithLock(ctx, func() error {
+		// Generate main proxy host config
+		if err := m.GenerateConfigFull(ctx, data); err != nil {
+			return fmt.Errorf("failed to generate proxy host config: %w", err)
+		}
+
+		// Generate WAF config if enabled
+		if data.Host.WAFEnabled {
+			if err := m.GenerateHostWAFConfig(ctx, data.Host, wafExclusions); err != nil {
+				return fmt.Errorf("failed to generate WAF config: %w", err)
+			}
+		}
+
+		// Test and reload nginx (all config files are complete now)
+		if err := m.testAndReloadNginx(ctx); err != nil {
+			return err
+		}
+
+		return nil
+	})
+}
+
+// UpdateConfigAndReload updates existing proxy host config, WAF config, tests and reloads nginx
+// This is an alias for GenerateConfigAndReload for semantic clarity
+func (m *Manager) UpdateConfigAndReload(ctx context.Context, data ProxyHostConfigData, wafExclusions []model.WAFRuleExclusion) error {
+	return m.GenerateConfigAndReload(ctx, data, wafExclusions)
+}
+
+// RemoveConfigAndReload removes proxy host config, WAF config, tests and reloads nginx
+func (m *Manager) RemoveConfigAndReload(ctx context.Context, host *model.ProxyHost) error {
+	return m.executeWithLock(ctx, func() error {
+		// Remove configs
+		if err := m.RemoveConfig(ctx, host); err != nil {
+			return err
+		}
+
+		// Test and reload nginx
+		if err := m.testAndReloadNginx(ctx); err != nil {
+			return err
+		}
+
+		return nil
+	})
+}
+
+
+// testConfigInternal is the internal test function without locking
+func (m *Manager) testConfigInternal(ctx context.Context) error {
+	if m.skipTest {
+		return nil
+	}
+
+	// Try docker exec first (for containerized environments)
+	cmd := exec.CommandContext(ctx, "docker", "exec", m.nginxContainer, "nginx", "-t")
+	output, err := cmd.CombinedOutput()
+	outputStr := strings.TrimSpace(string(output))
+
+	if err != nil {
+		// If we got nginx output, return it
+		if outputStr != "" {
+			return fmt.Errorf("nginx config test failed: %s", outputStr)
+		}
+		// If output is empty, try to capture error details
+		log.Printf("[TestConfig] docker exec failed with empty output, err: %v", err)
+		// Fallback to direct nginx command (for non-containerized environments)
+		cmd = exec.CommandContext(ctx, "nginx", "-t")
+		output, err = cmd.CombinedOutput()
+		if err != nil {
+			fallbackOutput := strings.TrimSpace(string(output))
+			if fallbackOutput != "" {
+				return fmt.Errorf("nginx config test failed: %s", fallbackOutput)
+			}
+			return fmt.Errorf("nginx config test failed: %v", err)
+		}
+	}
+	return nil
+}
+
+// reloadNginxInternal is the internal reload function without locking
+func (m *Manager) reloadNginxInternal(ctx context.Context) error {
+	if m.skipTest {
+		return nil
+	}
+
+	// Try docker exec first (for containerized environments)
+	cmd := exec.CommandContext(ctx, "docker", "exec", m.nginxContainer, "nginx", "-s", "reload")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// Fallback to direct nginx command (for non-containerized environments)
+		cmd = exec.CommandContext(ctx, "nginx", "-s", "reload")
+		output, err = cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("nginx reload failed: %s", string(output))
+		}
+	}
+	return nil
+}
+
 
 
 func (m *Manager) GenerateConfig(ctx context.Context, host *model.ProxyHost) error {
@@ -380,7 +565,9 @@ func (m *Manager) GenerateConfigFull(ctx context.Context, data ProxyHostConfigDa
 	}
 
 	configFile := filepath.Join(m.configPath, GetConfigFilename(data.Host))
-	if err := os.WriteFile(configFile, buf.Bytes(), 0644); err != nil {
+	
+	// Use atomic write to prevent nginx from reading partial config
+	if err := m.writeFileAtomic(configFile, buf.Bytes(), 0644); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
@@ -416,53 +603,15 @@ func (m *Manager) RemoveConfig(ctx context.Context, host *model.ProxyHost) error
 }
 
 func (m *Manager) TestConfig(ctx context.Context) error {
-	if m.skipTest {
-		return nil
-	}
-
-	// Try docker exec first (for containerized environments)
-	cmd := exec.CommandContext(ctx, "docker", "exec", m.nginxContainer, "nginx", "-t")
-	output, err := cmd.CombinedOutput()
-	outputStr := strings.TrimSpace(string(output))
-
-	if err != nil {
-		// If we got nginx output, return it
-		if outputStr != "" {
-			return fmt.Errorf("nginx config test failed: %s", outputStr)
-		}
-		// If output is empty, try to capture error details
-		log.Printf("[TestConfig] docker exec failed with empty output, err: %v", err)
-		// Fallback to direct nginx command (for non-containerized environments)
-		cmd = exec.CommandContext(ctx, "nginx", "-t")
-		output, err = cmd.CombinedOutput()
-		if err != nil {
-			fallbackOutput := strings.TrimSpace(string(output))
-			if fallbackOutput != "" {
-				return fmt.Errorf("nginx config test failed: %s", fallbackOutput)
-			}
-			return fmt.Errorf("nginx config test failed: %v", err)
-		}
-	}
-	return nil
+	return m.executeWithLock(ctx, func() error {
+		return m.testConfigInternal(ctx)
+	})
 }
 
 func (m *Manager) ReloadNginx(ctx context.Context) error {
-	if m.skipTest {
-		return nil
-	}
-
-	// Try docker exec first (for containerized environments)
-	cmd := exec.CommandContext(ctx, "docker", "exec", m.nginxContainer, "nginx", "-s", "reload")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		// Fallback to direct nginx command (for non-containerized environments)
-		cmd = exec.CommandContext(ctx, "nginx", "-s", "reload")
-		output, err = cmd.CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("nginx reload failed: %s", string(output))
-		}
-	}
-	return nil
+	return m.executeWithLock(ctx, func() error {
+		return m.reloadNginxInternal(ctx)
+	})
 }
 
 func (m *Manager) GenerateAllConfigs(ctx context.Context, hosts []model.ProxyHost) error {
