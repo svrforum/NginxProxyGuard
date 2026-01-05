@@ -113,10 +113,10 @@ BEGIN
     END IF;
 
     FOR i IN 0..months_ahead LOOP
-        -- Use TIMESTAMPTZ to match existing partition ranges
-        start_ts := DATE_TRUNC('month', CURRENT_TIMESTAMP + (i || ' months')::INTERVAL);
+        -- Use UTC timezone to match existing partition ranges (created by migration with +00)
+        start_ts := DATE_TRUNC('month', (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + (i || ' months')::INTERVAL) AT TIME ZONE 'UTC';
         end_ts := start_ts + INTERVAL '1 month';
-        partition_name := partition_prefix || TO_CHAR(start_ts, 'YYYY_MM');
+        partition_name := partition_prefix || TO_CHAR(start_ts AT TIME ZONE 'UTC', 'YYYY_MM');
 
         -- Check if partition already exists
         IF NOT EXISTS (
