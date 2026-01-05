@@ -10,14 +10,17 @@ env:
   IMAGE_PREFIX: svrforum/nginxproxyguard
 
 jobs:
-  build-and-test:
-    name: Build, Test, and Release
+  # ============================================================
+  # Step 1: Detect Changes
+  # ============================================================
+  detect:
+    name: 🔍 Detect Changes
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
-      api_changed: ${{ steps.check-api.outputs.changed }}
-      ui_changed: ${{ steps.check-ui.outputs.changed }}
-      nginx_changed: ${{ steps.check-nginx.outputs.changed }}
+      api_changed: ${{ steps.changes.outputs.api }}
+      ui_changed: ${{ steps.changes.outputs.ui }}
+      nginx_changed: ${{ steps.changes.outputs.nginx }}
 
     steps:
       - name: Checkout
@@ -25,12 +28,50 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Extract version from tag
+      - name: Extract version
         id: version
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Building version: $VERSION"
+          echo "📦 Version: $VERSION"
+
+      - name: Check component changes
+        id: changes
+        run: |
+          check_changes() {
+            local component=$1
+            local dir=$2
+
+            SOURCE_HASH=$(find ./$dir -type f -exec sha256sum {} \; | sort | sha256sum | cut -d' ' -f1)
+            REMOTE_HASH=$(docker manifest inspect ${{ env.IMAGE_PREFIX }}-$component:latest 2>/dev/null | \
+              jq -r '.annotations["org.opencontainers.image.revision"]' 2>/dev/null || echo "none")
+
+            if [ "$SOURCE_HASH" = "$REMOTE_HASH" ]; then
+              echo "$component=false" >> $GITHUB_OUTPUT
+              echo "⏭️ $component: No changes"
+            else
+              echo "$component=true" >> $GITHUB_OUTPUT
+              echo "${component}_hash=$SOURCE_HASH" >> $GITHUB_OUTPUT
+              echo "✅ $component: Changes detected"
+            fi
+          }
+
+          check_changes "api" "api"
+          check_changes "ui" "ui"
+          check_changes "nginx" "nginx"
+
+  # ============================================================
+  # Step 2: Build Images (Parallel)
+  # ============================================================
+  build-api:
+    name: 🔨 Build API
+    needs: detect
+    runs-on: ubuntu-latest
+    if: needs.detect.outputs.api_changed == 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -41,281 +82,342 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # Calculate source hash and compare with Docker Hub image
-      - name: Check API changes
-        id: check-api
-        run: |
-          # Calculate hash of source directory
-          SOURCE_HASH=$(find ./api -type f -exec sha256sum {} \; | sort | sha256sum | cut -d' ' -f1)
-          echo "Source hash: $SOURCE_HASH"
-
-          # Get hash from Docker Hub image label
-          REMOTE_HASH=$(docker manifest inspect ${{ env.IMAGE_PREFIX }}-api:latest 2>/dev/null | \
-            jq -r '.annotations["org.opencontainers.image.revision"]' 2>/dev/null || echo "none")
-          echo "Remote hash: $REMOTE_HASH"
-
-          if [ "$SOURCE_HASH" = "$REMOTE_HASH" ]; then
-            echo "changed=false" >> $GITHUB_OUTPUT
-            echo "API: No changes detected"
-          else
-            echo "changed=true" >> $GITHUB_OUTPUT
-            echo "hash=$SOURCE_HASH" >> $GITHUB_OUTPUT
-            echo "API: Changes detected"
-          fi
-
-      - name: Check UI changes
-        id: check-ui
-        run: |
-          SOURCE_HASH=$(find ./ui -type f -exec sha256sum {} \; | sort | sha256sum | cut -d' ' -f1)
-          echo "Source hash: $SOURCE_HASH"
-
-          REMOTE_HASH=$(docker manifest inspect ${{ env.IMAGE_PREFIX }}-ui:latest 2>/dev/null | \
-            jq -r '.annotations["org.opencontainers.image.revision"]' 2>/dev/null || echo "none")
-          echo "Remote hash: $REMOTE_HASH"
-
-          if [ "$SOURCE_HASH" = "$REMOTE_HASH" ]; then
-            echo "changed=false" >> $GITHUB_OUTPUT
-            echo "UI: No changes detected"
-          else
-            echo "changed=true" >> $GITHUB_OUTPUT
-            echo "hash=$SOURCE_HASH" >> $GITHUB_OUTPUT
-            echo "UI: Changes detected"
-          fi
-
-      - name: Check Nginx changes
-        id: check-nginx
-        run: |
-          SOURCE_HASH=$(find ./nginx -type f -exec sha256sum {} \; | sort | sha256sum | cut -d' ' -f1)
-          echo "Source hash: $SOURCE_HASH"
-
-          REMOTE_HASH=$(docker manifest inspect ${{ env.IMAGE_PREFIX }}-nginx:latest 2>/dev/null | \
-            jq -r '.annotations["org.opencontainers.image.revision"]' 2>/dev/null || echo "none")
-          echo "Remote hash: $REMOTE_HASH"
-
-          if [ "$SOURCE_HASH" = "$REMOTE_HASH" ]; then
-            echo "changed=false" >> $GITHUB_OUTPUT
-            echo "Nginx: No changes detected"
-          else
-            echo "changed=true" >> $GITHUB_OUTPUT
-            echo "hash=$SOURCE_HASH" >> $GITHUB_OUTPUT
-            echo "Nginx: Changes detected"
-          fi
-
-      # Build only changed images
-      - name: Build API image
-        if: steps.check-api.outputs.changed == 'true'
+      - name: Build and push (test tag)
         uses: docker/build-push-action@v6
         with:
           context: ./api
-          load: true
-          tags: ${{ env.IMAGE_PREFIX }}-api:${{ steps.version.outputs.version }}
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}-test
           cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
 
-      - name: Pull existing API image
-        if: steps.check-api.outputs.changed == 'false'
-        run: |
-          docker pull ${{ env.IMAGE_PREFIX }}-api:latest
-          docker tag ${{ env.IMAGE_PREFIX }}-api:latest ${{ env.IMAGE_PREFIX }}-api:${{ steps.version.outputs.version }}
+  build-ui:
+    name: 🔨 Build UI
+    needs: detect
+    runs-on: ubuntu-latest
+    if: needs.detect.outputs.ui_changed == 'true'
 
-      - name: Build UI image
-        if: steps.check-ui.outputs.changed == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push (test tag)
         uses: docker/build-push-action@v6
         with:
           context: ./ui
-          load: true
-          tags: ${{ env.IMAGE_PREFIX }}-ui:${{ steps.version.outputs.version }}
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}-test
           cache-from: type=gha,scope=ui
+          cache-to: type=gha,mode=max,scope=ui
 
-      - name: Pull existing UI image
-        if: steps.check-ui.outputs.changed == 'false'
-        run: |
-          docker pull ${{ env.IMAGE_PREFIX }}-ui:latest
-          docker tag ${{ env.IMAGE_PREFIX }}-ui:latest ${{ env.IMAGE_PREFIX }}-ui:${{ steps.version.outputs.version }}
+  build-nginx:
+    name: 🔨 Build Nginx
+    needs: detect
+    runs-on: ubuntu-latest
+    if: needs.detect.outputs.nginx_changed == 'true'
 
-      - name: Build Nginx image
-        if: steps.check-nginx.outputs.changed == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push (test tag)
         uses: docker/build-push-action@v6
         with:
           context: ./nginx
-          load: true
-          tags: ${{ env.IMAGE_PREFIX }}-nginx:${{ steps.version.outputs.version }}
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}-test
           cache-from: type=gha,scope=nginx
+          cache-to: type=gha,mode=max,scope=nginx
 
-      - name: Pull existing Nginx image
-        if: steps.check-nginx.outputs.changed == 'false'
-        run: |
-          docker pull ${{ env.IMAGE_PREFIX }}-nginx:latest
-          docker tag ${{ env.IMAGE_PREFIX }}-nginx:latest ${{ env.IMAGE_PREFIX }}-nginx:${{ steps.version.outputs.version }}
+  # ============================================================
+  # Step 3: E2E Tests - Bridge Mode
+  # ============================================================
+  test-bridge:
+    name: 🧪 Test (Bridge Mode)
+    needs: [detect, build-api, build-ui, build-nginx]
+    if: always() && needs.detect.result == 'success'
+    runs-on: ubuntu-latest
 
-      # ================================================================
-      # E2E Tests - Bridge Mode (Default)
-      # ================================================================
-      - name: "[Bridge] Start test environment"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare test images
+        env:
+          VERSION: ${{ needs.detect.outputs.version }}
+          API_CHANGED: ${{ needs.detect.outputs.api_changed }}
+          UI_CHANGED: ${{ needs.detect.outputs.ui_changed }}
+          NGINX_CHANGED: ${{ needs.detect.outputs.nginx_changed }}
         run: |
-          VERSION=${{ steps.version.outputs.version }}
-          export VERSION
+          # Pull test images or latest for unchanged components
+          pull_image() {
+            local component=$1
+            local changed=$2
+
+            if [ "$changed" == "true" ]; then
+              echo "Pulling $component:$VERSION-test..."
+              docker pull ${{ env.IMAGE_PREFIX }}-$component:$VERSION-test
+              docker tag ${{ env.IMAGE_PREFIX }}-$component:$VERSION-test ${{ env.IMAGE_PREFIX }}-$component:$VERSION
+            else
+              echo "Pulling $component:latest (unchanged)..."
+              docker pull ${{ env.IMAGE_PREFIX }}-$component:latest
+              docker tag ${{ env.IMAGE_PREFIX }}-$component:latest ${{ env.IMAGE_PREFIX }}-$component:$VERSION
+            fi
+          }
+
+          pull_image "api" "$API_CHANGED"
+          pull_image "ui" "$UI_CHANGED"
+          pull_image "nginx" "$NGINX_CHANGED"
+
+      - name: Start test environment
+        env:
+          VERSION: ${{ needs.detect.outputs.version }}
+        run: |
           docker compose -f docker-compose.release-test.yml up -d db valkey api nginx whoami httpbin
 
-      - name: "[Bridge] Wait for services to be healthy"
+      - name: Wait for services
         run: |
-          echo "Waiting for API..."
+          echo "⏳ Waiting for API..."
           timeout 120s bash -c '
             until docker compose -f docker-compose.release-test.yml ps 2>/dev/null | grep -E "release-test-api.*healthy"; do
               sleep 5
             done
           '
-          echo "Waiting for Nginx..."
+          echo "⏳ Waiting for Nginx..."
           timeout 60s bash -c '
             until docker compose -f docker-compose.release-test.yml ps 2>/dev/null | grep -E "release-test-nginx.*healthy"; do
               sleep 5
             done
           '
+          echo "✅ All services healthy"
           docker compose -f docker-compose.release-test.yml ps
 
-      - name: "[Bridge] Run E2E integration tests"
+      - name: Run E2E tests
+        env:
+          VERSION: ${{ needs.detect.outputs.version }}
         run: |
-          VERSION=${{ steps.version.outputs.version }}
-          export VERSION
           docker compose -f docker-compose.release-test.yml run --rm test-runner
 
-      - name: "[Bridge] Get container logs (on failure)"
+      - name: Show logs (on failure)
         if: failure()
         run: |
-          echo "=== Bridge Mode - API Logs ==="
+          echo "::group::API Logs"
           docker compose -f docker-compose.release-test.yml logs api
-          echo ""
-          echo "=== Bridge Mode - Nginx Logs ==="
+          echo "::endgroup::"
+          echo "::group::Nginx Logs"
           docker compose -f docker-compose.release-test.yml logs nginx
+          echo "::endgroup::"
 
-      - name: "[Bridge] Teardown test environment"
+      - name: Cleanup
         if: always()
-        run: |
-          docker compose -f docker-compose.release-test.yml down -v
+        run: docker compose -f docker-compose.release-test.yml down -v
 
-      # ================================================================
-      # E2E Tests - Host Network Mode
-      # ================================================================
-      - name: "[Host] Start test environment"
+  # ============================================================
+  # Step 4: E2E Tests - Host Mode
+  # ============================================================
+  test-host:
+    name: 🧪 Test (Host Mode)
+    needs: [detect, build-api, build-ui, build-nginx]
+    if: always() && needs.detect.result == 'success'
+    runs-on: ubuntu-latest
+
+    env:
+      NGINX_HTTP_PORT: 28080
+      NGINX_HTTPS_PORT: 28443
+      API_HOST_PORT: 29080
+      WHOAMI_PORT: 28888
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare test images
+        env:
+          VERSION: ${{ needs.detect.outputs.version }}
+          API_CHANGED: ${{ needs.detect.outputs.api_changed }}
+          UI_CHANGED: ${{ needs.detect.outputs.ui_changed }}
+          NGINX_CHANGED: ${{ needs.detect.outputs.nginx_changed }}
         run: |
-          VERSION=${{ steps.version.outputs.version }}
-          export VERSION
-          export NGINX_HTTP_PORT=28080
-          export NGINX_HTTPS_PORT=28443
-          export API_HOST_PORT=29080
-          export WHOAMI_PORT=28888
+          pull_image() {
+            local component=$1
+            local changed=$2
+
+            if [ "$changed" == "true" ]; then
+              docker pull ${{ env.IMAGE_PREFIX }}-$component:$VERSION-test
+              docker tag ${{ env.IMAGE_PREFIX }}-$component:$VERSION-test ${{ env.IMAGE_PREFIX }}-$component:$VERSION
+            else
+              docker pull ${{ env.IMAGE_PREFIX }}-$component:latest
+              docker tag ${{ env.IMAGE_PREFIX }}-$component:latest ${{ env.IMAGE_PREFIX }}-$component:$VERSION
+            fi
+          }
+
+          pull_image "api" "$API_CHANGED"
+          pull_image "ui" "$UI_CHANGED"
+          pull_image "nginx" "$NGINX_CHANGED"
+
+      - name: Start test environment
+        env:
+          VERSION: ${{ needs.detect.outputs.version }}
+        run: |
           docker compose -f docker-compose.release-test-host.yml up -d db valkey api nginx whoami
 
-      - name: "[Host] Wait for services to be healthy"
+      - name: Wait for services
         run: |
-          echo "Waiting for API..."
+          echo "⏳ Waiting for API..."
           timeout 120s bash -c '
             until docker compose -f docker-compose.release-test-host.yml ps 2>/dev/null | grep -E "release-test-host-api.*healthy"; do
               sleep 5
             done
           '
-          echo "Waiting for Nginx..."
+          echo "⏳ Waiting for Nginx..."
           timeout 60s bash -c '
             until docker compose -f docker-compose.release-test-host.yml ps 2>/dev/null | grep -E "release-test-host-nginx.*healthy"; do
               sleep 5
             done
           '
-          echo "Waiting for Whoami upstream..."
+          echo "⏳ Waiting for Whoami..."
           timeout 30s bash -c '
             until docker compose -f docker-compose.release-test-host.yml ps 2>/dev/null | grep -E "release-test-host-whoami.*healthy"; do
               sleep 3
             done
           '
+          echo "✅ All services healthy"
           docker compose -f docker-compose.release-test-host.yml ps
 
-      - name: "[Host] Run E2E tests"
+      - name: Run E2E tests
+        env:
+          VERSION: ${{ needs.detect.outputs.version }}
         run: |
-          VERSION=${{ steps.version.outputs.version }}
-          export VERSION
-          export NGINX_HTTP_PORT=28080
-          export NGINX_HTTPS_PORT=28443
-          export API_HOST_PORT=29080
-          export WHOAMI_PORT=28888
           docker compose -f docker-compose.release-test-host.yml run --rm test-runner
 
-      - name: "[Host] Get container logs (on failure)"
+      - name: Show logs (on failure)
         if: failure()
         run: |
-          echo "=== Host Mode - API Logs ==="
+          echo "::group::API Logs"
           docker compose -f docker-compose.release-test-host.yml logs api
-          echo ""
-          echo "=== Host Mode - Nginx Logs ==="
+          echo "::endgroup::"
+          echo "::group::Nginx Logs"
           docker compose -f docker-compose.release-test-host.yml logs nginx
-          echo ""
-          echo "=== Host Mode - Whoami Logs ==="
+          echo "::endgroup::"
+          echo "::group::Whoami Logs"
           docker compose -f docker-compose.release-test-host.yml logs whoami
+          echo "::endgroup::"
 
-      - name: "[Host] Teardown test environment"
+      - name: Cleanup
         if: always()
-        run: |
-          docker compose -f docker-compose.release-test-host.yml down -v
+        run: docker compose -f docker-compose.release-test-host.yml down -v
 
-      - name: Delete tag on failure
-        if: failure()
-        run: |
-          echo "E2E tests failed. Deleting tag ${GITHUB_REF#refs/tags/}..."
-          git push origin :refs/tags/${GITHUB_REF#refs/tags/}
-          echo "Tag deleted. Please fix the issues and create a new tag."
+  # ============================================================
+  # Step 5: Push Final Images
+  # ============================================================
+  push:
+    name: 🚀 Push Images
+    needs: [detect, test-bridge, test-host]
+    if: needs.test-bridge.result == 'success' && needs.test-host.result == 'success'
+    runs-on: ubuntu-latest
 
-      # Push only changed images with source hash label
-      - name: Push API image
-        if: steps.check-api.outputs.changed == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Calculate hashes
+        id: hashes
+        run: |
+          echo "api_hash=$(find ./api -type f -exec sha256sum {} \; | sort | sha256sum | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+          echo "ui_hash=$(find ./ui -type f -exec sha256sum {} \; | sort | sha256sum | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+          echo "nginx_hash=$(find ./nginx -type f -exec sha256sum {} \; | sort | sha256sum | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+
+      - name: Push API
+        if: needs.detect.outputs.api_changed == 'true'
         uses: docker/build-push-action@v6
         with:
           context: ./api
           platforms: linux/amd64
           push: true
           tags: |
-            ${{ env.IMAGE_PREFIX }}-api:${{ steps.version.outputs.version }}
+            ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}
             ${{ env.IMAGE_PREFIX }}-api:latest
           labels: |
-            org.opencontainers.image.revision=${{ steps.check-api.outputs.hash }}
+            org.opencontainers.image.revision=${{ steps.hashes.outputs.api_hash }}
           annotations: |
-            org.opencontainers.image.revision=${{ steps.check-api.outputs.hash }}
+            org.opencontainers.image.revision=${{ steps.hashes.outputs.api_hash }}
           cache-from: type=gha,scope=api
-          cache-to: type=gha,mode=max,scope=api
 
-      - name: Push UI image
-        if: steps.check-ui.outputs.changed == 'true'
+      - name: Push UI
+        if: needs.detect.outputs.ui_changed == 'true'
         uses: docker/build-push-action@v6
         with:
           context: ./ui
           platforms: linux/amd64
           push: true
           tags: |
-            ${{ env.IMAGE_PREFIX }}-ui:${{ steps.version.outputs.version }}
+            ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}
             ${{ env.IMAGE_PREFIX }}-ui:latest
           labels: |
-            org.opencontainers.image.revision=${{ steps.check-ui.outputs.hash }}
+            org.opencontainers.image.revision=${{ steps.hashes.outputs.ui_hash }}
           annotations: |
-            org.opencontainers.image.revision=${{ steps.check-ui.outputs.hash }}
+            org.opencontainers.image.revision=${{ steps.hashes.outputs.ui_hash }}
           cache-from: type=gha,scope=ui
-          cache-to: type=gha,mode=max,scope=ui
 
-      - name: Push Nginx image
-        if: steps.check-nginx.outputs.changed == 'true'
+      - name: Push Nginx
+        if: needs.detect.outputs.nginx_changed == 'true'
         uses: docker/build-push-action@v6
         with:
           context: ./nginx
           platforms: linux/amd64
           push: true
           tags: |
-            ${{ env.IMAGE_PREFIX }}-nginx:${{ steps.version.outputs.version }}
+            ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}
             ${{ env.IMAGE_PREFIX }}-nginx:latest
           labels: |
-            org.opencontainers.image.revision=${{ steps.check-nginx.outputs.hash }}
+            org.opencontainers.image.revision=${{ steps.hashes.outputs.nginx_hash }}
           annotations: |
-            org.opencontainers.image.revision=${{ steps.check-nginx.outputs.hash }}
+            org.opencontainers.image.revision=${{ steps.hashes.outputs.nginx_hash }}
           cache-from: type=gha,scope=nginx
-          cache-to: type=gha,mode=max,scope=nginx
 
-  # Create GitHub Release
-  create-release:
-    needs: build-and-test
+      - name: Cleanup test tags
+        run: |
+          # Note: Docker Hub doesn't have a simple API to delete tags
+          # Test tags will be overwritten on next release
+          echo "✅ Final images pushed successfully"
+          echo "📝 Test tags (${{ needs.detect.outputs.version }}-test) will be overwritten on next release"
+
+  # ============================================================
+  # Step 6: Create GitHub Release
+  # ============================================================
+  release:
+    name: 📦 Create Release
+    needs: [detect, push]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -329,7 +431,6 @@ jobs:
       - name: Get tag message
         id: tag_message
         run: |
-          # Get the annotated tag message (excluding the tag name line)
           TAG_MSG=$(git tag -l --format='%(contents)' ${GITHUB_REF#refs/tags/} | tail -n +2)
           echo "message<<EOF" >> $GITHUB_OUTPUT
           echo "$TAG_MSG" >> $GITHUB_OUTPUT
@@ -342,7 +443,6 @@ jobs:
         run: |
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
 
-          # Generate changelog with full commit messages
           if [ -n "$PREV_TAG" ]; then
             RANGE="$PREV_TAG..HEAD"
           else
@@ -352,7 +452,6 @@ jobs:
           CHANGELOG=""
           for hash in $(git log --pretty=format:"%H" $RANGE); do
             subject=$(git log -1 --pretty=format:"%s" $hash)
-            # Skip version bump commits
             if echo "$subject" | grep -q "^chore: Bump version"; then
               continue
             fi
@@ -368,10 +467,9 @@ jobs:
           echo "$CHANGELOG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-          # Get contributors from merged PRs
+          # Get contributors
           CONTRIBUTORS=""
           if [ -n "$PREV_TAG" ]; then
-            # Find merged PR numbers from commit messages
             PR_NUMBERS=$(git log --pretty=format:"%s %b" $PREV_TAG..HEAD | grep -oE '#[0-9]+' | sort -u | tr -d '#')
             for PR in $PR_NUMBERS; do
               PR_AUTHOR=$(gh pr view $PR --json author --jq '.author.login' 2>/dev/null || echo "")
@@ -386,10 +484,10 @@ jobs:
           fi
           echo "contributors=$CONTRIBUTORS" >> $GITHUB_OUTPUT
 
-      - name: Create GitHub Release
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          name: v${{ needs.build-and-test.outputs.version }}
+          name: v${{ needs.detect.outputs.version }}
           body: |
             ${{ steps.tag_message.outputs.message }}
 
@@ -398,24 +496,41 @@ jobs:
             ## Docker Images
 
             ```bash
-            docker pull svrforum/nginxproxyguard-api:${{ needs.build-and-test.outputs.version }}
-            docker pull svrforum/nginxproxyguard-ui:${{ needs.build-and-test.outputs.version }}
-            docker pull svrforum/nginxproxyguard-nginx:${{ needs.build-and-test.outputs.version }}
+            docker pull svrforum/nginxproxyguard-api:${{ needs.detect.outputs.version }}
+            docker pull svrforum/nginxproxyguard-ui:${{ needs.detect.outputs.version }}
+            docker pull svrforum/nginxproxyguard-nginx:${{ needs.detect.outputs.version }}
             ```
 
             ## Build Summary
             | Component | Status |
             |-----------|--------|
-            | API | ${{ needs.build-and-test.outputs.api_changed == 'true' && '✅ Built & Pushed' || '⏭️ Skipped (no changes)' }} |
-            | UI | ${{ needs.build-and-test.outputs.ui_changed == 'true' && '✅ Built & Pushed' || '⏭️ Skipped (no changes)' }} |
-            | Nginx | ${{ needs.build-and-test.outputs.nginx_changed == 'true' && '✅ Built & Pushed' || '⏭️ Skipped (no changes)' }} |
+            | API | ${{ needs.detect.outputs.api_changed == 'true' && '✅ Built & Pushed' || '⏭️ Skipped (no changes)' }} |
+            | UI | ${{ needs.detect.outputs.ui_changed == 'true' && '✅ Built & Pushed' || '⏭️ Skipped (no changes)' }} |
+            | Nginx | ${{ needs.detect.outputs.nginx_changed == 'true' && '✅ Built & Pushed' || '⏭️ Skipped (no changes)' }} |
 
-            ## E2E Test
-            ✅ All integration tests passed before release
+            ## E2E Tests
+            ✅ Bridge Mode - Passed
+            ✅ Host Mode - Passed
 
-            ${{ steps.changelog.outputs.contributors != '' && format('## Thanks to Contributors 🙏\nThank you for your contributions!\n{0}\n', steps.changelog.outputs.contributors) || '' }}
+            ${{ steps.changelog.outputs.contributors != '' && format('## Contributors\nThank you for your contributions! {0}\n', steps.changelog.outputs.contributors) || '' }}
 
             ## Commits
             ${{ steps.changelog.outputs.changelog }}
           draft: false
           prerelease: ${{ contains(github.ref, '-rc') || contains(github.ref, '-beta') || contains(github.ref, '-alpha') }}
+
+  # ============================================================
+  # Cleanup on Failure
+  # ============================================================
+  cleanup-on-failure:
+    name: 🧹 Cleanup (on failure)
+    needs: [detect, test-bridge, test-host]
+    if: failure()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Delete tag
+        run: |
+          echo "❌ Tests failed. Deleting tag ${GITHUB_REF#refs/tags/}..."
+          git push origin :refs/tags/${GITHUB_REF#refs/tags/} || true
+          echo "🔧 Please fix the issues and create a new tag."
