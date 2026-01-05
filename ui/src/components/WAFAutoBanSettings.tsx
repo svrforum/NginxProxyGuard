@@ -187,7 +187,7 @@ export default function WAFAutoBanSettings() {
                 min="0"
                 max="604800"
                 value={getValue('waf_auto_ban_duration') ?? 3600}
-                onChange={(e) => handleChange('waf_auto_ban_duration', parseInt(e.target.value) || 3600)}
+                onChange={(e) => handleChange('waf_auto_ban_duration', e.target.value === '' ? 3600 : parseInt(e.target.value))}
                 className={inputClass}
               />
             </div>

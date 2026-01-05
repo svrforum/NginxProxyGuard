@@ -82,7 +82,20 @@ DECLARE
     end_date DATE;
     partition_name TEXT;
     i INT;
+    is_partitioned BOOLEAN;
 BEGIN
+    -- Check if the table is actually a partitioned table
+    SELECT EXISTS (
+        SELECT 1 FROM pg_partitioned_table pt
+        JOIN pg_class c ON c.oid = pt.partrelid
+        WHERE c.relname = table_name
+    ) INTO is_partitioned;
+
+    IF NOT is_partitioned THEN
+        RAISE NOTICE 'Table % is not a partitioned table, skipping partition creation', table_name;
+        RETURN;
+    END IF;
+
     FOR i IN 0..months_ahead LOOP
         start_date := DATE_TRUNC('month', CURRENT_DATE + (i || ' months')::INTERVAL);
         end_date := start_date + INTERVAL '1 month';
@@ -91,11 +104,15 @@ BEGIN
         IF NOT EXISTS (
             SELECT 1 FROM pg_class WHERE relname = partition_name
         ) THEN
-            EXECUTE format(
-                'CREATE TABLE IF NOT EXISTS %I PARTITION OF %I FOR VALUES FROM (%L) TO (%L)',
-                partition_name, table_name, start_date, end_date
-            );
-            RAISE NOTICE 'Created partition: %', partition_name;
+            BEGIN
+                EXECUTE format(
+                    'CREATE TABLE IF NOT EXISTS %I PARTITION OF %I FOR VALUES FROM (%L) TO (%L)',
+                    partition_name, table_name, start_date, end_date
+                );
+                RAISE NOTICE 'Created partition: %', partition_name;
+            EXCEPTION WHEN OTHERS THEN
+                RAISE NOTICE 'Could not create partition %: %', partition_name, SQLERRM;
+            END;
         END IF;
     END LOOP;
 END;
