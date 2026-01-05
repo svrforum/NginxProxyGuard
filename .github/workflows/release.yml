@@ -296,13 +296,9 @@ jobs:
               sleep 5
             done
           '
-          echo "⏳ Waiting for Whoami..."
-          timeout 30s bash -c '
-            until docker compose -f docker-compose.release-test-host.yml ps 2>/dev/null | grep -E "release-test-host-whoami.*healthy"; do
-              sleep 3
-            done
-          '
-          echo "✅ All services healthy"
+          echo "⏳ Waiting for Whoami to start..."
+          sleep 5  # Simple wait - traefik/whoami has no healthcheck tools
+          echo "✅ All services ready"
           docker compose -f docker-compose.release-test-host.yml ps
 
       - name: Run E2E tests
@@ -527,10 +523,21 @@ jobs:
     needs: [detect, test-bridge, test-host]
     if: failure()
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Delete tag
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          echo "❌ Tests failed. Deleting tag ${GITHUB_REF#refs/tags/}..."
-          git push origin :refs/tags/${GITHUB_REF#refs/tags/} || true
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          echo "❌ Tests failed. Deleting tag $TAG_NAME..."
+          gh release delete "$TAG_NAME" --yes 2>/dev/null || true
+          git push origin :refs/tags/$TAG_NAME || true
           echo "🔧 Please fix the issues and create a new tag."
