@@ -97,7 +97,7 @@ services:
     image: traefik/whoami
     container_name: release-test-host-whoami
     ports:
-      - "127.0.0.1:${WHOAMI_PORT:-28888}:80"
+      - "${WHOAMI_PORT:-28888}:80"  # Bind to all interfaces for test access
     networks:
       - release-test-host-network
     # Note: traefik/whoami is a minimal Go binary without shell/wget
