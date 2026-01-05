@@ -100,11 +100,8 @@ services:
       - "127.0.0.1:${WHOAMI_PORT:-28888}:80"
     networks:
       - release-test-host-network
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+    # Note: traefik/whoami is a minimal Go binary without shell/wget
+    # Use start_period instead of healthcheck
 
   # Test Runner - Runs host mode specific tests including proxy host tests
   test-runner:
