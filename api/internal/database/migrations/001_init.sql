@@ -78,13 +78,29 @@ CREATE OR REPLACE FUNCTION public.create_monthly_partitions(table_name text, par
     LANGUAGE plpgsql
     AS $$
 DECLARE
-    start_date DATE;
-    end_date DATE;
+    start_ts TIMESTAMPTZ;
+    end_ts TIMESTAMPTZ;
     partition_name TEXT;
     i INT;
     is_partitioned BOOLEAN;
+    is_hypertable BOOLEAN := FALSE;
 BEGIN
-    -- Check if the table is actually a partitioned table
+    -- Check if TimescaleDB hypertable (skip if so - chunks are auto-managed)
+    BEGIN
+        SELECT EXISTS (
+            SELECT 1 FROM timescaledb_information.hypertables
+            WHERE hypertable_name = table_name
+        ) INTO is_hypertable;
+    EXCEPTION WHEN OTHERS THEN
+        is_hypertable := FALSE;
+    END;
+
+    IF is_hypertable THEN
+        RAISE NOTICE 'Table % is a TimescaleDB hypertable, chunks are auto-managed', table_name;
+        RETURN;
+    END IF;
+
+    -- Check if the table is a native PostgreSQL partitioned table
     SELECT EXISTS (
         SELECT 1 FROM pg_partitioned_table pt
         JOIN pg_class c ON c.oid = pt.partrelid
@@ -92,25 +108,28 @@ BEGIN
     ) INTO is_partitioned;
 
     IF NOT is_partitioned THEN
-        RAISE NOTICE 'Table % is not a partitioned table, skipping partition creation', table_name;
+        RAISE NOTICE 'Table % is not a partitioned table, skipping', table_name;
         RETURN;
     END IF;
 
     FOR i IN 0..months_ahead LOOP
-        start_date := DATE_TRUNC('month', CURRENT_DATE + (i || ' months')::INTERVAL);
-        end_date := start_date + INTERVAL '1 month';
-        partition_name := partition_prefix || TO_CHAR(start_date, 'YYYY_MM');
-        -- Check if partition exists
+        -- Use TIMESTAMPTZ to match existing partition ranges
+        start_ts := DATE_TRUNC('month', CURRENT_TIMESTAMP + (i || ' months')::INTERVAL);
+        end_ts := start_ts + INTERVAL '1 month';
+        partition_name := partition_prefix || TO_CHAR(start_ts, 'YYYY_MM');
+
+        -- Check if partition already exists
         IF NOT EXISTS (
             SELECT 1 FROM pg_class WHERE relname = partition_name
         ) THEN
             BEGIN
                 EXECUTE format(
                     'CREATE TABLE IF NOT EXISTS %I PARTITION OF %I FOR VALUES FROM (%L) TO (%L)',
-                    partition_name, table_name, start_date, end_date
+                    partition_name, table_name, start_ts, end_ts
                 );
-                RAISE NOTICE 'Created partition: %', partition_name;
+                RAISE NOTICE 'Created partition: % (% to %)', partition_name, start_ts, end_ts;
             EXCEPTION WHEN OTHERS THEN
+                -- Log but continue - partition might exist with different name or overlap
                 RAISE NOTICE 'Could not create partition %: %', partition_name, SQLERRM;
             END;
         END IF;
