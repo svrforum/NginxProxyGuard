@@ -85,14 +85,11 @@ func (s *PartitionScheduler) createPartitions() {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
-	// Create partitions for logs_partitioned (3 months ahead)
-	_, err := s.db.ExecContext(ctx, `SELECT create_monthly_partitions('logs_partitioned', 'logs_p', 3)`)
-	if err != nil {
-		log.Printf("[PartitionScheduler] Failed to create log partitions: %v", err)
-	}
+	// Note: logs_partitioned is a TimescaleDB hypertable - chunks are created automatically
+	// We only need to create partitions for native PostgreSQL partitioned tables
 
 	// Create partitions for dashboard_stats_hourly_partitioned (3 months ahead)
-	_, err = s.db.ExecContext(ctx, `SELECT create_monthly_partitions('dashboard_stats_hourly_partitioned', 'stats_hourly_p', 3)`)
+	_, err := s.db.ExecContext(ctx, `SELECT create_monthly_partitions('dashboard_stats_hourly_partitioned', 'stats_hourly_p', 3)`)
 	if err != nil {
 		log.Printf("[PartitionScheduler] Failed to create stats partitions: %v", err)
 	}
