@@ -26,6 +26,7 @@ const (
 	BlockReasonURIBlock               BlockReason = "uri_block"
 	BlockReasonCloudProviderChallenge BlockReason = "cloud_provider_challenge"
 	BlockReasonCloudProviderBlock     BlockReason = "cloud_provider_block"
+	BlockReasonAccessDenied           BlockReason = "access_denied"  // #16 follow up [LogCollector] Failed to batch insert logs enum error
 )
 
 type LogSeverity string
