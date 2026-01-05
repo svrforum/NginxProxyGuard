@@ -409,7 +409,6 @@ func (h *SecurityHandler) UnbanIP(c echo.Context) error {
 						}
 					}
 				}
-				
 				// Request single debounced reload after all configs are updated
 				if h.nginxReloader != nil {
 					h.nginxReloader.RequestReload(ctx)
