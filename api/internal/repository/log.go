@@ -332,6 +332,9 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 			argIndex++
 		}
 		if filter.Search != nil && *filter.Search != "" {
+			// Check if search term looks like an IP address
+			isIPLike := strings.Contains(*filter.Search, ".") || strings.Contains(*filter.Search, ":")
+
 			// Check if search term contains only digits (for rule_id partial match)
 			isNumeric := true
 			for _, c := range *filter.Search {
@@ -340,7 +343,16 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 					break
 				}
 			}
-			if isNumeric && len(*filter.Search) > 0 {
+
+			if isIPLike {
+				// Search looks like IP address - search in client_ip field
+				conditions = append(conditions, fmt.Sprintf(
+					"(host(client_ip) LIKE $%d OR host ILIKE $%d OR http_user_agent ILIKE $%d OR request_uri ILIKE $%d)",
+					argIndex, argIndex+1, argIndex+1, argIndex+1,
+				))
+				args = append(args, *filter.Search+"%", "%"+*filter.Search+"%")
+				argIndex += 2
+			} else if isNumeric && len(*filter.Search) > 0 {
 				// Search is numeric - search by rule_id (partial match using LIKE on text cast)
 				conditions = append(conditions, fmt.Sprintf(
 					"(rule_id::text LIKE $%d OR request_uri ILIKE $%d OR error_message ILIKE $%d OR rule_message ILIKE $%d)",
@@ -349,10 +361,10 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 				args = append(args, *filter.Search+"%", "%"+*filter.Search+"%")
 				argIndex += 2
 			} else {
-				// Search is text - search by text fields only
+				// Search is text - search by host, user_agent, uri, and error fields
 				conditions = append(conditions, fmt.Sprintf(
-					"(request_uri ILIKE $%d OR error_message ILIKE $%d OR rule_message ILIKE $%d)",
-					argIndex, argIndex, argIndex,
+					"(host ILIKE $%d OR http_user_agent ILIKE $%d OR request_uri ILIKE $%d OR error_message ILIKE $%d OR rule_message ILIKE $%d)",
+					argIndex, argIndex, argIndex, argIndex, argIndex,
 				))
 				args = append(args, "%"+*filter.Search+"%")
 				argIndex++
@@ -829,6 +841,9 @@ func (r *LogRepository) GetStatsWithFilter(ctx context.Context, filter *model.Lo
 			argIndex++
 		}
 		if filter.Search != nil && *filter.Search != "" {
+			// Check if search term looks like an IP address
+			isIPLike := strings.Contains(*filter.Search, ".") || strings.Contains(*filter.Search, ":")
+
 			// Check if search term contains only digits (for rule_id partial match)
 			isNumeric := true
 			for _, c := range *filter.Search {
@@ -837,14 +852,20 @@ func (r *LogRepository) GetStatsWithFilter(ctx context.Context, filter *model.Lo
 					break
 				}
 			}
-			if isNumeric && len(*filter.Search) > 0 {
+
+			if isIPLike {
+				// Search looks like IP address - search in client_ip field
+				whereClause += fmt.Sprintf(" AND (host(client_ip) LIKE $%d OR host ILIKE $%d OR http_user_agent ILIKE $%d OR request_uri ILIKE $%d)", argIndex, argIndex+1, argIndex+1, argIndex+1)
+				args = append(args, *filter.Search+"%", "%"+*filter.Search+"%")
+				argIndex += 2
+			} else if isNumeric && len(*filter.Search) > 0 {
 				// Search is numeric - search by rule_id (partial match using LIKE on text cast)
 				whereClause += fmt.Sprintf(" AND (rule_id::text LIKE $%d OR request_uri ILIKE $%d OR error_message ILIKE $%d OR rule_message ILIKE $%d)", argIndex, argIndex+1, argIndex+1, argIndex+1)
 				args = append(args, *filter.Search+"%", "%"+*filter.Search+"%")
 				argIndex += 2
 			} else {
-				// Search is text - search by text fields only
-				whereClause += fmt.Sprintf(" AND (request_uri ILIKE $%d OR error_message ILIKE $%d OR rule_message ILIKE $%d)", argIndex, argIndex, argIndex)
+				// Search is text - search by host, user_agent, uri, and error fields
+				whereClause += fmt.Sprintf(" AND (host ILIKE $%d OR http_user_agent ILIKE $%d OR request_uri ILIKE $%d OR error_message ILIKE $%d OR rule_message ILIKE $%d)", argIndex, argIndex, argIndex, argIndex, argIndex)
 				args = append(args, "%"+*filter.Search+"%")
 				argIndex++
 			}
