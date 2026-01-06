@@ -22,6 +22,9 @@ type NginxManager interface {
 	ReloadNginx(ctx context.Context) error
 	GenerateAllConfigs(ctx context.Context, hosts []model.ProxyHost) error
 	GenerateHostWAFConfig(ctx context.Context, host *model.ProxyHost, exclusions []model.WAFRuleExclusion) error
+	// Atomic operations with global locking
+	GenerateConfigAndReload(ctx context.Context, data nginx.ProxyHostConfigData, wafExclusions []model.WAFRuleExclusion) error
+	RemoveConfigAndReload(ctx context.Context, host *model.ProxyHost) error
 }
 
 type ProxyHostService struct {
@@ -415,44 +418,26 @@ func (s *ProxyHostService) Create(ctx context.Context, req *model.CreateProxyHos
 		return nil, fmt.Errorf("failed to create proxy host: %w", err)
 	}
 
-	// Generate nginx config if enabled
+	// Generate nginx config if enabled (atomic operation with global locking)
 	if host.Enabled {
-		// Fetch all configuration data for this host
 		configData := s.getHostConfigData(ctx, host)
 
-		if err := s.nginx.GenerateConfigFull(ctx, configData); err != nil {
-			return nil, fmt.Errorf("failed to generate nginx config: %w", err)
-		}
-
-		// Generate WAF config if WAF is enabled (new hosts may have global exclusions)
-		// FAIL-SAFE: If WAF config generation fails, we MUST remove the main config
-		// to prevent Nginx from trying to load a non-existent WAF rule file
+		// Get WAF exclusions if WAF is enabled
+		var wafExclusions []model.WAFRuleExclusion
 		if host.WAFEnabled {
-			mergedExclusions, err := s.getMergedWAFExclusions(ctx, host.ID)
+			wafExclusions, err = s.getMergedWAFExclusions(ctx, host.ID)
 			if err != nil {
-				// Rollback: Remove the main config we just created
-				_ = s.nginx.RemoveConfig(ctx, host)
+				_ = s.repo.Delete(ctx, host.ID)
 				return nil, fmt.Errorf("failed to get WAF exclusions: %w", err)
 			}
-			if err := s.nginx.GenerateHostWAFConfig(ctx, host, mergedExclusions); err != nil {
-				// Rollback: Remove the main config we just created
-				_ = s.nginx.RemoveConfig(ctx, host)
-				return nil, fmt.Errorf("failed to generate WAF config: %w", err)
-			}
 		}
 
-		if err := s.nginx.TestConfig(ctx); err != nil {
-			// Rollback config and DB record on test failure
+		// Atomic: generate config + WAF config + test + reload (with global lock)
+		if err := s.nginx.GenerateConfigAndReload(ctx, configData, wafExclusions); err != nil {
+			// Rollback: Remove config and DB record on failure
 			_ = s.nginx.RemoveConfig(ctx, host)
 			_ = s.repo.Delete(ctx, host.ID)
-			return nil, fmt.Errorf("nginx config test failed: %w", err)
-		}
-
-		if err := s.nginx.ReloadNginx(ctx); err != nil {
-			// Rollback config and DB record on reload failure
-			_ = s.nginx.RemoveConfig(ctx, host)
-			_ = s.repo.Delete(ctx, host.ID)
-			return nil, fmt.Errorf("failed to reload nginx: %w", err)
+			return nil, fmt.Errorf("failed to generate nginx config: %w", err)
 		}
 	}
 
@@ -634,37 +619,28 @@ func (s *ProxyHostService) Update(ctx context.Context, id string, req *model.Upd
 		return nil, nil
 	}
 
-	// Regenerate nginx config
+	// Regenerate nginx config (atomic operation with global locking)
 	if host.Enabled {
-		// Fetch all configuration data for this host
 		configData := s.getHostConfigData(ctx, host)
 
-		if err := s.nginx.GenerateConfigFull(ctx, configData); err != nil {
-			return nil, fmt.Errorf("failed to generate nginx config: %w", err)
-		}
-
-		// Generate WAF config if WAF is enabled, including global + host exclusions
+		// Get WAF exclusions if WAF is enabled
+		var wafExclusions []model.WAFRuleExclusion
 		if host.WAFEnabled {
-			mergedExclusions, err := s.getMergedWAFExclusions(ctx, id)
+			wafExclusions, err = s.getMergedWAFExclusions(ctx, id)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get WAF exclusions: %w", err)
 			}
-			if err := s.nginx.GenerateHostWAFConfig(ctx, host, mergedExclusions); err != nil {
-				return nil, fmt.Errorf("failed to generate WAF config: %w", err)
-			}
+		}
+
+		// Atomic: generate config + WAF config + test + reload (with global lock)
+		if err := s.nginx.GenerateConfigAndReload(ctx, configData, wafExclusions); err != nil {
+			return nil, fmt.Errorf("failed to generate nginx config: %w", err)
 		}
 	} else {
-		if err := s.nginx.RemoveConfig(ctx, host); err != nil {
+		// Atomic: remove config + test + reload (with global lock)
+		if err := s.nginx.RemoveConfigAndReload(ctx, host); err != nil {
 			return nil, fmt.Errorf("failed to remove nginx config: %w", err)
 		}
-	}
-
-	if err := s.nginx.TestConfig(ctx); err != nil {
-		return nil, fmt.Errorf("nginx config test failed: %w", err)
-	}
-
-	if err := s.nginx.ReloadNginx(ctx); err != nil {
-		return nil, fmt.Errorf("failed to reload nginx: %w", err)
 	}
 
 	return host, nil
@@ -680,23 +656,14 @@ func (s *ProxyHostService) Delete(ctx context.Context, id string) error {
 		return fmt.Errorf("proxy host not found")
 	}
 
-	// Remove nginx config first
-	if err := s.nginx.RemoveConfig(ctx, host); err != nil {
-		return fmt.Errorf("failed to remove nginx config: %w", err)
-	}
-
-	// Delete from database
+	// Delete from database first
 	if err := s.repo.Delete(ctx, id); err != nil {
 		return fmt.Errorf("failed to delete proxy host: %w", err)
 	}
 
-	// Test and reload nginx
-	if err := s.nginx.TestConfig(ctx); err != nil {
-		return fmt.Errorf("nginx config test failed: %w", err)
-	}
-
-	if err := s.nginx.ReloadNginx(ctx); err != nil {
-		return fmt.Errorf("failed to reload nginx: %w", err)
+	// Atomic: remove config + test + reload (with global lock)
+	if err := s.nginx.RemoveConfigAndReload(ctx, host); err != nil {
+		return fmt.Errorf("failed to remove nginx config: %w", err)
 	}
 
 	return nil
@@ -1024,28 +991,19 @@ func (s *ProxyHostService) RegenerateConfigForHost(ctx context.Context, hostID s
 	}
 
 	configData := s.getHostConfigData(ctx, host)
-	if err := s.nginx.GenerateConfigFull(ctx, configData); err != nil {
-		return fmt.Errorf("failed to generate config for host %s: %w", hostID, err)
-	}
 
-	// Also regenerate WAF config if enabled
+	// Get WAF exclusions if WAF is enabled
+	var wafExclusions []model.WAFRuleExclusion
 	if host.WAFEnabled {
-		mergedExclusions, err := s.getMergedWAFExclusions(ctx, hostID)
+		wafExclusions, err = s.getMergedWAFExclusions(ctx, hostID)
 		if err != nil {
 			return fmt.Errorf("failed to get WAF exclusions for host %s: %w", hostID, err)
 		}
-		if err := s.nginx.GenerateHostWAFConfig(ctx, host, mergedExclusions); err != nil {
-			return fmt.Errorf("failed to generate WAF config for host %s: %w", hostID, err)
-		}
 	}
 
-	// Test and reload nginx
-	if err := s.nginx.TestConfig(ctx); err != nil {
-		return fmt.Errorf("nginx config test failed: %w", err)
-	}
-
-	if err := s.nginx.ReloadNginx(ctx); err != nil {
-		return fmt.Errorf("failed to reload nginx: %w", err)
+	// Atomic: generate config + WAF config + test + reload (with global lock)
+	if err := s.nginx.GenerateConfigAndReload(ctx, configData, wafExclusions); err != nil {
+		return fmt.Errorf("failed to generate config for host %s: %w", hostID, err)
 	}
 
 	log.Printf("[ExploitRules] Nginx config regenerated and reloaded for host %s", hostID)
