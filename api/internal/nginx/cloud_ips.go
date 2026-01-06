@@ -35,7 +35,9 @@ func (m *Manager) GenerateCloudIPsInclude(hostID string, ipRanges []string) erro
 	}
 
 	includePath := filepath.Join(includesDir, fmt.Sprintf("cloud_ips_%s.conf", hostID))
-	if err := os.WriteFile(includePath, []byte(sb.String()), 0644); err != nil {
+	
+	// Use atomic write to prevent nginx from reading partial config
+	if err := m.writeFileAtomic(includePath, []byte(sb.String()), 0644); err != nil {
 		return fmt.Errorf("failed to write cloud IPs include file: %w", err)
 	}
 
