@@ -114,9 +114,9 @@ func (m *Manager) GenerateHostWAFConfig(ctx context.Context, host *model.ProxyHo
 		return fmt.Errorf("failed to execute WAF template: %w", err)
 	}
 
-	// Write config file
+	// Write config file atomically
 	configFile := filepath.Join(m.modsecPath, fmt.Sprintf("host_%s.conf", host.ID))
-	if err := os.WriteFile(configFile, buf.Bytes(), 0644); err != nil {
+	if err := m.writeFileAtomic(configFile, buf.Bytes(), 0644); err != nil {
 		return fmt.Errorf("failed to write WAF config file: %w", err)
 	}
 
