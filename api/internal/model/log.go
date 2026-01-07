@@ -232,12 +232,6 @@ type RuleIDStat struct {
 	Count   int64  `json:"count"`
 }
 
-type CountryStat struct {
-	CountryCode string `json:"country_code"`
-	Country     string `json:"country"`
-	Count       int64  `json:"count"`
-}
-
 type LogSettings struct {
 	ID                 string    `json:"id"`
 	RetentionDays      int       `json:"retention_days"`
