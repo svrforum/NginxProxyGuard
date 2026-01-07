@@ -1,5 +1,5 @@
 import { memo } from "react";
-import type { LogStats, CountryStat } from "../../types/log";
+import type { LogStats } from "../../types/log";
 
 // Simple Bar Chart Component
 interface BarChartProps {
