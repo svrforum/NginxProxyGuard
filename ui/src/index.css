@@ -1,10 +1,10 @@
 @import "react-datepicker/dist/react-datepicker.css";
 
 /* Google Fonts - loaded via Google Fonts API for proper unicode range support */
-@import url('https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap");
 
 /* Pretendard - Self-hosted from CDN */
-@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css");
 
 @tailwind base;
 @tailwind components;
@@ -12,15 +12,17 @@
 
 /* Font family CSS variables */
 :root {
-  --font-system: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-gowun-batang: 'Gowun Batang', serif;
-  --font-noto-sans-kr: 'Noto Sans KR', sans-serif;
-  --font-pretendard: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-inter: 'Inter', sans-serif;
+  --font-system: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-gowun-batang: "Gowun Batang", serif;
+  --font-noto-sans-kr: "Noto Sans KR", sans-serif;
+  --font-pretendard: "Pretendard", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-inter: "Inter", sans-serif;
 }
 
 /* Font family selectors based on data-font attribute */
-html[data-font="system"], html:not([data-font]) {
+html[data-font="system"],
+html:not([data-font]) {
   --current-font: var(--font-system);
 }
 html[data-font="gowun-batang"] {
@@ -112,8 +114,18 @@ html[data-font="inter"] {
   @apply z-50 !important;
 }
 
-html, body {
-  font-family: var(--current-font, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif);
+html,
+body {
+  font-family: var(
+    --current-font,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    "Helvetica Neue",
+    Arial,
+    sans-serif
+  );
   line-height: 1.5;
   font-weight: 400;
   color: #213547;
@@ -151,6 +163,32 @@ body {
 
 /* Hide scrollbar for IE, Edge and Firefox */
 .scrollbar-hide {
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+/* Custom styled scrollbar for webkit browsers */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(51, 65, 85, 0.3);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.5);
+  border-radius: 10px;
+  transition: background 0.2s;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.7);
+}
+
+/* Firefox scrollbar */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.5) rgba(51, 65, 85, 0.3);
 }
