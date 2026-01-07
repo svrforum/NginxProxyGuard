@@ -15,7 +15,6 @@ export interface StatusCodeChartProps {
 export interface VisualizationPanelProps {
   stats: LogStats | undefined;
   logType?: LogType;
-  countries: CountryStat[];
   isLoading: boolean;
 }
 
