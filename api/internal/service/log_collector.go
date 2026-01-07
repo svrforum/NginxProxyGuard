@@ -716,7 +716,8 @@ func (c *LogCollector) parseModSecLog(line string) (*model.CreateLogRequest, err
 	if !isDetectionOnly && tx.Response.HTTPCode == 403 {
 		// Only mark as blocked if:
 		// 1. WAF is in blocking mode (SecRuleEngine On)
-		// 2. Response is 403 (WAF's blocking response)
+		// 2. Response is 403 (WAF's default blocking response)
+		// Note: Other error codes (404, 405, 429, 500) are from upstream or other nginx modules, not WAF
 		actionTaken = "blocked"
 	}
 	// Check if this is an excluded rule (pass action)
