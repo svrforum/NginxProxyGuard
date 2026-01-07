@@ -1,10 +1,25 @@
-export type LogType = 'access' | 'error' | 'modsec';
+export type LogType = "access" | "error" | "modsec";
 
-export type LogSeverity = 'debug' | 'info' | 'notice' | 'warn' | 'error' | 'crit' | 'alert' | 'emerg';
+export type LogSeverity =
+  | "debug"
+  | "info"
+  | "notice"
+  | "warn"
+  | "error"
+  | "crit"
+  | "alert"
+  | "emerg";
 
-export type BlockReason = 'none' | 'waf' | 'bot_filter' | 'rate_limit' | 'geo_block' | 'exploit_block' | 'banned_ip';
+export type BlockReason =
+  | "none"
+  | "waf"
+  | "bot_filter"
+  | "rate_limit"
+  | "geo_block"
+  | "exploit_block"
+  | "banned_ip";
 
-export type BotCategory = 'bad_bot' | 'ai_bot' | 'suspicious' | 'search_engine';
+export type BotCategory = "bad_bot" | "ai_bot" | "suspicious" | "search_engine";
 
 export interface Log {
   id: string;
@@ -98,8 +113,14 @@ export interface LogFilter {
   exclude_countries?: string[];
 
   // Sorting
-  sort_by?: 'timestamp' | 'body_bytes_sent' | 'request_time' | 'status_code' | 'client_ip' | 'host';
-  sort_order?: 'asc' | 'desc';
+  sort_by?:
+    | "timestamp"
+    | "body_bytes_sent"
+    | "request_time"
+    | "status_code"
+    | "client_ip"
+    | "host";
+  sort_order?: "asc" | "desc";
 }
 
 export interface LogListResponse {
@@ -120,6 +141,7 @@ export interface LogStats {
   top_user_agents?: { user_agent: string; count: number }[];
   top_attacked_uris?: { uri: string; count: number }[];
   top_rule_ids?: { rule_id: number; message: string; count: number }[];
+  top_countries?: CountryStat[];
 }
 
 export interface LogSettings {
