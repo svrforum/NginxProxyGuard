@@ -206,6 +206,7 @@ type LogStats struct {
 	TopUserAgents   []UserAgentStat  `json:"top_user_agents"`
 	TopAttackedURIs []URIStat        `json:"top_attacked_uris"`
 	TopRuleIDs      []RuleIDStat     `json:"top_rule_ids"`
+	TopCountries    []CountryStat    `json:"top_countries"`
 }
 
 type StatusCodeStat struct {
@@ -228,6 +229,12 @@ type URIStat struct {
 type RuleIDStat struct {
 	RuleID  int64  `json:"rule_id"`
 	Message string `json:"message"`
+	Count   int64  `json:"count"`
+}
+
+type CountryStat struct {
+	CountryCode string `json:"country_code"`
+	Country     string `json:"country"`
 	Count   int64  `json:"count"`
 }
 
