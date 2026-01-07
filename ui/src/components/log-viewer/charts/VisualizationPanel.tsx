@@ -7,7 +7,6 @@ import type { VisualizationPanelProps } from '../types';
 export const VisualizationPanel = memo(function VisualizationPanel({
   stats,
   logType,
-  countries,
   isLoading
 }: VisualizationPanelProps) {
   const { t } = useTranslation('logs');
@@ -55,11 +54,11 @@ export const VisualizationPanel = memo(function VisualizationPanel({
     color: 'bg-purple-500'
   })) || [];
 
-  const countryData = countries.slice(0, 10).map(c => ({
-    label: c.country_code,
+  const countryData = stats.top_countries?.slice(0, 10).map(c => ({
+    label: `${c.country_code} (${c.country})`,
     value: c.count,
     color: 'bg-emerald-500'
-  }));
+  })) || [];
 
   return (
     <div className="bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
