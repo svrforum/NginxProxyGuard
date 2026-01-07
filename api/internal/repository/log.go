@@ -1058,6 +1058,33 @@ func (r *LogRepository) GetStatsWithFilter(ctx context.Context, filter *model.Lo
 		stats.TopRuleIDs = append(stats.TopRuleIDs, stat)
 	}
 
+	// Top countries
+	countryQuery := fmt.Sprintf(`
+		SELECT 
+			COALESCE(geo_country_code, 'Unknown') as country_code,
+			COALESCE(geo_country, 'Unknown') as country,
+			COUNT(*) as count
+		FROM logs_partitioned
+		WHERE %s
+		GROUP BY geo_country_code, geo_country
+		ORDER BY count DESC
+		LIMIT 10
+	`, whereClause)
+
+	countryRows, err := r.db.QueryContext(ctx, countryQuery, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get countries: %w", err)
+	}
+	defer countryRows.Close()
+
+	for countryRows.Next() {
+		var stat model.CountryStat
+		if err := countryRows.Scan(&stat.CountryCode, &stat.Country, &stat.Count); err != nil {
+			return nil, fmt.Errorf("failed to scan country: %w", err)
+		}
+		stats.TopCountries = append(stats.TopCountries, stat)
+	}
+
 	return stats, nil
 }
 
