@@ -15,7 +15,12 @@ const proxyHostTemplate = `# nginx-guard generated config
 
 {{if .RateLimit}}{{if .RateLimit.Enabled}}
 # Rate limiting zone definition
-limit_req_zone ${{if eq .RateLimit.LimitBy "uri"}}request_uri{{else if eq .RateLimit.LimitBy "ip_uri"}}binary_remote_addr$request_uri{{else}}binary_remote_addr{{end}} zone=rate_{{sanitizeID .Host.ID}}:{{.RateLimit.ZoneSize}} rate={{.RateLimit.RequestsPerSecond}}r/s;
+# Map to exclude static files from rate limiting (empty key = no rate limit)
+map $request_uri $rate_limit_key_{{sanitizeID .Host.ID}} {
+    ~*\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot|webp|avif|mp4|webm|pdf|zip|tar|gz|rar)(\?.*)?$  "";
+    default  ${{if eq .RateLimit.LimitBy "uri"}}request_uri{{else if eq .RateLimit.LimitBy "ip_uri"}}binary_remote_addr$request_uri{{else}}binary_remote_addr{{end}};
+}
+limit_req_zone $rate_limit_key_{{sanitizeID .Host.ID}} zone=rate_{{sanitizeID .Host.ID}}:{{.RateLimit.ZoneSize}} rate={{.RateLimit.RequestsPerSecond}}r/s;
 {{end}}{{end}}
 
 {{if .BannedIPs}}
