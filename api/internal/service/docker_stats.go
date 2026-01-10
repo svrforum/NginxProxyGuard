@@ -214,6 +214,34 @@ type DockerStatsSummary struct {
 	UpdatedAt      time.Time        `json:"updated_at"`
 }
 
+// getVolumeSizesFromSystemDF retrieves all volume sizes in a single docker command
+// This replaces the inefficient per-volume container creation approach
+func (s *DockerStatsService) getVolumeSizesFromSystemDF(ctx context.Context) (map[string]int64, error) {
+	cmd := exec.CommandContext(ctx, "docker", "system", "df", "-v", "--format", "{{json .Volumes}}")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get docker system df: %w", err)
+	}
+
+	var volumeInfos []struct {
+		Name string `json:"Name"`
+		Size string `json:"Size"`
+	}
+
+	if err := json.Unmarshal(output, &volumeInfos); err != nil {
+		return nil, fmt.Errorf("failed to parse volumes JSON: %w", err)
+	}
+
+	sizes := make(map[string]int64)
+	for _, vol := range volumeInfos {
+		if strings.HasPrefix(vol.Name, "npg_") {
+			sizes[vol.Name] = parseSizeToBytes(vol.Size)
+		}
+	}
+
+	return sizes, nil
+}
+
 // GetVolumeStats retrieves Docker volume statistics for npg volumes
 func (s *DockerStatsService) GetVolumeStats(ctx context.Context) ([]VolumeStats, error) {
 	// Get list of npg_ volumes
@@ -223,9 +251,16 @@ func (s *DockerStatsService) GetVolumeStats(ctx context.Context) ([]VolumeStats,
 		return nil, fmt.Errorf("failed to list volumes: %w", err)
 	}
 
-	var volumes []VolumeStats
 	names := strings.Split(strings.TrimSpace(string(output)), "\n")
 
+	// Get all volume sizes in a single docker command (no container creation)
+	volumeSizes, sizeErr := s.getVolumeSizesFromSystemDF(ctx)
+	if sizeErr != nil {
+		// Graceful degradation: continue without sizes if docker system df fails
+		volumeSizes = make(map[string]int64)
+	}
+
+	var volumes []VolumeStats
 	for _, name := range names {
 		if name == "" {
 			continue
@@ -236,71 +271,13 @@ func (s *DockerStatsService) GetVolumeStats(ctx context.Context) ([]VolumeStats,
 			Driver: "local",
 		}
 
-		// Get volume size using ephemeral alpine container with du
-		// This is faster than docker system df -v
-		sizeCmd := exec.CommandContext(ctx, "docker", "run", "--rm",
-			"-v", name+":/data:ro",
-			"alpine", "sh", "-c", "du -sb /data | cut -f1")
-
-		if sizeOutput, err := sizeCmd.Output(); err == nil {
-			var size int64
-			fmt.Sscanf(strings.TrimSpace(string(sizeOutput)), "%d", &size)
+		// Use pre-fetched size from docker system df
+		if size, ok := volumeSizes[name]; ok {
 			vol.Size = size
 			vol.SizeHuman = formatBytes(size)
 		}
 
 		volumes = append(volumes, vol)
-	}
-
-	return volumes, nil
-}
-
-// getVolumeListFallback gets volume info without size (fallback method)
-func (s *DockerStatsService) getVolumeListFallback(ctx context.Context) ([]VolumeStats, error) {
-	cmd := exec.CommandContext(ctx, "docker", "volume", "ls", "--filter", "name=npg_",
-		"--format", `{"name":"{{.Name}}","driver":"{{.Driver}}","mountpoint":"{{.Mountpoint}}"}`)
-
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get volume list: %w", err)
-	}
-
-	var volumes []VolumeStats
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-
-	for _, line := range lines {
-		if line == "" {
-			continue
-		}
-
-		var vol struct {
-			Name       string `json:"name"`
-			Driver     string `json:"driver"`
-			Mountpoint string `json:"mountpoint"`
-		}
-
-		if err := json.Unmarshal([]byte(line), &vol); err != nil {
-			continue
-		}
-
-		volumes = append(volumes, VolumeStats{
-			Name:       vol.Name,
-			Driver:     vol.Driver,
-			Mountpoint: vol.Mountpoint,
-		})
-	}
-
-	// Try to get sizes using du command for each volume
-	for i := range volumes {
-		if volumes[i].Mountpoint != "" {
-			sizeCmd := exec.CommandContext(ctx, "du", "-sb", volumes[i].Mountpoint)
-			if sizeOutput, err := sizeCmd.Output(); err == nil {
-				var size int64
-				fmt.Sscanf(string(sizeOutput), "%d", &size)
-				volumes[i].Size = size
-				volumes[i].SizeHuman = formatBytes(size)
-			}
-		}
 	}
 
 	return volumes, nil
