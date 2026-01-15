@@ -486,7 +486,15 @@ func (c *DockerLogCollector) parseNginxLogLine(line string) map[string]interface
 
 	status, _ := strconv.Atoi(matches[8])
 	bodyBytes, _ := strconv.ParseInt(matches[9], 10, 64)
-	requestTime, _ := strconv.ParseFloat(matches[13], 64)
+
+	// Parse and validate request_time (Issue #29 fix)
+	var requestTime float64
+	rawRequestTime := matches[13]
+	if rawRequestTime != "" && rawRequestTime != "-" {
+		if parsed, err := strconv.ParseFloat(rawRequestTime, 64); err == nil {
+			requestTime = validateRequestTime(parsed, rawRequestTime)
+		}
+	}
 
 	return map[string]interface{}{
 		"remote_addr":      matches[1],

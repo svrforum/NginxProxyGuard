@@ -736,28 +736,41 @@ func (h *SettingsHandler) RestoreBackup(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "backup not completed"})
 	}
 
-	// Perform restore synchronously for now
-	if err := h.performRestore(c.Request().Context(), backup); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
+	// Perform restore and get detailed result
+	result, err := h.performRestore(c.Request().Context(), backup)
+	if err != nil {
+		// Critical failure - return error response with partial result if available
+		response := map[string]interface{}{
 			"error":   "restore failed",
 			"details": err.Error(),
-		})
+		}
+		if result != nil {
+			response["result"] = result
+		}
+		return c.JSON(http.StatusInternalServerError, response)
 	}
 
 	// Audit log
 	h.audit.LogBackupRestore(c.Request().Context(), backup.Filename)
 
-	return c.JSON(http.StatusOK, map[string]string{
-		"status":  "completed",
-		"message": "Restore operation completed successfully",
-	})
+	// Return detailed result with appropriate HTTP status
+	httpStatus := http.StatusOK
+	if result.Status == "partial" {
+		httpStatus = http.StatusPartialContent // HTTP 206
+	}
+
+	return c.JSON(httpStatus, result)
 }
 
-func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Backup) error {
+func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Backup) (*model.RestoreResult, error) {
+	result := model.NewRestoreResult()
+
 	// Verify checksum before restore if available
 	if backup.ChecksumSHA256 != "" {
 		if err := h.verifyBackupChecksum(backup.FilePath, backup.ChecksumSHA256); err != nil {
-			return fmt.Errorf("backup integrity check failed: %w", err)
+			result.Status = "failed"
+			result.Message = "Backup integrity check failed"
+			return result, fmt.Errorf("backup integrity check failed: %w", err)
 		}
 	}
 
@@ -767,26 +780,34 @@ func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Back
 	if backup.IncludesDatabase {
 		data, err := h.extractExportJSON(backup.FilePath)
 		if err != nil {
-			return fmt.Errorf("failed to read export.json: %w", err)
+			result.DatabaseError = err.Error()
+			result.DetermineStatus()
+			return result, fmt.Errorf("failed to read export.json: %w", err)
 		}
 		if data != nil {
 			exportData = &model.ExportData{}
 			if err := json.Unmarshal(data, exportData); err != nil {
-				return fmt.Errorf("failed to parse export.json: %w", err)
+				result.DatabaseError = err.Error()
+				result.DetermineStatus()
+				return result, fmt.Errorf("failed to parse export.json: %w", err)
 			}
 			// Import database data first - if this fails, no files are touched
 			if err := h.backupRepo.ImportAllData(ctx, exportData); err != nil {
-				return fmt.Errorf("failed to import database data: %w", err)
+				result.DatabaseError = err.Error()
+				result.DetermineStatus()
+				return result, fmt.Errorf("failed to import database data: %w", err)
 			}
+			result.DatabaseRestored = true
 			log.Printf("[Backup] Database import completed successfully")
 		}
 	}
 
 	// PHASE 2: Restore files only after DB import succeeds
-	if err := h.restoreFilesFromBackup(backup); err != nil {
-		// DB is already imported, log warning but continue
-		// Files will be regenerated from DB anyway
-		log.Printf("[Backup] Warning: file restoration had issues: %v", err)
+	filesRestored, fileErrors := h.restoreFilesFromBackupDetailed(backup)
+	result.FilesRestored = filesRestored
+	result.FileErrors = fileErrors
+	if len(fileErrors) > 0 {
+		log.Printf("[Backup] Warning: file restoration had %d errors", len(fileErrors))
 	}
 
 	// Regenerate nginx configs from restored database
@@ -825,17 +846,17 @@ func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Back
 		}
 
 		// Regenerate Proxy Host configs with safe error handling
-		var failedHosts []string
 		if h.proxyHostRepo != nil {
 			proxyHosts, _, err := h.proxyHostRepo.List(ctx, 1, 1000, "", "", "")
 			if err != nil {
 				log.Printf("[Backup] Warning: failed to list proxy hosts for config regeneration: %v", err)
-			} else if len(proxyHosts) > 0 {
+			} else {
+				result.ProxyHostsTotal = len(proxyHosts)
 				// Generate configs one by one so we can handle failures gracefully
 				for _, host := range proxyHosts {
 					if err := h.nginxManager.GenerateConfig(ctx, &host); err != nil {
 						log.Printf("[Backup] Warning: failed to regenerate config for host %s: %v", host.ID, err)
-						failedHosts = append(failedHosts, host.ID)
+						result.ProxyHostsFailed = append(result.ProxyHostsFailed, host.ID)
 						continue
 					}
 					// Generate WAF config if enabled
@@ -844,9 +865,11 @@ func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Back
 							log.Printf("[Backup] Warning: failed to regenerate WAF config for host %s: %v", host.ID, err)
 							// Remove the main config if WAF config fails
 							_ = h.nginxManager.RemoveConfig(ctx, &host)
-							failedHosts = append(failedHosts, host.ID)
+							result.ProxyHostsFailed = append(result.ProxyHostsFailed, host.ID)
+							continue
 						}
 					}
+					result.ProxyHostsSuccess++
 				}
 			}
 		}
@@ -856,9 +879,15 @@ func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Back
 			redirectHosts, _, err := h.redirectHostRepo.List(ctx, 1, 1000)
 			if err != nil {
 				log.Printf("[Backup] Warning: failed to list redirect hosts for config regeneration: %v", err)
-			} else if len(redirectHosts) > 0 {
+			} else {
+				result.RedirectHostsTotal = len(redirectHosts)
 				if err := h.nginxManager.GenerateAllRedirectConfigs(ctx, redirectHosts); err != nil {
 					log.Printf("[Backup] Warning: failed to regenerate redirect host configs: %v", err)
+					for _, rh := range redirectHosts {
+						result.RedirectHostsFailed = append(result.RedirectHostsFailed, rh.ID)
+					}
+				} else {
+					result.RedirectHostsSuccess = len(redirectHosts)
 				}
 			}
 		}
@@ -866,10 +895,12 @@ func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Back
 		// Test nginx config before reload
 		if err := h.nginxManager.TestConfig(ctx); err != nil {
 			log.Printf("[Backup] ERROR: nginx config test failed: %v", err)
+			result.NginxConfigValid = false
+			result.NginxConfigError = err.Error()
 			log.Printf("[Backup] Attempting to remove failed host configs and retry...")
 
 			// Remove configs for failed hosts
-			for _, hostID := range failedHosts {
+			for _, hostID := range result.ProxyHostsFailed {
 				configFile := filepath.Join("/etc/nginx/conf.d", fmt.Sprintf("proxy_host_%s.conf", hostID))
 				if err := os.Remove(configFile); err != nil && !os.IsNotExist(err) {
 					log.Printf("[Backup] Warning: failed to remove config for host %s: %v", hostID, err)
@@ -878,22 +909,32 @@ func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Back
 
 			// Test again after removing failed configs
 			if err := h.nginxManager.TestConfig(ctx); err != nil {
-				log.Printf("[Backup] ERROR: nginx config test still failing: %v", err)
+				log.Printf("[Backup] ERROR: nginx config test still failing after cleanup: %v", err)
 				log.Printf("[Backup] nginx reload skipped to prevent container issues")
-				return nil // Don't fail the restore, but skip reload
+				result.NginxConfigValid = false
+				result.NginxConfigError = err.Error()
+				result.DetermineStatus()
+				// Return partial success instead of silently ignoring the error
+				return result, nil
 			}
+			// Config test passed after cleanup
+			result.NginxConfigValid = true
+			result.NginxConfigError = ""
 		}
 
 		// Reload nginx only if config test passes
 		if err := h.nginxManager.ReloadNginx(ctx); err != nil {
 			log.Printf("[Backup] Warning: failed to reload nginx after restore: %v", err)
-			// Don't return error - restore was successful, just reload failed
+			result.NginxReloaded = false
+			result.NginxReloadError = err.Error()
 		} else {
 			log.Printf("[Backup] nginx reloaded successfully")
+			result.NginxReloaded = true
 		}
 	}
 
-	return nil
+	result.DetermineStatus()
+	return result, nil
 }
 
 func (h *SettingsHandler) extractFile(tarReader *tar.Reader, destPath string, header *tar.Header) error {
@@ -1037,6 +1078,69 @@ func (h *SettingsHandler) restoreFilesFromBackup(backup *model.Backup) error {
 	return nil
 }
 
+// restoreFilesFromBackupDetailed restores files and returns detailed results
+func (h *SettingsHandler) restoreFilesFromBackupDetailed(backup *model.Backup) (int, []string) {
+	file, err := os.Open(backup.FilePath)
+	if err != nil {
+		return 0, []string{fmt.Sprintf("failed to open backup file: %v", err)}
+	}
+	defer file.Close()
+
+	gzReader, err := gzip.NewReader(file)
+	if err != nil {
+		return 0, []string{fmt.Sprintf("failed to create gzip reader: %v", err)}
+	}
+	defer gzReader.Close()
+
+	tarReader := tar.NewReader(gzReader)
+	var restoreErrors []string
+	var filesRestored int
+
+	for {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			restoreErrors = append(restoreErrors, fmt.Sprintf("tar read error: %v", err))
+			break
+		}
+
+		// Skip directories, symlinks, zero-size entries, export.json
+		if header.Typeflag == tar.TypeDir || header.Typeflag == tar.TypeSymlink ||
+			header.Typeflag == tar.TypeLink || header.Size == 0 ||
+			header.Name == "data/export.json" {
+			continue
+		}
+
+		switch {
+		case filepath.Dir(header.Name) == "config/conf.d":
+			if backup.IncludesConfig && !strings.HasSuffix(header.Name, "/") {
+				destPath := filepath.Join("/etc/nginx/conf.d", filepath.Base(header.Name))
+				if err := h.extractFile(tarReader, destPath, header); err != nil {
+					restoreErrors = append(restoreErrors, fmt.Sprintf("config %s: %v", header.Name, err))
+				} else {
+					filesRestored++
+				}
+			}
+
+		case filepath.HasPrefix(header.Name, "certs/"):
+			if backup.IncludesCertificates && !strings.HasSuffix(header.Name, "/") &&
+				strings.Contains(filepath.Base(header.Name), ".") {
+				relPath := header.Name[6:]
+				destPath := filepath.Join("/etc/nginx/certs", relPath)
+				if err := h.extractFile(tarReader, destPath, header); err != nil {
+					restoreErrors = append(restoreErrors, fmt.Sprintf("cert %s: %v", header.Name, err))
+				} else {
+					filesRestored++
+				}
+			}
+		}
+	}
+
+	return filesRestored, restoreErrors
+}
+
 // UploadAndRestoreBackup handles backup file upload and restore
 func (h *SettingsHandler) UploadAndRestoreBackup(c echo.Context) error {
 	// Get uploaded file
@@ -1100,21 +1204,33 @@ func (h *SettingsHandler) UploadAndRestoreBackup(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to create backup record"})
 	}
 
-	// Perform restore
-	if err := h.performRestore(c.Request().Context(), backup); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
+	// Perform restore and get detailed result
+	result, err := h.performRestore(c.Request().Context(), backup)
+	if err != nil {
+		response := map[string]interface{}{
 			"error":   "restore failed",
 			"details": err.Error(),
-		})
+		}
+		if result != nil {
+			response["result"] = result
+		}
+		return c.JSON(http.StatusInternalServerError, response)
 	}
 
 	// Audit log
 	h.audit.LogBackupRestore(c.Request().Context(), backup.Filename)
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"status":   "completed",
-		"message":  "Backup uploaded and restored successfully",
-		"backup":   backup,
+	// Determine HTTP status based on result
+	httpStatus := http.StatusOK
+	if result.Status == "partial" {
+		httpStatus = http.StatusPartialContent
+	}
+
+	return c.JSON(httpStatus, map[string]interface{}{
+		"status":  result.Status,
+		"message": result.Message,
+		"backup":  backup,
+		"result":  result,
 	})
 }
 
