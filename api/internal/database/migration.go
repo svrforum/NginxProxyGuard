@@ -111,6 +111,11 @@ func (db *DB) RunMigrations() error {
 		log.Printf("Warning: upgrade statements had errors (may be already applied): %v", err)
 	}
 
+	// Run 006_fix_numeric_overflow migration for existing installations (Issue #29 fix)
+	if err := db.runNumericOverflowMigration(); err != nil {
+		log.Printf("Warning: numeric overflow migration had issues: %v", err)
+	}
+
 	// Migrate logs table to logs_partitioned in background (for existing installations)
 	// This allows API to start immediately while migration runs
 	go db.migrateLogsToPartitioned()
@@ -719,4 +724,144 @@ func (db *DB) setupTimescaleDBCompression() {
 	if err == nil {
 		log.Printf("[TimescaleDB] Compression status: %d/%d chunks compressed", compressedChunks, totalChunks)
 	}
+}
+
+// runNumericOverflowMigration fixes the numeric field overflow issue (Issue #29)
+// This migration changes request_time and upstream_response_time from NUMERIC(10,6) to DOUBLE PRECISION
+func (db *DB) runNumericOverflowMigration() error {
+	const migrationVersion = "006_fix_numeric_overflow"
+
+	// Check if already migrated
+	var migrated bool
+	err := db.QueryRow(`SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = $1)`, migrationVersion).Scan(&migrated)
+	if err != nil {
+		return fmt.Errorf("failed to check migration status: %w", err)
+	}
+	if migrated {
+		log.Printf("[Migration] %s already applied", migrationVersion)
+		return nil
+	}
+
+	// Check if logs_partitioned table exists
+	var tableExists bool
+	err = db.QueryRow(`
+		SELECT EXISTS(
+			SELECT 1 FROM information_schema.tables
+			WHERE table_schema = 'public' AND table_name = 'logs_partitioned'
+		)
+	`).Scan(&tableExists)
+	if err != nil || !tableExists {
+		log.Printf("[Migration] logs_partitioned table not found, skipping %s", migrationVersion)
+		// Mark as applied since new installations already have DOUBLE PRECISION
+		db.Exec(`INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT DO NOTHING`, migrationVersion)
+		return nil
+	}
+
+	// Check current column type
+	var dataType string
+	err = db.QueryRow(`
+		SELECT data_type
+		FROM information_schema.columns
+		WHERE table_schema = 'public' AND table_name = 'logs_partitioned' AND column_name = 'request_time'
+	`).Scan(&dataType)
+	if err != nil {
+		return fmt.Errorf("failed to check column type: %w", err)
+	}
+
+	// If already DOUBLE PRECISION, mark as migrated and skip
+	if dataType == "double precision" {
+		log.Printf("[Migration] request_time already uses double precision, marking %s as applied", migrationVersion)
+		db.Exec(`INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT DO NOTHING`, migrationVersion)
+		return nil
+	}
+
+	log.Printf("[Migration] Starting %s: changing NUMERIC to DOUBLE PRECISION...", migrationVersion)
+	log.Printf("[Migration] Current request_time type: %s", dataType)
+
+	// Check if this is a TimescaleDB hypertable
+	isHypertable := db.isHypertable("logs_partitioned")
+
+	if isHypertable {
+		log.Println("[Migration] logs_partitioned is a TimescaleDB hypertable, handling compression...")
+
+		// Step 1: Decompress all chunks
+		log.Println("[Migration] Decompressing compressed chunks...")
+		_, err = db.Exec(`
+			DO $$
+			DECLARE
+				chunk_record RECORD;
+				decompressed_count INT := 0;
+			BEGIN
+				FOR chunk_record IN
+					SELECT format('%I.%I', chunk_schema, chunk_name) as full_name
+					FROM timescaledb_information.chunks
+					WHERE hypertable_name = 'logs_partitioned' AND is_compressed = true
+				LOOP
+					EXECUTE format('SELECT decompress_chunk(%L, true)', chunk_record.full_name);
+					decompressed_count := decompressed_count + 1;
+					RAISE NOTICE 'Decompressed: %', chunk_record.full_name;
+				END LOOP;
+				RAISE NOTICE 'Total chunks decompressed: %', decompressed_count;
+			END;
+			$$
+		`)
+		if err != nil {
+			log.Printf("[Migration] Warning: error during decompression (may be no compressed chunks): %v", err)
+		}
+
+		// Step 2: Disable compression temporarily
+		log.Println("[Migration] Disabling compression temporarily...")
+		_, err = db.Exec(`ALTER TABLE logs_partitioned SET (timescaledb.compress = false)`)
+		if err != nil {
+			log.Printf("[Migration] Warning: failed to disable compression: %v", err)
+		}
+	}
+
+	// Step 3: Alter column types to DOUBLE PRECISION
+	log.Println("[Migration] Altering column types to DOUBLE PRECISION...")
+	_, err = db.Exec(`
+		ALTER TABLE logs_partitioned
+			ALTER COLUMN request_time TYPE DOUBLE PRECISION,
+			ALTER COLUMN upstream_response_time TYPE DOUBLE PRECISION
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to alter column types: %w", err)
+	}
+	log.Println("[Migration] Column types changed successfully")
+
+	if isHypertable {
+		// Step 4: Re-enable compression with same settings
+		log.Println("[Migration] Re-enabling compression...")
+		_, err = db.Exec(`
+			ALTER TABLE logs_partitioned SET (
+				timescaledb.compress,
+				timescaledb.compress_segmentby = 'host, log_type',
+				timescaledb.compress_orderby = 'created_at DESC'
+			)
+		`)
+		if err != nil {
+			log.Printf("[Migration] Warning: failed to re-enable compression: %v", err)
+		}
+
+		// Step 5: Recompress old chunks (optional, in background)
+		log.Println("[Migration] Recompressing chunks older than 7 days in background...")
+		go func() {
+			time.Sleep(5 * time.Second)
+			_, err := db.Exec(`SELECT compress_chunk(c) FROM show_chunks('logs_partitioned', older_than => INTERVAL '7 days') c`)
+			if err != nil {
+				log.Printf("[Migration] Warning: background recompression had issues: %v", err)
+			} else {
+				log.Println("[Migration] Background recompression completed")
+			}
+		}()
+	}
+
+	// Mark migration as complete
+	_, err = db.Exec(`INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT DO NOTHING`, migrationVersion)
+	if err != nil {
+		return fmt.Errorf("failed to record migration: %w", err)
+	}
+
+	log.Printf("[Migration] %s completed successfully!", migrationVersion)
+	return nil
 }
