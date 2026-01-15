@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/url"
 	"os/exec"
 	"regexp"
@@ -18,6 +19,42 @@ import (
 	"nginx-proxy-guard/internal/repository"
 	"nginx-proxy-guard/pkg/cache"
 )
+
+const (
+	// MaxRequestTime is the maximum valid request time in seconds (24 hours)
+	// Values exceeding this are likely erroneous and will be replaced with 0
+	MaxRequestTime = 86400.0
+)
+
+// validateRequestTime validates a parsed request_time value
+// Returns the validated value (or 0 if invalid) and logs warnings for invalid values
+func validateRequestTime(value float64, rawValue string) float64 {
+	// Check for NaN
+	if math.IsNaN(value) {
+		log.Printf("[LogCollector] Warning: invalid request_time: NaN (raw: %s)", rawValue)
+		return 0
+	}
+
+	// Check for Infinity
+	if math.IsInf(value, 0) {
+		log.Printf("[LogCollector] Warning: invalid request_time: Inf (raw: %s)", rawValue)
+		return 0
+	}
+
+	// Check for negative values
+	if value < 0 {
+		log.Printf("[LogCollector] Warning: invalid request_time: negative value %.6f (raw: %s)", value, rawValue)
+		return 0
+	}
+
+	// Check for unreasonably large values (> 24 hours)
+	if value > MaxRequestTime {
+		log.Printf("[LogCollector] Warning: invalid request_time: exceeds max %.2f > %.2f (raw: %s)", value, MaxRequestTime, rawValue)
+		return 0
+	}
+
+	return value
+}
 
 // BotMatcher helps detect bot filter blocks from access logs
 type BotMatcher struct {
@@ -500,7 +537,10 @@ func (c *LogCollector) parseAccessLog(line string) (*model.CreateLogRequest, err
 		// Extract request_time from log line (rt=0.001)
 		var requestTime float64
 		if rtMatches := requestTimeRegex.FindStringSubmatch(line); rtMatches != nil {
-			requestTime, _ = strconv.ParseFloat(rtMatches[1], 64)
+			rawValue := rtMatches[1]
+			if parsed, err := strconv.ParseFloat(rawValue, 64); err == nil {
+				requestTime = validateRequestTime(parsed, rawValue)
+			}
 		}
 
 		return &model.CreateLogRequest{

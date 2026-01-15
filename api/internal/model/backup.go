@@ -107,6 +107,77 @@ type RestoreProgress struct {
 	ErrorMessage string    `json:"error_message,omitempty"`
 }
 
+// RestoreResult represents the detailed result of a restore operation (Issue #28 fix)
+type RestoreResult struct {
+	Status           string `json:"status"`             // "success", "partial", "failed"
+	Message          string `json:"message"`
+	IsPartialRestore bool   `json:"is_partial_restore"`
+
+	// Database restore
+	DatabaseRestored bool   `json:"database_restored"`
+	DatabaseError    string `json:"database_error,omitempty"`
+
+	// Config regeneration results
+	ProxyHostsTotal     int      `json:"proxy_hosts_total"`
+	ProxyHostsSuccess   int      `json:"proxy_hosts_success"`
+	ProxyHostsFailed    []string `json:"proxy_hosts_failed,omitempty"`
+
+	RedirectHostsTotal   int      `json:"redirect_hosts_total"`
+	RedirectHostsSuccess int      `json:"redirect_hosts_success"`
+	RedirectHostsFailed  []string `json:"redirect_hosts_failed,omitempty"`
+
+	// Nginx status
+	NginxConfigValid bool   `json:"nginx_config_valid"`
+	NginxConfigError string `json:"nginx_config_error,omitempty"`
+	NginxReloaded    bool   `json:"nginx_reloaded"`
+	NginxReloadError string `json:"nginx_reload_error,omitempty"`
+
+	// File restoration
+	FilesRestored int      `json:"files_restored"`
+	FileErrors    []string `json:"file_errors,omitempty"`
+}
+
+// NewRestoreResult creates a new RestoreResult with default values
+func NewRestoreResult() *RestoreResult {
+	return &RestoreResult{
+		Status:              "success",
+		Message:             "Restore completed successfully",
+		IsPartialRestore:    false,
+		DatabaseRestored:    false,
+		NginxConfigValid:    true,
+		NginxReloaded:       false,
+		ProxyHostsFailed:    []string{},
+		RedirectHostsFailed: []string{},
+		FileErrors:          []string{},
+	}
+}
+
+// DetermineStatus calculates the final status based on results
+func (r *RestoreResult) DetermineStatus() {
+	// Check for failures
+	hasFailures := len(r.ProxyHostsFailed) > 0 ||
+		len(r.RedirectHostsFailed) > 0 ||
+		!r.NginxConfigValid ||
+		!r.NginxReloaded ||
+		len(r.FileErrors) > 0
+
+	hasPartialSuccess := r.DatabaseRestored ||
+		r.ProxyHostsSuccess > 0 ||
+		r.RedirectHostsSuccess > 0
+
+	if !r.DatabaseRestored && !hasPartialSuccess {
+		r.Status = "failed"
+		r.Message = "Restore failed completely"
+	} else if hasFailures {
+		r.Status = "partial"
+		r.IsPartialRestore = true
+		r.Message = "Restore completed with some failures"
+	} else {
+		r.Status = "success"
+		r.Message = "Restore completed successfully"
+	}
+}
+
 // ExportData represents data for export/import
 type ExportData struct {
 	Version    string    `json:"version"`
