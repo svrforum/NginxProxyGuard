@@ -187,7 +187,7 @@ func main() {
 	redirectHostHandler := handler.NewRedirectHostHandler(redirectHostRepo, nginxManager, auditService)
 	geoHandler := handler.NewGeoHandler(geoRepo, proxyHostRepo, nginxManager, accessListRepo, rateLimitRepo, securityHeadersRepo, botFilterRepo, upstreamRepo)
 	securityHandler := handler.NewSecurityHandler(rateLimitRepo, botFilterRepo, securityHeadersRepo, upstreamRepo, proxyHostRepo, proxyHostService, auditService, redisCache, ipBanHistoryRepo, uriBlockRepo, nginxReloader)
-	settingsHandler := handler.NewSettingsHandler(globalSettingsRepo, dashboardRepo, backupRepo, proxyHostRepo, redirectHostRepo, certificateRepo, nginxManager, cfg.BackupPath, auditService, dockerStatsService, proxyHostService, redisCache)
+	settingsHandler := handler.NewSettingsHandler(globalSettingsRepo, dashboardRepo, backupRepo, proxyHostRepo, redirectHostRepo, certificateRepo, wafRepo, nginxManager, cfg.BackupPath, auditService, dockerStatsService, proxyHostService, redisCache)
 	systemLogHandler := handler.NewSystemLogHandler(systemLogRepo)
 	authHandler := handler.NewAuthHandler(authService, auditService)
 	// Initialize GeoIP service for log enrichment (moved up for scheduler)

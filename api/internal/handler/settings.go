@@ -40,6 +40,7 @@ type SettingsHandler struct {
 	proxyHostRepo    *repository.ProxyHostRepository
 	redirectHostRepo *repository.RedirectHostRepository
 	certificateRepo  *repository.CertificateRepository
+	wafRepo          *repository.WAFRepository
 	nginxManager     *nginx.Manager
 	backupPath       string
 	audit            *service.AuditService
@@ -55,6 +56,7 @@ func NewSettingsHandler(
 	proxyHostRepo *repository.ProxyHostRepository,
 	redirectHostRepo *repository.RedirectHostRepository,
 	certificateRepo *repository.CertificateRepository,
+	wafRepo *repository.WAFRepository,
 	nginxManager *nginx.Manager,
 	backupPath string,
 	audit *service.AuditService,
@@ -69,6 +71,7 @@ func NewSettingsHandler(
 		proxyHostRepo:    proxyHostRepo,
 		redirectHostRepo: redirectHostRepo,
 		certificateRepo:  certificateRepo,
+		wafRepo:          wafRepo,
 		nginxManager:     nginxManager,
 		backupPath:       backupPath,
 		audit:            audit,
@@ -861,7 +864,9 @@ func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Back
 					}
 					// Generate WAF config if enabled
 					if host.WAFEnabled {
-						if err := h.nginxManager.GenerateHostWAFConfig(ctx, &host, nil); err != nil {
+						// Get merged WAF exclusions (host + global) from database
+						exclusions := h.getMergedWAFExclusions(ctx, host.ID)
+						if err := h.nginxManager.GenerateHostWAFConfig(ctx, &host, exclusions); err != nil {
 							log.Printf("[Backup] Warning: failed to regenerate WAF config for host %s: %v", host.ID, err)
 							// Remove the main config if WAF config fails
 							_ = h.nginxManager.RemoveConfig(ctx, &host)
@@ -1408,4 +1413,54 @@ func (h *SettingsHandler) TestDashboardQueries(c echo.Context) error {
 		"status":  "passed",
 		"results": results,
 	})
+}
+
+// getMergedWAFExclusions returns merged WAF exclusions (host-specific + global)
+// This is used during backup restore to regenerate WAF configs correctly
+func (h *SettingsHandler) getMergedWAFExclusions(ctx context.Context, hostID string) []model.WAFRuleExclusion {
+	if h.wafRepo == nil {
+		return nil
+	}
+
+	// Get host-specific exclusions
+	hostExclusions, err := h.wafRepo.GetExclusionsByProxyHost(ctx, hostID)
+	if err != nil {
+		log.Printf("[Backup] Warning: failed to get host WAF exclusions for %s: %v", hostID, err)
+		hostExclusions = nil
+	}
+
+	// Get global exclusions
+	globalExclusions, err := h.wafRepo.GetGlobalExclusions(ctx)
+	if err != nil {
+		log.Printf("[Backup] Warning: failed to get global WAF exclusions: %v", err)
+		return hostExclusions // Return host-only if global fails
+	}
+
+	// Create a map of host exclusions to avoid duplicates
+	hostExclusionMap := make(map[int]bool)
+	for _, ex := range hostExclusions {
+		hostExclusionMap[ex.RuleID] = true
+	}
+
+	// Merge: start with host exclusions
+	merged := make([]model.WAFRuleExclusion, len(hostExclusions))
+	copy(merged, hostExclusions)
+
+	// Add global exclusions that are not already in host exclusions
+	for _, gex := range globalExclusions {
+		if !hostExclusionMap[gex.RuleID] {
+			merged = append(merged, model.WAFRuleExclusion{
+				ID:              gex.ID,
+				ProxyHostID:     "global",
+				RuleID:          gex.RuleID,
+				RuleCategory:    gex.RuleCategory,
+				RuleDescription: gex.RuleDescription,
+				Reason:          gex.Reason + " (global)",
+				DisabledBy:      gex.DisabledBy,
+				CreatedAt:       gex.CreatedAt,
+			})
+		}
+	}
+
+	return merged
 }
