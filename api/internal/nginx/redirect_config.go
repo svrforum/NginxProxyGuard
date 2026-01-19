@@ -76,8 +76,8 @@ server {
     ssl_prefer_server_ciphers on;
     ssl_early_data on;
 
-    # HTTP/3 Alt-Svc header
-    add_header Alt-Svc 'h3=":{{.HTTPSPort}}"; ma=86400' always;
+    # HTTP/3 Alt-Svc header (1 hour cache for faster fallback on connection issues)
+    add_header Alt-Svc 'h3=":{{.HTTPSPort}}"; ma=3600' always;
 
 {{if .Host.BlockExploits}}
     # Block common exploits

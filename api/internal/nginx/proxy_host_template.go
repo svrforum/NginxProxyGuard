@@ -1501,8 +1501,11 @@ server {
         proxy_set_header Connection $connection_upgrade;
         {{end}}
         {{if .Host.SSLHTTP3}}
-        # HTTP/3 Alt-Svc header
-        add_header Alt-Svc 'h3=":{{$.HTTPSPort}}"; ma=86400' always;
+        # HTTP/3 Alt-Svc header (1 hour cache for faster fallback on connection issues)
+        add_header Alt-Svc 'h3=":{{$.HTTPSPort}}"; ma=3600' always;
+        {{else}}
+        # Clear Alt-Svc cache when HTTP/3 is disabled (helps Safari recover faster)
+        add_header Alt-Svc 'clear' always;
         {{end}}
         {{if .Host.CacheEnabled}}
         # Caching
