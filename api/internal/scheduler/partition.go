@@ -122,16 +122,28 @@ func (s *PartitionScheduler) logPartitionStats(ctx context.Context) {
 	}
 
 	// Check default partition sizes (should be empty if date ranges are correct)
+	// Note: logs_p_default may not exist if logs_partitioned is a TimescaleDB hypertable
+	var logsDefaultExists bool
+	err = s.db.QueryRowContext(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM pg_tables
+			WHERE tablename = 'logs_p_default' AND schemaname = 'public'
+		)
+	`).Scan(&logsDefaultExists)
+
 	var logsDefaultSize int64
-	_ = s.db.QueryRowContext(ctx, `
-		SELECT COALESCE(pg_total_relation_size('logs_p_default'), 0)
-	`).Scan(&logsDefaultSize)
+	if err == nil && logsDefaultExists {
+		_ = s.db.QueryRowContext(ctx, `
+			SELECT COALESCE(pg_total_relation_size('logs_p_default'), 0)
+		`).Scan(&logsDefaultSize)
+	}
 
 	log.Printf("[PartitionScheduler] Partition stats: logs=%d partitions, stats=%d partitions, logs_default_size=%d bytes",
 		logPartitionCount, statsPartitionCount, logsDefaultSize)
 
 	// Warn if default partition has data (indicates date range issues)
-	if logsDefaultSize > 8192 { // More than just empty table overhead
+	// Only applicable when using native PostgreSQL partitioning (not TimescaleDB)
+	if logsDefaultExists && logsDefaultSize > 8192 { // More than just empty table overhead
 		log.Printf("[PartitionScheduler] WARNING: logs_p_default partition has data (%d bytes) - check partition date ranges", logsDefaultSize)
 	}
 }
