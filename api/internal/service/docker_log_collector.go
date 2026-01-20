@@ -338,8 +338,12 @@ func (c *DockerLogCollector) processLogStream(ctx context.Context, container Con
 			}
 
 			// Skip internal collector logs to avoid recursion
+			// Also filter PostgreSQL DETAIL logs and INSERT INTO system_logs to prevent infinite feedback loops
 			if strings.Contains(line, "[DockerLogCollector]") ||
-				strings.Contains(line, "[StatsCollector]") {
+				strings.Contains(line, "[StatsCollector]") ||
+				strings.Contains(line, "[PartitionScheduler]") ||
+				strings.Contains(line, "INSERT INTO system_logs") ||
+				strings.Contains(line, "DETAIL:  Parameters:") {
 				continue
 			}
 
