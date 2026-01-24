@@ -519,7 +519,14 @@ func (c *LogCollector) parseAccessLog(line string) (*model.CreateLogRequest, err
 		var exploitRule string
 
 		if brMatches := blockReasonRegex.FindStringSubmatch(line); brMatches != nil {
-			blockReason = model.ParseBlockReason(brMatches[1])
+			reason := model.ParseBlockReason(brMatches[1])
+			// Only set access_denied if the request was actually denied (403)
+			// This prevents false positives when Access List is configured but request is allowed
+			if reason == model.BlockReasonAccessDenied && statusCode != 403 {
+				blockReason = model.BlockReasonNone
+			} else {
+				blockReason = reason
+			}
 		}
 		if bcMatches := botCategoryRegex.FindStringSubmatch(line); bcMatches != nil && bcMatches[1] != "-" {
 			botCategory = bcMatches[1]
