@@ -126,7 +126,8 @@
     "exploitBlock": "Exploit 차단",
     "uriBlock": "URI 차단",
     "cloudChallenge": "클라우드",
-    "cloudBlock": "클라우드"
+    "cloudBlock": "클라우드",
+    "accessDenied": "접근 거부"
   },
   "bots": {
     "badBot": "Bad Bot",

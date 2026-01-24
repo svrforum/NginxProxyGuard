@@ -38,6 +38,10 @@ export function BlockReasonBadge({ reason, category }: { reason?: BlockReason; c
     geo_block: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Geo' },
     banned_ip: { bg: 'bg-red-100', text: 'text-red-800', label: 'Ban' },
     exploit_block: { bg: 'bg-red-100', text: 'text-red-800', label: 'Exploit' },
+    uri_block: { bg: 'bg-pink-100', text: 'text-pink-800', label: 'URI' },
+    cloud_provider_challenge: { bg: 'bg-cyan-100', text: 'text-cyan-800', label: 'Cloud' },
+    cloud_provider_block: { bg: 'bg-cyan-100', text: 'text-cyan-800', label: 'Cloud' },
+    access_denied: { bg: 'bg-rose-100', text: 'text-rose-800', label: 'Denied' },
   };
 
   const cfg = config[reason] || { bg: 'bg-gray-100', text: 'text-gray-800', label: reason };
