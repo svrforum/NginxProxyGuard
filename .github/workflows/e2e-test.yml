@@ -121,8 +121,6 @@ jobs:
         run: npx playwright test
         env:
           BASE_URL: https://localhost:18181
-          TEST_USERNAME: admin
-          TEST_PASSWORD: admin
           CI: true
 
       - name: Upload Playwright report
