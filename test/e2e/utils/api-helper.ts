@@ -1,6 +1,16 @@
 import { APIRequestContext } from '@playwright/test';
 import { TEST_CREDENTIALS, API_ENDPOINTS } from '../fixtures/test-data';
 
+// Delay helper for rate limiting
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Retry configuration
+const RETRY_CONFIG = {
+  maxRetries: 3,
+  baseDelay: 500, // 500ms base delay
+  maxDelay: 5000, // 5s max delay
+};
+
 /**
  * API Helper for direct API calls in tests.
  * Useful for setup/teardown and verifying backend state.
@@ -11,6 +21,43 @@ export class APIHelper {
 
   constructor(request: APIRequestContext) {
     this.request = request;
+  }
+
+  /**
+   * Execute a request with retry logic for rate limiting.
+   */
+  private async withRetry<T>(
+    operation: () => Promise<T>,
+    operationName: string
+  ): Promise<T> {
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt < RETRY_CONFIG.maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error) {
+        lastError = error as Error;
+        const errorMessage = lastError.message || '';
+
+        // Check if it's a rate limit error (429)
+        if (errorMessage.includes('429')) {
+          const delayTime = Math.min(
+            RETRY_CONFIG.baseDelay * Math.pow(2, attempt),
+            RETRY_CONFIG.maxDelay
+          );
+          console.log(
+            `Rate limited on ${operationName}, retrying in ${delayTime}ms (attempt ${attempt + 1}/${RETRY_CONFIG.maxRetries})`
+          );
+          await delay(delayTime);
+          continue;
+        }
+
+        // For other errors, don't retry
+        throw lastError;
+      }
+    }
+
+    throw lastError || new Error(`${operationName} failed after ${RETRY_CONFIG.maxRetries} retries`);
   }
 
   /**
@@ -33,17 +80,19 @@ export class APIHelper {
     username: string = TEST_CREDENTIALS.username,
     password: string = TEST_CREDENTIALS.password
   ): Promise<string> {
-    const response = await this.request.post(API_ENDPOINTS.login, {
-      data: { username, password },
-    });
+    return this.withRetry(async () => {
+      const response = await this.request.post(API_ENDPOINTS.login, {
+        data: { username, password },
+      });
 
-    if (!response.ok()) {
-      throw new Error(`Login failed: ${response.status()}`);
-    }
+      if (!response.ok()) {
+        throw new Error(`Login failed: ${response.status()}`);
+      }
 
-    const data = await response.json();
-    this.token = data.token;
-    return this.token;
+      const data = await response.json();
+      this.token = data.token;
+      return this.token;
+    }, 'login');
   }
 
   /**
@@ -62,17 +111,19 @@ export class APIHelper {
    * Get all proxy hosts.
    */
   async getProxyHosts(): Promise<ProxyHostData[]> {
-    const response = await this.request.get(API_ENDPOINTS.proxyHosts, {
-      headers: this.getHeaders(),
-    });
+    return this.withRetry(async () => {
+      const response = await this.request.get(API_ENDPOINTS.proxyHosts, {
+        headers: this.getHeaders(),
+      });
 
-    if (!response.ok()) {
-      throw new Error(`Failed to get proxy hosts: ${response.status()}`);
-    }
+      if (!response.ok()) {
+        throw new Error(`Failed to get proxy hosts: ${response.status()}`);
+      }
 
-    const result = await response.json();
-    // API returns paginated response: { data: [...], total, page, per_page, total_pages }
-    return result.data || [];
+      const result = await response.json();
+      // API returns paginated response: { data: [...], total, page, per_page, total_pages }
+      return result.data || [];
+    }, 'getProxyHosts');
   }
 
   /**
@@ -286,15 +337,19 @@ export class APIHelper {
    * Get all DNS providers.
    */
   async getDnsProviders(): Promise<DnsProviderData[]> {
-    const response = await this.request.get(API_ENDPOINTS.dnsProviders, {
-      headers: this.getHeaders(),
-    });
+    return this.withRetry(async () => {
+      const response = await this.request.get(API_ENDPOINTS.dnsProviders, {
+        headers: this.getHeaders(),
+      });
 
-    if (!response.ok()) {
-      throw new Error(`Failed to get DNS providers: ${response.status()}`);
-    }
+      if (!response.ok()) {
+        throw new Error(`Failed to get DNS providers: ${response.status()}`);
+      }
 
-    return response.json();
+      const data = await response.json();
+      // Ensure we return an array
+      return Array.isArray(data) ? data : [];
+    }, 'getDnsProviders');
   }
 
   /**
@@ -367,15 +422,19 @@ export class APIHelper {
    * Get all access lists.
    */
   async getAccessLists(): Promise<AccessListData[]> {
-    const response = await this.request.get(API_ENDPOINTS.accessLists, {
-      headers: this.getHeaders(),
-    });
+    return this.withRetry(async () => {
+      const response = await this.request.get(API_ENDPOINTS.accessLists, {
+        headers: this.getHeaders(),
+      });
 
-    if (!response.ok()) {
-      throw new Error(`Failed to get access lists: ${response.status()}`);
-    }
+      if (!response.ok()) {
+        throw new Error(`Failed to get access lists: ${response.status()}`);
+      }
 
-    return response.json();
+      const data = await response.json();
+      // Ensure we return an array
+      return Array.isArray(data) ? data : [];
+    }, 'getAccessLists');
   }
 
   /**
@@ -715,15 +774,19 @@ export class APIHelper {
    * Get WAF URI blocks.
    */
   async getWafUriBlocks(): Promise<WafUriBlockData[]> {
-    const response = await this.request.get(API_ENDPOINTS.wafUriBlocks, {
-      headers: this.getHeaders(),
-    });
+    return this.withRetry(async () => {
+      const response = await this.request.get(API_ENDPOINTS.wafUriBlocks, {
+        headers: this.getHeaders(),
+      });
 
-    if (!response.ok()) {
-      throw new Error(`Failed to get WAF URI blocks: ${response.status()}`);
-    }
+      if (!response.ok()) {
+        throw new Error(`Failed to get WAF URI blocks: ${response.status()}`);
+      }
 
-    return response.json();
+      const data = await response.json();
+      // Ensure we return an array
+      return Array.isArray(data) ? data : [];
+    }, 'getWafUriBlocks');
   }
 
   /**
@@ -815,20 +878,22 @@ export class APIHelper {
    * Get audit logs.
    */
   async getAuditLogs(params?: LogQueryParams): Promise<AuditLogEntry[]> {
-    const queryParams = new URLSearchParams();
-    if (params?.page) queryParams.set('page', params.page.toString());
-    if (params?.perPage) queryParams.set('per_page', params.perPage.toString());
+    return this.withRetry(async () => {
+      const queryParams = new URLSearchParams();
+      if (params?.page) queryParams.set('page', params.page.toString());
+      if (params?.perPage) queryParams.set('per_page', params.perPage.toString());
 
-    const response = await this.request.get(`${API_ENDPOINTS.logsAudit}?${queryParams}`, {
-      headers: this.getHeaders(),
-    });
+      const response = await this.request.get(`${API_ENDPOINTS.logsAudit}?${queryParams}`, {
+        headers: this.getHeaders(),
+      });
 
-    if (!response.ok()) {
-      throw new Error(`Failed to get audit logs: ${response.status()}`);
-    }
+      if (!response.ok()) {
+        throw new Error(`Failed to get audit logs: ${response.status()}`);
+      }
 
-    const result = await response.json();
-    return result.data || [];
+      const result = await response.json();
+      return result.data || [];
+    }, 'getAuditLogs');
   }
 }
 
