@@ -3,6 +3,7 @@ package middleware
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -11,6 +12,12 @@ import (
 
 	"nginx-proxy-guard/pkg/cache"
 )
+
+// isTestEnvironment checks if running in test/development environment
+func isTestEnvironment() bool {
+	env := os.Getenv("ENVIRONMENT")
+	return env == "test" || env == "development" || os.Getenv("RATE_LIMIT_DISABLED") == "true"
+}
 
 // APIRateLimitConfig defines the configuration for API rate limiting
 type APIRateLimitConfig struct {
@@ -26,14 +33,24 @@ type APIRateLimitConfig struct {
 
 // DefaultAPIRateLimitConfig returns default rate limit config
 func DefaultAPIRateLimitConfig() APIRateLimitConfig {
+	// Use much higher limits for test/development environments
+	limit := int64(100)
+	if isTestEnvironment() {
+		limit = 10000 // 10000 requests per minute for tests
+	}
+
 	return APIRateLimitConfig{
-		Limit:  100,
+		Limit:  limit,
 		Window: time.Minute,
 		KeyGenerator: func(c echo.Context) string {
 			// Default: rate limit by IP
 			return c.RealIP()
 		},
 		Skipper: func(c echo.Context) bool {
+			// Skip all rate limiting in test environment
+			if isTestEnvironment() {
+				return true
+			}
 			path := c.Path()
 			// Skip health check and challenge endpoints (auth_request from nginx)
 			return path == "/health" ||

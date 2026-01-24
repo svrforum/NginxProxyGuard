@@ -57,6 +57,8 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-testadmin123}
       NGINX_CONTAINER_NAME: npg-test-proxy
       TZ: Asia/Seoul
+      # Disable rate limiting for E2E tests
+      ENVIRONMENT: test
     volumes:
       - test_certs:/app/certs
       - test_nginx_conf:/etc/nginx/conf.d
