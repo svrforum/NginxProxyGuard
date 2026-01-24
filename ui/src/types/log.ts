@@ -17,7 +17,11 @@ export type BlockReason =
   | "rate_limit"
   | "geo_block"
   | "exploit_block"
-  | "banned_ip";
+  | "banned_ip"
+  | "uri_block"
+  | "cloud_provider_challenge"
+  | "cloud_provider_block"
+  | "access_denied";
 
 export type BotCategory = "bad_bot" | "ai_bot" | "suspicious" | "search_engine";
 

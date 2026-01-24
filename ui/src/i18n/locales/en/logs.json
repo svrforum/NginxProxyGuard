@@ -126,7 +126,8 @@
     "exploitBlock": "Exploit",
     "uriBlock": "URI Block",
     "cloudChallenge": "Cloud",
-    "cloudBlock": "Cloud"
+    "cloudBlock": "Cloud",
+    "accessDenied": "Access Denied"
   },
   "bots": {
     "badBot": "Bad Bot",

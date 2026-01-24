@@ -20,6 +20,7 @@ export function BlockReasonBadge({ reason, category }: BlockReasonBadgeProps) {
     uri_block: { bg: 'bg-pink-100 dark:bg-pink-900/30', text: 'text-pink-800 dark:text-pink-400', label: t('reasons.uriBlock') },
     cloud_provider_challenge: { bg: 'bg-cyan-100 dark:bg-cyan-900/30', text: 'text-cyan-800 dark:text-cyan-400', label: t('reasons.cloudChallenge') },
     cloud_provider_block: { bg: 'bg-cyan-100 dark:bg-cyan-900/30', text: 'text-cyan-800 dark:text-cyan-400', label: t('reasons.cloudBlock') },
+    access_denied: { bg: 'bg-rose-100 dark:bg-rose-900/30', text: 'text-rose-800 dark:text-rose-400', label: t('reasons.accessDenied') },
   };
 
   const cfg = config[reason] || { bg: 'bg-gray-100 dark:bg-gray-800', text: 'text-gray-800 dark:text-gray-300', label: reason };
