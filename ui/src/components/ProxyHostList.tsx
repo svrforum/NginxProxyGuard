@@ -650,8 +650,20 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
   const [testError, setTestError] = useState<string | null>(null)
   const [isTestLoading, setIsTestLoading] = useState(false)
   const [toggleConfirmHost, setToggleConfirmHost] = useState<ProxyHost | null>(null)
-  const [searchQuery, setSearchQuery] = useState('')
+  const [searchInput, setSearchInput] = useState('')  // For controlled input
+  const [searchQuery, setSearchQuery] = useState('')  // For actual query (debounced)
   const [currentPage, setCurrentPage] = useState(1)
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchInput !== searchQuery) {
+        setSearchQuery(searchInput)
+        setCurrentPage(1)
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchInput, searchQuery])
   const [perPage, setPerPage] = useState<number>(() => {
     const saved = localStorage.getItem('proxyHostPerPage')
     return saved ? parseInt(saved, 10) : 20
@@ -754,9 +766,15 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
   // Hosts are now sorted server-side
   const hosts = data?.data || []
 
-  // Reset to page 1 when search changes
+  // Handle search input change (debounced via useEffect)
   const handleSearchChange = (value: string) => {
-    setSearchQuery(value)
+    setSearchInput(value)
+  }
+
+  // Clear search
+  const handleClearSearch = () => {
+    setSearchInput('')
+    setSearchQuery('')
     setCurrentPage(1)
   }
 
@@ -814,14 +832,14 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
             </svg>
             <input
               type="text"
-              value={searchQuery}
+              value={searchInput}
               onChange={(e) => handleSearchChange(e.target.value)}
               placeholder={t('list.search')}
               className="w-full sm:w-48 pl-9 pr-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
-            {searchQuery && (
+            {searchInput && (
               <button
-                onClick={() => handleSearchChange('')}
+                onClick={handleClearSearch}
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600"
               >
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -868,7 +886,7 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
         <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-8 text-center border border-dashed border-slate-200 dark:border-slate-700">
           <div className="w-12 h-12 bg-slate-200 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              {searchQuery ? (
+              {searchInput ? (
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               ) : (
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
@@ -876,14 +894,14 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
             </svg>
           </div>
           <h3 className="text-slate-600 dark:text-slate-300 font-medium mb-1">
-            {searchQuery ? t('list.noResults') : t('list.empty')}
+            {searchInput ? t('list.noResults') : t('list.empty')}
           </h3>
           <p className="text-slate-400 text-sm">
-            {searchQuery ? t('list.noResultsDescription', { query: searchQuery }) : t('list.emptyDescription')}
+            {searchInput ? t('list.noResultsDescription', { query: searchInput }) : t('list.emptyDescription')}
           </p>
-          {searchQuery && (
+          {searchInput && (
             <button
-              onClick={() => setSearchQuery('')}
+              onClick={handleClearSearch}
               className="mt-3 text-sm text-primary-600 hover:text-primary-700 font-medium"
             >
               {t('list.clearSearch')}
