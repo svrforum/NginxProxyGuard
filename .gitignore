@@ -35,7 +35,7 @@ Thumbs.db
 
 # Logs
 *.log
-logs/
+/logs/
 
 # Test
 coverage/
@@ -58,6 +58,7 @@ temp/
 # Backups
 backups/
 test/.env
-
-# Test environment
-test/
+test/playwright-report/
+test/test-results/
+test/e2e/node_modules/
+test/e2e/.auth/

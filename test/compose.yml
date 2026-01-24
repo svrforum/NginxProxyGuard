@@ -1,0 +1,105 @@
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: npg-test-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-testpassword123}
+      POSTGRES_DB: ${POSTGRES_DB:-nginx_guard_test}
+    volumes:
+      - test_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - npg-test-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: npg-test-redis
+    command: redis-server --requirepass ${REDIS_PASSWORD:-testredispassword}
+    volumes:
+      - test_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-testredispassword}", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - npg-test-network
+
+  api:
+    image: nginxproxyguard-api:test
+    container_name: npg-test-api
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-testpassword123}@db:5432/${POSTGRES_DB:-nginx_guard_test}?sslmode=disable
+      REDIS_URL: redis://:${REDIS_PASSWORD:-testredispassword}@redis:6379
+      JWT_SECRET: ${JWT_SECRET:-test-jwt-secret-key}
+      PORT: "8080"
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@test.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-testadmin123}
+      NGINX_CONTAINER_NAME: npg-test-proxy
+      TZ: Asia/Seoul
+    volumes:
+      - test_certs:/app/certs
+      - test_nginx_conf:/etc/nginx/conf.d
+      - test_nginx_logs:/var/log/nginx
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - npg-test-network
+
+  ui:
+    image: nginxproxyguard-ui:test
+    container_name: npg-test-ui
+    ports:
+      - "${UI_HTTP_PORT:-18180}:80"
+      - "${UI_HTTPS_PORT:-18181}:443"
+    environment:
+      API_URL: http://api:8080
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - npg-test-network
+
+  proxy:
+    image: nginxproxyguard-nginx:test
+    container_name: npg-test-proxy
+    ports:
+      - "${HTTP_PORT:-18080}:80"
+      - "${HTTPS_PORT:-18443}:443"
+    volumes:
+      - test_certs:/etc/nginx/certs
+      - test_nginx_conf:/etc/nginx/conf.d
+      - test_nginx_logs:/var/log/nginx
+      - test_geoip:/etc/nginx/geoip
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - npg-test-network
+
+networks:
+  npg-test-network:
+    driver: bridge
+
+volumes:
+  test_postgres_data:
+  test_redis_data:
+  test_certs:
+  test_nginx_conf:
+  test_nginx_logs:
+  test_geoip:

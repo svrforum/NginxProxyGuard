@@ -1,0 +1,23 @@
+{
+  "name": "npg-e2e-tests",
+  "version": "1.0.0",
+  "description": "Playwright E2E tests for Nginx Proxy Guard",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "test:report": "playwright show-report",
+    "test:auth": "playwright test specs/auth/",
+    "test:proxy": "playwright test specs/proxy-host/",
+    "test:security": "playwright test specs/security/",
+    "test:logs": "playwright test specs/logs/",
+    "test:dashboard": "playwright test specs/dashboard/"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}

@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Test results and reports
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Auth state (contains tokens)
+playwright/.auth/
+
+# TypeScript build output
+dist/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
