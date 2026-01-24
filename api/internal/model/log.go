@@ -26,8 +26,36 @@ const (
 	BlockReasonURIBlock               BlockReason = "uri_block"
 	BlockReasonCloudProviderChallenge BlockReason = "cloud_provider_challenge"
 	BlockReasonCloudProviderBlock     BlockReason = "cloud_provider_block"
-	BlockReasonAccessDenied           BlockReason = "access_denied"  // #16 follow up [LogCollector] Failed to batch insert logs enum error
+	BlockReasonAccessDenied           BlockReason = "access_denied"
 )
+
+// validBlockReasons contains all valid block reason values
+var validBlockReasons = map[string]BlockReason{
+	"none":                     BlockReasonNone,
+	"waf":                      BlockReasonWAF,
+	"bot_filter":               BlockReasonBotFilter,
+	"rate_limit":               BlockReasonRateLimit,
+	"geo_block":                BlockReasonGeoBlock,
+	"exploit_block":            BlockReasonExploitBlock,
+	"banned_ip":                BlockReasonBannedIP,
+	"uri_block":                BlockReasonURIBlock,
+	"cloud_provider_challenge": BlockReasonCloudProviderChallenge,
+	"cloud_provider_block":     BlockReasonCloudProviderBlock,
+	"access_denied":            BlockReasonAccessDenied,
+}
+
+// ParseBlockReason validates and converts a string to BlockReason.
+// Returns BlockReasonNone for invalid/unknown values to prevent DB enum errors.
+func ParseBlockReason(s string) BlockReason {
+	if s == "" || s == "-" {
+		return BlockReasonNone
+	}
+	if reason, ok := validBlockReasons[s]; ok {
+		return reason
+	}
+	// Unknown value - fallback to none to prevent log loss
+	return BlockReasonNone
+}
 
 type LogSeverity string
 

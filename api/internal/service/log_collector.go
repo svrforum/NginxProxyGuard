@@ -332,7 +332,7 @@ func (c *LogCollector) flushRedisBuffer(ctx context.Context) ([]model.CreateLogR
 			BodyBytesSent:   entry.BodyBytes,
 			HTTPUserAgent:   entry.UserAgent,
 			HTTPReferer:     entry.Referer,
-			BlockReason:     model.BlockReason(entry.BlockReason),
+			BlockReason:     model.ParseBlockReason(entry.BlockReason),
 			BotCategory:     entry.BotCategory,
 			ExploitRule:     entry.ExploitRule,
 			GeoCountry:      entry.GeoCountry,
@@ -518,8 +518,8 @@ func (c *LogCollector) parseAccessLog(line string) (*model.CreateLogRequest, err
 		var botCategory string
 		var exploitRule string
 
-		if brMatches := blockReasonRegex.FindStringSubmatch(line); brMatches != nil && brMatches[1] != "-" {
-			blockReason = model.BlockReason(brMatches[1])
+		if brMatches := blockReasonRegex.FindStringSubmatch(line); brMatches != nil {
+			blockReason = model.ParseBlockReason(brMatches[1])
 		}
 		if bcMatches := botCategoryRegex.FindStringSubmatch(line); bcMatches != nil && bcMatches[1] != "-" {
 			botCategory = bcMatches[1]
