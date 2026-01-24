@@ -67,24 +67,41 @@ jobs:
         run: |
           cd test
           docker compose up -d
-          echo "Waiting for services to be ready..."
-          timeout 180 bash -c 'until docker compose ps | grep -q "healthy"; do sleep 5; done' || {
-            echo "Services failed to become healthy"
-            docker compose ps
-            docker compose logs
-            exit 1
-          }
-          sleep 10
+          echo "Waiting for all services to be healthy..."
+
+          # Wait for each service to be healthy
+          for service in db redis api ui proxy; do
+            echo "Waiting for $service..."
+            timeout 180 bash -c "until docker compose ps $service | grep -q 'healthy'; do sleep 5; done" || {
+              echo "$service failed to become healthy"
+              docker compose ps
+              docker compose logs $service
+              exit 1
+            }
+            echo "$service is healthy"
+          done
+
+          echo "All services healthy, waiting for stabilization..."
+          sleep 5
 
       - name: Verify services are running
         run: |
           cd test
           docker compose ps
-          curl -f http://localhost:18180/health || {
-            echo "UI health check failed"
-            docker compose logs ui
-            exit 1
-          }
+
+          # Retry UI health check with backoff
+          for i in {1..10}; do
+            if curl -sf http://localhost:18180/health > /dev/null 2>&1; then
+              echo "UI health check passed"
+              exit 0
+            fi
+            echo "UI health check attempt $i failed, retrying in 3s..."
+            sleep 3
+          done
+
+          echo "UI health check failed after 10 attempts"
+          docker compose logs ui
+          exit 1
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
