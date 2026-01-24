@@ -9,6 +9,11 @@ services:
   db:
     image: postgres:15-alpine
     container_name: release-test-host-db
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       POSTGRES_USER: test_user
       POSTGRES_PASSWORD: test_password
@@ -25,6 +30,11 @@ services:
   valkey:
     image: valkey/valkey:8-alpine
     container_name: release-test-host-valkey
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
       test: ["CMD", "valkey-cli", "ping"]
       interval: 5s
@@ -37,6 +47,11 @@ services:
   api:
     image: svrforum/nginxproxyguard-api:${VERSION:-latest}
     container_name: release-test-host-api
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
@@ -78,6 +93,11 @@ services:
     image: svrforum/nginxproxyguard-nginx:${VERSION:-latest}
     container_name: release-test-host-nginx
     network_mode: host
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       NGINX_HTTP_PORT: ${NGINX_HTTP_PORT:-28080}
       NGINX_HTTPS_PORT: ${NGINX_HTTPS_PORT:-28443}
@@ -96,6 +116,11 @@ services:
   whoami:
     image: traefik/whoami
     container_name: release-test-host-whoami
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "${WHOAMI_PORT:-28888}:80"  # Bind to all interfaces for test access
     networks:
@@ -107,6 +132,11 @@ services:
   test-runner:
     image: curlimages/curl:latest
     container_name: release-test-host-runner
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     profiles:
       - test
     extra_hosts:

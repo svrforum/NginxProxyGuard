@@ -4,6 +4,11 @@ services:
     image: timescale/timescaledb:latest-pg17
     container_name: npg-db
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
     environment:
       TZ: ${TZ:-UTC}
       POSTGRES_USER: ${DB_USER:-postgres}
@@ -24,6 +29,11 @@ services:
     image: valkey/valkey:8-alpine
     container_name: npg-valkey
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       TZ: ${TZ:-UTC}
     command: >
@@ -49,6 +59,11 @@ services:
     #   dockerfile: Dockerfile
     container_name: npg-api
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
     environment:
       TZ: ${TZ:-UTC}
       PORT: "8080"
@@ -94,6 +109,11 @@ services:
     #   dockerfile: Dockerfile
     container_name: npg-ui
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       TZ: ${TZ:-UTC}
     ports:
@@ -111,6 +131,11 @@ services:
     #   dockerfile: Dockerfile
     container_name: npg-proxy
     restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
     environment:
       TZ: ${TZ:-UTC}
     ports:
