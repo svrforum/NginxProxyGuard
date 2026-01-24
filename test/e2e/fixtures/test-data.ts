@@ -3,9 +3,15 @@
  */
 
 // Default admin credentials (default for fresh install)
+export const DEFAULT_ADMIN_CREDENTIALS = {
+  username: 'admin',
+  password: 'admin',
+} as const;
+
+// Test credentials after initial setup (used by all tests)
 export const TEST_CREDENTIALS = {
-  username: process.env.TEST_USERNAME || 'admin',
-  password: process.env.TEST_PASSWORD || 'admin',
+  username: process.env.TEST_USERNAME || 'testadmin',
+  password: process.env.TEST_PASSWORD || 'TestAdmin123!',
 } as const;
 
 // API endpoints
