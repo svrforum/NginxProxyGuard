@@ -19,15 +19,11 @@ on:
       - '.github/workflows/e2e-test.yml'
   workflow_dispatch:
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_PREFIX: ${{ github.repository_owner }}/nginxproxyguard
-
 jobs:
   e2e-tests:
     name: Playwright E2E Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Checkout repository
@@ -36,31 +32,48 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
+      - name: Build API image
+        uses: docker/build-push-action@v6
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          context: ./api
+          load: true
+          tags: nginxproxyguard-api:test
+          cache-from: type=gha,scope=api-e2e
+          cache-to: type=gha,mode=max,scope=api-e2e
 
-      - name: Pull test images
+      - name: Build UI image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./ui
+          load: true
+          tags: nginxproxyguard-ui:test
+          cache-from: type=gha,scope=ui-e2e
+          cache-to: type=gha,mode=max,scope=ui-e2e
+
+      - name: Build Nginx image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./nginx
+          load: true
+          tags: nginxproxyguard-nginx:test
+          cache-from: type=gha,scope=nginx-e2e
+          cache-to: type=gha,mode=max,scope=nginx-e2e
+
+      - name: Verify images built
         run: |
-          docker pull svrforum/nginxproxyguard-api:test || true
-          docker pull svrforum/nginxproxyguard-ui:test || true
-          docker pull svrforum/nginxproxyguard-nginx:test || true
+          docker images | grep nginxproxyguard
 
       - name: Start test environment
         run: |
           cd test
           docker compose up -d
-          # Wait for services to be healthy
           echo "Waiting for services to be ready..."
-          timeout 120 bash -c 'until docker compose ps | grep -q "healthy"; do sleep 5; done' || {
+          timeout 180 bash -c 'until docker compose ps | grep -q "healthy"; do sleep 5; done' || {
             echo "Services failed to become healthy"
+            docker compose ps
             docker compose logs
             exit 1
           }
-          # Additional wait for API to be fully ready
           sleep 10
 
       - name: Verify services are running
@@ -78,7 +91,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: test/e2e/package.json
+          cache-dependency-path: test/e2e/package-lock.json
 
       - name: Install Playwright dependencies
         working-directory: test/e2e
@@ -114,62 +127,6 @@ jobs:
         run: |
           cd test
           docker compose logs
-
-      - name: Stop test environment
-        if: always()
-        run: |
-          cd test
-          docker compose down -v
-
-  # Optional: Run tests on schedule for regression detection
-  scheduled-e2e:
-    name: Scheduled E2E Tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    if: github.event_name == 'schedule'
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Start test environment
-        run: |
-          cd test
-          docker compose up -d
-          echo "Waiting for services to be ready..."
-          timeout 120 bash -c 'until docker compose ps | grep -q "healthy"; do sleep 5; done'
-          sleep 10
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: test/e2e/package.json
-
-      - name: Install Playwright dependencies
-        working-directory: test/e2e
-        run: |
-          npm ci
-          npx playwright install --with-deps chromium
-
-      - name: Run Playwright tests
-        working-directory: test/e2e
-        run: npx playwright test
-        env:
-          BASE_URL: http://localhost:18180
-          CI: true
-
-      - name: Upload Playwright report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: playwright-report-scheduled
-          path: test/e2e/playwright-report/
-          retention-days: 7
 
       - name: Stop test environment
         if: always()
