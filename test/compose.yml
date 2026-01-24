@@ -65,7 +65,6 @@ services:
     image: nginxproxyguard-ui:test
     container_name: npg-test-ui
     ports:
-      - "${UI_HTTP_PORT:-18180}:80"
       - "${UI_HTTPS_PORT:-18181}:443"
     environment:
       API_URL: http://api:8080
@@ -73,7 +72,7 @@ services:
       api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:80/ || exit 1"]
+      test: ["CMD-SHELL", "wget -q --spider --no-check-certificate https://localhost:443/health || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 10
