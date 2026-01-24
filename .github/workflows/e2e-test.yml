@@ -89,9 +89,9 @@ jobs:
           cd test
           docker compose ps
 
-          # Retry UI health check with backoff (check root endpoint)
+          # Retry UI health check with backoff (check HTTPS endpoint)
           for i in {1..15}; do
-            if curl -sf http://localhost:18180/ > /dev/null 2>&1; then
+            if curl -sfk https://localhost:18181/health > /dev/null 2>&1; then
               echo "UI health check passed"
               exit 0
             fi
@@ -120,7 +120,7 @@ jobs:
         working-directory: test/e2e
         run: npx playwright test
         env:
-          BASE_URL: http://localhost:18180
+          BASE_URL: https://localhost:18181
           CI: true
 
       - name: Upload Playwright report
