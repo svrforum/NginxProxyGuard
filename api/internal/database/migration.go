@@ -65,7 +65,9 @@ func (db *DB) RunMigrations() error {
 	upgradeSQL := `
 		-- Enum upgrades (safe to run multiple times)
 		ALTER TYPE public.block_reason ADD VALUE IF NOT EXISTS 'cloud_provider_challenge';
+		ALTER TYPE public.block_reason ADD VALUE IF NOT EXISTS 'cloud_provider_block';
 		ALTER TYPE public.block_reason ADD VALUE IF NOT EXISTS 'uri_block';
+		ALTER TYPE public.block_reason ADD VALUE IF NOT EXISTS 'access_denied';
 
 		-- Column upgrades
 		ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS cache_static_only boolean DEFAULT true NOT NULL;
