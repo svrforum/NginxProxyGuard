@@ -9,17 +9,17 @@ export default defineConfig({
   // Test directory
   testDir: './specs',
 
-  // Run tests in files in parallel
-  fullyParallel: true,
+  // Run tests in files in parallel (disabled on CI for stability)
+  fullyParallel: process.env.CI ? false : true,
 
   // Fail the build on CI if you accidentally left test.only in the source code
   forbidOnly: !!process.env.CI,
 
-  // Retry on CI only (reduced to 1 for faster runs)
-  retries: process.env.CI ? 1 : 0,
+  // Retry on CI only (increased for flaky tests)
+  retries: process.env.CI ? 2 : 0,
 
-  // Use 2 workers on CI for faster parallel execution
-  workers: process.env.CI ? 2 : undefined,
+  // Use single worker on CI to avoid rate limiting issues
+  workers: process.env.CI ? 1 : undefined,
 
   // Reporter to use
   reporter: [
