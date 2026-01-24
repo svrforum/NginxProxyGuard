@@ -387,12 +387,16 @@ type SecurityHeadersExport struct {
 
 // GeoRestrictionExport represents geo restriction config for export
 type GeoRestrictionExport struct {
-	Mode            string   `json:"mode"`
-	Countries       []string `json:"countries"`
-	Enabled         bool     `json:"enabled"`
-	ChallengeMode   bool     `json:"challenge_mode"`
-	AllowPrivateIPs bool     `json:"allow_private_ips"`
-	AllowSearchBots bool     `json:"allow_search_bots"`
+	Mode                          string   `json:"mode"`
+	Countries                     []string `json:"countries"`
+	Enabled                       bool     `json:"enabled"`
+	ChallengeMode                 bool     `json:"challenge_mode"`
+	AllowPrivateIPs               bool     `json:"allow_private_ips"`
+	AllowSearchBots               bool     `json:"allow_search_bots"`
+	AllowedIPs                    []string `json:"allowed_ips"`
+	BlockedCloudProviders         []string `json:"blocked_cloud_providers"`
+	ChallengeCloudProviders       bool     `json:"challenge_cloud_providers"`
+	AllowSearchBotsCloudProviders bool     `json:"allow_search_bots_cloud_providers"`
 }
 
 // UpstreamExport represents upstream config for export

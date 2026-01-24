@@ -371,6 +371,13 @@ func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.Pr
 	return data
 }
 
+// BuildConfigData builds the full nginx configuration data for a proxy host.
+// This is useful for backup restore and other scenarios where the full config
+// data including GeoRestriction, RateLimit, BotFilter etc. is needed.
+func (s *ProxyHostService) BuildConfigData(ctx context.Context, host *model.ProxyHost) nginx.ProxyHostConfigData {
+	return s.getHostConfigData(ctx, host)
+}
+
 func (s *ProxyHostService) Create(ctx context.Context, req *model.CreateProxyHostRequest) (*model.ProxyHost, error) {
 	// Set defaults
 	if req.ForwardScheme == "" {

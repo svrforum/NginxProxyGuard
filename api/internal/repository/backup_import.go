@@ -521,8 +521,9 @@ func (r *BackupRepository) importSecurityHeaders(ctx context.Context, tx *sql.Tx
 
 func (r *BackupRepository) importGeoRestriction(ctx context.Context, tx *sql.Tx, proxyHostID string, gr *model.GeoRestrictionExport) error {
 	query := `
-		INSERT INTO geo_restrictions (proxy_host_id, mode, countries, enabled, challenge_mode, allow_private_ips, allow_search_bots)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO geo_restrictions (proxy_host_id, mode, countries, enabled, challenge_mode, allow_private_ips, allow_search_bots,
+		                              allowed_ips, blocked_cloud_providers, challenge_cloud_providers, allow_search_bots_cloud_providers)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		ON CONFLICT (proxy_host_id) DO UPDATE SET
 			mode = EXCLUDED.mode,
 			countries = EXCLUDED.countries,
@@ -530,10 +531,25 @@ func (r *BackupRepository) importGeoRestriction(ctx context.Context, tx *sql.Tx,
 			challenge_mode = EXCLUDED.challenge_mode,
 			allow_private_ips = EXCLUDED.allow_private_ips,
 			allow_search_bots = EXCLUDED.allow_search_bots,
+			allowed_ips = EXCLUDED.allowed_ips,
+			blocked_cloud_providers = EXCLUDED.blocked_cloud_providers,
+			challenge_cloud_providers = EXCLUDED.challenge_cloud_providers,
+			allow_search_bots_cloud_providers = EXCLUDED.allow_search_bots_cloud_providers,
 			updated_at = NOW()
 	`
+	// Ensure arrays are not nil for postgres
+	allowedIPs := gr.AllowedIPs
+	if allowedIPs == nil {
+		allowedIPs = []string{}
+	}
+	blockedCloudProviders := gr.BlockedCloudProviders
+	if blockedCloudProviders == nil {
+		blockedCloudProviders = []string{}
+	}
 	_, err := tx.ExecContext(ctx, query, proxyHostID, gr.Mode, pq.Array(gr.Countries), gr.Enabled,
-		gr.ChallengeMode, gr.AllowPrivateIPs, gr.AllowSearchBots)
+		gr.ChallengeMode, gr.AllowPrivateIPs, gr.AllowSearchBots,
+		pq.Array(allowedIPs), pq.Array(blockedCloudProviders),
+		gr.ChallengeCloudProviders, gr.AllowSearchBotsCloudProviders)
 	return err
 }
 
