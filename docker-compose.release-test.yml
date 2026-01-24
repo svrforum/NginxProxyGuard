@@ -9,6 +9,11 @@ services:
   db:
     image: postgres:15-alpine
     container_name: release-test-db
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       POSTGRES_USER: test_user
       POSTGRES_PASSWORD: test_password
@@ -25,6 +30,11 @@ services:
   valkey:
     image: valkey/valkey:8-alpine
     container_name: release-test-valkey
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
       test: ["CMD", "valkey-cli", "ping"]
       interval: 5s
@@ -37,6 +47,11 @@ services:
   api:
     image: svrforum/nginxproxyguard-api:${VERSION:-latest}
     container_name: release-test-api
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       PORT: "8080"
       DATABASE_URL: postgres://test_user:test_password@release-test-db:5432/nginx_proxy_guard_test?sslmode=disable
@@ -67,6 +82,11 @@ services:
   nginx:
     image: svrforum/nginxproxyguard-nginx:${VERSION:-latest}
     container_name: release-test-nginx
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     volumes:
       - release_test_nginx_conf:/etc/nginx:rw
     depends_on:
@@ -84,6 +104,11 @@ services:
   whoami:
     image: traefik/whoami
     container_name: release-test-whoami
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - release-test-network
 
@@ -91,6 +116,11 @@ services:
   httpbin:
     image: kennethreitz/httpbin
     container_name: release-test-httpbin
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - release-test-network
 
@@ -100,6 +130,11 @@ services:
     image: golang:1.23-alpine
     container_name: release-test-runner
     working_dir: /app
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     profiles:
       - test  # Only starts with --profile test or explicit 'run' command
     volumes:
