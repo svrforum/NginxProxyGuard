@@ -18,6 +18,8 @@ type NginxManager interface {
 	GenerateConfigWithAccessControl(ctx context.Context, host *model.ProxyHost, accessList *model.AccessList, geoRestriction *model.GeoRestriction) error
 	GenerateConfigFull(ctx context.Context, data nginx.ProxyHostConfigData) error
 	RemoveConfig(ctx context.Context, host *model.ProxyHost) error
+	RemoveConfigByFilename(ctx context.Context, filename string) error
+	RemoveHostWAFConfig(ctx context.Context, hostID string) error
 	TestConfig(ctx context.Context) error
 	ReloadNginx(ctx context.Context) error
 	GenerateAllConfigs(ctx context.Context, hosts []model.ProxyHost) error
@@ -41,6 +43,7 @@ type ProxyHostService struct {
 	globalSettingsRepo     *repository.GlobalSettingsRepository
 	uriBlockRepo           *repository.URIBlockRepository
 	exploitBlockRuleRepo   *repository.ExploitBlockRuleRepository
+	certRepo               *repository.CertificateRepository
 	nginx                  NginxManager
 }
 
@@ -58,6 +61,7 @@ func NewProxyHostService(
 	globalSettingsRepo *repository.GlobalSettingsRepository,
 	uriBlockRepo *repository.URIBlockRepository,
 	exploitBlockRuleRepo *repository.ExploitBlockRuleRepository,
+	certRepo *repository.CertificateRepository,
 	nginx NginxManager,
 ) *ProxyHostService {
 	return &ProxyHostService{
@@ -74,6 +78,7 @@ func NewProxyHostService(
 		globalSettingsRepo:     globalSettingsRepo,
 		uriBlockRepo:           uriBlockRepo,
 		exploitBlockRuleRepo:   exploitBlockRuleRepo,
+		certRepo:               certRepo,
 		nginx:                  nginx,
 	}
 }
@@ -419,6 +424,28 @@ func (s *ProxyHostService) Create(ctx context.Context, req *model.CreateProxyHos
 		return nil, fmt.Errorf("domain(s) already exist: %v", existingDomains)
 	}
 
+	// Validate certificate_id exists if provided
+	if req.CertificateID != nil && *req.CertificateID != "" && s.certRepo != nil {
+		cert, err := s.certRepo.GetByID(ctx, *req.CertificateID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to validate certificate_id: %w", err)
+		}
+		if cert == nil {
+			return nil, fmt.Errorf("certificate not found: %s", *req.CertificateID)
+		}
+	}
+
+	// Validate access_list_id exists if provided
+	if req.AccessListID != nil && *req.AccessListID != "" && s.accessListRepo != nil {
+		al, err := s.accessListRepo.GetByID(ctx, *req.AccessListID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to validate access_list_id: %w", err)
+		}
+		if al == nil {
+			return nil, fmt.Errorf("access list not found: %s", *req.AccessListID)
+		}
+	}
+
 	// Create in database
 	host, err := s.repo.Create(ctx, req)
 	if err != nil {
@@ -434,7 +461,10 @@ func (s *ProxyHostService) Create(ctx context.Context, req *model.CreateProxyHos
 		if host.WAFEnabled {
 			wafExclusions, err = s.getMergedWAFExclusions(ctx, host.ID)
 			if err != nil {
-				_ = s.repo.Delete(ctx, host.ID)
+				// Rollback: Delete DB record since config generation won't proceed
+				if delErr := s.repo.Delete(ctx, host.ID); delErr != nil {
+					log.Printf("[ERROR] Rollback failed: could not delete host %s after WAF exclusion error: %v", host.ID, delErr)
+				}
 				return nil, fmt.Errorf("failed to get WAF exclusions: %w", err)
 			}
 		}
@@ -442,8 +472,12 @@ func (s *ProxyHostService) Create(ctx context.Context, req *model.CreateProxyHos
 		// Atomic: generate config + WAF config + test + reload (with global lock)
 		if err := s.nginx.GenerateConfigAndReload(ctx, configData, wafExclusions); err != nil {
 			// Rollback: Remove config and DB record on failure
-			_ = s.nginx.RemoveConfig(ctx, host)
-			_ = s.repo.Delete(ctx, host.ID)
+			if removeErr := s.nginx.RemoveConfig(ctx, host); removeErr != nil {
+				log.Printf("[ERROR] Rollback failed: could not remove nginx config for host %s: %v", host.ID, removeErr)
+			}
+			if delErr := s.repo.Delete(ctx, host.ID); delErr != nil {
+				log.Printf("[ERROR] Rollback failed: could not delete host %s after config generation error: %v", host.ID, delErr)
+			}
 			return nil, fmt.Errorf("failed to generate nginx config: %w", err)
 		}
 	}
@@ -480,6 +514,7 @@ func (s *ProxyHostService) List(ctx context.Context, page, perPage int, search, 
 func (s *ProxyHostService) UpdateWithoutReload(ctx context.Context, id string, req *model.UpdateProxyHostRequest) (*model.ProxyHost, error) {
 	var host *model.ProxyHost
 	var err error
+	var oldConfigFilename string // Track old config filename for cleanup when domain changes
 
 	// If req is nil, we just want to regenerate config for the existing host
 	if req != nil {
@@ -511,12 +546,41 @@ func (s *ProxyHostService) UpdateWithoutReload(ctx context.Context, id string, r
 			}
 			req.DomainNames = validDomains
 
+			// Get existing host to save old config filename before update
+			// This is needed because config filename is based on the first domain name
+			existingHost, getErr := s.repo.GetByID(ctx, id)
+			if getErr == nil && existingHost != nil {
+				oldConfigFilename = nginx.GetConfigFilename(existingHost)
+			}
+
 			existingDomains, err := s.repo.CheckDomainExists(ctx, req.DomainNames, id)
 			if err != nil {
 				return nil, fmt.Errorf("failed to check domain existence: %w", err)
 			}
 			if len(existingDomains) > 0 {
 				return nil, fmt.Errorf("domain(s) already exist: %v", existingDomains)
+			}
+		}
+
+		// Validate certificate_id exists if provided
+		if req.CertificateID != nil && *req.CertificateID != "" && s.certRepo != nil {
+			cert, err := s.certRepo.GetByID(ctx, *req.CertificateID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to validate certificate_id: %w", err)
+			}
+			if cert == nil {
+				return nil, fmt.Errorf("certificate not found: %s", *req.CertificateID)
+			}
+		}
+
+		// Validate access_list_id exists if provided
+		if req.AccessListID != nil && *req.AccessListID != "" && s.accessListRepo != nil {
+			al, err := s.accessListRepo.GetByID(ctx, *req.AccessListID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to validate access_list_id: %w", err)
+			}
+			if al == nil {
+				return nil, fmt.Errorf("access list not found: %s", *req.AccessListID)
 			}
 		}
 
@@ -536,13 +600,16 @@ func (s *ProxyHostService) UpdateWithoutReload(ctx context.Context, id string, r
 	}
 
 	// Regenerate nginx config (without reload)
+	newConfigFilename := ""
 	if host.Enabled {
+		newConfigFilename = nginx.GetConfigFilename(host)
 		configData := s.getHostConfigData(ctx, host)
 
 		if err := s.nginx.GenerateConfigFull(ctx, configData); err != nil {
 			return nil, fmt.Errorf("failed to generate nginx config: %w", err)
 		}
 
+		// Generate or remove WAF config based on WAF enabled status
 		if host.WAFEnabled {
 			mergedExclusions, err := s.getMergedWAFExclusions(ctx, id)
 			if err != nil {
@@ -550,6 +617,12 @@ func (s *ProxyHostService) UpdateWithoutReload(ctx context.Context, id string, r
 			}
 			if err := s.nginx.GenerateHostWAFConfig(ctx, host, mergedExclusions); err != nil {
 				return nil, fmt.Errorf("failed to generate WAF config: %w", err)
+			}
+		} else {
+			// Remove WAF config if WAF is disabled to prevent orphan files
+			if err := s.nginx.RemoveHostWAFConfig(ctx, host.ID); err != nil {
+				log.Printf("[WARN] Failed to remove WAF config for host %s: %v", host.ID, err)
+				// Non-fatal: continue
 			}
 		}
 	} else {
@@ -563,12 +636,22 @@ func (s *ProxyHostService) UpdateWithoutReload(ctx context.Context, id string, r
 		return nil, fmt.Errorf("nginx config test failed: %w", err)
 	}
 
+	// Clean up old config file AFTER successful test
+	// This ensures the old config remains if new config test fails
+	if oldConfigFilename != "" && oldConfigFilename != newConfigFilename {
+		if err := s.nginx.RemoveConfigByFilename(ctx, oldConfigFilename); err != nil {
+			log.Printf("[WARN] Failed to remove old config file %s: %v", oldConfigFilename, err)
+			// Non-fatal: old config file will be orphaned but new config is active
+		}
+	}
+
 	return host, nil
 }
 
 func (s *ProxyHostService) Update(ctx context.Context, id string, req *model.UpdateProxyHostRequest) (*model.ProxyHost, error) {
 	var host *model.ProxyHost
 	var err error
+	var oldConfigFilename string // Track old config filename for cleanup when domain changes
 
 	// If req is nil, we just want to regenerate config for the existing host
 	if req != nil {
@@ -601,12 +684,41 @@ func (s *ProxyHostService) Update(ctx context.Context, id string, req *model.Upd
 			}
 			req.DomainNames = validDomains
 
+			// Get existing host to save old config filename before update
+			// This is needed because config filename is based on the first domain name
+			existingHost, getErr := s.repo.GetByID(ctx, id)
+			if getErr == nil && existingHost != nil {
+				oldConfigFilename = nginx.GetConfigFilename(existingHost)
+			}
+
 			existingDomains, err := s.repo.CheckDomainExists(ctx, req.DomainNames, id)
 			if err != nil {
 				return nil, fmt.Errorf("failed to check domain existence: %w", err)
 			}
 			if len(existingDomains) > 0 {
 				return nil, fmt.Errorf("domain(s) already exist: %v", existingDomains)
+			}
+		}
+
+		// Validate certificate_id exists if provided
+		if req.CertificateID != nil && *req.CertificateID != "" && s.certRepo != nil {
+			cert, err := s.certRepo.GetByID(ctx, *req.CertificateID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to validate certificate_id: %w", err)
+			}
+			if cert == nil {
+				return nil, fmt.Errorf("certificate not found: %s", *req.CertificateID)
+			}
+		}
+
+		// Validate access_list_id exists if provided
+		if req.AccessListID != nil && *req.AccessListID != "" && s.accessListRepo != nil {
+			al, err := s.accessListRepo.GetByID(ctx, *req.AccessListID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to validate access_list_id: %w", err)
+			}
+			if al == nil {
+				return nil, fmt.Errorf("access list not found: %s", *req.AccessListID)
 			}
 		}
 
@@ -628,6 +740,7 @@ func (s *ProxyHostService) Update(ctx context.Context, id string, req *model.Upd
 
 	// Regenerate nginx config (atomic operation with global locking)
 	if host.Enabled {
+		newConfigFilename := nginx.GetConfigFilename(host)
 		configData := s.getHostConfigData(ctx, host)
 
 		// Get WAF exclusions if WAF is enabled
@@ -642,6 +755,15 @@ func (s *ProxyHostService) Update(ctx context.Context, id string, req *model.Upd
 		// Atomic: generate config + WAF config + test + reload (with global lock)
 		if err := s.nginx.GenerateConfigAndReload(ctx, configData, wafExclusions); err != nil {
 			return nil, fmt.Errorf("failed to generate nginx config: %w", err)
+		}
+
+		// Clean up old config file AFTER successful new config deployment
+		// This ensures the old config remains if new config generation/test fails
+		if oldConfigFilename != "" && oldConfigFilename != newConfigFilename {
+			if err := s.nginx.RemoveConfigByFilename(ctx, oldConfigFilename); err != nil {
+				log.Printf("[WARN] Failed to remove old config file %s: %v", oldConfigFilename, err)
+				// Non-fatal: old config file will be orphaned but new config is active
+			}
 		}
 	} else {
 		// Atomic: remove config + test + reload (with global lock)
@@ -663,14 +785,33 @@ func (s *ProxyHostService) Delete(ctx context.Context, id string) error {
 		return fmt.Errorf("proxy host not found")
 	}
 
-	// Delete from database first
-	if err := s.repo.Delete(ctx, id); err != nil {
-		return fmt.Errorf("failed to delete proxy host: %w", err)
+	// Store config data in case we need to restore after DB failure
+	var configData nginx.ProxyHostConfigData
+	var wafExclusions []model.WAFRuleExclusion
+	if host.Enabled {
+		configData = s.getHostConfigData(ctx, host)
+		if host.WAFEnabled {
+			wafExclusions, _ = s.getMergedWAFExclusions(ctx, host.ID)
+		}
 	}
 
-	// Atomic: remove config + test + reload (with global lock)
+	// Remove nginx config FIRST (atomic: remove config + test + reload with global lock)
+	// This prevents orphan config files if DB deletion fails
 	if err := s.nginx.RemoveConfigAndReload(ctx, host); err != nil {
 		return fmt.Errorf("failed to remove nginx config: %w", err)
+	}
+
+	// Delete from database
+	if err := s.repo.Delete(ctx, id); err != nil {
+		// DB deletion failed after nginx config was removed
+		// Try to restore nginx config to maintain consistency
+		if host.Enabled {
+			log.Printf("[WARN] DB deletion failed for host %s, attempting to restore nginx config: %v", id, err)
+			if restoreErr := s.nginx.GenerateConfigAndReload(ctx, configData, wafExclusions); restoreErr != nil {
+				log.Printf("[ERROR] Failed to restore nginx config for host %s after DB deletion failure: %v", id, restoreErr)
+			}
+		}
+		return fmt.Errorf("failed to delete proxy host: %w", err)
 	}
 
 	return nil

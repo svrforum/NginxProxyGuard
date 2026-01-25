@@ -107,6 +107,26 @@ func (db *DB) RunMigrations() error {
 		('e78e2ef1-d710-409b-8a44-a03db3999b19', 'scanner', 'WebInspect', 'webinspect', 'user_agent', 'Blocks HP WebInspect', 'warning', true, true, 41),
 		('8ec83a35-dea8-4f51-9185-37035f0a4501', 'http_method', 'Dangerous Methods', '^(TRACE|TRACK|DEBUG|CONNECT)$', 'request_method', 'Blocks dangerous HTTP methods', 'warning', true, true, 50)
 		ON CONFLICT (id) DO NOTHING;
+
+		-- Add foreign key constraint for proxy_hosts.access_list_id (v1.3.31+)
+		-- First clean up any orphaned references, then add FK with ON DELETE SET NULL
+		DO $$
+		BEGIN
+			-- Clean up orphaned access_list_id references
+			UPDATE public.proxy_hosts
+			SET access_list_id = NULL
+			WHERE access_list_id IS NOT NULL
+			  AND access_list_id NOT IN (SELECT id FROM public.access_lists);
+
+			-- Add FK constraint if not exists
+			IF NOT EXISTS (
+				SELECT 1 FROM pg_constraint WHERE conname = 'proxy_hosts_access_list_id_fkey'
+			) THEN
+				ALTER TABLE public.proxy_hosts
+				ADD CONSTRAINT proxy_hosts_access_list_id_fkey
+				FOREIGN KEY (access_list_id) REFERENCES public.access_lists(id) ON DELETE SET NULL;
+			END IF;
+		END $$;
 	`
 	_, err = db.Exec(upgradeSQL)
 	if err != nil {

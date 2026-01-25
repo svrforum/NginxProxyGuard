@@ -174,10 +174,16 @@ func (m *Manager) GenerateConfigAndReload(ctx context.Context, data ProxyHostCon
 			return fmt.Errorf("failed to generate proxy host config: %w", err)
 		}
 
-		// Generate WAF config if enabled
+		// Generate or remove WAF config based on WAF enabled status
 		if data.Host.WAFEnabled {
 			if err := m.GenerateHostWAFConfig(ctx, data.Host, wafExclusions); err != nil {
 				return fmt.Errorf("failed to generate WAF config: %w", err)
+			}
+		} else {
+			// Remove WAF config if WAF is disabled to prevent orphan files
+			if err := m.RemoveHostWAFConfig(ctx, data.Host.ID); err != nil {
+				log.Printf("[WARN] Failed to remove WAF config for host %s: %v", data.Host.ID, err)
+				// Non-fatal: continue with nginx reload
 			}
 		}
 
@@ -596,6 +602,25 @@ func (m *Manager) RemoveConfig(ctx context.Context, host *model.ProxyHost) error
 	// Also remove the cloud IPs include file if it exists
 	_ = m.RemoveCloudIPsInclude(host.ID)
 
+	return nil
+}
+
+// RemoveConfigByFilename removes a config file by its filename
+// This is used when the domain name changes, causing the config filename to change
+func (m *Manager) RemoveConfigByFilename(ctx context.Context, filename string) error {
+	configFile := filepath.Join(m.configPath, filename)
+
+	// Check if file exists before removing
+	if _, err := os.Stat(configFile); os.IsNotExist(err) {
+		return nil // File doesn't exist, nothing to do
+	}
+
+	if err := os.Remove(configFile); err != nil {
+		log.Printf("[WARN] Failed to remove old config file %s: %v", filename, err)
+		return err
+	}
+
+	log.Printf("[INFO] Removed old config file: %s", filename)
 	return nil
 }
 
