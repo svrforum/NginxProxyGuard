@@ -202,6 +202,68 @@ func (m *Manager) UpdateConfigAndReload(ctx context.Context, data ProxyHostConfi
 	return m.GenerateConfigAndReload(ctx, data, wafExclusions)
 }
 
+// GenerateConfigAndReloadWithCleanup generates config, removes old config, tests and reloads
+// Use this when domain name changes (config filename changes but zone names stay same)
+// This prevents limit_req_zone duplicate errors by removing the old config BEFORE nginx test
+func (m *Manager) GenerateConfigAndReloadWithCleanup(ctx context.Context, data ProxyHostConfigData, wafExclusions []model.WAFRuleExclusion, oldConfigFilename string) error {
+	return m.executeWithLock(ctx, func() error {
+		newConfigFilename := GetConfigFilename(data.Host)
+		oldConfigFile := filepath.Join(m.configPath, oldConfigFilename)
+		var oldConfigBackup []byte
+		var oldConfigExists bool
+
+		// 1. Backup old config for potential rollback
+		if oldConfigFilename != "" && oldConfigFilename != newConfigFilename {
+			if content, err := os.ReadFile(oldConfigFile); err == nil {
+				oldConfigBackup = content
+				oldConfigExists = true
+			}
+		}
+
+		// 2. Generate new config
+		if err := m.GenerateConfigFull(ctx, data); err != nil {
+			return fmt.Errorf("failed to generate proxy host config: %w", err)
+		}
+
+		// 3. Generate or remove WAF config
+		if data.Host.WAFEnabled {
+			if err := m.GenerateHostWAFConfig(ctx, data.Host, wafExclusions); err != nil {
+				return fmt.Errorf("failed to generate WAF config: %w", err)
+			}
+		} else {
+			if err := m.RemoveHostWAFConfig(ctx, data.Host.ID); err != nil {
+				log.Printf("[WARN] Failed to remove WAF config for host %s: %v", data.Host.ID, err)
+			}
+		}
+
+		// 4. Remove old config BEFORE nginx test (prevents zone duplication)
+		if oldConfigFilename != "" && oldConfigFilename != newConfigFilename {
+			if err := os.Remove(oldConfigFile); err != nil && !os.IsNotExist(err) {
+				log.Printf("[WARN] Failed to remove old config file %s: %v", oldConfigFilename, err)
+			}
+		}
+
+		// 5. Test and reload nginx
+		if err := m.testAndReloadNginx(ctx); err != nil {
+			// Rollback: restore old config file if test fails
+			if oldConfigExists && len(oldConfigBackup) > 0 {
+				log.Printf("[WARN] Nginx test failed, attempting to restore old config: %s", oldConfigFilename)
+				if writeErr := m.writeFileAtomic(oldConfigFile, oldConfigBackup, 0644); writeErr != nil {
+					log.Printf("[ERROR] Failed to restore old config file %s: %v", oldConfigFilename, writeErr)
+				}
+				// Also remove the new (invalid) config file
+				newConfigFile := filepath.Join(m.configPath, newConfigFilename)
+				if removeErr := os.Remove(newConfigFile); removeErr != nil && !os.IsNotExist(removeErr) {
+					log.Printf("[ERROR] Failed to remove invalid new config file %s: %v", newConfigFilename, removeErr)
+				}
+			}
+			return err
+		}
+
+		return nil
+	})
+}
+
 // RemoveConfigAndReload removes proxy host config, WAF config, tests and reloads nginx
 func (m *Manager) RemoveConfigAndReload(ctx context.Context, host *model.ProxyHost) error {
 	return m.executeWithLock(ctx, func() error {

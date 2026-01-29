@@ -26,6 +26,7 @@ type NginxManager interface {
 	GenerateHostWAFConfig(ctx context.Context, host *model.ProxyHost, exclusions []model.WAFRuleExclusion) error
 	// Atomic operations with global locking
 	GenerateConfigAndReload(ctx context.Context, data nginx.ProxyHostConfigData, wafExclusions []model.WAFRuleExclusion) error
+	GenerateConfigAndReloadWithCleanup(ctx context.Context, data nginx.ProxyHostConfigData, wafExclusions []model.WAFRuleExclusion, oldConfigFilename string) error
 	RemoveConfigAndReload(ctx context.Context, host *model.ProxyHost) error
 }
 
@@ -625,24 +626,38 @@ func (s *ProxyHostService) UpdateWithoutReload(ctx context.Context, id string, r
 				// Non-fatal: continue
 			}
 		}
+
+		// Remove old config BEFORE nginx test (prevents zone duplication)
+		// When domain changes, both old and new config files exist with same zone names
+		// which causes limit_req_zone duplicate errors during nginx test
+		if oldConfigFilename != "" && oldConfigFilename != newConfigFilename {
+			if err := s.nginx.RemoveConfigByFilename(ctx, oldConfigFilename); err != nil {
+				log.Printf("[WARN] Failed to remove old config file %s: %v", oldConfigFilename, err)
+				// Non-fatal: continue with test
+			}
+		}
 	} else {
+		// Host is disabled - remove config
+		// When domain changed, old config file has different name than current
+		if oldConfigFilename != "" {
+			// Domain was changed - remove old config file (different filename)
+			if err := s.nginx.RemoveConfigByFilename(ctx, oldConfigFilename); err != nil {
+				log.Printf("[WARN] Failed to remove old config file %s: %v", oldConfigFilename, err)
+			}
+		}
+		// Also try to remove current config (may not exist if domain changed)
 		if err := s.nginx.RemoveConfig(ctx, host); err != nil {
-			return nil, fmt.Errorf("failed to remove nginx config: %w", err)
+			// Only log if this is not the same file we just removed
+			currentFilename := nginx.GetConfigFilename(host)
+			if oldConfigFilename != currentFilename {
+				log.Printf("[WARN] Failed to remove current config file: %v", err)
+			}
 		}
 	}
 
 	// Test config but don't reload
 	if err := s.nginx.TestConfig(ctx); err != nil {
 		return nil, fmt.Errorf("nginx config test failed: %w", err)
-	}
-
-	// Clean up old config file AFTER successful test
-	// This ensures the old config remains if new config test fails
-	if oldConfigFilename != "" && oldConfigFilename != newConfigFilename {
-		if err := s.nginx.RemoveConfigByFilename(ctx, oldConfigFilename); err != nil {
-			log.Printf("[WARN] Failed to remove old config file %s: %v", oldConfigFilename, err)
-			// Non-fatal: old config file will be orphaned but new config is active
-		}
 	}
 
 	return host, nil
@@ -753,22 +768,42 @@ func (s *ProxyHostService) Update(ctx context.Context, id string, req *model.Upd
 		}
 
 		// Atomic: generate config + WAF config + test + reload (with global lock)
-		if err := s.nginx.GenerateConfigAndReload(ctx, configData, wafExclusions); err != nil {
-			return nil, fmt.Errorf("failed to generate nginx config: %w", err)
-		}
-
-		// Clean up old config file AFTER successful new config deployment
-		// This ensures the old config remains if new config generation/test fails
 		if oldConfigFilename != "" && oldConfigFilename != newConfigFilename {
-			if err := s.nginx.RemoveConfigByFilename(ctx, oldConfigFilename); err != nil {
-				log.Printf("[WARN] Failed to remove old config file %s: %v", oldConfigFilename, err)
-				// Non-fatal: old config file will be orphaned but new config is active
+			// Domain changed - use method that removes old config before nginx test
+			// This prevents limit_req_zone duplicate errors when zone names stay same
+			if err := s.nginx.GenerateConfigAndReloadWithCleanup(ctx, configData, wafExclusions, oldConfigFilename); err != nil {
+				return nil, fmt.Errorf("failed to generate nginx config: %w", err)
+			}
+		} else {
+			// No domain change - use standard method
+			if err := s.nginx.GenerateConfigAndReload(ctx, configData, wafExclusions); err != nil {
+				return nil, fmt.Errorf("failed to generate nginx config: %w", err)
 			}
 		}
 	} else {
-		// Atomic: remove config + test + reload (with global lock)
+		// Host is disabled - remove config
+		// When domain changed, old config file has different name than current
+		if oldConfigFilename != "" {
+			// Domain was changed - remove old config file first (different filename)
+			if err := s.nginx.RemoveConfigByFilename(ctx, oldConfigFilename); err != nil {
+				log.Printf("[WARN] Failed to remove old config file %s: %v", oldConfigFilename, err)
+			}
+		}
+		// Atomic: remove current config + test + reload (with global lock)
 		if err := s.nginx.RemoveConfigAndReload(ctx, host); err != nil {
-			return nil, fmt.Errorf("failed to remove nginx config: %w", err)
+			// Only fail if this is not just a "file not found" situation
+			// (old config may have been the only one if domain changed)
+			currentFilename := nginx.GetConfigFilename(host)
+			if oldConfigFilename == "" || oldConfigFilename == currentFilename {
+				return nil, fmt.Errorf("failed to remove nginx config: %w", err)
+			}
+			// Domain changed and old config was removed - just test and reload
+			if testErr := s.nginx.TestConfig(ctx); testErr != nil {
+				return nil, fmt.Errorf("nginx config test failed: %w", testErr)
+			}
+			if reloadErr := s.nginx.ReloadNginx(ctx); reloadErr != nil {
+				return nil, fmt.Errorf("failed to reload nginx: %w", reloadErr)
+			}
 		}
 	}
 
