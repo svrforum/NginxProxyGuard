@@ -353,6 +353,7 @@
       "proxy_host_created": "프록시 호스트 생성",
       "proxy_host_updated": "프록시 호스트 수정",
       "proxy_host_deleted": "프록시 호스트 삭제",
+      "proxy_host_cloned": "프록시 호스트 복제",
       "certificate_created": "인증서 생성",
       "certificate_updated": "인증서 수정",
       "certificate_deleted": "인증서 삭제",

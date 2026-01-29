@@ -168,6 +168,23 @@ func (s *AuditService) LogProxyHostDelete(ctx context.Context, domains []string)
 	return s.logEntry(ctx, "proxy_host_deleted", "proxy_host", "", domainStr, nil)
 }
 
+// LogProxyHostClone logs proxy host cloning
+func (s *AuditService) LogProxyHostClone(ctx context.Context, sourceDomains []string, targetDomains []string) error {
+	sourceDomainStr := ""
+	if len(sourceDomains) > 0 {
+		sourceDomainStr = sourceDomains[0]
+	}
+	targetDomainStr := ""
+	if len(targetDomains) > 0 {
+		targetDomainStr = targetDomains[0]
+	}
+	return s.logEntry(ctx, "proxy_host_cloned", "proxy_host", "", targetDomainStr, map[string]interface{}{
+		"source_domains": sourceDomains,
+		"target_domains": targetDomains,
+		"source_domain":  sourceDomainStr,
+	})
+}
+
 // LogProxyHostToggle logs proxy host enable/disable
 func (s *AuditService) LogProxyHostToggle(ctx context.Context, domains []string, enabled bool) error {
 	domainStr := ""

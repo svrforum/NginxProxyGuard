@@ -247,3 +247,62 @@ func (h *ProxyHostHandler) TestHost(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, result)
 }
+
+// Clone creates a copy of an existing proxy host with new domain names
+func (h *ProxyHostHandler) Clone(c echo.Context) error {
+	id := c.Param("id")
+	if id == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "id is required",
+		})
+	}
+
+	var req model.CloneProxyHostRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid request body",
+		})
+	}
+
+	// Basic validation
+	if len(req.DomainNames) == 0 {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "domain_names is required",
+		})
+	}
+
+	// Validate each domain name format
+	for _, domain := range req.DomainNames {
+		if !ValidateDomainName(domain) {
+			return c.JSON(http.StatusBadRequest, map[string]string{
+				"error": "invalid domain format: " + domain,
+			})
+		}
+	}
+
+	// Get source host info for audit
+	sourceHost, _ := h.service.GetByID(c.Request().Context(), id)
+
+	host, err := h.service.Clone(c.Request().Context(), id, &req)
+	if err != nil {
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "already exist") {
+			return conflictError(c, errMsg)
+		}
+		if strings.Contains(errMsg, "not found") {
+			return notFoundError(c, "Source proxy host")
+		}
+		if strings.Contains(errMsg, "invalid") || strings.Contains(errMsg, "required") {
+			return badRequestError(c, errMsg)
+		}
+		return internalError(c, "clone proxy host", err)
+	}
+
+	// Log audit
+	if sourceHost != nil {
+		auditCtx := service.ContextWithAudit(c.Request().Context(), c)
+		h.audit.LogProxyHostClone(auditCtx, sourceHost.DomainNames, req.DomainNames)
+	}
+
+	return c.JSON(http.StatusCreated, host)
+}

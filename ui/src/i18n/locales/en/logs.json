@@ -351,6 +351,7 @@
       "proxy_host_created": "Proxy Host Created",
       "proxy_host_updated": "Proxy Host Updated",
       "proxy_host_deleted": "Proxy Host Deleted",
+      "proxy_host_cloned": "Proxy Host Cloned",
       "certificate_created": "Certificate Created",
       "certificate_updated": "Certificate Updated",
       "certificate_deleted": "Certificate Deleted",

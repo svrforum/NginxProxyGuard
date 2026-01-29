@@ -475,6 +475,7 @@ func main() {
 			proxyHosts.PUT("/:id", proxyHostHandler.Update)
 			proxyHosts.DELETE("/:id", proxyHostHandler.Delete)
 			proxyHosts.POST("/:id/test", proxyHostHandler.TestHost)
+			proxyHosts.POST("/:id/clone", proxyHostHandler.Clone)
 		}
 
 		// DNS Provider routes

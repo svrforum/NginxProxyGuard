@@ -264,6 +264,12 @@ type UpdateProxyHostRequest struct {
 	Enabled                 *bool   `json:"enabled,omitempty"`
 }
 
+// CloneProxyHostRequest is the request to clone a proxy host
+type CloneProxyHostRequest struct {
+	DomainNames     []string `json:"domain_names" validate:"required,min=1"`
+	CopyCertificate bool     `json:"copy_certificate"` // If true, use the same certificate; if false, clear certificate_id
+}
+
 type ProxyHostListResponse struct {
 	Data       []ProxyHost `json:"data"`
 	Total      int         `json:"total"`

@@ -82,3 +82,15 @@ export async function testProxyHostConfig(
     `${API_BASE}/proxy-hosts/${id}/test${params}`
   )
 }
+
+export interface CloneProxyHostRequest {
+  domain_names: string[]
+  copy_certificate: boolean
+}
+
+export async function cloneProxyHost(
+  id: string,
+  data: CloneProxyHostRequest
+): Promise<ProxyHost> {
+  return apiPost<ProxyHost>(`${API_BASE}/proxy-hosts/${id}/clone`, data)
+}

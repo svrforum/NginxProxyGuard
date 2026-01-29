@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { fetchProxyHosts, deleteProxyHost, testProxyHost, updateProxyHost, testProxyHostConfig } from '../api/proxy-hosts'
+import { fetchProxyHosts, deleteProxyHost, testProxyHost, updateProxyHost, testProxyHostConfig, cloneProxyHost } from '../api/proxy-hosts'
 import { HelpTip } from './common/HelpTip'
 import { useEscapeKey } from '../hooks/useEscapeKey'
 import type { ProxyHost, ProxyHostTestResult } from '../types/proxy-host'
@@ -650,6 +650,9 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
   const [testError, setTestError] = useState<string | null>(null)
   const [isTestLoading, setIsTestLoading] = useState(false)
   const [toggleConfirmHost, setToggleConfirmHost] = useState<ProxyHost | null>(null)
+  const [cloningHost, setCloningHost] = useState<ProxyHost | null>(null)
+  const [cloneDomains, setCloneDomains] = useState('')
+  const [cloneCopyCertificate, setCloneCopyCertificate] = useState(true)
   const [searchInput, setSearchInput] = useState('')  // For controlled input
   const [searchQuery, setSearchQuery] = useState('')  // For actual query (debounced)
   const [currentPage, setCurrentPage] = useState(1)
@@ -697,6 +700,17 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
     },
   })
 
+  const cloneMutation = useMutation({
+    mutationFn: ({ id, domainNames, copyCertificate }: { id: string; domainNames: string[]; copyCertificate: boolean }) =>
+      cloneProxyHost(id, { domain_names: domainNames, copy_certificate: copyCertificate }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['proxy-hosts'] })
+      setCloningHost(null)
+      setCloneDomains('')
+      setCloneCopyCertificate(true)
+    },
+  })
+
   const handleToggle = (host: ProxyHost) => {
     setToggleConfirmHost(host)
   }
@@ -736,6 +750,19 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
     if (confirm(t('actions.deleteConfirm'))) {
       deleteMutation.mutate(id)
     }
+  }
+
+  const handleClone = (host: ProxyHost) => {
+    setCloningHost(host)
+    setCloneDomains('')
+    setCloneCopyCertificate(!!host.certificate_id)
+  }
+
+  const confirmClone = () => {
+    if (!cloningHost || !cloneDomains.trim()) return
+    const domainNames = cloneDomains.split(/[\s,]+/).map(d => d.trim()).filter(d => d)
+    if (domainNames.length === 0) return
+    cloneMutation.mutate({ id: cloningHost.id, domainNames, copyCertificate: cloneCopyCertificate })
   }
 
   const handleTestConfig = async (host: ProxyHost) => {
@@ -1075,7 +1102,15 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
                       </button>
-
+                      <button
+                        onClick={() => handleClone(host)}
+                        className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 dark:hover:text-emerald-400 rounded transition-colors"
+                        title={t('actions.clone')}
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                      </button>
                       <button
                         onClick={() => handleDelete(host.id)}
                         className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 dark:hover:text-red-400 rounded transition-colors"
@@ -1253,6 +1288,77 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
                     : toggleConfirmHost.enabled
                       ? t('actions.disable')
                       : t('actions.enable')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {/* Clone Modal */}
+      {
+        cloningHost && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+                  {t('actions.cloneTitle')}
+                </h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                  {t('actions.cloneSource')}: {cloningHost.domain_names[0]}
+                </p>
+              </div>
+              <div className="px-6 py-4 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    {t('actions.cloneDomains')}
+                  </label>
+                  <input
+                    type="text"
+                    value={cloneDomains}
+                    onChange={(e) => setCloneDomains(e.target.value)}
+                    placeholder={t('actions.cloneDomainsPlaceholder')}
+                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  />
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    {t('actions.cloneDomainsHelp')}
+                  </p>
+                </div>
+                {cloningHost.certificate_id && (
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={cloneCopyCertificate}
+                      onChange={(e) => setCloneCopyCertificate(e.target.checked)}
+                      className="w-4 h-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    <span className="text-sm text-slate-700 dark:text-slate-300">
+                      {t('actions.cloneCopyCertificate')}
+                    </span>
+                  </label>
+                )}
+                {cloneMutation.isError && (
+                  <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-400">
+                    {(cloneMutation.error as Error)?.message || t('actions.cloneError')}
+                  </div>
+                )}
+              </div>
+              <div className="px-6 py-4 bg-slate-50 dark:bg-slate-900 flex justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setCloningHost(null)
+                    setCloneDomains('')
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                >
+                  {t('common:buttons.cancel')}
+                </button>
+                <button
+                  onClick={confirmClone}
+                  disabled={cloneMutation.isPending || !cloneDomains.trim()}
+                  className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {cloneMutation.isPending ? t('common:status.processing') : t('actions.clone')}
                 </button>
               </div>
             </div>
