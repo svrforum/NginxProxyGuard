@@ -44,7 +44,7 @@ export function LogDetailModal({ log, onClose, onRuleDisabled }: LogDetailModalP
       const response = await api.get<{ id: string }>(`/api/v1/proxy-hosts/by-domain/${encodeURIComponent(log.host)}`);
       return response.id || null;
     },
-    enabled: !!log.host && showBlockURIForm,
+    enabled: !!log.host && (showBlockURIForm || showBanForm),
     staleTime: 60000,
   });
 

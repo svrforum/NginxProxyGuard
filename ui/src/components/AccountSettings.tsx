@@ -231,9 +231,9 @@ export default function AccountSettings({ onClose, onLogout }: AccountSettingsPr
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-gray-800 rounded-lg p-8">
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-8">
           <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto"></div>
-          <p className="text-white mt-4">{t('account.loading')}</p>
+          <p className="text-gray-900 dark:text-white mt-4">{t('account.loading')}</p>
         </div>
       </div>
     )
@@ -241,26 +241,26 @@ export default function AccountSettings({ onClose, onLogout }: AccountSettingsPr
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className={`bg-gray-800 rounded-lg w-full max-h-[90vh] overflow-hidden flex flex-col ${activeTab === 'api-tokens' ? 'max-w-5xl' : 'max-w-2xl'}`}>
+      <div className={`bg-white dark:bg-gray-800 rounded-lg w-full max-h-[90vh] overflow-hidden flex flex-col ${activeTab === 'api-tokens' ? 'max-w-5xl' : 'max-w-2xl'}`}>
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-700">
-          <h2 className="text-xl font-bold text-white">{t('account.title')}</h2>
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">{t('account.title')}</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-white text-2xl"
+            className="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white text-2xl"
           >
             &times;
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-gray-700">
+        <div className="flex border-b border-gray-200 dark:border-gray-700">
           <button
             onClick={() => { setActiveTab('info'); setError(''); setSuccess(''); }}
             className={`px-6 py-3 font-medium ${
               activeTab === 'info'
-                ? 'text-blue-400 border-b-2 border-blue-400'
-                : 'text-gray-400 hover:text-white'
+                ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
             }`}
           >
             {t('account.tabs.info')}
@@ -269,8 +269,8 @@ export default function AccountSettings({ onClose, onLogout }: AccountSettingsPr
             onClick={() => { setActiveTab('password'); setError(''); setSuccess(''); }}
             className={`px-6 py-3 font-medium ${
               activeTab === 'password'
-                ? 'text-blue-400 border-b-2 border-blue-400'
-                : 'text-gray-400 hover:text-white'
+                ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
             }`}
           >
             {t('account.tabs.password')}
@@ -279,8 +279,8 @@ export default function AccountSettings({ onClose, onLogout }: AccountSettingsPr
             onClick={() => { setActiveTab('2fa'); setError(''); setSuccess(''); }}
             className={`px-6 py-3 font-medium ${
               activeTab === '2fa'
-                ? 'text-blue-400 border-b-2 border-blue-400'
-                : 'text-gray-400 hover:text-white'
+                ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
             }`}
           >
             {t('account.tabs.twoFactor')}
@@ -289,8 +289,8 @@ export default function AccountSettings({ onClose, onLogout }: AccountSettingsPr
             onClick={() => { setActiveTab('api-tokens'); setError(''); setSuccess(''); }}
             className={`px-6 py-3 font-medium ${
               activeTab === 'api-tokens'
-                ? 'text-blue-400 border-b-2 border-blue-400'
-                : 'text-gray-400 hover:text-white'
+                ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
             }`}
           >
             {t('account.tabs.apiTokens')}
@@ -314,17 +314,17 @@ export default function AccountSettings({ onClose, onLogout }: AccountSettingsPr
           {activeTab === 'info' && accountInfo && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <div className="bg-gray-700/50 p-4 rounded">
-                  <p className="text-gray-400 text-sm">{t('account.info.username')}</p>
+                <div className="bg-gray-100 dark:bg-gray-700/50 p-4 rounded">
+                  <p className="text-gray-500 dark:text-gray-400 text-sm">{t('account.info.username')}</p>
                   {!showUsernameForm ? (
                     <div className="flex items-center justify-between">
-                      <p className="text-white font-medium">{accountInfo.username}</p>
+                      <p className="text-gray-900 dark:text-white font-medium">{accountInfo.username}</p>
                       <button
                         onClick={() => {
                           setShowUsernameForm(true)
                           setUsernameForm({ ...usernameForm, new_username: accountInfo.username })
                         }}
-                        className="text-blue-400 hover:text-blue-300 text-sm"
+                        className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-sm"
                       >
                         {t('common:buttons.edit')}
                       </button>
@@ -335,7 +335,7 @@ export default function AccountSettings({ onClose, onLogout }: AccountSettingsPr
                         type="text"
                         value={usernameForm.new_username}
                         onChange={(e) => setUsernameForm({ ...usernameForm, new_username: e.target.value })}
-                        className="w-full px-3 py-1.5 bg-gray-600 border border-gray-500 rounded text-white text-sm focus:border-blue-500 focus:outline-none"
+                        className="w-full px-3 py-1.5 bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded text-gray-900 dark:text-white text-sm focus:border-blue-500 focus:outline-none"
                         placeholder={t('account.username.newUsername')}
                         minLength={3}
                         required
@@ -344,7 +344,7 @@ export default function AccountSettings({ onClose, onLogout }: AccountSettingsPr
                         type="password"
                         value={usernameForm.current_password}
                         onChange={(e) => setUsernameForm({ ...usernameForm, current_password: e.target.value })}
-                        className="w-full px-3 py-1.5 bg-gray-600 border border-gray-500 rounded text-white text-sm focus:border-blue-500 focus:outline-none"
+                        className="w-full px-3 py-1.5 bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded text-gray-900 dark:text-white text-sm focus:border-blue-500 focus:outline-none"
                         placeholder={t('account.username.currentPassword')}
                         required
                       />
@@ -362,7 +362,7 @@ export default function AccountSettings({ onClose, onLogout }: AccountSettingsPr
                             setShowUsernameForm(false)
                             setUsernameForm({ current_password: '', new_username: '' })
                           }}
-                          className="px-3 py-1 bg-gray-600 hover:bg-gray-500 text-white text-sm rounded"
+                          className="px-3 py-1 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-700 dark:text-white text-sm rounded"
                         >
                           {t('common:buttons.cancel')}
                         </button>
@@ -370,30 +370,30 @@ export default function AccountSettings({ onClose, onLogout }: AccountSettingsPr
                     </form>
                   )}
                 </div>
-                <div className="bg-gray-700/50 p-4 rounded">
-                  <p className="text-gray-400 text-sm">{t('account.info.role')}</p>
-                  <p className="text-white font-medium capitalize">{accountInfo.role}</p>
+                <div className="bg-gray-100 dark:bg-gray-700/50 p-4 rounded">
+                  <p className="text-gray-500 dark:text-gray-400 text-sm">{t('account.info.role')}</p>
+                  <p className="text-gray-900 dark:text-white font-medium capitalize">{accountInfo.role}</p>
                 </div>
-                <div className="bg-gray-700/50 p-4 rounded">
-                  <p className="text-gray-400 text-sm">{t('account.info.twoFactorStatus')}</p>
-                  <p className={`font-medium ${accountInfo.totp_enabled ? 'text-green-400' : 'text-yellow-400'}`}>
+                <div className="bg-gray-100 dark:bg-gray-700/50 p-4 rounded">
+                  <p className="text-gray-500 dark:text-gray-400 text-sm">{t('account.info.twoFactorStatus')}</p>
+                  <p className={`font-medium ${accountInfo.totp_enabled ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'}`}>
                     {accountInfo.totp_enabled ? t('common:status.enabled') : t('common:status.disabled')}
                   </p>
                 </div>
-                <div className="bg-gray-700/50 p-4 rounded">
-                  <p className="text-gray-400 text-sm">{t('account.info.lastLogin')}</p>
-                  <p className="text-white font-medium text-sm">{formatDate(accountInfo.last_login_at)}</p>
+                <div className="bg-gray-100 dark:bg-gray-700/50 p-4 rounded">
+                  <p className="text-gray-500 dark:text-gray-400 text-sm">{t('account.info.lastLogin')}</p>
+                  <p className="text-gray-900 dark:text-white font-medium text-sm">{formatDate(accountInfo.last_login_at)}</p>
                 </div>
-                <div className="bg-gray-700/50 p-4 rounded">
-                  <p className="text-gray-400 text-sm">{t('account.info.lastLoginIP')}</p>
-                  <p className="text-white font-medium">{accountInfo.last_login_ip || t('account.info.na')}</p>
+                <div className="bg-gray-100 dark:bg-gray-700/50 p-4 rounded">
+                  <p className="text-gray-500 dark:text-gray-400 text-sm">{t('account.info.lastLoginIP')}</p>
+                  <p className="text-gray-900 dark:text-white font-medium">{accountInfo.last_login_ip || t('account.info.na')}</p>
                 </div>
-                <div className="bg-gray-700/50 p-4 rounded">
-                  <p className="text-gray-400 text-sm">{t('navigation:account.language')}</p>
+                <div className="bg-gray-100 dark:bg-gray-700/50 p-4 rounded">
+                  <p className="text-gray-500 dark:text-gray-400 text-sm">{t('navigation:account.language')}</p>
                   <select
                     value={currentLanguage}
                     onChange={(e) => changeLanguage(e.target.value as 'ko' | 'en')}
-                    className="mt-1 w-full px-3 py-1.5 bg-gray-600 border border-gray-500 rounded text-white text-sm focus:border-blue-500 focus:outline-none"
+                    className="mt-1 w-full px-3 py-1.5 bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded text-gray-900 dark:text-white text-sm focus:border-blue-500 focus:outline-none"
                   >
                     {supportedLanguages.map((lang) => (
                       <option key={lang} value={lang}>
@@ -402,13 +402,13 @@ export default function AccountSettings({ onClose, onLogout }: AccountSettingsPr
                     ))}
                   </select>
                 </div>
-                <div className="bg-gray-700/50 p-4 rounded">
-                  <p className="text-gray-400 text-sm">{t('account.info.fontFamily', '폰트')}</p>
+                <div className="bg-gray-100 dark:bg-gray-700/50 p-4 rounded">
+                  <p className="text-gray-500 dark:text-gray-400 text-sm">{t('account.info.fontFamily', '폰트')}</p>
                   <select
                     value={currentFontFamily}
                     onChange={(e) => handleFontFamilyChange(e.target.value)}
                     disabled={changingFont}
-                    className="mt-1 w-full px-3 py-1.5 bg-gray-600 border border-gray-500 rounded text-white text-sm focus:border-blue-500 focus:outline-none disabled:opacity-50"
+                    className="mt-1 w-full px-3 py-1.5 bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded text-gray-900 dark:text-white text-sm focus:border-blue-500 focus:outline-none disabled:opacity-50"
                   >
                     {FONT_OPTIONS.map((font) => (
                       <option key={font.value} value={font.value}>
@@ -419,7 +419,7 @@ export default function AccountSettings({ onClose, onLogout }: AccountSettingsPr
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-gray-700">
+              <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
                 <button
                   onClick={onLogout}
                   className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded"
@@ -434,34 +434,34 @@ export default function AccountSettings({ onClose, onLogout }: AccountSettingsPr
           {activeTab === 'password' && (
             <form onSubmit={handlePasswordChange} className="space-y-4">
               <div>
-                <label className="block text-gray-400 text-sm mb-1">{t('account.password.currentPassword')}</label>
+                <label className="block text-gray-500 dark:text-gray-400 text-sm mb-1">{t('account.password.currentPassword')}</label>
                 <input
                   type="password"
                   value={passwordForm.current_password}
                   onChange={(e) => setPasswordForm({ ...passwordForm, current_password: e.target.value })}
-                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:border-blue-500 focus:outline-none"
+                  className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-white focus:border-blue-500 focus:outline-none"
                   required
                 />
               </div>
               <div>
-                <label className="block text-gray-400 text-sm mb-1">{t('account.password.newPassword')}</label>
+                <label className="block text-gray-500 dark:text-gray-400 text-sm mb-1">{t('account.password.newPassword')}</label>
                 <input
                   type="password"
                   value={passwordForm.new_password}
                   onChange={(e) => setPasswordForm({ ...passwordForm, new_password: e.target.value })}
-                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:border-blue-500 focus:outline-none"
+                  className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-white focus:border-blue-500 focus:outline-none"
                   minLength={8}
                   required
                 />
                 <p className="text-gray-500 text-xs mt-1">{t('account.password.minLength')}</p>
               </div>
               <div>
-                <label className="block text-gray-400 text-sm mb-1">{t('account.password.confirmPassword')}</label>
+                <label className="block text-gray-500 dark:text-gray-400 text-sm mb-1">{t('account.password.confirmPassword')}</label>
                 <input
                   type="password"
                   value={passwordForm.new_password_confirm}
                   onChange={(e) => setPasswordForm({ ...passwordForm, new_password_confirm: e.target.value })}
-                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:border-blue-500 focus:outline-none"
+                  className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-white focus:border-blue-500 focus:outline-none"
                   required
                 />
               </div>
@@ -482,7 +482,7 @@ export default function AccountSettings({ onClose, onLogout }: AccountSettingsPr
                 <>
                   {!setup2FAData ? (
                     <div className="text-center">
-                      <p className="text-gray-400 mb-4">
+                      <p className="text-gray-500 dark:text-gray-400 mb-4">
                         {t('account.twoFactor.description')}
                       </p>
                       <button
@@ -496,7 +496,7 @@ export default function AccountSettings({ onClose, onLogout }: AccountSettingsPr
                   ) : !showBackupCodes ? (
                     <div className="space-y-4">
                       <div className="text-center">
-                        <p className="text-gray-400 mb-4">
+                        <p className="text-gray-500 dark:text-gray-400 mb-4">
                           {t('account.twoFactor.scanQR')}
                         </p>
                         <div className="inline-block bg-white p-4 rounded">
@@ -507,20 +507,20 @@ export default function AccountSettings({ onClose, onLogout }: AccountSettingsPr
                           />
                         </div>
                       </div>
-                      <div className="bg-gray-700/50 p-4 rounded">
-                        <p className="text-gray-400 text-sm mb-2">{t('account.twoFactor.manualEntry')}</p>
-                        <code className="text-blue-400 text-sm break-all">{setup2FAData.secret}</code>
+                      <div className="bg-gray-100 dark:bg-gray-700/50 p-4 rounded">
+                        <p className="text-gray-500 dark:text-gray-400 text-sm mb-2">{t('account.twoFactor.manualEntry')}</p>
+                        <code className="text-blue-600 dark:text-blue-400 text-sm break-all">{setup2FAData.secret}</code>
                       </div>
                       <form onSubmit={handleEnable2FA} className="space-y-4">
                         <div>
-                          <label className="block text-gray-400 text-sm mb-1">
+                          <label className="block text-gray-500 dark:text-gray-400 text-sm mb-1">
                             {t('account.twoFactor.enterCode')}
                           </label>
                           <input
                             type="text"
                             value={totpCode}
                             onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                            className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded text-white text-center text-2xl tracking-widest focus:border-blue-500 focus:outline-none"
+                            className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-white text-center text-2xl tracking-widest focus:border-blue-500 focus:outline-none"
                             placeholder="000000"
                             maxLength={6}
                             required
@@ -537,7 +537,7 @@ export default function AccountSettings({ onClose, onLogout }: AccountSettingsPr
                           <button
                             type="button"
                             onClick={() => { setSetup2FAData(null); setTotpCode(''); }}
-                            className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded"
+                            className="px-4 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-700 dark:text-white rounded"
                           >
                             {t('common:buttons.cancel')}
                           </button>
@@ -547,13 +547,13 @@ export default function AccountSettings({ onClose, onLogout }: AccountSettingsPr
                   ) : (
                     <div className="space-y-4">
                       <div className="bg-yellow-500/20 border border-yellow-500 p-4 rounded">
-                        <h3 className="text-yellow-400 font-bold mb-2">{t('account.twoFactor.backupCodes.title')}</h3>
-                        <p className="text-yellow-300 text-sm mb-4">
+                        <h3 className="text-yellow-600 dark:text-yellow-400 font-bold mb-2">{t('account.twoFactor.backupCodes.title')}</h3>
+                        <p className="text-yellow-600 dark:text-yellow-300 text-sm mb-4">
                           {t('account.twoFactor.backupCodes.description')}
                         </p>
                         <div className="grid grid-cols-2 gap-2">
                           {setup2FAData.backup_codes.map((code, i) => (
-                            <code key={i} className="bg-gray-800 px-3 py-1 rounded text-white font-mono text-center">
+                            <code key={i} className="bg-gray-200 dark:bg-gray-800 px-3 py-1 rounded text-gray-900 dark:text-white font-mono text-center">
                               {code}
                             </code>
                           ))}
@@ -571,29 +571,29 @@ export default function AccountSettings({ onClose, onLogout }: AccountSettingsPr
               ) : (
                 <div className="space-y-4">
                   <div className="bg-green-500/20 border border-green-500 p-4 rounded">
-                    <p className="text-green-400" dangerouslySetInnerHTML={{ __html: t('account.twoFactor.enabled') }} />
+                    <p className="text-green-600 dark:text-green-400" dangerouslySetInnerHTML={{ __html: t('account.twoFactor.enabled') }} />
                   </div>
                   <form onSubmit={handleDisable2FA} className="space-y-4">
-                    <p className="text-gray-400">
+                    <p className="text-gray-500 dark:text-gray-400">
                       {t('account.twoFactor.disablePrompt')}
                     </p>
                     <div>
-                      <label className="block text-gray-400 text-sm mb-1">{t('login.password')}</label>
+                      <label className="block text-gray-500 dark:text-gray-400 text-sm mb-1">{t('login.password')}</label>
                       <input
                         type="password"
                         value={disableForm.password}
                         onChange={(e) => setDisableForm({ ...disableForm, password: e.target.value })}
-                        className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:border-blue-500 focus:outline-none"
+                        className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-white focus:border-blue-500 focus:outline-none"
                         required
                       />
                     </div>
                     <div>
-                      <label className="block text-gray-400 text-sm mb-1">TOTP Code</label>
+                      <label className="block text-gray-500 dark:text-gray-400 text-sm mb-1">TOTP Code</label>
                       <input
                         type="text"
                         value={disableForm.totp_code}
                         onChange={(e) => setDisableForm({ ...disableForm, totp_code: e.target.value.replace(/\D/g, '').slice(0, 6) })}
-                        className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded text-white text-center text-xl tracking-widest focus:border-blue-500 focus:outline-none"
+                        className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-white text-center text-xl tracking-widest focus:border-blue-500 focus:outline-none"
                         placeholder="000000"
                         maxLength={6}
                         required

@@ -324,14 +324,14 @@ function Fail2banEditModal({
             onClick={onClose}
             className="px-4 py-2 text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
           >
-            {t('common:actions.cancel')}
+            {t('common:buttons.cancel')}
           </button>
           <button
             onClick={() => mutation.mutate()}
             disabled={mutation.isPending}
             className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
           >
-            {mutation.isPending ? t('common:status.saving') : t('common:actions.save')}
+            {mutation.isPending ? t('common:status.saving') : t('common:buttons.save')}
           </button>
         </div>
       </div>
