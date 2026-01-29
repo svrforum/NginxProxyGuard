@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { fetchProxyHosts, deleteProxyHost, testProxyHost, updateProxyHost, testProxyHostConfig, cloneProxyHost } from '../api/proxy-hosts'
+import { listCertificates } from '../api/certificates'
 import { HelpTip } from './common/HelpTip'
 import { useEscapeKey } from '../hooks/useEscapeKey'
 import type { ProxyHost, ProxyHostTestResult } from '../types/proxy-host'
@@ -652,7 +653,10 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
   const [toggleConfirmHost, setToggleConfirmHost] = useState<ProxyHost | null>(null)
   const [cloningHost, setCloningHost] = useState<ProxyHost | null>(null)
   const [cloneDomains, setCloneDomains] = useState('')
-  const [cloneCopyCertificate, setCloneCopyCertificate] = useState(true)
+  const [cloneCertificateId, setCloneCertificateId] = useState<string>('same') // 'same', 'none', 'new', or certificate ID
+  const [cloneForwardScheme, setCloneForwardScheme] = useState<'http' | 'https'>('http')
+  const [cloneForwardHost, setCloneForwardHost] = useState('')
+  const [cloneForwardPort, setCloneForwardPort] = useState('')
   const [searchInput, setSearchInput] = useState('')  // For controlled input
   const [searchQuery, setSearchQuery] = useState('')  // For actual query (debounced)
   const [currentPage, setCurrentPage] = useState(1)
@@ -685,6 +689,13 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
     queryFn: () => fetchProxyHosts(currentPage, perPage, searchQuery, sortBy, sortOrder),
   })
 
+  // Fetch certificates for clone modal
+  const { data: certificatesData } = useQuery({
+    queryKey: ['certificates-for-clone'],
+    queryFn: () => listCertificates(1, 100),
+    enabled: !!cloningHost,
+  })
+
   const deleteMutation = useMutation({
     mutationFn: deleteProxyHost,
     onSuccess: () => {
@@ -701,13 +712,32 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
   })
 
   const cloneMutation = useMutation({
-    mutationFn: ({ id, domainNames, copyCertificate }: { id: string; domainNames: string[]; copyCertificate: boolean }) =>
-      cloneProxyHost(id, { domain_names: domainNames, copy_certificate: copyCertificate }),
+    mutationFn: ({ id, domainNames, certificateId, requestNewCertificate, forwardScheme, forwardHost, forwardPort }: {
+      id: string
+      domainNames: string[]
+      certificateId?: string
+      requestNewCertificate?: boolean
+      forwardScheme: string
+      forwardHost: string
+      forwardPort: number
+    }) =>
+      cloneProxyHost(id, {
+        domain_names: domainNames,
+        certificate_id: certificateId,
+        request_new_certificate: requestNewCertificate,
+        forward_scheme: forwardScheme,
+        forward_host: forwardHost,
+        forward_port: forwardPort,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['proxy-hosts'] })
+      queryClient.invalidateQueries({ queryKey: ['certificates'] })
       setCloningHost(null)
       setCloneDomains('')
-      setCloneCopyCertificate(true)
+      setCloneCertificateId('same')
+      setCloneForwardScheme('http')
+      setCloneForwardHost('')
+      setCloneForwardPort('')
     },
   })
 
@@ -755,14 +785,38 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
   const handleClone = (host: ProxyHost) => {
     setCloningHost(host)
     setCloneDomains('')
-    setCloneCopyCertificate(!!host.certificate_id)
+    setCloneCertificateId(host.certificate_id ? 'same' : 'none')
+    setCloneForwardScheme(host.forward_scheme as 'http' | 'https')
+    setCloneForwardHost(host.forward_host)
+    setCloneForwardPort(String(host.forward_port))
   }
 
   const confirmClone = () => {
     if (!cloningHost || !cloneDomains.trim()) return
     const domainNames = cloneDomains.split(/[\s,]+/).map(d => d.trim()).filter(d => d)
     if (domainNames.length === 0) return
-    cloneMutation.mutate({ id: cloningHost.id, domainNames, copyCertificate: cloneCopyCertificate })
+    const forwardPort = parseInt(cloneForwardPort, 10)
+
+    // Determine certificate ID and new cert request based on selection
+    let certificateId: string | undefined
+    let requestNewCertificate = false
+    if (cloneCertificateId === 'same' && cloningHost.certificate_id) {
+      certificateId = cloningHost.certificate_id
+    } else if (cloneCertificateId === 'new') {
+      requestNewCertificate = true
+    } else if (cloneCertificateId !== 'none' && cloneCertificateId !== 'same') {
+      certificateId = cloneCertificateId
+    }
+
+    cloneMutation.mutate({
+      id: cloningHost.id,
+      domainNames,
+      certificateId,
+      requestNewCertificate,
+      forwardScheme: cloneForwardScheme,
+      forwardHost: cloneForwardHost,
+      forwardPort: isNaN(forwardPort) ? cloningHost.forward_port : forwardPort,
+    })
   }
 
   const handleTestConfig = async (host: ProxyHost) => {
@@ -1324,19 +1378,76 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
                     {t('actions.cloneDomainsHelp')}
                   </p>
                 </div>
-                {cloningHost.certificate_id && (
-                  <label className="flex items-center gap-2 cursor-pointer">
+                <div className="grid grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      {t('actions.cloneForwardScheme')}
+                    </label>
+                    <select
+                      value={cloneForwardScheme}
+                      onChange={(e) => setCloneForwardScheme(e.target.value as 'http' | 'https')}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    >
+                      <option value="http">http</option>
+                      <option value="https">https</option>
+                    </select>
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      {t('actions.cloneForwardHost')}
+                    </label>
                     <input
-                      type="checkbox"
-                      checked={cloneCopyCertificate}
-                      onChange={(e) => setCloneCopyCertificate(e.target.checked)}
-                      className="w-4 h-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                      type="text"
+                      value={cloneForwardHost}
+                      onChange={(e) => setCloneForwardHost(e.target.value)}
+                      placeholder={cloningHost.forward_host}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                     />
-                    <span className="text-sm text-slate-700 dark:text-slate-300">
-                      {t('actions.cloneCopyCertificate')}
-                    </span>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      {t('actions.cloneForwardPort')}
+                    </label>
+                    <input
+                      type="number"
+                      value={cloneForwardPort}
+                      onChange={(e) => setCloneForwardPort(e.target.value)}
+                      placeholder={String(cloningHost.forward_port)}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    {t('actions.cloneCertificate')}
                   </label>
-                )}
+                  <select
+                    value={cloneCertificateId}
+                    onChange={(e) => setCloneCertificateId(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  >
+                    {cloningHost.certificate_id && (
+                      <option value="same">{t('actions.cloneCertificateSame')}</option>
+                    )}
+                    <option value="new">{t('actions.cloneCertificateNew')}</option>
+                    <option value="none">{t('actions.cloneCertificateNone')}</option>
+                    {certificatesData?.data?.filter(cert => cert.status === 'issued' && cert.id !== cloningHost.certificate_id).map(cert => (
+                      <option key={cert.id} value={cert.id}>
+                        {cert.domain_names.join(', ')}
+                      </option>
+                    ))}
+                  </select>
+                  {cloneCertificateId === 'new' && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                      {t('actions.cloneCertificateNewHelp')}
+                    </p>
+                  )}
+                  {cloneCertificateId !== 'new' && (
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      {t('actions.cloneCertificateHelp')}
+                    </p>
+                  )}
+                </div>
                 {cloneMutation.isError && (
                   <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-400">
                     {(cloneMutation.error as Error)?.message || t('actions.cloneError')}

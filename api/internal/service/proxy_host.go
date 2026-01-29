@@ -13,6 +13,11 @@ import (
 	"nginx-proxy-guard/internal/repository"
 )
 
+// boolPtr returns a pointer to a bool value
+func boolPtr(b bool) *bool {
+	return &b
+}
+
 type NginxManager interface {
 	GenerateConfig(ctx context.Context, host *model.ProxyHost) error
 	GenerateConfigWithAccessControl(ctx context.Context, host *model.ProxyHost, accessList *model.AccessList, geoRestriction *model.GeoRestriction) error
@@ -28,6 +33,11 @@ type NginxManager interface {
 	GenerateConfigAndReload(ctx context.Context, data nginx.ProxyHostConfigData, wafExclusions []model.WAFRuleExclusion) error
 	GenerateConfigAndReloadWithCleanup(ctx context.Context, data nginx.ProxyHostConfigData, wafExclusions []model.WAFRuleExclusion, oldConfigFilename string) error
 	RemoveConfigAndReload(ctx context.Context, host *model.ProxyHost) error
+}
+
+// CertificateCreator is an interface for creating certificates (used to avoid circular dependency)
+type CertificateCreator interface {
+	Create(ctx context.Context, req *model.CreateCertificateRequest) (*model.Certificate, error)
 }
 
 type ProxyHostService struct {
@@ -46,6 +56,7 @@ type ProxyHostService struct {
 	exploitBlockRuleRepo   *repository.ExploitBlockRuleRepository
 	certRepo               *repository.CertificateRepository
 	nginx                  NginxManager
+	certService            CertificateCreator // Optional: for creating certificates during clone
 }
 
 func NewProxyHostService(
@@ -82,6 +93,11 @@ func NewProxyHostService(
 		certRepo:               certRepo,
 		nginx:                  nginx,
 	}
+}
+
+// SetCertificateService sets the certificate service for creating certificates during clone operations
+func (s *ProxyHostService) SetCertificateService(certService CertificateCreator) {
+	s.certService = certService
 }
 
 // getMergedWAFExclusions gets host-specific exclusions and merges with global exclusions
@@ -1309,24 +1325,40 @@ func (s *ProxyHostService) Clone(ctx context.Context, sourceID string, req *mode
 
 	// Prepare certificate_id and SSL settings based on request
 	var certificateID *string
-	sslEnabled := source.SSLEnabled
-	sslForceHTTPS := source.SSLForceHTTPS
+	sslEnabled := false
+	sslForceHTTPS := false
+	requestNewCert := req.RequestNewCertificate
 
-	if req.CopyCertificate && source.CertificateID != nil {
-		certificateID = source.CertificateID
-	} else if source.SSLEnabled && source.CertificateID != nil {
-		// Source has SSL with certificate, but user chose not to copy certificate
-		// Disable SSL since we don't have a valid certificate
-		sslEnabled = false
-		sslForceHTTPS = false
+	if req.CertificateID != nil && *req.CertificateID != "" {
+		// User specified a certificate ID - enable SSL
+		certificateID = req.CertificateID
+		sslEnabled = true
+		sslForceHTTPS = source.SSLForceHTTPS // Copy force HTTPS setting from source
+		requestNewCert = false // Don't request new cert if existing one is specified
+	}
+	// If no certificate specified and not requesting new cert, SSL remains disabled
+
+	// Use provided forward settings or copy from source
+	forwardScheme := source.ForwardScheme
+	forwardHost := source.ForwardHost
+	forwardPort := source.ForwardPort
+
+	if req.ForwardScheme != "" {
+		forwardScheme = req.ForwardScheme
+	}
+	if req.ForwardHost != "" {
+		forwardHost = req.ForwardHost
+	}
+	if req.ForwardPort > 0 {
+		forwardPort = req.ForwardPort
 	}
 
 	// Create the new proxy host with copied settings
 	createReq := &model.CreateProxyHostRequest{
 		DomainNames:             validDomains,
-		ForwardScheme:           source.ForwardScheme,
-		ForwardHost:             source.ForwardHost,
-		ForwardPort:             source.ForwardPort,
+		ForwardScheme:           forwardScheme,
+		ForwardHost:             forwardHost,
+		ForwardPort:             forwardPort,
 		SSLEnabled:              sslEnabled,
 		SSLForceHTTPS:           sslForceHTTPS,
 		SSLHTTP2:                source.SSLHTTP2,
@@ -1357,6 +1389,33 @@ func (s *ProxyHostService) Clone(ctx context.Context, sourceID string, req *mode
 	newHost, err := s.Create(ctx, createReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cloned proxy host: %w", err)
+	}
+
+	// Request new certificate if requested
+	if requestNewCert && s.certService != nil {
+		certReq := &model.CreateCertificateRequest{
+			DomainNames: validDomains,
+			Provider:    model.CertProviderLetsEncrypt,
+			AutoRenew:   true,
+		}
+		cert, certErr := s.certService.Create(ctx, certReq)
+		if certErr != nil {
+			log.Printf("[Clone] Failed to create certificate request: %v", certErr)
+			// Don't fail the clone, just log the error
+			// The host will be created without SSL, user can request certificate later
+		} else {
+			log.Printf("[Clone] Certificate request created: %s for domains %v", cert.ID, validDomains)
+			// Update the host with the new certificate ID
+			// The certificate is pending, so SSL will be enabled when cert is issued
+			updateReq := &model.UpdateProxyHostRequest{
+				CertificateID: &cert.ID,
+				SSLEnabled:    boolPtr(true),
+				SSLForceHTTPS: &source.SSLForceHTTPS,
+			}
+			if _, updateErr := s.repo.Update(ctx, newHost.ID, updateReq); updateErr != nil {
+				log.Printf("[Clone] Failed to update host with certificate: %v", updateErr)
+			}
+		}
 	}
 
 	// Clone related configurations

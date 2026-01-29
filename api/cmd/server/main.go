@@ -114,6 +114,9 @@ func main() {
 		redisCache,
 	)
 
+	// Inject certificate service into proxy host service for clone operations
+	proxyHostService.SetCertificateService(certificateService)
+
 	// Set up certificate ready callback to regenerate nginx configs
 	// when a certificate is issued or renewed
 	certificateService.SetCertificateReadyCallback(func(ctx context.Context, certificateID string) error {
