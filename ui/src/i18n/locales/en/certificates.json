@@ -28,6 +28,8 @@
     "days": "{{count}} days",
     "view": "View",
     "renew": "Renew",
+    "download": "Download",
+    "downloading": "Downloading...",
     "delete": "Delete"
   },
   "form": {
@@ -99,7 +101,8 @@
     "renewSuccess": "Certificate renewal started",
     "renewFailed": "Failed to renew certificate",
     "deleteSuccess": "Certificate deleted",
-    "deleteFailed": "Failed to delete certificate"
+    "deleteFailed": "Failed to delete certificate",
+    "downloadError": "Failed to download certificate"
   },
   "dnsProviders": {
     "title": "DNS Providers",

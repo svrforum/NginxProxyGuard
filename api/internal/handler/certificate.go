@@ -1,7 +1,11 @@
 package handler
 
 import (
+	"archive/zip"
+	"bytes"
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 
@@ -200,4 +204,122 @@ func (h *CertificateHandler) ListHistory(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, response)
+}
+
+// Download handles GET /api/v1/certificates/:id/download
+// Query params:
+//   - type: cert, key, chain, fullchain, all (default: all)
+func (h *CertificateHandler) Download(c echo.Context) error {
+	id := c.Param("id")
+	downloadType := c.QueryParam("type")
+	if downloadType == "" {
+		downloadType = "all"
+	}
+
+	cert, err := h.service.GetByID(c.Request().Context(), id)
+	if err != nil {
+		return databaseError(c, "get certificate", err)
+	}
+
+	if cert == nil {
+		return notFoundError(c, "Certificate")
+	}
+
+	// Check if certificate is issued
+	if cert.Status != model.CertStatusIssued {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Certificate is not issued yet",
+		})
+	}
+
+	// Check if PEM data exists
+	if cert.CertificatePEM == "" || cert.PrivateKeyPEM == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Certificate data not available",
+		})
+	}
+
+	// Generate filename base from first domain
+	filenameBase := "certificate"
+	if len(cert.DomainNames) > 0 {
+		// Replace dots and wildcards for safe filename
+		filenameBase = strings.ReplaceAll(cert.DomainNames[0], ".", "_")
+		filenameBase = strings.ReplaceAll(filenameBase, "*", "wildcard")
+	}
+
+	// Audit log
+	auditCtx := service.ContextWithAudit(c.Request().Context(), c)
+	h.audit.LogCertificateDownload(auditCtx, cert.DomainNames, downloadType)
+
+	switch downloadType {
+	case "cert":
+		c.Response().Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.crt\"", filenameBase))
+		return c.Blob(http.StatusOK, "application/x-pem-file", []byte(cert.CertificatePEM))
+
+	case "key":
+		c.Response().Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.key\"", filenameBase))
+		return c.Blob(http.StatusOK, "application/x-pem-file", []byte(cert.PrivateKeyPEM))
+
+	case "chain":
+		if cert.IssuerCertificatePEM == "" {
+			return c.JSON(http.StatusBadRequest, map[string]string{
+				"error": "Chain certificate not available",
+			})
+		}
+		c.Response().Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s_chain.crt\"", filenameBase))
+		return c.Blob(http.StatusOK, "application/x-pem-file", []byte(cert.IssuerCertificatePEM))
+
+	case "fullchain":
+		fullchain := cert.CertificatePEM
+		if cert.IssuerCertificatePEM != "" {
+			fullchain += "\n" + cert.IssuerCertificatePEM
+		}
+		c.Response().Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s_fullchain.crt\"", filenameBase))
+		return c.Blob(http.StatusOK, "application/x-pem-file", []byte(fullchain))
+
+	case "all":
+		// Create ZIP archive
+		buf := new(bytes.Buffer)
+		zipWriter := zip.NewWriter(buf)
+
+		// Add certificate
+		certFile, err := zipWriter.Create(filenameBase + ".crt")
+		if err != nil {
+			return internalError(c, "create zip", err)
+		}
+		certFile.Write([]byte(cert.CertificatePEM))
+
+		// Add private key
+		keyFile, err := zipWriter.Create(filenameBase + ".key")
+		if err != nil {
+			return internalError(c, "create zip", err)
+		}
+		keyFile.Write([]byte(cert.PrivateKeyPEM))
+
+		// Add chain if available
+		if cert.IssuerCertificatePEM != "" {
+			chainFile, err := zipWriter.Create(filenameBase + "_chain.crt")
+			if err != nil {
+				return internalError(c, "create zip", err)
+			}
+			chainFile.Write([]byte(cert.IssuerCertificatePEM))
+
+			// Add fullchain
+			fullchainFile, err := zipWriter.Create(filenameBase + "_fullchain.crt")
+			if err != nil {
+				return internalError(c, "create zip", err)
+			}
+			fullchainFile.Write([]byte(cert.CertificatePEM + "\n" + cert.IssuerCertificatePEM))
+		}
+
+		zipWriter.Close()
+
+		c.Response().Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.zip\"", filenameBase))
+		return c.Blob(http.StatusOK, "application/zip", buf.Bytes())
+
+	default:
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid download type. Use: cert, key, chain, fullchain, or all",
+		})
+	}
 }

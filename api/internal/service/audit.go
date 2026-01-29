@@ -215,6 +215,18 @@ func (s *AuditService) LogCertificateRenewed(ctx context.Context, domains []stri
 	})
 }
 
+// LogCertificateDownload logs certificate download
+func (s *AuditService) LogCertificateDownload(ctx context.Context, domains []string, downloadType string) error {
+	domainStr := ""
+	if len(domains) > 0 {
+		domainStr = domains[0]
+	}
+	return s.logEntry(ctx, "certificate_downloaded", "certificate", "", domainStr, map[string]interface{}{
+		"domain_names":  domains,
+		"download_type": downloadType,
+	})
+}
+
 // LogSettingsUpdate logs global settings update
 func (s *AuditService) LogSettingsUpdate(ctx context.Context, settingName string, details map[string]interface{}) error {
 	return s.logEntry(ctx, "settings_updated", "settings", "", settingName, details)

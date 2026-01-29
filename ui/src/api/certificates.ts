@@ -97,3 +97,37 @@ export async function getCertificateHistory(page = 1, perPage = 20, certificateI
   });
   return handleResponse<CertificateHistoryListResponse>(response);
 }
+
+export type CertificateDownloadType = 'cert' | 'key' | 'chain' | 'fullchain' | 'all';
+
+export async function downloadCertificate(id: string, type: CertificateDownloadType = 'all'): Promise<void> {
+  const response = await fetch(`${API_BASE}/certificates/${id}/download?type=${type}`, {
+    headers: getAuthHeaders(),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(error.error || `HTTP ${response.status}`);
+  }
+
+  // Get filename from Content-Disposition header
+  const contentDisposition = response.headers.get('Content-Disposition');
+  let filename = 'certificate';
+  if (contentDisposition) {
+    const match = contentDisposition.match(/filename="([^"]+)"/);
+    if (match) {
+      filename = match[1];
+    }
+  }
+
+  // Download the file
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+}

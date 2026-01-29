@@ -501,6 +501,7 @@ func main() {
 			certificates.DELETE("/:id", certificateHandler.Delete)
 			certificates.POST("/:id/renew", certificateHandler.Renew)
 			certificates.GET("/:id/logs", certificateHandler.GetLogs)
+			certificates.GET("/:id/download", certificateHandler.Download)
 		}
 
 		// Log routes

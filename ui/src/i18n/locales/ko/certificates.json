@@ -28,6 +28,8 @@
     "days": "{{count}}일",
     "view": "보기",
     "renew": "갱신",
+    "download": "다운로드",
+    "downloading": "다운로드 중...",
     "delete": "삭제"
   },
   "form": {
@@ -99,7 +101,8 @@
     "renewSuccess": "인증서 갱신이 시작되었습니다",
     "renewFailed": "인증서 갱신에 실패했습니다",
     "deleteSuccess": "인증서가 삭제되었습니다",
-    "deleteFailed": "인증서 삭제에 실패했습니다"
+    "deleteFailed": "인증서 삭제에 실패했습니다",
+    "downloadError": "인증서 다운로드에 실패했습니다"
   },
   "dnsProviders": {
     "title": "DNS 제공자",

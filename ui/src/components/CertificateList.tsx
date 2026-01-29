@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { listCertificates, deleteCertificate, renewCertificate } from '../api/certificates';
+import { listCertificates, deleteCertificate, renewCertificate, downloadCertificate } from '../api/certificates';
 import type { Certificate } from '../types/certificate';
 import CertificateForm from './CertificateForm';
 import { CertificateDetail } from './CertificateDetail';
@@ -47,6 +47,7 @@ export default function CertificateList() {
   const [selectedCertId, setSelectedCertId] = useState<string | null>(null);
   const [renewingCertId, setRenewingCertId] = useState<string | null>(null);
   const [showRenewLogModal, setShowRenewLogModal] = useState(false);
+  const [downloadingCertId, setDownloadingCertId] = useState<string | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['certificates'],
@@ -95,6 +96,17 @@ export default function CertificateList() {
     setShowRenewLogModal(false);
     setRenewingCertId(null);
     queryClient.invalidateQueries({ queryKey: ['certificates'] });
+  };
+
+  const handleDownload = async (certId: string) => {
+    setDownloadingCertId(certId);
+    try {
+      await downloadCertificate(certId, 'all');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : t('messages.downloadError'));
+    } finally {
+      setDownloadingCertId(null);
+    }
   };
 
   const formatDate = (dateStr?: string) => {
@@ -228,6 +240,15 @@ export default function CertificateList() {
                         className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm font-medium"
                       >
                         {t('list.renew')}
+                      </button>
+                    )}
+                    {cert.status === 'issued' && (
+                      <button
+                        onClick={() => handleDownload(cert.id)}
+                        disabled={downloadingCertId === cert.id}
+                        className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 text-sm font-medium"
+                      >
+                        {downloadingCertId === cert.id ? t('list.downloading') : t('list.download')}
                       </button>
                     )}
                     <button
