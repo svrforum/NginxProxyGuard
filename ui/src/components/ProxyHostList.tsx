@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { fetchProxyHosts, deleteProxyHost, testProxyHost, updateProxyHost, testProxyHostConfig, cloneProxyHost } from '../api/proxy-hosts'
-import { listCertificates } from '../api/certificates'
+import { listCertificates, getCertificate } from '../api/certificates'
+import { listDNSProviders } from '../api/dns-providers'
 import { HelpTip } from './common/HelpTip'
 import { useEscapeKey } from '../hooks/useEscapeKey'
 import type { ProxyHost, ProxyHostTestResult } from '../types/proxy-host'
@@ -653,10 +654,19 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
   const [toggleConfirmHost, setToggleConfirmHost] = useState<ProxyHost | null>(null)
   const [cloningHost, setCloningHost] = useState<ProxyHost | null>(null)
   const [cloneDomains, setCloneDomains] = useState('')
-  const [cloneCertificateId, setCloneCertificateId] = useState<string>('same') // 'same', 'none', 'new', or certificate ID
+  const [cloneCertMode, setCloneCertMode] = useState<'select' | 'create'>('select')
+  const [cloneCertificateId, setCloneCertificateId] = useState<string>('') // certificate ID when mode is 'select'
+  const [cloneCertProvider, setCloneCertProvider] = useState<'letsencrypt' | 'selfsigned'>('letsencrypt')
+  const [cloneDnsProviderId, setCloneDnsProviderId] = useState<string>('')
   const [cloneForwardScheme, setCloneForwardScheme] = useState<'http' | 'https'>('http')
   const [cloneForwardHost, setCloneForwardHost] = useState('')
   const [cloneForwardPort, setCloneForwardPort] = useState('')
+  // Certificate issuance progress state
+  const [cloneCertCreating, setCloneCertCreating] = useState(false)
+  const [cloneCertProgress, setCloneCertProgress] = useState<string | null>(null)
+  const [cloneCertElapsedTime, setCloneCertElapsedTime] = useState(0)
+  const [cloneCertError, setCloneCertError] = useState<string | null>(null)
+  const [cloneCertSuccess, setCloneCertSuccess] = useState(false)
   const [searchInput, setSearchInput] = useState('')  // For controlled input
   const [searchQuery, setSearchQuery] = useState('')  // For actual query (debounced)
   const [currentPage, setCurrentPage] = useState(1)
@@ -696,6 +706,13 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
     enabled: !!cloningHost,
   })
 
+  // Fetch DNS providers for clone modal
+  const { data: dnsProvidersData } = useQuery({
+    queryKey: ['dns-providers-for-clone'],
+    queryFn: () => listDNSProviders(1, 100),
+    enabled: !!cloningHost && cloneCertMode === 'create' && cloneCertProvider === 'letsencrypt',
+  })
+
   const deleteMutation = useMutation({
     mutationFn: deleteProxyHost,
     onSuccess: () => {
@@ -712,32 +729,51 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
   })
 
   const cloneMutation = useMutation({
-    mutationFn: ({ id, domainNames, certificateId, requestNewCertificate, forwardScheme, forwardHost, forwardPort }: {
+    mutationFn: ({ id, domainNames, certificateId, certProvider, dnsProviderId, forwardScheme, forwardHost, forwardPort, isCreatingCert }: {
       id: string
       domainNames: string[]
       certificateId?: string
-      requestNewCertificate?: boolean
+      certProvider?: string
+      dnsProviderId?: string
       forwardScheme: string
       forwardHost: string
       forwardPort: number
+      isCreatingCert: boolean
     }) =>
       cloneProxyHost(id, {
         domain_names: domainNames,
         certificate_id: certificateId,
-        request_new_certificate: requestNewCertificate,
+        cert_provider: certProvider,
+        dns_provider_id: dnsProviderId,
         forward_scheme: forwardScheme,
         forward_host: forwardHost,
         forward_port: forwardPort,
-      }),
-    onSuccess: () => {
+      }).then(result => ({ ...result, isCreatingCert })),
+    onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ['proxy-hosts'] })
       queryClient.invalidateQueries({ queryKey: ['certificates'] })
-      setCloningHost(null)
-      setCloneDomains('')
-      setCloneCertificateId('same')
-      setCloneForwardScheme('http')
-      setCloneForwardHost('')
-      setCloneForwardPort('')
+
+      // If creating new certificate, wait for it to complete
+      if (data.isCreatingCert) {
+        setCloneCertCreating(true)
+        setCloneCertProgress(t('actions.cloneCertIssuing'))
+        setCloneCertElapsedTime(0)
+        setCloneCertError(null)
+
+        const success = await waitForCloneCertificate(data.id)
+
+        setCloneCertCreating(false)
+        if (success) {
+          setCloneCertSuccess(true)
+          queryClient.invalidateQueries({ queryKey: ['proxy-hosts'] })
+          queryClient.invalidateQueries({ queryKey: ['certificates'] })
+          // Auto-close modal after 1.5 seconds on success
+          setTimeout(() => resetCloneState(), 1500)
+        }
+        // On error, keep modal open to show error message
+      } else {
+        resetCloneState()
+      }
     },
   })
 
@@ -782,10 +818,79 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
     }
   }
 
+  // Certificate polling function for clone modal
+  const waitForCloneCertificate = async (hostId: string, maxWaitTime = 120000): Promise<boolean> => {
+    const startTime = Date.now()
+    const pollInterval = 2000
+
+    while (Date.now() - startTime < maxWaitTime) {
+      const elapsed = Math.floor((Date.now() - startTime) / 1000)
+      setCloneCertElapsedTime(elapsed)
+
+      try {
+        // Get the host to find its certificate
+        const hosts = await fetchProxyHosts(1, 100, '', 'name', 'asc')
+        const host = hosts.data.find(h => h.id === hostId)
+
+        if (!host?.certificate_id) {
+          setCloneCertProgress(`${t('actions.cloneCertIssuing')} (${elapsed}s)`)
+          await new Promise(resolve => setTimeout(resolve, pollInterval))
+          continue
+        }
+
+        const cert = await getCertificate(host.certificate_id)
+
+        if (!cert) {
+          setCloneCertProgress(`${t('actions.cloneCertIssuing')} (${elapsed}s)`)
+          await new Promise(resolve => setTimeout(resolve, pollInterval))
+          continue
+        }
+
+        if (cert.status === 'issued') {
+          return true
+        } else if (cert.status === 'error') {
+          setCloneCertError(cert.error_message || t('actions.cloneCertFailed'))
+          return false
+        }
+
+        setCloneCertProgress(`${t('actions.cloneCertIssuing')} (${elapsed}s)`)
+      } catch (err) {
+        console.error('Error checking certificate:', err)
+        setCloneCertProgress(`${t('actions.cloneCertIssuing')} (${elapsed}s)`)
+      }
+
+      await new Promise(resolve => setTimeout(resolve, pollInterval))
+    }
+
+    setCloneCertError('Certificate issuance timed out')
+    return false
+  }
+
+  // Reset all clone-related state
+  const resetCloneState = () => {
+    setCloningHost(null)
+    setCloneDomains('')
+    setCloneCertMode('select')
+    setCloneCertificateId('')
+    setCloneCertProvider('letsencrypt')
+    setCloneDnsProviderId('')
+    setCloneForwardScheme('http')
+    setCloneForwardHost('')
+    setCloneForwardPort('')
+    setCloneCertCreating(false)
+    setCloneCertProgress(null)
+    setCloneCertElapsedTime(0)
+    setCloneCertError(null)
+    setCloneCertSuccess(false)
+  }
+
   const handleClone = (host: ProxyHost) => {
     setCloningHost(host)
     setCloneDomains('')
-    setCloneCertificateId(host.certificate_id ? 'same' : 'none')
+    setCloneCertMode('select')
+    setCloneCertificateId(host.certificate_id || '')
+    setCloneCertProvider('letsencrypt')
+    setCloneDnsProviderId('')
     setCloneForwardScheme(host.forward_scheme as 'http' | 'https')
     setCloneForwardHost(host.forward_host)
     setCloneForwardPort(String(host.forward_port))
@@ -797,25 +902,33 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
     if (domainNames.length === 0) return
     const forwardPort = parseInt(cloneForwardPort, 10)
 
-    // Determine certificate ID and new cert request based on selection
+    // Build clone request based on certificate mode
     let certificateId: string | undefined
-    let requestNewCertificate = false
-    if (cloneCertificateId === 'same' && cloningHost.certificate_id) {
-      certificateId = cloningHost.certificate_id
-    } else if (cloneCertificateId === 'new') {
-      requestNewCertificate = true
-    } else if (cloneCertificateId !== 'none' && cloneCertificateId !== 'same') {
-      certificateId = cloneCertificateId
+    let certProvider: string | undefined
+    let dnsProviderId: string | undefined
+    const isCreatingCert = cloneCertMode === 'create'
+
+    if (cloneCertMode === 'select') {
+      // Using existing certificate
+      certificateId = cloneCertificateId || undefined
+    } else {
+      // Creating new certificate
+      certProvider = cloneCertProvider
+      if (cloneCertProvider === 'letsencrypt' && cloneDnsProviderId) {
+        dnsProviderId = cloneDnsProviderId
+      }
     }
 
     cloneMutation.mutate({
       id: cloningHost.id,
       domainNames,
       certificateId,
-      requestNewCertificate,
+      certProvider,
+      dnsProviderId,
       forwardScheme: cloneForwardScheme,
       forwardHost: cloneForwardHost,
       forwardPort: isNaN(forwardPort) ? cloningHost.forward_port : forwardPort,
+      isCreatingCert,
     })
   }
 
@@ -1417,59 +1530,226 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
                     />
                   </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    {t('actions.cloneCertificate')}
-                  </label>
-                  <select
-                    value={cloneCertificateId}
-                    onChange={(e) => setCloneCertificateId(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  >
-                    {cloningHost.certificate_id && (
-                      <option value="same">{t('actions.cloneCertificateSame')}</option>
-                    )}
-                    <option value="new">{t('actions.cloneCertificateNew')}</option>
-                    <option value="none">{t('actions.cloneCertificateNone')}</option>
-                    {certificatesData?.data?.filter(cert => cert.status === 'issued' && cert.id !== cloningHost.certificate_id).map(cert => (
-                      <option key={cert.id} value={cert.id}>
-                        {cert.domain_names.join(', ')}
-                      </option>
-                    ))}
-                  </select>
-                  {cloneCertificateId === 'new' && (
-                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                      {t('actions.cloneCertificateNewHelp')}
-                    </p>
-                  )}
-                  {cloneCertificateId !== 'new' && (
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                      {t('actions.cloneCertificateHelp')}
-                    </p>
+                {/* SSL Certificate Section */}
+                <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                      {t('actions.cloneCertificate')}
+                    </label>
+                    <div className="flex gap-1 bg-slate-200 dark:bg-slate-700 rounded-lg p-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setCloneCertMode('select')}
+                        className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${cloneCertMode === 'select' ? 'bg-white dark:bg-slate-600 text-slate-900 dark:text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'}`}
+                      >
+                        {t('actions.cloneCertExisting')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCloneCertMode('create')}
+                        className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${cloneCertMode === 'create' ? 'bg-white dark:bg-slate-600 text-slate-900 dark:text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'}`}
+                      >
+                        + {t('actions.cloneCertCreate')}
+                      </button>
+                    </div>
+                  </div>
+
+                  {cloneCertMode === 'select' ? (
+                    <>
+                      <select
+                        value={cloneCertificateId}
+                        onChange={(e) => setCloneCertificateId(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                      >
+                        <option value="">{t('actions.cloneCertNone')}</option>
+                        {cloningHost.certificate_id && (
+                          <option value={cloningHost.certificate_id}>{t('actions.cloneCertSame')}</option>
+                        )}
+                        {certificatesData?.data?.filter(cert => cert.status === 'issued' && cert.id !== cloningHost.certificate_id).map(cert => (
+                          <option key={cert.id} value={cert.id}>
+                            {cert.domain_names.join(', ')} ({cert.provider})
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        {t('actions.cloneCertificateHelp')}
+                      </p>
+                    </>
+                  ) : (
+                    <div className="space-y-4">
+                      {/* Certificate Provider Selection */}
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
+                          {t('actions.cloneCertProviderLabel')}
+                        </label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setCloneCertProvider('letsencrypt')}
+                            className={`p-3 rounded-lg border-2 text-left transition-colors ${cloneCertProvider === 'letsencrypt'
+                              ? 'bg-green-50 border-green-300 dark:bg-green-900/20 dark:border-green-800'
+                              : 'bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 hover:border-slate-300 dark:hover:border-slate-500'
+                              }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg">🔐</span>
+                              <div>
+                                <span className="text-sm font-medium text-slate-900 dark:text-white">Let's Encrypt</span>
+                                <p className="text-xs text-slate-500 dark:text-slate-400">{t('actions.cloneCertLetsEncryptDesc')}</p>
+                              </div>
+                            </div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCloneCertProvider('selfsigned')}
+                            className={`p-3 rounded-lg border-2 text-left transition-colors ${cloneCertProvider === 'selfsigned'
+                              ? 'bg-amber-50 border-amber-300 dark:bg-amber-900/20 dark:border-amber-800'
+                              : 'bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 hover:border-slate-300 dark:hover:border-slate-500'
+                              }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg">📜</span>
+                              <div>
+                                <span className="text-sm font-medium text-slate-900 dark:text-white">Self-Signed</span>
+                                <p className="text-xs text-slate-500 dark:text-slate-400">{t('actions.cloneCertSelfSignedDesc')}</p>
+                              </div>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Domains to cover */}
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
+                          {t('actions.cloneCertDomains')}
+                        </label>
+                        <div className="flex flex-wrap gap-1.5">
+                          {cloneDomains.trim() ? (
+                            cloneDomains.split(/[\s,]+/).filter(d => d.trim()).map((domain, i) => (
+                              <span key={i} className="px-2 py-1 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-xs rounded-full">
+                                {domain.trim()}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-xs text-slate-500 dark:text-slate-400 italic">
+                              {t('actions.cloneCertDomainsEmpty')}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* DNS Provider for Let's Encrypt */}
+                      {cloneCertProvider === 'letsencrypt' && (
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
+                            {t('actions.cloneCertDnsProvider')}
+                          </label>
+                          <select
+                            value={cloneDnsProviderId}
+                            onChange={(e) => setCloneDnsProviderId(e.target.value)}
+                            className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                          >
+                            <option value="">{t('actions.cloneCertHttpChallenge')}</option>
+                            {dnsProvidersData?.data?.map(p => (
+                              <option key={p.id} value={p.id}>
+                                {p.name} ({p.provider_type})
+                              </option>
+                            ))}
+                          </select>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                            {t('actions.cloneCertDnsProviderHelp')}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Info message */}
+                      <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-sm text-blue-700 dark:text-blue-300 flex items-start gap-2">
+                        <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span>
+                          {cloneCertProvider === 'letsencrypt'
+                            ? t('actions.cloneCertLetsEncryptInfo')
+                            : t('actions.cloneCertSelfSignedInfo')}
+                        </span>
+                      </div>
+                    </div>
                   )}
                 </div>
-                {cloneMutation.isError && (
+                {cloneMutation.isError && !cloneCertCreating && (
                   <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-400">
                     {(cloneMutation.error as Error)?.message || t('actions.cloneError')}
+                  </div>
+                )}
+
+                {/* Certificate Progress UI */}
+                {(cloneCertCreating || cloneCertError || cloneCertSuccess) && (
+                  <div className="space-y-3">
+                    {/* Progress Bar */}
+                    {cloneCertCreating && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-slate-600 dark:text-slate-400">
+                            {cloneCertProgress}
+                          </span>
+                          <span className="text-slate-500 dark:text-slate-500">
+                            {cloneCertElapsedTime}s
+                          </span>
+                        </div>
+                        <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+                          <div
+                            className="h-2 bg-primary-600 rounded-full transition-all duration-1000 animate-pulse"
+                            style={{ width: `${Math.min((cloneCertElapsedTime / 60) * 100, 95)}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Error Message */}
+                    {cloneCertError && (
+                      <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-start gap-2">
+                        <svg className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <div>
+                          <p className="text-sm font-medium text-red-700 dark:text-red-300">
+                            {t('actions.cloneCertFailed')}
+                          </p>
+                          <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">
+                            {cloneCertError}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Success Message */}
+                    {cloneCertSuccess && (
+                      <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg flex items-center gap-2">
+                        <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span className="text-sm font-medium text-green-700 dark:text-green-300">
+                          {t('actions.cloneCertSuccess')}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
               <div className="px-6 py-4 bg-slate-50 dark:bg-slate-900 flex justify-end gap-3">
                 <button
-                  onClick={() => {
-                    setCloningHost(null)
-                    setCloneDomains('')
-                  }}
-                  className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                  onClick={() => resetCloneState()}
+                  disabled={cloneCertCreating}
+                  className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
                 >
-                  {t('common:buttons.cancel')}
+                  {cloneCertSuccess ? t('common:buttons.close') : t('common:buttons.cancel')}
                 </button>
                 <button
                   onClick={confirmClone}
-                  disabled={cloneMutation.isPending || !cloneDomains.trim()}
+                  disabled={cloneMutation.isPending || cloneCertCreating || cloneCertSuccess || !cloneDomains.trim()}
                   className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50"
                 >
-                  {cloneMutation.isPending ? t('common:status.processing') : t('actions.clone')}
+                  {cloneMutation.isPending || cloneCertCreating ? t('common:status.processing') : t('actions.clone')}
                 </button>
               </div>
             </div>

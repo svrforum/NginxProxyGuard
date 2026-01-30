@@ -1327,16 +1327,16 @@ func (s *ProxyHostService) Clone(ctx context.Context, sourceID string, req *mode
 	var certificateID *string
 	sslEnabled := false
 	sslForceHTTPS := false
-	requestNewCert := req.RequestNewCertificate
+	createNewCert := req.CertProvider != "" // 'letsencrypt' or 'selfsigned'
 
 	if req.CertificateID != nil && *req.CertificateID != "" {
-		// User specified a certificate ID - enable SSL
+		// User specified an existing certificate ID - enable SSL
 		certificateID = req.CertificateID
 		sslEnabled = true
 		sslForceHTTPS = source.SSLForceHTTPS // Copy force HTTPS setting from source
-		requestNewCert = false // Don't request new cert if existing one is specified
+		createNewCert = false                // Don't create new cert if existing one is specified
 	}
-	// If no certificate specified and not requesting new cert, SSL remains disabled
+	// If no certificate specified and not creating new cert, SSL remains disabled
 
 	// Use provided forward settings or copy from source
 	forwardScheme := source.ForwardScheme
@@ -1392,11 +1392,19 @@ func (s *ProxyHostService) Clone(ctx context.Context, sourceID string, req *mode
 	}
 
 	// Request new certificate if requested
-	if requestNewCert && s.certService != nil {
+	// Request new certificate if provider is specified
+	if createNewCert && s.certService != nil {
+		// Determine provider type
+		provider := model.CertProviderLetsEncrypt
+		if req.CertProvider == "selfsigned" {
+			provider = model.CertProviderSelfSigned
+		}
+
 		certReq := &model.CreateCertificateRequest{
-			DomainNames: validDomains,
-			Provider:    model.CertProviderLetsEncrypt,
-			AutoRenew:   true,
+			DomainNames:   validDomains,
+			Provider:      provider,
+			AutoRenew:     provider == model.CertProviderLetsEncrypt,
+			DNSProviderID: req.DNSProviderID,
 		}
 		cert, certErr := s.certService.Create(ctx, certReq)
 		if certErr != nil {
@@ -1404,9 +1412,9 @@ func (s *ProxyHostService) Clone(ctx context.Context, sourceID string, req *mode
 			// Don't fail the clone, just log the error
 			// The host will be created without SSL, user can request certificate later
 		} else {
-			log.Printf("[Clone] Certificate request created: %s for domains %v", cert.ID, validDomains)
+			log.Printf("[Clone] Certificate request created: %s (provider: %s) for domains %v", cert.ID, provider, validDomains)
 			// Update the host with the new certificate ID
-			// The certificate is pending, so SSL will be enabled when cert is issued
+			// The certificate is pending/issued, SSL will be enabled when cert is ready
 			updateReq := &model.UpdateProxyHostRequest{
 				CertificateID: &cert.ID,
 				SSLEnabled:    boolPtr(true),

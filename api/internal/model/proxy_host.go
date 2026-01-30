@@ -266,12 +266,13 @@ type UpdateProxyHostRequest struct {
 
 // CloneProxyHostRequest is the request to clone a proxy host
 type CloneProxyHostRequest struct {
-	DomainNames           []string `json:"domain_names" validate:"required,min=1"`
-	CertificateID         *string  `json:"certificate_id"`          // Optional: certificate to use
-	RequestNewCertificate bool     `json:"request_new_certificate"` // If true, request new Let's Encrypt certificate
-	ForwardScheme         string   `json:"forward_scheme"`          // Optional: http or https (default: copy from source)
-	ForwardHost           string   `json:"forward_host"`            // Optional: target host (default: copy from source)
-	ForwardPort           int      `json:"forward_port"`            // Optional: target port (default: copy from source)
+	DomainNames   []string `json:"domain_names" validate:"required,min=1"`
+	CertificateID *string  `json:"certificate_id"`   // Optional: use existing certificate
+	CertProvider  string   `json:"cert_provider"`    // Optional: 'letsencrypt' or 'selfsigned' to create new cert
+	DNSProviderID *string  `json:"dns_provider_id"`  // Optional: DNS provider for Let's Encrypt DNS challenge
+	ForwardScheme string   `json:"forward_scheme"`   // Optional: http or https (default: copy from source)
+	ForwardHost   string   `json:"forward_host"`     // Optional: target host (default: copy from source)
+	ForwardPort   int      `json:"forward_port"`     // Optional: target port (default: copy from source)
 }
 
 type ProxyHostListResponse struct {

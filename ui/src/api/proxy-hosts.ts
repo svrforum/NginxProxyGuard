@@ -85,9 +85,10 @@ export async function testProxyHostConfig(
 
 export interface CloneProxyHostRequest {
   domain_names: string[]
-  certificate_id?: string           // If provided, use this certificate
-  request_new_certificate?: boolean // If true, request a new Let's Encrypt certificate
-  forward_scheme?: string           // http or https
+  certificate_id?: string      // If provided, use this existing certificate
+  cert_provider?: string       // 'letsencrypt' or 'selfsigned' - create new certificate
+  dns_provider_id?: string     // DNS provider ID for Let's Encrypt DNS challenge
+  forward_scheme?: string      // http or https
   forward_host?: string
   forward_port?: number
 }
