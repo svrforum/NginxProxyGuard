@@ -167,6 +167,8 @@ RUN echo "Downloading OWASP CRS ${OWASP_CRS_VERSION}..." \
 # =============================================================================
 FROM alpine:3.23
 
+ARG TARGETARCH
+
 LABEL maintainer="nginx-proxy-guard"
 LABEL description="nginx with HTTP/3, ModSecurity v3, and OWASP CRS"
 LABEL nginx.version="${NGINX_VERSION}"
@@ -201,11 +203,11 @@ RUN apk add --no-cache \
 # Install geoipupdate from edge/testing repository
 RUN apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/testing geoipupdate || \
     (echo "geoipupdate not available, installing manually..." && \
-     wget -q https://github.com/maxmind/geoipupdate/releases/download/v7.0.1/geoipupdate_7.0.1_linux_amd64.tar.gz && \
-     tar -xzf geoipupdate_7.0.1_linux_amd64.tar.gz && \
-     mv geoipupdate_7.0.1_linux_amd64/geoipupdate /usr/local/bin/ && \
+     wget -q https://github.com/maxmind/geoipupdate/releases/download/v7.0.1/geoipupdate_7.0.1_linux_${TARGETARCH}.tar.gz && \
+     tar -xzf geoipupdate_7.0.1_linux_${TARGETARCH}.tar.gz && \
+     mv geoipupdate_7.0.1_linux_${TARGETARCH}/geoipupdate /usr/local/bin/ && \
      chmod +x /usr/local/bin/geoipupdate && \
-     rm -rf geoipupdate_7.0.1_linux_amd64*)
+     rm -rf geoipupdate_7.0.1_linux_${TARGETARCH}*)
 
 # Create nginx user and directories
 RUN addgroup -g 101 -S nginx \

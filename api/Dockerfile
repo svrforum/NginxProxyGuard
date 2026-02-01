@@ -21,14 +21,16 @@ RUN go mod tidy && CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o se
 # Runtime stage
 FROM alpine:3.23
 
+ARG TARGETARCH
+
 WORKDIR /app
 
 # Install CA certificates for HTTPS, Docker CLI for nginx management, and geoipupdate for MaxMind
 RUN apk --no-cache add ca-certificates tzdata docker-cli \
-    && wget -q https://github.com/maxmind/geoipupdate/releases/download/v7.0.1/geoipupdate_7.0.1_linux_amd64.tar.gz \
-    && tar -xzf geoipupdate_7.0.1_linux_amd64.tar.gz \
-    && mv geoipupdate_7.0.1_linux_amd64/geoipupdate /usr/local/bin/ \
-    && rm -rf geoipupdate_7.0.1_linux_amd64* \
+    && wget -q https://github.com/maxmind/geoipupdate/releases/download/v7.0.1/geoipupdate_7.0.1_linux_${TARGETARCH}.tar.gz \
+    && tar -xzf geoipupdate_7.0.1_linux_${TARGETARCH}.tar.gz \
+    && mv geoipupdate_7.0.1_linux_${TARGETARCH}/geoipupdate /usr/local/bin/ \
+    && rm -rf geoipupdate_7.0.1_linux_${TARGETARCH}* \
     && chmod +x /usr/local/bin/geoipupdate
 
 # Copy binary from builder
