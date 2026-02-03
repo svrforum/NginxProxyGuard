@@ -703,6 +703,9 @@ server {
         # WebSocket support (proxy_http_version already set in proxy_params.conf)
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
+        # Long timeouts for persistent WebSocket connections (24h)
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
         {{end}}
         {{if .Host.CacheEnabled}}
         # Caching
@@ -791,6 +794,9 @@ server {
         # WebSocket support (proxy_http_version already set in proxy_params.conf)
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
+        # Long timeouts for persistent WebSocket connections (24h)
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
         {{end}}
         {{if .Host.CacheEnabled}}
         # Caching
@@ -1499,6 +1505,9 @@ server {
         # WebSocket support (proxy_http_version already set in proxy_params.conf)
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
+        # Long timeouts for persistent WebSocket connections (24h)
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
         {{end}}
         {{if .Host.SSLHTTP3}}
         # HTTP/3 Alt-Svc header (1 hour cache for faster fallback on connection issues)
