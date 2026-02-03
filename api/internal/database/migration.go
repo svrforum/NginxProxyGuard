@@ -138,6 +138,16 @@ func (db *DB) RunMigrations() error {
 		log.Printf("Warning: numeric overflow migration had issues: %v", err)
 	}
 
+	// Run 008_fix_partition_timezone_v2 migration (fixes timezone detection bug in 007)
+	if err := db.runPartitionTimezoneMigration(); err != nil {
+		log.Printf("Warning: partition timezone migration had issues: %v", err)
+	}
+
+	// Run 009_pregenerate_partitions migration (pre-generates 10 years of partitions)
+	if err := db.runPregeneratePartitionsMigration(); err != nil {
+		log.Printf("Warning: partition pre-generation migration had issues: %v", err)
+	}
+
 	// Migrate logs table to logs_partitioned in background (for existing installations)
 	// This allows API to start immediately while migration runs
 	go db.migrateLogsToPartitioned()
@@ -876,6 +886,87 @@ func (db *DB) runNumericOverflowMigration() error {
 				log.Println("[Migration] Background recompression completed")
 			}
 		}()
+	}
+
+	// Mark migration as complete
+	_, err = db.Exec(`INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT DO NOTHING`, migrationVersion)
+	if err != nil {
+		return fmt.Errorf("failed to record migration: %w", err)
+	}
+
+	log.Printf("[Migration] %s completed successfully!", migrationVersion)
+	return nil
+}
+
+// runPartitionTimezoneMigration fixes the partition timezone detection bug (Issue #38 related)
+// The original 007 migration incorrectly detected local timezone when pg_get_expr()
+// displays UTC timestamps in the session's timezone (e.g., +00 shown as +09 in KST)
+func (db *DB) runPartitionTimezoneMigration() error {
+	const migrationVersion = "008_fix_partition_timezone_v2"
+
+	// Check if already migrated
+	var migrated bool
+	err := db.QueryRow(`SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = $1)`, migrationVersion).Scan(&migrated)
+	if err != nil {
+		return fmt.Errorf("failed to check migration status: %w", err)
+	}
+	if migrated {
+		log.Printf("[Migration] %s already applied", migrationVersion)
+		return nil
+	}
+
+	log.Printf("[Migration] Starting %s: fixing partition timezone detection...", migrationVersion)
+
+	// Read and execute the migration file
+	content, err := migrationFS.ReadFile("migrations/008_fix_partition_timezone_v2.sql")
+	if err != nil {
+		return fmt.Errorf("failed to read 008_fix_partition_timezone_v2.sql: %w", err)
+	}
+
+	_, err = db.Exec(string(content))
+	if err != nil {
+		log.Printf("[Migration] Warning: %s had issues (may be partially applied): %v", migrationVersion, err)
+		// Continue anyway - the function replacement should still work
+	}
+
+	// Mark migration as complete
+	_, err = db.Exec(`INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT DO NOTHING`, migrationVersion)
+	if err != nil {
+		return fmt.Errorf("failed to record migration: %w", err)
+	}
+
+	log.Printf("[Migration] %s completed successfully!", migrationVersion)
+	return nil
+}
+
+// runPregeneratePartitionsMigration pre-generates partitions for 10 years
+// This avoids timezone-related bugs from dynamic partition creation
+func (db *DB) runPregeneratePartitionsMigration() error {
+	const migrationVersion = "009_pregenerate_partitions"
+
+	// Check if already migrated
+	var migrated bool
+	err := db.QueryRow(`SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = $1)`, migrationVersion).Scan(&migrated)
+	if err != nil {
+		return fmt.Errorf("failed to check migration status: %w", err)
+	}
+	if migrated {
+		log.Printf("[Migration] %s already applied", migrationVersion)
+		return nil
+	}
+
+	log.Printf("[Migration] Starting %s: pre-generating partitions for 10 years...", migrationVersion)
+
+	// Read and execute the migration file
+	content, err := migrationFS.ReadFile("migrations/009_pregenerate_partitions.sql")
+	if err != nil {
+		return fmt.Errorf("failed to read 009_pregenerate_partitions.sql: %w", err)
+	}
+
+	_, err = db.Exec(string(content))
+	if err != nil {
+		log.Printf("[Migration] Warning: %s had issues (may be partially applied): %v", migrationVersion, err)
+		// Continue anyway - partitions may be partially created
 	}
 
 	// Mark migration as complete

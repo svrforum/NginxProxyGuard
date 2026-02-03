@@ -1,3 +1,11 @@
+-- Migration 007: DEPRECATED - DO NOT USE
+-- This migration has a bug where pg_get_expr() displays UTC timestamps
+-- in the session's timezone (e.g., +00 shown as +09 in KST), causing
+-- incorrect timezone detection.
+--
+-- Use 008_fix_partition_timezone_v2.sql instead.
+--
+-- Original description:
 -- Migration 007: Fix partition creation to detect and match existing timezone format
 -- This prevents overlap errors when existing partitions use local timezone
 

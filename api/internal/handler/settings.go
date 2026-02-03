@@ -868,7 +868,12 @@ func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Back
 					if host.WAFEnabled {
 						// Get merged WAF exclusions (host + global) from database
 						exclusions := h.getMergedWAFExclusions(ctx, host.ID)
-						if err := h.nginxManager.GenerateHostWAFConfig(ctx, &host, exclusions); err != nil {
+						// Get Priority Allow IPs from configData
+						var allowedIPs []string
+						if configData.GeoRestriction != nil {
+							allowedIPs = configData.GeoRestriction.AllowedIPs
+						}
+						if err := h.nginxManager.GenerateHostWAFConfig(ctx, &host, exclusions, allowedIPs); err != nil {
 							log.Printf("[Backup] Warning: failed to regenerate WAF config for host %s: %v", host.ID, err)
 							// Remove the main config if WAF config fails
 							_ = h.nginxManager.RemoveConfig(ctx, &host)

@@ -176,7 +176,11 @@ func (m *Manager) GenerateConfigAndReload(ctx context.Context, data ProxyHostCon
 
 		// Generate or remove WAF config based on WAF enabled status
 		if data.Host.WAFEnabled {
-			if err := m.GenerateHostWAFConfig(ctx, data.Host, wafExclusions); err != nil {
+			var allowedIPs []string
+			if data.GeoRestriction != nil {
+				allowedIPs = data.GeoRestriction.AllowedIPs
+			}
+			if err := m.GenerateHostWAFConfig(ctx, data.Host, wafExclusions, allowedIPs); err != nil {
 				return fmt.Errorf("failed to generate WAF config: %w", err)
 			}
 		} else {
@@ -227,7 +231,11 @@ func (m *Manager) GenerateConfigAndReloadWithCleanup(ctx context.Context, data P
 
 		// 3. Generate or remove WAF config
 		if data.Host.WAFEnabled {
-			if err := m.GenerateHostWAFConfig(ctx, data.Host, wafExclusions); err != nil {
+			var allowedIPs []string
+			if data.GeoRestriction != nil {
+				allowedIPs = data.GeoRestriction.AllowedIPs
+			}
+			if err := m.GenerateHostWAFConfig(ctx, data.Host, wafExclusions, allowedIPs); err != nil {
 				return fmt.Errorf("failed to generate WAF config: %w", err)
 			}
 		} else {

@@ -18,6 +18,7 @@ const hostWAFTemplate = `# nginx-guard per-host WAF configuration
 # Paranoia Level: {{.ParanoiaLevel}}
 # Anomaly Threshold: {{.AnomalyThreshold}}
 # Exclusions: {{len .Exclusions}}
+# Priority Allow IPs: {{len .AllowedIPs}}
 # Generated at: {{now}}
 
 # Include base ModSecurity configuration
@@ -41,6 +42,14 @@ SecAction "id:900000,phase:1,pass,t:none,nolog,setvar:tx.blocking_paranoia_level
 # Lower = stricter (more blocking), Higher = looser (more permissive)
 # Default: 5, Permissive: 10+, Strict: 3
 SecAction "id:900110,phase:1,pass,t:none,nolog,setvar:tx.inbound_anomaly_score_threshold={{.AnomalyThreshold}},setvar:tx.outbound_anomaly_score_threshold={{.AnomalyThreshold}}"
+
+{{if .AllowedIPs}}
+# =============================================================================
+# Priority Allow IPs - Bypass WAF completely for these IPs
+# =============================================================================
+# These IPs are configured in Security > Priority Allow IPs
+SecRule REMOTE_ADDR "@ipMatch {{joinComma .AllowedIPs}}" "id:1,phase:1,pass,nolog,ctl:ruleEngine=Off"
+{{end}}
 
 # Include OWASP CRS rules
 Include /etc/nginx/owasp-crs/rules/*.conf
@@ -70,11 +79,13 @@ type hostWAFConfigData struct {
 	ParanoiaLevel    int
 	AnomalyThreshold int
 	Exclusions       []model.WAFRuleExclusion
+	AllowedIPs       []string // Priority Allow IPs that bypass WAF
 }
 
 // GenerateHostWAFConfig generates a per-host ModSecurity configuration file
 // that includes the appropriate rule engine mode and any rule exclusions
-func (m *Manager) GenerateHostWAFConfig(ctx context.Context, host *model.ProxyHost, exclusions []model.WAFRuleExclusion) error {
+// allowedIPs are Priority Allow IPs from GeoRestriction that bypass WAF completely
+func (m *Manager) GenerateHostWAFConfig(ctx context.Context, host *model.ProxyHost, exclusions []model.WAFRuleExclusion, allowedIPs []string) error {
 	// Determine WAF mode
 	mode := "On" // blocking mode (default)
 	if host.WAFMode == "detection" {
@@ -100,6 +111,7 @@ func (m *Manager) GenerateHostWAFConfig(ctx context.Context, host *model.ProxyHo
 		ParanoiaLevel:    paranoiaLevel,
 		AnomalyThreshold: anomalyThreshold,
 		Exclusions:       exclusions,
+		AllowedIPs:       allowedIPs,
 	}
 
 	funcMap := GetSimpleTemplateFuncMap()

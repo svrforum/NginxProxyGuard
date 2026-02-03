@@ -28,7 +28,7 @@ type NginxManager interface {
 	TestConfig(ctx context.Context) error
 	ReloadNginx(ctx context.Context) error
 	GenerateAllConfigs(ctx context.Context, hosts []model.ProxyHost) error
-	GenerateHostWAFConfig(ctx context.Context, host *model.ProxyHost, exclusions []model.WAFRuleExclusion) error
+	GenerateHostWAFConfig(ctx context.Context, host *model.ProxyHost, exclusions []model.WAFRuleExclusion, allowedIPs []string) error
 	// Atomic operations with global locking
 	GenerateConfigAndReload(ctx context.Context, data nginx.ProxyHostConfigData, wafExclusions []model.WAFRuleExclusion) error
 	GenerateConfigAndReloadWithCleanup(ctx context.Context, data nginx.ProxyHostConfigData, wafExclusions []model.WAFRuleExclusion, oldConfigFilename string) error
@@ -167,6 +167,18 @@ func (s *ProxyHostService) getAccessControlData(ctx context.Context, host *model
 	}
 
 	return accessList, geoRestriction, nil
+}
+
+// getPriorityAllowIPs returns the Priority Allow IPs for a host (used for WAF bypass)
+func (s *ProxyHostService) getPriorityAllowIPs(ctx context.Context, hostID string) []string {
+	if s.geoRepo == nil {
+		return nil
+	}
+	geo, err := s.geoRepo.GetByProxyHostID(ctx, hostID)
+	if err != nil || geo == nil {
+		return nil
+	}
+	return geo.AllowedIPs
 }
 
 // getHostConfigData fetches all Phase 6 configuration data for a host
@@ -632,7 +644,8 @@ func (s *ProxyHostService) UpdateWithoutReload(ctx context.Context, id string, r
 			if err != nil {
 				return nil, fmt.Errorf("failed to get WAF exclusions: %w", err)
 			}
-			if err := s.nginx.GenerateHostWAFConfig(ctx, host, mergedExclusions); err != nil {
+			allowedIPs := s.getPriorityAllowIPs(ctx, id)
+			if err := s.nginx.GenerateHostWAFConfig(ctx, host, mergedExclusions, allowedIPs); err != nil {
 				return nil, fmt.Errorf("failed to generate WAF config: %w", err)
 			}
 		} else {
@@ -897,7 +910,8 @@ func (s *ProxyHostService) RegenerateConfigsForCertificate(ctx context.Context, 
 			if err != nil {
 				return fmt.Errorf("failed to get WAF exclusions for host %s: %w", host.ID, err)
 			}
-			if err := s.nginx.GenerateHostWAFConfig(ctx, &host, mergedExclusions); err != nil {
+			allowedIPs := s.getPriorityAllowIPs(ctx, host.ID)
+			if err := s.nginx.GenerateHostWAFConfig(ctx, &host, mergedExclusions, allowedIPs); err != nil {
 				return fmt.Errorf("failed to generate WAF config for host %s: %w", host.ID, err)
 			}
 		}
@@ -1019,7 +1033,8 @@ func (s *ProxyHostService) SyncAllConfigsWithDetails(ctx context.Context) (*Sync
 				result.Hosts = append(result.Hosts, hostResult)
 				continue
 			}
-			if err := s.nginx.GenerateHostWAFConfig(ctx, &host, mergedExclusions); err != nil {
+			allowedIPs := s.getPriorityAllowIPs(ctx, host.ID)
+			if err := s.nginx.GenerateHostWAFConfig(ctx, &host, mergedExclusions, allowedIPs); err != nil {
 				hostResult.Success = false
 				hostResult.Error = fmt.Sprintf("failed to generate WAF config: %v", err)
 				result.FailedCount++
@@ -1105,7 +1120,8 @@ func (s *ProxyHostService) RegenerateConfigsForCloudProviders(ctx context.Contex
 			if err != nil {
 				return fmt.Errorf("failed to get WAF exclusions for host %s: %w", hostID, err)
 			}
-			if err := s.nginx.GenerateHostWAFConfig(ctx, host, mergedExclusions); err != nil {
+			allowedIPs := s.getPriorityAllowIPs(ctx, hostID)
+			if err := s.nginx.GenerateHostWAFConfig(ctx, host, mergedExclusions, allowedIPs); err != nil {
 				return fmt.Errorf("failed to generate WAF config for host %s: %w", hostID, err)
 			}
 		}
@@ -1159,7 +1175,8 @@ func (s *ProxyHostService) RegenerateConfigsForExploitRules(ctx context.Context)
 			if err != nil {
 				return fmt.Errorf("failed to get WAF exclusions for host %s: %w", host.ID, err)
 			}
-			if err := s.nginx.GenerateHostWAFConfig(ctx, host, mergedExclusions); err != nil {
+			allowedIPs := s.getPriorityAllowIPs(ctx, host.ID)
+			if err := s.nginx.GenerateHostWAFConfig(ctx, host, mergedExclusions, allowedIPs); err != nil {
 				return fmt.Errorf("failed to generate WAF config for host %s: %w", host.ID, err)
 			}
 		}
