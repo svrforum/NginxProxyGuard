@@ -27,6 +27,7 @@
     "clear": "Clear",
     "clearAll": "Clear All",
     "selectAll": "Select All",
+    "deselectAll": "Deselect All",
     "view": "View",
     "viewDetails": "View Details",
     "viewAll": "View All",

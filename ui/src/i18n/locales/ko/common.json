@@ -27,6 +27,7 @@
     "clear": "지우기",
     "clearAll": "모두 지우기",
     "selectAll": "모두 선택",
+    "deselectAll": "모두 해제",
     "view": "보기",
     "viewDetails": "상세 보기",
     "viewAll": "전체 보기",

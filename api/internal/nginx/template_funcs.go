@@ -258,5 +258,8 @@ func GetSimpleTemplateFuncMap() template.FuncMap {
 				return 0
 			}
 		},
+		"joinComma": func(s []string) string {
+			return strings.Join(s, ",")
+		},
 	}
 }

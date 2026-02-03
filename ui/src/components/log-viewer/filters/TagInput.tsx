@@ -197,11 +197,8 @@ export function TagInput({ values, onChange, placeholder, fetchSuggestions, clas
                 <input
                   type="checkbox"
                   checked={pendingSelections.includes(suggestion)}
-                  onChange={(e) => {
-                    e.stopPropagation();
-                    togglePendingSelection(suggestion);
-                  }}
-                  className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-primary-600 focus:ring-primary-500 cursor-pointer"
+                  readOnly
+                  className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-primary-600 focus:ring-primary-500 pointer-events-none"
                 />
                 <span className="truncate flex-1">{suggestion}</span>
               </li>

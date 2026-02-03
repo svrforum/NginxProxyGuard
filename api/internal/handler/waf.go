@@ -20,11 +20,12 @@ import (
 type WAFHandler struct {
 	wafRepo       *repository.WAFRepository
 	proxyHostRepo *repository.ProxyHostRepository
+	geoRepo       *repository.GeoRepository
 	nginxManager  *nginx.Manager
 	crsPath       string
 }
 
-func NewWAFHandler(wafRepo *repository.WAFRepository, proxyHostRepo *repository.ProxyHostRepository, nginxManager *nginx.Manager) *WAFHandler {
+func NewWAFHandler(wafRepo *repository.WAFRepository, proxyHostRepo *repository.ProxyHostRepository, geoRepo *repository.GeoRepository, nginxManager *nginx.Manager) *WAFHandler {
 	crsPath := os.Getenv("CRS_PATH")
 	if crsPath == "" {
 		crsPath = "/etc/nginx/owasp-crs"
@@ -32,6 +33,7 @@ func NewWAFHandler(wafRepo *repository.WAFRepository, proxyHostRepo *repository.
 	return &WAFHandler{
 		wafRepo:       wafRepo,
 		proxyHostRepo: proxyHostRepo,
+		geoRepo:       geoRepo,
 		nginxManager:  nginxManager,
 		crsPath:       crsPath,
 	}
@@ -505,8 +507,17 @@ func (h *WAFHandler) regenerateHostConfig(ctx context.Context, proxyHostID strin
 	// Merge global + host exclusions
 	mergedExclusions := h.mergeExclusions(globalExclusions, hostExclusions)
 
+	// Get Priority Allow IPs for WAF bypass
+	var allowedIPs []string
+	if h.geoRepo != nil {
+		geo, err := h.geoRepo.GetByProxyHostID(ctx, proxyHostID)
+		if err == nil && geo != nil {
+			allowedIPs = geo.AllowedIPs
+		}
+	}
+
 	// Generate per-host WAF config only (not full proxy config)
-	if err := h.nginxManager.GenerateHostWAFConfig(ctx, host, mergedExclusions); err != nil {
+	if err := h.nginxManager.GenerateHostWAFConfig(ctx, host, mergedExclusions, allowedIPs); err != nil {
 		return err
 	}
 
@@ -958,8 +969,17 @@ func (h *WAFHandler) regenerateAllHostConfigs(ctx context.Context) error {
 		// Merge global + host exclusions for config generation
 		mergedExclusions := h.mergeExclusions(globalExclusions, hostExclusions)
 
+		// Get Priority Allow IPs for WAF bypass
+		var allowedIPs []string
+		if h.geoRepo != nil {
+			geo, err := h.geoRepo.GetByProxyHostID(ctx, host.ID)
+			if err == nil && geo != nil {
+				allowedIPs = geo.AllowedIPs
+			}
+		}
+
 		// Generate WAF config
-		if err := h.nginxManager.GenerateHostWAFConfig(ctx, &host, mergedExclusions); err != nil {
+		if err := h.nginxManager.GenerateHostWAFConfig(ctx, &host, mergedExclusions, allowedIPs); err != nil {
 			continue
 		}
 	}

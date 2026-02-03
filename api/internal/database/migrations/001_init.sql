@@ -84,8 +84,6 @@ DECLARE
     i INT;
     is_partitioned BOOLEAN;
     is_hypertable BOOLEAN := FALSE;
-    existing_bound_text TEXT;
-    use_local_tz BOOLEAN := FALSE;
 BEGIN
     -- Check if TimescaleDB hypertable (skip if so - chunks are auto-managed)
     BEGIN
@@ -114,38 +112,16 @@ BEGIN
         RETURN;
     END IF;
 
-    -- Detect existing partition timezone format by checking the first non-default partition
-    BEGIN
-        SELECT pg_get_expr(c.relpartbound, c.oid) INTO existing_bound_text
-        FROM pg_class c
-        JOIN pg_inherits i ON c.oid = i.inhrelid
-        JOIN pg_class p ON i.inhparent = p.oid
-        WHERE p.relname = table_name
-          AND c.relname LIKE partition_prefix || '%'
-          AND c.relname NOT LIKE '%_default'
-        LIMIT 1;
-
-        -- Check if existing partitions use non-UTC timezone (e.g., +09)
-        IF existing_bound_text IS NOT NULL AND existing_bound_text NOT LIKE '%+00%' AND existing_bound_text ~ '\+[0-9]{2}\)' THEN
-            use_local_tz := TRUE;
-            RAISE NOTICE 'Detected local timezone in existing partitions, using local timezone for new partitions';
-        END IF;
-    EXCEPTION WHEN OTHERS THEN
-        use_local_tz := FALSE;
-    END;
-
+    -- Always use UTC for partition boundaries to ensure consistency
+    -- This prevents timezone detection bugs where pg_get_expr() displays
+    -- UTC timestamps in the session's timezone (e.g., +00 displayed as +09 in KST)
     FOR i IN 0..months_ahead LOOP
-        IF use_local_tz THEN
-            -- Use local timezone to match existing partition ranges
-            start_ts := DATE_TRUNC('month', CURRENT_TIMESTAMP + (i || ' months')::INTERVAL);
-            end_ts := start_ts + INTERVAL '1 month';
-            partition_name := partition_prefix || TO_CHAR(start_ts, 'YYYY_MM');
-        ELSE
-            -- Use UTC timezone (default for new installations)
-            start_ts := DATE_TRUNC('month', (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + (i || ' months')::INTERVAL) AT TIME ZONE 'UTC';
-            end_ts := start_ts + INTERVAL '1 month';
-            partition_name := partition_prefix || TO_CHAR(start_ts AT TIME ZONE 'UTC', 'YYYY_MM');
-        END IF;
+        -- Calculate first day of month at 00:00:00 UTC
+        start_ts := DATE_TRUNC('month',
+            (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + (i || ' months')::INTERVAL
+        ) AT TIME ZONE 'UTC';
+        end_ts := start_ts + INTERVAL '1 month';
+        partition_name := partition_prefix || TO_CHAR(start_ts AT TIME ZONE 'UTC', 'YYYY_MM');
 
         -- Check if partition already exists
         IF NOT EXISTS (
