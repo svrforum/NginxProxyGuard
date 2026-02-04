@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -324,8 +325,8 @@ func (h *SecurityHandler) BanIP(c echo.Context) error {
 		if h.proxyHostService != nil {
 			if req.ProxyHostID != nil {
 				// Regenerate specific host config without immediate reload
-				if _, err := h.proxyHostService.UpdateWithoutReload(ctx, *req.ProxyHostID, &model.UpdateProxyHostRequest{}); err != nil {
-					c.Logger().Errorf("Failed to update config for host: %v", err)
+				if _, err := h.proxyHostService.UpdateWithoutReload(ctx, *req.ProxyHostID, nil); err != nil {
+					log.Printf("[BanIP] Failed to regenerate config for host: %v", err)
 					return
 				}
 			} else {
@@ -334,8 +335,8 @@ func (h *SecurityHandler) BanIP(c echo.Context) error {
 				if err == nil && hosts != nil {
 					for _, host := range hosts {
 						if host.Enabled {
-							if _, err := h.proxyHostService.UpdateWithoutReload(ctx, host.ID, &model.UpdateProxyHostRequest{}); err != nil {
-								c.Logger().Errorf("Failed to update config for host %s: %v", host.ID, err)
+							if _, err := h.proxyHostService.UpdateWithoutReload(ctx, host.ID, nil); err != nil {
+								log.Printf("[BanIP] Failed to regenerate config for host %s: %v", host.ID, err)
 							}
 						}
 					}
@@ -415,7 +416,7 @@ func (h *SecurityHandler) UnbanIP(c echo.Context) error {
 				for _, host := range hosts {
 					if host.Enabled {
 						if _, err := h.proxyHostService.UpdateWithoutReload(ctx, host.ID, nil); err != nil {
-							c.Logger().Errorf("Failed to regenerate config for host %s: %v", host.ID, err)
+							log.Printf("[UnbanIP] Failed to regenerate config for host %s: %v", host.ID, err)
 						}
 					}
 				}
@@ -498,7 +499,7 @@ func (h *SecurityHandler) UnbanIPByAddress(c echo.Context) error {
 				for _, host := range hosts {
 					if host.Enabled {
 						if _, err := h.proxyHostService.UpdateWithoutReload(ctx, host.ID, nil); err != nil {
-							c.Logger().Errorf("Failed to regenerate config for host %s: %v", host.ID, err)
+							log.Printf("[UnbanIPByAddress] Failed to regenerate config for host %s: %v", host.ID, err)
 						}
 					}
 				}
