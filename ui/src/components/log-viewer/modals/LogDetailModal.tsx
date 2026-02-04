@@ -347,16 +347,16 @@ export function LogDetailModal({ log, onClose, onRuleDisabled }: LogDetailModalP
             <>
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div>
-                  <label className="text-xs font-medium text-slate-500 uppercase">{t('detail.method')}</label>
+                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">{t('detail.method')}</label>
                   <p className="text-sm">{log.request_method && <MethodBadge method={log.request_method} />}</p>
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-slate-500 uppercase">{t('detail.status')}</label>
+                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">{t('detail.status')}</label>
                   <p className="text-sm">{log.status_code && <StatusCodeBadge code={log.status_code} />}</p>
                 </div>
               </div>
               <div className="mb-4">
-                <label className="text-xs font-medium text-slate-500 uppercase">{t('detail.uri')}</label>
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">{t('detail.uri')}</label>
                 <div className="bg-slate-50 dark:bg-slate-800 p-2 rounded">
                   {log.request_uri ? (
                     <button
@@ -442,29 +442,29 @@ export function LogDetailModal({ log, onClose, onRuleDisabled }: LogDetailModalP
                 </div>
               )}
               <div className="grid grid-cols-3 gap-4 mb-4">
-                <div>
-                  <label className="text-xs font-medium text-slate-500 uppercase">{t('detail.protocol')}</label>
-                  <p className="text-sm text-slate-900">{log.request_protocol || '-'}</p>
+                <div className="min-w-0">
+                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">{t('detail.protocol')}</label>
+                  <p className="text-sm text-slate-900 dark:text-slate-200 truncate" title={log.request_protocol || '-'}>{log.request_protocol || '-'}</p>
                 </div>
-                <div>
-                  <label className="text-xs font-medium text-slate-500 uppercase">{t('detail.responseSize')}</label>
-                  <p className="text-sm text-slate-900">{log.body_bytes_sent ? formatBytes(log.body_bytes_sent) : '-'}</p>
+                <div className="min-w-0">
+                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">{t('detail.responseSize')}</label>
+                  <p className="text-sm text-slate-900 dark:text-slate-200">{log.body_bytes_sent ? formatBytes(log.body_bytes_sent) : '-'}</p>
                 </div>
-                <div>
-                  <label className="text-xs font-medium text-slate-500 uppercase">{t('detail.requestTime')}</label>
-                  <p className="text-sm text-slate-900">{log.request_time ? `${log.request_time}s` : '-'}</p>
+                <div className="min-w-0">
+                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">{t('detail.requestTime')}</label>
+                  <p className="text-sm text-slate-900 dark:text-slate-200">{log.request_time ? `${log.request_time}s` : '-'}</p>
                 </div>
               </div>
               {log.http_user_agent && (
                 <div className="mb-4">
-                  <label className="text-xs font-medium text-slate-500 uppercase">{t('detail.userAgent')}</label>
-                  <p className="text-sm text-slate-600 break-all">{log.http_user_agent}</p>
+                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">{t('detail.userAgent')}</label>
+                  <p className="text-sm text-slate-600 dark:text-slate-300 break-all">{log.http_user_agent}</p>
                 </div>
               )}
               {log.http_referer && (
                 <div className="mb-4">
-                  <label className="text-xs font-medium text-slate-500 uppercase">{t('detail.referer')}</label>
-                  <p className="text-sm text-slate-600 break-all">{log.http_referer}</p>
+                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">{t('detail.referer')}</label>
+                  <p className="text-sm text-slate-600 dark:text-slate-300 break-all">{log.http_referer}</p>
                 </div>
               )}
             </>
@@ -643,9 +643,9 @@ export function LogDetailModal({ log, onClose, onRuleDisabled }: LogDetailModalP
           )}
 
           {log.raw_log && (
-            <div className="mt-4 pt-4 border-t border-slate-200">
-              <label className="text-xs font-medium text-slate-500 uppercase">{t('detail.rawLog')}</label>
-              <pre className="text-xs bg-slate-800 text-slate-200 p-3 rounded mt-1 overflow-x-auto">
+            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+              <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">{t('detail.rawLog')}</label>
+              <pre className="text-xs bg-slate-800 text-slate-200 p-3 rounded mt-1 overflow-x-auto overflow-y-hidden whitespace-pre-wrap break-all max-h-60">
                 {log.raw_log}
               </pre>
             </div>
