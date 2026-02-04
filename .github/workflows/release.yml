@@ -61,20 +61,26 @@ jobs:
           check_changes "nginx" "nginx"
 
   # ============================================================
-  # Step 2: Build Images (Parallel)
+  # Step 2: Build Images (Parallel, Native Multi-Arch)
   # ============================================================
   build-api:
-    name: 🔨 Build API
+    name: 🔨 Build API (${{ matrix.arch }})
     needs: detect
-    runs-on: ubuntu-latest
     if: needs.detect.outputs.api_changed == 'true'
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+            platform: linux/amd64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -89,24 +95,31 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ./api
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           push: true
-          tags: ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}-test
-          cache-from: type=gha,scope=api
-          cache-to: type=gha,mode=max,scope=api
+          tags: ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}-test-${{ matrix.arch }}
+          cache-from: type=gha,scope=api-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=api-${{ matrix.arch }}
+          provenance: false
 
   build-ui:
-    name: 🔨 Build UI
+    name: 🔨 Build UI (${{ matrix.arch }})
     needs: detect
-    runs-on: ubuntu-latest
     if: needs.detect.outputs.ui_changed == 'true'
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+            platform: linux/amd64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -121,24 +134,31 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ./ui
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           push: true
-          tags: ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}-test
-          cache-from: type=gha,scope=ui
-          cache-to: type=gha,mode=max,scope=ui
+          tags: ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}-test-${{ matrix.arch }}
+          cache-from: type=gha,scope=ui-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=ui-${{ matrix.arch }}
+          provenance: false
 
   build-nginx:
-    name: 🔨 Build Nginx
+    name: 🔨 Build Nginx (${{ matrix.arch }})
     needs: detect
-    runs-on: ubuntu-latest
     if: needs.detect.outputs.nginx_changed == 'true'
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+            platform: linux/amd64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -153,18 +173,59 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ./nginx
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           push: true
-          tags: ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}-test
-          cache-from: type=gha,scope=nginx
-          cache-to: type=gha,mode=max,scope=nginx
+          tags: ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}-test-${{ matrix.arch }}
+          cache-from: type=gha,scope=nginx-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=nginx-${{ matrix.arch }}
+          provenance: false
 
   # ============================================================
-  # Step 3: E2E Tests - Bridge Mode
+  # Step 3: Create Test Manifests
+  # ============================================================
+  create-test-manifests:
+    name: 📦 Create Test Manifests
+    needs: [detect, build-api, build-ui, build-nginx]
+    if: always() && needs.detect.result == 'success'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Create API manifest
+        if: needs.detect.outputs.api_changed == 'true' && needs.build-api.result == 'success'
+        run: |
+          docker manifest create ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}-test \
+            ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}-test-amd64 \
+            ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}-test-arm64
+          docker manifest push ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}-test
+
+      - name: Create UI manifest
+        if: needs.detect.outputs.ui_changed == 'true' && needs.build-ui.result == 'success'
+        run: |
+          docker manifest create ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}-test \
+            ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}-test-amd64 \
+            ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}-test-arm64
+          docker manifest push ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}-test
+
+      - name: Create Nginx manifest
+        if: needs.detect.outputs.nginx_changed == 'true' && needs.build-nginx.result == 'success'
+        run: |
+          docker manifest create ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}-test \
+            ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}-test-amd64 \
+            ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}-test-arm64
+          docker manifest push ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}-test
+
+  # ============================================================
+  # Step 4: E2E Tests - Bridge Mode
   # ============================================================
   test-bridge:
     name: 🧪 Test (Bridge Mode)
-    needs: [detect, build-api, build-ui, build-nginx]
+    needs: [detect, build-api, build-ui, build-nginx, create-test-manifests]
     if: always() && needs.detect.result == 'success'
     runs-on: ubuntu-latest
 
@@ -243,11 +304,11 @@ jobs:
         run: docker compose -f docker-compose.release-test.yml down -v
 
   # ============================================================
-  # Step 4: E2E Tests - Host Mode
+  # Step 5: E2E Tests - Host Mode
   # ============================================================
   test-host:
     name: 🧪 Test (Host Mode)
-    needs: [detect, build-api, build-ui, build-nginx]
+    needs: [detect, build-api, build-ui, build-nginx, create-test-manifests]
     if: always() && needs.detect.result == 'success'
     runs-on: ubuntu-latest
 
@@ -334,23 +395,155 @@ jobs:
         run: docker compose -f docker-compose.release-test-host.yml down -v
 
   # ============================================================
-  # Step 5: Push Final Images
+  # Step 6: Push Final Images (Native Multi-Arch)
   # ============================================================
-  push:
-    name: 🚀 Push Images
+  push-api:
+    name: 🚀 Push API (${{ matrix.arch }})
     needs: [detect, test-bridge, test-host]
-    if: needs.test-bridge.result == 'success' && needs.test-host.result == 'success'
-    runs-on: ubuntu-latest
+    if: needs.test-bridge.result == 'success' && needs.test-host.result == 'success' && needs.detect.outputs.api_changed == 'true'
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+            platform: linux/amd64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Calculate hash
+        id: hash
+        run: |
+          echo "hash=$(find ./api -type f -exec sha256sum {} \; | sort | sha256sum | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./api
+          platforms: ${{ matrix.platform }}
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}-${{ matrix.arch }}
+          labels: |
+            org.opencontainers.image.revision=${{ steps.hash.outputs.hash }}
+          cache-from: type=gha,scope=api-${{ matrix.arch }}
+          provenance: false
+
+  push-ui:
+    name: 🚀 Push UI (${{ matrix.arch }})
+    needs: [detect, test-bridge, test-host]
+    if: needs.test-bridge.result == 'success' && needs.test-host.result == 'success' && needs.detect.outputs.ui_changed == 'true'
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+            platform: linux/amd64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Calculate hash
+        id: hash
+        run: |
+          echo "hash=$(find ./ui -type f -exec sha256sum {} \; | sort | sha256sum | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./ui
+          platforms: ${{ matrix.platform }}
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}-${{ matrix.arch }}
+          labels: |
+            org.opencontainers.image.revision=${{ steps.hash.outputs.hash }}
+          cache-from: type=gha,scope=ui-${{ matrix.arch }}
+          provenance: false
+
+  push-nginx:
+    name: 🚀 Push Nginx (${{ matrix.arch }})
+    needs: [detect, test-bridge, test-host]
+    if: needs.test-bridge.result == 'success' && needs.test-host.result == 'success' && needs.detect.outputs.nginx_changed == 'true'
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+            platform: linux/amd64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Calculate hash
+        id: hash
+        run: |
+          echo "hash=$(find ./nginx -type f -exec sha256sum {} \; | sort | sha256sum | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./nginx
+          platforms: ${{ matrix.platform }}
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}-${{ matrix.arch }}
+          labels: |
+            org.opencontainers.image.revision=${{ steps.hash.outputs.hash }}
+          cache-from: type=gha,scope=nginx-${{ matrix.arch }}
+          provenance: false
+
+  # ============================================================
+  # Step 7: Create Final Manifests
+  # ============================================================
+  create-manifests:
+    name: 📦 Create Final Manifests
+    needs: [detect, push-api, push-ui, push-nginx]
+    if: always() && (needs.push-api.result == 'success' || needs.push-api.result == 'skipped') && (needs.push-ui.result == 'success' || needs.push-ui.result == 'skipped') && (needs.push-nginx.result == 'success' || needs.push-nginx.result == 'skipped')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -365,67 +558,86 @@ jobs:
           echo "ui_hash=$(find ./ui -type f -exec sha256sum {} \; | sort | sha256sum | cut -d' ' -f1)" >> $GITHUB_OUTPUT
           echo "nginx_hash=$(find ./nginx -type f -exec sha256sum {} \; | sort | sha256sum | cut -d' ' -f1)" >> $GITHUB_OUTPUT
 
-      - name: Push API
-        if: needs.detect.outputs.api_changed == 'true'
-        uses: docker/build-push-action@v6
-        with:
-          context: ./api
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}
-            ${{ env.IMAGE_PREFIX }}-api:latest
-          labels: |
-            org.opencontainers.image.revision=${{ steps.hashes.outputs.api_hash }}
-          annotations: |
-            org.opencontainers.image.revision=${{ steps.hashes.outputs.api_hash }}
-          cache-from: type=gha,scope=api
-
-      - name: Push UI
-        if: needs.detect.outputs.ui_changed == 'true'
-        uses: docker/build-push-action@v6
-        with:
-          context: ./ui
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}
-            ${{ env.IMAGE_PREFIX }}-ui:latest
-          labels: |
-            org.opencontainers.image.revision=${{ steps.hashes.outputs.ui_hash }}
-          annotations: |
-            org.opencontainers.image.revision=${{ steps.hashes.outputs.ui_hash }}
-          cache-from: type=gha,scope=ui
-
-      - name: Push Nginx
-        if: needs.detect.outputs.nginx_changed == 'true'
-        uses: docker/build-push-action@v6
-        with:
-          context: ./nginx
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}
-            ${{ env.IMAGE_PREFIX }}-nginx:latest
-          labels: |
-            org.opencontainers.image.revision=${{ steps.hashes.outputs.nginx_hash }}
-          annotations: |
-            org.opencontainers.image.revision=${{ steps.hashes.outputs.nginx_hash }}
-          cache-from: type=gha,scope=nginx
-
-      - name: Cleanup test tags
+      - name: Create API manifests
+        if: needs.detect.outputs.api_changed == 'true' && needs.push-api.result == 'success'
         run: |
-          # Note: Docker Hub doesn't have a simple API to delete tags
-          # Test tags will be overwritten on next release
+          # Version tag
+          docker manifest create ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }} \
+            ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}-amd64 \
+            ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}-arm64
+          docker manifest annotate ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }} \
+            ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}-amd64 --os linux --arch amd64
+          docker manifest annotate ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }} \
+            ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}-arm64 --os linux --arch arm64
+          docker manifest push ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}
+
+          # Latest tag
+          docker manifest create ${{ env.IMAGE_PREFIX }}-api:latest \
+            ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}-amd64 \
+            ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}-arm64
+          docker manifest annotate ${{ env.IMAGE_PREFIX }}-api:latest \
+            ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}-amd64 --os linux --arch amd64
+          docker manifest annotate ${{ env.IMAGE_PREFIX }}-api:latest \
+            ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}-arm64 --os linux --arch arm64
+          docker manifest push ${{ env.IMAGE_PREFIX }}-api:latest
+
+      - name: Create UI manifests
+        if: needs.detect.outputs.ui_changed == 'true' && needs.push-ui.result == 'success'
+        run: |
+          # Version tag
+          docker manifest create ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }} \
+            ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}-amd64 \
+            ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}-arm64
+          docker manifest annotate ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }} \
+            ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}-amd64 --os linux --arch amd64
+          docker manifest annotate ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }} \
+            ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}-arm64 --os linux --arch arm64
+          docker manifest push ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}
+
+          # Latest tag
+          docker manifest create ${{ env.IMAGE_PREFIX }}-ui:latest \
+            ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}-amd64 \
+            ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}-arm64
+          docker manifest annotate ${{ env.IMAGE_PREFIX }}-ui:latest \
+            ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}-amd64 --os linux --arch amd64
+          docker manifest annotate ${{ env.IMAGE_PREFIX }}-ui:latest \
+            ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}-arm64 --os linux --arch arm64
+          docker manifest push ${{ env.IMAGE_PREFIX }}-ui:latest
+
+      - name: Create Nginx manifests
+        if: needs.detect.outputs.nginx_changed == 'true' && needs.push-nginx.result == 'success'
+        run: |
+          # Version tag
+          docker manifest create ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }} \
+            ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}-amd64 \
+            ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}-arm64
+          docker manifest annotate ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }} \
+            ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}-amd64 --os linux --arch amd64
+          docker manifest annotate ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }} \
+            ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}-arm64 --os linux --arch arm64
+          docker manifest push ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}
+
+          # Latest tag
+          docker manifest create ${{ env.IMAGE_PREFIX }}-nginx:latest \
+            ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}-amd64 \
+            ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}-arm64
+          docker manifest annotate ${{ env.IMAGE_PREFIX }}-nginx:latest \
+            ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}-amd64 --os linux --arch amd64
+          docker manifest annotate ${{ env.IMAGE_PREFIX }}-nginx:latest \
+            ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}-arm64 --os linux --arch arm64
+          docker manifest push ${{ env.IMAGE_PREFIX }}-nginx:latest
+
+      - name: Summary
+        run: |
           echo "✅ Final images pushed successfully"
           echo "📝 Test tags (${{ needs.detect.outputs.version }}-test) will be overwritten on next release"
 
   # ============================================================
-  # Step 6: Create GitHub Release
+  # Step 8: Create GitHub Release
   # ============================================================
   release:
     name: 📦 Create Release
-    needs: [detect, push]
+    needs: [detect, create-manifests]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -508,6 +720,10 @@ jobs:
             docker pull svrforum/nginxproxyguard-ui:${{ needs.detect.outputs.version }}
             docker pull svrforum/nginxproxyguard-nginx:${{ needs.detect.outputs.version }}
             ```
+
+            ## Supported Architectures
+            - `linux/amd64`
+            - `linux/arm64`
 
             ## Build Summary
             | Component | Status |
