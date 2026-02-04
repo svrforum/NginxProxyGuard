@@ -683,8 +683,8 @@ server {
         {{if .GlobalSettings}}
         # Proxy settings (Host-level overrides Global)
         {{if gt .Host.ProxyConnectTimeout 0}}proxy_connect_timeout {{.Host.ProxyConnectTimeout}}s;{{else if gt .GlobalSettings.ProxyConnectTimeout 0}}proxy_connect_timeout {{.GlobalSettings.ProxyConnectTimeout}}s;{{end}}
-        {{if gt .Host.ProxySendTimeout 0}}proxy_send_timeout {{.Host.ProxySendTimeout}}s;{{else if gt .GlobalSettings.ProxySendTimeout 0}}proxy_send_timeout {{.GlobalSettings.ProxySendTimeout}}s;{{end}}
-        {{if gt .Host.ProxyReadTimeout 0}}proxy_read_timeout {{.Host.ProxyReadTimeout}}s;{{else if gt .GlobalSettings.ProxyReadTimeout 0}}proxy_read_timeout {{.GlobalSettings.ProxyReadTimeout}}s;{{end}}
+        {{if .Host.AllowWebsocketUpgrade}}proxy_send_timeout 86400s;{{else if gt .Host.ProxySendTimeout 0}}proxy_send_timeout {{.Host.ProxySendTimeout}}s;{{else if gt .GlobalSettings.ProxySendTimeout 0}}proxy_send_timeout {{.GlobalSettings.ProxySendTimeout}}s;{{end}}
+        {{if .Host.AllowWebsocketUpgrade}}proxy_read_timeout 86400s;{{else if gt .Host.ProxyReadTimeout 0}}proxy_read_timeout {{.Host.ProxyReadTimeout}}s;{{else if gt .GlobalSettings.ProxyReadTimeout 0}}proxy_read_timeout {{.GlobalSettings.ProxyReadTimeout}}s;{{end}}
         {{if gt .GlobalSettings.ClientBodyTimeout 0}}client_body_timeout {{.GlobalSettings.ClientBodyTimeout}}s;{{end}}
         {{if gt .GlobalSettings.SendTimeout 0}}send_timeout {{.GlobalSettings.SendTimeout}}s;{{end}}
         {{if .Host.ClientMaxBodySize}}client_max_body_size {{.Host.ClientMaxBodySize}};{{else if .GlobalSettings.ClientMaxBodySize}}client_max_body_size {{.GlobalSettings.ClientMaxBodySize}};{{end}}
@@ -703,9 +703,6 @@ server {
         # WebSocket support (proxy_http_version already set in proxy_params.conf)
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
-        # Long timeouts for persistent WebSocket connections (24h)
-        proxy_read_timeout 86400s;
-        proxy_send_timeout 86400s;
         {{end}}
         {{if .Host.CacheEnabled}}
         # Caching
@@ -774,8 +771,8 @@ server {
         {{if .GlobalSettings}}
         # Proxy settings (Host-level overrides Global)
         {{if gt .Host.ProxyConnectTimeout 0}}proxy_connect_timeout {{.Host.ProxyConnectTimeout}}s;{{else if gt .GlobalSettings.ProxyConnectTimeout 0}}proxy_connect_timeout {{.GlobalSettings.ProxyConnectTimeout}}s;{{end}}
-        {{if gt .Host.ProxySendTimeout 0}}proxy_send_timeout {{.Host.ProxySendTimeout}}s;{{else if gt .GlobalSettings.ProxySendTimeout 0}}proxy_send_timeout {{.GlobalSettings.ProxySendTimeout}}s;{{end}}
-        {{if gt .Host.ProxyReadTimeout 0}}proxy_read_timeout {{.Host.ProxyReadTimeout}}s;{{else if gt .GlobalSettings.ProxyReadTimeout 0}}proxy_read_timeout {{.GlobalSettings.ProxyReadTimeout}}s;{{end}}
+        {{if .Host.AllowWebsocketUpgrade}}proxy_send_timeout 86400s;{{else if gt .Host.ProxySendTimeout 0}}proxy_send_timeout {{.Host.ProxySendTimeout}}s;{{else if gt .GlobalSettings.ProxySendTimeout 0}}proxy_send_timeout {{.GlobalSettings.ProxySendTimeout}}s;{{end}}
+        {{if .Host.AllowWebsocketUpgrade}}proxy_read_timeout 86400s;{{else if gt .Host.ProxyReadTimeout 0}}proxy_read_timeout {{.Host.ProxyReadTimeout}}s;{{else if gt .GlobalSettings.ProxyReadTimeout 0}}proxy_read_timeout {{.GlobalSettings.ProxyReadTimeout}}s;{{end}}
         {{if gt .GlobalSettings.ClientBodyTimeout 0}}client_body_timeout {{.GlobalSettings.ClientBodyTimeout}}s;{{end}}
         {{if gt .GlobalSettings.SendTimeout 0}}send_timeout {{.GlobalSettings.SendTimeout}}s;{{end}}
         {{if .Host.ClientMaxBodySize}}client_max_body_size {{.Host.ClientMaxBodySize}};{{else if .GlobalSettings.ClientMaxBodySize}}client_max_body_size {{.GlobalSettings.ClientMaxBodySize}};{{end}}
@@ -794,9 +791,6 @@ server {
         # WebSocket support (proxy_http_version already set in proxy_params.conf)
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
-        # Long timeouts for persistent WebSocket connections (24h)
-        proxy_read_timeout 86400s;
-        proxy_send_timeout 86400s;
         {{end}}
         {{if .Host.CacheEnabled}}
         # Caching
@@ -1485,8 +1479,8 @@ server {
         {{if .GlobalSettings}}
         # Proxy settings (Host-level overrides Global)
         {{if gt .Host.ProxyConnectTimeout 0}}proxy_connect_timeout {{.Host.ProxyConnectTimeout}}s;{{else if gt .GlobalSettings.ProxyConnectTimeout 0}}proxy_connect_timeout {{.GlobalSettings.ProxyConnectTimeout}}s;{{end}}
-        {{if gt .Host.ProxySendTimeout 0}}proxy_send_timeout {{.Host.ProxySendTimeout}}s;{{else if gt .GlobalSettings.ProxySendTimeout 0}}proxy_send_timeout {{.GlobalSettings.ProxySendTimeout}}s;{{end}}
-        {{if gt .Host.ProxyReadTimeout 0}}proxy_read_timeout {{.Host.ProxyReadTimeout}}s;{{else if gt .GlobalSettings.ProxyReadTimeout 0}}proxy_read_timeout {{.GlobalSettings.ProxyReadTimeout}}s;{{end}}
+        {{if .Host.AllowWebsocketUpgrade}}proxy_send_timeout 86400s;{{else if gt .Host.ProxySendTimeout 0}}proxy_send_timeout {{.Host.ProxySendTimeout}}s;{{else if gt .GlobalSettings.ProxySendTimeout 0}}proxy_send_timeout {{.GlobalSettings.ProxySendTimeout}}s;{{end}}
+        {{if .Host.AllowWebsocketUpgrade}}proxy_read_timeout 86400s;{{else if gt .Host.ProxyReadTimeout 0}}proxy_read_timeout {{.Host.ProxyReadTimeout}}s;{{else if gt .GlobalSettings.ProxyReadTimeout 0}}proxy_read_timeout {{.GlobalSettings.ProxyReadTimeout}}s;{{end}}
         {{if gt .GlobalSettings.ClientBodyTimeout 0}}client_body_timeout {{.GlobalSettings.ClientBodyTimeout}}s;{{end}}
         {{if gt .GlobalSettings.SendTimeout 0}}send_timeout {{.GlobalSettings.SendTimeout}}s;{{end}}
         {{if .Host.ClientMaxBodySize}}client_max_body_size {{.Host.ClientMaxBodySize}};{{else if .GlobalSettings.ClientMaxBodySize}}client_max_body_size {{.GlobalSettings.ClientMaxBodySize}};{{end}}
@@ -1505,9 +1499,6 @@ server {
         # WebSocket support (proxy_http_version already set in proxy_params.conf)
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
-        # Long timeouts for persistent WebSocket connections (24h)
-        proxy_read_timeout 86400s;
-        proxy_send_timeout 86400s;
         {{end}}
         {{if .Host.SSLHTTP3}}
         # HTTP/3 Alt-Svc header (1 hour cache for faster fallback on connection issues)
