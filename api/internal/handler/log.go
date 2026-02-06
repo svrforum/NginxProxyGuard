@@ -15,12 +15,13 @@ import (
 const maxFilterArraySize = 100
 
 type LogHandler struct {
-	logRepo    *repository.LogRepository
-	redisCache *cache.RedisClient
+	logRepo       *repository.LogRepository
+	redisCache    *cache.RedisClient
+	rateLimitRepo *repository.RateLimitRepository
 }
 
-func NewLogHandler(logRepo *repository.LogRepository, redisCache *cache.RedisClient) *LogHandler {
-	return &LogHandler{logRepo: logRepo, redisCache: redisCache}
+func NewLogHandler(logRepo *repository.LogRepository, redisCache *cache.RedisClient, rateLimitRepo *repository.RateLimitRepository) *LogHandler {
+	return &LogHandler{logRepo: logRepo, redisCache: redisCache, rateLimitRepo: rateLimitRepo}
 }
 
 // limitArray limits the size of a string slice to prevent DoS
@@ -180,12 +181,27 @@ func (h *LogHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Enrich logs with ban status (Redis O(1) lookup per IP)
-	if h.redisCache != nil {
-		for i := range logs {
-			if logs[i].ClientIP != nil {
-				isBanned, _ := h.redisCache.IsBannedIP(ctx, logs[i].ClientIP.String())
-				logs[i].IsBanned = isBanned
+	// Enrich logs with ban status (DB batch lookup for accuracy)
+	if h.rateLimitRepo != nil && len(logs) > 0 {
+		uniqueIPs := make(map[string]bool)
+		var ipList []string
+		for _, l := range logs {
+			if l.ClientIP != nil {
+				ip := l.ClientIP.String()
+				if !uniqueIPs[ip] {
+					uniqueIPs[ip] = true
+					ipList = append(ipList, ip)
+				}
+			}
+		}
+		if len(ipList) > 0 {
+			bannedSet, err := h.rateLimitRepo.GetActiveBannedIPSet(ctx, ipList)
+			if err == nil {
+				for i := range logs {
+					if logs[i].ClientIP != nil {
+						logs[i].IsBanned = bannedSet[logs[i].ClientIP.String()]
+					}
+				}
 			}
 		}
 	}

@@ -60,11 +60,14 @@ interface LogListResponse {
 
 const API_BASE = '/api/v1'
 
-async function fetchBannedIPs(page = 1, perPage = 50, proxyHostId?: string): Promise<BannedIPListResponse> {
+async function fetchBannedIPs(page = 1, perPage = 50, proxyHostId?: string, filter?: string): Promise<BannedIPListResponse> {
   const params = new URLSearchParams({
     page: page.toString(),
     per_page: perPage.toString(),
   })
+  if (filter) {
+    params.set('filter', filter)
+  }
   if (proxyHostId) {
     params.set('proxy_host_id', proxyHostId)
   }
@@ -223,40 +226,28 @@ export function BannedIPList() {
   }, [proxyHosts])
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['banned-ips', page, hostFilter],
-    queryFn: () => fetchBannedIPs(page, 50, hostFilter === 'all' ? undefined : hostFilter === 'global' ? '' : hostFilter),
+    queryKey: ['banned-ips', page, activeTab, hostFilter],
+    queryFn: () => {
+      const filter = activeTab === 'global' ? 'global' : activeTab === 'hosts' ? 'host' : undefined
+      const proxyHostId = activeTab === 'hosts' && hostFilter !== 'all' ? hostFilter : undefined
+      return fetchBannedIPs(page, 50, proxyHostId, filter)
+    },
     refetchInterval: 30000,
   })
 
-  // Client-side filtering based on active tab and type filter
+  // Client-side filtering for type filter only (global/hosts filtering is server-side)
   const filteredBannedIPs = useMemo(() => {
     if (!data?.data) return []
 
-    let filtered = data.data
+    if (typeFilter === 'all') return data.data
 
-    // Filter by tab (global vs hosts)
-    if (activeTab === 'global') {
-      filtered = filtered.filter(ban => !ban.proxy_host_id)
-    } else if (activeTab === 'hosts') {
-      filtered = filtered.filter(ban => ban.proxy_host_id)
-      // Apply host filter for hosts tab
-      if (hostFilter !== 'all') {
-        filtered = filtered.filter(ban => ban.proxy_host_id === hostFilter)
-      }
-    }
-
-    // Apply type filter
-    if (typeFilter !== 'all') {
-      filtered = filtered.filter(ban => {
-        const category = getReasonCategory(ban.reason)
-        if (typeFilter === 'auto') return ban.is_auto_banned
-        if (typeFilter === 'manual') return !ban.is_auto_banned
-        return category === typeFilter
-      })
-    }
-
-    return filtered
-  }, [data?.data, activeTab, hostFilter, typeFilter])
+    return data.data.filter(ban => {
+      const category = getReasonCategory(ban.reason)
+      if (typeFilter === 'auto') return ban.is_auto_banned
+      if (typeFilter === 'manual') return !ban.is_auto_banned
+      return category === typeFilter
+    })
+  }, [data?.data, typeFilter])
 
   const unbanMutation = useMutation({
     mutationFn: unbanIP,
@@ -339,7 +330,7 @@ export function BannedIPList() {
       <div className="border-b border-slate-200 dark:border-slate-700">
         <nav className="flex gap-4" aria-label="Tabs">
           <button
-            onClick={() => setActiveTab('global')}
+            onClick={() => { setActiveTab('global'); setPage(1); }}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
               activeTab === 'global'
                 ? 'border-primary-600 text-primary-600 dark:text-primary-400'
@@ -347,12 +338,14 @@ export function BannedIPList() {
             }`}
           >
             {t('bannedIp.tabs.global', { defaultValue: '전역 차단' })}
-            <span className="ml-2 px-2 py-0.5 text-xs bg-slate-100 dark:bg-slate-700 rounded-full">
-              {stats.byHost['global'] || 0}
-            </span>
+            {activeTab === 'global' && (
+              <span className="ml-2 px-2 py-0.5 text-xs bg-slate-100 dark:bg-slate-700 rounded-full">
+                {total}
+              </span>
+            )}
           </button>
           <button
-            onClick={() => setActiveTab('hosts')}
+            onClick={() => { setActiveTab('hosts'); setPage(1); }}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
               activeTab === 'hosts'
                 ? 'border-primary-600 text-primary-600 dark:text-primary-400'
@@ -360,12 +353,14 @@ export function BannedIPList() {
             }`}
           >
             {t('bannedIp.tabs.perHost', { defaultValue: '호스트별 차단' })}
-            <span className="ml-2 px-2 py-0.5 text-xs bg-slate-100 dark:bg-slate-700 rounded-full">
-              {total - (stats.byHost['global'] || 0)}
-            </span>
+            {activeTab === 'hosts' && (
+              <span className="ml-2 px-2 py-0.5 text-xs bg-slate-100 dark:bg-slate-700 rounded-full">
+                {total}
+              </span>
+            )}
           </button>
           <button
-            onClick={() => setActiveTab('history')}
+            onClick={() => { setActiveTab('history'); setPage(1); }}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
               activeTab === 'history'
                 ? 'border-primary-600 text-primary-600 dark:text-primary-400'
@@ -383,33 +378,21 @@ export function BannedIPList() {
         <>
 
       {/* Statistics Cards - only show for global/hosts tabs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
-          <div className="text-2xl font-bold text-slate-900 dark:text-white">{filteredBannedIPs.length}</div>
+          <div className="text-2xl font-bold text-slate-900 dark:text-white">{total}</div>
           <div className="text-sm text-slate-500 dark:text-slate-400">
-            {activeTab === 'global' ? t('bannedIp.stats.global', { defaultValue: '전역 차단' }) : t('bannedIp.stats.total', { defaultValue: '전체 차단' })}
+            {activeTab === 'global' ? t('bannedIp.stats.global', { defaultValue: '전역 차단' }) : t('bannedIp.stats.total', { defaultValue: '호스트별 차단' })}
           </div>
         </div>
         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
-          <div className="text-2xl font-bold text-red-600 dark:text-red-400">{filteredBannedIPs.filter(b => b.is_permanent).length}</div>
+          <div className="text-2xl font-bold text-red-600 dark:text-red-400">{stats.permanent}</div>
           <div className="text-sm text-slate-500 dark:text-slate-400">{t('bannedIp.stats.permanent', { defaultValue: '영구 차단' })}</div>
         </div>
         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
-          <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">{filteredBannedIPs.filter(b => b.is_auto_banned).length}</div>
+          <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">{stats.auto}</div>
           <div className="text-sm text-slate-500 dark:text-slate-400">{t('bannedIp.stats.auto', { defaultValue: '자동 차단' })}</div>
         </div>
-        {activeTab === 'hosts' && (
-          <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
-            <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{Object.keys(stats.byHost).filter(k => k !== 'global').length}</div>
-            <div className="text-sm text-slate-500 dark:text-slate-400">{t('bannedIp.stats.hostsWithBans', { defaultValue: '차단 호스트 수' })}</div>
-          </div>
-        )}
-        {activeTab === 'global' && (
-          <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
-            <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{total - (stats.byHost['global'] || 0)}</div>
-            <div className="text-sm text-slate-500 dark:text-slate-400">{t('bannedIp.stats.perHostTotal', { defaultValue: '호스트별 차단' })}</div>
-          </div>
-        )}
       </div>
 
       {/* Filters */}

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"time"
 
+	"github.com/lib/pq"
 	"nginx-proxy-guard/internal/model"
 )
 
@@ -289,6 +290,65 @@ func (r *RateLimitRepository) ListGlobalBannedIPs(ctx context.Context, page, per
 	}, nil
 }
 
+// ListHostBannedIPs returns only banned IPs where proxy_host_id IS NOT NULL (per-host bans)
+func (r *RateLimitRepository) ListHostBannedIPs(ctx context.Context, page, perPage int) (*model.BannedIPListResponse, error) {
+	activeCondition := "(is_permanent = TRUE OR expires_at > NOW())"
+
+	countQuery := "SELECT COUNT(*) FROM banned_ips WHERE proxy_host_id IS NOT NULL AND " + activeCondition
+	listQuery := `
+		SELECT id, proxy_host_id, ip_address, reason, fail_count, banned_at, expires_at, is_permanent, COALESCE(is_auto_banned, false), created_at
+		FROM banned_ips
+		WHERE proxy_host_id IS NOT NULL AND ` + activeCondition + `
+		ORDER BY banned_at DESC
+		LIMIT $1 OFFSET $2
+	`
+
+	var total int
+	err := r.db.QueryRowContext(ctx, countQuery).Scan(&total)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := r.db.QueryContext(ctx, listQuery, perPage, (page-1)*perPage)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var bannedIPs []model.BannedIP
+	for rows.Next() {
+		var b model.BannedIP
+		var proxyHostID sql.NullString
+		var reason sql.NullString
+		var expiresAt sql.NullTime
+
+		err := rows.Scan(&b.ID, &proxyHostID, &b.IPAddress, &reason, &b.FailCount,
+			&b.BannedAt, &expiresAt, &b.IsPermanent, &b.IsAutoBanned, &b.CreatedAt)
+		if err != nil {
+			return nil, err
+		}
+
+		if proxyHostID.Valid {
+			b.ProxyHostID = &proxyHostID.String
+		}
+		b.Reason = reason.String
+		if expiresAt.Valid {
+			b.ExpiresAt = &expiresAt.Time
+		}
+
+		bannedIPs = append(bannedIPs, b)
+	}
+
+	totalPages := (total + perPage - 1) / perPage
+	return &model.BannedIPListResponse{
+		Data:       bannedIPs,
+		Total:      total,
+		Page:       page,
+		PerPage:    perPage,
+		TotalPages: totalPages,
+	}, nil
+}
+
 func (r *RateLimitRepository) BanIP(ctx context.Context, proxyHostID *string, ip, reason string, banTime int) (*model.BannedIP, error) {
 	var expiresAt *time.Time
 	isPermanent := banTime == 0
@@ -412,4 +472,33 @@ func (r *RateLimitRepository) IsIPBanned(ctx context.Context, proxyHostID *strin
 	var exists bool
 	err := r.db.QueryRowContext(ctx, query, args...).Scan(&exists)
 	return exists, err
+}
+
+// GetActiveBannedIPSet returns the set of IPs from the given list that are currently actively banned.
+func (r *RateLimitRepository) GetActiveBannedIPSet(ctx context.Context, ips []string) (map[string]bool, error) {
+	result := make(map[string]bool)
+	if len(ips) == 0 {
+		return result, nil
+	}
+
+	query := `
+		SELECT DISTINCT ip_address FROM banned_ips
+		WHERE ip_address = ANY($1) AND (is_permanent = TRUE OR expires_at > NOW())
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, pq.Array(ips))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var ip string
+		if err := rows.Scan(&ip); err != nil {
+			return nil, err
+		}
+		result[ip] = true
+	}
+
+	return result, rows.Err()
 }

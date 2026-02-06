@@ -12,9 +12,9 @@ export function BannedIPBadge({ ip, isBanned }: BannedIPBadgeProps) {
 
   if (isBanned) {
     return (
-      <span className="flex items-center gap-1.5">
-        <span className="text-red-600 dark:text-red-400 font-mono">{ip}</span>
-        <span className="px-1.5 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-xs font-medium rounded">
+      <span className="inline-flex items-center gap-1.5 max-w-full">
+        <span className="text-red-600 dark:text-red-400 font-mono truncate">{ip}</span>
+        <span className="shrink-0 px-1.5 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-xs font-medium rounded">
           {t('badges.banned', { defaultValue: 'Banned' })}
         </span>
       </span>

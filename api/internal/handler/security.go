@@ -220,6 +220,7 @@ func (h *SecurityHandler) DeleteFail2ban(c echo.Context) error {
 
 func (h *SecurityHandler) ListBannedIPs(c echo.Context) error {
 	proxyHostID := c.QueryParam("proxy_host_id")
+	filterType := c.QueryParam("filter")
 	page, _ := strconv.Atoi(c.QueryParam("page"))
 	perPage, _ := strconv.Atoi(c.QueryParam("per_page"))
 
@@ -230,12 +231,27 @@ func (h *SecurityHandler) ListBannedIPs(c echo.Context) error {
 		perPage = 20
 	}
 
-	var proxyHostIDPtr *string
-	if proxyHostID != "" {
-		proxyHostIDPtr = &proxyHostID
+	ctx := c.Request().Context()
+	var result *model.BannedIPListResponse
+	var err error
+
+	switch filterType {
+	case "global":
+		result, err = h.rateLimitRepo.ListGlobalBannedIPs(ctx, page, perPage)
+	case "host":
+		if proxyHostID != "" {
+			result, err = h.rateLimitRepo.ListBannedIPs(ctx, &proxyHostID, page, perPage)
+		} else {
+			result, err = h.rateLimitRepo.ListHostBannedIPs(ctx, page, perPage)
+		}
+	default:
+		var proxyHostIDPtr *string
+		if proxyHostID != "" {
+			proxyHostIDPtr = &proxyHostID
+		}
+		result, err = h.rateLimitRepo.ListBannedIPs(ctx, proxyHostIDPtr, page, perPage)
 	}
 
-	result, err := h.rateLimitRepo.ListBannedIPs(c.Request().Context(), proxyHostIDPtr, page, perPage)
 	if err != nil {
 		return databaseError(c, "list banned IPs", err)
 	}
