@@ -133,7 +133,7 @@ func (h *DNSProviderHandler) Test(c echo.Context) error {
 	err := h.service.TestConnection(c.Request().Context(), &req)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error":   "DNS provider connection test failed",
+			"error":   err.Error(),
 			"success": false,
 		})
 	}

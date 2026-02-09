@@ -30,10 +30,9 @@ type DNSProvider struct {
 
 // CloudflareCredentials represents Cloudflare API credentials
 type CloudflareCredentials struct {
-	APIToken string `json:"api_token,omitempty"` // Recommended: API Token with Zone:DNS:Edit
+	APIToken string `json:"api_token,omitempty"` // Recommended: API Token with Zone:DNS:Edit and Zone:Read
 	APIKey   string `json:"api_key,omitempty"`   // Legacy: Global API Key
 	Email    string `json:"email,omitempty"`     // Required if using API Key
-	ZoneID   string `json:"zone_id,omitempty"`   // Optional: specific zone ID
 }
 
 // Route53Credentials represents AWS Route53 credentials

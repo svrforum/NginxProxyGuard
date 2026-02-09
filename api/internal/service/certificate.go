@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"nginx-proxy-guard/internal/model"
@@ -168,7 +169,7 @@ func (s *CertificateService) obtainLetsEncryptCert(certID string, domains []stri
 
 		result, user, err = acmeService.ObtainCertificate(acmeEmail, domains, dnsProvider, nil)
 		if err != nil {
-			s.updateCertError(ctx, certID, fmt.Sprintf("failed to obtain certificate via DNS-01: %v", err))
+			s.updateCertError(ctx, certID, diagnoseDNS01Error(err))
 			return
 		}
 	} else {
@@ -507,7 +508,7 @@ func (s *CertificateService) renewLetsEncrypt(ctx context.Context, cert *model.C
 		}
 
 		if renewErr != nil {
-			s.updateCertError(ctx, cert.ID, fmt.Sprintf("failed to renew/obtain certificate via DNS-01: %v", renewErr))
+			s.updateCertError(ctx, cert.ID, diagnoseDNS01Error(renewErr))
 			return
 		}
 	} else {
@@ -748,4 +749,32 @@ func (s *CertificateService) saveHistory(cert *model.Certificate, action, status
 	if err != nil {
 		log.Printf("[CertificateService] Failed to save history for certificate %s: %v", cert.ID, err)
 	}
+}
+
+// diagnoseDNS01Error provides user-friendly error messages for DNS-01 challenge failures
+func diagnoseDNS01Error(err error) string {
+	msg := err.Error()
+
+	if strings.Contains(msg, "time limit exceeded") || strings.Contains(msg, "propagation") {
+		return fmt.Sprintf("DNS propagation timeout: DNS record was not detected within the time limit. "+
+			"This usually means the API token lacks Zone:Read permission, or DNS propagation is slow. "+
+			"Please verify your API token has both Zone:DNS:Edit and Zone:Zone:Read permissions. Original error: %v", err)
+	}
+
+	if strings.Contains(msg, "401") || strings.Contains(msg, "403") || strings.Contains(msg, "Unauthorized") {
+		return fmt.Sprintf("Authentication failed: The API credentials were rejected by the DNS provider. "+
+			"Please check that your API token or API key is valid and has not expired. Original error: %v", err)
+	}
+
+	if strings.Contains(msg, "could not find zone") || strings.Contains(msg, "zone not found") {
+		return fmt.Sprintf("Zone not found: The DNS provider could not find the DNS zone for your domain. "+
+			"Please ensure the domain is added to your DNS provider account and the API token has access to it. Original error: %v", err)
+	}
+
+	if strings.Contains(msg, "rate limit") || strings.Contains(msg, "rate_limit") {
+		return fmt.Sprintf("Rate limit exceeded: Too many requests to the DNS provider API. "+
+			"Please wait a few minutes and try again. Original error: %v", err)
+	}
+
+	return fmt.Sprintf("Failed to obtain certificate via DNS-01: %v", err)
 }

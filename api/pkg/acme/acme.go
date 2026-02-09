@@ -605,16 +605,27 @@ func (s *Service) createDNSProvider(provider *model.DNSProvider) (challenge.Prov
 		// Set environment variables for cloudflare provider
 		if creds.APIToken != "" {
 			os.Setenv("CLOUDFLARE_DNS_API_TOKEN", creds.APIToken)
+			os.Setenv("CLOUDFLARE_ZONE_API_TOKEN", creds.APIToken)
 		} else {
 			os.Setenv("CLOUDFLARE_EMAIL", creds.Email)
 			os.Setenv("CLOUDFLARE_API_KEY", creds.APIKey)
 		}
 
-		if creds.ZoneID != "" {
-			os.Setenv("CLOUDFLARE_ZONE_API_TOKEN", creds.APIToken)
-		}
+		// Increase propagation timeout for DNS propagation reliability
+		os.Setenv("CLOUDFLARE_PROPAGATION_TIMEOUT", "180")
+		os.Setenv("CLOUDFLARE_POLLING_INTERVAL", "5")
 
-		return cloudflare.NewDNSProvider()
+		p, err := cloudflare.NewDNSProvider()
+
+		// Cleanup environment variables
+		os.Unsetenv("CLOUDFLARE_DNS_API_TOKEN")
+		os.Unsetenv("CLOUDFLARE_ZONE_API_TOKEN")
+		os.Unsetenv("CLOUDFLARE_EMAIL")
+		os.Unsetenv("CLOUDFLARE_API_KEY")
+		os.Unsetenv("CLOUDFLARE_PROPAGATION_TIMEOUT")
+		os.Unsetenv("CLOUDFLARE_POLLING_INTERVAL")
+
+		return p, err
 
 	case model.DNSProviderDuckDNS:
 		var creds model.DuckDNSCredentials
@@ -625,7 +636,9 @@ func (s *Service) createDNSProvider(provider *model.DNSProvider) (challenge.Prov
 		// Set environment variable for DuckDNS provider
 		os.Setenv("DUCKDNS_TOKEN", creds.Token)
 
-		return duckdns.NewDNSProvider()
+		p, err := duckdns.NewDNSProvider()
+		os.Unsetenv("DUCKDNS_TOKEN")
+		return p, err
 
 	case model.DNSProviderDynu:
 		var creds model.DynuCredentials
@@ -636,7 +649,9 @@ func (s *Service) createDNSProvider(provider *model.DNSProvider) (challenge.Prov
 		// Set environment variable for Dynu provider
 		os.Setenv("DYNU_API_KEY", creds.APIKey)
 
-		return dynu.NewDNSProvider()
+		p, err := dynu.NewDNSProvider()
+		os.Unsetenv("DYNU_API_KEY")
+		return p, err
 
 	default:
 		return nil, fmt.Errorf("unsupported DNS provider type: %s", provider.ProviderType)

@@ -24,13 +24,13 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
   const [isDefault, setIsDefault] = useState(provider?.is_default || false)
   const [error, setError] = useState('')
   const [testResult, setTestResult] = useState<'success' | 'failed' | null>(null)
+  const [testError, setTestError] = useState('')
   const [isTesting, setIsTesting] = useState(false)
 
   // Cloudflare credentials
   const [cfApiToken, setCfApiToken] = useState('')
   const [cfApiKey, setCfApiKey] = useState('')
   const [cfEmail, setCfEmail] = useState('')
-  const [cfZoneId, setCfZoneId] = useState('')
 
   // Route53 credentials
   const [awsAccessKeyId, setAwsAccessKeyId] = useState('')
@@ -50,7 +50,6 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
       if (cfApiToken) creds.api_token = cfApiToken
       if (cfApiKey) creds.api_key = cfApiKey
       if (cfEmail) creds.email = cfEmail
-      if (cfZoneId) creds.zone_id = cfZoneId
       return creds
     }
     if (providerType === 'route53') {
@@ -97,6 +96,7 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
 
   const handleTest = async () => {
     setTestResult(null)
+    setTestError('')
     setError('')
     setIsTesting(true)
 
@@ -108,8 +108,13 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
     }
 
     try {
-      const success = await testDNSProvider(data)
-      setTestResult(success ? 'success' : 'failed')
+      const result = await testDNSProvider(data)
+      if (result.success) {
+        setTestResult('success')
+      } else {
+        setTestResult('failed')
+        setTestError(result.error || '')
+      }
     } catch {
       setTestResult('failed')
     } finally {
@@ -179,11 +184,16 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
           )}
 
           {testResult === 'failed' && (
-            <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4 text-red-700 dark:text-red-400 text-sm flex items-center gap-2">
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-              {t('dnsProviders.form.test.failed')}
+            <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4 text-red-700 dark:text-red-400 text-sm">
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+                {t('dnsProviders.form.test.failed')}
+              </div>
+              {testError && (
+                <p className="mt-2 ml-7 text-xs">{testError}</p>
+              )}
             </div>
           )}
 
@@ -275,19 +285,6 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-2">
-                  {t('dnsProviders.form.cloudflare.zoneId')}
-                  <HelpTip content={t('dnsProviders.form.cloudflare.zoneIdPlaceholder')} />
-                </label>
-                <input
-                  type="text"
-                  value={cfZoneId}
-                  onChange={(e) => setCfZoneId(e.target.value)}
-                  placeholder={t('dnsProviders.form.cloudflare.zoneIdPlaceholder')}
-                  className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 placeholder:text-slate-400 bg-white dark:bg-slate-700 dark:text-white"
-                />
-              </div>
             </div>
           )}
 

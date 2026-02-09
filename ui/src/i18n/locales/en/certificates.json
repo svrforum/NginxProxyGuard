@@ -148,12 +148,10 @@
         "title": "Cloudflare Credentials",
         "apiToken": "API Token (Recommended)",
         "apiTokenPlaceholder": "Enter Cloudflare API Token",
-        "apiTokenHelp": "Create an API Token with Zone:DNS:Edit permissions.",
+        "apiTokenHelp": "Create an API Token with Zone:DNS:Edit and Zone:Read permissions.",
         "orGlobalKey": "Or use Global API Key (Legacy)",
         "apiKey": "API Key",
-        "email": "Email",
-        "zoneId": "Zone ID (Optional)",
-        "zoneIdPlaceholder": "Leave empty for auto-detect"
+        "email": "Email"
       },
       "route53": {
         "title": "AWS Credentials",

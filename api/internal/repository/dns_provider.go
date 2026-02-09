@@ -5,6 +5,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"time"
 
 	"nginx-proxy-guard/internal/database"
 	"nginx-proxy-guard/internal/model"
@@ -247,6 +250,9 @@ func (r *DNSProviderRepository) TestConnection(ctx context.Context, providerType
 		if creds.APIToken == "" && (creds.APIKey == "" || creds.Email == "") {
 			return model.ErrInvalidCredentials
 		}
+		if err := testCloudflareConnection(creds); err != nil {
+			return err
+		}
 	case model.DNSProviderRoute53:
 		var creds model.Route53Credentials
 		if err := json.Unmarshal(credentials, &creds); err != nil {
@@ -272,6 +278,57 @@ func (r *DNSProviderRepository) TestConnection(ctx context.Context, providerType
 			return model.ErrInvalidCredentials
 		}
 	}
+	return nil
+}
+
+func testCloudflareConnection(creds model.CloudflareCredentials) error {
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	var req *http.Request
+	var err error
+
+	if creds.APIToken != "" {
+		// API Token: verify via token verification endpoint
+		req, err = http.NewRequest("GET", "https://api.cloudflare.com/client/v4/user/tokens/verify", nil)
+		if err != nil {
+			return fmt.Errorf("failed to create request: %w", err)
+		}
+		req.Header.Set("Authorization", "Bearer "+creds.APIToken)
+	} else {
+		// Global API Key: verify via zones endpoint
+		req, err = http.NewRequest("GET", "https://api.cloudflare.com/client/v4/zones?per_page=1", nil)
+		if err != nil {
+			return fmt.Errorf("failed to create request: %w", err)
+		}
+		req.Header.Set("X-Auth-Email", creds.Email)
+		req.Header.Set("X-Auth-Key", creds.APIKey)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to connect to Cloudflare API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode == 401 {
+		if creds.APIToken != "" {
+			return fmt.Errorf("invalid or expired API token. Please verify the token is active in your Cloudflare dashboard")
+		}
+		return fmt.Errorf("invalid API key or email. Please check your Global API Key and account email")
+	}
+
+	if resp.StatusCode == 403 {
+		return fmt.Errorf("insufficient permissions. API token requires Zone:DNS:Edit and Zone:Zone:Read permissions")
+	}
+
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("cloudflare API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
 	return nil
 }
 

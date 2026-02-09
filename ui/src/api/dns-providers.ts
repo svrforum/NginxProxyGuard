@@ -73,15 +73,19 @@ export async function deleteDNSProvider(id: string): Promise<void> {
   }
 }
 
-export async function testDNSProvider(data: CreateDNSProviderRequest): Promise<boolean> {
+export async function testDNSProvider(data: CreateDNSProviderRequest): Promise<{ success: boolean; error?: string }> {
   try {
     const response = await fetch(`${API_BASE}/dns-providers/test`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(data),
     });
-    return response.ok;
+    const result = await response.json();
+    if (response.ok) {
+      return { success: true };
+    }
+    return { success: false, error: result.error || 'Connection test failed' };
   } catch {
-    return false;
+    return { success: false, error: 'Failed to connect to server' };
   }
 }

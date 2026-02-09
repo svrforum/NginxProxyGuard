@@ -148,12 +148,10 @@
         "title": "Cloudflare 자격 증명",
         "apiToken": "API 토큰 (권장)",
         "apiTokenPlaceholder": "Cloudflare API 토큰 입력",
-        "apiTokenHelp": "Zone:DNS:Edit 권한이 있는 API Token을 생성하세요.",
+        "apiTokenHelp": "Zone:DNS:Edit 및 Zone:Read 권한이 있는 API Token을 생성하세요.",
         "orGlobalKey": "또는 Global API Key 사용 (구버전)",
         "apiKey": "API Key",
-        "email": "이메일",
-        "zoneId": "Zone ID (선택사항)",
-        "zoneIdPlaceholder": "자동 감지를 위해 비워두세요"
+        "email": "이메일"
       },
       "route53": {
         "title": "AWS 자격 증명",
