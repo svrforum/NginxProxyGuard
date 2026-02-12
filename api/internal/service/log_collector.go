@@ -187,33 +187,40 @@ func (c *LogCollector) getHostIDByDomain(ctx context.Context, domain string) str
 		return ""
 	}
 
-	// Check cache first
+	// Check cache first (fast path)
 	c.domainCacheMu.RLock()
 	if hostID, ok := c.domainCache[domain]; ok {
 		c.domainCacheMu.RUnlock()
 		return hostID
 	}
+	needsRefresh := time.Since(c.domainCacheTime) > 60*time.Second
 	c.domainCacheMu.RUnlock()
 
-	// Refresh cache if stale (every 60 seconds)
-	c.domainCacheMu.Lock()
-	defer c.domainCacheMu.Unlock()
+	if !needsRefresh {
+		return ""
+	}
 
-	if time.Since(c.domainCacheTime) > 60*time.Second {
-		// Refresh entire cache
-		hosts, _, err := c.proxyHostRepo.List(ctx, 1, 1000, "", "", "")
-		if err == nil {
-			c.domainCache = make(map[string]string)
-			for _, host := range hosts {
-				for _, d := range host.DomainNames {
-					c.domainCache[d] = host.ID
-				}
-			}
-			c.domainCacheTime = time.Now()
+	// DB query OUTSIDE lock
+	hosts, _, err := c.proxyHostRepo.List(ctx, 1, 1000, "", "", "")
+	if err != nil {
+		return ""
+	}
+
+	// Build new cache
+	newCache := make(map[string]string)
+	for _, host := range hosts {
+		for _, d := range host.DomainNames {
+			newCache[d] = host.ID
 		}
 	}
 
-	return c.domainCache[domain]
+	// Swap cache under write lock (fast)
+	c.domainCacheMu.Lock()
+	c.domainCache = newCache
+	c.domainCacheTime = time.Now()
+	c.domainCacheMu.Unlock()
+
+	return newCache[domain]
 }
 
 func (c *LogCollector) Start(ctx context.Context) {

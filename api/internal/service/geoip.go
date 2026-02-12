@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"sync"
+	"sync/atomic"
 
 	"github.com/oschwald/geoip2-golang"
 
@@ -27,8 +28,8 @@ type GeoIPService struct {
 	mu          sync.RWMutex
 	enabled     bool
 	redisCache  *cache.RedisClient
-	cacheHits   int64
-	cacheMisses int64
+	cacheHits   atomic.Int64
+	cacheMisses atomic.Int64
 }
 
 // NewGeoIPService creates a new GeoIP service
@@ -144,9 +145,7 @@ func (s *GeoIPService) LookupWithContext(ctx context.Context, ipStr string) *Geo
 	// Try to get from cache first
 	if redisCache != nil {
 		if cached, err := redisCache.GetGeoIPLookup(ctx, ipStr); err == nil {
-			s.mu.Lock()
-			s.cacheHits++
-			s.mu.Unlock()
+			s.cacheHits.Add(1)
 			return &GeoIPInfo{
 				Country:     cached.Country,
 				CountryCode: cached.CountryCode,
@@ -157,9 +156,7 @@ func (s *GeoIPService) LookupWithContext(ctx context.Context, ipStr string) *Geo
 		}
 	}
 
-	s.mu.Lock()
-	s.cacheMisses++
-	s.mu.Unlock()
+	s.cacheMisses.Add(1)
 
 	// Perform actual lookup
 	s.mu.RLock()
@@ -213,9 +210,7 @@ func (s *GeoIPService) LookupWithContext(ctx context.Context, ipStr string) *Geo
 
 // GetCacheStats returns cache hit/miss statistics
 func (s *GeoIPService) GetCacheStats() (hits, misses int64) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.cacheHits, s.cacheMisses
+	return s.cacheHits.Load(), s.cacheMisses.Load()
 }
 
 // isPrivateIP checks if an IP is private/local

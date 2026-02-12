@@ -529,19 +529,14 @@ func (r *RedisClient) ReadLogEntries(ctx context.Context, count int64) ([]LogEnt
 		return nil, ErrNotReady
 	}
 
-	// Read entries
-	messages, err := r.client.XRange(ctx, PrefixLogBuffer, "-", "+").Result()
+	// Read entries (limited to count at Redis level)
+	messages, err := r.client.XRangeN(ctx, PrefixLogBuffer, "-", "+", count).Result()
 	if err != nil {
 		return nil, err
 	}
 
 	if len(messages) == 0 {
 		return nil, nil
-	}
-
-	// Limit to requested count
-	if int64(len(messages)) > count {
-		messages = messages[:count]
 	}
 
 	var entries []LogEntry
