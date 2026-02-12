@@ -239,7 +239,6 @@ func (c *LogCollector) Start(ctx context.Context) {
 	// Start log streaming
 	go c.streamAccessLogs(ctx)
 	go c.streamErrorLogs(ctx)
-	go c.streamModSecLogs(ctx)
 
 	log.Println("Log collector started")
 }
@@ -963,12 +962,6 @@ func (c *LogCollector) streamErrorLogs(ctx context.Context) {
 	})
 }
 
-func (c *LogCollector) streamModSecLogs(ctx context.Context) {
-	// ModSecurity audit logs are now collected from stdout via streamAccessLogs
-	// This function is kept for potential future use with file-based audit logs
-	// Currently, ModSec JSON logs are detected and parsed in streamAccessLogs
-}
-
 func (c *LogCollector) streamLogs(ctx context.Context, logType string, handler func(string)) {
 	for {
 		select {
@@ -1036,45 +1029,6 @@ func (c *LogCollector) streamLogs(ctx context.Context, logType string, handler f
 
 		cmd.Wait()
 		time.Sleep(1 * time.Second) // Brief pause before reconnecting
-	}
-}
-
-func (c *LogCollector) streamDockerExecLogs(ctx context.Context, logFile string, handler func(string)) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-c.stopCh:
-			return
-		default:
-		}
-
-		// Use docker exec to tail the log file
-		cmd := exec.CommandContext(ctx, "docker", "exec", c.nginxContainer, "tail", "-F", "-n", "0", logFile)
-
-		pipe, err := cmd.StdoutPipe()
-		if err != nil {
-			log.Printf("Failed to get stdout pipe for modsec logs: %v", err)
-			time.Sleep(10 * time.Second)
-			continue
-		}
-
-		if err := cmd.Start(); err != nil {
-			log.Printf("Failed to start tail for modsec logs: %v", err)
-			time.Sleep(10 * time.Second)
-			continue
-		}
-
-		scanner := bufio.NewScanner(pipe)
-		for scanner.Scan() {
-			line := scanner.Text()
-			if line != "" {
-				handler(line)
-			}
-		}
-
-		cmd.Wait()
-		time.Sleep(5 * time.Second)
 	}
 }
 
