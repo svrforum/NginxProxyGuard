@@ -148,6 +148,11 @@ func (db *DB) RunMigrations() error {
 		log.Printf("Warning: partition pre-generation migration had issues: %v", err)
 	}
 
+	// Run 010_fix_hypertable_numeric migration (fixes numeric type after TimescaleDB migration, Issue #55)
+	if err := db.runHypertableNumericFixMigration(); err != nil {
+		log.Printf("Warning: hypertable numeric fix migration had issues: %v", err)
+	}
+
 	// Migrate logs table to logs_partitioned in background (for existing installations)
 	// This allows API to start immediately while migration runs
 	go db.migrateLogsToPartitioned()
@@ -348,8 +353,8 @@ func (db *DB) migrateToTimescaleDB() {
 			request_protocol text,
 			status_code integer,
 			body_bytes_sent bigint,
-			request_time numeric(10,6),
-			upstream_response_time numeric(10,6),
+			request_time double precision,
+			upstream_response_time double precision,
 			http_referer text,
 			http_user_agent text,
 			http_x_forwarded_for text,
@@ -967,6 +972,59 @@ func (db *DB) runPregeneratePartitionsMigration() error {
 	if err != nil {
 		log.Printf("[Migration] Warning: %s had issues (may be partially applied): %v", migrationVersion, err)
 		// Continue anyway - partitions may be partially created
+	}
+
+	// Mark migration as complete
+	_, err = db.Exec(`INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT DO NOTHING`, migrationVersion)
+	if err != nil {
+		return fmt.Errorf("failed to record migration: %w", err)
+	}
+
+	log.Printf("[Migration] %s completed successfully!", migrationVersion)
+	return nil
+}
+
+// runHypertableNumericFixMigration fixes numeric type that was reintroduced by TimescaleDB migration (Issue #55)
+// The migrateToTimescaleDB() function previously created logs_hypertable with numeric(10,6),
+// which overrode the double precision fix from migration 006.
+func (db *DB) runHypertableNumericFixMigration() error {
+	const migrationVersion = "010_fix_hypertable_numeric"
+
+	// Check if already migrated
+	var migrated bool
+	err := db.QueryRow(`SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = $1)`, migrationVersion).Scan(&migrated)
+	if err != nil {
+		return fmt.Errorf("failed to check migration status: %w", err)
+	}
+	if migrated {
+		log.Printf("[Migration] %s already applied", migrationVersion)
+		return nil
+	}
+
+	log.Printf("[Migration] Starting %s: fixing hypertable numeric type...", migrationVersion)
+
+	// Read and execute the migration file
+	content, err := migrationFS.ReadFile("migrations/010_fix_hypertable_numeric.sql")
+	if err != nil {
+		return fmt.Errorf("failed to read 010_fix_hypertable_numeric.sql: %w", err)
+	}
+
+	_, err = db.Exec(string(content))
+	if err != nil {
+		log.Printf("[Migration] Warning: %s had issues (may be partially applied): %v", migrationVersion, err)
+	}
+
+	// Recompress old chunks in background if applicable
+	if db.isTimescaleDBAvailable() && db.isHypertable("logs_partitioned") {
+		go func() {
+			time.Sleep(5 * time.Second)
+			_, err := db.Exec(`SELECT compress_chunk(c) FROM show_chunks('logs_partitioned', older_than => INTERVAL '7 days') c`)
+			if err != nil {
+				log.Printf("[Migration] Warning: background recompression after 010 had issues: %v", err)
+			} else {
+				log.Println("[Migration] Background recompression after 010 completed")
+			}
+		}()
 	}
 
 	// Mark migration as complete

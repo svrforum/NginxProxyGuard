@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"net"
 	"strings"
 	"time"
@@ -200,6 +201,29 @@ func (r *LogRepository) CreateBatch(ctx context.Context, logs []model.CreateLogR
 		return nil
 	}
 
+	// Try batch transaction first
+	err := r.createBatchTx(ctx, logs)
+	if err == nil {
+		return nil
+	}
+
+	// Batch failed - fall back to individual inserts to avoid losing all logs
+	log.Printf("[LogRepository] Batch insert failed, falling back to individual inserts: %v", err)
+	var failCount int
+	for i, req := range logs {
+		if err := r.createSingle(ctx, &req); err != nil {
+			failCount++
+			log.Printf("[LogRepository] Failed to insert log %d/%d: %v", i+1, len(logs), err)
+		}
+	}
+	if failCount > 0 {
+		log.Printf("[LogRepository] Individual insert fallback: %d/%d logs failed", failCount, len(logs))
+	}
+	return nil
+}
+
+// createBatchTx inserts all logs in a single transaction
+func (r *LogRepository) createBatchTx(ctx context.Context, logs []model.CreateLogRequest) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
@@ -257,6 +281,48 @@ func (r *LogRepository) CreateBatch(ctx context.Context, logs []model.CreateLogR
 	}
 
 	return tx.Commit()
+}
+
+// createSingle inserts a single log entry (used as fallback when batch fails)
+func (r *LogRepository) createSingle(ctx context.Context, req *model.CreateLogRequest) error {
+	timestamp := req.Timestamp
+	if timestamp.IsZero() {
+		timestamp = time.Now()
+	}
+
+	_, err := r.db.ExecContext(ctx, `
+		INSERT INTO logs_partitioned (
+			log_type, timestamp, host, client_ip,
+			geo_country, geo_country_code, geo_city, geo_asn, geo_org,
+			request_method, request_uri, request_protocol, status_code,
+			body_bytes_sent, request_time, upstream_response_time,
+			http_referer, http_user_agent, http_x_forwarded_for,
+			severity, error_message,
+			rule_id, rule_message, rule_severity, rule_data, attack_type, action_taken,
+			block_reason, bot_category, exploit_rule,
+			proxy_host_id, raw_log
+		) VALUES (
+			$1, $2, NULLIF($3, ''), NULLIF($4, '')::inet,
+			NULLIF($5, ''), NULLIF($6, ''), NULLIF($7, ''), NULLIF($8, ''), NULLIF($9, ''),
+			NULLIF($10, ''), NULLIF($11, ''), NULLIF($12, ''), NULLIF($13, 0),
+			NULLIF($14::bigint, 0), NULLIF($15::numeric, 0), NULLIF($16::numeric, 0),
+			NULLIF($17, ''), NULLIF($18, ''), NULLIF($19, ''),
+			NULLIF($20, '')::log_severity, NULLIF($21, ''),
+			NULLIF($22::bigint, 0), NULLIF($23, ''), NULLIF($24, ''), NULLIF($25, ''), NULLIF($26, ''), NULLIF($27, ''),
+			COALESCE(NULLIF($28, '')::block_reason, 'none'), NULLIF($29, ''), NULLIF($30, ''),
+			NULLIF($31, '')::uuid, NULLIF($32, '')
+		)`,
+		req.LogType, timestamp, req.Host, req.ClientIP,
+		req.GeoCountry, req.GeoCountryCode, req.GeoCity, req.GeoASN, req.GeoOrg,
+		req.RequestMethod, req.RequestURI, req.RequestProtocol, req.StatusCode,
+		req.BodyBytesSent, req.RequestTime, req.UpstreamResponseTime,
+		req.HTTPReferer, req.HTTPUserAgent, req.HTTPXForwardedFor,
+		req.Severity, req.ErrorMessage,
+		req.RuleID, req.RuleMessage, req.RuleSeverity, req.RuleData, req.AttackType, req.ActionTaken,
+		req.BlockReason, req.BotCategory, req.ExploitRule,
+		req.ProxyHostID, req.RawLog,
+	)
+	return err
 }
 
 func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page, perPage int) ([]model.Log, int, error) {
