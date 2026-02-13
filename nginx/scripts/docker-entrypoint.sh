@@ -245,6 +245,17 @@ update_static_html() {
 }
 update_static_html
 
+# Always update ModSecurity base config from defaults (for security fixes like SecRequestBodyLimitAction)
+update_modsec_base() {
+    if [ -f "$NGINX_DEFAULT/modsec/modsec-base.conf" ]; then
+        echo "[Entrypoint] Updating ModSecurity base config from defaults..."
+        cp -f "$NGINX_DEFAULT/modsec/modsec-base.conf" "$NGINX_DIR/modsec/modsec-base.conf"
+        chown nginx:nginx "$NGINX_DIR/modsec/modsec-base.conf"
+        echo "[Entrypoint] ModSecurity base config updated"
+    fi
+}
+update_modsec_base
+
 # Run GeoIP update if script exists and license key is provided
 if [ -x /scripts/geoip-update.sh ]; then
     echo "[Entrypoint] Running GeoIP database update..."
