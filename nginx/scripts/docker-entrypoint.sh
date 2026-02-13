@@ -249,8 +249,9 @@ update_static_html
 update_modsec_base() {
     if [ -f "$NGINX_DEFAULT/modsec/modsec-base.conf" ]; then
         echo "[Entrypoint] Updating ModSecurity base config from defaults..."
-        cp -f "$NGINX_DEFAULT/modsec/modsec-base.conf" "$NGINX_DIR/modsec/modsec-base.conf"
-        chown nginx:nginx "$NGINX_DIR/modsec/modsec-base.conf"
+        cp -f "$NGINX_DEFAULT/modsec/modsec-base.conf" "$NGINX_DIR/modsec/modsec-base.conf" 2>/dev/null || true
+        chown nginx:nginx "$NGINX_DIR/modsec/modsec-base.conf" 2>/dev/null || true
+        chmod 644 "$NGINX_DIR/modsec/modsec-base.conf" 2>/dev/null || true
         echo "[Entrypoint] ModSecurity base config updated"
     fi
 }
