@@ -713,7 +713,7 @@ jobs:
 
             ---
 
-            ## Docker Images
+            ## Docker 이미지
 
             ```bash
             docker pull svrforum/nginxproxyguard-api:${{ needs.detect.outputs.version }}
@@ -721,24 +721,24 @@ jobs:
             docker pull svrforum/nginxproxyguard-nginx:${{ needs.detect.outputs.version }}
             ```
 
-            ## Supported Architectures
+            ## 지원 아키텍처
             - `linux/amd64`
             - `linux/arm64`
 
-            ## Build Summary
-            | Component | Status |
+            ## 빌드 요약
+            | 컴포넌트 | 상태 |
             |-----------|--------|
-            | API | ${{ needs.detect.outputs.api_changed == 'true' && '✅ Built & Pushed' || '⏭️ Skipped (no changes)' }} |
-            | UI | ${{ needs.detect.outputs.ui_changed == 'true' && '✅ Built & Pushed' || '⏭️ Skipped (no changes)' }} |
-            | Nginx | ${{ needs.detect.outputs.nginx_changed == 'true' && '✅ Built & Pushed' || '⏭️ Skipped (no changes)' }} |
+            | API | ${{ needs.detect.outputs.api_changed == 'true' && '✅ 빌드 및 푸시 완료' || '⏭️ 건너뜀 (변경 없음)' }} |
+            | UI | ${{ needs.detect.outputs.ui_changed == 'true' && '✅ 빌드 및 푸시 완료' || '⏭️ 건너뜀 (변경 없음)' }} |
+            | Nginx | ${{ needs.detect.outputs.nginx_changed == 'true' && '✅ 빌드 및 푸시 완료' || '⏭️ 건너뜀 (변경 없음)' }} |
 
-            ## E2E Tests
-            ✅ Bridge Mode - Passed
-            ✅ Host Mode - Passed
+            ## E2E 테스트
+            ✅ Bridge 모드 - 통과
+            ✅ Host 모드 - 통과
 
-            ${{ steps.changelog.outputs.contributors != '' && format('## Contributors\nThank you for your contributions! {0}\n', steps.changelog.outputs.contributors) || '' }}
+            ${{ steps.changelog.outputs.contributors != '' && format('## 기여자\n기여해 주셔서 감사합니다! {0}\n', steps.changelog.outputs.contributors) || '' }}
 
-            ## Commits
+            ## 커밋 내역
             ${{ steps.changelog.outputs.changelog }}
           draft: false
           prerelease: ${{ contains(github.ref, '-rc') || contains(github.ref, '-beta') || contains(github.ref, '-alpha') }}
