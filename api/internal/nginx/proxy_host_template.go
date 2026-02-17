@@ -690,6 +690,11 @@ server {
         {{if .Host.ClientMaxBodySize}}client_max_body_size {{.Host.ClientMaxBodySize}};{{else if .GlobalSettings.ClientMaxBodySize}}client_max_body_size {{.GlobalSettings.ClientMaxBodySize}};{{end}}
         {{if .Host.ProxyBuffering}}proxy_buffering {{.Host.ProxyBuffering}};{{end}}
         {{if .Host.ProxyRequestBuffering}}proxy_request_buffering {{.Host.ProxyRequestBuffering}};{{end}}
+        {{if and .Host.WAFEnabled (eq .Host.ProxyRequestBuffering "off")}}
+        # Disable ModSecurity request body inspection for large file upload support
+        # WAF still protects headers, URL patterns, and response inspection
+        modsecurity_rules 'SecRequestBodyAccess Off';
+        {{end}}
         # Proxy buffer settings (from Global Settings)
         {{if .GlobalSettings.ProxyBufferSize}}proxy_buffer_size {{.GlobalSettings.ProxyBufferSize}};{{end}}
         {{if .GlobalSettings.ProxyBuffers}}proxy_buffers {{.GlobalSettings.ProxyBuffers}};{{end}}
@@ -779,6 +784,11 @@ server {
         {{if .Host.ClientMaxBodySize}}client_max_body_size {{.Host.ClientMaxBodySize}};{{else if .GlobalSettings.ClientMaxBodySize}}client_max_body_size {{.GlobalSettings.ClientMaxBodySize}};{{end}}
         {{if .Host.ProxyBuffering}}proxy_buffering {{.Host.ProxyBuffering}};{{end}}
         {{if .Host.ProxyRequestBuffering}}proxy_request_buffering {{.Host.ProxyRequestBuffering}};{{end}}
+        {{if and .Host.WAFEnabled (eq .Host.ProxyRequestBuffering "off")}}
+        # Disable ModSecurity request body inspection for large file upload support
+        # WAF still protects headers, URL patterns, and response inspection
+        modsecurity_rules 'SecRequestBodyAccess Off';
+        {{end}}
         # Proxy buffer settings (from Global Settings)
         {{if .GlobalSettings.ProxyBufferSize}}proxy_buffer_size {{.GlobalSettings.ProxyBufferSize}};{{end}}
         {{if .GlobalSettings.ProxyBuffers}}proxy_buffers {{.GlobalSettings.ProxyBuffers}};{{end}}
@@ -1488,6 +1498,11 @@ server {
         {{if .Host.ClientMaxBodySize}}client_max_body_size {{.Host.ClientMaxBodySize}};{{else if .GlobalSettings.ClientMaxBodySize}}client_max_body_size {{.GlobalSettings.ClientMaxBodySize}};{{end}}
         {{if .Host.ProxyBuffering}}proxy_buffering {{.Host.ProxyBuffering}};{{end}}
         {{if .Host.ProxyRequestBuffering}}proxy_request_buffering {{.Host.ProxyRequestBuffering}};{{end}}
+        {{if and .Host.WAFEnabled (eq .Host.ProxyRequestBuffering "off")}}
+        # Disable ModSecurity request body inspection for large file upload support
+        # WAF still protects headers, URL patterns, and response inspection
+        modsecurity_rules 'SecRequestBodyAccess Off';
+        {{end}}
         # Proxy buffer settings (from Global Settings)
         {{if .GlobalSettings.ProxyBufferSize}}proxy_buffer_size {{.GlobalSettings.ProxyBufferSize}};{{end}}
         {{if .GlobalSettings.ProxyBuffers}}proxy_buffers {{.GlobalSettings.ProxyBuffers}};{{end}}

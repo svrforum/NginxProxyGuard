@@ -357,7 +357,7 @@
         "infoUpload": "For large uploads: increase client_max_body_size (e.g., 10g or 0 for unlimited)",
         "infoDownload": "For large downloads: set proxy_max_temp_file_size to 0",
         "infoStreaming": "For streaming: set proxy_buffering to off",
-        "infoRequestBuffering": "For large uploads (10GB+): set proxy_request_buffering to off and client_max_body_size to 0"
+        "infoRequestBuffering": "For large uploads (10GB+): set proxy_request_buffering to off and client_max_body_size to 0 (WAF request body inspection is automatically disabled)"
       }
     },
     "advanced": {
