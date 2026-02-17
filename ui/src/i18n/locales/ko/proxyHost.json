@@ -359,7 +359,7 @@
         "infoUpload": "대용량 업로드: client_max_body_size를 늘리세요 (예: 10g 또는 무제한은 0)",
         "infoDownload": "대용량 다운로드: proxy_max_temp_file_size를 0으로 설정하세요",
         "infoStreaming": "스트리밍: proxy_buffering을 off로 설정하세요",
-        "infoRequestBuffering": "대용량 업로드(10GB+): proxy_request_buffering을 off, client_max_body_size를 0으로 설정하세요"
+        "infoRequestBuffering": "대용량 업로드(10GB+): proxy_request_buffering을 off, client_max_body_size를 0으로 설정하세요 (WAF 요청 본문 검사가 자동으로 비활성화됩니다)"
       }
     },
     "advanced": {
