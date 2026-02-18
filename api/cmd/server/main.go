@@ -274,7 +274,7 @@ func main() {
 	// Start stats collector for dashboard
 	nginxStatusURL := os.Getenv("NGINX_STATUS_URL")
 	if nginxStatusURL == "" {
-		nginxStatusURL = "http://nginx:8080/nginx_status"
+		nginxStatusURL = "http://host.docker.internal:80/nginx_status"
 	}
 	accessLogPath := os.Getenv("NGINX_ACCESS_LOG")
 	if accessLogPath == "" {

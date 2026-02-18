@@ -81,7 +81,7 @@ services:
       ENVIRONMENT: ${ENVIRONMENT:-production}
       NGINX_CONTAINER: npg-proxy
       NGINX_SKIP_TEST: "false"
-      # For host network mode: use host.docker.internal to reach nginx
+      # nginx is in host mode, so use host.docker.internal to reach it
       NGINX_STATUS_URL: "http://host.docker.internal:${NGINX_HTTP_PORT:-80}/nginx_status"
       NGINX_ACCESS_LOG: "/var/log/nginx/access.log"
       BACKUP_PATH: ${BACKUP_PATH:-/app/data/backups}
@@ -89,14 +89,12 @@ services:
       ACME_STAGING: ${ACME_STAGING:-false}
       # Docker API version - leave empty for auto-detection (recommended)
       DOCKER_API_VERSION: ${DOCKER_API_VERSION:-}
-      # Custom nginx listen ports for host network mode
+      # Custom nginx listen ports
       NGINX_HTTP_PORT: ${NGINX_HTTP_PORT:-80}
       NGINX_HTTPS_PORT: ${NGINX_HTTPS_PORT:-443}
-      # API host port - for host network mode (nginx uses this to reach API)
-      # IMPORTANT: If you change API_HOST_PORT, also update API_HOST to match
+      # API host port (nginx uses this to reach API via localhost)
       API_HOST_PORT: ${API_HOST_PORT:-9080}
-      # API host for nginx config generation (required for host network mode)
-      # Must match API_HOST_PORT. Example: API_HOST=127.0.0.1:9080
+      # API host for nginx config generation
       API_HOST: ${API_HOST:-127.0.0.1:${API_HOST_PORT:-9080}}
     ports:
       # API host port - MUST NOT conflict with NGINX_HTTP_PORT

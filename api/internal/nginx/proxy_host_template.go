@@ -79,7 +79,7 @@ server {
     set $port {{.Host.ForwardPort}};
 
     # Resolver for dynamic proxy_pass with variables
-    resolver 127.0.0.11 valid=30s;
+    resolver {{dnsResolver}} valid=30s;
 
 {{if .SearchEnginesList}}
     # Search bot detection (set once, used by GeoIP, CloudProvider, BotFilter)
@@ -886,7 +886,7 @@ server {
     set $port {{.Host.ForwardPort}};
 
     # Resolver for dynamic proxy_pass with variables
-    resolver 127.0.0.11 valid=30s;
+    resolver {{dnsResolver}} valid=30s;
 
 {{if .SearchEnginesList}}
     # Search bot detection (set once, used by GeoIP, CloudProvider, BotFilter)

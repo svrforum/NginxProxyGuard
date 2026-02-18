@@ -115,7 +115,7 @@ type DefaultServerConfigData struct {
 	Action    string // allow, block_403, block_444
 	HTTPPort  string // HTTP listen port (default: 80)
 	HTTPSPort string // HTTPS listen port (default: 443)
-	APIURL    string // API URL for nginx to reach API (default: http://api:8080)
+	APIURL    string // API URL for nginx to reach API (default: http://127.0.0.1:9080)
 }
 
 // GenerateDefaultServerConfig generates the default server config based on settings

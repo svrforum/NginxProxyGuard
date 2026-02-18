@@ -96,16 +96,11 @@ func (h *HealthHandler) checkRedis(ctx context.Context) string {
 	return config.StatusOK
 }
 
-// checkNginx verifies Nginx is running
+// checkNginx verifies Nginx is running via docker exec
 func checkNginx() string {
-	// Check if nginx process is running
-	cmd := exec.Command("pgrep", "-x", "nginx")
+	cmd := exec.Command("docker", "exec", "npg-proxy", "nginx", "-t")
 	if err := cmd.Run(); err != nil {
-		// Try alternative check via docker
-		dockerCmd := exec.Command("docker", "exec", "npg-proxy", "nginx", "-t")
-		if dockerErr := dockerCmd.Run(); dockerErr != nil {
-			return config.StatusError
-		}
+		return config.StatusError
 	}
 	return config.StatusOK
 }

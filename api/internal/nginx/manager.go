@@ -29,7 +29,8 @@ type Manager struct {
 	skipTest       bool   // Skip nginx test/reload (for development)
 	httpPort       string // HTTP listen port (default: 80)
 	httpsPort      string // HTTPS listen port (default: 443)
-	apiURL         string // API URL for nginx to reach API (default: http://api:8080)
+	apiURL         string // API URL for nginx to reach API (default: http://127.0.0.1:9080)
+	dnsResolver    string // DNS resolver for nginx (default: 127.0.0.53 8.8.8.8)
 }
 
 func NewManager(configPath, certsPath string) *Manager {
@@ -55,14 +56,18 @@ func NewManager(configPath, certsPath string) *Manager {
 		httpsPort = "443"
 	}
 
-	// API URL for nginx to reach API
-	// In host network mode, nginx can't use Docker service names
-	// Use API_HOST_PORT env var to determine the correct URL
-	apiURL := "http://api:8080" // Default for bridge network mode
+	// API URL for nginx to reach API (host network mode)
+	// nginx runs in host mode, so it reaches API via localhost
 	apiHostPort := os.Getenv("API_HOST_PORT")
-	if apiHostPort != "" {
-		// Host network mode - use localhost with the exposed API port
-		apiURL = "http://127.0.0.1:" + apiHostPort
+	if apiHostPort == "" {
+		apiHostPort = "9080"
+	}
+	apiURL := "http://127.0.0.1:" + apiHostPort
+
+	// DNS resolver for nginx (host network mode uses system resolver)
+	dnsResolver := os.Getenv("DNS_RESOLVER")
+	if dnsResolver == "" {
+		dnsResolver = "127.0.0.53 8.8.8.8"
 	}
 
 	return &Manager{
@@ -74,6 +79,7 @@ func NewManager(configPath, certsPath string) *Manager {
 		httpPort:       httpPort,
 		httpsPort:      httpsPort,
 		apiURL:         apiURL,
+		dnsResolver:    dnsResolver,
 	}
 }
 
@@ -295,28 +301,14 @@ func (m *Manager) testConfigInternal(ctx context.Context) error {
 		return nil
 	}
 
-	// Try docker exec first (for containerized environments)
 	cmd := exec.CommandContext(ctx, "docker", "exec", m.nginxContainer, "nginx", "-t")
 	output, err := cmd.CombinedOutput()
-	outputStr := strings.TrimSpace(string(output))
-
 	if err != nil {
-		// If we got nginx output, return it
+		outputStr := strings.TrimSpace(string(output))
 		if outputStr != "" {
 			return fmt.Errorf("nginx config test failed: %s", outputStr)
 		}
-		// If output is empty, try to capture error details
-		log.Printf("[TestConfig] docker exec failed with empty output, err: %v", err)
-		// Fallback to direct nginx command (for non-containerized environments)
-		cmd = exec.CommandContext(ctx, "nginx", "-t")
-		output, err = cmd.CombinedOutput()
-		if err != nil {
-			fallbackOutput := strings.TrimSpace(string(output))
-			if fallbackOutput != "" {
-				return fmt.Errorf("nginx config test failed: %s", fallbackOutput)
-			}
-			return fmt.Errorf("nginx config test failed: %v", err)
-		}
+		return fmt.Errorf("nginx config test failed: %v", err)
 	}
 	return nil
 }
@@ -327,16 +319,10 @@ func (m *Manager) reloadNginxInternal(ctx context.Context) error {
 		return nil
 	}
 
-	// Try docker exec first (for containerized environments)
 	cmd := exec.CommandContext(ctx, "docker", "exec", m.nginxContainer, "nginx", "-s", "reload")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		// Fallback to direct nginx command (for non-containerized environments)
-		cmd = exec.CommandContext(ctx, "nginx", "-s", "reload")
-		output, err = cmd.CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("nginx reload failed: %s", string(output))
-		}
+		return fmt.Errorf("nginx reload failed: %s", string(output))
 	}
 	return nil
 }
@@ -365,11 +351,14 @@ func (m *Manager) GenerateConfigFull(ctx context.Context, data ProxyHostConfigDa
 	data.HTTPPort = m.httpPort
 	data.HTTPSPort = m.httpsPort
 
-	// Get API host from environment or default
+	// Get API host from environment or default (host network mode)
 	apiHostValue := os.Getenv("API_HOST")
 	if apiHostValue == "" {
-		apiHostValue = "api:8080" // Docker internal hostname
+		apiHostValue = "127.0.0.1:9080"
 	}
+
+	// DNS resolver value for templates
+	dnsResolverValue := m.dnsResolver
 
 	funcMap := template.FuncMap{
 		"join": strings.Join,
@@ -442,6 +431,9 @@ func (m *Manager) GenerateConfigFull(ctx context.Context, data ProxyHostConfigDa
 		},
 		"apiHost": func() string {
 			return apiHostValue
+		},
+		"dnsResolver": func() string {
+			return dnsResolverValue
 		},
 		"len": func(s []string) int {
 			return len(s)
