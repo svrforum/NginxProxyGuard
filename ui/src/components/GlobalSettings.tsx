@@ -11,6 +11,63 @@ import type { GlobalSettings as GlobalSettingsType } from '../types/settings';
 
 type TabType = 'worker' | 'http' | 'performance' | 'compression' | 'ssl' | 'timeout' | 'advanced';
 
+// Common input class
+const inputClass = "mt-1 w-full px-3 py-2.5 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-sm text-slate-700 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors";
+
+// Extracted as top-level components to prevent re-creation on parent re-render (fixes focus loss)
+function SettingField({
+  settingKey,
+  children,
+  className = '',
+}: {
+  settingKey: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const { t } = useTranslation('settings');
+  return (
+    <div className={`${className} group`}>
+      <label className="block text-[13px] font-semibold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-2">
+        {t(`global.fields.${settingKey}.label`)}
+        <HelpTip contentKey={`help.global.${settingKey}`} ns="settings" />
+      </label>
+      {children}
+      <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">{t(`global.fields.${settingKey}.description`)}</p>
+    </div>
+  );
+}
+
+function CheckboxField({
+  settingKey,
+  checked,
+  onChange,
+}: {
+  settingKey: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  const { t } = useTranslation('settings');
+  return (
+    <div className="py-3 px-4 rounded-lg bg-slate-50 dark:bg-slate-700/30 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+      <label className="flex items-start gap-3 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+          className="mt-0.5 w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 focus:ring-offset-0 bg-white dark:bg-slate-700"
+        />
+        <div className="flex-1">
+          <span className="text-[13px] font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+            {t(`global.fields.${settingKey}.label`)}
+            <HelpTip contentKey={`help.global.${settingKey}`} ns="settings" />
+          </span>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">{t(`global.fields.${settingKey}.description`)}</p>
+        </div>
+      </label>
+    </div>
+  );
+}
+
 export default function GlobalSettings() {
   const { t } = useTranslation('settings');
   const queryClient = useQueryClient();
@@ -93,62 +150,6 @@ export default function GlobalSettings() {
     { id: 'timeout', label: t('global.tabs.timeout'), icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> },
     { id: 'advanced', label: t('global.tabs.advanced'), icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg> },
   ];
-
-  // Helper component for setting field with description
-  const SettingField = ({
-    settingKey,
-    children,
-    className = '',
-  }: {
-    settingKey: string;
-    children: React.ReactNode;
-    className?: string;
-  }) => {
-    return (
-      <div className={`${className} group`}>
-        <label className="block text-[13px] font-semibold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-2">
-          {t(`global.fields.${settingKey}.label`)}
-          <HelpTip contentKey={`help.global.${settingKey}`} ns="settings" />
-        </label>
-        {children}
-        <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">{t(`global.fields.${settingKey}.description`)}</p>
-      </div>
-    );
-  };
-
-  // Helper component for checkbox with description
-  const CheckboxField = ({
-    settingKey,
-    checked,
-    onChange,
-  }: {
-    settingKey: string;
-    checked: boolean;
-    onChange: (checked: boolean) => void;
-  }) => {
-    return (
-      <div className="py-3 px-4 rounded-lg bg-slate-50 dark:bg-slate-700/30 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
-        <label className="flex items-start gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={checked}
-            onChange={(e) => onChange(e.target.checked)}
-            className="mt-0.5 w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 focus:ring-offset-0 bg-white dark:bg-slate-700"
-          />
-          <div className="flex-1">
-            <span className="text-[13px] font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
-              {t(`global.fields.${settingKey}.label`)}
-              <HelpTip contentKey={`help.global.${settingKey}`} ns="settings" />
-            </span>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">{t(`global.fields.${settingKey}.description`)}</p>
-          </div>
-        </label>
-      </div>
-    );
-  };
-
-  // Common input class
-  const inputClass = "mt-1 w-full px-3 py-2.5 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-sm text-slate-700 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors";
 
   return (
     <div className="space-y-6">
