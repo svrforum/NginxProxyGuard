@@ -335,3 +335,130 @@ func (s *DockerStatsService) GetStatsSummary(ctx context.Context) (*DockerStatsS
 
 	return summary, nil
 }
+
+// DockerContainerInfo represents a Docker container with its network information
+type DockerContainerInfo struct {
+	Name     string                   `json:"name"`
+	Image    string                   `json:"image"`
+	State    string                   `json:"state"`
+	Networks []DockerContainerNetwork `json:"networks"`
+	Ports    []DockerContainerPort    `json:"ports"`
+}
+
+// DockerContainerNetwork represents a container's network attachment
+type DockerContainerNetwork struct {
+	Name      string `json:"name"`
+	IPAddress string `json:"ip_address"`
+}
+
+// DockerContainerPort represents a container's exposed port
+type DockerContainerPort struct {
+	ContainerPort int    `json:"container_port"`
+	Protocol      string `json:"protocol"`
+}
+
+// ListContainersWithNetworks returns all running containers with their network IPs,
+// excluding npg-* containers. This is used by the UI to help users select
+// Docker containers as proxy targets when nginx runs in host network mode.
+func (s *DockerStatsService) ListContainersWithNetworks(ctx context.Context) ([]DockerContainerInfo, error) {
+	// Get all running containers (exclude npg-* self containers)
+	cmd := exec.CommandContext(ctx, "docker", "ps", "--format", `{{.Names}}`)
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list containers: %w", err)
+	}
+
+	names := strings.Split(strings.TrimSpace(string(output)), "\n")
+	var containers []DockerContainerInfo
+
+	for _, name := range names {
+		name = strings.TrimSpace(name)
+		if name == "" || strings.HasPrefix(name, "npg-") || strings.HasPrefix(name, "npg_") {
+			continue
+		}
+
+		info, err := s.inspectContainer(ctx, name)
+		if err != nil {
+			continue
+		}
+		// Only include containers that have at least one network with an IP
+		hasIP := false
+		for _, net := range info.Networks {
+			if net.IPAddress != "" {
+				hasIP = true
+				break
+			}
+		}
+		if hasIP {
+			containers = append(containers, *info)
+		}
+	}
+
+	return containers, nil
+}
+
+// inspectContainer gets detailed network info for a single container
+func (s *DockerStatsService) inspectContainer(ctx context.Context, name string) (*DockerContainerInfo, error) {
+	cmd := exec.CommandContext(ctx, "docker", "inspect", "--format",
+		`{"image":"{{.Config.Image}}","state":"{{.State.Status}}","networks":{{json .NetworkSettings.Networks}},"ports":{{json .Config.ExposedPorts}}}`,
+		name)
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect container %s: %w", name, err)
+	}
+
+	var raw struct {
+		Image    string                            `json:"image"`
+		State    string                            `json:"state"`
+		Networks map[string]json.RawMessage        `json:"networks"`
+		Ports    map[string]json.RawMessage        `json:"ports"`
+	}
+
+	if err := json.Unmarshal(output, &raw); err != nil {
+		return nil, fmt.Errorf("failed to parse inspect output for %s: %w", name, err)
+	}
+
+	info := &DockerContainerInfo{
+		Name:     name,
+		Image:    raw.Image,
+		State:    raw.State,
+		Networks: []DockerContainerNetwork{},
+		Ports:    []DockerContainerPort{},
+	}
+
+	// Parse networks
+	for netName, netData := range raw.Networks {
+		var netInfo struct {
+			IPAddress string `json:"IPAddress"`
+		}
+		if err := json.Unmarshal(netData, &netInfo); err != nil {
+			continue
+		}
+		if netInfo.IPAddress != "" {
+			info.Networks = append(info.Networks, DockerContainerNetwork{
+				Name:      netName,
+				IPAddress: netInfo.IPAddress,
+			})
+		}
+	}
+
+	// Parse exposed ports (e.g., "8080/tcp": {})
+	for portProto := range raw.Ports {
+		parts := strings.SplitN(portProto, "/", 2)
+		if len(parts) == 2 {
+			var port int
+			if _, err := fmt.Sscanf(parts[0], "%d", &port); err == nil {
+				proto := parts[1]
+				if proto == "" {
+					proto = "tcp"
+				}
+				info.Ports = append(info.Ports, DockerContainerPort{
+					ContainerPort: port,
+					Protocol:      proto,
+				})
+			}
+		}
+	}
+
+	return info, nil
+}

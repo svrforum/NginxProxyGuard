@@ -470,6 +470,25 @@ func (h *SettingsHandler) GetDockerStats(c echo.Context) error {
 	return c.JSON(http.StatusOK, summary)
 }
 
+// ListDockerContainers returns all running Docker containers with their network info
+// Used by the UI to help users select bridge network containers as proxy targets
+func (h *SettingsHandler) ListDockerContainers(c echo.Context) error {
+	if h.dockerStats == nil {
+		return c.JSON(http.StatusServiceUnavailable, map[string]string{"error": "Docker stats service not available"})
+	}
+
+	containers, err := h.dockerStats.ListContainersWithNetworks(c.Request().Context())
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+
+	if containers == nil {
+		containers = []service.DockerContainerInfo{}
+	}
+
+	return c.JSON(http.StatusOK, containers)
+}
+
 // Backup Handlers
 
 func (h *SettingsHandler) ListBackups(c echo.Context) error {
