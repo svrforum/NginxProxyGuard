@@ -252,7 +252,7 @@ var domainNames pq.StringArray    // 읽기
 
 | File | Repository | Key Methods |
 |------|-----------|-------------|
-| `proxy_host.go` | ProxyHostRepository | Create, GetByID, GetByDomain, List, Update, Delete, GetByCertificateID |
+| `proxy_host.go` | ProxyHostRepository | Create, GetByID, GetByDomain, List, Update, Delete, GetByCertificateID, ToggleFavorite |
 | `certificate.go` | CertificateRepository | Create, GetByID, List, Update, Delete, GetExpiringSoon, GetByDomainNames |
 | `waf.go` | WAFRepository | GetHostConfig, GetGlobalExclusions, CreateExclusion, DeleteExclusion |
 | `access_list.go` | AccessListRepository | Create, GetByID, List, Update, Delete |
@@ -697,6 +697,7 @@ Tag push (v*) → detect changes (SHA256 per component)
 | access_list_id | uuid | NULL | FK → access_lists |
 | proxy_connect/send/read_timeout | integer | 0 | 0=global |
 | client_max_body_size | varchar(20) | '' | |
+| is_favorite | boolean | false | UI 즐겨찾기 (상단 고정) |
 | enabled | boolean | true | |
 | meta | jsonb | '{}' | |
 
@@ -828,6 +829,7 @@ system_log_level: 'debug','info','warn','error','fatal'
 | DELETE | `/api/v1/proxy-hosts/:id` | 삭제 |
 | POST | `/api/v1/proxy-hosts/:id/test` | 업스트림 연결 테스트 |
 | POST | `/api/v1/proxy-hosts/:id/clone` | 복제 |
+| PUT | `/api/v1/proxy-hosts/:id/favorite` | 즐겨찾기 토글 (nginx reload 없음) |
 
 ### 6.4 Security (per-host)
 
@@ -941,7 +943,7 @@ interface ProxyHost {
   id, domain_names[], forward_scheme, forward_host, forward_port
   ssl_enabled, ssl_force_https, ssl_http2, ssl_http3, certificate_id?
   waf_enabled, waf_mode, waf_paranoia_level, waf_anomaly_threshold
-  cache_enabled, block_exploits, access_list_id?, enabled
+  cache_enabled, block_exploits, access_list_id?, is_favorite, enabled
   proxy_connect_timeout?, proxy_send_timeout?, proxy_read_timeout?
   client_max_body_size?, advanced_config?
   created_at, updated_at
