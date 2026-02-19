@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import type { CreateProxyHostRequest } from '../../../types/proxy-host'
 import type { FormErrors } from '../types'
 import { useTranslation } from 'react-i18next'
 import { HelpTip } from '../../common/HelpTip'
+import { DockerContainerSelector } from '../DockerContainerSelector'
 
 interface BasicTabFullProps {
   formData: CreateProxyHostRequest
@@ -27,6 +29,12 @@ export function BasicTabContent({
   updateDomain,
 }: BasicTabFullProps) {
   const { t } = useTranslation('proxyHost')
+  const [dockerSelectorOpen, setDockerSelectorOpen] = useState(false)
+
+  const handleDockerSelect = (host: string, port: number) => {
+    setFormData(prev => ({ ...prev, forward_host: host }))
+    setPortInput(port.toString())
+  }
 
   return (
     <div className="space-y-6">
@@ -132,16 +140,29 @@ export function BasicTabContent({
               {t('form.basic.forwardHost')}
               <HelpTip contentKey="help.forwardHost" />
             </label>
-            <input
-              type="text"
-              value={formData.forward_host}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, forward_host: e.target.value }))
-              }
-              placeholder={t('form.basic.forwardHostPlaceholder')}
-              className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400 ${errors.forward_host ? 'border-red-300 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'
-                }`}
-            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={formData.forward_host}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, forward_host: e.target.value }))
+                }
+                placeholder={t('form.basic.forwardHostPlaceholder')}
+                className={`flex-1 rounded-lg border px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400 ${errors.forward_host ? 'border-red-300 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'
+                  }`}
+              />
+              <button
+                type="button"
+                onClick={() => setDockerSelectorOpen(true)}
+                className="flex-shrink-0 px-3 py-2.5 text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors flex items-center gap-1.5"
+                title={t('form.basic.dockerBrowse')}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                </svg>
+                {t('form.basic.dockerBrowseShort')}
+              </button>
+            </div>
             {errors.forward_host && (
               <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.forward_host}</p>
             )}
@@ -202,6 +223,13 @@ export function BasicTabContent({
           ))}
         </div>
       </div>
+
+      {/* Docker Container Selector Modal */}
+      <DockerContainerSelector
+        isOpen={dockerSelectorOpen}
+        onClose={() => setDockerSelectorOpen(false)}
+        onSelect={handleDockerSelect}
+      />
     </div>
   )
 }
