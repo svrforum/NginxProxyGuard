@@ -66,7 +66,7 @@ func (r *ProxyHostRepository) Create(ctx context.Context, req *model.CreateProxy
 			proxy_connect_timeout, proxy_send_timeout, proxy_read_timeout,
 			proxy_buffering, COALESCE(proxy_request_buffering, '') as proxy_request_buffering,
 			client_max_body_size, COALESCE(proxy_max_temp_file_size, '') as proxy_max_temp_file_size,
-			access_list_id, enabled, meta, created_at, updated_at
+			access_list_id, enabled, is_favorite, meta, created_at, updated_at
 	`
 
 	var host model.ProxyHost
@@ -175,6 +175,7 @@ func (r *ProxyHostRepository) Create(ctx context.Context, req *model.CreateProxy
 		&host.ProxyMaxTempFileSize,
 		&accessListID,
 		&host.Enabled,
+		&host.IsFavorite,
 		&meta,
 		&host.CreatedAt,
 		&host.UpdatedAt,
@@ -228,7 +229,7 @@ func (r *ProxyHostRepository) GetByID(ctx context.Context, id string) (*model.Pr
 			COALESCE(proxy_request_buffering, '') as proxy_request_buffering,
 			COALESCE(client_max_body_size, '') as client_max_body_size,
 			COALESCE(proxy_max_temp_file_size, '') as proxy_max_temp_file_size,
-			access_list_id, enabled, meta, created_at, updated_at
+			access_list_id, enabled, is_favorite, meta, created_at, updated_at
 		FROM proxy_hosts WHERE id = $1
 	`
 
@@ -268,6 +269,7 @@ func (r *ProxyHostRepository) GetByID(ctx context.Context, id string) (*model.Pr
 		&host.ProxyMaxTempFileSize,
 		&accessListID,
 		&host.Enabled,
+		&host.IsFavorite,
 		&meta,
 		&host.CreatedAt,
 		&host.UpdatedAt,
@@ -327,8 +329,8 @@ func (r *ProxyHostRepository) List(ctx context.Context, page, perPage int, searc
 		return nil, 0, fmt.Errorf("failed to count proxy hosts: %w", err)
 	}
 
-	// Build ORDER BY clause
-	orderByClause := "created_at DESC" // default
+	// Build ORDER BY clause (always sort favorites first)
+	orderByClause := "is_favorite DESC, created_at DESC" // default
 	validSortFields := map[string]string{
 		"name":    "domain_names[1]",
 		"created": "created_at",
@@ -339,7 +341,7 @@ func (r *ProxyHostRepository) List(ctx context.Context, page, perPage int, searc
 		if sortOrder == "desc" {
 			order = "DESC"
 		}
-		orderByClause = fmt.Sprintf("%s %s", sortField, order)
+		orderByClause = fmt.Sprintf("is_favorite DESC, %s %s", sortField, order)
 	}
 
 	// Get paginated data
@@ -360,7 +362,7 @@ func (r *ProxyHostRepository) List(ctx context.Context, page, perPage int, searc
 			COALESCE(proxy_request_buffering, '') as proxy_request_buffering,
 			COALESCE(client_max_body_size, '') as client_max_body_size,
 			COALESCE(proxy_max_temp_file_size, '') as proxy_max_temp_file_size,
-			access_list_id, enabled, meta, created_at, updated_at
+			access_list_id, enabled, is_favorite, meta, created_at, updated_at
 		FROM proxy_hosts
 		%s
 		ORDER BY %s
@@ -412,6 +414,7 @@ func (r *ProxyHostRepository) List(ctx context.Context, page, perPage int, searc
 			&host.ProxyMaxTempFileSize,
 			&accessListID,
 			&host.Enabled,
+			&host.IsFavorite,
 			&meta,
 			&host.CreatedAt,
 			&host.UpdatedAt,
@@ -655,6 +658,94 @@ func (r *ProxyHostRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+// ToggleFavorite toggles the is_favorite flag for a proxy host without updating updated_at
+func (r *ProxyHostRepository) ToggleFavorite(ctx context.Context, id string) (*model.ProxyHost, error) {
+	query := `
+		UPDATE proxy_hosts SET is_favorite = NOT is_favorite
+		WHERE id = $1
+		RETURNING id, domain_names, forward_scheme, forward_host, forward_port,
+			ssl_enabled, ssl_force_https, ssl_http2, ssl_http3, certificate_id,
+			allow_websocket_upgrade, cache_enabled,
+			COALESCE(cache_static_only, true) as cache_static_only,
+			COALESCE(cache_ttl, '7d') as cache_ttl,
+			block_exploits,
+			COALESCE(block_exploits_exceptions, '') as block_exploits_exceptions,
+			custom_locations, advanced_config, waf_enabled, waf_mode,
+			waf_paranoia_level, waf_anomaly_threshold,
+			COALESCE(proxy_connect_timeout, 0) as proxy_connect_timeout,
+			COALESCE(proxy_send_timeout, 0) as proxy_send_timeout,
+			COALESCE(proxy_read_timeout, 0) as proxy_read_timeout,
+			COALESCE(proxy_buffering, '') as proxy_buffering,
+			COALESCE(proxy_request_buffering, '') as proxy_request_buffering,
+			COALESCE(client_max_body_size, '') as client_max_body_size,
+			COALESCE(proxy_max_temp_file_size, '') as proxy_max_temp_file_size,
+			access_list_id, enabled, is_favorite, meta, created_at, updated_at
+	`
+
+	var host model.ProxyHost
+	var certificateID, accessListID sql.NullString
+	var customLocations, meta []byte
+
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&host.ID,
+		&host.DomainNames,
+		&host.ForwardScheme,
+		&host.ForwardHost,
+		&host.ForwardPort,
+		&host.SSLEnabled,
+		&host.SSLForceHTTPS,
+		&host.SSLHTTP2,
+		&host.SSLHTTP3,
+		&certificateID,
+		&host.AllowWebsocketUpgrade,
+		&host.CacheEnabled,
+		&host.CacheStaticOnly,
+		&host.CacheTTL,
+		&host.BlockExploits,
+		&host.BlockExploitsExceptions,
+		&customLocations,
+		&host.AdvancedConfig,
+		&host.WAFEnabled,
+		&host.WAFMode,
+		&host.WAFParanoiaLevel,
+		&host.WAFAnomalyThreshold,
+		&host.ProxyConnectTimeout,
+		&host.ProxySendTimeout,
+		&host.ProxyReadTimeout,
+		&host.ProxyBuffering,
+		&host.ProxyRequestBuffering,
+		&host.ClientMaxBodySize,
+		&host.ProxyMaxTempFileSize,
+		&accessListID,
+		&host.Enabled,
+		&host.IsFavorite,
+		&meta,
+		&host.CreatedAt,
+		&host.UpdatedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to toggle favorite: %w", err)
+	}
+
+	if certificateID.Valid {
+		host.CertificateID = &certificateID.String
+	}
+	if accessListID.Valid {
+		host.AccessListID = &accessListID.String
+	}
+	host.CustomLocations = json.RawMessage(customLocations)
+	host.Meta = json.RawMessage(meta)
+
+	// Invalidate cache
+	r.invalidateHostCache(ctx, id)
+
+	return &host, nil
+}
+
 // CheckDomainExists checks if any of the given domains already exist in another proxy host
 // excludeID can be empty string for create operations, or the host ID for update operations
 func (r *ProxyHostRepository) CheckDomainExists(ctx context.Context, domains []string, excludeID string) ([]string, error) {
@@ -704,7 +795,7 @@ func (r *ProxyHostRepository) GetByDomain(ctx context.Context, domain string) (*
 			COALESCE(proxy_request_buffering, '') as proxy_request_buffering,
 			COALESCE(client_max_body_size, '') as client_max_body_size,
 			COALESCE(proxy_max_temp_file_size, '') as proxy_max_temp_file_size,
-			access_list_id, enabled, meta, created_at, updated_at
+			access_list_id, enabled, is_favorite, meta, created_at, updated_at
 		FROM proxy_hosts WHERE $1 = ANY(domain_names)
 		LIMIT 1
 	`
@@ -745,6 +836,7 @@ func (r *ProxyHostRepository) GetByDomain(ctx context.Context, domain string) (*
 		&host.ProxyMaxTempFileSize,
 		&accessListID,
 		&host.Enabled,
+		&host.IsFavorite,
 		&meta,
 		&host.CreatedAt,
 		&host.UpdatedAt,
@@ -787,7 +879,7 @@ func (r *ProxyHostRepository) GetAllEnabled(ctx context.Context) ([]model.ProxyH
 			COALESCE(proxy_request_buffering, '') as proxy_request_buffering,
 			COALESCE(client_max_body_size, '') as client_max_body_size,
 			COALESCE(proxy_max_temp_file_size, '') as proxy_max_temp_file_size,
-			access_list_id, enabled, meta, created_at, updated_at
+			access_list_id, enabled, is_favorite, meta, created_at, updated_at
 		FROM proxy_hosts
 		WHERE enabled = true
 		ORDER BY created_at ASC
@@ -837,6 +929,7 @@ func (r *ProxyHostRepository) GetAllEnabled(ctx context.Context) ([]model.ProxyH
 			&host.ProxyMaxTempFileSize,
 			&accessListID,
 			&host.Enabled,
+			&host.IsFavorite,
 			&meta,
 			&host.CreatedAt,
 			&host.UpdatedAt,
@@ -879,7 +972,7 @@ func (r *ProxyHostRepository) GetByCertificateID(ctx context.Context, certificat
 			COALESCE(proxy_request_buffering, '') as proxy_request_buffering,
 			COALESCE(client_max_body_size, '') as client_max_body_size,
 			COALESCE(proxy_max_temp_file_size, '') as proxy_max_temp_file_size,
-			access_list_id, enabled, meta, created_at, updated_at
+			access_list_id, enabled, is_favorite, meta, created_at, updated_at
 		FROM proxy_hosts
 		WHERE certificate_id = $1
 		ORDER BY created_at ASC
@@ -929,6 +1022,7 @@ func (r *ProxyHostRepository) GetByCertificateID(ctx context.Context, certificat
 			&host.ProxyMaxTempFileSize,
 			&accessListID,
 			&host.Enabled,
+			&host.IsFavorite,
 			&meta,
 			&host.CreatedAt,
 			&host.UpdatedAt,

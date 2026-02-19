@@ -93,6 +93,10 @@ export interface CloneProxyHostRequest {
   forward_port?: number
 }
 
+export async function toggleProxyHostFavorite(id: string): Promise<ProxyHost> {
+  return apiPut<ProxyHost>(`${API_BASE}/proxy-hosts/${id}/favorite`, {})
+}
+
 export async function cloneProxyHost(
   id: string,
   data: CloneProxyHostRequest

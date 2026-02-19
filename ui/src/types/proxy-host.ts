@@ -31,6 +31,7 @@ export interface ProxyHost {
   waf_anomaly_threshold: number
   access_list_id?: string
   enabled: boolean
+  is_favorite: boolean
   meta?: Record<string, unknown>
   created_at: string
   updated_at: string

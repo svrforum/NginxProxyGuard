@@ -195,7 +195,8 @@ type ProxyHost struct {
 	AccessListID *string `json:"access_list_id,omitempty"`
 
 	// Status
-	Enabled bool `json:"enabled"`
+	Enabled    bool `json:"enabled"`
+	IsFavorite bool `json:"is_favorite"`
 
 	// Metadata
 	Meta      json.RawMessage `json:"meta,omitempty"`

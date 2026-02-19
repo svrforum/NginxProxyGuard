@@ -74,6 +74,8 @@
       "forwardHostPlaceholder": "192.168.1.100 or container_name",
       "forwardPort": "Forward Port",
       "forwardScheme": "Forward Scheme",
+      "dockerBrowse": "Browse Docker Containers",
+      "dockerBrowseShort": "Docker",
       "websocket": "WebSocket Support",
       "websocketDescription": "Allow WebSocket connections"
     },
@@ -385,9 +387,27 @@
       "anomalyThresholdDescription": "Minimum score to block request"
     }
   },
+  "dockerSelector": {
+    "title": "Select Docker Container",
+    "description": "Select a Docker container to use as the proxy target",
+    "loading": "Loading containers...",
+    "empty": "No containers available",
+    "emptyDescription": "No running Docker containers found on bridge networks",
+    "error": "Failed to fetch container list",
+    "container": "Container",
+    "image": "Image",
+    "network": "Network",
+    "ip": "IP",
+    "ports": "Ports",
+    "select": "Select",
+    "refresh": "Refresh",
+    "search": "Search containers...",
+    "selectNetwork": "Select Network",
+    "selectPort": "Select Port"
+  },
   "help": {
     "domainNames": "Enter the web addresses (e.g., blog.mysite.com) that visitors will use. Press Enter to add multiple. Wildcards like *.mysite.com are supported.",
-    "forwardHost": "The IP address or container name of your internal server. 'Container Name' is best if on the same Docker network.",
+    "forwardHost": "The IP address of your internal server. To proxy to a Docker container, click the 'Docker' button to auto-fill the container's bridge network IP. In host network mode, you can access containers via their bridge IP without publishing ports.",
     "forwardScheme": "Protocol to use for communicating with the internal service. Use 'https' only if the internal service handles its own SSL.",
     "forwardPort": "The port number your internal service is listening on (e.g., 80 for web, 3000 for Node.js).",
     "websocket": "Must be enabled for apps using real-time communication like Signal or Socket.io.",
@@ -486,7 +506,9 @@
     "testConnection": "Test Connection",
     "testConfig": "Test Configuration",
     "edit": "Edit",
-    "toggleEnable": "Toggle Enable/Disable"
+    "toggleEnable": "Toggle Enable/Disable",
+    "favorite": "Add to favorites",
+    "unfavorite": "Remove from favorites"
   },
   "test": {
     "title": "Configuration Test",

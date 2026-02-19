@@ -479,6 +479,7 @@ func main() {
 			proxyHosts.DELETE("/:id", proxyHostHandler.Delete)
 			proxyHosts.POST("/:id/test", proxyHostHandler.TestHost)
 			proxyHosts.POST("/:id/clone", proxyHostHandler.Clone)
+			proxyHosts.PUT("/:id/favorite", proxyHostHandler.ToggleFavorite)
 		}
 
 		// DNS Provider routes
@@ -710,6 +711,9 @@ func main() {
 			dashboard.GET("/containers", settingsHandler.GetDockerStats)
 			dashboard.GET("/geoip-stats", settingsHandler.GetGeoIPStats)
 		}
+
+		// Docker container discovery (for proxy target selection in host network mode)
+		v1.GET("/docker/containers", settingsHandler.ListDockerContainers)
 
 		// Backup/Restore routes (Phase 7)
 		backups := v1.Group("/backups")

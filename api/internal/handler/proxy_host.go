@@ -210,6 +210,26 @@ func (h *ProxyHostHandler) Delete(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
+func (h *ProxyHostHandler) ToggleFavorite(c echo.Context) error {
+	id := c.Param("id")
+	if id == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "id is required",
+		})
+	}
+
+	host, err := h.service.ToggleFavorite(c.Request().Context(), id)
+	if err != nil {
+		return internalError(c, "toggle favorite", err)
+	}
+
+	if host == nil {
+		return notFoundError(c, "Proxy host")
+	}
+
+	return c.JSON(http.StatusOK, host)
+}
+
 func (h *ProxyHostHandler) SyncAll(c echo.Context) error {
 	result, err := h.service.SyncAllConfigsWithDetails(c.Request().Context())
 	if err != nil {

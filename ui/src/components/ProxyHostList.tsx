@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { fetchProxyHosts, deleteProxyHost, testProxyHost, updateProxyHost, testProxyHostConfig, cloneProxyHost } from '../api/proxy-hosts'
+import { fetchProxyHosts, deleteProxyHost, testProxyHost, updateProxyHost, testProxyHostConfig, cloneProxyHost, toggleProxyHostFavorite } from '../api/proxy-hosts'
 import { listCertificates, getCertificate } from '../api/certificates'
 import { listDNSProviders } from '../api/dns-providers'
 import { HelpTip } from './common/HelpTip'
@@ -728,6 +728,13 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
     },
   })
 
+  const favoriteMutation = useMutation({
+    mutationFn: toggleProxyHostFavorite,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['proxy-hosts'] })
+    },
+  })
+
   const cloneMutation = useMutation({
     mutationFn: ({ id, domainNames, certificateId, certProvider, dnsProviderId, forwardScheme, forwardHost, forwardPort, isCreatingCert }: {
       id: string
@@ -1129,7 +1136,21 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
                 <tr key={host.id} className={`hover:bg-slate-50 dark:hover:bg-slate-700/50 ${!host.enabled ? 'opacity-50' : ''}`}>
                   {/* Source (Domains) */}
                   <td className="px-4 py-3">
-                    <div className="flex flex-col gap-1">
+                    <div className="flex items-start gap-1.5">
+                      <button
+                        onClick={() => favoriteMutation.mutate(host.id)}
+                        className={`mt-0.5 p-0.5 rounded transition-colors flex-shrink-0 ${
+                          host.is_favorite
+                            ? 'text-amber-400 hover:text-amber-500 dark:text-amber-400 dark:hover:text-amber-300'
+                            : 'text-slate-300 hover:text-amber-400 dark:text-slate-600 dark:hover:text-amber-400'
+                        }`}
+                        title={host.is_favorite ? t('actions.unfavorite') : t('actions.favorite')}
+                      >
+                        <svg className="w-4 h-4" fill={host.is_favorite ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                        </svg>
+                      </button>
+                      <div className="flex flex-col gap-1">
                       {host.domain_names.map((domain, idx) => (
                         <a
                           key={idx}
@@ -1149,6 +1170,7 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
                           </svg>
                         </a>
                       ))}
+                      </div>
                     </div>
                   </td>
 

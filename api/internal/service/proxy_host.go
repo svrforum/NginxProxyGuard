@@ -839,6 +839,10 @@ func (s *ProxyHostService) Update(ctx context.Context, id string, req *model.Upd
 	return host, nil
 }
 
+func (s *ProxyHostService) ToggleFavorite(ctx context.Context, id string) (*model.ProxyHost, error) {
+	return s.repo.ToggleFavorite(ctx, id)
+}
+
 func (s *ProxyHostService) Delete(ctx context.Context, id string) error {
 	// Get host first to know domain names for config file
 	host, err := s.repo.GetByID(ctx, id)

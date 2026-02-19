@@ -1083,6 +1083,7 @@ CREATE TABLE IF NOT EXISTS public.proxy_hosts (
     proxy_buffering character varying(10) DEFAULT ''::character varying,
     client_max_body_size character varying(20) DEFAULT ''::character varying,
     proxy_max_temp_file_size character varying(20) DEFAULT ''::character varying,
+    is_favorite boolean DEFAULT false NOT NULL,
     CONSTRAINT chk_waf_anomaly_threshold CHECK (((waf_anomaly_threshold >= 1) AND (waf_anomaly_threshold <= 100))),
     CONSTRAINT chk_waf_paranoia_level CHECK (((waf_paranoia_level >= 1) AND (waf_paranoia_level <= 4)))
 );
@@ -2092,6 +2093,7 @@ ALTER TYPE public.block_reason ADD VALUE IF NOT EXISTS 'access_denied';
 -- proxy_hosts table upgrades
 ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS cache_static_only boolean DEFAULT true NOT NULL;
 ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS cache_ttl character varying(20) DEFAULT '7d'::character varying NOT NULL;
+ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS is_favorite boolean DEFAULT false NOT NULL;
 
 -- Add column comments
 COMMENT ON COLUMN public.proxy_hosts.cache_static_only IS 'Only cache static assets (js, css, images, fonts) - excludes API paths';
