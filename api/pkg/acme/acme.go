@@ -28,6 +28,7 @@ import (
 	"github.com/go-acme/lego/v4/providers/dns/cloudflare"
 	"github.com/go-acme/lego/v4/providers/dns/duckdns"
 	"github.com/go-acme/lego/v4/providers/dns/dynu"
+	"github.com/go-acme/lego/v4/providers/dns/route53"
 	"github.com/go-acme/lego/v4/registration"
 
 	"nginx-proxy-guard/internal/model"
@@ -638,6 +639,38 @@ func (s *Service) createDNSProvider(provider *model.DNSProvider) (challenge.Prov
 
 		p, err := duckdns.NewDNSProvider()
 		os.Unsetenv("DUCKDNS_TOKEN")
+		return p, err
+
+	case model.DNSProviderRoute53:
+		var creds model.Route53Credentials
+		if err := json.Unmarshal(provider.Credentials, &creds); err != nil {
+			return nil, fmt.Errorf("invalid route53 credentials: %w", err)
+		}
+
+		// Set environment variables for Route53 provider
+		os.Setenv("AWS_ACCESS_KEY_ID", creds.AccessKeyID)
+		os.Setenv("AWS_SECRET_ACCESS_KEY", creds.SecretAccessKey)
+		if creds.Region != "" {
+			os.Setenv("AWS_REGION", creds.Region)
+		}
+		if creds.HostedZoneID != "" {
+			os.Setenv("AWS_HOSTED_ZONE_ID", creds.HostedZoneID)
+		}
+
+		// Increase propagation timeout for DNS propagation reliability
+		os.Setenv("AWS_PROPAGATION_TIMEOUT", "180")
+		os.Setenv("AWS_POLLING_INTERVAL", "5")
+
+		p, err := route53.NewDNSProvider()
+
+		// Cleanup environment variables
+		os.Unsetenv("AWS_ACCESS_KEY_ID")
+		os.Unsetenv("AWS_SECRET_ACCESS_KEY")
+		os.Unsetenv("AWS_REGION")
+		os.Unsetenv("AWS_HOSTED_ZONE_ID")
+		os.Unsetenv("AWS_PROPAGATION_TIMEOUT")
+		os.Unsetenv("AWS_POLLING_INTERVAL")
+
 		return p, err
 
 	case model.DNSProviderDynu:
