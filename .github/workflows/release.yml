@@ -221,90 +221,7 @@ jobs:
           docker manifest push ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}-test
 
   # ============================================================
-  # Step 4: E2E Tests - Bridge Mode
-  # ============================================================
-  test-bridge:
-    name: 🧪 Test (Bridge Mode)
-    needs: [detect, build-api, build-ui, build-nginx, create-test-manifests]
-    if: always() && needs.detect.result == 'success'
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Prepare test images
-        env:
-          VERSION: ${{ needs.detect.outputs.version }}
-          API_CHANGED: ${{ needs.detect.outputs.api_changed }}
-          UI_CHANGED: ${{ needs.detect.outputs.ui_changed }}
-          NGINX_CHANGED: ${{ needs.detect.outputs.nginx_changed }}
-        run: |
-          # Pull test images or latest for unchanged components
-          pull_image() {
-            local component=$1
-            local changed=$2
-
-            if [ "$changed" == "true" ]; then
-              echo "Pulling $component:$VERSION-test..."
-              docker pull ${{ env.IMAGE_PREFIX }}-$component:$VERSION-test
-              docker tag ${{ env.IMAGE_PREFIX }}-$component:$VERSION-test ${{ env.IMAGE_PREFIX }}-$component:$VERSION
-            else
-              echo "Pulling $component:latest (unchanged)..."
-              docker pull ${{ env.IMAGE_PREFIX }}-$component:latest
-              docker tag ${{ env.IMAGE_PREFIX }}-$component:latest ${{ env.IMAGE_PREFIX }}-$component:$VERSION
-            fi
-          }
-
-          pull_image "api" "$API_CHANGED"
-          pull_image "ui" "$UI_CHANGED"
-          pull_image "nginx" "$NGINX_CHANGED"
-
-      - name: Start test environment
-        env:
-          VERSION: ${{ needs.detect.outputs.version }}
-        run: |
-          docker compose -f docker-compose.release-test.yml up -d db valkey api nginx whoami httpbin
-
-      - name: Wait for services
-        run: |
-          echo "⏳ Waiting for API..."
-          timeout 120s bash -c '
-            until docker compose -f docker-compose.release-test.yml ps 2>/dev/null | grep -E "release-test-api.*healthy"; do
-              sleep 5
-            done
-          '
-          echo "⏳ Waiting for Nginx..."
-          timeout 60s bash -c '
-            until docker compose -f docker-compose.release-test.yml ps 2>/dev/null | grep -E "release-test-nginx.*healthy"; do
-              sleep 5
-            done
-          '
-          echo "✅ All services healthy"
-          docker compose -f docker-compose.release-test.yml ps
-
-      - name: Run E2E tests
-        env:
-          VERSION: ${{ needs.detect.outputs.version }}
-        run: |
-          docker compose -f docker-compose.release-test.yml run --rm test-runner
-
-      - name: Show logs (on failure)
-        if: failure()
-        run: |
-          echo "::group::API Logs"
-          docker compose -f docker-compose.release-test.yml logs api
-          echo "::endgroup::"
-          echo "::group::Nginx Logs"
-          docker compose -f docker-compose.release-test.yml logs nginx
-          echo "::endgroup::"
-
-      - name: Cleanup
-        if: always()
-        run: docker compose -f docker-compose.release-test.yml down -v
-
-  # ============================================================
-  # Step 5: E2E Tests - Host Mode
+  # Step 4: E2E Tests - Host Mode
   # ============================================================
   test-host:
     name: 🧪 Test (Host Mode)
@@ -399,8 +316,8 @@ jobs:
   # ============================================================
   push-api:
     name: 🚀 Push API (${{ matrix.arch }})
-    needs: [detect, test-bridge, test-host]
-    if: needs.test-bridge.result == 'success' && needs.test-host.result == 'success' && needs.detect.outputs.api_changed == 'true'
+    needs: [detect, test-host]
+    if: needs.test-host.result == 'success' && needs.detect.outputs.api_changed == 'true'
     strategy:
       matrix:
         include:
@@ -444,8 +361,8 @@ jobs:
 
   push-ui:
     name: 🚀 Push UI (${{ matrix.arch }})
-    needs: [detect, test-bridge, test-host]
-    if: needs.test-bridge.result == 'success' && needs.test-host.result == 'success' && needs.detect.outputs.ui_changed == 'true'
+    needs: [detect, test-host]
+    if: needs.test-host.result == 'success' && needs.detect.outputs.ui_changed == 'true'
     strategy:
       matrix:
         include:
@@ -489,8 +406,8 @@ jobs:
 
   push-nginx:
     name: 🚀 Push Nginx (${{ matrix.arch }})
-    needs: [detect, test-bridge, test-host]
-    if: needs.test-bridge.result == 'success' && needs.test-host.result == 'success' && needs.detect.outputs.nginx_changed == 'true'
+    needs: [detect, test-host]
+    if: needs.test-host.result == 'success' && needs.detect.outputs.nginx_changed == 'true'
     strategy:
       matrix:
         include:
@@ -733,7 +650,6 @@ jobs:
             | Nginx | ${{ needs.detect.outputs.nginx_changed == 'true' && '✅ 빌드 및 푸시 완료' || '⏭️ 건너뜀 (변경 없음)' }} |
 
             ## E2E 테스트
-            ✅ Bridge 모드 - 통과
             ✅ Host 모드 - 통과
 
             ${{ steps.changelog.outputs.contributors != '' && format('## 기여자\n기여해 주셔서 감사합니다! {0}\n', steps.changelog.outputs.contributors) || '' }}
@@ -748,7 +664,7 @@ jobs:
   # ============================================================
   cleanup-on-failure:
     name: 🧹 Cleanup (on failure)
-    needs: [detect, test-bridge, test-host]
+    needs: [detect, test-host]
     if: failure()
     runs-on: ubuntu-latest
     permissions:
