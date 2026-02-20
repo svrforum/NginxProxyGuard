@@ -310,18 +310,33 @@ type ProxyHostData struct {
 	SSLEnabled            bool                   `json:"ssl_enabled"`
 	SSLForceHTTPS         bool                   `json:"ssl_force_https"`
 	SSLHTTP2              bool                   `json:"ssl_http2"`
+	SSLHTTP3              bool                   `json:"ssl_http3"`
 	CertificateID         string                 `json:"certificate_id,omitempty"`
 	AllowWebsocketUpgrade bool                   `json:"allow_websocket_upgrade"`
 	CacheEnabled          bool                   `json:"cache_enabled"`
 	CacheStaticOnly       bool                   `json:"cache_static_only"`
 	CacheTTL              string                 `json:"cache_ttl"`
 	BlockExploits         bool                   `json:"block_exploits"`
+	BlockExploitsExceptions string               `json:"block_exploits_exceptions,omitempty"`
 	CustomLocations       []interface{}          `json:"custom_locations,omitempty"`
 	AdvancedConfig        string                 `json:"advanced_config,omitempty"`
 	WAFEnabled            bool                   `json:"waf_enabled"`
 	WAFMode               string                 `json:"waf_mode,omitempty"`
+	WAFParanoiaLevel      int                    `json:"waf_paranoia_level"`
+	WAFAnomalyThreshold   int                    `json:"waf_anomaly_threshold"`
 	AccessListID          string                 `json:"access_list_id,omitempty"`
 	Enabled               bool                   `json:"enabled"`
+	IsFavorite            bool                   `json:"is_favorite"`
+	RateLimitEnabled      bool                   `json:"rate_limit_enabled"`
+	Fail2banEnabled       bool                   `json:"fail2ban_enabled"`
+	BotFilterEnabled      bool                   `json:"bot_filter_enabled"`
+	SecurityHeadersEnabled bool                  `json:"security_headers_enabled"`
+	ProxyConnectTimeout   int                    `json:"proxy_connect_timeout"`
+	ProxySendTimeout      int                    `json:"proxy_send_timeout"`
+	ProxyReadTimeout      int                    `json:"proxy_read_timeout"`
+	ProxyBuffering        string                 `json:"proxy_buffering,omitempty"`
+	ClientMaxBodySize     string                 `json:"client_max_body_size,omitempty"`
+	ProxyMaxTempFileSize  string                 `json:"proxy_max_temp_file_size,omitempty"`
 	Meta                  map[string]interface{} `json:"meta,omitempty"`
 }
 

@@ -197,13 +197,26 @@ func (r *BackupRepository) exportGlobalSettings(ctx context.Context) (*model.Glo
 func (r *BackupRepository) exportProxyHosts(ctx context.Context) ([]model.ProxyHostExport, error) {
 	query := `
 		SELECT id, domain_names, forward_scheme, forward_host, forward_port,
-		       ssl_enabled, ssl_force_https, ssl_http2, certificate_id,
+		       ssl_enabled, ssl_force_https, ssl_http2, COALESCE(ssl_http3, false) as ssl_http3, certificate_id,
 		       allow_websocket_upgrade, cache_enabled,
 		       COALESCE(cache_static_only, true) as cache_static_only,
 		       COALESCE(cache_ttl, '7d') as cache_ttl,
-		       block_exploits,
+		       block_exploits, COALESCE(block_exploits_exceptions, '') as block_exploits_exceptions,
 		       custom_locations, advanced_config, waf_enabled, waf_mode,
-		       access_list_id, enabled, meta
+		       COALESCE(waf_paranoia_level, 1) as waf_paranoia_level,
+		       COALESCE(waf_anomaly_threshold, 5) as waf_anomaly_threshold,
+		       access_list_id, enabled, COALESCE(is_favorite, false) as is_favorite,
+		       COALESCE(rate_limit_enabled, false) as rate_limit_enabled,
+		       COALESCE(fail2ban_enabled, false) as fail2ban_enabled,
+		       COALESCE(bot_filter_enabled, false) as bot_filter_enabled,
+		       COALESCE(security_headers_enabled, false) as security_headers_enabled,
+		       COALESCE(proxy_connect_timeout, 0) as proxy_connect_timeout,
+		       COALESCE(proxy_send_timeout, 0) as proxy_send_timeout,
+		       COALESCE(proxy_read_timeout, 0) as proxy_read_timeout,
+		       COALESCE(proxy_buffering, '') as proxy_buffering,
+		       COALESCE(client_max_body_size, '') as client_max_body_size,
+		       COALESCE(proxy_max_temp_file_size, '') as proxy_max_temp_file_size,
+		       meta
 		FROM proxy_hosts ORDER BY created_at
 	`
 
@@ -222,10 +235,16 @@ func (r *BackupRepository) exportProxyHosts(ctx context.Context) ([]model.ProxyH
 
 		err := rows.Scan(
 			&ph.ID, pq.Array(&ph.DomainNames), &ph.ForwardScheme, &ph.ForwardHost, &ph.ForwardPort,
-			&ph.SSLEnabled, &ph.SSLForceHTTPS, &ph.SSLHTTP2, &certID,
-			&ph.AllowWebsocketUpgrade, &ph.CacheEnabled, &ph.CacheStaticOnly, &ph.CacheTTL, &ph.BlockExploits,
+			&ph.SSLEnabled, &ph.SSLForceHTTPS, &ph.SSLHTTP2, &ph.SSLHTTP3, &certID,
+			&ph.AllowWebsocketUpgrade, &ph.CacheEnabled, &ph.CacheStaticOnly, &ph.CacheTTL,
+			&ph.BlockExploits, &ph.BlockExploitsExceptions,
 			&customLocations, &advancedConfig, &ph.WAFEnabled, &ph.WAFMode,
-			&accessListID, &ph.Enabled, &meta,
+			&ph.WAFParanoiaLevel, &ph.WAFAnomalyThreshold,
+			&accessListID, &ph.Enabled, &ph.IsFavorite,
+			&ph.RateLimitEnabled, &ph.Fail2banEnabled, &ph.BotFilterEnabled, &ph.SecurityHeadersEnabled,
+			&ph.ProxyConnectTimeout, &ph.ProxySendTimeout, &ph.ProxyReadTimeout,
+			&ph.ProxyBuffering, &ph.ClientMaxBodySize, &ph.ProxyMaxTempFileSize,
+			&meta,
 		)
 		if err != nil {
 			return nil, err
