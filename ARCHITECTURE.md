@@ -1,6 +1,6 @@
 # NginxProxyGuard - Architecture Specification
 
-> **Version**: 2.1.0 | **Last Updated**: 2026-02-19
+> **Version**: 2.2.0 | **Last Updated**: 2026-02-20
 > 이 문서는 Claude Code가 개발 시 참조하는 프로젝트 아키텍처 명세서입니다.
 > 새 기능 추가, 버그 수정, 리팩토링 시 이 문서를 기준으로 작업합니다.
 
@@ -347,7 +347,7 @@ Protected: APITokenAuth → AuthMiddleware → Handler
 ### 2.11 Key Constants
 
 ```go
-const AppVersion = "2.1.0"
+const AppVersion = "2.2.0"
 
 // Timeouts
 HTTPClientTimeout       = 30s

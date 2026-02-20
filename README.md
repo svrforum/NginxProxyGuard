@@ -8,7 +8,7 @@
 
 <img src="./NPG_banner.png" alt="Nginx Proxy Guard" width="800">
 
-[![Version](https://img.shields.io/badge/Version-1.3.7-brightgreen?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-2.2.0-brightgreen?style=for-the-badge)]()
 [![Nginx](https://img.shields.io/badge/Nginx-1.28.0-009639?style=for-the-badge&logo=nginx&logoColor=white)](https://nginx.org/)
 [![ModSecurity](https://img.shields.io/badge/ModSecurity-v3.0.14-red?style=for-the-badge)](https://modsecurity.org/)
 [![OWASP CRS](https://img.shields.io/badge/OWASP_CRS-v4.21.0-orange?style=for-the-badge)](https://coreruleset.org/)
@@ -83,6 +83,9 @@ Optional 2FA for admin accounts using TOTP (Google Authenticator, Authy, etc.).
 ### 🌐 HTTP/3 & QUIC
 Modern protocol support for faster, more reliable connections over UDP.
 
+### 🔐 Security Hardening (v2.2.0)
+Strong password policy (10+ chars, complexity requirements). IP/CIDR input validation. Regex ReDoS prevention. Automatic Nginx config rollback on failure.
+
 ---
 
 ## 🛠 Tech Stack
@@ -94,7 +97,7 @@ Modern protocol support for faster, more reliable connections over UDP.
 | **Nginx 1.28** | High-performance reverse proxy core with HTTP/3 & QUIC support |
 | **TimescaleDB** | PostgreSQL with time-series optimization for log compression |
 | **Valkey 8** | Redis-compatible high-speed caching and session management |
-| **Go 1.23** | Backend API with efficient resource management and concurrency |
+| **Go 1.24** | Backend API with efficient resource management and concurrency |
 | **React 18 & TypeScript** | Type-safe, component-based modern UI |
 | **ModSecurity 3** | Web Application Firewall with OWASP Core Rule Set v4.21 |
 | **MaxMind GeoIP2** | Geographic IP database for country-level access control |
@@ -138,12 +141,20 @@ docker compose up -d
 
 **Default Login**: `admin` / `admin` (Change immediately after first login!)
 
+> **Password Policy (v2.2.0+)**: New passwords must be at least 10 characters with uppercase, lowercase, digit, and special character. Common passwords are blocked.
+
 ### Update
 
 ```bash
 docker compose pull
 docker compose up -d
 ```
+
+### Upgrading to v2.2.0
+
+v2.2.0 is fully backward compatible. No migration needed.
+
+> **Password policy change**: New passwords now require 10+ characters with complexity requirements. Existing users can still log in — the policy only applies when changing passwords.
 
 ---
 
@@ -211,5 +222,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 <div align="center">
-  <sub>© 2025 Nginx Proxy Guard. Powerful, secure, and fast Nginx proxy manager & WAF.</sub>
+  <sub>© 2025-2026 Nginx Proxy Guard. Powerful, secure, and fast Nginx proxy manager & WAF.</sub>
 </div>

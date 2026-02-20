@@ -8,7 +8,7 @@
 
 <img src="./NPG_banner.png" alt="Nginx Proxy Guard" width="800">
 
-[![Version](https://img.shields.io/badge/Version-1.3.7-brightgreen?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-2.2.0-brightgreen?style=for-the-badge)]()
 [![Nginx](https://img.shields.io/badge/Nginx-1.28.0-009639?style=for-the-badge&logo=nginx&logoColor=white)](https://nginx.org/)
 [![ModSecurity](https://img.shields.io/badge/ModSecurity-v3.0.14-red?style=for-the-badge)](https://modsecurity.org/)
 [![OWASP CRS](https://img.shields.io/badge/OWASP_CRS-v4.21.0-orange?style=for-the-badge)](https://coreruleset.org/)
@@ -83,6 +83,9 @@ TOTP(Google Authenticator, Authy 등)를 사용한 관리자 계정용 선택적
 ### 🌐 HTTP/3 & QUIC
 UDP를 통한 더 빠르고 안정적인 연결을 위한 최신 프로토콜 지원.
 
+### 🔐 보안 강화 (v2.2.0)
+강화된 비밀번호 정책 (10자 이상, 복잡도 요구). IP/CIDR 입력 유효성 검증. 정규식 ReDoS 방지. Nginx 설정 실패 시 자동 롤백.
+
 ---
 
 ## 🛠 기술 스택
@@ -94,7 +97,7 @@ UDP를 통한 더 빠르고 안정적인 연결을 위한 최신 프로토콜 �
 | **Nginx 1.28** | HTTP/3 & QUIC 지원 고성능 리버스 프록시 코어 |
 | **TimescaleDB** | 로그 압축을 위한 시계열 최적화 PostgreSQL |
 | **Valkey 8** | Redis 호환 고속 캐싱 및 세션 관리 |
-| **Go 1.23** | 효율적인 리소스 관리와 동시성 처리 백엔드 API |
+| **Go 1.24** | 효율적인 리소스 관리와 동시성 처리 백엔드 API |
 | **React 18 & TypeScript** | 타입 안전성과 컴포넌트 기반의 모던 UI |
 | **ModSecurity 3** | OWASP Core Rule Set v4.21 기반 웹 애플리케이션 방화벽 |
 | **MaxMind GeoIP2** | 국가별 접근 제어를 위한 지리 IP 데이터베이스 |
@@ -138,12 +141,20 @@ docker compose up -d
 
 **기본 로그인**: `admin` / `admin` (첫 로그인 후 반드시 변경!)
 
+> **비밀번호 정책 (v2.2.0+)**: 새 비밀번호는 최소 10자 이상이며, 대문자, 소문자, 숫자, 특수문자를 포함해야 합니다. 흔한 비밀번호는 차단됩니다.
+
 ### 업데이트
 
 ```bash
 docker compose pull
 docker compose up -d
 ```
+
+### v2.2.0 업그레이드 안내
+
+v2.2.0은 완전히 하위 호환됩니다. 별도의 마이그레이션이 필요 없습니다.
+
+> **비밀번호 정책 변경**: 새 비밀번호는 10자 이상 + 복잡도 요구사항이 적용됩니다. 기존 사용자는 정상적으로 로그인 가능하며, 비밀번호 변경 시에만 새 정책이 적용됩니다.
 
 ---
 
@@ -211,5 +222,5 @@ https://localhost:81/api/v1/swagger
 ---
 
 <div align="center">
-  <sub>© 2025 Nginx Proxy Guard. 강력하고 안전하고 빠른 Nginx 프록시 매니저 & WAF.</sub>
+  <sub>© 2025-2026 Nginx Proxy Guard. 강력하고 안전하고 빠른 Nginx 프록시 매니저 & WAF.</sub>
 </div>
