@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net"
 	"net/url"
 	"regexp"
@@ -201,4 +202,141 @@ func ExtractUserInfo(c echo.Context) UserInfo {
 	}
 
 	return info
+}
+
+// ValidateIPAddress validates a single IPv4 or IPv6 address
+func ValidateIPAddress(ip string) bool {
+	return net.ParseIP(strings.TrimSpace(ip)) != nil
+}
+
+// ValidateCIDR validates an IP address or CIDR notation (e.g., "192.168.0.0/24")
+func ValidateCIDR(address string) bool {
+	address = strings.TrimSpace(address)
+	if address == "all" {
+		return true
+	}
+	if net.ParseIP(address) != nil {
+		return true
+	}
+	_, _, err := net.ParseCIDR(address)
+	return err == nil
+}
+
+// ValidateIPList validates a list of IP addresses or CIDR notations.
+// Returns a list of invalid entries, or nil if all are valid.
+func ValidateIPList(ips []string) (invalid []string) {
+	for _, ip := range ips {
+		if !ValidateCIDR(ip) {
+			invalid = append(invalid, ip)
+		}
+	}
+	return invalid
+}
+
+const (
+	// Regex safety limits
+	MaxRegexLength     = 500
+	MaxRegexGroupDepth = 3
+)
+
+const (
+	MinPasswordLength = 10
+)
+
+// ValidatePasswordStrength validates password meets security requirements
+// Returns nil if valid, error with specific requirement that failed
+func ValidatePasswordStrength(password string) error {
+	if len(password) < MinPasswordLength {
+		return fmt.Errorf("password must be at least %d characters", MinPasswordLength)
+	}
+
+	var hasUpper, hasLower, hasDigit, hasSpecial bool
+	for _, ch := range password {
+		switch {
+		case 'A' <= ch && ch <= 'Z':
+			hasUpper = true
+		case 'a' <= ch && ch <= 'z':
+			hasLower = true
+		case '0' <= ch && ch <= '9':
+			hasDigit = true
+		default:
+			hasSpecial = true
+		}
+	}
+
+	if !hasUpper {
+		return fmt.Errorf("password must contain at least one uppercase letter")
+	}
+	if !hasLower {
+		return fmt.Errorf("password must contain at least one lowercase letter")
+	}
+	if !hasDigit {
+		return fmt.Errorf("password must contain at least one number")
+	}
+	if !hasSpecial {
+		return fmt.Errorf("password must contain at least one special character")
+	}
+
+	// Check common passwords
+	if isCommonPassword(password) {
+		return fmt.Errorf("password is too common, please choose a stronger password")
+	}
+
+	return nil
+}
+
+// isCommonPassword checks against a small blocklist of very common passwords
+func isCommonPassword(password string) bool {
+	common := []string{
+		"password123", "admin12345", "qwerty1234",
+		"letmein123", "welcome123", "monkey1234",
+		"dragon1234", "master1234", "1234567890",
+		"abcdefghij", "Password1!", "Admin@1234",
+		"Qwerty123!", "P@ssw0rd12", "Ch@ngeme1!",
+	}
+	lower := strings.ToLower(password)
+	for _, c := range common {
+		if strings.ToLower(c) == lower {
+			return true
+		}
+	}
+	return false
+}
+
+// ValidateRegexPattern validates a regex pattern for safety (ReDoS prevention).
+// Returns nil if safe, error with description if unsafe.
+func ValidateRegexPattern(pattern string) error {
+	if len(pattern) > MaxRegexLength {
+		return fmt.Errorf("pattern exceeds maximum length of %d characters", MaxRegexLength)
+	}
+
+	// Check for nested quantifiers (common ReDoS pattern: (a+)+, (a*)*,  (a+)* etc.)
+	nestedQuantifier := regexp.MustCompile(`[+*]\)[\s]*[+*?{]`)
+	if nestedQuantifier.MatchString(pattern) {
+		return fmt.Errorf("pattern contains nested quantifiers which may cause performance issues")
+	}
+
+	// Check for excessive group nesting depth
+	depth, maxDepth := 0, 0
+	for _, ch := range pattern {
+		if ch == '(' {
+			depth++
+			if depth > maxDepth {
+				maxDepth = depth
+			}
+		} else if ch == ')' {
+			depth--
+		}
+	}
+	if maxDepth > MaxRegexGroupDepth {
+		return fmt.Errorf("pattern nesting depth %d exceeds maximum of %d", maxDepth, MaxRegexGroupDepth)
+	}
+
+	// Try to compile the regex (catches syntax errors)
+	_, err := regexp.Compile(pattern)
+	if err != nil {
+		return fmt.Errorf("invalid regex pattern: %v", err)
+	}
+
+	return nil
 }

@@ -2,9 +2,11 @@ package handler
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -273,6 +275,10 @@ func (h *SecurityHandler) BanIP(c echo.Context) error {
 
 	if req.IPAddress == "" {
 		return badRequestError(c, "ip_address is required")
+	}
+
+	if !ValidateIPAddress(req.IPAddress) && !ValidateCIDR(req.IPAddress) {
+		return badRequestError(c, "Invalid IP address format. Must be a valid IPv4, IPv6, or CIDR notation")
 	}
 
 	bannedIP, err := h.rateLimitRepo.BanIP(c.Request().Context(), req.ProxyHostID, req.IPAddress, req.Reason, req.BanTime)
@@ -989,6 +995,12 @@ func (h *SecurityHandler) UpsertURIBlock(c echo.Context) error {
 		return badRequestError(c, "Invalid request body")
 	}
 
+	if len(req.ExceptionIPs) > 0 {
+		if invalid := ValidateIPList(req.ExceptionIPs); len(invalid) > 0 {
+			return badRequestError(c, fmt.Sprintf("Invalid IP address(es) in exception_ips: %s", strings.Join(invalid, ", ")))
+		}
+	}
+
 	uriBlock, err := h.uriBlockRepo.Upsert(c.Request().Context(), proxyHostID, &req)
 	if err != nil {
 		return databaseError(c, "upsert URI block", err)
@@ -1069,6 +1081,11 @@ func (h *SecurityHandler) AddURIBlockRule(c echo.Context) error {
 
 	if req.Pattern == "" {
 		return badRequestError(c, "pattern is required")
+	}
+	if req.MatchType == model.URIMatchRegex {
+		if err := ValidateRegexPattern(req.Pattern); err != nil {
+			return badRequestError(c, fmt.Sprintf("Invalid regex pattern: %v", err))
+		}
 	}
 	if req.MatchType == "" {
 		req.MatchType = model.URIMatchPrefix
@@ -1171,6 +1188,11 @@ func (h *SecurityHandler) BulkAddURIBlockRule(c echo.Context) error {
 
 	if req.Pattern == "" {
 		return badRequestError(c, "pattern is required")
+	}
+	if req.MatchType == string(model.URIMatchRegex) {
+		if err := ValidateRegexPattern(req.Pattern); err != nil {
+			return badRequestError(c, fmt.Sprintf("Invalid regex pattern: %v", err))
+		}
 	}
 	if req.MatchType == "" {
 		req.MatchType = string(model.URIMatchExact)
@@ -1326,6 +1348,12 @@ func (h *SecurityHandler) UpdateGlobalURIBlock(c echo.Context) error {
 	var req model.CreateGlobalURIBlockRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
+	}
+
+	if len(req.ExceptionIPs) > 0 {
+		if invalid := ValidateIPList(req.ExceptionIPs); len(invalid) > 0 {
+			return badRequestError(c, fmt.Sprintf("Invalid IP address(es) in exception_ips: %s", strings.Join(invalid, ", ")))
+		}
 	}
 
 	ctx := c.Request().Context()
