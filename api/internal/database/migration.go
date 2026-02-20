@@ -73,6 +73,7 @@ func (db *DB) RunMigrations() error {
 		ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS cache_static_only boolean DEFAULT true NOT NULL;
 		ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS cache_ttl character varying(20) DEFAULT '7d' NOT NULL;
 		ALTER TABLE public.geo_restrictions ADD COLUMN IF NOT EXISTS allow_search_bots_cloud_providers boolean DEFAULT false;
+		ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS is_favorite boolean DEFAULT false NOT NULL;
 
 		-- Host-level proxy settings (v1.3.4+)
 		ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS proxy_connect_timeout integer DEFAULT 0;
