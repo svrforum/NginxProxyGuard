@@ -581,10 +581,11 @@ docker compose exec api wget -qO- --header="Authorization: Bearer $TEST_TOKEN" \
 **Backend (Go):**
 1. `model/` - 데이터 구조체 + Request/Response 타입
 2. `migrations/001_init.sql` - CREATE TABLE + UPGRADE SECTION 둘 다 추가
-3. `repository/` - DB CRUD
-4. `service/` - 비즈니스 로직 (nginx 연동 시)
-5. `handler/` - HTTP 핸들러
-6. `cmd/server/main.go` - DI 조립 + 라우트 등록
+3. `database/migration.go` - upgradeSQL에 동일한 ALTER TABLE 추가 (**필수! 빠뜨리면 기존 사용자 장애**)
+4. `repository/` - DB CRUD
+5. `service/` - 비즈니스 로직 (nginx 연동 시)
+6. `handler/` - HTTP 핸들러
+7. `cmd/server/main.go` - DI 조립 + 라우트 등록
 
 **Frontend (React):**
 1. `types/` - TypeScript 인터페이스
@@ -597,9 +598,25 @@ docker compose exec api wget -qO- --header="Authorization: Bearer $TEST_TOKEN" \
 - `ARCHITECTURE.md` 업데이트 — API 추가 시 §6 엔드포인트, DB 변경 시 §5 스키마, 모델 변경 시 §7 타입, Repository 변경 시 §2.7 인벤토리 등 해당 섹션 반영
 
 ### Database Migration
-- **단일 파일**: `001_init.sql`로 전체 스키마 관리
-- **항상 안전**: 서버 시작 시 매번 실행
-- **새 컬럼**: CREATE TABLE에 추가 + UPGRADE SECTION에 ALTER TABLE 추가
+
+> **⚠️ 중요: 스키마 변경은 반드시 3곳에 동시 반영!**
+> 기존 사용자 업그레이드 시 `001_init.sql`은 재실행되지 않는다.
+> `migration.go`의 upgradeSQL만 실행되므로, 여기에 빠지면 기존 사용자에게 컬럼 누락 에러 발생.
+
+**스키마 변경 시 필수 반영 위치 (3곳):**
+
+| # | 파일 | 위치 | 역할 |
+|---|------|------|------|
+| 1 | `migrations/001_init.sql` | CREATE TABLE 본문 | 신규 설치 시 테이블 생성 |
+| 2 | `migrations/001_init.sql` | UPGRADE SECTION (파일 하단) | 문서화 목적 (실제 실행 안 됨) |
+| 3 | `database/migration.go` | `upgradeSQL` 변수 (65줄~) | **기존 설치 업그레이드 시 실제 실행** |
+
+**새 컬럼 추가 예시:**
+```
+1. 001_init.sql CREATE TABLE에 컬럼 추가
+2. 001_init.sql UPGRADE SECTION에 ALTER TABLE ADD COLUMN IF NOT EXISTS 추가
+3. migration.go upgradeSQL에 동일한 ALTER TABLE 추가 ← 이것을 빠뜨리면 기존 사용자 장애!
+```
 
 | 객체 | 멱등성 패턴 |
 |------|------------|
