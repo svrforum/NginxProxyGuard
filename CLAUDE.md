@@ -587,6 +587,20 @@ docker compose exec api wget -qO- --header="Authorization: Bearer $TEST_TOKEN" \
 6. `handler/` - HTTP 핸들러
 7. `cmd/server/main.go` - DI 조립 + 라우트 등록
 
+> **⚠️ 테이블 컬럼 추가/변경 시 백업 export/import 동기화 필수!**
+> `proxy_hosts` 등 백업 대상 테이블에 컬럼을 추가하면, 반드시 아래 3개 파일도 함께 수정해야 한다.
+> 빠뜨리면 백업 복구 시 해당 컬럼 데이터가 손실된다.
+>
+> | # | 파일 | 수정 내용 |
+> |---|------|----------|
+> | 1 | `model/backup.go` | Export 구조체에 필드 추가 (예: `ProxyHostData`) |
+> | 2 | `repository/backup_export.go` | SELECT 쿼리 + Scan에 컬럼 추가 |
+> | 3 | `repository/backup_import.go` | INSERT 쿼리 + Values에 컬럼 추가 |
+>
+> **하위 버전 백업 호환성:** import 시 CHECK 제약조건이 있는 컬럼(예: `waf_paranoia_level >= 1`)은
+> 구 버전 백업에 해당 필드가 없어 zero value가 될 수 있으므로, import 코드에서 반드시 기본값 보정 로직 추가.
+> `if value < minConstraint { value = defaultValue }`
+
 **Frontend (React):**
 1. `types/` - TypeScript 인터페이스
 2. `api/` - API 함수 모듈

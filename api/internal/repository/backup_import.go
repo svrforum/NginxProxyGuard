@@ -389,20 +389,36 @@ func (r *BackupRepository) importProxyHost(ctx context.Context, tx *sql.Tx, ph *
 	customLocations, _ := json.Marshal(ph.ProxyHost.CustomLocations)
 	meta, _ := json.Marshal(ph.ProxyHost.Meta)
 
-	// Set default values for new cache fields if not set
+	// Set default values for fields that may be missing from older backups
 	cacheStaticOnly := ph.ProxyHost.CacheStaticOnly
 	cacheTTL := ph.ProxyHost.CacheTTL
 	if cacheTTL == "" {
 		cacheTTL = "7d"
 	}
+	// waf_paranoia_level has CHECK constraint >= 1, default to 1 if missing from old backup
+	wafParanoiaLevel := ph.ProxyHost.WAFParanoiaLevel
+	if wafParanoiaLevel < 1 {
+		wafParanoiaLevel = 1
+	}
+	// waf_anomaly_threshold has CHECK constraint >= 1, default to 5 if missing from old backup
+	wafAnomalyThreshold := ph.ProxyHost.WAFAnomalyThreshold
+	if wafAnomalyThreshold < 1 {
+		wafAnomalyThreshold = 5
+	}
 
 	query := `
 		INSERT INTO proxy_hosts (domain_names, forward_scheme, forward_host, forward_port,
-		                         ssl_enabled, ssl_force_https, ssl_http2, certificate_id,
-		                         allow_websocket_upgrade, cache_enabled, cache_static_only, cache_ttl, block_exploits,
+		                         ssl_enabled, ssl_force_https, ssl_http2, ssl_http3, certificate_id,
+		                         allow_websocket_upgrade, cache_enabled, cache_static_only, cache_ttl,
+		                         block_exploits, block_exploits_exceptions,
 		                         custom_locations, advanced_config, waf_enabled, waf_mode,
-		                         access_list_id, enabled, meta)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+		                         waf_paranoia_level, waf_anomaly_threshold,
+		                         access_list_id, enabled, is_favorite,
+		                         rate_limit_enabled, fail2ban_enabled, bot_filter_enabled, security_headers_enabled,
+		                         proxy_connect_timeout, proxy_send_timeout, proxy_read_timeout,
+		                         proxy_buffering, client_max_body_size, proxy_max_temp_file_size, meta)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19,
+		        $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35)
 		RETURNING id
 	`
 
@@ -417,10 +433,15 @@ func (r *BackupRepository) importProxyHost(ctx context.Context, tx *sql.Tx, ph *
 	var newID string
 	err := tx.QueryRowContext(ctx, query,
 		pq.Array(ph.ProxyHost.DomainNames), ph.ProxyHost.ForwardScheme, ph.ProxyHost.ForwardHost, ph.ProxyHost.ForwardPort,
-		ph.ProxyHost.SSLEnabled, ph.ProxyHost.SSLForceHTTPS, ph.ProxyHost.SSLHTTP2, certID,
-		ph.ProxyHost.AllowWebsocketUpgrade, ph.ProxyHost.CacheEnabled, cacheStaticOnly, cacheTTL, ph.ProxyHost.BlockExploits,
+		ph.ProxyHost.SSLEnabled, ph.ProxyHost.SSLForceHTTPS, ph.ProxyHost.SSLHTTP2, ph.ProxyHost.SSLHTTP3, certID,
+		ph.ProxyHost.AllowWebsocketUpgrade, ph.ProxyHost.CacheEnabled, cacheStaticOnly, cacheTTL,
+		ph.ProxyHost.BlockExploits, ph.ProxyHost.BlockExploitsExceptions,
 		customLocations, ph.ProxyHost.AdvancedConfig, ph.ProxyHost.WAFEnabled, ph.ProxyHost.WAFMode,
-		accessListID, ph.ProxyHost.Enabled, meta,
+		wafParanoiaLevel, wafAnomalyThreshold,
+		accessListID, ph.ProxyHost.Enabled, ph.ProxyHost.IsFavorite,
+		ph.ProxyHost.RateLimitEnabled, ph.ProxyHost.Fail2banEnabled, ph.ProxyHost.BotFilterEnabled, ph.ProxyHost.SecurityHeadersEnabled,
+		ph.ProxyHost.ProxyConnectTimeout, ph.ProxyHost.ProxySendTimeout, ph.ProxyHost.ProxyReadTimeout,
+		ph.ProxyHost.ProxyBuffering, ph.ProxyHost.ClientMaxBodySize, ph.ProxyHost.ProxyMaxTempFileSize, meta,
 	).Scan(&newID)
 	if err != nil {
 		return "", err
