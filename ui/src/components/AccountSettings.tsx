@@ -120,7 +120,7 @@ export default function AccountSettings({ onClose, onLogout }: AccountSettingsPr
       return
     }
 
-    if (passwordForm.new_password.length < 8) {
+    if (passwordForm.new_password.length < 10) {
       setError(t('account.password.minLengthError'))
       return
     }

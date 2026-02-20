@@ -170,9 +170,9 @@ func (h *AuthHandler) ChangeCredentials(c echo.Context) error {
 		})
 	}
 
-	if len(req.NewPassword) < 8 {
+	if err := ValidatePasswordStrength(req.NewPassword); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Password must be at least 8 characters",
+			"error": err.Error(),
 		})
 	}
 
@@ -195,7 +195,7 @@ func (h *AuthHandler) ChangeCredentials(c echo.Context) error {
 			})
 		case service.ErrWeakPassword:
 			return c.JSON(http.StatusBadRequest, map[string]string{
-				"error": "Password must be at least 8 characters",
+				"error": service.ErrWeakPassword.Error(),
 			})
 		case service.ErrPasswordMismatch:
 			return c.JSON(http.StatusBadRequest, map[string]string{
@@ -227,9 +227,9 @@ func (h *AuthHandler) ChangePassword(c echo.Context) error {
 		})
 	}
 
-	if len(req.NewPassword) < 8 {
+	if err := ValidatePasswordStrength(req.NewPassword); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Password must be at least 8 characters",
+			"error": err.Error(),
 		})
 	}
 
@@ -248,7 +248,7 @@ func (h *AuthHandler) ChangePassword(c echo.Context) error {
 			})
 		case service.ErrWeakPassword:
 			return c.JSON(http.StatusBadRequest, map[string]string{
-				"error": "Password must be at least 8 characters",
+				"error": service.ErrWeakPassword.Error(),
 			})
 		case service.ErrPasswordMismatch:
 			return c.JSON(http.StatusBadRequest, map[string]string{

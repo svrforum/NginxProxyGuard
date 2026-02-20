@@ -21,7 +21,7 @@ var (
 	ErrTooManyAttempts    = errors.New("too many failed login attempts, try again later")
 	ErrPasswordMismatch   = errors.New("passwords do not match")
 	ErrUsernameTaken      = errors.New("username already taken")
-	ErrWeakPassword       = errors.New("password must be at least 8 characters")
+	ErrWeakPassword       = errors.New("password does not meet security requirements")
 	ErrSessionExpired     = errors.New("session expired")
 	ErrUnauthorized       = errors.New("unauthorized")
 	ErrInvalid2FACode     = errors.New("invalid 2FA code")
@@ -428,7 +428,7 @@ func (s *AuthService) ChangeCredentials(ctx context.Context, userID string, req 
 	}
 
 	// Validate new password
-	if len(req.NewPassword) < 8 {
+	if len(req.NewPassword) < 10 {
 		return ErrWeakPassword
 	}
 	if req.NewPassword != req.NewPasswordConfirm {
@@ -482,7 +482,7 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID string, req *mo
 	}
 
 	// Validate new password
-	if len(req.NewPassword) < 8 {
+	if len(req.NewPassword) < 10 {
 		return ErrWeakPassword
 	}
 	if req.NewPassword != req.NewPasswordConfirm {

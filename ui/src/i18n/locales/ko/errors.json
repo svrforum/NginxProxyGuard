@@ -30,7 +30,7 @@
     "INVALID_IP": "유효한 IP 주소를 입력하세요",
     "INVALID_DOMAIN": "유효한 도메인을 입력하세요",
     "INVALID_PORT": "포트는 1-65535 사이여야 합니다",
-    "PASSWORD_TOO_SHORT": "비밀번호는 최소 8자 이상이어야 합니다",
+    "PASSWORD_TOO_SHORT": "비밀번호는 최소 10자 이상이어야 합니다",
     "PASSWORD_MISMATCH": "비밀번호가 일치하지 않습니다",
     "DUPLICATE_DOMAIN": "이미 등록된 도메인입니다",
     "DUPLICATE_NAME": "이미 사용 중인 이름입니다"

@@ -27,7 +27,7 @@ export function InitialSetup({ user, onComplete }: InitialSetupProps) {
       return
     }
 
-    if (newPassword.length < 8) {
+    if (newPassword.length < 10) {
       setError(t('initialSetup.passwordMinLength'))
       return
     }

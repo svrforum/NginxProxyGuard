@@ -30,7 +30,7 @@
     "INVALID_IP": "Please enter a valid IP address",
     "INVALID_DOMAIN": "Please enter a valid domain",
     "INVALID_PORT": "Port must be between 1 and 65535",
-    "PASSWORD_TOO_SHORT": "Password must be at least 8 characters",
+    "PASSWORD_TOO_SHORT": "Password must be at least 10 characters",
     "PASSWORD_MISMATCH": "Passwords do not match",
     "DUPLICATE_DOMAIN": "Domain already exists",
     "DUPLICATE_NAME": "Name already in use"
