@@ -173,14 +173,34 @@ func (m *Manager) testAndReloadNginx(ctx context.Context) error {
 
 // GenerateConfigAndReload generates proxy host config, WAF config, tests and reloads nginx
 // This is a centralized operation that ensures all file writes complete before test/reload
+// On test failure, it rolls back to the previous config
 func (m *Manager) GenerateConfigAndReload(ctx context.Context, data ProxyHostConfigData, wafExclusions []model.WAFRuleExclusion) error {
 	return m.executeWithLock(ctx, func() error {
-		// Generate main proxy host config
+		configFilename := GetConfigFilename(data.Host)
+		configFile := filepath.Join(m.configPath, configFilename)
+		wafConfigFile := filepath.Join(m.modsecPath, fmt.Sprintf("host_%s.conf", data.Host.ID))
+
+		// 1. Backup existing configs for rollback
+		var configBackup []byte
+		var wafConfigBackup []byte
+		configExists := false
+		wafConfigExists := false
+
+		if content, err := os.ReadFile(configFile); err == nil {
+			configBackup = content
+			configExists = true
+		}
+		if content, err := os.ReadFile(wafConfigFile); err == nil {
+			wafConfigBackup = content
+			wafConfigExists = true
+		}
+
+		// 2. Generate main proxy host config
 		if err := m.GenerateConfigFull(ctx, data); err != nil {
 			return fmt.Errorf("failed to generate proxy host config: %w", err)
 		}
 
-		// Generate or remove WAF config based on WAF enabled status
+		// 3. Generate or remove WAF config based on WAF enabled status
 		if data.Host.WAFEnabled {
 			var allowedIPs []string
 			if data.GeoRestriction != nil {
@@ -190,15 +210,34 @@ func (m *Manager) GenerateConfigAndReload(ctx context.Context, data ProxyHostCon
 				return fmt.Errorf("failed to generate WAF config: %w", err)
 			}
 		} else {
-			// Remove WAF config if WAF is disabled to prevent orphan files
 			if err := m.RemoveHostWAFConfig(ctx, data.Host.ID); err != nil {
 				log.Printf("[WARN] Failed to remove WAF config for host %s: %v", data.Host.ID, err)
-				// Non-fatal: continue with nginx reload
 			}
 		}
 
-		// Test and reload nginx (all config files are complete now)
+		// 4. Test and reload nginx (all config files are complete now)
 		if err := m.testAndReloadNginx(ctx); err != nil {
+			// Rollback: restore previous configs
+			log.Printf("[WARN] Nginx test failed, rolling back config for host %s", data.Host.ID)
+			if configExists && len(configBackup) > 0 {
+				if writeErr := m.writeFileAtomic(configFile, configBackup, 0644); writeErr != nil {
+					log.Printf("[ERROR] Failed to restore proxy host config %s: %v", configFilename, writeErr)
+				}
+			} else if !configExists {
+				// Config didn't exist before (new host) - remove the invalid one
+				if removeErr := os.Remove(configFile); removeErr != nil && !os.IsNotExist(removeErr) {
+					log.Printf("[ERROR] Failed to remove invalid new config %s: %v", configFilename, removeErr)
+				}
+			}
+			if wafConfigExists && len(wafConfigBackup) > 0 {
+				if writeErr := m.writeFileAtomic(wafConfigFile, wafConfigBackup, 0644); writeErr != nil {
+					log.Printf("[ERROR] Failed to restore WAF config for host %s: %v", data.Host.ID, writeErr)
+				}
+			} else if !wafConfigExists && data.Host.WAFEnabled {
+				if removeErr := os.Remove(wafConfigFile); removeErr != nil && !os.IsNotExist(removeErr) {
+					log.Printf("[ERROR] Failed to remove invalid WAF config for host %s: %v", data.Host.ID, removeErr)
+				}
+			}
 			return err
 		}
 
