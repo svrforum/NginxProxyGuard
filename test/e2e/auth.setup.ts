@@ -8,12 +8,22 @@ const authFile = 'playwright/.auth/user.json';
 // Clear rate limiting before auth setup
 function clearRateLimiting() {
   try {
+    // Clear Valkey rate limiting keys
+    execSync(
+      'docker exec npg-test-valkey valkey-cli KEYS "rate_limit:*" | xargs -r docker exec -i npg-test-valkey valkey-cli DEL',
+      { stdio: 'pipe' }
+    );
+    execSync(
+      'docker exec npg-test-valkey valkey-cli KEYS "api_rate:*" | xargs -r docker exec -i npg-test-valkey valkey-cli DEL',
+      { stdio: 'pipe' }
+    );
+    // Clear database login_attempts table
     execSync(
       'docker exec npg-test-db psql -U postgres -d nginx_guard_test -c "DELETE FROM login_attempts;"',
       { stdio: 'pipe' }
     );
   } catch {
-    // Ignore errors
+    // Ignore errors if Valkey/DB is not available
   }
 }
 

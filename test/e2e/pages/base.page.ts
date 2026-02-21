@@ -32,20 +32,21 @@ export abstract class BasePage {
     this.header = page.locator('header');
 
     // Navigation tabs (based on translation keys or button text patterns)
-    this.navDashboard = page.locator('nav button').filter({ hasText: /dashboard/i }).first();
-    this.navProxyHosts = page.locator('nav button').filter({ hasText: /proxy.*host|hosts/i }).first();
-    this.navRedirects = page.locator('nav button').filter({ hasText: /redirect/i }).first();
-    this.navWaf = page.locator('nav button').filter({ hasText: /waf/i }).first();
-    this.navAccess = page.locator('nav button').filter({ hasText: /access/i }).first();
-    this.navCertificates = page.locator('nav button').filter({ hasText: /certificate|ssl/i }).first();
-    this.navLogs = page.locator('nav button').filter({ hasText: /log/i }).first();
-    this.navSettings = page.locator('nav button').filter({ hasText: /setting/i }).first();
+    // Support both <button> and <a> tags in nav layouts
+    this.navDashboard = page.locator('nav button, nav a').filter({ hasText: /dashboard/i }).first();
+    this.navProxyHosts = page.locator('nav button, nav a').filter({ hasText: /proxy.*host|hosts/i }).first();
+    this.navRedirects = page.locator('nav button, nav a').filter({ hasText: /redirect/i }).first();
+    this.navWaf = page.locator('nav button, nav a').filter({ hasText: /waf/i }).first();
+    this.navAccess = page.locator('nav button, nav a').filter({ hasText: /access/i }).first();
+    this.navCertificates = page.locator('nav button, nav a').filter({ hasText: /certificate|ssl/i }).first();
+    this.navLogs = page.locator('nav button, nav a').filter({ hasText: /log/i }).first();
+    this.navSettings = page.locator('nav button, nav a').filter({ hasText: /setting/i }).first();
 
     // Header actions
     this.syncAllButton = page.locator('header button[title*="Sync"]').first();
     this.darkModeToggle = page.locator('header button[title*="Mode"]').first();
     this.userMenuButton = page.locator('header button').filter({ hasText: TEST_CREDENTIALS_PATTERN });
-    this.logoutButton = page.locator('header button').filter({ hasText: /logout|sign.*out/i });
+    this.logoutButton = page.locator('header button, header a').filter({ hasText: /logout|sign.*out/i });
     this.versionText = page.locator('header').locator('text=/v\\d+\\.\\d+\\.\\d+/');
   }
 

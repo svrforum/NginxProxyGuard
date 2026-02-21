@@ -6,13 +6,13 @@ import { execSync } from 'child_process';
 // Helper to clear rate limiting in Redis and database before tests
 function clearRateLimiting() {
   try {
-    // Clear Redis rate limiting keys
+    // Clear Valkey rate limiting keys
     execSync(
-      'docker exec npg-test-redis redis-cli -a testredispassword --no-auth-warning KEYS "rate_limit:*" | xargs -r docker exec -i npg-test-redis redis-cli -a testredispassword --no-auth-warning DEL',
+      'docker exec npg-test-valkey valkey-cli KEYS "rate_limit:*" | xargs -r docker exec -i npg-test-valkey valkey-cli DEL',
       { stdio: 'pipe' }
     );
     execSync(
-      'docker exec npg-test-redis redis-cli -a testredispassword --no-auth-warning KEYS "api_rate:*" | xargs -r docker exec -i npg-test-redis redis-cli -a testredispassword --no-auth-warning DEL',
+      'docker exec npg-test-valkey valkey-cli KEYS "api_rate:*" | xargs -r docker exec -i npg-test-valkey valkey-cli DEL',
       { stdio: 'pipe' }
     );
     // Clear database login_attempts table (stores failed login history for rate limiting)
@@ -21,7 +21,7 @@ function clearRateLimiting() {
       { stdio: 'pipe' }
     );
   } catch {
-    // Ignore errors if Redis/DB is not available
+    // Ignore errors if Valkey/DB is not available
   }
 }
 

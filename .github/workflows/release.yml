@@ -312,155 +312,20 @@ jobs:
         run: docker compose -f docker-compose.release-test-host.yml down -v
 
   # ============================================================
-  # Step 6: Push Final Images (Native Multi-Arch)
-  # ============================================================
-  push-api:
-    name: 🚀 Push API (${{ matrix.arch }})
-    needs: [detect, test-host]
-    if: needs.test-host.result == 'success' && needs.detect.outputs.api_changed == 'true'
-    strategy:
-      matrix:
-        include:
-          - arch: amd64
-            runner: ubuntu-latest
-            platform: linux/amd64
-          - arch: arm64
-            runner: ubuntu-24.04-arm
-            platform: linux/arm64
-    runs-on: ${{ matrix.runner }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Calculate hash
-        id: hash
-        run: |
-          echo "hash=$(find ./api -type f -exec sha256sum {} \; | sort | sha256sum | cut -d' ' -f1)" >> $GITHUB_OUTPUT
-
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: ./api
-          platforms: ${{ matrix.platform }}
-          push: true
-          tags: ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}-${{ matrix.arch }}
-          labels: |
-            org.opencontainers.image.revision=${{ steps.hash.outputs.hash }}
-          cache-from: type=gha,scope=api-${{ matrix.arch }}
-          provenance: false
-
-  push-ui:
-    name: 🚀 Push UI (${{ matrix.arch }})
-    needs: [detect, test-host]
-    if: needs.test-host.result == 'success' && needs.detect.outputs.ui_changed == 'true'
-    strategy:
-      matrix:
-        include:
-          - arch: amd64
-            runner: ubuntu-latest
-            platform: linux/amd64
-          - arch: arm64
-            runner: ubuntu-24.04-arm
-            platform: linux/arm64
-    runs-on: ${{ matrix.runner }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Calculate hash
-        id: hash
-        run: |
-          echo "hash=$(find ./ui -type f -exec sha256sum {} \; | sort | sha256sum | cut -d' ' -f1)" >> $GITHUB_OUTPUT
-
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: ./ui
-          platforms: ${{ matrix.platform }}
-          push: true
-          tags: ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}-${{ matrix.arch }}
-          labels: |
-            org.opencontainers.image.revision=${{ steps.hash.outputs.hash }}
-          cache-from: type=gha,scope=ui-${{ matrix.arch }}
-          provenance: false
-
-  push-nginx:
-    name: 🚀 Push Nginx (${{ matrix.arch }})
-    needs: [detect, test-host]
-    if: needs.test-host.result == 'success' && needs.detect.outputs.nginx_changed == 'true'
-    strategy:
-      matrix:
-        include:
-          - arch: amd64
-            runner: ubuntu-latest
-            platform: linux/amd64
-          - arch: arm64
-            runner: ubuntu-24.04-arm
-            platform: linux/arm64
-    runs-on: ${{ matrix.runner }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Calculate hash
-        id: hash
-        run: |
-          echo "hash=$(find ./nginx -type f -exec sha256sum {} \; | sort | sha256sum | cut -d' ' -f1)" >> $GITHUB_OUTPUT
-
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: ./nginx
-          platforms: ${{ matrix.platform }}
-          push: true
-          tags: ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}-${{ matrix.arch }}
-          labels: |
-            org.opencontainers.image.revision=${{ steps.hash.outputs.hash }}
-          cache-from: type=gha,scope=nginx-${{ matrix.arch }}
-          provenance: false
-
-  # ============================================================
-  # Step 7: Create Final Manifests
+  # Step 5: Create Final Manifests (retag test images)
   # ============================================================
   create-manifests:
     name: 📦 Create Final Manifests
-    needs: [detect, push-api, push-ui, push-nginx]
-    if: always() && (needs.push-api.result == 'success' || needs.push-api.result == 'skipped') && (needs.push-ui.result == 'success' || needs.push-ui.result == 'skipped') && (needs.push-nginx.result == 'success' || needs.push-nginx.result == 'skipped')
+    needs: [detect, test-host]
+    if: needs.test-host.result == 'success'
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -476,73 +341,34 @@ jobs:
           echo "nginx_hash=$(find ./nginx -type f -exec sha256sum {} \; | sort | sha256sum | cut -d' ' -f1)" >> $GITHUB_OUTPUT
 
       - name: Create API manifests
-        if: needs.detect.outputs.api_changed == 'true' && needs.push-api.result == 'success'
+        if: needs.detect.outputs.api_changed == 'true'
         run: |
-          # Version tag
-          docker manifest create ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }} \
-            ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}-amd64 \
-            ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}-arm64
-          docker manifest annotate ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }} \
-            ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}-amd64 --os linux --arch amd64
-          docker manifest annotate ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }} \
-            ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}-arm64 --os linux --arch arm64
-          docker manifest push ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}
-
-          # Latest tag
-          docker manifest create ${{ env.IMAGE_PREFIX }}-api:latest \
-            ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}-amd64 \
-            ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}-arm64
-          docker manifest annotate ${{ env.IMAGE_PREFIX }}-api:latest \
-            ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}-amd64 --os linux --arch amd64
-          docker manifest annotate ${{ env.IMAGE_PREFIX }}-api:latest \
-            ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}-arm64 --os linux --arch arm64
-          docker manifest push ${{ env.IMAGE_PREFIX }}-api:latest
+          docker buildx imagetools create \
+            --tag ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }} \
+            --tag ${{ env.IMAGE_PREFIX }}-api:latest \
+            --annotation "index:org.opencontainers.image.revision=${{ steps.hashes.outputs.api_hash }}" \
+            ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}-test-amd64 \
+            ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}-test-arm64
 
       - name: Create UI manifests
-        if: needs.detect.outputs.ui_changed == 'true' && needs.push-ui.result == 'success'
+        if: needs.detect.outputs.ui_changed == 'true'
         run: |
-          # Version tag
-          docker manifest create ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }} \
-            ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}-amd64 \
-            ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}-arm64
-          docker manifest annotate ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }} \
-            ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}-amd64 --os linux --arch amd64
-          docker manifest annotate ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }} \
-            ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}-arm64 --os linux --arch arm64
-          docker manifest push ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}
-
-          # Latest tag
-          docker manifest create ${{ env.IMAGE_PREFIX }}-ui:latest \
-            ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}-amd64 \
-            ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}-arm64
-          docker manifest annotate ${{ env.IMAGE_PREFIX }}-ui:latest \
-            ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}-amd64 --os linux --arch amd64
-          docker manifest annotate ${{ env.IMAGE_PREFIX }}-ui:latest \
-            ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}-arm64 --os linux --arch arm64
-          docker manifest push ${{ env.IMAGE_PREFIX }}-ui:latest
+          docker buildx imagetools create \
+            --tag ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }} \
+            --tag ${{ env.IMAGE_PREFIX }}-ui:latest \
+            --annotation "index:org.opencontainers.image.revision=${{ steps.hashes.outputs.ui_hash }}" \
+            ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}-test-amd64 \
+            ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}-test-arm64
 
       - name: Create Nginx manifests
-        if: needs.detect.outputs.nginx_changed == 'true' && needs.push-nginx.result == 'success'
+        if: needs.detect.outputs.nginx_changed == 'true'
         run: |
-          # Version tag
-          docker manifest create ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }} \
-            ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}-amd64 \
-            ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}-arm64
-          docker manifest annotate ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }} \
-            ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}-amd64 --os linux --arch amd64
-          docker manifest annotate ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }} \
-            ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}-arm64 --os linux --arch arm64
-          docker manifest push ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}
-
-          # Latest tag
-          docker manifest create ${{ env.IMAGE_PREFIX }}-nginx:latest \
-            ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}-amd64 \
-            ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}-arm64
-          docker manifest annotate ${{ env.IMAGE_PREFIX }}-nginx:latest \
-            ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}-amd64 --os linux --arch amd64
-          docker manifest annotate ${{ env.IMAGE_PREFIX }}-nginx:latest \
-            ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}-arm64 --os linux --arch arm64
-          docker manifest push ${{ env.IMAGE_PREFIX }}-nginx:latest
+          docker buildx imagetools create \
+            --tag ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }} \
+            --tag ${{ env.IMAGE_PREFIX }}-nginx:latest \
+            --annotation "index:org.opencontainers.image.revision=${{ steps.hashes.outputs.nginx_hash }}" \
+            ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}-test-amd64 \
+            ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}-test-arm64
 
       - name: Summary
         run: |
@@ -550,7 +376,7 @@ jobs:
           echo "📝 Test tags (${{ needs.detect.outputs.version }}-test) will be overwritten on next release"
 
   # ============================================================
-  # Step 8: Create GitHub Release
+  # Step 6: Create GitHub Release
   # ============================================================
   release:
     name: 📦 Create Release

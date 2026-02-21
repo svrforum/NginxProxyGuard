@@ -220,7 +220,7 @@ export class APIHelper {
   /**
    * Clean up test proxy hosts (by domain pattern).
    */
-  async cleanupTestHosts(pattern: RegExp = /test-e2e-|secure-e2e-/i): Promise<number> {
+  async cleanupTestHosts(pattern: RegExp = /.+\.example\.local$/i): Promise<number> {
     const hosts = await this.getProxyHosts();
     let deleted = 0;
 
@@ -316,7 +316,7 @@ export class APIHelper {
   /**
    * Clean up test redirect hosts.
    */
-  async cleanupTestRedirectHosts(pattern: RegExp = /test-e2e-|redirect-e2e-/i): Promise<number> {
+  async cleanupTestRedirectHosts(pattern: RegExp = /.+\.example\.local$/i): Promise<number> {
     const hosts = await this.getRedirectHosts();
     let deleted = 0;
 

@@ -85,10 +85,20 @@ export class LoginPage {
     await this.clickLogin();
 
     // Wait for either navigation or error
+    // Use a longer timeout to accommodate React auth state machine processing
     await Promise.race([
       this.page.waitForURL(/\/(dashboard|proxy-hosts)/, { timeout: TIMEOUTS.long }),
       this.errorMessage.waitFor({ state: 'visible', timeout: TIMEOUTS.long }).catch(() => null),
     ]);
+
+    // If still on login page without error, wait a bit more for React navigation
+    const url = this.page.url();
+    if (!url.includes('/dashboard') && !url.includes('/proxy-hosts')) {
+      const hasError = await this.errorMessage.isVisible().catch(() => false);
+      if (!hasError) {
+        await this.page.waitForURL(/\/(dashboard|proxy-hosts)/, { timeout: TIMEOUTS.medium });
+      }
+    }
   }
 
   /**

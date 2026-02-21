@@ -56,14 +56,14 @@ export const API_ENDPOINTS = {
   logsSystem: '/api/v1/logs/system',
 
   // Settings
-  settingsGlobal: '/api/v1/settings/global',
-  settingsBackups: '/api/v1/settings/backups',
-  settingsCaptcha: '/api/v1/settings/captcha',
-  settingsGeoip: '/api/v1/settings/geoip',
-  settingsBotfilter: '/api/v1/settings/botfilter',
-  settingsWafAutoBan: '/api/v1/settings/waf-auto-ban',
-  settingsSsl: '/api/v1/settings/ssl',
-  settingsMaintenance: '/api/v1/settings/maintenance',
+  settingsGlobal: '/api/v1/settings',
+  settingsBackups: '/api/v1/backups',
+  settingsCaptcha: '/api/v1/settings',
+  settingsGeoip: '/api/v1/settings',
+  settingsBotfilter: '/api/v1/settings',
+  settingsWafAutoBan: '/api/v1/settings',
+  settingsSsl: '/api/v1/settings',
+  settingsMaintenance: '/api/v1/settings',
 
   // API Tokens
   apiTokens: '/api/v1/api-tokens',
