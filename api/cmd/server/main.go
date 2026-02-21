@@ -5,8 +5,10 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strconv"
 	"strings"
@@ -850,6 +852,24 @@ func main() {
 				}
 				resp, err := client.Do(req)
 				if err != nil {
+					// If forward_host is a private IP (docker internal), retry via nginx container
+					if ip := net.ParseIP(host.ForwardHost); ip != nil && ip.IsPrivate() {
+						testCtx, cancel := context.WithTimeout(c.Request().Context(), 5*time.Second)
+						defer cancel()
+						cmd := exec.CommandContext(testCtx, "docker", "exec", cfg.NginxContainer,
+							"curl", "-sk", "--head", "--max-time", "4",
+							"-o", "/dev/null", "-w", "%{http_code}", upstreamURL)
+						if output, execErr := cmd.CombinedOutput(); execErr == nil {
+							if code, _ := strconv.Atoi(strings.TrimSpace(string(output))); code > 0 {
+								return c.JSON(http.StatusOK, map[string]interface{}{
+									"status":      config.StatusOK,
+									"host":        host,
+									"upstream":    upstreamURL,
+									"status_code": code,
+								})
+							}
+						}
+					}
 					return c.JSON(http.StatusOK, map[string]interface{}{
 						"status":   config.StatusError,
 						"error":    "Connection failed",

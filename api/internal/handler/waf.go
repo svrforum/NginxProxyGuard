@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -290,8 +291,14 @@ func (h *WAFHandler) DisableRuleByHost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Strip port suffix from host (e.g. "example.com:443" → "example.com")
+	hostLookup := req.Host
+	if h, _, err := net.SplitHostPort(hostLookup); err == nil {
+		hostLookup = h
+	}
+
 	// Look up proxy host by domain name
-	host, err := h.proxyHostRepo.GetByDomain(ctx, req.Host)
+	host, err := h.proxyHostRepo.GetByDomain(ctx, hostLookup)
 	if err != nil {
 		httpDatabaseError(w, "lookup proxy host by domain", err)
 		return
