@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 
 	"nginx-proxy-guard/internal/database"
 	"nginx-proxy-guard/internal/model"
@@ -778,6 +779,11 @@ func (r *ProxyHostRepository) CheckDomainExists(ctx context.Context, domains []s
 }
 
 func (r *ProxyHostRepository) GetByDomain(ctx context.Context, domain string) (*model.ProxyHost, error) {
+	// Defensive: strip port suffix (e.g. "example.com:443" → "example.com")
+	if h, _, err := net.SplitHostPort(domain); err == nil {
+		domain = h
+	}
+
 	query := `
 		SELECT id, domain_names, forward_scheme, forward_host, forward_port,
 			ssl_enabled, ssl_force_https, ssl_http2, ssl_http3, certificate_id,

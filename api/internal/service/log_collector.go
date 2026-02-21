@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"net"
 	"net/url"
 	"os/exec"
 	"regexp"
@@ -819,6 +820,10 @@ func (c *LogCollector) parseModSecLog(line string) (*model.CreateLogRequest, err
 		lowerKey := strings.ToLower(k)
 		if lowerKey == "host" || k == ":authority" {
 			host = v
+			// Strip port suffix: "example.com:443" → "example.com"
+			if h, _, splitErr := net.SplitHostPort(host); splitErr == nil {
+				host = h
+			}
 			break
 		}
 	}
