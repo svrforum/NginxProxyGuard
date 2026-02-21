@@ -1243,10 +1243,11 @@ func mergeURIBlocks(global *model.GlobalURIBlock, host *model.URIBlock) *model.U
 
 	// Create merged result
 	result := &model.URIBlock{
-		Enabled:         true,
-		Rules:           []model.URIBlockRule{},
-		ExceptionIPs:    []string{},
-		AllowPrivateIPs: true, // Default to true
+		Enabled:      true,
+		Rules:        []model.URIBlockRule{},
+		ExceptionIPs: []string{},
+		// AllowPrivateIPs defaults to false; set from global/host below via OR logic
+		AllowPrivateIPs: false,
 	}
 
 	// If host has settings, use its ID and other properties
@@ -1299,9 +1300,10 @@ func mergeURIBlocks(global *model.GlobalURIBlock, host *model.URIBlock) *model.U
 				result.ExceptionIPs = append(result.ExceptionIPs, ip)
 			}
 		}
-		// Host-specific AllowPrivateIPs takes precedence if host settings exist
+		// AllowPrivateIPs: OR logic - true if EITHER global OR host enables it
+		// Global acts as a safety net that cannot be overridden by host
 		if host.Enabled {
-			result.AllowPrivateIPs = host.AllowPrivateIPs
+			result.AllowPrivateIPs = host.AllowPrivateIPs || result.AllowPrivateIPs
 		}
 	}
 
