@@ -836,7 +836,7 @@ func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Back
 	if h.nginxManager != nil {
 		// Create certificate symlinks for new IDs pointing to existing cert files
 		if h.certificateRepo != nil {
-			certs, _, err := h.certificateRepo.List(ctx, 1, 1000)
+			certs, _, err := h.certificateRepo.List(ctx, 1, 1000, "", "", "", "", "")
 			if err != nil {
 				log.Printf("[Backup] Warning: failed to list certificates: %v", err)
 			} else {

@@ -31,7 +31,30 @@
     "update": "Update",
     "download": "Download",
     "downloading": "Downloading...",
-    "delete": "Delete"
+    "delete": "Delete",
+    "search": "Search domains...",
+    "showing": "Showing {{from}}-{{to}} of {{total}}",
+    "perPage": "{{count}} per page",
+    "noResults": "No certificates match your search criteria.",
+    "bulkDeleteErrors": "Delete All Error Certificates",
+    "sort": {
+      "createdDesc": "Newest first",
+      "createdAsc": "Oldest first",
+      "expiresAsc": "Expiring soon",
+      "expiresDesc": "Expiring later",
+      "domainAsc": "Domain A-Z",
+      "domainDesc": "Domain Z-A"
+    },
+    "filter": {
+      "allStatus": "All Status",
+      "allProvider": "All Providers"
+    },
+    "pagination": {
+      "first": "First",
+      "previous": "Previous",
+      "next": "Next",
+      "last": "Last"
+    }
   },
   "form": {
     "title": "New Certificate",
@@ -108,7 +131,10 @@
     "deleteFailed": "Failed to delete certificate",
     "downloadError": "Failed to download certificate",
     "updateSuccess": "Certificate updated successfully",
-    "updateFailed": "Failed to update certificate"
+    "updateFailed": "Failed to update certificate",
+    "bulkDeleteConfirm": "Are you sure you want to delete all error certificates? This action cannot be undone.",
+    "bulkDeleteSuccess": "{{count}} error certificate(s) deleted.",
+    "bulkDeleteFailed": "Failed to delete error certificates"
   },
   "dnsProviders": {
     "title": "DNS Providers",

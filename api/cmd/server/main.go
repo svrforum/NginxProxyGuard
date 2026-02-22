@@ -504,6 +504,7 @@ func main() {
 			certificates.POST("/upload", certificateHandler.Upload)
 			certificates.GET("/expiring", certificateHandler.GetExpiring)
 			certificates.GET("/history", certificateHandler.ListHistory)
+			certificates.DELETE("/errors", certificateHandler.BulkDeleteErrors)
 			certificates.GET("/:id", certificateHandler.Get)
 			certificates.DELETE("/:id", certificateHandler.Delete)
 			certificates.PUT("/:id/upload", certificateHandler.UpdateUpload)

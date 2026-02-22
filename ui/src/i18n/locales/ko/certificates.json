@@ -31,7 +31,30 @@
     "update": "교체",
     "download": "다운로드",
     "downloading": "다운로드 중...",
-    "delete": "삭제"
+    "delete": "삭제",
+    "search": "도메인 검색...",
+    "showing": "{{total}}개 중 {{from}}-{{to}} 표시",
+    "perPage": "{{count}}개씩",
+    "noResults": "검색 조건에 맞는 인증서가 없습니다.",
+    "bulkDeleteErrors": "오류 인증서 일괄 삭제",
+    "sort": {
+      "createdDesc": "최근 생성순",
+      "createdAsc": "오래된 순",
+      "expiresAsc": "만료 임박순",
+      "expiresDesc": "만료 여유순",
+      "domainAsc": "도메인 A-Z",
+      "domainDesc": "도메인 Z-A"
+    },
+    "filter": {
+      "allStatus": "전체 상태",
+      "allProvider": "전체 제공자"
+    },
+    "pagination": {
+      "first": "처음",
+      "previous": "이전",
+      "next": "다음",
+      "last": "마지막"
+    }
   },
   "form": {
     "title": "새 인증서",
@@ -108,7 +131,10 @@
     "deleteFailed": "인증서 삭제에 실패했습니다",
     "downloadError": "인증서 다운로드에 실패했습니다",
     "updateSuccess": "인증서가 교체되었습니다",
-    "updateFailed": "인증서 교체에 실패했습니다"
+    "updateFailed": "인증서 교체에 실패했습니다",
+    "bulkDeleteConfirm": "모든 오류 인증서를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
+    "bulkDeleteSuccess": "{{count}}개의 오류 인증서가 삭제되었습니다.",
+    "bulkDeleteFailed": "오류 인증서 삭제에 실패했습니다"
   },
   "dnsProviders": {
     "title": "DNS 제공자",

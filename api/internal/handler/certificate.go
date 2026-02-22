@@ -28,13 +28,34 @@ func NewCertificateHandler(svc *service.CertificateService, audit *service.Audit
 // List handles GET /api/v1/certificates
 func (h *CertificateHandler) List(c echo.Context) error {
 	page, perPage := ParsePaginationParams(c)
+	search := c.QueryParam("search")
+	sortBy := c.QueryParam("sort_by")
+	sortOrder := c.QueryParam("sort_order")
+	status := c.QueryParam("status")
+	provider := c.QueryParam("provider")
 
-	response, err := h.service.List(c.Request().Context(), page, perPage)
+	response, err := h.service.List(c.Request().Context(), page, perPage, search, sortBy, sortOrder, status, provider)
 	if err != nil {
 		return databaseError(c, "list certificates", err)
 	}
 
 	return c.JSON(http.StatusOK, response)
+}
+
+// BulkDeleteErrors handles DELETE /api/v1/certificates/errors
+func (h *CertificateHandler) BulkDeleteErrors(c echo.Context) error {
+	count, err := h.service.DeleteErrorCertificates(c.Request().Context())
+	if err != nil {
+		return internalError(c, "bulk delete error certificates", err)
+	}
+
+	// Audit log
+	auditCtx := service.ContextWithAudit(c.Request().Context(), c)
+	h.audit.LogCertificateDelete(auditCtx, []string{fmt.Sprintf("bulk_delete_errors(%d)", count)})
+
+	return c.JSON(http.StatusOK, map[string]int64{
+		"deleted": count,
+	})
 }
 
 // Get handles GET /api/v1/certificates/:id

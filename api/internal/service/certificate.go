@@ -418,9 +418,9 @@ func (s *CertificateService) GetByID(ctx context.Context, id string) (*model.Cer
 	return s.repo.GetByID(ctx, id)
 }
 
-// List retrieves certificates with pagination
-func (s *CertificateService) List(ctx context.Context, page, perPage int) (*model.CertificateListResponse, error) {
-	certs, total, err := s.repo.List(ctx, page, perPage)
+// List retrieves certificates with pagination, search, sort, and filters
+func (s *CertificateService) List(ctx context.Context, page, perPage int, search, sortBy, sortOrder, status, provider string) (*model.CertificateListResponse, error) {
+	certs, total, err := s.repo.List(ctx, page, perPage, search, sortBy, sortOrder, status, provider)
 	if err != nil {
 		return nil, err
 	}
@@ -434,6 +434,29 @@ func (s *CertificateService) List(ctx context.Context, page, perPage int) (*mode
 		PerPage:    perPage,
 		TotalPages: totalPages,
 	}, nil
+}
+
+// DeleteErrorCertificates deletes all certificates with error status
+func (s *CertificateService) DeleteErrorCertificates(ctx context.Context) (int64, error) {
+	// Get error certificates for file cleanup
+	errorCerts, err := s.repo.ListByStatus(ctx, "error")
+	if err != nil {
+		return 0, fmt.Errorf("failed to list error certificates: %w", err)
+	}
+
+	// Delete certificate files (best-effort)
+	acmeService, _ := s.getACMEService(ctx)
+	for _, cert := range errorCerts {
+		_ = acmeService.DeleteCertificateFiles(cert.ID)
+	}
+
+	// Delete from DB
+	count, err := s.repo.DeleteByStatus(ctx, "error")
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete error certificates: %w", err)
+	}
+
+	return count, nil
 }
 
 // Delete removes a certificate

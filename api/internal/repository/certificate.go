@@ -172,28 +172,88 @@ func (r *CertificateRepository) GetByID(ctx context.Context, id string) (*model.
 	return cert, nil
 }
 
-func (r *CertificateRepository) List(ctx context.Context, page, perPage int) ([]model.Certificate, int, error) {
+func (r *CertificateRepository) List(ctx context.Context, page, perPage int, search, sortBy, sortOrder, status, provider string) ([]model.Certificate, int, error) {
+	if page < 1 {
+		page = 1
+	}
+	if perPage < 1 {
+		perPage = 20
+	}
 	offset := (page - 1) * perPage
+
+	// Build WHERE clause
+	var conditions []string
+	var args []interface{}
+	argIndex := 1
+
+	if search != "" {
+		conditions = append(conditions, fmt.Sprintf("array_to_string(c.domain_names, ',') ILIKE $%d", argIndex))
+		args = append(args, "%"+search+"%")
+		argIndex++
+	}
+
+	validStatuses := map[string]bool{"pending": true, "issued": true, "expired": true, "error": true, "renewing": true}
+	if status != "" && validStatuses[status] {
+		conditions = append(conditions, fmt.Sprintf("c.status = $%d", argIndex))
+		args = append(args, status)
+		argIndex++
+	}
+
+	validProviders := map[string]bool{"letsencrypt": true, "selfsigned": true, "custom": true}
+	if provider != "" && validProviders[provider] {
+		conditions = append(conditions, fmt.Sprintf("c.provider = $%d", argIndex))
+		args = append(args, provider)
+		argIndex++
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = " WHERE " + conditions[0]
+		for i := 1; i < len(conditions); i++ {
+			whereClause += " AND " + conditions[i]
+		}
+	}
 
 	// Count total
 	var total int
-	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM certificates`).Scan(&total)
-	if err != nil {
+	countQuery := `SELECT COUNT(*) FROM certificates c` + whereClause
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("failed to count certificates: %w", err)
 	}
 
-	query := `
+	// Build ORDER BY clause
+	orderByClause := "c.created_at DESC" // default
+	validSortFields := map[string]string{
+		"domain":  "c.domain_names[1]",
+		"expires": "c.expires_at",
+		"created": "c.created_at",
+	}
+	if sortField, ok := validSortFields[sortBy]; ok {
+		order := "DESC"
+		if sortOrder == "asc" {
+			order = "ASC"
+		}
+		if sortBy == "expires" {
+			orderByClause = fmt.Sprintf("%s %s NULLS LAST", sortField, order)
+		} else {
+			orderByClause = fmt.Sprintf("%s %s", sortField, order)
+		}
+	}
+
+	query := fmt.Sprintf(`
 		SELECT c.id, c.domain_names, c.dns_provider_id, c.status, c.provider, c.auto_renew,
 			c.expires_at, c.issued_at, c.renewal_attempted_at, c.error_message,
 			c.certificate_path, c.private_key_path, c.created_at, c.updated_at,
 			d.id, d.name, d.provider_type
 		FROM certificates c
 		LEFT JOIN dns_providers d ON c.dns_provider_id = d.id
-		ORDER BY c.created_at DESC
-		LIMIT $1 OFFSET $2
-	`
+		%s
+		ORDER BY %s
+		LIMIT $%d OFFSET $%d
+	`, whereClause, orderByClause, argIndex, argIndex+1)
 
-	rows, err := r.db.QueryContext(ctx, query, perPage, offset)
+	args = append(args, perPage, offset)
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to list certificates: %w", err)
 	}
@@ -250,6 +310,66 @@ func (r *CertificateRepository) List(ctx context.Context, page, perPage int) ([]
 	}
 
 	return certs, total, nil
+}
+
+func (r *CertificateRepository) DeleteByStatus(ctx context.Context, status string) (int64, error) {
+	result, err := r.db.ExecContext(ctx, `DELETE FROM certificates WHERE status = $1`, status)
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete certificates by status: %w", err)
+	}
+	return result.RowsAffected()
+}
+
+func (r *CertificateRepository) ListByStatus(ctx context.Context, status string) ([]model.Certificate, error) {
+	query := `
+		SELECT id, domain_names, dns_provider_id, status, provider, auto_renew,
+			expires_at, issued_at, certificate_path, private_key_path,
+			created_at, updated_at
+		FROM certificates
+		WHERE status = $1
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, status)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list certificates by status: %w", err)
+	}
+	defer rows.Close()
+
+	var certs []model.Certificate
+	for rows.Next() {
+		var cert model.Certificate
+		var dnsProviderID sql.NullString
+		var expiresAt, issuedAt sql.NullTime
+		var certPath, keyPath sql.NullString
+
+		err := rows.Scan(
+			&cert.ID,
+			&cert.DomainNames,
+			&dnsProviderID,
+			&cert.Status,
+			&cert.Provider,
+			&cert.AutoRenew,
+			&expiresAt,
+			&issuedAt,
+			&certPath,
+			&keyPath,
+			&cert.CreatedAt,
+			&cert.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan certificate: %w", err)
+		}
+
+		cert.DNSProviderID = fromNullString(dnsProviderID)
+		cert.ExpiresAt = fromNullTime(expiresAt)
+		cert.IssuedAt = fromNullTime(issuedAt)
+		cert.CertificatePath = fromNullString(certPath)
+		cert.PrivateKeyPath = fromNullString(keyPath)
+
+		certs = append(certs, cert)
+	}
+
+	return certs, nil
 }
 
 func (r *CertificateRepository) Update(ctx context.Context, cert *model.Certificate) error {

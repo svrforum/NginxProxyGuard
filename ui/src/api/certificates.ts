@@ -18,11 +18,36 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return response.json();
 }
 
-export async function listCertificates(page = 1, perPage = 20): Promise<CertificateListResponse> {
-  const response = await fetch(`${API_BASE}/certificates?page=${page}&per_page=${perPage}`, {
+export async function listCertificates(
+  page = 1,
+  perPage = 20,
+  search = '',
+  sortBy = '',
+  sortOrder = '',
+  status = '',
+  provider = ''
+): Promise<CertificateListResponse> {
+  const params = new URLSearchParams();
+  params.set('page', String(page));
+  params.set('per_page', String(perPage));
+  if (search) params.set('search', search);
+  if (sortBy) params.set('sort_by', sortBy);
+  if (sortOrder) params.set('sort_order', sortOrder);
+  if (status) params.set('status', status);
+  if (provider) params.set('provider', provider);
+
+  const response = await fetch(`${API_BASE}/certificates?${params.toString()}`, {
     headers: getAuthHeaders(),
   });
   return handleResponse<CertificateListResponse>(response);
+}
+
+export async function bulkDeleteErrorCertificates(): Promise<{ deleted: number }> {
+  const response = await fetch(`${API_BASE}/certificates/errors`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  return handleResponse<{ deleted: number }>(response);
 }
 
 export async function getCertificate(id: string): Promise<Certificate> {
