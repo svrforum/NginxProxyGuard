@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -238,14 +239,22 @@ func (h *WAFHandler) regenerateAllHostConfigs(ctx context.Context) error {
 		return err
 	}
 
-	// Regenerate config for each WAF-enabled host
-	for _, host := range hosts {
-		if !host.WAFEnabled {
+	// Regenerate config for each WAF-enabled host and reload once at the end
+	// Use RegenerateMultipleHostWAFConfigs for atomic operation with single lock
+	type hostWAFData struct {
+		Host       *model.ProxyHost
+		Exclusions []model.WAFRuleExclusion
+		AllowedIPs []string
+	}
+
+	var wafHosts []hostWAFData
+	for i := range hosts {
+		if !hosts[i].WAFEnabled {
 			continue
 		}
 
 		// Get host-specific exclusions
-		hostExclusions, err := h.wafRepo.GetExclusionsByProxyHost(ctx, host.ID)
+		hostExclusions, err := h.wafRepo.GetExclusionsByProxyHost(ctx, hosts[i].ID)
 		if err != nil {
 			continue
 		}
@@ -256,24 +265,28 @@ func (h *WAFHandler) regenerateAllHostConfigs(ctx context.Context) error {
 		// Get Priority Allow IPs for WAF bypass
 		var allowedIPs []string
 		if h.geoRepo != nil {
-			geo, err := h.geoRepo.GetByProxyHostID(ctx, host.ID)
+			geo, err := h.geoRepo.GetByProxyHostID(ctx, hosts[i].ID)
 			if err == nil && geo != nil {
 				allowedIPs = geo.AllowedIPs
 			}
 		}
 
-		// Generate WAF config
-		if err := h.nginxManager.GenerateHostWAFConfig(ctx, &host, mergedExclusions, allowedIPs); err != nil {
+		wafHosts = append(wafHosts, hostWAFData{
+			Host:       &hosts[i],
+			Exclusions: mergedExclusions,
+			AllowedIPs: allowedIPs,
+		})
+	}
+
+	// Generate all WAF configs, then test and reload once
+	for _, data := range wafHosts {
+		if err := h.nginxManager.GenerateHostWAFConfig(ctx, data.Host, data.Exclusions, data.AllowedIPs); err != nil {
+			log.Printf("[WAF] Failed to generate WAF config for host %s: %v", data.Host.ID, err)
 			continue
 		}
 	}
 
-	// Test and reload nginx once after all configs are updated
-	if err := h.nginxManager.TestConfig(ctx); err != nil {
-		return err
-	}
-
-	return h.nginxManager.ReloadNginx(ctx)
+	return h.nginxManager.TestAndReload(ctx)
 }
 
 // mergeExclusions merges global and host-specific exclusions.

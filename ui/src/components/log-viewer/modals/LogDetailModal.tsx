@@ -23,7 +23,7 @@ export function LogDetailModal({ log, onClose, onRuleDisabled }: LogDetailModalP
   const [showRelatedLogs, setShowRelatedLogs] = useState(false);
   const [disableReason, setDisableReason] = useState('');
   const [showDisableForm, setShowDisableForm] = useState(false);
-  const [isGlobalDisable, setIsGlobalDisable] = useState(false);
+  const [isGlobalDisable, setIsGlobalDisable] = useState(!log.host);
   const [showBanForm, setShowBanForm] = useState(false);
   const [banReason, setBanReason] = useState('');
   const [banDuration, setBanDuration] = useState<number | undefined>(undefined);
@@ -150,7 +150,7 @@ export function LogDetailModal({ log, onClose, onRuleDisabled }: LogDetailModalP
       onRuleDisabled?.();
       setShowDisableForm(false);
       setDisableReason('');
-      setIsGlobalDisable(false);
+      setIsGlobalDisable(!log.host);
     },
     onError: (error) => {
       alert(t('messages.ruleDisableFailed', { error: (error as Error).message }));
@@ -544,10 +544,14 @@ export function LogDetailModal({ log, onClose, onRuleDisabled }: LogDetailModalP
                           <button
                             type="button"
                             onClick={() => setIsGlobalDisable(false)}
+                            disabled={!log.host}
+                            title={!log.host ? t('disableRule.perHostUnavailable', { defaultValue: '호스트 정보가 없어 전역 비활성화만 가능합니다' }) : undefined}
                             className={`flex-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                              !isGlobalDisable
-                                ? 'bg-orange-600 text-white'
-                                : 'bg-white dark:bg-slate-800 text-orange-700 dark:text-orange-400 border border-orange-300 dark:border-orange-700 hover:bg-orange-50 dark:hover:bg-orange-900/30'
+                              !log.host
+                                ? 'opacity-50 cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-700'
+                                : !isGlobalDisable
+                                  ? 'bg-orange-600 text-white'
+                                  : 'bg-white dark:bg-slate-800 text-orange-700 dark:text-orange-400 border border-orange-300 dark:border-orange-700 hover:bg-orange-50 dark:hover:bg-orange-900/30'
                             }`}
                           >
                             {t('disableRule.perHost', { defaultValue: '이 호스트만' })}
@@ -566,7 +570,9 @@ export function LogDetailModal({ log, onClose, onRuleDisabled }: LogDetailModalP
                         </div>
                         {isGlobalDisable && (
                           <p className="mt-1 text-xs text-purple-600 dark:text-purple-400">
-                            {t('disableRule.globalDescription', { defaultValue: '이 정책은 모든 프록시 호스트에서 비활성화됩니다.' })}
+                            {!log.host
+                              ? t('disableRule.noHostInfo', { defaultValue: '호스트 정보가 없는 로그입니다. 전역 비활성화만 가능합니다.' })
+                              : t('disableRule.globalDescription', { defaultValue: '이 정책은 모든 프록시 호스트에서 비활성화됩니다.' })}
                           </p>
                         )}
                       </div>

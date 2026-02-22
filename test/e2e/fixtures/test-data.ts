@@ -254,8 +254,8 @@ export const TIMEOUTS = {
 
 // WAF modes
 export const WAF_MODES = {
-  detection: 'DetectionOnly',
-  blocking: 'On',
+  detection: 'detection',
+  blocking: 'blocking',
   off: 'Off',
 } as const;
 

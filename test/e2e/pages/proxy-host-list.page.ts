@@ -117,11 +117,18 @@ export class ProxyHostListPage extends BasePage {
   }
 
   /**
-   * Click on a host to edit.
+   * Click on a host to edit (clicks the edit button in the actions column).
    */
   async clickHost(domain: string): Promise<void> {
     const hostCard = this.getHostByDomain(domain);
-    await hostCard.click();
+    // Click the edit button (pencil icon) within the host row
+    const editButton = hostCard.locator('button[title="Edit"], button[title="편집"]').first();
+    if (await editButton.isVisible()) {
+      await editButton.click();
+    } else {
+      // Fallback: try any edit-like button
+      await hostCard.locator('button').filter({ hasText: /edit/i }).first().click();
+    }
     // Wait for form/modal
     await this.page.waitForSelector('[class*="modal"], [role="dialog"], .fixed.inset-0', {
       state: 'visible',
