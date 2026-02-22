@@ -737,6 +737,53 @@ func (m *Manager) ReloadNginx(ctx context.Context) error {
 	})
 }
 
+// TestAndReload tests and reloads nginx with a single lock acquisition.
+func (m *Manager) TestAndReload(ctx context.Context) error {
+	return m.executeWithLock(ctx, func() error {
+		return m.testAndReloadNginx(ctx)
+	})
+}
+
+// GenerateHostWAFConfigAndReload atomically generates per-host WAF config, tests and reloads nginx.
+// On test failure, it rolls back to the previous WAF config.
+// This should be used instead of calling GenerateHostWAFConfig + TestConfig + ReloadNginx separately.
+func (m *Manager) GenerateHostWAFConfigAndReload(ctx context.Context, host *model.ProxyHost, exclusions []model.WAFRuleExclusion, allowedIPs []string) error {
+	return m.executeWithLock(ctx, func() error {
+		wafConfigFile := filepath.Join(m.modsecPath, fmt.Sprintf("host_%s.conf", host.ID))
+
+		// 1. Backup existing WAF config for rollback
+		var wafConfigBackup []byte
+		wafConfigExists := false
+		if content, err := os.ReadFile(wafConfigFile); err == nil {
+			wafConfigBackup = content
+			wafConfigExists = true
+		}
+
+		// 2. Generate new WAF config
+		if err := m.GenerateHostWAFConfig(ctx, host, exclusions, allowedIPs); err != nil {
+			return fmt.Errorf("failed to generate WAF config: %w", err)
+		}
+
+		// 3. Test and reload nginx
+		if err := m.testAndReloadNginx(ctx); err != nil {
+			// Rollback: restore previous WAF config
+			log.Printf("[WARN] Nginx test failed after WAF config update for host %s, rolling back", host.ID)
+			if wafConfigExists && len(wafConfigBackup) > 0 {
+				if writeErr := m.writeFileAtomic(wafConfigFile, wafConfigBackup, 0644); writeErr != nil {
+					log.Printf("[ERROR] Failed to restore WAF config for host %s: %v", host.ID, writeErr)
+				}
+			} else if !wafConfigExists {
+				if removeErr := os.Remove(wafConfigFile); removeErr != nil && !os.IsNotExist(removeErr) {
+					log.Printf("[ERROR] Failed to remove invalid WAF config for host %s: %v", host.ID, removeErr)
+				}
+			}
+			return err
+		}
+
+		return nil
+	})
+}
+
 func (m *Manager) GenerateAllConfigs(ctx context.Context, hosts []model.ProxyHost) error {
 	// Remove all existing proxy_host configs
 	files, err := filepath.Glob(filepath.Join(m.configPath, "proxy_host_*.conf"))

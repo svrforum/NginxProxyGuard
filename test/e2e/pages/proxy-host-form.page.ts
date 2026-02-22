@@ -87,8 +87,8 @@ export class ProxyHostFormPage {
     this.hstsToggle = page.locator('input[type="checkbox"], button[role="switch"]').filter({ has: page.locator('text=/hsts/i') }).first();
     this.certificateSelect = page.locator('select[name*="certificate"], [role="combobox"]').filter({ has: page.locator('option:has-text("certificate"), [role="option"]:has-text("certificate")') }).first();
 
-    // Security tab fields
-    this.wafEnabledToggle = page.locator('input[type="checkbox"], button[role="switch"]').filter({ has: page.locator('text=/waf|modsec/i') }).first();
+    // Security tab fields - WAF toggle is inside a label with WAF text
+    this.wafEnabledToggle = page.locator('label').filter({ hasText: /WAF.*Firewall|ModSecurity/i }).locator('input[type="checkbox"]').first();
     this.wafModeSelect = page.locator('select[name*="waf_mode"], [role="combobox"]').filter({ has: page.locator('text=/detection|blocking/i') }).first();
     this.paranoiaLevelSelect = page.locator('select[name*="paranoia"], [role="combobox"]').filter({ has: page.locator('text=/paranoia|level/i') }).first();
     this.botFilterToggle = page.locator('input[type="checkbox"], button[role="switch"]').filter({ has: page.locator('text=/bot.*filter/i') }).first();
@@ -163,23 +163,17 @@ export class ProxyHostFormPage {
    * Fill forward host (upstream server).
    */
   async fillForwardHost(host: string): Promise<void> {
-    // Find input by various patterns
-    const hostInput = this.page.locator('input').filter({
-      has: this.page.locator('[placeholder*="host"], [placeholder*="IP"], [placeholder*="server"]'),
-    }).first().or(
-      this.page.locator('input[name*="forward_host"], input[id*="forward_host"]').first()
-    );
+    // Find input by placeholder text (e.g., "192.168.1.100 or container_name")
+    const hostInput = this.page.locator('input[placeholder*="192.168"], input[placeholder*="container_name"], input[placeholder*="forward"]').first();
 
     if (await hostInput.isVisible()) {
       await hostInput.fill(host);
     } else {
-      // Try to find by label
-      const label = this.page.locator('label').filter({ hasText: /forward.*host|upstream/i }).first();
-      if (await label.isVisible()) {
-        const forAttr = await label.getAttribute('for');
-        if (forAttr) {
-          await this.page.locator(`#${forAttr}`).fill(host);
-        }
+      // Fallback: find by nearby label text
+      const section = this.page.locator('label').filter({ hasText: /Forward Host/i }).first();
+      const input = section.locator('..').locator('input[type="text"]').first();
+      if (await input.isVisible()) {
+        await input.fill(host);
       }
     }
   }
@@ -188,12 +182,18 @@ export class ProxyHostFormPage {
    * Fill forward port.
    */
   async fillForwardPort(port: number): Promise<void> {
-    const portInput = this.page.locator('input[type="number"]').first().or(
-      this.page.locator('input').filter({ has: this.page.locator('[placeholder*="port"]') }).first()
-    );
+    // Port input is type="text" with inputMode="numeric", find by label context
+    const portLabel = this.page.locator('label').filter({ hasText: /Forward Port/i }).first();
+    const portInput = portLabel.locator('..').locator('input').first();
 
     if (await portInput.isVisible()) {
       await portInput.fill(port.toString());
+    } else {
+      // Fallback: find input with inputMode="numeric"
+      const numericInput = this.page.locator('input[inputmode="numeric"]').first();
+      if (await numericInput.isVisible()) {
+        await numericInput.fill(port.toString());
+      }
     }
   }
 
@@ -269,12 +269,15 @@ export class ProxyHostFormPage {
   }
 
   /**
-   * Set WAF mode.
+   * Set WAF mode by clicking the appropriate radio label card.
    */
-  async setWAFMode(mode: 'DetectionOnly' | 'On' | 'Off'): Promise<void> {
+  async setWAFMode(mode: 'blocking' | 'detection'): Promise<void> {
     await this.switchTab('security');
-    if (await this.wafModeSelect.isVisible()) {
-      await this.wafModeSelect.selectOption(mode);
+    // WAF mode uses radio buttons styled as cards, not a select element
+    if (mode === 'blocking') {
+      await this.page.locator('label').filter({ hasText: /blocking/i }).first().click();
+    } else if (mode === 'detection') {
+      await this.page.locator('label').filter({ hasText: /detection/i }).first().click();
     }
   }
 
@@ -305,13 +308,12 @@ export class ProxyHostFormPage {
    */
   async save(): Promise<void> {
     await this.saveButton.click();
-    // Wait for save operation to complete
+    // Wait for save progress modal to appear and complete
     await this.page.waitForTimeout(500);
-    // Wait for modal to close or success message
-    await Promise.race([
-      this.modal.waitFor({ state: 'hidden', timeout: TIMEOUTS.long }),
-      this.saveSuccessMessage.waitFor({ state: 'visible', timeout: TIMEOUTS.long }),
-    ]).catch(() => null);
+    // Wait for the form modal to close (happens after save progress completes)
+    await this.modal.waitFor({ state: 'hidden', timeout: TIMEOUTS.long }).catch(() => null);
+    // Small buffer for API to settle
+    await this.page.waitForTimeout(500);
   }
 
   /**

@@ -558,6 +558,52 @@ docker compose exec api wget -qO- --header="Authorization: Bearer $TEST_TOKEN" \
   "http://localhost:8080/api/v1/endpoint"
 ```
 
+### E2E 테스트 (Playwright)
+
+> **기능 개발/버그 수정 후 반드시 E2E 테스트를 수행할 것.**
+
+**E2E 테스트 환경 구조:**
+```
+docker-compose.e2e-test.yml    # 격리된 테스트 환경 (별도 포트/볼륨/네트워크)
+test/e2e/
+├── playwright.config.ts        # Playwright 설정
+├── auth.setup.ts               # 인증 셋업 (자동 로그인)
+├── fixtures/test-data.ts       # 테스트 데이터 상수
+├── pages/                      # Page Object 패턴
+├── specs/                      # 테스트 스펙 파일
+└── utils/
+    ├── api-helper.ts           # API 직접 호출 헬퍼
+    └── test-data-factory.ts    # 테스트 데이터 팩토리
+```
+
+**테스트 실행:**
+```bash
+# 1. E2E 테스트 환경 시작 (최초 1회 또는 코드 변경 시)
+sudo docker compose -f docker-compose.e2e-test.yml up -d --build
+
+# 2. 전체 테스트 실행
+cd test/e2e && npx playwright test
+
+# 3. 특정 스펙 실행
+cd test/e2e && npx playwright test specs/security/waf.spec.ts
+
+# 4. 환경 정리
+sudo docker compose -f docker-compose.e2e-test.yml down -v
+```
+
+**API 빌드만 재배포 (백엔드 수정 시):**
+```bash
+sudo docker compose -f docker-compose.e2e-test.yml build --no-cache api
+sudo docker compose -f docker-compose.e2e-test.yml up -d api
+```
+
+**기능 개발/수정 후 필수 테스트 절차:**
+1. API 빌드 확인: `docker compose -f docker-compose.dev.yml build api`
+2. E2E 테스트 환경 빌드: `docker compose -f docker-compose.e2e-test.yml build --no-cache api`
+3. E2E 테스트 재시작: `docker compose -f docker-compose.e2e-test.yml up -d api`
+4. 관련 E2E 테스트 실행: `cd test/e2e && npx playwright test specs/<관련스펙>.spec.ts`
+5. API 직접 검증 (필요 시): curl/wget으로 엔드포인트 직접 호출하여 동작 확인
+
 ### File Size Limits
 | File Type | Max Lines |
 |-----------|-----------|

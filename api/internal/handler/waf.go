@@ -255,8 +255,9 @@ func (h *WAFHandler) DisableRule(w http.ResponseWriter, r *http.Request) {
 
 	// Regenerate nginx config for this host
 	if err := h.regenerateHostConfig(ctx, proxyHostID); err != nil {
-		// Log but don't fail - the exclusion is saved
 		log.Printf("[WAF] Failed to regenerate nginx config for host %s: %v", proxyHostID, err)
+		http.Error(w, "Rule exclusion saved but failed to apply nginx config: "+err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -304,7 +305,7 @@ func (h *WAFHandler) DisableRuleByHost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if host == nil {
-		http.Error(w, "Proxy host not found for domain", http.StatusNotFound)
+		http.Error(w, "Proxy host not found for domain: "+hostLookup+". Use global disable instead.", http.StatusNotFound)
 		return
 	}
 
@@ -349,8 +350,9 @@ func (h *WAFHandler) DisableRuleByHost(w http.ResponseWriter, r *http.Request) {
 
 	// Regenerate nginx config for this host
 	if err := h.regenerateHostConfig(ctx, proxyHostID); err != nil {
-		// Log but don't fail - the exclusion is saved
 		log.Printf("[WAF] Failed to regenerate nginx config for host %s (via DisableRuleByHost): %v", proxyHostID, err)
+		http.Error(w, "Rule exclusion saved but failed to apply nginx config: "+err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -405,8 +407,9 @@ func (h *WAFHandler) EnableRule(w http.ResponseWriter, r *http.Request) {
 
 	// Regenerate nginx config for this host
 	if err := h.regenerateHostConfig(ctx, proxyHostID); err != nil {
-		// Log but don't fail
 		log.Printf("[WAF] Failed to regenerate nginx config for host %s (via EnableRule): %v", proxyHostID, err)
+		http.Error(w, "Rule exclusion removed but failed to apply nginx config: "+err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
@@ -486,15 +489,6 @@ func (h *WAFHandler) regenerateHostConfig(ctx context.Context, proxyHostID strin
 		}
 	}
 
-	// Generate per-host WAF config only (not full proxy config)
-	if err := h.nginxManager.GenerateHostWAFConfig(ctx, host, mergedExclusions, allowedIPs); err != nil {
-		return err
-	}
-
-	// Test and reload nginx
-	if err := h.nginxManager.TestConfig(ctx); err != nil {
-		return err
-	}
-
-	return h.nginxManager.ReloadNginx(ctx)
+	// Atomic: generate WAF config + test + reload (with global lock and rollback)
+	return h.nginxManager.GenerateHostWAFConfigAndReload(ctx, host, mergedExclusions, allowedIPs)
 }

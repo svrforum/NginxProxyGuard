@@ -68,7 +68,7 @@ export class TestDataFactory {
     return this.createProxyHost({
       domain_names: [this.generateDomain('waf-e2e')],
       waf_enabled: true,
-      waf_mode: 'DetectionOnly',
+      waf_mode: 'detection',
       ...overrides,
     });
   }
@@ -82,7 +82,7 @@ export class TestDataFactory {
       ssl_enabled: true,
       http2_enabled: true,
       waf_enabled: true,
-      waf_mode: 'On',
+      waf_mode: 'blocking',
       bot_filter_enabled: true,
       geoip_enabled: false, // GeoIP needs license key
       ...overrides,

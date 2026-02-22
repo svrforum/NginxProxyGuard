@@ -5,7 +5,7 @@ import { TestDataFactory } from '../../utils/test-data-factory';
 import { APIHelper } from '../../utils/api-helper';
 import { ROUTES, TIMEOUTS, WAF_MODES, PARANOIA_LEVELS } from '../../fixtures/test-data';
 
-test.describe('WAF Settings on Proxy Host', () => {
+test.describe.serial('WAF Settings on Proxy Host', () => {
   let listPage: ProxyHostListPage;
   let formPage: ProxyHostFormPage;
   let apiHelper: APIHelper;
@@ -74,14 +74,14 @@ test.describe('WAF Settings on Proxy Host', () => {
     await listPage.goto();
     await listPage.clickHost(testDomain);
 
-    await formPage.setWAFMode('DetectionOnly');
+    await formPage.setWAFMode('detection');
 
     await formPage.save();
 
     // Verify via API
     const hosts = await apiHelper.getProxyHosts();
     const updatedHost = hosts.find(h => h.domain_names.includes(testDomain));
-    expect(updatedHost?.waf_mode).toBe('DetectionOnly');
+    expect(updatedHost?.waf_mode).toBe('detection');
   });
 
   test('should set WAF mode to Blocking', async ({ page }) => {
@@ -92,14 +92,14 @@ test.describe('WAF Settings on Proxy Host', () => {
     await listPage.goto();
     await listPage.clickHost(testDomain);
 
-    await formPage.setWAFMode('On');
+    await formPage.setWAFMode('blocking');
 
     await formPage.save();
 
     // Verify via API
     const hosts = await apiHelper.getProxyHosts();
     const updatedHost = hosts.find(h => h.domain_names.includes(testDomain));
-    expect(updatedHost?.waf_mode).toBe('On');
+    expect(updatedHost?.waf_mode).toBe('blocking');
   });
 
   test('should create proxy host with WAF enabled from scratch', async ({ page }) => {
@@ -116,6 +116,8 @@ test.describe('WAF Settings on Proxy Host', () => {
     // Enable WAF
     await formPage.toggleWAF(true);
 
+    // In create mode, save/create button is only visible on the last tab (Advanced)
+    await formPage.switchTab('advanced');
     await formPage.save();
 
     // Verify
@@ -181,7 +183,7 @@ test.describe('WAF Global Settings Page', () => {
   test('should navigate to WAF tester section', async ({ page }) => {
     await page.goto(ROUTES.wafSettings);
 
-    const testerTab = page.locator('button, [role="tab"]').filter({ hasText: /test/i }).first();
+    const testerTab = page.locator('button, [role="tab"]').filter({ hasText: /WAF Tester|WAF 테스터/i }).first();
     if (await testerTab.isVisible()) {
       await testerTab.click();
       await expect(page).toHaveURL(/\/waf\/tester/);
