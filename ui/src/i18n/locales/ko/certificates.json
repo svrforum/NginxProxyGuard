@@ -25,6 +25,8 @@
     "empty": "인증서가 없습니다. 시작하려면 인증서를 생성하세요.",
     "more": "+{{count}} 더보기",
     "error": "오류",
+    "renewalFailed": "갱신 실패",
+    "dismissError": "해제",
     "days": "{{count}}일",
     "view": "보기",
     "renew": "갱신",
@@ -35,6 +37,7 @@
     "search": "도메인 검색...",
     "showing": "{{total}}개 중 {{from}}-{{to}} 표시",
     "perPage": "{{count}}개씩",
+    "collapse": "접기",
     "noResults": "검색 조건에 맞는 인증서가 없습니다.",
     "bulkDeleteErrors": "오류 인증서 일괄 삭제",
     "sort": {
@@ -118,10 +121,13 @@
     "files": "인증서 파일",
     "id": "ID",
     "created": "생성일",
-    "close": "닫기"
+    "close": "닫기",
+    "linkedHosts": "연결된 호스트",
+    "noLinkedHosts": "이 인증서를 사용하는 호스트가 없습니다"
   },
   "messages": {
     "deleteConfirm": "이 인증서를 삭제하시겠습니까?",
+    "renewConfirm": "이 인증서를 갱신하시겠습니까?",
     "loadError": "인증서를 불러오는데 실패했습니다",
     "createSuccess": "인증서 요청이 제출되었습니다",
     "createFailed": "인증서 요청에 실패했습니다",

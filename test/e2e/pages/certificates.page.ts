@@ -35,7 +35,7 @@ export class CertificatesPage extends BasePage {
     this.certificateItems = page.locator('[class*="card"], .bg-white.rounded').filter({
       has: page.locator('text=/\\.(com|local|net|org|io)|certificate|ssl/i'),
     });
-    this.addCertificateButton = page.locator('button').filter({ hasText: /add|new|create|request/i }).first();
+    this.addCertificateButton = page.locator('button').filter({ hasText: /^\+\s/ }).first();
     this.emptyState = page.locator('text=/no.*certificate|empty|no.*data/i');
 
     // Certificate details

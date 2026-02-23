@@ -89,11 +89,11 @@ type UploadCertificateRequest struct {
 
 // CertificateListResponse is the paginated list response
 type CertificateListResponse struct {
-	Data       []Certificate `json:"data"`
-	Total      int           `json:"total"`
-	Page       int           `json:"page"`
-	PerPage    int           `json:"per_page"`
-	TotalPages int           `json:"total_pages"`
+	Data       []CertificateWithDetails `json:"data"`
+	Total      int                      `json:"total"`
+	Page       int                      `json:"page"`
+	PerPage    int                      `json:"per_page"`
+	TotalPages int                      `json:"total_pages"`
 }
 
 // CertificateWithDetails includes additional computed fields

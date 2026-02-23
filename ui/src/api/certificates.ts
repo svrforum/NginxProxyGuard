@@ -95,6 +95,17 @@ export async function deleteCertificate(id: string): Promise<void> {
   }
 }
 
+export async function clearCertificateError(id: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/certificates/${id}/error`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(error.error || `HTTP ${response.status}`);
+  }
+}
+
 export async function renewCertificate(id: string): Promise<void> {
   const response = await fetch(`${API_BASE}/certificates/${id}/renew`, {
     method: 'POST',

@@ -166,6 +166,15 @@ func (h *CertificateHandler) UpdateUpload(c echo.Context) error {
 }
 
 // Delete handles DELETE /api/v1/certificates/:id
+// ClearError handles DELETE /api/v1/certificates/:id/error
+func (h *CertificateHandler) ClearError(c echo.Context) error {
+	id := c.Param("id")
+	if err := h.service.ClearError(c.Request().Context(), id); err != nil {
+		return internalError(c, "clear certificate error", err)
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
 func (h *CertificateHandler) Delete(c echo.Context) error {
 	id := c.Param("id")
 

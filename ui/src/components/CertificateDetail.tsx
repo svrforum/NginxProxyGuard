@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { getCertificate } from '../api/certificates'
+import { fetchProxyHosts } from '../api/proxy-hosts'
+import { useEscapeKey } from '../hooks/useEscapeKey'
 import type { Certificate } from '../types/certificate'
 
 interface CertificateDetailProps {
@@ -10,9 +12,19 @@ interface CertificateDetailProps {
 
 export function CertificateDetail({ certificateId, onClose }: CertificateDetailProps) {
   const { t, i18n } = useTranslation('certificates')
+  useEscapeKey(onClose)
+
   const { data: cert, isLoading, error } = useQuery({
     queryKey: ['certificate', certificateId],
     queryFn: () => getCertificate(certificateId),
+  })
+
+  const { data: linkedHosts } = useQuery({
+    queryKey: ['certificate-linked-hosts', certificateId],
+    queryFn: async () => {
+      const result = await fetchProxyHosts(1, 100)
+      return result.data.filter(h => h.certificate_id === certificateId)
+    },
   })
 
   const formatDate = (dateStr?: string) => {
@@ -183,6 +195,35 @@ export function CertificateDetail({ certificateId, onClose }: CertificateDetailP
                   <span className="text-slate-300 break-all">{cert.private_key_path}</span>
                 </div>
               </div>
+            </div>
+
+            {/* Linked Hosts */}
+            <div>
+              <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-2">{t('detail.linkedHosts')}</h3>
+              {linkedHosts && linkedHosts.length > 0 ? (
+                <div className="space-y-2">
+                  {linkedHosts.map(host => (
+                    <div key={host.id} className="flex items-center gap-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3">
+                      <div className={`w-2 h-2 rounded-full ${host.enabled ? 'bg-green-500' : 'bg-slate-400'}`} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
+                          {host.domain_names[0]}
+                        </p>
+                        {host.domain_names.length > 1 && (
+                          <p className="text-xs text-slate-500 dark:text-slate-400">
+                            +{host.domain_names.length - 1} more
+                          </p>
+                        )}
+                      </div>
+                      <span className="text-xs text-slate-500 dark:text-slate-400">
+                        → {host.forward_scheme}://{host.forward_host}:{host.forward_port}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-400 dark:text-slate-500 italic">{t('detail.noLinkedHosts')}</p>
+              )}
             </div>
 
             {/* Error Message */}

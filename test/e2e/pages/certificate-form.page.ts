@@ -17,9 +17,8 @@ export class CertificateFormPage {
   readonly letsEncryptOption: Locator;
   readonly customOption: Locator;
 
-  // Let's Encrypt fields
+  // Domain field (textarea in the actual form)
   readonly domainInput: Locator;
-  readonly addDomainButton: Locator;
   readonly domainChips: Locator;
   readonly emailInput: Locator;
   readonly dnsProviderSelect: Locator;
@@ -29,8 +28,6 @@ export class CertificateFormPage {
   readonly certificateInput: Locator;
   readonly privateKeyInput: Locator;
   readonly certificateChainInput: Locator;
-  readonly uploadCertButton: Locator;
-  readonly uploadKeyButton: Locator;
 
   // Status/progress
   readonly progressIndicator: Locator;
@@ -40,43 +37,40 @@ export class CertificateFormPage {
   constructor(page: Page) {
     this.page = page;
 
-    // Modal container
-    this.modal = page.locator('.fixed.inset-0, [role="dialog"], [class*="modal"]').first();
-    this.closeButton = page.locator('button[aria-label*="close"], button:has(svg path[d*="M6 18L18 6"])').first();
-    this.saveButton = page.locator('button').filter({ hasText: /save|request|submit|create/i }).first();
-    this.cancelButton = page.locator('button').filter({ hasText: /cancel|close/i }).first();
+    // Modal container - the fixed overlay
+    this.modal = page.locator('.fixed.inset-0').first();
 
-    // Certificate type selection
-    this.letsEncryptOption = page.locator('button, [role="radio"], input[type="radio"]').filter({
-      hasText: /let.*encrypt|acme/i,
+    // Scope all locators inside the modal to avoid matching background elements
+    const modal = this.modal;
+
+    this.closeButton = modal.locator('button:has(svg path[d*="M6 18L18 6"])').first();
+    this.saveButton = modal.locator('button[type="submit"]').first();
+    this.cancelButton = modal.locator('button').filter({ hasText: /cancel/i }).first();
+
+    // Certificate type selection - provider buttons in the grid
+    this.letsEncryptOption = modal.locator('.grid-cols-3 button').filter({
+      hasText: /let.*encrypt/i,
     }).first();
-    this.customOption = page.locator('button, [role="radio"], input[type="radio"]').filter({
+    this.customOption = modal.locator('.grid-cols-3 button').filter({
       hasText: /custom|upload/i,
     }).first();
 
-    // Let's Encrypt fields
-    this.domainInput = page.locator('input[placeholder*="domain"], input[name*="domain"]').first();
-    this.addDomainButton = page.locator('button').filter({ hasText: /add|\+/ }).first();
-    this.domainChips = page.locator('[class*="chip"], [class*="tag"], .bg-slate-100');
-    this.emailInput = page.locator('input[type="email"], input[placeholder*="email"], input[name*="email"]').first();
-    this.dnsProviderSelect = page.locator('select[name*="dns_provider"], [role="combobox"]').filter({
-      has: page.locator('option:has-text("provider"), [role="option"]'),
-    }).first();
-    this.wildcardToggle = page.locator('input[type="checkbox"], button[role="switch"]').filter({
-      has: page.locator('text=/wildcard|\\*/i'),
-    }).first();
+    // Domain field - the form uses a textarea for domain input
+    this.domainInput = modal.locator('textarea').first();
+    this.domainChips = modal.locator('[class*="chip"], [class*="tag"]');
+    this.emailInput = modal.locator('input[type="email"]').first();
+    this.dnsProviderSelect = modal.locator('select').first();
+    this.wildcardToggle = modal.locator('input[type="checkbox"]').first();
 
-    // Custom certificate fields
-    this.certificateInput = page.locator('textarea[name*="certificate"], textarea[placeholder*="certificate"]').first();
-    this.privateKeyInput = page.locator('textarea[name*="private_key"], textarea[placeholder*="key"]').first();
-    this.certificateChainInput = page.locator('textarea[name*="chain"], textarea[placeholder*="chain"]').first();
-    this.uploadCertButton = page.locator('button, input[type="file"]').filter({ hasText: /upload.*cert/i }).first();
-    this.uploadKeyButton = page.locator('button, input[type="file"]').filter({ hasText: /upload.*key/i }).first();
+    // Custom certificate fields - textareas with BEGIN CERTIFICATE / BEGIN PRIVATE KEY placeholders
+    this.certificateInput = modal.locator('textarea[placeholder*="CERTIFICATE"]').first();
+    this.privateKeyInput = modal.locator('textarea[placeholder*="PRIVATE KEY"]').first();
+    this.certificateChainInput = modal.locator('textarea').nth(3);
 
     // Status/progress
-    this.progressIndicator = page.locator('.animate-spin, [class*="progress"]').first();
-    this.successMessage = page.locator('text=/success|complete|issued/i');
-    this.errorMessage = page.locator('.text-red-500, .text-red-600, [class*="error"]');
+    this.progressIndicator = modal.locator('.animate-spin').first();
+    this.successMessage = modal.locator('text=/success|complete|issued/i');
+    this.errorMessage = modal.locator('.text-red-500, .text-red-600, .text-red-700, .bg-red-50');
   }
 
   /**
@@ -97,42 +91,33 @@ export class CertificateFormPage {
    * Select Let's Encrypt certificate type.
    */
   async selectLetsEncrypt(): Promise<void> {
-    if (await this.letsEncryptOption.isVisible()) {
-      await this.letsEncryptOption.click();
-      await this.page.waitForTimeout(300);
-    }
+    await this.letsEncryptOption.click();
+    await this.page.waitForTimeout(300);
   }
 
   /**
    * Select custom certificate type.
    */
   async selectCustomCertificate(): Promise<void> {
-    if (await this.customOption.isVisible()) {
-      await this.customOption.click();
-      await this.page.waitForTimeout(300);
-    }
+    await this.customOption.click();
+    await this.page.waitForTimeout(300);
   }
 
   /**
-   * Fill domain for Let's Encrypt certificate.
+   * Fill domain in the domain textarea.
+   * The form uses a textarea (one domain per line), not input + add button.
    */
   async fillDomain(domain: string): Promise<void> {
-    await this.domainInput.fill(domain);
-    if (await this.addDomainButton.isVisible()) {
-      await this.addDomainButton.click();
-    } else {
-      await this.domainInput.press('Enter');
-    }
+    const current = await this.domainInput.inputValue();
+    const newValue = current ? `${current}\n${domain}` : domain;
+    await this.domainInput.fill(newValue);
   }
 
   /**
    * Fill multiple domains.
    */
   async fillDomains(domains: string[]): Promise<void> {
-    for (const domain of domains) {
-      await this.fillDomain(domain);
-      await this.page.waitForTimeout(200);
-    }
+    await this.domainInput.fill(domains.join('\n'));
   }
 
   /**
@@ -219,9 +204,9 @@ export class CertificateFormPage {
     // Wait for operation to complete
     await this.page.waitForTimeout(500);
     await Promise.race([
-      this.modal.waitFor({ state: 'hidden', timeout: TIMEOUTS.veryLong }),
-      this.successMessage.waitFor({ state: 'visible', timeout: TIMEOUTS.veryLong }),
-      this.errorMessage.waitFor({ state: 'visible', timeout: TIMEOUTS.veryLong }),
+      this.modal.waitFor({ state: 'hidden', timeout: TIMEOUTS.long }),
+      this.successMessage.waitFor({ state: 'visible', timeout: TIMEOUTS.long }),
+      this.errorMessage.waitFor({ state: 'visible', timeout: TIMEOUTS.long }),
     ]).catch(() => null);
   }
 
@@ -255,7 +240,6 @@ export class CertificateFormPage {
    * Wait for certificate issuance to complete.
    */
   async waitForIssuance(): Promise<void> {
-    // Certificate issuance can take time
     await this.page.waitForSelector('text=/success|complete|issued/i', {
       timeout: TIMEOUTS.veryLong,
     });

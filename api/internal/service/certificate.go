@@ -427,8 +427,13 @@ func (s *CertificateService) List(ctx context.Context, page, perPage int, search
 
 	totalPages := (total + perPage - 1) / perPage
 
+	details := make([]model.CertificateWithDetails, len(certs))
+	for i := range certs {
+		details[i] = certs[i].ToWithDetails()
+	}
+
 	return &model.CertificateListResponse{
-		Data:       certs,
+		Data:       details,
 		Total:      total,
 		Page:       page,
 		PerPage:    perPage,
@@ -451,7 +456,7 @@ func (s *CertificateService) DeleteErrorCertificates(ctx context.Context) (int64
 	}
 
 	// Delete from DB
-	count, err := s.repo.DeleteByStatus(ctx, "error")
+	count, err := s.repo.DeleteByErrorStatus(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to delete error certificates: %w", err)
 	}
@@ -468,6 +473,10 @@ func (s *CertificateService) Delete(ctx context.Context, id string) error {
 	}
 
 	return s.repo.Delete(ctx, id)
+}
+
+func (s *CertificateService) ClearError(ctx context.Context, id string) error {
+	return s.repo.ClearError(ctx, id)
 }
 
 // Renew renews a certificate
@@ -577,7 +586,7 @@ func (s *CertificateService) renewLetsEncrypt(ctx context.Context, cert *model.C
 		// Use DNS-01 challenge for renewal
 		dnsProvider, err := s.dnsRepo.GetByID(ctx, *cert.DNSProviderID)
 		if err != nil || dnsProvider == nil {
-			s.updateCertError(ctx, cert.ID, "DNS provider not found")
+			s.updateRenewalError(ctx, cert.ID, "DNS provider not found")
 			return
 		}
 
@@ -600,7 +609,7 @@ func (s *CertificateService) renewLetsEncrypt(ctx context.Context, cert *model.C
 		}
 
 		if renewErr != nil {
-			s.updateCertError(ctx, cert.ID, diagnoseDNS01Error(renewErr))
+			s.updateRenewalError(ctx, cert.ID, diagnoseDNS01Error(renewErr))
 			return
 		}
 	} else {
@@ -624,7 +633,7 @@ func (s *CertificateService) renewLetsEncrypt(ctx context.Context, cert *model.C
 		}
 
 		if renewErr != nil {
-			s.updateCertError(ctx, cert.ID, fmt.Sprintf("failed to renew/obtain certificate via HTTP-01: %v", renewErr))
+			s.updateRenewalError(ctx, cert.ID, fmt.Sprintf("failed to renew/obtain certificate via HTTP-01: %v", renewErr))
 			return
 		}
 	}
@@ -634,7 +643,7 @@ func (s *CertificateService) renewLetsEncrypt(ctx context.Context, cert *model.C
 	// Validate renewed certificate before saving
 	s.addCertLog(cert.ID, "info", "Validating renewed certificate...", "validate")
 	if err := acme.ValidateRenewedCertificate(result.CertificatePEM, result.PrivateKeyPEM, []string(cert.DomainNames)); err != nil {
-		s.updateCertError(ctx, cert.ID, fmt.Sprintf("renewed certificate validation failed: %v", err))
+		s.updateRenewalError(ctx, cert.ID, fmt.Sprintf("renewed certificate validation failed: %v", err))
 		return
 	}
 	s.addCertLog(cert.ID, "success", "Certificate validation passed", "validate")
@@ -661,7 +670,7 @@ func (s *CertificateService) renewLetsEncrypt(ctx context.Context, cert *model.C
 		} else {
 			s.addCertLog(cert.ID, "info", "Rollback successful, previous certificate restored", "save")
 		}
-		s.updateCertError(ctx, cert.ID, fmt.Sprintf("failed to save renewed certificate files: %v", err))
+		s.updateRenewalError(ctx, cert.ID, fmt.Sprintf("failed to save renewed certificate files: %v", err))
 		return
 	}
 
@@ -687,7 +696,7 @@ func (s *CertificateService) renewLetsEncrypt(ctx context.Context, cert *model.C
 	}
 
 	if err := s.repo.Update(ctx, cert); err != nil {
-		s.updateCertError(ctx, cert.ID, fmt.Sprintf("failed to update renewed certificate: %v", err))
+		s.updateRenewalError(ctx, cert.ID, fmt.Sprintf("failed to update renewed certificate: %v", err))
 		return
 	}
 
@@ -705,7 +714,8 @@ func (s *CertificateService) GetExpiringSoon(ctx context.Context, days int) ([]m
 	return s.repo.GetExpiringSoon(ctx, days)
 }
 
-// updateCertError updates certificate with error status and saves history
+// updateCertError updates certificate with error status and saves history.
+// Used for initial issuance failures where no valid certificate existed before.
 func (s *CertificateService) updateCertError(ctx context.Context, certID, errMsg string) {
 	// Add error log
 	s.addCertLog(certID, "error", errMsg, "error")
@@ -721,6 +731,26 @@ func (s *CertificateService) updateCertError(ctx context.Context, certID, errMsg
 
 	// Save history
 	s.saveHistory(cert, "error", "error", errMsg)
+}
+
+// updateRenewalError restores a previously-issued certificate back to "issued" status
+// after a renewal failure. The existing certificate files on disk are still valid,
+// so the status must NOT be changed to "error" (which could lead to accidental deletion).
+func (s *CertificateService) updateRenewalError(ctx context.Context, certID, errMsg string) {
+	s.addCertLog(certID, "error", errMsg, "error")
+
+	cert, err := s.repo.GetByID(ctx, certID)
+	if err != nil || cert == nil {
+		return
+	}
+
+	// Restore to issued — the old cert is still valid on disk
+	cert.Status = model.CertStatusIssued
+	cert.ErrorMessage = &errMsg
+	s.repo.Update(ctx, cert)
+
+	// Save history as renewal error
+	s.saveHistory(cert, "renewed", "error", errMsg)
 }
 
 // Certificate logging methods for real-time progress tracking

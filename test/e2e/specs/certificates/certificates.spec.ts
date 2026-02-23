@@ -47,7 +47,7 @@ test.describe('Certificate Management', () => {
       await certificatesPage.clickAddCertificate();
 
       // Should show Let's Encrypt option
-      await expect(formPage.letsEncryptOption.or(page.locator('text=/let.*encrypt/i'))).toBeVisible();
+      await expect(formPage.letsEncryptOption).toBeVisible();
     });
 
     test('should select Let\'s Encrypt certificate type', async () => {
@@ -56,7 +56,7 @@ test.describe('Certificate Management', () => {
       await formPage.selectLetsEncrypt();
 
       // Domain input should be visible
-      await expect(formPage.domainInput.or(formPage.page.locator('input[placeholder*="domain"]'))).toBeVisible();
+      await expect(formPage.domainInput).toBeVisible();
     });
 
     test('should select custom certificate type', async ({ page }) => {
@@ -66,7 +66,7 @@ test.describe('Certificate Management', () => {
       if (await formPage.customOption.isVisible()) {
         await formPage.selectCustomCertificate();
         // Certificate textarea should be visible
-        await expect(formPage.certificateInput.or(page.locator('textarea'))).toBeVisible();
+        await expect(formPage.certificateInput).toBeVisible();
       }
     });
 
@@ -76,7 +76,8 @@ test.describe('Certificate Management', () => {
       await formPage.selectLetsEncrypt();
 
       // Try to save without filling required fields
-      await formPage.save();
+      await formPage.saveButton.click();
+      await formPage.page.waitForTimeout(1000);
 
       // Should show validation errors or form should still be open
       const hasErrors = await formPage.hasValidationErrors();
@@ -171,8 +172,8 @@ test.describe('Let\'s Encrypt Certificate Request', () => {
     const testDomain = TestDataFactory.generateDomain('le-cert-test');
     await formPage.fillDomain(testDomain);
 
-    // Domain should be added
-    await expect(formPage.domainChips.or(formPage.page.locator(`text=${testDomain}`))).toBeVisible();
+    // Domain should be in the textarea
+    await expect(formPage.domainInput).toHaveValue(testDomain);
   });
 
   test('should fill multiple domains', async () => {
@@ -183,9 +184,11 @@ test.describe('Let\'s Encrypt Certificate Request', () => {
     const domains = TestDataFactory.generateDomains(2, 'multi-cert');
     await formPage.fillDomains(domains);
 
-    // At least one domain chip should be visible
-    const chipCount = await formPage.domainChips.count();
-    expect(chipCount).toBeGreaterThanOrEqual(1);
+    // Domains should be in the textarea
+    const value = await formPage.domainInput.inputValue();
+    for (const domain of domains) {
+      expect(value).toContain(domain);
+    }
   });
 
   test('should fill email address', async () => {

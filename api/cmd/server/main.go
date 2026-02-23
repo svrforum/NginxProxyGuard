@@ -507,6 +507,7 @@ func main() {
 			certificates.DELETE("/errors", certificateHandler.BulkDeleteErrors)
 			certificates.GET("/:id", certificateHandler.Get)
 			certificates.DELETE("/:id", certificateHandler.Delete)
+			certificates.DELETE("/:id/error", certificateHandler.ClearError)
 			certificates.PUT("/:id/upload", certificateHandler.UpdateUpload)
 			certificates.POST("/:id/renew", certificateHandler.Renew)
 			certificates.GET("/:id/logs", certificateHandler.GetLogs)

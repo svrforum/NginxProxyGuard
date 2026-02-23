@@ -200,7 +200,8 @@ export class APIHelper {
       throw new Error(`Failed to get certificates: ${response.status()}`);
     }
 
-    return response.json();
+    const result = await response.json();
+    return result.data || [];
   }
 
   /**

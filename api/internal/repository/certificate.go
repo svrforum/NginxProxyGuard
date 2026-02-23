@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/lib/pq"
@@ -208,10 +209,7 @@ func (r *CertificateRepository) List(ctx context.Context, page, perPage int, sea
 
 	whereClause := ""
 	if len(conditions) > 0 {
-		whereClause = " WHERE " + conditions[0]
-		for i := 1; i < len(conditions); i++ {
-			whereClause += " AND " + conditions[i]
-		}
+		whereClause = " WHERE " + strings.Join(conditions, " AND ")
 	}
 
 	// Count total
@@ -312,10 +310,10 @@ func (r *CertificateRepository) List(ctx context.Context, page, perPage int, sea
 	return certs, total, nil
 }
 
-func (r *CertificateRepository) DeleteByStatus(ctx context.Context, status string) (int64, error) {
-	result, err := r.db.ExecContext(ctx, `DELETE FROM certificates WHERE status = $1`, status)
+func (r *CertificateRepository) DeleteByErrorStatus(ctx context.Context) (int64, error) {
+	result, err := r.db.ExecContext(ctx, `DELETE FROM certificates WHERE status = 'error'`)
 	if err != nil {
-		return 0, fmt.Errorf("failed to delete certificates by status: %w", err)
+		return 0, fmt.Errorf("failed to delete error certificates: %w", err)
 	}
 	return result.RowsAffected()
 }
@@ -408,6 +406,18 @@ func (r *CertificateRepository) Update(ctx context.Context, cert *model.Certific
 		return fmt.Errorf("failed to update certificate: %w", err)
 	}
 
+	return nil
+}
+
+func (r *CertificateRepository) ClearError(ctx context.Context, id string) error {
+	result, err := r.db.ExecContext(ctx, `UPDATE certificates SET error_message = NULL WHERE id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("failed to clear certificate error: %w", err)
+	}
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return fmt.Errorf("certificate not found")
+	}
 	return nil
 }
 
