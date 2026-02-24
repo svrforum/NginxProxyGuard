@@ -13,6 +13,7 @@ import (
 	"sync"
 	"text/template"
 
+	"nginx-proxy-guard/internal/config"
 	"nginx-proxy-guard/internal/model"
 )
 
@@ -149,9 +150,19 @@ func (m *Manager) writeFileAtomic(filePath string, data []byte, perm os.FileMode
 // executeWithLock runs a function with the global nginx mutex locked
 // This ensures all config operations are serialized
 func (m *Manager) executeWithLock(ctx context.Context, fn func() error) error {
+	// Check if context is already cancelled before waiting for the lock
+	if ctx.Err() != nil {
+		return fmt.Errorf("nginx operation cancelled before acquiring lock: %w", ctx.Err())
+	}
+
 	globalNginxMutex.Lock()
 	defer globalNginxMutex.Unlock()
-	
+
+	// Check again after acquiring the lock (may have waited a long time)
+	if ctx.Err() != nil {
+		return fmt.Errorf("nginx operation cancelled while waiting for lock: %w", ctx.Err())
+	}
+
 	return fn()
 }
 
@@ -340,9 +351,15 @@ func (m *Manager) testConfigInternal(ctx context.Context) error {
 		return nil
 	}
 
-	cmd := exec.CommandContext(ctx, "docker", "exec", m.nginxContainer, "nginx", "-t")
+	testCtx, cancel := context.WithTimeout(ctx, config.NginxTestTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(testCtx, "docker", "exec", m.nginxContainer, "nginx", "-t")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
+		if testCtx.Err() == context.DeadlineExceeded {
+			return fmt.Errorf("nginx config test timed out after %s", config.NginxTestTimeout)
+		}
 		outputStr := strings.TrimSpace(string(output))
 		if outputStr != "" {
 			return fmt.Errorf("nginx config test failed: %s", outputStr)
@@ -358,9 +375,15 @@ func (m *Manager) reloadNginxInternal(ctx context.Context) error {
 		return nil
 	}
 
-	cmd := exec.CommandContext(ctx, "docker", "exec", m.nginxContainer, "nginx", "-s", "reload")
+	reloadCtx, cancel := context.WithTimeout(ctx, config.NginxReloadTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(reloadCtx, "docker", "exec", m.nginxContainer, "nginx", "-s", "reload")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
+		if reloadCtx.Err() == context.DeadlineExceeded {
+			return fmt.Errorf("nginx reload timed out after %s", config.NginxReloadTimeout)
+		}
 		return fmt.Errorf("nginx reload failed: %s", string(output))
 	}
 	return nil

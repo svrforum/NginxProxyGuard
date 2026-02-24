@@ -23,6 +23,9 @@ import (
 	"github.com/shirou/gopsutil/v3/net"
 )
 
+// combinedLogPattern is precompiled regex for combined log format parsing
+var combinedLogPattern = regexp.MustCompile(`^(\S+) \S+ \S+ \[([^\]]+)\] "(\S+) (\S+)[^"]*" (\d+) (\d+)`)
+
 type StatsCollector struct {
 	db              *sql.DB
 	nginxStatusURL  string
@@ -261,6 +264,7 @@ func (sc *StatsCollector) parseNewLogEntries() ([]AccessLogEntry, error) {
 	}
 
 	scanner := bufio.NewScanner(file)
+	const maxEntries = 10000 // Cap to prevent unbounded memory growth
 	// JSON log format pattern
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -269,6 +273,9 @@ func (sc *StatsCollector) parseNewLogEntries() ([]AccessLogEntry, error) {
 			continue
 		}
 		entries = append(entries, entry)
+		if len(entries) >= maxEntries {
+			break
+		}
 	}
 
 	// Update position
@@ -324,8 +331,7 @@ func (sc *StatsCollector) parseCombinedLogLine(line string) (AccessLogEntry, err
 
 	// Combined log format:
 	// 127.0.0.1 - - [02/Dec/2025:10:00:00 +0000] "GET /path HTTP/1.1" 200 1234 "-" "Mozilla/5.0"
-	pattern := regexp.MustCompile(`^(\S+) \S+ \S+ \[([^\]]+)\] "(\S+) (\S+)[^"]*" (\d+) (\d+)`)
-	matches := pattern.FindStringSubmatch(line)
+	matches := combinedLogPattern.FindStringSubmatch(line)
 	if len(matches) < 7 {
 		return entry, fmt.Errorf("invalid log format")
 	}
@@ -365,6 +371,7 @@ func (sc *StatsCollector) aggregateStatsFromDB() AggregatedStats {
 
 	// Query access logs from the last collection interval (30 seconds + buffer)
 	// Only include requests to actual proxy hosts (exclude internal like localhost, nginx)
+	// LIMIT 10000 to prevent unbounded memory growth during traffic spikes
 	query := `
 		SELECT status_code, body_bytes_sent, request_time, host, request_uri
 		FROM logs_partitioned
@@ -375,6 +382,7 @@ func (sc *StatsCollector) aggregateStatsFromDB() AggregatedStats {
 		  AND host NOT LIKE 'localhost:%'
 		  AND request_uri NOT IN ('/health', '/nginx_status')
 		  AND request_uri NOT LIKE '/.well-known/%'
+		LIMIT 10000
 	`
 
 	rows, err := sc.db.QueryContext(ctx, query)

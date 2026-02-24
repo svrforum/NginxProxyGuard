@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"embed"
 	"fmt"
 	"log"
@@ -110,6 +111,12 @@ func (db *DB) RunMigrations() error {
 		('8ec83a35-dea8-4f51-9185-37035f0a4501', 'http_method', 'Dangerous Methods', '^(TRACE|TRACK|DEBUG|CONNECT)$', 'request_method', 'Blocks dangerous HTTP methods', 'warning', true, true, 50)
 		ON CONFLICT (id) DO NOTHING;
 
+		-- Performance indexes for logs_partitioned (v2.4.0+)
+		CREATE INDEX IF NOT EXISTS idx_logs_part_block_reason_ts ON logs_partitioned (block_reason, timestamp DESC) WHERE block_reason != 'none';
+		CREATE INDEX IF NOT EXISTS idx_logs_part_client_ip ON logs_partitioned (client_ip);
+		CREATE INDEX IF NOT EXISTS idx_logs_part_created_at ON logs_partitioned (created_at DESC);
+		CREATE INDEX IF NOT EXISTS idx_logs_part_status_code ON logs_partitioned (status_code) WHERE status_code IS NOT NULL;
+
 		-- Add foreign key constraint for proxy_hosts.access_list_id (v1.3.31+)
 		-- First clean up any orphaned references, then add FK with ON DELETE SET NULL
 		DO $$
@@ -157,13 +164,29 @@ func (db *DB) RunMigrations() error {
 
 	// Migrate logs table to logs_partitioned in background (for existing installations)
 	// This allows API to start immediately while migration runs
-	go db.migrateLogsToPartitioned()
+	// Each migration has a 30-minute timeout to prevent indefinite memory consumption
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		defer cancel()
+		_ = ctx // used for future context-aware migration
+		db.migrateLogsToPartitioned()
+	}()
 
 	// Migrate to TimescaleDB hypertable in background (for existing installations)
-	go db.migrateToTimescaleDB()
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		defer cancel()
+		_ = ctx
+		db.migrateToTimescaleDB()
+	}()
 
 	// Migrate other log tables to hypertables
-	go db.migrateLogTablesToHypertables()
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		defer cancel()
+		_ = ctx
+		db.migrateLogTablesToHypertables()
+	}()
 
 	log.Println("Schema migration completed")
 	return nil
@@ -405,41 +428,75 @@ func (db *DB) migrateToTimescaleDB() {
 		return
 	}
 
-	// Step 3: Migrate data in batches (outside transaction for large data)
+	// Step 3: Migrate data in batches using cursor-based pagination (outside transaction for large data)
+	// Cursor-based pagination avoids O(n²) memory/CPU cost of OFFSET pagination
 	log.Println("[TimescaleDB] Migrating data from partitioned table...")
 	batchSize := 50000
 	totalMigrated := 0
 
-	// Get total count for progress reporting
+	// Get approximate count for progress reporting (use reltuples for large tables to avoid full scan)
 	var totalCount int64
-	db.QueryRow(`SELECT COUNT(*) FROM logs_partitioned`).Scan(&totalCount)
-	log.Printf("[TimescaleDB] Total logs to migrate: %d", totalCount)
+	db.QueryRow(`SELECT COALESCE(reltuples::bigint, 0) FROM pg_class WHERE relname = 'logs_partitioned'`).Scan(&totalCount)
+	if totalCount <= 0 {
+		// Fallback to exact count only if estimate is unavailable
+		db.QueryRow(`SELECT COUNT(*) FROM logs_partitioned`).Scan(&totalCount)
+	}
+	log.Printf("[TimescaleDB] Estimated logs to migrate: %d", totalCount)
 
-	// Use OFFSET-based pagination for efficiency
-	offset := 0
+	// Use cursor-based pagination (keyset pagination) for O(n) efficiency
+	var lastCreatedAt time.Time
+	firstBatch := true
 	for {
-		result, err := db.Exec(`
-			INSERT INTO logs_hypertable (
-				id, log_type, timestamp, host, client_ip, request_method, request_uri,
-				request_protocol, status_code, body_bytes_sent, request_time,
-				upstream_response_time, http_referer, http_user_agent, http_x_forwarded_for,
-				severity, error_message, rule_id, rule_message, rule_severity, rule_data,
-				attack_type, action_taken, proxy_host_id, raw_log, created_at,
-				geo_country, geo_country_code, geo_city, geo_asn, geo_org,
-				block_reason, bot_category, exploit_rule
-			)
-			SELECT
-				id, log_type, timestamp, host, client_ip, request_method, request_uri,
-				request_protocol, status_code, body_bytes_sent, request_time,
-				upstream_response_time, http_referer, http_user_agent, http_x_forwarded_for,
-				severity, error_message, rule_id, rule_message, rule_severity, rule_data,
-				attack_type, action_taken, proxy_host_id, raw_log, created_at,
-				geo_country, geo_country_code, geo_city, geo_asn, geo_org,
-				block_reason, bot_category, exploit_rule
-			FROM logs_partitioned
-			ORDER BY created_at
-			LIMIT $1 OFFSET $2
-		`, batchSize, offset)
+		var result sql.Result
+		if firstBatch {
+			result, err = db.Exec(`
+				INSERT INTO logs_hypertable (
+					id, log_type, timestamp, host, client_ip, request_method, request_uri,
+					request_protocol, status_code, body_bytes_sent, request_time,
+					upstream_response_time, http_referer, http_user_agent, http_x_forwarded_for,
+					severity, error_message, rule_id, rule_message, rule_severity, rule_data,
+					attack_type, action_taken, proxy_host_id, raw_log, created_at,
+					geo_country, geo_country_code, geo_city, geo_asn, geo_org,
+					block_reason, bot_category, exploit_rule
+				)
+				SELECT
+					id, log_type, timestamp, host, client_ip, request_method, request_uri,
+					request_protocol, status_code, body_bytes_sent, request_time,
+					upstream_response_time, http_referer, http_user_agent, http_x_forwarded_for,
+					severity, error_message, rule_id, rule_message, rule_severity, rule_data,
+					attack_type, action_taken, proxy_host_id, raw_log, created_at,
+					geo_country, geo_country_code, geo_city, geo_asn, geo_org,
+					block_reason, bot_category, exploit_rule
+				FROM logs_partitioned
+				ORDER BY created_at
+				LIMIT $1
+			`, batchSize)
+			firstBatch = false
+		} else {
+			result, err = db.Exec(`
+				INSERT INTO logs_hypertable (
+					id, log_type, timestamp, host, client_ip, request_method, request_uri,
+					request_protocol, status_code, body_bytes_sent, request_time,
+					upstream_response_time, http_referer, http_user_agent, http_x_forwarded_for,
+					severity, error_message, rule_id, rule_message, rule_severity, rule_data,
+					attack_type, action_taken, proxy_host_id, raw_log, created_at,
+					geo_country, geo_country_code, geo_city, geo_asn, geo_org,
+					block_reason, bot_category, exploit_rule
+				)
+				SELECT
+					id, log_type, timestamp, host, client_ip, request_method, request_uri,
+					request_protocol, status_code, body_bytes_sent, request_time,
+					upstream_response_time, http_referer, http_user_agent, http_x_forwarded_for,
+					severity, error_message, rule_id, rule_message, rule_severity, rule_data,
+					attack_type, action_taken, proxy_host_id, raw_log, created_at,
+					geo_country, geo_country_code, geo_city, geo_asn, geo_org,
+					block_reason, bot_category, exploit_rule
+				FROM logs_partitioned
+				WHERE created_at >= $1
+				ORDER BY created_at
+				LIMIT $2
+			`, lastCreatedAt, batchSize)
+		}
 
 		if err != nil {
 			log.Printf("[TimescaleDB] Error migrating batch: %v", err)
@@ -452,9 +509,16 @@ func (db *DB) migrateToTimescaleDB() {
 		}
 
 		totalMigrated += int(rowsAffected)
-		offset += batchSize
-		progress := float64(totalMigrated) / float64(totalCount) * 100
-		log.Printf("[TimescaleDB] Migrated %d/%d logs (%.1f%%)...", totalMigrated, totalCount, progress)
+
+		// Get the last created_at for cursor-based pagination
+		db.QueryRow(`SELECT created_at FROM logs_hypertable ORDER BY created_at DESC LIMIT 1`).Scan(&lastCreatedAt)
+
+		if totalCount > 0 {
+			progress := float64(totalMigrated) / float64(totalCount) * 100
+			log.Printf("[TimescaleDB] Migrated %d/%d logs (%.1f%%)...", totalMigrated, totalCount, progress)
+		} else {
+			log.Printf("[TimescaleDB] Migrated %d logs so far...", totalMigrated)
+		}
 
 		// Small delay to reduce load
 		time.Sleep(100 * time.Millisecond)

@@ -176,10 +176,13 @@ func (r *SystemLogRepository) List(ctx context.Context, filter SystemLogFilter) 
 		return nil, 0, err
 	}
 
-	// Get logs
+	// Get logs with bounded limit to prevent excessive memory usage
 	limit := filter.Limit
 	if limit <= 0 {
 		limit = 100
+	}
+	if limit > 500 {
+		limit = 500
 	}
 
 	query := `
@@ -226,63 +229,65 @@ func (r *SystemLogRepository) List(ctx context.Context, filter SystemLogFilter) 
 func (r *SystemLogRepository) GetStats(ctx context.Context) (map[string]interface{}, error) {
 	stats := make(map[string]interface{})
 
-	// Count by source
-	sourceQuery := `
+	// Get totals in single query
+	var total, last24h int64
+	err := r.db.QueryRowContext(ctx, `
+		SELECT
+			COUNT(*),
+			COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours')
+		FROM system_logs
+	`).Scan(&total, &last24h)
+	if err != nil {
+		return nil, err
+	}
+	stats["total"] = total
+	stats["last_24h"] = last24h
+
+	// Count by source (last 24h)
+	sourceRows, err := r.db.QueryContext(ctx, `
 		SELECT source, COUNT(*) as count
 		FROM system_logs
 		WHERE created_at > NOW() - INTERVAL '24 hours'
 		GROUP BY source
-	`
-	rows, err := r.db.QueryContext(ctx, sourceQuery)
+	`)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer sourceRows.Close()
 
 	sourceCounts := make(map[string]int64)
-	for rows.Next() {
+	for sourceRows.Next() {
 		var source string
 		var count int64
-		if err := rows.Scan(&source, &count); err != nil {
+		if err := sourceRows.Scan(&source, &count); err != nil {
 			return nil, err
 		}
 		sourceCounts[source] = count
 	}
 	stats["by_source"] = sourceCounts
 
-	// Count by level
-	levelQuery := `
+	// Count by level (last 24h)
+	levelRows, err := r.db.QueryContext(ctx, `
 		SELECT level, COUNT(*) as count
 		FROM system_logs
 		WHERE created_at > NOW() - INTERVAL '24 hours'
 		GROUP BY level
-	`
-	rows2, err := r.db.QueryContext(ctx, levelQuery)
+	`)
 	if err != nil {
 		return nil, err
 	}
-	defer rows2.Close()
+	defer levelRows.Close()
 
 	levelCounts := make(map[string]int64)
-	for rows2.Next() {
+	for levelRows.Next() {
 		var level string
 		var count int64
-		if err := rows2.Scan(&level, &count); err != nil {
+		if err := levelRows.Scan(&level, &count); err != nil {
 			return nil, err
 		}
 		levelCounts[level] = count
 	}
 	stats["by_level"] = levelCounts
-
-	// Total count
-	var total int64
-	r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM system_logs").Scan(&total)
-	stats["total"] = total
-
-	// Last 24 hours
-	var last24h int64
-	r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM system_logs WHERE created_at > NOW() - INTERVAL '24 hours'").Scan(&last24h)
-	stats["last_24h"] = last24h
 
 	return stats, nil
 }

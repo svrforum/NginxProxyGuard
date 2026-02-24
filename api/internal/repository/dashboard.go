@@ -124,11 +124,8 @@ func (r *DashboardRepository) GetSummary(ctx context.Context) (*model.DashboardS
 	`).Scan(&summary.TotalProxyHosts, &summary.ActiveProxyHosts, &summary.TotalRedirectHosts,
 		&summary.TotalCertificates, &summary.ExpiringCertificates)
 
-	// Get chart data (last 24 hours, hourly)
-	summary.RequestsChart = r.getRequestsChart(ctx, last24h, now)
-	summary.BandwidthChart = r.getBandwidthChart(ctx, last24h, now)
-	summary.StatusCodeChart = r.getStatusCodeChart(ctx, last24h, now)
-	summary.SecurityChart = r.getSecurityChart(ctx, last24h, now)
+	// Get all chart data in single query (last 24 hours, hourly)
+	r.getAllChartData(ctx, last24h, now, summary)
 
 	// Get top data
 	summary.TopHosts = r.getTopHosts(ctx, last24h)
@@ -140,92 +137,59 @@ func (r *DashboardRepository) GetSummary(ctx context.Context) (*model.DashboardS
 	return summary, nil
 }
 
-func (r *DashboardRepository) getRequestsChart(ctx context.Context, start, end time.Time) []model.ChartDataPoint {
+// getAllChartData fetches all chart data (requests, bandwidth, status codes, security) in a single query
+func (r *DashboardRepository) getAllChartData(ctx context.Context, start, end time.Time, summary *model.DashboardSummary) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT hour_bucket, SUM(total_requests)
+		SELECT hour_bucket,
+		       SUM(total_requests),
+		       SUM(bytes_sent + bytes_received),
+		       SUM(status_2xx), SUM(status_3xx), SUM(status_4xx), SUM(status_5xx),
+		       SUM(waf_blocked), SUM(rate_limited), SUM(bot_blocked)
 		FROM dashboard_stats_hourly
 		WHERE hour_bucket >= $1 AND hour_bucket <= $2
 		GROUP BY hour_bucket
 		ORDER BY hour_bucket
+		LIMIT 200
 	`, start, end)
 	if err != nil {
-		return []model.ChartDataPoint{}
+		summary.RequestsChart = []model.ChartDataPoint{}
+		summary.BandwidthChart = []model.ChartDataPoint{}
+		summary.StatusCodeChart = []model.StatusCodePoint{}
+		summary.SecurityChart = []model.SecurityChartPoint{}
+		return
 	}
 	defer rows.Close()
 
-	var points []model.ChartDataPoint
 	for rows.Next() {
-		var p model.ChartDataPoint
-		rows.Scan(&p.Timestamp, &p.Value)
-		points = append(points, p)
-	}
-	return points
-}
+		var ts time.Time
+		var totalReq, totalBW float64
+		var s2xx, s3xx, s4xx, s5xx int64
+		var wafBlocked, rateLimited, botBlocked int64
 
-func (r *DashboardRepository) getBandwidthChart(ctx context.Context, start, end time.Time) []model.ChartDataPoint {
-	rows, err := r.db.QueryContext(ctx, `
-		SELECT hour_bucket, SUM(bytes_sent + bytes_received)
-		FROM dashboard_stats_hourly
-		WHERE hour_bucket >= $1 AND hour_bucket <= $2
-		GROUP BY hour_bucket
-		ORDER BY hour_bucket
-	`, start, end)
-	if err != nil {
-		return []model.ChartDataPoint{}
-	}
-	defer rows.Close()
+		rows.Scan(&ts, &totalReq, &totalBW, &s2xx, &s3xx, &s4xx, &s5xx, &wafBlocked, &rateLimited, &botBlocked)
 
-	var points []model.ChartDataPoint
-	for rows.Next() {
-		var p model.ChartDataPoint
-		rows.Scan(&p.Timestamp, &p.Value)
-		points = append(points, p)
+		summary.RequestsChart = append(summary.RequestsChart, model.ChartDataPoint{Timestamp: ts, Value: totalReq})
+		summary.BandwidthChart = append(summary.BandwidthChart, model.ChartDataPoint{Timestamp: ts, Value: totalBW})
+		summary.StatusCodeChart = append(summary.StatusCodeChart, model.StatusCodePoint{
+			Timestamp: ts, Status2xx: s2xx, Status3xx: s3xx, Status4xx: s4xx, Status5xx: s5xx,
+		})
+		summary.SecurityChart = append(summary.SecurityChart, model.SecurityChartPoint{
+			Timestamp: ts, WAFBlocked: wafBlocked, RateLimited: rateLimited, BotBlocked: botBlocked,
+		})
 	}
-	return points
-}
 
-func (r *DashboardRepository) getStatusCodeChart(ctx context.Context, start, end time.Time) []model.StatusCodePoint {
-	rows, err := r.db.QueryContext(ctx, `
-		SELECT hour_bucket, SUM(status_2xx), SUM(status_3xx), SUM(status_4xx), SUM(status_5xx)
-		FROM dashboard_stats_hourly
-		WHERE hour_bucket >= $1 AND hour_bucket <= $2
-		GROUP BY hour_bucket
-		ORDER BY hour_bucket
-	`, start, end)
-	if err != nil {
-		return []model.StatusCodePoint{}
+	if summary.RequestsChart == nil {
+		summary.RequestsChart = []model.ChartDataPoint{}
 	}
-	defer rows.Close()
-
-	var points []model.StatusCodePoint
-	for rows.Next() {
-		var p model.StatusCodePoint
-		rows.Scan(&p.Timestamp, &p.Status2xx, &p.Status3xx, &p.Status4xx, &p.Status5xx)
-		points = append(points, p)
+	if summary.BandwidthChart == nil {
+		summary.BandwidthChart = []model.ChartDataPoint{}
 	}
-	return points
-}
-
-func (r *DashboardRepository) getSecurityChart(ctx context.Context, start, end time.Time) []model.SecurityChartPoint {
-	rows, err := r.db.QueryContext(ctx, `
-		SELECT hour_bucket, SUM(waf_blocked), SUM(rate_limited), SUM(bot_blocked)
-		FROM dashboard_stats_hourly
-		WHERE hour_bucket >= $1 AND hour_bucket <= $2
-		GROUP BY hour_bucket
-		ORDER BY hour_bucket
-	`, start, end)
-	if err != nil {
-		return []model.SecurityChartPoint{}
+	if summary.StatusCodeChart == nil {
+		summary.StatusCodeChart = []model.StatusCodePoint{}
 	}
-	defer rows.Close()
-
-	var points []model.SecurityChartPoint
-	for rows.Next() {
-		var p model.SecurityChartPoint
-		rows.Scan(&p.Timestamp, &p.WAFBlocked, &p.RateLimited, &p.BotBlocked)
-		points = append(points, p)
+	if summary.SecurityChart == nil {
+		summary.SecurityChart = []model.SecurityChartPoint{}
 	}
-	return points
 }
 
 func (r *DashboardRepository) getTopHosts(ctx context.Context, since time.Time) []model.HostStat {
@@ -340,28 +304,16 @@ func (r *DashboardRepository) getTopCountries(ctx context.Context, since time.Ti
 
 // GetGeoIPStats returns detailed GeoIP statistics from logs_partitioned table
 func (r *DashboardRepository) GetGeoIPStats(ctx context.Context, since time.Time) ([]model.GeoIPStat, int64, error) {
-	// Get total count first
-	var totalCount int64
-	err := r.db.QueryRowContext(ctx, `
-		SELECT COUNT(*) FROM logs_partitioned
-		WHERE log_type = 'access'
-		AND timestamp >= $1
-		AND geo_country_code IS NOT NULL
-		AND geo_country_code != ''
-	`, since).Scan(&totalCount)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	// Get country stats
+	// Single query with window function to get both total and per-country counts
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT
 			geo_country_code,
 			COALESCE(geo_country, geo_country_code) as country_name,
-			COUNT(*) as request_count
+			COUNT(*) as request_count,
+			SUM(COUNT(*)) OVER () as total_count
 		FROM logs_partitioned
 		WHERE log_type = 'access'
-		AND timestamp >= $1
+		AND created_at >= $1
 		AND geo_country_code IS NOT NULL
 		AND geo_country_code != ''
 		GROUP BY geo_country_code, geo_country
@@ -374,17 +326,16 @@ func (r *DashboardRepository) GetGeoIPStats(ctx context.Context, since time.Time
 	defer rows.Close()
 
 	var stats []model.GeoIPStat
+	var totalCount int64
 	for rows.Next() {
 		var s model.GeoIPStat
-		err := rows.Scan(&s.CountryCode, &s.Country, &s.Count)
+		err := rows.Scan(&s.CountryCode, &s.Country, &s.Count, &totalCount)
 		if err != nil {
 			continue
 		}
-		// Calculate percentage
 		if totalCount > 0 {
 			s.Percentage = float64(s.Count) / float64(totalCount) * 100
 		}
-		// Add coordinates
 		if coords, ok := countryCoordinates[s.CountryCode]; ok {
 			s.Lat = coords[0]
 			s.Lng = coords[1]
@@ -578,15 +529,23 @@ func (r *DashboardRepository) GetSystemHealth(ctx context.Context) (*model.Syste
 		return nil, err
 	}
 
-	// Always fetch live certificate counts
-	r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM certificates WHERE status = 'issued'").Scan(&h.CertsTotal)
-	r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM certificates WHERE expires_at < NOW() + INTERVAL '30 days' AND expires_at > NOW() AND status = 'issued'").Scan(&h.CertsExpiringSoon)
-	r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM certificates WHERE expires_at < NOW() OR status = 'expired'").Scan(&h.CertsExpired)
+	// Fetch live certificate counts in single query
+	r.db.QueryRowContext(ctx, `
+		SELECT
+			COUNT(*) FILTER (WHERE status = 'issued'),
+			COUNT(*) FILTER (WHERE expires_at < NOW() + INTERVAL '30 days' AND expires_at > NOW() AND status = 'issued'),
+			COUNT(*) FILTER (WHERE expires_at < NOW() OR status = 'expired')
+		FROM certificates
+	`).Scan(&h.CertsTotal, &h.CertsExpiringSoon, &h.CertsExpired)
 
-	// Always fetch live upstream counts
-	r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM upstreams").Scan(&h.UpstreamsTotal)
-	r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM upstreams WHERE is_healthy = TRUE").Scan(&h.UpstreamsHealthy)
-	r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM upstreams WHERE is_healthy = FALSE").Scan(&h.UpstreamsUnhealthy)
+	// Fetch live upstream counts in single query
+	r.db.QueryRowContext(ctx, `
+		SELECT
+			COUNT(*),
+			COUNT(*) FILTER (WHERE is_healthy = TRUE),
+			COUNT(*) FILTER (WHERE is_healthy = FALSE)
+		FROM upstreams
+	`).Scan(&h.UpstreamsTotal, &h.UpstreamsHealthy, &h.UpstreamsUnhealthy)
 
 	return &h, nil
 }
@@ -667,7 +626,7 @@ func (r *DashboardRepository) GetHourlyStats(ctx context.Context, params *model.
 		args = append(args, params.ProxyHostID)
 	}
 
-	query += " ORDER BY hour_bucket DESC"
+	query += " ORDER BY hour_bucket DESC LIMIT 1000"
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {

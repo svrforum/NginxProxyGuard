@@ -94,6 +94,8 @@ const (
 	CPUSamplingDuration     = 500 * time.Millisecond
 	NginxReloaderDebounce   = 2 * time.Second
 	ContextTimeout          = 30 * time.Second
+	NginxTestTimeout        = 60 * time.Second
+	NginxReloadTimeout      = 30 * time.Second
 )
 
 // GeoIP constants

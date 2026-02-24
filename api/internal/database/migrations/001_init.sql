@@ -1844,6 +1844,10 @@ CREATE INDEX IF NOT EXISTS idx_logs_part_log_type ON ONLY public.logs_partitione
 CREATE INDEX IF NOT EXISTS idx_logs_part_timestamp ON ONLY public.logs_partitioned USING btree ("timestamp" DESC);
 CREATE INDEX IF NOT EXISTS idx_logs_part_type_timestamp ON ONLY public.logs_partitioned USING btree (log_type, "timestamp" DESC);
 CREATE INDEX IF NOT EXISTS idx_logs_partitioned_exploit_rule ON ONLY public.logs_partitioned USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
+CREATE INDEX IF NOT EXISTS idx_logs_part_block_reason_ts ON ONLY public.logs_partitioned USING btree (block_reason, "timestamp" DESC) WHERE (block_reason != 'none');
+CREATE INDEX IF NOT EXISTS idx_logs_part_client_ip ON ONLY public.logs_partitioned USING btree (client_ip);
+CREATE INDEX IF NOT EXISTS idx_logs_part_created_at ON ONLY public.logs_partitioned USING btree (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_logs_part_status_code ON ONLY public.logs_partitioned USING btree (status_code) WHERE (status_code IS NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_logs_proxy_host_id ON public.logs USING btree (proxy_host_id) WHERE (proxy_host_id IS NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_logs_request_uri_trgm ON public.logs USING gin (request_uri public.gin_trgm_ops) WHERE (request_uri IS NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_logs_rule_id ON public.logs USING btree (rule_id) WHERE (rule_id IS NOT NULL);
