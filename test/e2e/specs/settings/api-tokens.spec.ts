@@ -99,7 +99,7 @@ test.describe('API Token Management', () => {
       await tokensPage.save();
 
       // Should show validation errors
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(200);
       const hasErrors = await tokensPage.hasValidationErrors();
       const modalVisible = await tokensPage.modal.isVisible();
       expect(hasErrors || modalVisible).toBeTruthy();

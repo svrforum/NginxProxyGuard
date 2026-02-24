@@ -77,7 +77,7 @@ test.describe('Certificate Management', () => {
 
       // Try to save without filling required fields
       await formPage.saveButton.click();
-      await formPage.page.waitForTimeout(1000);
+      await formPage.page.waitForTimeout(500);
 
       // Should show validation errors or form should still be open
       const hasErrors = await formPage.hasValidationErrors();
@@ -260,7 +260,7 @@ test.describe('Custom Certificate Upload', () => {
       await formPage.save();
 
       // Should show validation error
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(200);
       const hasErrors = await formPage.hasValidationErrors();
       const isOpen = await formPage.isVisible();
       expect(hasErrors || isOpen).toBeTruthy();

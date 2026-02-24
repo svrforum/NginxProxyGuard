@@ -299,7 +299,7 @@ export class GlobalSettingsPage extends BasePage {
    */
   async save(): Promise<void> {
     await this.saveButton.click();
-    await this.page.waitForTimeout(500);
+    await this.page.waitForLoadState('domcontentloaded');
   }
 
   /**
@@ -313,7 +313,7 @@ export class GlobalSettingsPage extends BasePage {
       if (await confirmBtn.isVisible()) {
         await confirmBtn.click();
       }
-      await this.page.waitForTimeout(500);
+      await this.page.waitForLoadState('domcontentloaded');
     }
   }
 

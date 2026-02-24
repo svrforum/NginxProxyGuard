@@ -308,12 +308,8 @@ export class ProxyHostFormPage {
    */
   async save(): Promise<void> {
     await this.saveButton.click();
-    // Wait for save progress modal to appear and complete
-    await this.page.waitForTimeout(500);
     // Wait for the form modal to close (happens after save progress completes)
     await this.modal.waitFor({ state: 'hidden', timeout: TIMEOUTS.long }).catch(() => null);
-    // Small buffer for API to settle
-    await this.page.waitForTimeout(500);
   }
 
   /**

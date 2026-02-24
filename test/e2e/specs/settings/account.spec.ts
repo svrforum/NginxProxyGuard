@@ -52,7 +52,7 @@ test.describe('Account Settings', () => {
       await accountPage.changePassword('wrong-password', 'NewPassword123!');
 
       // Should show error
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(200);
       const hasError = await accountPage.hasErrorMessage();
       expect(hasError).toBeTruthy();
     });
@@ -71,7 +71,7 @@ test.describe('Account Settings', () => {
       await accountPage.changePasswordButton.click();
 
       // Should show error
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(200);
       const hasError = await accountPage.hasErrorMessage();
       expect(hasError).toBeTruthy();
     });
@@ -220,7 +220,7 @@ test.describe('Account Security', () => {
     await accountPage.changePassword(TEST_CREDENTIALS.password, '123');
 
     // Should show error
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(200);
     const hasError = await accountPage.hasErrorMessage();
     // Might show validation error or API error
     expect(typeof hasError).toBe('boolean');

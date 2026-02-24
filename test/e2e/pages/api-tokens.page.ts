@@ -240,7 +240,6 @@ export class ApiTokensPage extends BasePage {
    */
   async save(): Promise<void> {
     await this.saveButton.click();
-    await this.page.waitForTimeout(500);
     // Wait for either token display or error
     await Promise.race([
       this.tokenDisplay.waitFor({ state: 'visible', timeout: TIMEOUTS.medium }).catch(() => null),

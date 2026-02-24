@@ -159,7 +159,7 @@ export class WAFPage extends BasePage {
     if (await this.testerInput.isVisible()) {
       await this.testerInput.fill(payload);
       await this.testButton.click();
-      await this.page.waitForTimeout(1000);
+      await this.page.waitForTimeout(500);
     }
   }
 

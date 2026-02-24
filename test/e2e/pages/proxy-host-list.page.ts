@@ -92,7 +92,7 @@ export class ProxyHostListPage extends BasePage {
   async searchHosts(query: string): Promise<void> {
     if (await this.searchInput.isVisible()) {
       await this.searchInput.fill(query);
-      await this.page.waitForTimeout(500); // Debounce
+      await this.page.waitForTimeout(300); // Debounce
       await this.waitForHostsLoad();
     }
   }

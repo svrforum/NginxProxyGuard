@@ -54,7 +54,7 @@ test.describe('Logout', () => {
 
     // Try to access protected route directly (reload the page)
     await page.goto('/dashboard');
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(200);
 
     // Should still show login page (not authenticated)
     await loginPage.expectLoginPage();
@@ -71,7 +71,7 @@ test.describe('Logout', () => {
 
     // Try going back
     await page.goBack();
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(1000);
 
     // After going back, the page should either:
     // 1. Still show login page (correct behavior)
@@ -150,7 +150,7 @@ test.describe('Logout', () => {
     const addButton = page.locator('button').filter({ hasText: /add|new|create|추가/i }).first();
     if (await addButton.isVisible()) {
       await addButton.click();
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(200);
     }
 
     // Logout while form might be open
@@ -210,6 +210,6 @@ test.describe('Session Expiration', () => {
     await page.goto('/proxy-hosts');
 
     // Should eventually redirect to login or show error
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(1000);
   });
 });

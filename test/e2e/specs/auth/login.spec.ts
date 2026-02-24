@@ -209,7 +209,7 @@ test.describe('Login Error Handling', () => {
     await loginPage.clickLogin();
 
     // Should show some error indication
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(1000);
     // Stay on login page
     await expect(page).toHaveURL(/\/$/);
   });

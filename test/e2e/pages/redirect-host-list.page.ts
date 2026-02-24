@@ -90,7 +90,7 @@ export class RedirectHostListPage extends BasePage {
   async searchHosts(query: string): Promise<void> {
     if (await this.searchInput.isVisible()) {
       await this.searchInput.fill(query);
-      await this.page.waitForTimeout(500);
+      await this.page.waitForTimeout(300);
       await this.waitForHostsLoad();
     }
   }
@@ -192,7 +192,7 @@ export class RedirectHostListPage extends BasePage {
     const toggle = hostCard.locator('input[type="checkbox"], button[role="switch"]').first();
     if (await toggle.isVisible()) {
       await toggle.click();
-      await this.page.waitForTimeout(500);
+      await this.page.waitForLoadState('domcontentloaded');
     }
   }
 

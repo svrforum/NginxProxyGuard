@@ -181,7 +181,7 @@ test.describe('Dashboard Dark Mode', () => {
 
     // Refresh page
     await page.reload();
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Dark mode should be preserved
     const afterReloadIsDark = await page.evaluate(() =>

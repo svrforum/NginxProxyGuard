@@ -18,8 +18,9 @@ export default defineConfig({
   // Retry on CI only (increased for flaky tests)
   retries: process.env.CI ? 2 : 0,
 
-  // Use single worker on CI to avoid rate limiting issues
-  workers: process.env.CI ? 1 : undefined,
+  // Limit workers to prevent OOM - each Chromium process uses ~200MB+
+  // CI: 1 worker for stability, Local: 2 workers (down from 4) to reduce memory pressure
+  workers: process.env.CI ? 1 : 2,
 
   // Reporter to use
   reporter: [
@@ -36,28 +37,28 @@ export default defineConfig({
     // Ignore HTTPS errors for self-signed certificates
     ignoreHTTPSErrors: true,
 
-    // Collect trace when retrying the failed test (disabled on CI for speed)
-    trace: process.env.CI ? 'off' : 'on-first-retry',
+    // Collect trace only on CI retry - traces consume significant memory/disk
+    trace: 'off',
 
     // Capture screenshot on failure
     screenshot: 'only-on-failure',
 
-    // Record video on failure (disabled on CI for speed)
-    video: process.env.CI ? 'off' : 'on-first-retry',
+    // Video recording disabled - consumes significant memory per worker
+    video: 'off',
 
     // Default timeout for actions
-    actionTimeout: 15000,
+    actionTimeout: 10000,
 
     // Default timeout for navigation
     navigationTimeout: 30000,
   },
 
-  // Global timeout for each test (reduced for CI)
-  timeout: process.env.CI ? 45000 : 60000,
+  // Global timeout for each test
+  timeout: 45000,
 
   // Expect timeout
   expect: {
-    timeout: process.env.CI ? 8000 : 10000,
+    timeout: 7000,
   },
 
   // Configure projects for major browsers
