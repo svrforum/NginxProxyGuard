@@ -124,7 +124,7 @@ export function LogViewer({ logType, defaultBlockReason }: LogViewerProps) {
   }, [filter]);
 
   // Serialize filter for queryKey to ensure React Query detects changes
-  const filterKey = JSON.stringify(effectiveFilter);
+  const filterKey = useMemo(() => JSON.stringify(effectiveFilter), [effectiveFilter]);
 
   const logsQuery = useQuery({
     queryKey: ["logs", page, perPage, filterKey],

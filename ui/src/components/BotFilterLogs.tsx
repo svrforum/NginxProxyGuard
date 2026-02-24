@@ -7,6 +7,7 @@ import { fetchLogs } from '../api/logs';
 import type { Log, LogFilter, BotCategory } from '../types/log';
 import { HelpTip } from './common/HelpTip';
 import { useEscapeKey } from '../hooks/useEscapeKey';
+import { useDebounce } from './log-viewer/utils';
 
 // Bot category display config (keys for translation)
 const BOT_CATEGORY_CONFIG: Record<string, { labelKey: string; color: string; icon: string }> = {
@@ -131,6 +132,7 @@ export function BotFilterLogs() {
     return d;
   });
   const [searchInput, setSearchInput] = useState('');
+  const debouncedSearch = useDebounce(searchInput, 300);
   const dateLocale = i18n.language === 'ko' ? ko : enUS;
 
   const filter: LogFilter = useMemo(() => ({
@@ -139,8 +141,8 @@ export function BotFilterLogs() {
     bot_category: categoryFilter || undefined,
     start_time: startDate?.toISOString(),
     end_time: endDate?.toISOString(),
-    search: searchInput || undefined,
-  }), [categoryFilter, startDate, endDate, searchInput]);
+    search: debouncedSearch || undefined,
+  }), [categoryFilter, startDate, endDate, debouncedSearch]);
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['bot-filter-logs', filter, page, perPage],
