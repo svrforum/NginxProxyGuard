@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -9,6 +9,7 @@ import {
   type SystemLogFilter,
 } from '../api/system-logs';
 import { useEscapeKey } from '../hooks/useEscapeKey';
+import { useDebounce } from './log-viewer/utils';
 
 function formatTime(timestamp: string): string {
   return new Date(timestamp).toLocaleString();
@@ -119,6 +120,26 @@ function LogDetailModal({ log, onClose }: LogDetailModalProps) {
 
 const AUTO_REFRESH_INTERVAL = 5000;
 
+// Isolated countdown component to prevent full SystemLogViewer re-render every second
+const CountdownDisplay = memo(function CountdownDisplay({ autoRefresh, dataUpdatedAt }: { autoRefresh: boolean; dataUpdatedAt: number }) {
+  const [countdown, setCountdown] = useState(AUTO_REFRESH_INTERVAL / 1000);
+
+  useEffect(() => {
+    if (dataUpdatedAt) setCountdown(AUTO_REFRESH_INTERVAL / 1000);
+  }, [dataUpdatedAt]);
+
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const timer = setInterval(() => {
+      setCountdown((prev) => (prev <= 1 ? AUTO_REFRESH_INTERVAL / 1000 : prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [autoRefresh]);
+
+  if (!autoRefresh) return null;
+  return <span className="font-medium">{countdown}s</span>;
+});
+
 export function SystemLogViewer() {
   const { t } = useTranslation('logs');
   const queryClient = useQueryClient();
@@ -126,8 +147,15 @@ export function SystemLogViewer() {
   const [filter, setFilter] = useState<SystemLogFilter>({});
   const [selectedLog, setSelectedLog] = useState<SystemLog | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [countdown, setCountdown] = useState(AUTO_REFRESH_INTERVAL / 1000);
+  const [searchInput, setSearchInput] = useState('');
+  const debouncedSearch = useDebounce(searchInput, 300);
   const limit = 50;
+
+  // Apply debounced search to filter
+  useEffect(() => {
+    setFilter((prev) => ({ ...prev, search: debouncedSearch || undefined }));
+    setOffset(0);
+  }, [debouncedSearch]);
 
   const logsQuery = useQuery({
     queryKey: ['system-logs', offset, filter],
@@ -146,27 +174,16 @@ export function SystemLogViewer() {
     queryFn: fetchLogSources,
   });
 
-  useEffect(() => {
-    if (logsQuery.dataUpdatedAt) {
-      setCountdown(AUTO_REFRESH_INTERVAL / 1000);
-    }
-  }, [logsQuery.dataUpdatedAt]);
-
-  useEffect(() => {
-    if (!autoRefresh) return;
-    const timer = setInterval(() => {
-      setCountdown((prev) => (prev <= 1 ? AUTO_REFRESH_INTERVAL / 1000 : prev - 1));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [autoRefresh]);
-
   const handleManualRefresh = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['system-logs'] });
     queryClient.invalidateQueries({ queryKey: ['system-log-stats'] });
-    setCountdown(AUTO_REFRESH_INTERVAL / 1000);
   }, [queryClient]);
 
   const handleFilterChange = (key: keyof SystemLogFilter, value: string | undefined) => {
+    if (key === 'search') {
+      setSearchInput(value || '');
+      return;
+    }
     setFilter((prev) => ({ ...prev, [key]: value || undefined }));
     setOffset(0);
   };
@@ -236,8 +253,8 @@ export function SystemLogViewer() {
           <input
             type="text"
             placeholder={t('system.filters.searchPlaceholder')}
-            value={filter.search || ''}
-            onChange={(e) => handleFilterChange('search', e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 flex-1 min-w-[200px] bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400"
           />
 
@@ -254,7 +271,7 @@ export function SystemLogViewer() {
                 />
               </button>
               <span className="text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap">
-                {autoRefresh ? <span className="font-medium">{countdown}s</span> : t('system.filters.auto')}
+                {autoRefresh ? <CountdownDisplay autoRefresh={autoRefresh} dataUpdatedAt={logsQuery.dataUpdatedAt} /> : t('system.filters.auto')}
               </span>
             </div>
 
