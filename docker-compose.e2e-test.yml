@@ -23,7 +23,11 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: nginx_guard_test
-    command: postgres -c shared_preload_libraries=timescaledb -c timescaledb.telemetry_level=off
+    command: postgres -c shared_preload_libraries=timescaledb -c timescaledb.telemetry_level=off -c shared_buffers=128MB -c work_mem=4MB -c maintenance_work_mem=64MB
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -56,6 +60,10 @@ services:
       context: ./api
       dockerfile: Dockerfile
     container_name: npg-test-api
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     logging:
       driver: "json-file"
       options:
@@ -102,6 +110,10 @@ services:
       context: ./ui
       dockerfile: Dockerfile
     container_name: npg-test-ui
+    deploy:
+      resources:
+        limits:
+          memory: 128M
     logging:
       driver: "json-file"
       options:
@@ -122,6 +134,10 @@ services:
       dockerfile: Dockerfile
     container_name: npg-test-proxy
     network_mode: host
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     logging:
       driver: "json-file"
       options:

@@ -19,7 +19,7 @@ test.describe('Rate Limiting', () => {
       await page.goto(ROUTES.settingsRateLimiting);
 
       // Page should load without error
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
     });
 
     test('should display rate limiting configuration', async ({ page }) => {
@@ -48,7 +48,7 @@ test.describe('Rate Limiting', () => {
         const saveBtn = page.locator('button').filter({ hasText: /save|apply/i }).first();
         if (await saveBtn.isVisible()) {
           await saveBtn.click();
-          await page.waitForTimeout(500);
+          await page.waitForTimeout(200);
         }
       }
     });
@@ -75,7 +75,7 @@ test.describe('Rate Limiting', () => {
 
       if (await enableToggle.isVisible()) {
         await enableToggle.click();
-        await page.waitForTimeout(500);
+        await page.waitForTimeout(200);
 
         // Toggle back
         await enableToggle.click();

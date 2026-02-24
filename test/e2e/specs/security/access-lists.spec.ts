@@ -102,7 +102,7 @@ test.describe('Access List Management', () => {
       await accessListPage.save();
 
       // Should show validation errors
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(200);
       const hasErrors = await accessListPage.hasValidationErrors();
       const modalVisible = await accessListPage.modal.isVisible();
       expect(hasErrors || modalVisible).toBeTruthy();

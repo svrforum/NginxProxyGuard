@@ -108,7 +108,7 @@ test.describe('Bot Filter Logs', () => {
     await page.goto(ROUTES.logsBotFilter);
 
     // Page should load without errors
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Should have some content (empty state or logs)
     await expect(page.locator('main')).toBeVisible();

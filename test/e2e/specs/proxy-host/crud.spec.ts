@@ -112,7 +112,7 @@ test.describe('Proxy Host CRUD', () => {
     await formPage.save();
 
     // Should show validation errors
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(200);
     const hasErrors = await formPage.hasValidationErrors();
     expect(hasErrors).toBeTruthy();
 
@@ -158,7 +158,7 @@ test.describe('Proxy Host CRUD', () => {
     await formPage.save();
 
     // Should show error (duplicate domain)
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(500);
     // Form should still be open or show error
     const hasErrors = await formPage.hasValidationErrors();
     // Either validation error or form still open

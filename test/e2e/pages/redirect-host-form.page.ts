@@ -199,7 +199,6 @@ export class RedirectHostFormPage {
    */
   async save(): Promise<void> {
     await this.saveButton.click();
-    await this.page.waitForTimeout(500);
     await Promise.race([
       this.modal.waitFor({ state: 'hidden', timeout: TIMEOUTS.long }),
       this.successMessage.waitFor({ state: 'visible', timeout: TIMEOUTS.long }),

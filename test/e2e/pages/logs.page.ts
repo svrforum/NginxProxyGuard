@@ -166,7 +166,7 @@ export class LogsPage extends BasePage {
   async searchLogs(query: string): Promise<void> {
     if (await this.searchInput.isVisible()) {
       await this.searchInput.fill(query);
-      await this.page.waitForTimeout(500); // Debounce
+      await this.page.waitForTimeout(300); // Debounce
     }
   }
 
@@ -176,7 +176,7 @@ export class LogsPage extends BasePage {
   async clearSearch(): Promise<void> {
     if (await this.searchInput.isVisible()) {
       await this.searchInput.clear();
-      await this.page.waitForTimeout(500);
+      await this.page.waitForTimeout(300);
     }
   }
 
@@ -207,7 +207,7 @@ export class LogsPage extends BasePage {
   async nextPage(): Promise<void> {
     if (await this.nextPageButton.isEnabled()) {
       await this.nextPageButton.click();
-      await this.page.waitForTimeout(500);
+      await this.page.waitForLoadState('domcontentloaded');
     }
   }
 
@@ -217,7 +217,7 @@ export class LogsPage extends BasePage {
   async prevPage(): Promise<void> {
     if (await this.prevPageButton.isEnabled()) {
       await this.prevPageButton.click();
-      await this.page.waitForTimeout(500);
+      await this.page.waitForLoadState('domcontentloaded');
     }
   }
 

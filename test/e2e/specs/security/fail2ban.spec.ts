@@ -105,7 +105,7 @@ test.describe('Fail2ban Integration', () => {
       const saveBtn = page.locator('button').filter({ hasText: /ban|save|add/i }).first();
       await saveBtn.click();
 
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(200);
     });
   });
 

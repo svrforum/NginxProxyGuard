@@ -14,7 +14,7 @@ test.describe('Challenge/CAPTCHA', () => {
     test('should access challenge settings page', async ({ page }) => {
       await page.goto(ROUTES.settingsChallenge);
 
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
       // Page should load without error
     });
 
@@ -229,7 +229,7 @@ test.describe('Challenge/CAPTCHA', () => {
       const saveBtn = page.locator('button').filter({ hasText: /save|apply/i }).first();
       if (await saveBtn.isVisible()) {
         await saveBtn.click();
-        await page.waitForTimeout(500);
+        await page.waitForTimeout(200);
       }
     });
   });

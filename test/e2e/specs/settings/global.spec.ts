@@ -304,7 +304,7 @@ test.describe('Global Settings Validation', () => {
       await settingsPage.setWorkerProcesses(-1);
       await settingsPage.save();
 
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(200);
       const hasError = await settingsPage.hasErrorMessage();
       // Should show validation error
       expect(typeof hasError).toBe('boolean');
@@ -319,7 +319,7 @@ test.describe('Global Settings Validation', () => {
       await settingsPage.setWorkerConnections(1);
       await settingsPage.save();
 
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(200);
       // Might succeed or show warning
     }
   });

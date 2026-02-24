@@ -25,7 +25,7 @@ test.describe('Audit Logs', () => {
       await page.goto(ROUTES.logsAudit);
 
       // Wait for logs to load
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
 
       // Look for log entries
       const logEntries = page.locator('tr, [class*="log-entry"], [class*="card"]').filter({
@@ -104,7 +104,7 @@ test.describe('Audit Logs', () => {
 
       if (await actionFilter.isVisible()) {
         await actionFilter.selectOption({ index: 1 });
-        await page.waitForTimeout(500);
+        await page.waitForTimeout(200);
       }
     });
 
@@ -115,7 +115,7 @@ test.describe('Audit Logs', () => {
 
       if (await userFilter.isVisible()) {
         await userFilter.selectOption({ index: 0 });
-        await page.waitForTimeout(500);
+        await page.waitForTimeout(200);
       }
     });
 
@@ -129,7 +129,7 @@ test.describe('Audit Logs', () => {
         const today = new Date().toISOString().split('T')[0];
         await startDateInput.fill(today);
         await endDateInput.fill(today);
-        await page.waitForTimeout(500);
+        await page.waitForTimeout(200);
       }
     });
 
@@ -142,7 +142,7 @@ test.describe('Audit Logs', () => {
 
       if (await resourceFilter.isVisible()) {
         await resourceFilter.selectOption({ index: 1 });
-        await page.waitForTimeout(500);
+        await page.waitForTimeout(200);
       }
     });
   });
@@ -156,7 +156,7 @@ test.describe('Audit Logs', () => {
 
       if (await nextButton.isVisible()) {
         await nextButton.click();
-        await page.waitForTimeout(500);
+        await page.waitForTimeout(200);
 
         // URL might include page parameter
         const url = page.url();
@@ -171,7 +171,7 @@ test.describe('Audit Logs', () => {
 
       if (await pageSizeSelect.isVisible()) {
         await pageSizeSelect.selectOption('50');
-        await page.waitForTimeout(500);
+        await page.waitForTimeout(200);
       }
     });
   });

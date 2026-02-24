@@ -225,7 +225,6 @@ export class DnsProviderPage extends BasePage {
    */
   async save(): Promise<void> {
     await this.saveButton.click();
-    await this.page.waitForTimeout(500);
     await Promise.race([
       this.modal.waitFor({ state: 'hidden', timeout: TIMEOUTS.long }),
       this.errorMessage.waitFor({ state: 'visible', timeout: TIMEOUTS.long }),

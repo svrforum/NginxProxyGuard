@@ -97,7 +97,7 @@ test.describe('URI Blocking', () => {
       const saveBtn = page.locator('button').filter({ hasText: /save|create/i }).first();
       await saveBtn.click();
 
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(200);
     });
   });
 

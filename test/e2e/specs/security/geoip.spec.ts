@@ -72,7 +72,7 @@ test.describe('GeoIP Global Settings', () => {
     await page.goto(ROUTES.settingsGeoip);
 
     // Page should have GeoIP content
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await expect(page.locator('main')).toContainText(/geo/i);
   });
 

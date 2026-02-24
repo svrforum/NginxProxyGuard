@@ -91,7 +91,7 @@ test.describe('Redirect Host CRUD', () => {
       await formPage.save();
 
       // Should show validation errors
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(200);
       const hasErrors = await formPage.hasValidationErrors();
       expect(hasErrors).toBeTruthy();
 

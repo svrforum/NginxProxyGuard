@@ -94,7 +94,7 @@ test.describe('DNS Provider Management', () => {
       await dnsProviderPage.save();
 
       // Should show validation errors or form should still be open
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(200);
       const hasErrors = await dnsProviderPage.hasValidationErrors();
       const modalVisible = await dnsProviderPage.modal.isVisible();
       expect(hasErrors || modalVisible).toBeTruthy();
