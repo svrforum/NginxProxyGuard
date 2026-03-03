@@ -8,7 +8,7 @@
 
 <img src="./NPG_banner.png" alt="Nginx Proxy Guard" width="800">
 
-[![Version](https://img.shields.io/badge/Version-2.2.0-brightgreen?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-2.3.1-brightgreen?style=for-the-badge)]()
 [![Nginx](https://img.shields.io/badge/Nginx-1.28.0-009639?style=for-the-badge&logo=nginx&logoColor=white)](https://nginx.org/)
 [![ModSecurity](https://img.shields.io/badge/ModSecurity-v3.0.14-red?style=for-the-badge)](https://modsecurity.org/)
 [![OWASP CRS](https://img.shields.io/badge/OWASP_CRS-v4.21.0-orange?style=for-the-badge)](https://coreruleset.org/)
@@ -21,10 +21,12 @@
 
 <p align="center">
   <a href="https://nginxproxyguard.com">Website</a> •
+  <a href="https://nginxproxyguard.com/en/docs">Docs</a> •
   <a href="#-key-features">Features</a> •
   <a href="#-quick-start">Quick Start</a> •
   <a href="#-tech-stack">Tech Stack</a> •
-  <a href="#-api-documentation">API</a>
+  <a href="#-api-documentation">API</a> •
+  <a href="https://buymeacoffee.com/svrforum">☕ Sponsor</a>
 </p>
 
 ---
@@ -210,6 +212,14 @@ https://localhost:81/api/v1/swagger
 
 ---
 
+## ☕ Sponsor
+
+If you find Nginx Proxy Guard useful, consider supporting the project!
+
+<a href="https://buymeacoffee.com/svrforum" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="50"></a>
+
+---
+
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
@@ -218,6 +228,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - [GitHub Issues](https://github.com/svrforum/nginxproxyguard/issues) - Bug reports and feature requests
 - [Discussions](https://github.com/svrforum/nginxproxyguard/discussions) - Questions and community
+- [Buy Me a Coffee](https://buymeacoffee.com/svrforum) - Support the project
 
 ---
 

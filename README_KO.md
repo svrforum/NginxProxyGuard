@@ -8,7 +8,7 @@
 
 <img src="./NPG_banner.png" alt="Nginx Proxy Guard" width="800">
 
-[![Version](https://img.shields.io/badge/Version-2.2.0-brightgreen?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-2.3.1-brightgreen?style=for-the-badge)]()
 [![Nginx](https://img.shields.io/badge/Nginx-1.28.0-009639?style=for-the-badge&logo=nginx&logoColor=white)](https://nginx.org/)
 [![ModSecurity](https://img.shields.io/badge/ModSecurity-v3.0.14-red?style=for-the-badge)](https://modsecurity.org/)
 [![OWASP CRS](https://img.shields.io/badge/OWASP_CRS-v4.21.0-orange?style=for-the-badge)](https://coreruleset.org/)
@@ -21,10 +21,12 @@
 
 <p align="center">
   <a href="https://nginxproxyguard.com">웹사이트</a> •
+  <a href="https://nginxproxyguard.com/ko/docs">문서</a> •
   <a href="#-주요-기능">기능</a> •
   <a href="#-빠른-시작">빠른 시작</a> •
   <a href="#-기술-스택">기술 스택</a> •
-  <a href="#-api-문서">API</a>
+  <a href="#-api-문서">API</a> •
+  <a href="https://buymeacoffee.com/svrforum">☕ 후원</a>
 </p>
 
 ---
@@ -210,6 +212,14 @@ https://localhost:81/api/v1/swagger
 
 ---
 
+## ☕ 후원
+
+Nginx Proxy Guard가 유용하셨다면, 프로젝트를 후원해주세요!
+
+<a href="https://buymeacoffee.com/svrforum" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="50"></a>
+
+---
+
 ## 📄 라이선스
 
 이 프로젝트는 MIT 라이선스에 따라 배포됩니다 - 자세한 내용은 [LICENSE](LICENSE) 파일을 참조하세요.
@@ -218,6 +228,7 @@ https://localhost:81/api/v1/swagger
 
 - [GitHub Issues](https://github.com/svrforum/nginxproxyguard/issues) - 버그 리포트 및 기능 요청
 - [Discussions](https://github.com/svrforum/nginxproxyguard/discussions) - 질문 및 커뮤니티
+- [Buy Me a Coffee](https://buymeacoffee.com/svrforum) - 프로젝트 후원
 
 ---
 
