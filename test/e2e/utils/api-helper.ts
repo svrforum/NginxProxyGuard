@@ -249,6 +249,23 @@ export class APIHelper {
     return response.json();
   }
 
+  // ==================== Bot Filter ====================
+
+  /**
+   * Get bot filter settings for a proxy host.
+   */
+  async getBotFilter(proxyHostId: string): Promise<{ enabled: boolean } | null> {
+    const response = await this.request.get(`${API_ENDPOINTS.proxyHosts}/${proxyHostId}/bot-filter`, {
+      headers: this.getHeaders(),
+    });
+
+    if (!response.ok()) {
+      return null;
+    }
+
+    return response.json();
+  }
+
   // ==================== Redirect Hosts ====================
 
   /**

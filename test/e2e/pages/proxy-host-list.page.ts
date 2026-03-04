@@ -108,10 +108,11 @@ export class ProxyHostListPage extends BasePage {
   }
 
   /**
-   * Get host card by domain name.
+   * Get host row by domain name (supports both table and card layouts).
    */
   getHostByDomain(domain: string): Locator {
-    return this.page.locator('[class*="card"], .bg-white.rounded, .dark\\:bg-slate-800').filter({
+    // Try table row first (primary layout), then card-based fallback
+    return this.page.locator('tr, [class*="card"], .bg-white.rounded').filter({
       hasText: domain,
     }).first();
   }
@@ -120,14 +121,15 @@ export class ProxyHostListPage extends BasePage {
    * Click on a host to edit (clicks the edit button in the actions column).
    */
   async clickHost(domain: string): Promise<void> {
-    const hostCard = this.getHostByDomain(domain);
-    // Click the edit button (pencil icon) within the host row
-    const editButton = hostCard.locator('button[title="Edit"], button[title="편집"]').first();
+    const hostRow = this.getHostByDomain(domain);
+    // Use accessible name to find the Edit button (works with title/aria-label)
+    const editButton = hostRow.getByRole('button', { name: /^Edit$|^수정$/ });
     if (await editButton.isVisible()) {
       await editButton.click();
     } else {
-      // Fallback: try any edit-like button
-      await hostCard.locator('button').filter({ hasText: /edit/i }).first().click();
+      // Fallback: try button with title attribute
+      const titleButton = hostRow.locator('button[title="Edit"], button[title="수정"]').first();
+      await titleButton.click();
     }
     // Wait for form/modal
     await this.page.waitForSelector('[class*="modal"], [role="dialog"], .fixed.inset-0', {

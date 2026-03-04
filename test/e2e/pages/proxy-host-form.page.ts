@@ -91,8 +91,8 @@ export class ProxyHostFormPage {
     this.wafEnabledToggle = page.locator('label').filter({ hasText: /WAF.*Firewall|ModSecurity/i }).locator('input[type="checkbox"]').first();
     this.wafModeSelect = page.locator('select[name*="waf_mode"], [role="combobox"]').filter({ has: page.locator('text=/detection|blocking/i') }).first();
     this.paranoiaLevelSelect = page.locator('select[name*="paranoia"], [role="combobox"]').filter({ has: page.locator('text=/paranoia|level/i') }).first();
-    this.botFilterToggle = page.locator('input[type="checkbox"], button[role="switch"]').filter({ has: page.locator('text=/bot.*filter/i') }).first();
-    this.geoipToggle = page.locator('input[type="checkbox"], button[role="switch"]').filter({ has: page.locator('text=/geo.*ip|country/i') }).first();
+    this.botFilterToggle = page.locator('label').filter({ hasText: /bot.*filter/i }).locator('input[type="checkbox"]').first();
+    this.geoipToggle = page.locator('label').filter({ hasText: /geo.*ip|country/i }).locator('input[type="checkbox"]').first();
 
     // Save progress modal
     this.saveProgressModal = page.locator('[class*="progress"], [class*="saving"]').first();

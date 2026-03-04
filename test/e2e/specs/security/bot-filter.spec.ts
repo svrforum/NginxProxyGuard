@@ -9,21 +9,27 @@ test.describe('Bot Filter on Proxy Host', () => {
   let listPage: ProxyHostListPage;
   let formPage: ProxyHostFormPage;
   let apiHelper: APIHelper;
+  let createdHostId: number | null;
 
   test.beforeEach(async ({ page, request }) => {
     listPage = new ProxyHostListPage(page);
     formPage = new ProxyHostFormPage(page);
     apiHelper = new APIHelper(request);
     await apiHelper.login();
+    createdHostId = null;
   });
 
   test.afterEach(async () => {
-    await apiHelper.cleanupTestHosts();
+    // Only delete the host created by this specific test
+    if (createdHostId) {
+      await apiHelper.deleteProxyHost(createdHostId).catch(() => {});
+    }
   });
 
   test('should enable Bot Filter on proxy host', async ({ page }) => {
     const testData = TestDataFactory.createProxyHost();
-    await apiHelper.createProxyHost(testData);
+    const created = await apiHelper.createProxyHost(testData);
+    createdHostId = created.id;
     const testDomain = testData.domain_names[0];
 
     await listPage.goto();
@@ -34,35 +40,36 @@ test.describe('Bot Filter on Proxy Host', () => {
 
     await formPage.save();
 
-    // Verify via API
-    const hosts = await apiHelper.getProxyHosts();
-    const updatedHost = hosts.find(h => h.domain_names.includes(testDomain));
-    expect(updatedHost?.bot_filter_enabled).toBe(true);
+    // Verify via bot filter API
+    const botFilter = await apiHelper.getBotFilter(created.id.toString());
+    expect(botFilter?.enabled).toBe(true);
   });
 
   test('should disable Bot Filter on proxy host', async ({ page }) => {
-    const testData = TestDataFactory.createProxyHost({
-      bot_filter_enabled: true,
-    });
-    await apiHelper.createProxyHost(testData);
+    const testData = TestDataFactory.createProxyHost();
+    const created = await apiHelper.createProxyHost(testData);
+    createdHostId = created.id;
     const testDomain = testData.domain_names[0];
 
     await listPage.goto();
     await listPage.clickHost(testDomain);
 
-    // Disable Bot Filter
-    await formPage.toggleBotFilter(false);
-
+    // Enable Bot Filter first, then disable
+    await formPage.toggleBotFilter(true);
     await formPage.save();
 
-    // Verify via API
-    const hosts = await apiHelper.getProxyHosts();
-    const updatedHost = hosts.find(h => h.domain_names.includes(testDomain));
-    expect(updatedHost?.bot_filter_enabled).toBe(false);
+    await listPage.goto();
+    await listPage.clickHost(testDomain);
+    await formPage.toggleBotFilter(false);
+    await formPage.save();
+
+    // Verify via bot filter API
+    const botFilter = await apiHelper.getBotFilter(created.id.toString());
+    expect(botFilter?.enabled).toBe(false);
   });
 
   test('should create proxy host with Bot Filter from scratch', async ({ page }) => {
-    const testDomain = TestDataFactory.generateDomain('botfilter-new');
+    const testDomain = TestDataFactory.generateDomain('bf');
 
     await listPage.goto();
     await listPage.clickAddHost();
@@ -75,12 +82,17 @@ test.describe('Bot Filter on Proxy Host', () => {
     // Enable Bot Filter
     await formPage.toggleBotFilter(true);
 
+    // In create mode, save button is only visible on the last tab
+    await formPage.switchTab('advanced');
     await formPage.save();
 
-    // Verify
+    // Verify via bot filter API
     const hosts = await apiHelper.getProxyHosts();
     const createdHost = hosts.find(h => h.domain_names.includes(testDomain));
-    expect(createdHost?.bot_filter_enabled).toBe(true);
+    expect(createdHost).toBeTruthy();
+    createdHostId = createdHost!.id;
+    const botFilter = await apiHelper.getBotFilter(createdHost!.id.toString());
+    expect(botFilter?.enabled).toBe(true);
   });
 });
 
