@@ -391,52 +391,42 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Get tag message
-        id: tag_message
-        run: |
-          TAG_MSG=$(git tag -l --format='%(contents)' ${GITHUB_REF#refs/tags/} | tail -n +2)
-          echo "message<<EOF" >> $GITHUB_OUTPUT
-          echo "$TAG_MSG" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Generate changelog
-        id: changelog
+      - name: Get release notes
+        id: release_notes
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          TAG_NAME="${GITHUB_REF#refs/tags/}"
 
-          if [ -n "$PREV_TAG" ]; then
-            RANGE="$PREV_TAG..HEAD"
+          # 1. 기존 릴리즈 노트 확인 (수동 작성된 것이 있으면 보존)
+          EXISTING=$(gh release view "$TAG_NAME" --json body --jq '.body' 2>/dev/null || echo "")
+
+          # 2. Annotated tag 메시지 확인
+          TAG_MSG=$(git tag -l --format='%(contents)' "$TAG_NAME" | tail -n +2 | sed '/^$/d')
+
+          # 우선순위: 기존 릴리즈 노트 > 태그 메시지
+          if [ -n "$EXISTING" ]; then
+            NOTES="$EXISTING"
+          elif [ -n "$TAG_MSG" ]; then
+            NOTES="$TAG_MSG"
           else
-            RANGE="-20"
+            NOTES=""
           fi
 
-          CHANGELOG=""
-          for hash in $(git log --pretty=format:"%H" $RANGE); do
-            subject=$(git log -1 --pretty=format:"%s" $hash)
-            if echo "$subject" | grep -q "^chore: Bump version"; then
-              continue
-            fi
-            body=$(git log -1 --pretty=format:"%b" $hash | sed '/^$/d' | sed 's/^/  /')
-            if [ -n "$body" ]; then
-              CHANGELOG="${CHANGELOG}### ${subject}"$'\n\n'"${body}"$'\n\n'
-            else
-              CHANGELOG="${CHANGELOG}- ${subject}"$'\n'
-            fi
-          done
-
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "notes<<EOF" >> $GITHUB_OUTPUT
+          echo "$NOTES" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-          # Get contributors
+          # 외부 기여자 수집 (중복 제거)
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           CONTRIBUTORS=""
           if [ -n "$PREV_TAG" ]; then
-            PR_NUMBERS=$(git log --pretty=format:"%s %b" $PREV_TAG..HEAD | grep -oE '#[0-9]+' | sort -u | tr -d '#')
+            PR_NUMBERS=$(git log --pretty=format:"%s %b" "$PREV_TAG..HEAD" | grep -oE '#[0-9]+' | sort -u | tr -d '#')
+            SEEN=""
             for PR in $PR_NUMBERS; do
-              PR_AUTHOR=$(gh pr view $PR --json author --jq '.author.login' 2>/dev/null || echo "")
-              if [ -n "$PR_AUTHOR" ] && [ "$PR_AUTHOR" != "svrforum" ]; then
+              PR_AUTHOR=$(gh pr view "$PR" --json author --jq '.author.login' 2>/dev/null || echo "")
+              if [ -n "$PR_AUTHOR" ] && [ "$PR_AUTHOR" != "svrforum" ] && ! echo "$SEEN" | grep -qw "$PR_AUTHOR"; then
+                SEEN="$SEEN $PR_AUTHOR"
                 if [ -z "$CONTRIBUTORS" ]; then
                   CONTRIBUTORS="@$PR_AUTHOR"
                 else
@@ -452,11 +442,11 @@ jobs:
         with:
           name: v${{ needs.detect.outputs.version }}
           body: |
-            ${{ steps.tag_message.outputs.message }}
+            ${{ steps.release_notes.outputs.notes }}
 
             ---
 
-            ## Docker 이미지
+            ## Docker Images
 
             ```bash
             docker pull svrforum/nginxproxyguard-api:${{ needs.detect.outputs.version }}
@@ -464,24 +454,15 @@ jobs:
             docker pull svrforum/nginxproxyguard-nginx:${{ needs.detect.outputs.version }}
             ```
 
-            ## 지원 아키텍처
-            - `linux/amd64`
-            - `linux/arm64`
+            **Architectures:** `linux/amd64`, `linux/arm64`
 
-            ## 빌드 요약
-            | 컴포넌트 | 상태 |
+            | Component | Status |
             |-----------|--------|
-            | API | ${{ needs.detect.outputs.api_changed == 'true' && '✅ 빌드 및 푸시 완료' || '⏭️ 건너뜀 (변경 없음)' }} |
-            | UI | ${{ needs.detect.outputs.ui_changed == 'true' && '✅ 빌드 및 푸시 완료' || '⏭️ 건너뜀 (변경 없음)' }} |
-            | Nginx | ${{ needs.detect.outputs.nginx_changed == 'true' && '✅ 빌드 및 푸시 완료' || '⏭️ 건너뜀 (변경 없음)' }} |
+            | API | ${{ needs.detect.outputs.api_changed == 'true' && 'Built' || 'Skipped (no changes)' }} |
+            | UI | ${{ needs.detect.outputs.ui_changed == 'true' && 'Built' || 'Skipped (no changes)' }} |
+            | Nginx | ${{ needs.detect.outputs.nginx_changed == 'true' && 'Built' || 'Skipped (no changes)' }} |
 
-            ## E2E 테스트
-            ✅ Host 모드 - 통과
-
-            ${{ steps.changelog.outputs.contributors != '' && format('## 기여자\n기여해 주셔서 감사합니다! {0}\n', steps.changelog.outputs.contributors) || '' }}
-
-            ## 커밋 내역
-            ${{ steps.changelog.outputs.changelog }}
+            ${{ steps.release_notes.outputs.contributors != '' && format('**Contributors:** {0}', steps.release_notes.outputs.contributors) || '' }}
           draft: false
           prerelease: ${{ contains(github.ref, '-rc') || contains(github.ref, '-beta') || contains(github.ref, '-alpha') }}
 
