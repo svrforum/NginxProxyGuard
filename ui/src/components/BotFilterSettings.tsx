@@ -276,7 +276,7 @@ export default function BotFilterSettings() {
             <div className="p-4 bg-white dark:bg-slate-800 border-t border-orange-200 dark:border-orange-800 transition-colors">
               <div className="p-3 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-lg mb-3">
                 <p className="text-xs text-amber-700 dark:text-amber-400">
-                  <strong>{t('common.warning')}:</strong> {t('system.botfilter.options.challengeSuspicious.description')}
+                  <strong>{t('common:status.warning')}:</strong> {t('system.botfilter.options.challengeSuspicious.description')}
                 </p>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">{t('system.botfilter.customAgents.description')}</p>
@@ -326,7 +326,7 @@ export default function BotFilterSettings() {
           <svg className="w-5 h-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <span className="text-sm text-emerald-700 dark:text-emerald-400 font-medium">{t('common.messages.saved')}</span>
+          <span className="text-sm text-emerald-700 dark:text-emerald-400 font-medium">{t('common:messages.saveSuccess')}</span>
         </div>
       )}
 
@@ -336,7 +336,7 @@ export default function BotFilterSettings() {
           <svg className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <span className="text-sm text-red-700 dark:text-red-400 font-medium">{t('common.messages.saveFailed')}</span>
+          <span className="text-sm text-red-700 dark:text-red-400 font-medium">{t('common:messages.saveFailed')}</span>
         </div>
       )}
     </div>

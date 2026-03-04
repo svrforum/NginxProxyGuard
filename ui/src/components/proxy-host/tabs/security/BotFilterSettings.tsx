@@ -149,6 +149,28 @@ export function BotFilterSettings({ botFilterData, setBotFilterData }: BotFilter
               className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-orange-500 focus:border-orange-500 dark:bg-slate-700 dark:text-white"
             />
           </div>
+
+          {/* Custom allowed agents */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+              {t('form.security.botFilter.customAllowed')}
+            </label>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+              {t('form.security.botFilter.customAllowedDescription')}
+            </p>
+            <textarea
+              value={botFilterData.custom_allowed_agents || ''}
+              onChange={(e) =>
+                setBotFilterData((prev) => ({
+                  ...prev,
+                  custom_allowed_agents: e.target.value,
+                }))
+              }
+              placeholder={t('form.security.botFilter.customAllowedPlaceholder')}
+              rows={3}
+              className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-green-500 focus:border-green-500 dark:bg-slate-700 dark:text-white"
+            />
+          </div>
         </div>
       )}
     </div>

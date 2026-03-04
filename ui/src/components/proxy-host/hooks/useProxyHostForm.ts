@@ -85,6 +85,7 @@ export function useProxyHostForm(host: ProxyHost | null | undefined, onClose: ()
     allow_search_engines: true,
     block_suspicious_clients: false,
     custom_blocked_agents: '',
+    custom_allowed_agents: '',
     challenge_suspicious: false,
   })
 
@@ -176,6 +177,7 @@ export function useProxyHostForm(host: ProxyHost | null | undefined, onClose: ()
         allow_search_engines: existingBotFilter.allow_search_engines,
         block_suspicious_clients: existingBotFilter.block_suspicious_clients,
         custom_blocked_agents: existingBotFilter.custom_blocked_agents || '',
+        custom_allowed_agents: existingBotFilter.custom_allowed_agents || '',
         challenge_suspicious: existingBotFilter.challenge_suspicious,
       })
     }
@@ -267,7 +269,7 @@ export function useProxyHostForm(host: ProxyHost | null | undefined, onClose: ()
       // Save additional settings in PARALLEL for speed (skip nginx reload since main API already did it)
       const additionalSettingsPromises: Promise<unknown>[] = []
 
-      if (botFilterData.enabled || botFilterData.custom_blocked_agents) {
+      if (botFilterData.enabled || botFilterData.custom_blocked_agents || botFilterData.custom_allowed_agents) {
         additionalSettingsPromises.push(
           updateBotFilter(newHost.id, botFilterData, true)
             .catch(err => console.error('Failed to save bot filter:', err))
