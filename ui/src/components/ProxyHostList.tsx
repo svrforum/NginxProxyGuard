@@ -51,7 +51,7 @@ function TestResultModal({
             <button
               onClick={onRetest}
               disabled={isLoading}
-              className="px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg flex items-center gap-1.5"
+              className="px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg flex items-center gap-1.5"
             >
               <svg className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -74,7 +74,7 @@ function TestResultModal({
           <div className="flex-1 flex items-center justify-center py-20">
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4" />
-              <p className="text-slate-600">{t('test.testing')}</p>
+              <p className="text-slate-600 dark:text-slate-400">{t('test.testing')}</p>
             </div>
           </div>
         )}
@@ -89,7 +89,7 @@ function TestResultModal({
                 </svg>
               </div>
               <p className="text-red-600 font-medium mb-2">{t('test.failed')}</p>
-              <p className="text-slate-500 text-sm">{error}</p>
+              <p className="text-slate-500 dark:text-slate-400 text-sm">{error}</p>
             </div>
           </div>
         )}
@@ -299,7 +299,7 @@ function SSLTab({ result }: { result: ProxyHostTestResult }) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
           )}
-          <span className={`font-medium ${ssl.valid ? 'text-green-700' : 'text-red-700'}`}>
+          <span className={`font-medium ${ssl.valid ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>
             {ssl.valid ? t('test.validCert') : t('test.invalidCert')}
           </span>
         </div>
@@ -553,7 +553,7 @@ function SecurityTab({ result }: { result: ProxyHostTestResult }) {
         <div className="px-4 py-2 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
           <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('test.security.headers')}</h4>
         </div>
-        <div className="divide-y divide-slate-100">
+        <div className="divide-y divide-slate-100 dark:divide-slate-700">
           {headers.map(header => (
             <div key={header.name} className="px-4 py-3">
               <div className="flex items-center justify-between mb-1">
@@ -1001,7 +1001,7 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
     if (status === 'offline') {
       return <span className="w-2 h-2 rounded-full bg-red-500" title="Offline" />
     }
-    return <span className="w-2 h-2 rounded-full bg-slate-300" title="Unknown" />
+    return <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600" title="Unknown" />
   }
 
   if (isLoading) {
@@ -1014,7 +1014,7 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
+      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 text-red-700 dark:text-red-400">
         Error loading proxy hosts: {(error as Error).message}
       </div>
     )
@@ -1041,7 +1041,7 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
             {searchInput && (
               <button
                 onClick={handleClearSearch}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-400"
               >
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1199,7 +1199,7 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
                       {host.ssl_enabled && (
                         <button
                           onClick={() => onEdit(host, 'ssl')}
-                          className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-green-100 text-green-700 hover:bg-green-200 transition-colors cursor-pointer"
+                          className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors cursor-pointer"
                           title="Click to edit SSL settings"
                         >
                           SSL{host.ssl_http2 ? '+H2' : ''}{host.ssl_http3 ? '+H3' : ''}
@@ -1208,7 +1208,7 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
                       {host.ssl_http3 && (
                         <button
                           onClick={() => onEdit(host, 'ssl')}
-                          className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors cursor-pointer"
+                          className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/50 transition-colors cursor-pointer"
                           title="Click to edit HTTP/3 settings"
                         >
                           QUIC
@@ -1217,7 +1217,7 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
                       {host.waf_enabled && (
                         <button
                           onClick={() => onEdit(host, 'security')}
-                          className={`px-1.5 py-0.5 text-[10px] font-medium rounded hover:opacity-80 transition-opacity cursor-pointer ${host.waf_mode === 'blocking' ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                          className={`px-1.5 py-0.5 text-[10px] font-medium rounded hover:opacity-80 transition-opacity cursor-pointer ${host.waf_mode === 'blocking' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-900/50' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/50'
                             }`}
                           title={`Click to edit WAF settings (${host.waf_mode})`}
                         >
@@ -1227,7 +1227,7 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
                       {host.allow_websocket_upgrade && (
                         <button
                           onClick={() => onEdit(host, 'performance')}
-                          className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-cyan-100 text-cyan-700 hover:bg-cyan-200 transition-colors cursor-pointer"
+                          className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400 hover:bg-cyan-200 dark:hover:bg-cyan-900/50 transition-colors cursor-pointer"
                           title="Click to edit WebSocket settings"
                         >
                           WS
@@ -1236,7 +1236,7 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
                       {host.cache_enabled && (
                         <button
                           onClick={() => onEdit(host, 'performance')}
-                          className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-indigo-100 text-indigo-700 hover:bg-indigo-200 transition-colors cursor-pointer"
+                          className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors cursor-pointer"
                           title="Click to edit Cache settings"
                         >
                           Cache
@@ -1245,7 +1245,7 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
                       {host.block_exploits && (
                         <button
                           onClick={() => onEdit(host, 'security')}
-                          className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-red-100 text-red-700 hover:bg-red-200 transition-colors cursor-pointer"
+                          className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors cursor-pointer"
                           title="Click to edit Exploit Block settings"
                         >
                           Exploits
@@ -1260,8 +1260,8 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
                       onClick={() => handleToggle(host)}
                       disabled={toggleMutation.isPending}
                       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${host.enabled
-                        ? 'bg-green-100 text-green-800 hover:bg-green-200'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50'
+                        : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'
                         }`}
                       title={host.enabled ? 'Click to disable' : 'Click to enable'}
                     >
@@ -1444,23 +1444,23 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
       {
         toggleConfirmHost && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-200">
-                <h3 className="text-lg font-semibold text-slate-900">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
                   {toggleConfirmHost.enabled ? t('actions.disableConfirmTitle') : t('actions.enableConfirmTitle')}
                 </h3>
               </div>
               <div className="px-6 py-4">
-                <p className="text-slate-600">
+                <p className="text-slate-600 dark:text-slate-400">
                   {toggleConfirmHost.enabled
                     ? t('actions.disableConfirmMessage', { domain: toggleConfirmHost.domain_names[0] })
                     : t('actions.enableConfirmMessage', { domain: toggleConfirmHost.domain_names[0] })}
                 </p>
               </div>
-              <div className="px-6 py-4 bg-slate-50 flex justify-end gap-3">
+              <div className="px-6 py-4 bg-slate-50 dark:bg-slate-900 flex justify-end gap-3">
                 <button
                   onClick={() => setToggleConfirmHost(null)}
-                  className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 rounded-lg transition-colors"
+                  className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
                 >
                   {t('common:buttons.cancel')}
                 </button>

@@ -229,9 +229,9 @@ export function LogViewer({ logType, defaultBlockReason }: LogViewerProps) {
 
         {/* Summary Stats */}
         <div className="flex items-center gap-4 text-sm">
-          <span className="text-slate-500">
+          <span className="text-slate-500 dark:text-slate-400">
             {t("stats.total")}:{" "}
-            <span className="font-semibold text-slate-700">
+            <span className="font-semibold text-slate-700 dark:text-slate-300">
               {statsQuery.data?.total_logs?.toLocaleString() || 0}
             </span>
           </span>
@@ -375,8 +375,8 @@ export function LogViewer({ logType, defaultBlockReason }: LogViewerProps) {
             onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               showAdvancedFilters || activeFilterCount > 0
-                ? "bg-primary-100 text-primary-700"
-                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                ? "bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300"
+                : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600"
             }`}
           >
             <svg
@@ -463,7 +463,7 @@ export function LogViewer({ logType, defaultBlockReason }: LogViewerProps) {
           {/* Settings */}
           <button
             onClick={() => setShowSettings(true)}
-            className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
+            className="p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
             title={t("viewer.settings")}
           >
             <svg
@@ -509,32 +509,32 @@ export function LogViewer({ logType, defaultBlockReason }: LogViewerProps) {
             <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
               {logType === "access" && (
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase w-[140px]">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[140px]">
                     {t("table.columns.time")}
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase w-[180px]">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[180px]">
                     {t("table.columns.host")}
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase w-[120px]">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[120px]">
                     {t("table.columns.ip")}
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase w-[60px]">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[60px]">
                     {t("table.columns.country")}
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase w-[60px]">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[60px]">
                     {t("table.columns.method")}
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase w-[200px]">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[200px]">
                     {t("table.columns.path")}
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase w-[55px]">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[55px]">
                     {t("table.columns.status")}
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase w-[85px]">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[85px]">
                     {t("table.columns.block")}
                   </th>
                   <th
-                    className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase cursor-pointer hover:bg-slate-100 w-[65px]"
+                    className="px-4 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 w-[65px]"
                     onClick={() =>
                       handleFilterChange({
                         ...filter,
@@ -552,7 +552,7 @@ export function LogViewer({ logType, defaultBlockReason }: LogViewerProps) {
                       (filter.sort_order === "desc" ? "↓" : "↑")}
                   </th>
                   <th
-                    className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase cursor-pointer hover:bg-slate-100 w-[70px]"
+                    className="px-4 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 w-[70px]"
                     onClick={() =>
                       handleFilterChange({
                         ...filter,
@@ -573,44 +573,44 @@ export function LogViewer({ logType, defaultBlockReason }: LogViewerProps) {
               )}
               {logType === "modsec" && (
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
                     {t("table.columns.time")}
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
                     {t("table.columns.host")}
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
                     {t("table.columns.ip")}
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase w-[60px]">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[60px]">
                     {t("table.columns.country")}
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
                     {t("table.columns.ruleId")}
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
                     {t("table.columns.ruleMessage")}
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
                     {t("table.columns.path")}
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
                     {t("table.columns.action")}
                   </th>
                 </tr>
               )}
               {logType === "error" && (
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
                     {t("table.columns.time")}
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
                     {t("table.columns.severity")}
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
                     {t("table.columns.ip")}
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
                     {t("table.columns.error")}
                   </th>
                 </tr>
@@ -621,7 +621,7 @@ export function LogViewer({ logType, defaultBlockReason }: LogViewerProps) {
                 <tr>
                   <td
                     colSpan={10}
-                    className="px-4 py-8 text-center text-slate-500"
+                    className="px-4 py-8 text-center text-slate-500 dark:text-slate-400"
                   >
                     {t("table.loading")}
                   </td>
@@ -630,7 +630,7 @@ export function LogViewer({ logType, defaultBlockReason }: LogViewerProps) {
                 <tr>
                   <td
                     colSpan={10}
-                    className="px-4 py-8 text-center text-slate-500"
+                    className="px-4 py-8 text-center text-slate-500 dark:text-slate-400"
                   >
                     {logType === "modsec"
                       ? t("table.noWafEvents")
@@ -657,7 +657,7 @@ export function LogViewer({ logType, defaultBlockReason }: LogViewerProps) {
         {logsQuery.data && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 dark:border-slate-700">
             <div className="flex items-center gap-4">
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-slate-500 dark:text-slate-400">
                 {t("pagination.showing", {
                   start: (page - 1) * perPage + 1,
                   end: Math.min(page * perPage, logsQuery.data.total),
@@ -665,7 +665,7 @@ export function LogViewer({ logType, defaultBlockReason }: LogViewerProps) {
                 })}
               </p>
               <div className="flex items-center gap-2">
-                <label className="text-sm text-slate-500">
+                <label className="text-sm text-slate-500 dark:text-slate-400">
                   {t("pagination.perPage")}
                 </label>
                 <select
@@ -674,7 +674,7 @@ export function LogViewer({ logType, defaultBlockReason }: LogViewerProps) {
                     setPerPage(parseInt(e.target.value));
                     setPage(1);
                   }}
-                  className="px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-primary-500"
+                  className="px-2 py-1 border border-slate-300 dark:border-slate-600 rounded text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500"
                 >
                   {PAGE_SIZE_OPTIONS.map((size) => (
                     <option key={size} value={size}>

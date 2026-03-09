@@ -66,12 +66,12 @@ export function AutocompleteInput({ value, onChange, placeholder, fetchSuggestio
         </div>
       )}
       {showSuggestions && suggestions.length > 0 && (
-        <ul className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+        <ul className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg max-h-48 overflow-y-auto">
           {suggestions.map((suggestion, index) => (
             <li
               key={index}
               onClick={() => handleSelect(suggestion)}
-              className="px-3 py-2 text-sm cursor-pointer hover:bg-slate-100 truncate"
+              className="px-3 py-2 text-sm cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 truncate"
             >
               {suggestion}
             </li>
@@ -141,10 +141,10 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
   ];
 
   return (
-    <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-4 mb-4">
+    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 p-4 mb-4">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-slate-900">Advanced Filters</h3>
-        <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Advanced Filters</h3>
+        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-400">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
@@ -154,7 +154,7 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Date Range */}
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Start Date</label>
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Start Date</label>
           <DatePicker
             selected={localFilter.start_time ? new Date(localFilter.start_time) : null}
             onChange={(date: Date | null) => updateFilter('start_time', date ? date.toISOString() : undefined)}
@@ -166,11 +166,11 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
             placeholderText="시작 날짜 선택"
             isClearable
             maxDate={localFilter.end_time ? new Date(localFilter.end_time) : undefined}
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">End Date</label>
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">End Date</label>
           <DatePicker
             selected={localFilter.end_time ? new Date(localFilter.end_time) : null}
             onChange={(date: Date | null) => updateFilter('end_time', date ? date.toISOString() : undefined)}
@@ -182,66 +182,66 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
             placeholderText="종료 날짜 선택"
             isClearable
             minDate={localFilter.start_time ? new Date(localFilter.start_time) : undefined}
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
           />
         </div>
 
         {/* Host with Autocomplete */}
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Host</label>
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Host</label>
           <AutocompleteInput
             value={localFilter.host || ''}
             onChange={(v) => updateFilter('host', v)}
             placeholder="Filter by host..."
             fetchSuggestions={fetchDistinctHosts}
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
           />
         </div>
 
         {/* Client IP with Autocomplete */}
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Client IP</label>
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Client IP</label>
           <AutocompleteInput
             value={localFilter.client_ip || ''}
             onChange={(v) => updateFilter('client_ip', v)}
             placeholder="Filter by IP..."
             fetchSuggestions={fetchDistinctIPs}
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
           />
         </div>
 
         {/* URI with Autocomplete */}
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">URI</label>
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">URI</label>
           <AutocompleteInput
             value={localFilter.uri || ''}
             onChange={(v) => updateFilter('uri', v)}
             placeholder="Filter by URI..."
             fetchSuggestions={fetchDistinctURIs}
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
           />
         </div>
 
         {/* User Agent with Autocomplete */}
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">User Agent</label>
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">User Agent</label>
           <AutocompleteInput
             value={localFilter.user_agent || ''}
             onChange={(v) => updateFilter('user_agent', v)}
             placeholder="Filter by User-Agent..."
             fetchSuggestions={fetchDistinctUserAgents}
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
           />
         </div>
 
         {/* HTTP Method */}
         {logType === 'access' && (
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">HTTP Method</label>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">HTTP Method</label>
             <select
               value={localFilter.method || ''}
               onChange={(e) => updateFilter('method', e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
             >
               <option value="">All Methods</option>
               {methodsQuery.data?.map(method => (
@@ -253,11 +253,11 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
 
         {/* GeoIP Country */}
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Country</label>
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Country</label>
           <select
             value={localFilter.geo_country_code || ''}
             onChange={(e) => updateFilter('geo_country_code', e.target.value)}
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
           >
             <option value="">All Countries</option>
             {countriesQuery.data?.map((c: CountryStat) => (
@@ -271,11 +271,11 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
         {/* Status Codes (Multiple Select) */}
         {logType === 'access' && (
           <div className="md:col-span-2">
-            <label className="block text-xs font-medium text-slate-600 mb-1">Status Codes</label>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Status Codes</label>
             <div className="flex flex-wrap gap-2">
               {statusCodeGroups.map(group => (
                 <div key={group.label} className="flex items-center gap-1">
-                  <span className="text-xs text-slate-500">{group.label}:</span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">{group.label}:</span>
                   {group.codes.map(code => (
                     <button
                       key={code}
@@ -291,7 +291,7 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
                       className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
                         (localFilter.status_codes || []).includes(code)
                           ? 'bg-primary-500 text-white'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'
                       }`}
                     >
                       {code}
@@ -307,25 +307,25 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
         {logType === 'access' && (
           <>
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Min Size (bytes)</label>
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Min Size (bytes)</label>
               <input
                 type="number"
                 value={localFilter.min_size || ''}
                 onChange={(e) => updateFilter('min_size', e.target.value ? parseInt(e.target.value) : undefined)}
                 placeholder="0"
                 min="0"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Max Size (bytes)</label>
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Max Size (bytes)</label>
               <input
                 type="number"
                 value={localFilter.max_size || ''}
                 onChange={(e) => updateFilter('max_size', e.target.value ? parseInt(e.target.value) : undefined)}
                 placeholder="No limit"
                 min="0"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
               />
             </div>
           </>
@@ -334,7 +334,7 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
         {/* Min Request Time (Slow Requests) */}
         {logType === 'access' && (
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Min Request Time (sec)</label>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Min Request Time (sec)</label>
             <input
               type="number"
               step="0.1"
@@ -342,7 +342,7 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
               onChange={(e) => updateFilter('min_request_time', e.target.value ? parseFloat(e.target.value) : undefined)}
               placeholder="0"
               min="0"
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
             />
           </div>
         )}
@@ -350,11 +350,11 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
         {/* Block Reason Filter */}
         {logType === 'access' && (
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Block Reason</label>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Block Reason</label>
             <select
               value={localFilter.block_reason || ''}
               onChange={(e) => updateFilter('block_reason', e.target.value || undefined)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
             >
               <option value="">All Requests</option>
               <option value="none">Not Blocked</option>
@@ -370,11 +370,11 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
         {/* Bot Category Filter */}
         {logType === 'access' && localFilter.block_reason === 'bot_filter' && (
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Bot Category</label>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Bot Category</label>
             <select
               value={localFilter.bot_category || ''}
               onChange={(e) => updateFilter('bot_category', e.target.value || undefined)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
             >
               <option value="">All Bots</option>
               <option value="bad_bot">Bad Bot</option>
@@ -387,11 +387,11 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
 
         {/* Sort Options */}
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Sort By</label>
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Sort By</label>
           <select
             value={localFilter.sort_by || 'timestamp'}
             onChange={(e) => updateFilter('sort_by', e.target.value as LogFilter['sort_by'])}
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
           >
             <option value="timestamp">Time</option>
             <option value="body_bytes_sent">Size</option>
@@ -402,11 +402,11 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
           </select>
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Sort Order</label>
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Sort Order</label>
           <select
             value={localFilter.sort_order || 'desc'}
             onChange={(e) => updateFilter('sort_order', e.target.value as 'asc' | 'desc')}
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
           >
             <option value="desc">Descending</option>
             <option value="asc">Ascending</option>
@@ -415,11 +415,11 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
       </div>
 
       {/* Exclude Filters Section */}
-      <div className="mt-4 pt-4 border-t border-slate-200">
+      <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
         <button
           type="button"
           onClick={() => setShowExcludeFilters(!showExcludeFilters)}
-          className="flex items-center gap-2 text-xs font-semibold text-slate-700 hover:text-slate-900 transition-colors"
+          className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
         >
           <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
@@ -441,7 +441,7 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-3">
           {/* Exclude IPs */}
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Exclude IPs</label>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Exclude IPs</label>
             <input
               type="text"
               value={(localFilter.exclude_ips || []).join(', ')}
@@ -450,14 +450,14 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
                 updateFilter('exclude_ips', values.length > 0 ? values : undefined);
               }}
               placeholder="192.168.1.1, 10.0.0.1"
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
             />
-            <p className="text-xs text-slate-400 mt-1">Comma separated</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Comma separated</p>
           </div>
 
           {/* Exclude User Agents */}
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Exclude User Agents</label>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Exclude User Agents</label>
             <input
               type="text"
               value={(localFilter.exclude_user_agents || []).join(', ')}
@@ -466,14 +466,14 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
                 updateFilter('exclude_user_agents', values.length > 0 ? values : undefined);
               }}
               placeholder="bot, crawler, spider"
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
             />
-            <p className="text-xs text-slate-400 mt-1">Contains match, comma separated</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Contains match, comma separated</p>
           </div>
 
           {/* Exclude URIs */}
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Exclude URIs</label>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Exclude URIs</label>
             <input
               type="text"
               value={(localFilter.exclude_uris || []).join(', ')}
@@ -482,14 +482,14 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
                 updateFilter('exclude_uris', values.length > 0 ? values : undefined);
               }}
               placeholder="/health, /metrics"
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
             />
-            <p className="text-xs text-slate-400 mt-1">Contains match, comma separated</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Contains match, comma separated</p>
           </div>
 
           {/* Exclude Hosts */}
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Exclude Hosts</label>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Exclude Hosts</label>
             <input
               type="text"
               value={(localFilter.exclude_hosts || []).join(', ')}
@@ -498,14 +498,14 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
                 updateFilter('exclude_hosts', values.length > 0 ? values : undefined);
               }}
               placeholder="internal.example.com"
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
             />
-            <p className="text-xs text-slate-400 mt-1">Comma separated</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Comma separated</p>
           </div>
 
           {/* Exclude Countries */}
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Exclude Countries</label>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Exclude Countries</label>
             <input
               type="text"
               value={(localFilter.exclude_countries || []).join(', ')}
@@ -514,19 +514,19 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
                 updateFilter('exclude_countries', values.length > 0 ? values : undefined);
               }}
               placeholder="US, CN, RU"
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
             />
-            <p className="text-xs text-slate-400 mt-1">Country codes, comma separated</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Country codes, comma separated</p>
           </div>
         </div>
         )}
       </div>
 
       {/* Action Buttons */}
-      <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-slate-200">
+      <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
         <button
           onClick={handleReset}
-          className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+          className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg transition-colors"
         >
           Reset
         </button>
@@ -600,8 +600,8 @@ export function ActiveFilterTags({ filter, onRemove }: ActiveFilterTagsProps) {
           key={tag.key}
           className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs ${
             tag.isExclude
-              ? 'bg-red-50 text-red-700'
-              : 'bg-primary-50 text-primary-700'
+              ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400'
+              : 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-400'
           }`}
         >
           <span className="font-medium">{tag.label}:</span>

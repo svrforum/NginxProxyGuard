@@ -595,7 +595,7 @@ export function BannedIPList() {
               <h3 className="text-lg font-semibold text-slate-900 dark:text-white">{t('bannedIp.modal.title')}</h3>
               <button
                 onClick={() => setShowAddModal(false)}
-                className="p-2 text-slate-400 hover:text-slate-600 rounded-lg"
+                className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -631,12 +631,12 @@ export function BannedIPList() {
                     <option key={host.id} value={host.id}>{host.domain_names[0]}</option>
                   ))}
                 </select>
-                <p className="text-xs text-slate-500 mt-1">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                   {t('bannedIp.modal.hostHint', { defaultValue: '전역 차단은 모든 프록시 호스트에 적용됩니다.' })}
                 </p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center gap-2">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-2">
                   {t('bannedIp.modal.reasonLabel')}
                   <HelpTip contentKey="help.bannedIp.reason" ns="waf" />
                 </label>
@@ -772,11 +772,11 @@ function IPLogsModal({ ip, hostName, onClose }: { ip: BannedIP; hostName?: strin
               </svg>
             </div>
           ) : error ? (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 text-red-700 dark:text-red-400">
               {t('bannedIp.logs.fetchError')}
             </div>
           ) : logs.length === 0 ? (
-            <div className="text-center py-12 text-slate-500">
+            <div className="text-center py-12 text-slate-500 dark:text-slate-400">
               <p>{t('bannedIp.logs.noLogs')}</p>
             </div>
           ) : (

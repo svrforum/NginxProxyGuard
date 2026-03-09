@@ -37,24 +37,24 @@ export default function SecurityPanel({ proxyHostId, onClose }: SecurityPanelPro
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden m-4">
-        <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-lg font-semibold">{t('form.tabs.security')}</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden m-4">
+        <div className="flex items-center justify-between p-4 border-b dark:border-slate-700">
+          <h2 className="text-lg font-semibold dark:text-white">{t('form.tabs.security')}</h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
-        <div className="flex border-b">
+        <div className="flex border-b dark:border-slate-700">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`px-4 py-2 text-sm font-medium border-b-2 ${activeTab === tab.id
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
                 }`}
             >
               {tab.label}
@@ -133,7 +133,7 @@ function RateLimitTab({ proxyHostId }: { proxyHostId: string }) {
         <>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Requests per Second
               </label>
               <input
@@ -145,7 +145,7 @@ function RateLimitTab({ proxyHostId }: { proxyHostId: string }) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Burst Size
               </label>
               <input
@@ -160,7 +160,7 @@ function RateLimitTab({ proxyHostId }: { proxyHostId: string }) {
 
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Zone Size</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Zone Size</label>
               <select
                 value={form.zone_size}
                 onChange={(e) => setForm({ ...form, zone_size: e.target.value })}
@@ -173,7 +173,7 @@ function RateLimitTab({ proxyHostId }: { proxyHostId: string }) {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Limit By</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Limit By</label>
               <select
                 value={form.limit_by}
                 onChange={(e) => setForm({ ...form, limit_by: e.target.value })}
@@ -185,7 +185,7 @@ function RateLimitTab({ proxyHostId }: { proxyHostId: string }) {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Response Code</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Response Code</label>
               <select
                 value={form.limit_response}
                 onChange={(e) => setForm({ ...form, limit_response: parseInt(e.target.value) })}
@@ -198,7 +198,7 @@ function RateLimitTab({ proxyHostId }: { proxyHostId: string }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Whitelist IPs (CIDR, comma-separated)
             </label>
             <textarea
@@ -279,7 +279,7 @@ function Fail2banTab({ proxyHostId }: { proxyHostId: string }) {
         <>
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('form.protection.fail2ban.maxRetries')}</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('form.protection.fail2ban.maxRetries')}</label>
               <input
                 type="number"
                 value={form.max_retries}
@@ -289,7 +289,7 @@ function Fail2banTab({ proxyHostId }: { proxyHostId: string }) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('form.protection.fail2ban.findTime')}</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('form.protection.fail2ban.findTime')}</label>
               <input
                 type="number"
                 value={form.find_time}
@@ -299,7 +299,7 @@ function Fail2banTab({ proxyHostId }: { proxyHostId: string }) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('form.protection.fail2ban.banTime')}</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('form.protection.fail2ban.banTime')}</label>
               <input
                 type="number"
                 value={form.ban_time}
@@ -307,13 +307,13 @@ function Fail2banTab({ proxyHostId }: { proxyHostId: string }) {
                 className="w-full px-3 py-2 border rounded-md"
                 min={0}
               />
-              <p className="text-xs text-gray-500 mt-1">0 = permanent</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">0 = permanent</p>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Fail Codes (comma-separated)
               </label>
               <input
@@ -325,7 +325,7 @@ function Fail2banTab({ proxyHostId }: { proxyHostId: string }) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Action</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Action</label>
               <select
                 value={form.action}
                 onChange={(e) => setForm({ ...form, action: e.target.value })}
@@ -452,24 +452,24 @@ function BotFilterTab({ proxyHostId }: { proxyHostId: string }) {
           </div>
 
           {knownBots && (
-            <div className="grid grid-cols-3 gap-4 p-3 bg-gray-50 rounded-md text-xs">
+            <div className="grid grid-cols-3 gap-4 p-3 bg-gray-50 dark:bg-slate-700/50 rounded-md text-xs">
               <div>
-                <p className="font-medium text-gray-700 mb-1">Bad Bots ({knownBots.bad_bots.length})</p>
-                <p className="text-gray-500 truncate">{knownBots.bad_bots.slice(0, 5).join(', ')}...</p>
+                <p className="font-medium text-gray-700 dark:text-gray-300 mb-1">Bad Bots ({knownBots.bad_bots.length})</p>
+                <p className="text-gray-500 dark:text-gray-400 truncate">{knownBots.bad_bots.slice(0, 5).join(', ')}...</p>
               </div>
               <div>
-                <p className="font-medium text-gray-700 mb-1">AI Bots ({knownBots.ai_bots.length})</p>
-                <p className="text-gray-500 truncate">{knownBots.ai_bots.slice(0, 5).join(', ')}...</p>
+                <p className="font-medium text-gray-700 dark:text-gray-300 mb-1">AI Bots ({knownBots.ai_bots.length})</p>
+                <p className="text-gray-500 dark:text-gray-400 truncate">{knownBots.ai_bots.slice(0, 5).join(', ')}...</p>
               </div>
               <div>
-                <p className="font-medium text-gray-700 mb-1">Search Engines ({knownBots.search_engine_bots.length})</p>
-                <p className="text-gray-500 truncate">{knownBots.search_engine_bots.slice(0, 5).join(', ')}...</p>
+                <p className="font-medium text-gray-700 dark:text-gray-300 mb-1">Search Engines ({knownBots.search_engine_bots.length})</p>
+                <p className="text-gray-500 dark:text-gray-400 truncate">{knownBots.search_engine_bots.slice(0, 5).join(', ')}...</p>
               </div>
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Custom Blocked User-Agents (one per line)
             </label>
             <textarea
@@ -482,7 +482,7 @@ function BotFilterTab({ proxyHostId }: { proxyHostId: string }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Custom Allowed User-Agents (one per line)
             </label>
             <textarea
@@ -600,7 +600,7 @@ function SecurityHeadersTab({ proxyHostId }: { proxyHostId: string }) {
 
       {form.enabled && (
         <>
-          <div className="border rounded-md p-3 space-y-3">
+          <div className="border dark:border-slate-700 rounded-md p-3 space-y-3">
             <h4 className="font-medium text-sm">{t('form.protection.securityHeaders.hsts')}</h4>
             <div className="grid grid-cols-4 gap-3">
               <label className="flex items-center gap-2">
@@ -647,7 +647,7 @@ function SecurityHeadersTab({ proxyHostId }: { proxyHostId: string }) {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('form.protection.securityHeaders.xFrameOptions')}</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('form.protection.securityHeaders.xFrameOptions')}</label>
               <select
                 value={form.x_frame_options}
                 onChange={(e) => setForm({ ...form, x_frame_options: e.target.value })}
@@ -658,7 +658,7 @@ function SecurityHeadersTab({ proxyHostId }: { proxyHostId: string }) {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('form.protection.securityHeaders.referrerPolicy')}</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('form.protection.securityHeaders.referrerPolicy')}</label>
               <select
                 value={form.referrer_policy}
                 onChange={(e) => setForm({ ...form, referrer_policy: e.target.value })}
@@ -697,7 +697,7 @@ function SecurityHeadersTab({ proxyHostId }: { proxyHostId: string }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               {t('form.protection.securityHeaders.csp')}
             </label>
             <textarea
@@ -765,7 +765,7 @@ function BannedIPsTab({ proxyHostId }: { proxyHostId: string }) {
     <div className="space-y-4">
       <form onSubmit={handleBan} className="flex gap-2 items-end">
         <div className="flex-1">
-          <label className="block text-sm font-medium text-gray-700 mb-1">{t('form.protection.bannedIPs.ip')}</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('form.protection.bannedIPs.ip')}</label>
           <input
             type="text"
             value={newIP}
@@ -775,7 +775,7 @@ function BannedIPsTab({ proxyHostId }: { proxyHostId: string }) {
           />
         </div>
         <div className="flex-1">
-          <label className="block text-sm font-medium text-gray-700 mb-1">{t('form.protection.bannedIPs.reason')}</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('form.protection.bannedIPs.reason')}</label>
           <input
             type="text"
             value={reason}
@@ -785,7 +785,7 @@ function BannedIPsTab({ proxyHostId }: { proxyHostId: string }) {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">{t('form.protection.bannedIPs.duration')}</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('form.protection.bannedIPs.duration')}</label>
           <select
             value={banTime}
             onChange={(e) => setBanTime(parseInt(e.target.value))}
@@ -806,21 +806,21 @@ function BannedIPsTab({ proxyHostId }: { proxyHostId: string }) {
         </button>
       </form>
 
-      <div className="border rounded-md overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+      <div className="border dark:border-slate-700 rounded-md overflow-hidden">
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-slate-700">
+          <thead className="bg-gray-50 dark:bg-slate-900">
             <tr>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('form.protection.bannedIPs.ip')}</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('form.protection.bannedIPs.reason')}</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('form.protection.bannedIPs.bannedAt')}</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('form.protection.bannedIPs.expiresAt')}</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('form.protection.bannedIPs.ip')}</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('form.protection.bannedIPs.reason')}</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('form.protection.bannedIPs.bannedAt')}</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('form.protection.bannedIPs.expiresAt')}</th>
               <th className="px-4 py-2"></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
+          <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
             {data?.data?.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={5} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                   {t('form.protection.bannedIPs.empty')}
                 </td>
               </tr>
@@ -828,8 +828,8 @@ function BannedIPsTab({ proxyHostId }: { proxyHostId: string }) {
               data?.data?.map((ip) => (
                 <tr key={ip.id}>
                   <td className="px-4 py-2 text-sm font-mono">{ip.ip_address}</td>
-                  <td className="px-4 py-2 text-sm text-gray-600">{ip.reason || '-'}</td>
-                  <td className="px-4 py-2 text-sm text-gray-600">
+                  <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">{ip.reason || '-'}</td>
+                  <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
                     {new Date(ip.banned_at).toLocaleString()}
                   </td>
                   <td className="px-4 py-2 text-sm">

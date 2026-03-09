@@ -57,7 +57,7 @@ export function RelatedLogsModal({ clientIp, requestUri, timestamp, host, userAg
             onClick={onClose}
             className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
           >
-            <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -66,29 +66,29 @@ export function RelatedLogsModal({ clientIp, requestUri, timestamp, host, userAg
         <div className="flex-1 overflow-auto p-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
             <div className="flex flex-col">
-              <span className="text-xs text-slate-500 uppercase font-semibold mb-1">{t('filters.clientIp')}</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 uppercase font-semibold mb-1">{t('filters.clientIp')}</span>
               <span className="font-mono text-slate-700 dark:text-slate-200">{clientIp || '-'}</span>
             </div>
             <div className="flex flex-col">
-              <span className="text-xs text-slate-500 uppercase font-semibold mb-1">{t('detail.host')}</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 uppercase font-semibold mb-1">{t('detail.host')}</span>
               <span className="font-mono text-slate-700 dark:text-slate-200">{host || '-'}</span>
             </div>
             <div className="flex flex-col">
-              <span className="text-xs text-slate-500 uppercase font-semibold mb-1">{t('filters.uri')}</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 uppercase font-semibold mb-1">{t('filters.uri')}</span>
               <span className="font-mono text-slate-700 dark:text-slate-200 truncate" title={requestUri}>
                 {requestUri || '-'}
               </span>
             </div>
             <div className="flex flex-col">
-              <span className="text-xs text-slate-500 uppercase font-semibold mb-1">{t('filters.startDate')}</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 uppercase font-semibold mb-1">{t('filters.startDate')}</span>
               <span className="text-slate-700 dark:text-slate-200">{new Date(timeRange.start_time).toLocaleString()}</span>
             </div>
             <div className="flex flex-col">
-              <span className="text-xs text-slate-500 uppercase font-semibold mb-1">{t('filters.endDate')}</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 uppercase font-semibold mb-1">{t('filters.endDate')}</span>
               <span className="text-slate-700 dark:text-slate-200">{new Date(timeRange.end_time).toLocaleString()}</span>
             </div>
             <div className="flex flex-col">
-              <span className="text-xs text-slate-500 uppercase font-semibold mb-1">{t('detail.userAgent')}</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 uppercase font-semibold mb-1">{t('detail.userAgent')}</span>
               <span className="text-slate-700 dark:text-slate-200 truncate" title={displayUserAgent}>{displayUserAgent || '-'}</span>
             </div>
           </div>

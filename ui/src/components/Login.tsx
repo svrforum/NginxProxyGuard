@@ -75,22 +75,22 @@ export function Login({ onLogin }: LoginProps) {
         </div>
 
         {/* Login Form */}
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-8">
           {!requires2FA ? (
             <>
-              <h2 className="text-xl font-semibold text-slate-900 mb-6 text-center">
+              <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-6 text-center">
                 {t('login.title')}
               </h2>
 
               <form onSubmit={handleSubmit} className="space-y-5">
                 {error && (
-                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                  <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg text-sm">
                     {error}
                   </div>
                 )}
 
                 <div>
-                  <label htmlFor="username" className="block text-sm font-medium text-slate-700 mb-1.5">
+                  <label htmlFor="username" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                     {t('login.email')}
                   </label>
                   <input
@@ -98,7 +98,7 @@ export function Login({ onLogin }: LoginProps) {
                     id="username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                    className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                     placeholder={t('login.emailPlaceholder')}
                     required
                     autoFocus
@@ -106,7 +106,7 @@ export function Login({ onLogin }: LoginProps) {
                 </div>
 
                 <div>
-                  <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-1.5">
+                  <label htmlFor="password" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                     {t('login.password')}
                   </label>
                   <input
@@ -114,7 +114,7 @@ export function Login({ onLogin }: LoginProps) {
                     id="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                    className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                     placeholder={t('login.passwordPlaceholder')}
                     required
                   />
@@ -141,16 +141,16 @@ export function Login({ onLogin }: LoginProps) {
             </>
           ) : (
             <>
-              <h2 className="text-xl font-semibold text-slate-900 mb-2 text-center">
+              <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-2 text-center">
                 {t('changePassword.title', { defaultValue: 'Two-Factor Authentication' })}
               </h2>
-              <p className="text-slate-500 text-sm text-center mb-6">
+              <p className="text-slate-500 dark:text-slate-400 text-sm text-center mb-6">
                 {t('common:validation.required', { defaultValue: 'Enter the 6-digit code from your authenticator app' })}
               </p>
 
               <form onSubmit={handle2FASubmit} className="space-y-5">
                 {error && (
-                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                  <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg text-sm">
                     {error}
                   </div>
                 )}
@@ -160,13 +160,13 @@ export function Login({ onLogin }: LoginProps) {
                     type="text"
                     value={totpCode}
                     onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    className="w-full px-4 py-4 border border-slate-300 rounded-lg text-center text-3xl tracking-[0.5em] font-mono focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                    className="w-full px-4 py-4 border border-slate-300 dark:border-slate-600 rounded-lg text-center text-3xl tracking-[0.5em] font-mono focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                     placeholder="000000"
                     maxLength={6}
                     required
                     autoFocus
                   />
-                  <p className="text-slate-500 text-xs text-center mt-2">
+                  <p className="text-slate-500 dark:text-slate-400 text-xs text-center mt-2">
                     {t('common:messages.noData', { defaultValue: 'You can also use a backup code' })}
                   </p>
                 </div>
@@ -192,7 +192,7 @@ export function Login({ onLogin }: LoginProps) {
                 <button
                   type="button"
                   onClick={handleBackToLogin}
-                  className="w-full text-slate-600 hover:text-slate-900 py-2 text-sm transition-colors"
+                  className="w-full text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white py-2 text-sm transition-colors"
                 >
                   {t('common:buttons.back')}
                 </button>

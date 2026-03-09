@@ -77,7 +77,7 @@ export function InitialSetup({ user, onComplete }: InitialSetupProps) {
         </div>
 
         {/* Setup Form */}
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-8">
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
             <div className="flex items-start gap-3">
               <svg className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -101,13 +101,13 @@ export function InitialSetup({ user, onComplete }: InitialSetupProps) {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg text-sm">
                 {error}
               </div>
             )}
 
             <div>
-              <label htmlFor="currentPassword" className="block text-sm font-medium text-slate-700 mb-1.5">
+              <label htmlFor="currentPassword" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                 {t('initialSetup.currentPassword')}
               </label>
               <input
@@ -115,19 +115,19 @@ export function InitialSetup({ user, onComplete }: InitialSetupProps) {
                 id="currentPassword"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
-                className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                 placeholder={t('initialSetup.currentPasswordPlaceholder')}
                 required
               />
-              <p className="text-xs text-slate-500 mt-1">{t('initialSetup.defaultPasswordHint')}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('initialSetup.defaultPasswordHint')}</p>
             </div>
 
-            <div className="border-t pt-5">
-              <h3 className="text-sm font-medium text-slate-900 mb-4">{t('initialSetup.newCredentials')}</h3>
+            <div className="border-t dark:border-slate-700 pt-5">
+              <h3 className="text-sm font-medium text-slate-900 dark:text-white mb-4">{t('initialSetup.newCredentials')}</h3>
 
               <div className="space-y-4">
                 <div>
-                  <label htmlFor="newUsername" className="block text-sm font-medium text-slate-700 mb-1.5">
+                  <label htmlFor="newUsername" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                     {t('initialSetup.newUsername')}
                   </label>
                   <input
@@ -135,7 +135,7 @@ export function InitialSetup({ user, onComplete }: InitialSetupProps) {
                     id="newUsername"
                     value={newUsername}
                     onChange={(e) => setNewUsername(e.target.value)}
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                    className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                     placeholder={t('initialSetup.newUsernamePlaceholder')}
                     required
                     minLength={3}
@@ -143,7 +143,7 @@ export function InitialSetup({ user, onComplete }: InitialSetupProps) {
                 </div>
 
                 <div>
-                  <label htmlFor="newPassword" className="block text-sm font-medium text-slate-700 mb-1.5">
+                  <label htmlFor="newPassword" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                     {t('initialSetup.newPassword')}
                   </label>
                   <input
@@ -151,7 +151,7 @@ export function InitialSetup({ user, onComplete }: InitialSetupProps) {
                     id="newPassword"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                    className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                     placeholder={t('initialSetup.newPasswordPlaceholder')}
                     required
                     minLength={8}
@@ -159,7 +159,7 @@ export function InitialSetup({ user, onComplete }: InitialSetupProps) {
                 </div>
 
                 <div>
-                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-700 mb-1.5">
+                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                     {t('initialSetup.confirmPassword')}
                   </label>
                   <input
@@ -167,7 +167,7 @@ export function InitialSetup({ user, onComplete }: InitialSetupProps) {
                     id="confirmPassword"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                    className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                     placeholder={t('initialSetup.confirmPasswordPlaceholder')}
                     required
                   />

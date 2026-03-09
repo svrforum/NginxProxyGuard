@@ -74,16 +74,16 @@ export function ProxyHostSettings({ host, onClose }: ProxyHostSettingsProps) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">Advanced Settings</h2>
-            <p className="text-sm text-slate-500">{host.domain_names.join(', ')}</p>
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Advanced Settings</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400">{host.domain_names.join(', ')}</p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
+            className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -92,7 +92,7 @@ export function ProxyHostSettings({ host, onClose }: ProxyHostSettingsProps) {
         </div>
 
         {/* Tabs */}
-        <div className="px-6 pt-4 border-b border-slate-200">
+        <div className="px-6 pt-4 border-b border-slate-200 dark:border-slate-700">
           <div className="flex gap-1">
             {tabs.map((tab) => (
               <button
@@ -100,8 +100,8 @@ export function ProxyHostSettings({ host, onClose }: ProxyHostSettingsProps) {
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
                   activeTab === tab.id
-                    ? 'bg-primary-50 text-primary-700 border-b-2 border-primary-600'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 border-b-2 border-primary-600'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-700'
                 }`}
               >
                 {tab.icon}
@@ -188,8 +188,8 @@ function RateLimitSettings({ hostId, queryClient }: { hostId: string; queryClien
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="font-medium text-slate-900">Rate Limiting</h3>
-          <p className="text-sm text-slate-500">Limit requests per second to prevent abuse</p>
+          <h3 className="font-medium text-slate-900 dark:text-white">Rate Limiting</h3>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Limit requests per second to prevent abuse</p>
         </div>
         <label className="flex items-center gap-2 cursor-pointer">
           <input
@@ -204,29 +204,29 @@ function RateLimitSettings({ hostId, queryClient }: { hostId: string; queryClien
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Requests per Second</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Requests per Second</label>
           <input
             type="number"
             value={formData.requests_per_second}
             onChange={(e) => setFormData((prev) => ({ ...prev, requests_per_second: Number(e.target.value) }))}
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg disabled:bg-slate-100 disabled:text-slate-500"
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white disabled:bg-slate-100 dark:disabled:bg-slate-600 disabled:text-slate-500 dark:disabled:text-slate-400"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Burst Size</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Burst Size</label>
           <input
             type="number"
             value={formData.burst_size}
             onChange={(e) => setFormData((prev) => ({ ...prev, burst_size: Number(e.target.value) }))}
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg disabled:bg-slate-100 disabled:text-slate-500"
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white disabled:bg-slate-100 dark:disabled:bg-slate-600 disabled:text-slate-500 dark:disabled:text-slate-400"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Limit By</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Limit By</label>
           <select
             value={formData.limit_by}
             onChange={(e) => setFormData((prev) => ({ ...prev, limit_by: e.target.value }))}
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg disabled:bg-slate-100 disabled:text-slate-500"
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white disabled:bg-slate-100 dark:disabled:bg-slate-600 disabled:text-slate-500 dark:disabled:text-slate-400"
           >
             <option value="ip">IP Address</option>
             <option value="uri">URI</option>
@@ -234,11 +234,11 @@ function RateLimitSettings({ hostId, queryClient }: { hostId: string; queryClien
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Response Code</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Response Code</label>
           <select
             value={formData.limit_response}
             onChange={(e) => setFormData((prev) => ({ ...prev, limit_response: Number(e.target.value) }))}
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg disabled:bg-slate-100 disabled:text-slate-500"
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white disabled:bg-slate-100 dark:disabled:bg-slate-600 disabled:text-slate-500 dark:disabled:text-slate-400"
           >
             <option value={429}>429 Too Many Requests</option>
             <option value={503}>503 Service Unavailable</option>
@@ -247,13 +247,13 @@ function RateLimitSettings({ hostId, queryClient }: { hostId: string; queryClien
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">Whitelist IPs (comma separated)</label>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Whitelist IPs (comma separated)</label>
         <input
           type="text"
           value={formData.whitelist_ips}
           onChange={(e) => setFormData((prev) => ({ ...prev, whitelist_ips: e.target.value }))}
           placeholder="192.168.1.1, 10.0.0.0/8"
-          className="w-full px-3 py-2 border border-slate-300 rounded-lg disabled:bg-slate-100 disabled:text-slate-500"
+          className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white disabled:bg-slate-100 dark:disabled:bg-slate-600 disabled:text-slate-500 dark:disabled:text-slate-400"
         />
       </div>
 
@@ -318,8 +318,8 @@ function Fail2banSettings({ hostId, queryClient }: { hostId: string; queryClient
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="font-medium text-slate-900">Fail2ban</h3>
-          <p className="text-sm text-slate-500">Auto-ban IPs after repeated failures</p>
+          <h3 className="font-medium text-slate-900 dark:text-white">Fail2ban</h3>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Auto-ban IPs after repeated failures</p>
         </div>
         <label className="flex items-center gap-2 cursor-pointer">
           <input
@@ -334,41 +334,41 @@ function Fail2banSettings({ hostId, queryClient }: { hostId: string; queryClient
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Max Retries</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Max Retries</label>
           <input
             type="number"
             value={formData.max_retries}
             onChange={(e) => setFormData((prev) => ({ ...prev, max_retries: Number(e.target.value) }))}
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
           />
-          <p className="text-xs text-slate-500 mt-1">Failures before ban</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Failures before ban</p>
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Find Time (seconds)</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Find Time (seconds)</label>
           <input
             type="number"
             value={formData.find_time}
             onChange={(e) => setFormData((prev) => ({ ...prev, find_time: Number(e.target.value) }))}
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
           />
-          <p className="text-xs text-slate-500 mt-1">Time window for counting failures</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Time window for counting failures</p>
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Ban Time (seconds)</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Ban Time (seconds)</label>
           <input
             type="number"
             value={formData.ban_time}
             onChange={(e) => setFormData((prev) => ({ ...prev, ban_time: Number(e.target.value) }))}
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
           />
-          <p className="text-xs text-slate-500 mt-1">Duration of ban (3600 = 1 hour)</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Duration of ban (3600 = 1 hour)</p>
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Action</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Action</label>
           <select
             value={formData.action}
             onChange={(e) => setFormData((prev) => ({ ...prev, action: e.target.value }))}
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
           >
             <option value="block">Block</option>
             <option value="log">Log Only</option>
@@ -378,13 +378,13 @@ function Fail2banSettings({ hostId, queryClient }: { hostId: string; queryClient
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">Failure Status Codes (comma separated)</label>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Failure Status Codes (comma separated)</label>
         <input
           type="text"
           value={formData.fail_codes}
           onChange={(e) => setFormData((prev) => ({ ...prev, fail_codes: e.target.value }))}
           placeholder="401,403,404"
-          className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+          className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
         />
       </div>
 
@@ -451,8 +451,8 @@ function BotFilterSettings({ hostId, queryClient }: { hostId: string; queryClien
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="font-medium text-slate-900">Bot Filter</h3>
-          <p className="text-sm text-slate-500">Block malicious bots and scrapers</p>
+          <h3 className="font-medium text-slate-900 dark:text-white">Bot Filter</h3>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Block malicious bots and scrapers</p>
         </div>
         <label className="flex items-center gap-2 cursor-pointer">
           <input
@@ -474,8 +474,8 @@ function BotFilterSettings({ hostId, queryClient }: { hostId: string; queryClien
             className="rounded border-slate-300 text-primary-600"
           />
           <div>
-            <span className="text-sm font-medium text-slate-700">Block Bad Bots</span>
-            <p className="text-xs text-slate-500">Block known malicious bots and scrapers</p>
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Block Bad Bots</span>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Block known malicious bots and scrapers</p>
           </div>
         </label>
 
@@ -487,8 +487,8 @@ function BotFilterSettings({ hostId, queryClient }: { hostId: string; queryClien
             className="rounded border-slate-300 text-primary-600"
           />
           <div>
-            <span className="text-sm font-medium text-slate-700">Block AI Bots</span>
-            <p className="text-xs text-slate-500">Block AI crawlers (GPTBot, ChatGPT, Claude, etc.)</p>
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Block AI Bots</span>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Block AI crawlers (GPTBot, ChatGPT, Claude, etc.)</p>
           </div>
         </label>
 
@@ -500,8 +500,8 @@ function BotFilterSettings({ hostId, queryClient }: { hostId: string; queryClien
             className="rounded border-slate-300 text-primary-600"
           />
           <div>
-            <span className="text-sm font-medium text-slate-700">Allow Search Engines</span>
-            <p className="text-xs text-slate-500">Allow Googlebot, Bingbot, etc.</p>
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Allow Search Engines</span>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Allow Googlebot, Bingbot, etc.</p>
           </div>
         </label>
 
@@ -513,20 +513,20 @@ function BotFilterSettings({ hostId, queryClient }: { hostId: string; queryClien
             className="rounded border-slate-300 text-primary-600"
           />
           <div>
-            <span className="text-sm font-medium text-slate-700">Challenge Suspicious</span>
-            <p className="text-xs text-slate-500">Show CAPTCHA for suspicious requests</p>
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Challenge Suspicious</span>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Show CAPTCHA for suspicious requests</p>
           </div>
         </label>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">Custom Blocked User-Agents</label>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Custom Blocked User-Agents</label>
         <textarea
           value={formData.custom_blocked_agents}
           onChange={(e) => setFormData((prev) => ({ ...prev, custom_blocked_agents: e.target.value }))}
           placeholder="One per line"
           rows={3}
-          className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+          className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
         />
       </div>
 
@@ -601,8 +601,8 @@ function SecurityHeadersSettings({ hostId, queryClient }: { hostId: string; quer
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="font-medium text-slate-900">Security Headers</h3>
-          <p className="text-sm text-slate-500">HTTP security headers for browser protection</p>
+          <h3 className="font-medium text-slate-900 dark:text-white">Security Headers</h3>
+          <p className="text-sm text-slate-500 dark:text-slate-400">HTTP security headers for browser protection</p>
         </div>
         <label className="flex items-center gap-2 cursor-pointer">
           <input
@@ -616,8 +616,8 @@ function SecurityHeadersSettings({ hostId, queryClient }: { hostId: string; quer
       </div>
 
       {/* HSTS Settings */}
-      <div className="p-4 bg-slate-50 rounded-lg space-y-3">
-        <h4 className="font-medium text-slate-800">HSTS (HTTP Strict Transport Security)</h4>
+      <div className="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg space-y-3">
+        <h4 className="font-medium text-slate-800 dark:text-slate-200">HSTS (HTTP Strict Transport Security)</h4>
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
@@ -629,12 +629,12 @@ function SecurityHeadersSettings({ hostId, queryClient }: { hostId: string; quer
         </label>
         <div className="grid grid-cols-3 gap-3">
           <div>
-            <label className="block text-xs text-slate-600 mb-1">Max Age (seconds)</label>
+            <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">Max Age (seconds)</label>
             <input
               type="number"
               value={formData.hsts_max_age}
               onChange={(e) => setFormData((prev) => ({ ...prev, hsts_max_age: Number(e.target.value) }))}
-              className="w-full px-2 py-1 text-sm border border-slate-300 rounded"
+              className="w-full px-2 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
             />
           </div>
           <label className="flex items-center gap-2 cursor-pointer">
@@ -661,11 +661,11 @@ function SecurityHeadersSettings({ hostId, queryClient }: { hostId: string; quer
       {/* Other Headers */}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">X-Frame-Options</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">X-Frame-Options</label>
           <select
             value={formData.x_frame_options}
             onChange={(e) => setFormData((prev) => ({ ...prev, x_frame_options: e.target.value }))}
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
           >
             <option value="DENY">DENY</option>
             <option value="SAMEORIGIN">SAMEORIGIN</option>
@@ -673,11 +673,11 @@ function SecurityHeadersSettings({ hostId, queryClient }: { hostId: string; quer
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Referrer-Policy</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Referrer-Policy</label>
           <select
             value={formData.referrer_policy}
             onChange={(e) => setFormData((prev) => ({ ...prev, referrer_policy: e.target.value }))}
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
           >
             <option value="no-referrer">no-referrer</option>
             <option value="no-referrer-when-downgrade">no-referrer-when-downgrade</option>
@@ -713,13 +713,13 @@ function SecurityHeadersSettings({ hostId, queryClient }: { hostId: string; quer
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">Content-Security-Policy</label>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Content-Security-Policy</label>
         <textarea
           value={formData.content_security_policy}
           onChange={(e) => setFormData((prev) => ({ ...prev, content_security_policy: e.target.value }))}
           placeholder="default-src 'self'; script-src 'self' 'unsafe-inline'"
           rows={2}
-          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white"
         />
       </div>
 
@@ -772,30 +772,30 @@ function BannedIPsSettings({ hostId, queryClient }: { hostId: string; queryClien
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="font-medium text-slate-900">Banned IPs</h3>
-        <p className="text-sm text-slate-500">Manage manually banned IP addresses</p>
+        <h3 className="font-medium text-slate-900 dark:text-white">Banned IPs</h3>
+        <p className="text-sm text-slate-500 dark:text-slate-400">Manage manually banned IP addresses</p>
       </div>
 
       {/* Add new ban */}
-      <div className="p-4 bg-slate-50 rounded-lg space-y-4">
-        <h4 className="font-medium text-slate-800">Ban New IP</h4>
+      <div className="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg space-y-4">
+        <h4 className="font-medium text-slate-800 dark:text-slate-200">Ban New IP</h4>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">IP Address</label>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">IP Address</label>
             <input
               type="text"
               value={newIP}
               onChange={(e) => setNewIP(e.target.value)}
               placeholder="192.168.1.100"
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Ban Duration</label>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Ban Duration</label>
             <select
               value={banTime}
               onChange={(e) => setBanTime(Number(e.target.value))}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
             >
               <option value={3600}>1 Hour</option>
               <option value={86400}>1 Day</option>
@@ -806,13 +806,13 @@ function BannedIPsSettings({ hostId, queryClient }: { hostId: string; queryClien
           </div>
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Reason (optional)</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Reason (optional)</label>
           <input
             type="text"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="Manual ban - suspicious activity"
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
           />
         </div>
         <button
@@ -827,7 +827,7 @@ function BannedIPsSettings({ hostId, queryClient }: { hostId: string; queryClien
       {/* Banned IPs list */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h4 className="font-medium text-slate-800">Currently Banned ({bannedIPs.length})</h4>
+          <h4 className="font-medium text-slate-800 dark:text-slate-200">Currently Banned ({bannedIPs.length})</h4>
           <button
             onClick={() => refetch()}
             className="text-sm text-primary-600 hover:text-primary-700"
@@ -837,26 +837,26 @@ function BannedIPsSettings({ hostId, queryClient }: { hostId: string; queryClien
         </div>
 
         {bannedIPs.length === 0 ? (
-          <div className="text-center py-8 text-slate-500 bg-slate-50 rounded-lg">
+          <div className="text-center py-8 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
             No banned IPs
           </div>
         ) : (
-          <div className="border border-slate-200 rounded-lg overflow-hidden">
-            <table className="min-w-full divide-y divide-slate-200">
-              <thead className="bg-slate-50">
+          <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+            <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+              <thead className="bg-slate-50 dark:bg-slate-900">
                 <tr>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500">IP Address</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500">Reason</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500">Expires</th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">Action</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 dark:text-slate-400">IP Address</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 dark:text-slate-400">Reason</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 dark:text-slate-400">Expires</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-500 dark:text-slate-400">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200">
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
                 {bannedIPs.map((ban: BannedIP) => (
                   <tr key={ban.id}>
                     <td className="px-4 py-2 text-sm font-mono">{ban.ip_address}</td>
-                    <td className="px-4 py-2 text-sm text-slate-600">{ban.reason || '-'}</td>
-                    <td className="px-4 py-2 text-sm text-slate-600">
+                    <td className="px-4 py-2 text-sm text-slate-600 dark:text-slate-400">{ban.reason || '-'}</td>
+                    <td className="px-4 py-2 text-sm text-slate-600 dark:text-slate-400">
                       {ban.is_permanent ? (
                         <span className="text-red-600 font-medium">Permanent</span>
                       ) : ban.expires_at ? (

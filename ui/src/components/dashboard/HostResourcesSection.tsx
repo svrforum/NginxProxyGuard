@@ -401,7 +401,7 @@ export default function HostResourcesSection({ systemHealth }: {
                     </svg>
                   </div>
                   <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">{t('hostResources.network')}</span>
-                  <div className="flex items-center gap-3 ml-auto text-xs">
+                  <div className="flex items-center gap-3 ml-auto text-xs text-gray-600 dark:text-gray-300">
                     <span className="flex items-center gap-1">
                       <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                       {t('hostResources.networkIn')}

@@ -25,7 +25,7 @@ function formatTime(timestamp: string, language: string = 'ko'): string {
 function BotCategoryBadge({ category }: { category?: BotCategory }) {
   const { t } = useTranslation('logs');
   if (!category) return <span className="text-slate-400">-</span>;
-  const config = BOT_CATEGORY_CONFIG[category] || { labelKey: category, color: 'bg-slate-100 text-slate-800', icon: '❓' };
+  const config = BOT_CATEGORY_CONFIG[category] || { labelKey: category, color: 'bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200', icon: '❓' };
   const label = config.labelKey.startsWith('logs:') ? t(config.labelKey.replace('logs:', '')) : config.labelKey;
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${config.color}`}>
@@ -36,11 +36,11 @@ function BotCategoryBadge({ category }: { category?: BotCategory }) {
 }
 
 function StatusCodeBadge({ code }: { code: number }) {
-  let color = 'bg-gray-100 text-gray-800';
-  if (code >= 200 && code < 300) color = 'bg-green-100 text-green-800';
-  else if (code >= 300 && code < 400) color = 'bg-blue-100 text-blue-800';
-  else if (code >= 400 && code < 500) color = 'bg-yellow-100 text-yellow-800';
-  else if (code >= 500) color = 'bg-red-100 text-red-800';
+  let color = 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200';
+  if (code >= 200 && code < 300) color = 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300';
+  else if (code >= 300 && code < 400) color = 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300';
+  else if (code >= 400 && code < 500) color = 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300';
+  else if (code >= 500) color = 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300';
   return (
     <span className={`px-2 py-0.5 rounded text-xs font-medium ${color}`}>
       {code}
@@ -61,7 +61,7 @@ function LogDetailModal({ log, onClose }: LogDetailModalProps) {
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between bg-purple-50 dark:bg-purple-900/20">
           <h3 className="text-lg font-semibold text-purple-900 dark:text-purple-100">{t('botFilter.modal.title')}</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-400">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -74,7 +74,7 @@ function LogDetailModal({ log, onClose }: LogDetailModalProps) {
               <p className="text-sm text-slate-900 dark:text-white">{new Date(log.timestamp).toLocaleString(i18n.language)}</p>
             </div>
             <div>
-              <label className="text-xs text-slate-500 font-medium">{t('botFilter.modal.botCategory')}</label>
+              <label className="text-xs text-slate-500 dark:text-slate-400 font-medium">{t('botFilter.modal.botCategory')}</label>
               <p className="mt-1"><BotCategoryBadge category={log.bot_category} /></p>
             </div>
             <div>
@@ -82,25 +82,25 @@ function LogDetailModal({ log, onClose }: LogDetailModalProps) {
               <p className="text-sm text-slate-900 dark:text-white font-mono">{log.client_ip || '-'}</p>
             </div>
             <div>
-              <label className="text-xs text-slate-500 font-medium">{t('botFilter.modal.statusCode')}</label>
+              <label className="text-xs text-slate-500 dark:text-slate-400 font-medium">{t('botFilter.modal.statusCode')}</label>
               <p className="mt-1">{log.status_code && <StatusCodeBadge code={log.status_code} />}</p>
             </div>
             <div>
-              <label className="text-xs text-slate-500 font-medium">{t('botFilter.modal.host')}</label>
-              <p className="text-sm text-slate-900">{log.host || '-'}</p>
+              <label className="text-xs text-slate-500 dark:text-slate-400 font-medium">{t('botFilter.modal.host')}</label>
+              <p className="text-sm text-slate-900 dark:text-white">{log.host || '-'}</p>
             </div>
             <div>
-              <label className="text-xs text-slate-500 font-medium">{t('botFilter.modal.method')}</label>
-              <p className="text-sm text-slate-900 font-mono">{log.request_method || '-'}</p>
+              <label className="text-xs text-slate-500 dark:text-slate-400 font-medium">{t('botFilter.modal.method')}</label>
+              <p className="text-sm text-slate-900 dark:text-white font-mono">{log.request_method || '-'}</p>
             </div>
           </div>
           <div>
-            <label className="text-xs text-slate-500 font-medium">{t('botFilter.modal.requestUri')}</label>
-            <p className="text-sm text-slate-900 font-mono break-all bg-slate-50 p-2 rounded">{log.request_uri || '-'}</p>
+            <label className="text-xs text-slate-500 dark:text-slate-400 font-medium">{t('botFilter.modal.requestUri')}</label>
+            <p className="text-sm text-slate-900 dark:text-white font-mono break-all bg-slate-50 dark:bg-slate-700 p-2 rounded">{log.request_uri || '-'}</p>
           </div>
           <div>
-            <label className="text-xs text-slate-500 font-medium">{t('botFilter.modal.userAgent')}</label>
-            <p className="text-sm text-slate-900 font-mono break-all bg-red-50 p-2 rounded border border-red-200">{log.http_user_agent || '-'}</p>
+            <label className="text-xs text-slate-500 dark:text-slate-400 font-medium">{t('botFilter.modal.userAgent')}</label>
+            <p className="text-sm text-slate-900 dark:text-white font-mono break-all bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-200 dark:border-red-800">{log.http_user_agent || '-'}</p>
           </div>
           {log.raw_log && (
             <div>
@@ -251,7 +251,7 @@ export function BotFilterLogs() {
             </div>
             <span className="text-slate-400 mt-5">~</span>
             <div>
-              <label className="block text-xs text-slate-500 mb-1 flex items-center gap-1">
+              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1 flex items-center gap-1">
                 {t('botFilter.filters.end')}
                 <HelpTip content={t('botFilter.filters.endHelp')} />
               </label>
@@ -270,7 +270,7 @@ export function BotFilterLogs() {
 
           {/* Category Filter */}
           <div>
-            <label className="block text-xs text-slate-500 mb-1 flex items-center gap-1">
+            <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1 flex items-center gap-1">
               {t('botFilter.filters.botCategory')}
               <HelpTip content={t('botFilter.filters.botCategoryHelp')} />
             </label>
@@ -289,7 +289,7 @@ export function BotFilterLogs() {
 
           {/* Search */}
           <div className="flex-1 min-w-[200px]">
-            <label className="block text-xs text-slate-500 mb-1 flex items-center gap-1">
+            <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1 flex items-center gap-1">
               {t('botFilter.filters.search')}
               <HelpTip content={t('botFilter.filters.searchHelp')} />
             </label>
@@ -304,7 +304,7 @@ export function BotFilterLogs() {
 
           {/* Per Page */}
           <div>
-            <label className="block text-xs text-slate-500 mb-1 flex items-center gap-1">
+            <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1 flex items-center gap-1">
               {t('botFilter.filters.perPage')}
               <HelpTip content={t('botFilter.filters.perPageHelp')} />
             </label>

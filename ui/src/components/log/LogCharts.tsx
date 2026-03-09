@@ -17,23 +17,23 @@ export const BarChart = memo(function BarChart({
   const maxValue = Math.max(...displayData.map((d) => d.value), 1);
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4">
-      <h4 className="text-sm font-semibold text-slate-700 mb-3">{title}</h4>
+    <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+      <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">{title}</h4>
       <div className="space-y-2">
         {displayData.length === 0 ? (
-          <p className="text-xs text-slate-400 text-center py-4">
+          <p className="text-xs text-slate-400 dark:text-slate-500 text-center py-4">
             No data available
           </p>
         ) : (
           displayData.map((item, index) => (
             <div key={index} className="flex items-center gap-2">
               <span
-                className="text-xs text-slate-600 w-36 truncate font-mono"
+                className="text-xs text-slate-600 dark:text-slate-400 w-36 truncate font-mono"
                 title={item.label}
               >
                 {item.label}
               </span>
-              <div className="flex-1 h-5 bg-slate-100 rounded-full overflow-hidden min-w-[60px]">
+              <div className="flex-1 h-5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden min-w-[60px]">
                 <div
                   className={`h-full rounded-full transition-all duration-300 ${
                     item.color || "bg-primary-500"
@@ -41,7 +41,7 @@ export const BarChart = memo(function BarChart({
                   style={{ width: `${(item.value / maxValue) * 100}%` }}
                 />
               </div>
-              <span className="text-xs font-medium text-slate-700 w-14 text-right">
+              <span className="text-xs font-medium text-slate-700 dark:text-slate-300 w-14 text-right">
                 {item.value.toLocaleString()}
               </span>
             </div>
@@ -84,8 +84,8 @@ export const StatusCodeChart = memo(function StatusCodeChart({
   });
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4">
-      <h4 className="text-sm font-semibold text-slate-700 mb-3">
+    <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+      <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
         Status Codes
       </h4>
       <div className="flex items-center gap-4">
@@ -108,7 +108,7 @@ export const StatusCodeChart = memo(function StatusCodeChart({
             ))}
           </svg>
           <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-xs font-bold text-slate-700">
+            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
               {total.toLocaleString()}
             </span>
           </div>
@@ -119,8 +119,8 @@ export const StatusCodeChart = memo(function StatusCodeChart({
           {segments.slice(0, 6).map((seg, i) => (
             <div key={i} className="flex items-center gap-2 text-xs">
               <span className={`w-2 h-2 rounded-full ${seg.color.bg}`} />
-              <span className="text-slate-600">{seg.status_code}</span>
-              <span className="text-slate-400 ml-auto">
+              <span className="text-slate-600 dark:text-slate-400">{seg.status_code}</span>
+              <span className="text-slate-400 dark:text-slate-500 ml-auto">
                 {seg.percentage.toFixed(1)}%
               </span>
             </div>
@@ -145,9 +145,9 @@ export const VisualizationPanel = memo(function VisualizationPanel({
 }: VisualizationPanelProps) {
   if (isLoading) {
     return (
-      <div className="bg-slate-50 rounded-xl border border-slate-200 p-8 text-center">
+      <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 p-8 text-center">
         <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto" />
-        <p className="text-sm text-slate-500 mt-2">Loading visualization...</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">Loading visualization...</p>
       </div>
     );
   }
@@ -208,7 +208,7 @@ export const VisualizationPanel = memo(function VisualizationPanel({
     })) || [];
 
   return (
-    <div className="bg-slate-50 rounded-xl border border-slate-200 p-4">
+    <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {/* Status Codes Chart - Access logs only */}
         {logType === "access" &&

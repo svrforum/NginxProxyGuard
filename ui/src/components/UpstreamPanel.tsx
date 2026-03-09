@@ -107,17 +107,17 @@ export default function UpstreamPanel({ proxyHostId, onClose }: UpstreamPanelPro
   if (isLoading) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-8">Loading...</div>
+        <div className="bg-white dark:bg-slate-800 rounded-lg p-8 dark:text-white">Loading...</div>
       </div>
     );
   }
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-hidden m-4">
-        <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-lg font-semibold">Upstream / Load Balancing</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-hidden m-4">
+        <div className="flex items-center justify-between p-4 border-b dark:border-slate-700">
+          <h2 className="text-lg font-semibold dark:text-white">Upstream / Load Balancing</h2>
+          <button onClick={onClose} className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -132,12 +132,12 @@ export default function UpstreamPanel({ proxyHostId, onClose }: UpstreamPanelPro
                 <span className={`font-medium ${health.is_healthy ? 'text-green-700' : 'text-red-700'}`}>
                   {health.is_healthy ? 'Healthy' : 'Unhealthy'}
                 </span>
-                <span className="text-sm text-gray-600">
+                <span className="text-sm text-gray-600 dark:text-gray-400">
                   {health.healthy_count} / {health.healthy_count + health.unhealthy_count} servers up
                 </span>
               </div>
               {health.last_check_at && (
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   Last check: {new Date(health.last_check_at).toLocaleString()}
                 </p>
               )}
@@ -147,21 +147,21 @@ export default function UpstreamPanel({ proxyHostId, onClose }: UpstreamPanelPro
           {/* Basic Settings */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
               <input
                 type="text"
                 value={form.name || ''}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="w-full px-3 py-2 border rounded-md"
+                className="w-full px-3 py-2 border dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                 placeholder="upstream_backend"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Load Balance</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Load Balance</label>
               <select
                 value={form.load_balance}
                 onChange={(e) => setForm({ ...form, load_balance: e.target.value })}
-                className="w-full px-3 py-2 border rounded-md"
+                className="w-full px-3 py-2 border dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
               >
                 <option value="round_robin">Round Robin</option>
                 <option value="least_conn">Least Connections</option>
@@ -172,20 +172,20 @@ export default function UpstreamPanel({ proxyHostId, onClose }: UpstreamPanelPro
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Keepalive Connections
             </label>
             <input
               type="number"
               value={form.keepalive || 32}
               onChange={(e) => setForm({ ...form, keepalive: parseInt(e.target.value) })}
-              className="w-full px-3 py-2 border rounded-md"
+              className="w-full px-3 py-2 border dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
               min={0}
             />
           </div>
 
           {/* Health Check Settings */}
-          <div className="border rounded-md p-4 space-y-3">
+          <div className="border dark:border-slate-600 rounded-md p-4 space-y-3">
             <label className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -193,48 +193,48 @@ export default function UpstreamPanel({ proxyHostId, onClose }: UpstreamPanelPro
                 onChange={(e) => setForm({ ...form, health_check_enabled: e.target.checked })}
                 className="rounded border-gray-300"
               />
-              <span className="font-medium">Enable Health Check</span>
+              <span className="font-medium dark:text-white">Enable Health Check</span>
             </label>
 
             {form.health_check_enabled && (
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Interval (sec)</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Interval (sec)</label>
                   <input
                     type="number"
                     value={form.health_check_interval || 30}
                     onChange={(e) => setForm({ ...form, health_check_interval: parseInt(e.target.value) })}
-                    className="w-full px-3 py-2 border rounded-md"
+                    className="w-full px-3 py-2 border dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                     min={5}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Timeout (sec)</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Timeout (sec)</label>
                   <input
                     type="number"
                     value={form.health_check_timeout || 5}
                     onChange={(e) => setForm({ ...form, health_check_timeout: parseInt(e.target.value) })}
-                    className="w-full px-3 py-2 border rounded-md"
+                    className="w-full px-3 py-2 border dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                     min={1}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Health Check Path</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Health Check Path</label>
                   <input
                     type="text"
                     value={form.health_check_path || '/'}
                     onChange={(e) => setForm({ ...form, health_check_path: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-md"
+                    className="w-full px-3 py-2 border dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                     placeholder="/health"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Expected Status</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Expected Status</label>
                   <input
                     type="number"
                     value={form.health_check_expected_status || 200}
                     onChange={(e) => setForm({ ...form, health_check_expected_status: parseInt(e.target.value) })}
-                    className="w-full px-3 py-2 border rounded-md"
+                    className="w-full px-3 py-2 border dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                   />
                 </div>
               </div>
@@ -242,9 +242,9 @@ export default function UpstreamPanel({ proxyHostId, onClose }: UpstreamPanelPro
           </div>
 
           {/* Servers */}
-          <div className="border rounded-md">
-            <div className="flex items-center justify-between p-3 border-b bg-gray-50">
-              <h4 className="font-medium">Backend Servers</h4>
+          <div className="border dark:border-slate-600 rounded-md">
+            <div className="flex items-center justify-between p-3 border-b dark:border-slate-600 bg-gray-50 dark:bg-slate-700">
+              <h4 className="font-medium dark:text-white">Backend Servers</h4>
               <button
                 type="button"
                 onClick={() => setShowAddServer(true)}
@@ -255,14 +255,14 @@ export default function UpstreamPanel({ proxyHostId, onClose }: UpstreamPanelPro
             </div>
 
             {showAddServer && (
-              <div className="p-3 border-b bg-indigo-50 space-y-3">
+              <div className="p-3 border-b dark:border-slate-600 bg-indigo-50 dark:bg-indigo-900/20 space-y-3">
                 <div className="grid grid-cols-4 gap-2">
                   <div className="col-span-2">
                     <input
                       type="text"
                       value={newServer.address}
                       onChange={(e) => setNewServer({ ...newServer, address: e.target.value })}
-                      className="w-full px-3 py-2 border rounded-md"
+                      className="w-full px-3 py-2 border dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                       placeholder="192.168.1.10 or hostname"
                     />
                   </div>
@@ -271,7 +271,7 @@ export default function UpstreamPanel({ proxyHostId, onClose }: UpstreamPanelPro
                       type="number"
                       value={newServer.port}
                       onChange={(e) => setNewServer({ ...newServer, port: parseInt(e.target.value) })}
-                      className="w-full px-3 py-2 border rounded-md"
+                      className="w-full px-3 py-2 border dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                       placeholder="Port"
                     />
                   </div>
@@ -280,7 +280,7 @@ export default function UpstreamPanel({ proxyHostId, onClose }: UpstreamPanelPro
                       type="number"
                       value={newServer.weight}
                       onChange={(e) => setNewServer({ ...newServer, weight: parseInt(e.target.value) })}
-                      className="w-full px-3 py-2 border rounded-md"
+                      className="w-full px-3 py-2 border dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                       placeholder="Weight"
                     />
                   </div>
@@ -293,13 +293,13 @@ export default function UpstreamPanel({ proxyHostId, onClose }: UpstreamPanelPro
                       onChange={(e) => setNewServer({ ...newServer, is_backup: e.target.checked })}
                       className="rounded border-gray-300"
                     />
-                    <span className="text-sm">Backup server</span>
+                    <span className="text-sm dark:text-slate-300">Backup server</span>
                   </label>
                   <div className="space-x-2">
                     <button
                       type="button"
                       onClick={() => setShowAddServer(false)}
-                      className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800"
+                      className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
                     >
                       Cancel
                     </button>
@@ -315,9 +315,9 @@ export default function UpstreamPanel({ proxyHostId, onClose }: UpstreamPanelPro
               </div>
             )}
 
-            <div className="divide-y">
+            <div className="divide-y dark:divide-slate-600">
               {(form.servers || []).length === 0 ? (
-                <p className="p-4 text-center text-gray-500 text-sm">No servers configured</p>
+                <p className="p-4 text-center text-gray-500 dark:text-gray-400 text-sm">No servers configured</p>
               ) : (
                 form.servers?.map((server, index) => {
                   const healthStatus = health?.servers?.find(
@@ -333,10 +333,10 @@ export default function UpstreamPanel({ proxyHostId, onClose }: UpstreamPanelPro
                             }`}
                           />
                         )}
-                        <span className="font-mono text-sm">
+                        <span className="font-mono text-sm dark:text-white">
                           {server.address}:{server.port}
                         </span>
-                        <span className="text-xs text-gray-500">weight: {server.weight}</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">weight: {server.weight}</span>
                         {server.is_backup && (
                           <span className="px-1.5 py-0.5 text-xs bg-yellow-100 text-yellow-700 rounded">
                             backup
@@ -362,11 +362,11 @@ export default function UpstreamPanel({ proxyHostId, onClose }: UpstreamPanelPro
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 pt-4 border-t">
+          <div className="flex justify-end gap-2 pt-4 border-t dark:border-slate-700">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+              className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 rounded-md hover:bg-gray-200 dark:hover:bg-slate-600"
             >
               Cancel
             </button>
