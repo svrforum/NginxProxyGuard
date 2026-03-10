@@ -173,18 +173,57 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
         {/* Form Content */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
           {/* Config Error Banner */}
-          {isEditing && host?.config_status === 'error' && host.config_error && (
-            <div className="mx-6 mt-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-3">
-              <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-              <div className="flex-1 min-w-0">
-                <h4 className="text-sm font-medium text-red-800 dark:text-red-300">{t('form.configError.title')}</h4>
-                <p className="mt-1 text-xs text-red-700 dark:text-red-400 font-mono break-all">{host.config_error}</p>
-                <p className="mt-2 text-xs text-red-600 dark:text-red-500">{t('form.configError.hint')}</p>
+          {isEditing && host?.config_status === 'error' && host.config_error && (() => {
+            const err = host.config_error.toLowerCase()
+            let guideKey: string
+            let targetTab: TabType | null = null
+
+            if (err.includes('ssl_certificate') || err.includes('ssl_cert') || err.includes('fullchain.pem') || err.includes('privkey.pem') || err.includes('certificate')) {
+              guideKey = 'form.configError.guides.ssl'
+              targetTab = 'ssl'
+            } else if (err.includes('unknown directive') || err.includes('invalid number of arguments') || err.includes('directive is not allowed') || err.includes('unexpected "}"') || err.includes('unexpected end of file')) {
+              guideKey = 'form.configError.guides.advanced'
+              targetTab = 'advanced'
+            } else if (err.includes('waf') || err.includes('modsec') || err.includes('modsecurity')) {
+              guideKey = 'form.configError.guides.waf'
+              targetTab = 'security'
+            } else if (err.includes('upstream') || err.includes('proxy_pass') || err.includes('host not found') || err.includes('could not be resolved')) {
+              guideKey = 'form.configError.guides.upstream'
+              targetTab = 'basic'
+            } else if (err.includes('limit_req') || err.includes('rate_limit') || err.includes('limit_req_zone')) {
+              guideKey = 'form.configError.guides.rateLimit'
+              targetTab = 'security'
+            } else if (err.includes('access') || err.includes('deny') || err.includes('allow')) {
+              guideKey = 'form.configError.guides.accessList'
+              targetTab = 'protection'
+            } else {
+              guideKey = 'form.configError.guides.general'
+            }
+
+            return (
+              <div className="mx-6 mt-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-3">
+                <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-sm font-medium text-red-800 dark:text-red-300">{t('form.configError.title')}</h4>
+                  <p className="mt-1 text-xs text-red-700 dark:text-red-400 font-mono break-all">{host.config_error}</p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <p className="text-xs text-red-600 dark:text-red-500">{t(guideKey)}</p>
+                    {targetTab && (
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab(targetTab!)}
+                        className="text-xs font-medium text-red-700 dark:text-red-300 underline hover:text-red-900 dark:hover:text-red-200 transition-colors"
+                      >
+                        {t('form.configError.goToTab', { tab: t(`form.tabs.${targetTab}`) })}
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          )}
+            )
+          })()}
           <div className="p-6">
             {/* Basic Tab */}
             {activeTab === 'basic' && (

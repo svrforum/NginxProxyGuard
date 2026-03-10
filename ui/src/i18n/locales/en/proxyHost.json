@@ -62,7 +62,16 @@
     "editTitle": "Edit Proxy Host",
     "configError": {
       "title": "Nginx Config Error",
-      "hint": "Fix the settings and save to re-apply the configuration."
+      "goToTab": "Go to {{tab}} tab →",
+      "guides": {
+        "ssl": "SSL certificate file not found. Re-select the certificate in the SSL tab or disable SSL.",
+        "advanced": "Syntax error in custom Nginx config. Check the Advanced tab settings.",
+        "waf": "WAF (ModSecurity) configuration error. Disable WAF or review rules in the Security tab.",
+        "upstream": "Cannot connect to backend server. Check the forwarding host and port in the Basic tab.",
+        "rateLimit": "Rate limit configuration conflict. Review rate limit settings in the Security tab.",
+        "accessList": "Access control configuration error. Check the access list in the Protection tab.",
+        "general": "Fix the settings and save to re-apply the configuration."
+      }
     },
     "tabs": {
       "basic": "Basic",
