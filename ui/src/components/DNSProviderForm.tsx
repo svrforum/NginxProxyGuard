@@ -44,6 +44,11 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
   // Dynu credentials
   const [dynuApiKey, setDynuApiKey] = useState('')
 
+  // Track whether credentials were modified during editing
+  const [credentialsModified, setCredentialsModified] = useState(false)
+
+  const hasExistingCredentials = isEditing && provider?.has_credentials
+
   const buildCredentials = (): Record<string, string> => {
     if (providerType === 'cloudflare') {
       const creds: Record<string, string> = {}
@@ -98,6 +103,12 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
     setTestResult(null)
     setTestError('')
     setError('')
+
+    if (hasExistingCredentials && !credentialsModified) {
+      setTestResult('success')
+      return
+    }
+
     setIsTesting(true)
 
     const data: CreateDNSProviderRequest = {
@@ -131,16 +142,23 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
       return
     }
 
-    const data: CreateDNSProviderRequest = {
-      name: name.trim(),
-      provider_type: providerType,
-      credentials: buildCredentials(),
-      is_default: isDefault,
-    }
-
     if (isEditing && provider) {
+      // Only include credentials if they were modified
+      const data: Partial<CreateDNSProviderRequest> = {
+        name: name.trim(),
+        is_default: isDefault,
+      }
+      if (credentialsModified) {
+        data.credentials = buildCredentials()
+      }
       updateMutation.mutate({ id: provider.id, data })
     } else {
+      const data: CreateDNSProviderRequest = {
+        name: name.trim(),
+        provider_type: providerType,
+        credentials: buildCredentials(),
+        is_default: isDefault,
+      }
       createMutation.mutate(data)
     }
   }
@@ -240,6 +258,15 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
                 {t('dnsProviders.form.cloudflare.title')}
               </h3>
 
+              {hasExistingCredentials && !credentialsModified && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 text-blue-700 dark:text-blue-400 text-xs flex items-center gap-2">
+                  <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                  </svg>
+                  {t('dnsProviders.form.credentialsConfigured')}
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-2">
                   {t('dnsProviders.form.cloudflare.apiToken')}
@@ -248,8 +275,8 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
                 <input
                   type="password"
                   value={cfApiToken}
-                  onChange={(e) => setCfApiToken(e.target.value)}
-                  placeholder={t('dnsProviders.form.cloudflare.apiTokenPlaceholder')}
+                  onChange={(e) => { setCfApiToken(e.target.value); setCredentialsModified(true) }}
+                  placeholder={hasExistingCredentials ? '••••••••' : t('dnsProviders.form.cloudflare.apiTokenPlaceholder')}
                   className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 placeholder:text-slate-400 bg-white dark:bg-slate-700 dark:text-white"
                 />
                 <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
@@ -267,7 +294,8 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
                     <input
                       type="password"
                       value={cfApiKey}
-                      onChange={(e) => setCfApiKey(e.target.value)}
+                      onChange={(e) => { setCfApiKey(e.target.value); setCredentialsModified(true) }}
+                      placeholder={hasExistingCredentials ? '••••••••' : ''}
                       className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 dark:text-white"
                     />
                   </div>
@@ -278,7 +306,7 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
                     <input
                       type="email"
                       value={cfEmail}
-                      onChange={(e) => setCfEmail(e.target.value)}
+                      onChange={(e) => { setCfEmail(e.target.value); setCredentialsModified(true) }}
                       className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 dark:text-white"
                     />
                   </div>
@@ -298,6 +326,15 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
                 {t('dnsProviders.form.route53.title')}
               </h3>
 
+              {hasExistingCredentials && !credentialsModified && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 text-blue-700 dark:text-blue-400 text-xs flex items-center gap-2">
+                  <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                  </svg>
+                  {t('dnsProviders.form.credentialsConfigured')}
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
@@ -306,7 +343,8 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
                   <input
                     type="text"
                     value={awsAccessKeyId}
-                    onChange={(e) => setAwsAccessKeyId(e.target.value)}
+                    onChange={(e) => { setAwsAccessKeyId(e.target.value); setCredentialsModified(true) }}
+                    placeholder={hasExistingCredentials ? '••••••••' : ''}
                     className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 dark:text-white"
                   />
                 </div>
@@ -317,7 +355,8 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
                   <input
                     type="password"
                     value={awsSecretAccessKey}
-                    onChange={(e) => setAwsSecretAccessKey(e.target.value)}
+                    onChange={(e) => { setAwsSecretAccessKey(e.target.value); setCredentialsModified(true) }}
+                    placeholder={hasExistingCredentials ? '••••••••' : ''}
                     className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 dark:text-white"
                   />
                 </div>
@@ -331,7 +370,7 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
                   <input
                     type="text"
                     value={awsRegion}
-                    onChange={(e) => setAwsRegion(e.target.value)}
+                    onChange={(e) => { setAwsRegion(e.target.value); setCredentialsModified(true) }}
                     className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 dark:text-white"
                   />
                 </div>
@@ -342,7 +381,7 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
                   <input
                     type="text"
                     value={awsHostedZoneId}
-                    onChange={(e) => setAwsHostedZoneId(e.target.value)}
+                    onChange={(e) => { setAwsHostedZoneId(e.target.value); setCredentialsModified(true) }}
                     className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 dark:text-white"
                   />
                 </div>
@@ -360,6 +399,15 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
                 {t('dnsProviders.form.duckdns.title')}
               </h3>
 
+              {hasExistingCredentials && !credentialsModified && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 text-blue-700 dark:text-blue-400 text-xs flex items-center gap-2">
+                  <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                  </svg>
+                  {t('dnsProviders.form.credentialsConfigured')}
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-2">
                   {t('dnsProviders.form.duckdns.token')}
@@ -368,8 +416,8 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
                 <input
                   type="password"
                   value={duckdnsToken}
-                  onChange={(e) => setDuckdnsToken(e.target.value)}
-                  placeholder={t('dnsProviders.form.duckdns.tokenPlaceholder')}
+                  onChange={(e) => { setDuckdnsToken(e.target.value); setCredentialsModified(true) }}
+                  placeholder={hasExistingCredentials ? '••••••••' : t('dnsProviders.form.duckdns.tokenPlaceholder')}
                   className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 placeholder:text-slate-400 bg-white dark:bg-slate-700 dark:text-white"
                 />
                 <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
@@ -389,6 +437,15 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
                 {t('dnsProviders.form.dynu.title')}
               </h3>
 
+              {hasExistingCredentials && !credentialsModified && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 text-blue-700 dark:text-blue-400 text-xs flex items-center gap-2">
+                  <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                  </svg>
+                  {t('dnsProviders.form.credentialsConfigured')}
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-2">
                   {t('dnsProviders.form.dynu.apiKey')}
@@ -397,8 +454,8 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
                 <input
                   type="password"
                   value={dynuApiKey}
-                  onChange={(e) => setDynuApiKey(e.target.value)}
-                  placeholder={t('dnsProviders.form.dynu.apiKeyPlaceholder')}
+                  onChange={(e) => { setDynuApiKey(e.target.value); setCredentialsModified(true) }}
+                  placeholder={hasExistingCredentials ? '••••••••' : t('dnsProviders.form.dynu.apiKeyPlaceholder')}
                   className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 placeholder:text-slate-400 bg-white dark:bg-slate-700 dark:text-white"
                 />
                 <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">

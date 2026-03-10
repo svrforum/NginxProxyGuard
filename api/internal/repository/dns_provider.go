@@ -284,22 +284,18 @@ func (r *DNSProviderRepository) TestConnection(ctx context.Context, providerType
 func testCloudflareConnection(creds model.CloudflareCredentials) error {
 	client := &http.Client{Timeout: 10 * time.Second}
 
-	var req *http.Request
-	var err error
+	// Use zones endpoint for both API Token and Global API Key
+	// The /user/tokens/verify endpoint returns 401 for tokens scoped to
+	// specific accounts/zones without User resource access, so we use
+	// /zones?per_page=1 which validates DNS-related permissions directly.
+	req, err := http.NewRequest("GET", "https://api.cloudflare.com/client/v4/zones?per_page=1", nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
 
 	if creds.APIToken != "" {
-		// API Token: verify via token verification endpoint
-		req, err = http.NewRequest("GET", "https://api.cloudflare.com/client/v4/user/tokens/verify", nil)
-		if err != nil {
-			return fmt.Errorf("failed to create request: %w", err)
-		}
 		req.Header.Set("Authorization", "Bearer "+creds.APIToken)
 	} else {
-		// Global API Key: verify via zones endpoint
-		req, err = http.NewRequest("GET", "https://api.cloudflare.com/client/v4/zones?per_page=1", nil)
-		if err != nil {
-			return fmt.Errorf("failed to create request: %w", err)
-		}
 		req.Header.Set("X-Auth-Email", creds.Email)
 		req.Header.Set("X-Auth-Key", creds.APIKey)
 	}

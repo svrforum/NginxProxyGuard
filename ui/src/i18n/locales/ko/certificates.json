@@ -216,6 +216,7 @@
         "success": "연결 테스트 성공!",
         "failed": "연결 테스트 실패. 자격 증명을 확인하세요."
       },
+      "credentialsConfigured": "자격 증명이 이미 설정되어 있습니다. 변경하려면 새 값을 입력하세요.",
       "errors": {
         "nameRequired": "이름은 필수입니다",
         "createFailed": "DNS 제공자 생성 실패",

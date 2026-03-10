@@ -216,6 +216,7 @@
         "success": "Connection test successful!",
         "failed": "Connection test failed. Please check your credentials."
       },
+      "credentialsConfigured": "Credentials are already configured. Enter new values to change them.",
       "errors": {
         "nameRequired": "Name is required",
         "createFailed": "Failed to create DNS provider",
