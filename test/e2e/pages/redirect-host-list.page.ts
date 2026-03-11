@@ -200,7 +200,7 @@ export class RedirectHostListPage extends BasePage {
    * Verify page is loaded correctly.
    */
   async expectRedirectHostList(): Promise<void> {
-    await expect(this.page).toHaveURL(/\/redirect-hosts/);
+    await expect(this.page).toHaveURL(/\/redirects/);
     await expect(this.addHostButton).toBeVisible({ timeout: TIMEOUTS.medium });
   }
 

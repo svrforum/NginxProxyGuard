@@ -70,7 +70,7 @@ test.describe('Redirect Host CRUD', () => {
 
       await formPage.fillConfig({
         domain: testDomain,
-        forwardDomain: testData.forward_domain,
+        forwardDomain: testData.forward_domain_name,
         redirectCode: 302,
         preservePath: testData.preserve_path,
       });
@@ -161,7 +161,7 @@ test.describe('Redirect Host CRUD', () => {
       // Verify change via API
       const hosts = await apiHelper.getRedirectHosts();
       const updatedHost = hosts.find(h => h.id === created.id);
-      expect(updatedHost?.forward_domain).toBe(newTarget);
+      expect(updatedHost?.forward_domain_name).toBe(newTarget);
     });
   });
 
@@ -277,7 +277,7 @@ test.describe('Redirect Host CRUD', () => {
 
       expect(created).toHaveProperty('id');
       expect(created.domain_names).toEqual(testData.domain_names);
-      expect(created.forward_domain).toBe(testData.forward_domain);
+      expect(created.forward_domain_name).toBe(testData.forward_domain_name);
     });
 
     test('should update redirect host via API', async () => {

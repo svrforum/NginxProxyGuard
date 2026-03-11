@@ -488,19 +488,55 @@ export class APIHelper {
         throw new Error(`Failed to get access lists: ${response.status()}`);
       }
 
-      const data = await response.json();
-      // Ensure we return an array
-      return Array.isArray(data) ? data : [];
+      const result = await response.json();
+      // API returns paginated response: { data: [...], total, page, per_page, total_pages }
+      if (result.data && Array.isArray(result.data)) return result.data;
+      return Array.isArray(result) ? result : [];
     }, 'getAccessLists');
+  }
+
+  /**
+   * Convert allowed_ips/denied_ips to items format for the API.
+   */
+  private convertAccessListData(data: CreateAccessListData | Partial<CreateAccessListData>): Record<string, unknown> {
+    const apiData: Record<string, unknown> = { name: data.name };
+    if (data.description !== undefined) apiData.description = data.description;
+    if (data.satisfy_any !== undefined) apiData.satisfy_any = data.satisfy_any;
+    if (data.pass_auth !== undefined) apiData.pass_auth = data.pass_auth;
+
+    // If items are provided directly, use them
+    if (data.items) {
+      apiData.items = data.items;
+    } else {
+      // Convert allowed_ips/denied_ips to items format
+      const items: Array<{ directive: string; address: string; sort_order: number }> = [];
+      let sortOrder = 0;
+      if (data.allowed_ips) {
+        for (const ip of data.allowed_ips) {
+          items.push({ directive: 'allow', address: ip, sort_order: sortOrder++ });
+        }
+      }
+      if (data.denied_ips) {
+        for (const ip of data.denied_ips) {
+          items.push({ directive: 'deny', address: ip, sort_order: sortOrder++ });
+        }
+      }
+      if (items.length > 0) {
+        apiData.items = items;
+      }
+    }
+
+    return apiData;
   }
 
   /**
    * Create a new access list.
    */
   async createAccessList(data: CreateAccessListData): Promise<AccessListData> {
+    const apiData = this.convertAccessListData(data);
     const response = await this.request.post(API_ENDPOINTS.accessLists, {
       headers: this.getHeaders(),
-      data,
+      data: apiData,
     });
 
     if (!response.ok()) {
@@ -515,9 +551,10 @@ export class APIHelper {
    * Update an access list.
    */
   async updateAccessList(id: number, data: Partial<CreateAccessListData>): Promise<AccessListData> {
+    const apiData = this.convertAccessListData(data);
     const response = await this.request.put(`${API_ENDPOINTS.accessLists}/${id}`, {
       headers: this.getHeaders(),
-      data,
+      data: apiData,
     });
 
     if (!response.ok()) {
@@ -1041,7 +1078,7 @@ export interface HealthData {
 export interface RedirectHostData {
   id: number;
   domain_names: string[];
-  forward_domain: string;
+  forward_domain_name: string;
   redirect_code: number;
   preserve_path: boolean;
   enabled: boolean;
@@ -1052,7 +1089,7 @@ export interface RedirectHostData {
 
 export interface CreateRedirectHostData {
   domain_names: string[];
-  forward_domain: string;
+  forward_domain_name: string;
   redirect_code: number;
   preserve_path?: boolean;
   enabled?: boolean;
@@ -1077,18 +1114,33 @@ export interface CreateDnsProviderData {
 }
 
 // Access List Types
+export interface AccessListItemData {
+  id?: string;
+  access_list_id?: string;
+  directive: string;  // "allow" or "deny"
+  address: string;    // IP, CIDR, or "all"
+  description?: string;
+  sort_order?: number;
+}
+
 export interface AccessListData {
   id: number;
   name: string;
-  allowed_ips: string[];
-  denied_ips: string[];
-  proxy_host_count?: number;
+  description?: string;
+  satisfy_any?: boolean;
+  pass_auth?: boolean;
+  items?: AccessListItemData[];
   created_at: string;
   updated_at: string;
 }
 
 export interface CreateAccessListData {
   name: string;
+  description?: string;
+  satisfy_any?: boolean;
+  pass_auth?: boolean;
+  items?: Array<{ directive: string; address: string; description?: string; sort_order?: number }>;
+  // Legacy fields for convenience - converted to items before sending
   allowed_ips?: string[];
   denied_ips?: string[];
 }

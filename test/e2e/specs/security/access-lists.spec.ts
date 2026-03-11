@@ -1,8 +1,16 @@
 import { test, expect } from '@playwright/test';
 import { AccessListPage } from '../../pages';
 import { TestDataFactory } from '../../utils/test-data-factory';
-import { APIHelper } from '../../utils/api-helper';
+import { APIHelper, AccessListData } from '../../utils/api-helper';
 import { TIMEOUTS } from '../../fixtures/test-data';
+
+/**
+ * Helper to extract addresses with a given directive from access list items.
+ */
+function getAddresses(list: AccessListData, directive: 'allow' | 'deny'): string[] {
+  if (!list.items) return [];
+  return list.items.filter(item => item.directive === directive).map(item => item.address);
+}
 
 test.describe('Access List Management', () => {
   let accessListPage: AccessListPage;
@@ -167,7 +175,8 @@ test.describe('Access List Management', () => {
       // Verify via API
       const lists = await apiHelper.getAccessLists();
       const list = lists.find(l => l.name === testData.name);
-      expect(list?.allowed_ips).toContain('10.0.0.1');
+      const allowedAddresses = getAddresses(list!, 'allow');
+      expect(allowedAddresses).toContain('10.0.0.1');
     });
   });
 
@@ -198,10 +207,11 @@ test.describe('Access List Management', () => {
       });
 
       const created = await apiHelper.createAccessList(testData);
+      const allowedAddresses = getAddresses(created, 'allow');
 
-      expect(created.allowed_ips).toContain('192.168.0.0/16');
-      expect(created.allowed_ips).toContain('10.0.0.0/8');
-      expect(created.allowed_ips).toContain('172.16.0.0/12');
+      expect(allowedAddresses).toContain('192.168.0.0/16');
+      expect(allowedAddresses).toContain('10.0.0.0/8');
+      expect(allowedAddresses).toContain('172.16.0.0/12');
     });
 
     test('should accept single IP addresses', async () => {
@@ -210,9 +220,10 @@ test.describe('Access List Management', () => {
       });
 
       const created = await apiHelper.createAccessList(testData);
+      const allowedAddresses = getAddresses(created, 'allow');
 
-      expect(created.allowed_ips).toContain('192.168.1.1');
-      expect(created.allowed_ips).toContain('10.0.0.1');
+      expect(allowedAddresses).toContain('192.168.1.1');
+      expect(allowedAddresses).toContain('10.0.0.1');
     });
   });
 
@@ -238,7 +249,8 @@ test.describe('Access List Management', () => {
         allowed_ips: ['10.10.10.0/24'],
       });
 
-      expect(updated.allowed_ips).toContain('10.10.10.0/24');
+      const allowedAddresses = getAddresses(updated, 'allow');
+      expect(allowedAddresses).toContain('10.10.10.0/24');
     });
 
     test('should delete access list via API', async () => {
@@ -303,7 +315,8 @@ test.describe('Access List IP Validation', () => {
     });
 
     const created = await apiHelper.createAccessList(testData);
-    expect(created.allowed_ips.length).toBe(3);
+    const allowedAddresses = getAddresses(created, 'allow');
+    expect(allowedAddresses.length).toBe(3);
   });
 
   test('should accept valid CIDR ranges', async () => {
@@ -312,7 +325,8 @@ test.describe('Access List IP Validation', () => {
     });
 
     const created = await apiHelper.createAccessList(testData);
-    expect(created.allowed_ips.length).toBe(2);
+    const allowedAddresses = getAddresses(created, 'allow');
+    expect(allowedAddresses.length).toBe(2);
   });
 
   test('should handle deny-all with allow exceptions', async () => {
@@ -322,7 +336,9 @@ test.describe('Access List IP Validation', () => {
     ]);
 
     const created = await apiHelper.createAccessList(whitelistData);
-    expect(created.denied_ips).toContain('0.0.0.0/0');
-    expect(created.allowed_ips.length).toBe(2);
+    const deniedAddresses = getAddresses(created, 'deny');
+    const allowedAddresses = getAddresses(created, 'allow');
+    expect(deniedAddresses).toContain('0.0.0.0/0');
+    expect(allowedAddresses.length).toBe(2);
   });
 });

@@ -40,11 +40,11 @@ export const API_ENDPOINTS = {
 
   // WAF
   wafSettings: '/api/v1/waf/settings',
-  wafBannedIps: '/api/v1/waf/banned-ips',
-  wafUriBlocks: '/api/v1/waf/uri-blocks',
-  wafExploitRules: '/api/v1/waf/exploit-rules',
+  wafBannedIps: '/api/v1/banned-ips',
+  wafUriBlocks: '/api/v1/uri-blocks',
+  wafExploitRules: '/api/v1/exploit-rules',
   wafFail2ban: '/api/v1/waf/fail2ban',
-  wafTest: '/api/v1/waf/test',
+  wafTest: '/api/v1/waf-test/test',
 
   // Logs
   logs: '/api/v1/logs',
@@ -85,7 +85,7 @@ export const ROUTES = {
   // Main sections
   dashboard: '/dashboard',
   proxyHosts: '/proxy-hosts',
-  redirectHosts: '/redirect-hosts',
+  redirectHosts: '/redirects',
 
   // WAF
   wafSettings: '/waf/settings',
@@ -217,11 +217,11 @@ export const TEST_DNS_PROVIDER = {
 export const TEST_API_TOKEN = {
   readOnly: {
     name: 'test-readonly-token-{timestamp}',
-    permissions: ['read:proxy-hosts', 'read:certificates'],
+    permissions: ['proxy:read', 'certificate:read'],
   },
   fullAccess: {
     name: 'test-full-token-{timestamp}',
-    permissions: ['read:*', 'write:*'],
+    permissions: ['*'],
   },
 } as const;
 
