@@ -43,12 +43,25 @@ SecAction "id:900000,phase:1,pass,t:none,nolog,setvar:tx.blocking_paranoia_level
 # Default: 5, Permissive: 10+, Strict: 3
 SecAction "id:900110,phase:1,pass,t:none,nolog,setvar:tx.inbound_anomaly_score_threshold={{.AnomalyThreshold}},setvar:tx.outbound_anomaly_score_threshold={{.AnomalyThreshold}}"
 
+# Allowed HTTP methods (CRS Rule 911100 - METHOD ENFORCEMENT)
+# Default CRS only allows GET HEAD POST OPTIONS, blocking PUT/DELETE/PATCH
+# which are required for REST API operations (editing hosts, deleting certs, etc.)
+SecAction "id:900200,phase:1,pass,t:none,nolog,setvar:'tx.allowed_methods=GET HEAD POST OPTIONS PUT DELETE PATCH'"
+
+# Allowed HTTP versions (CRS Rule 911100)
+# Include HTTP/3.0 for QUIC support alongside standard versions
+SecAction "id:900230,phase:1,pass,t:none,nolog,setvar:'tx.allowed_http_versions=HTTP/1.1 HTTP/2 HTTP/2.0 HTTP/3.0'"
+
+# Request body / file size limits (CRS Rule 920370/920400)
+# Aligned with SecRequestBodyLimit (13107200 bytes = 12.5 MB) in modsec-base.conf
+SecAction "id:900300,phase:1,pass,t:none,nolog,setvar:tx.max_file_size=13107200,setvar:tx.combined_file_sizes=13107200"
+
 {{if .AllowedIPs}}
 # =============================================================================
 # Priority Allow IPs - Bypass WAF completely for these IPs
 # =============================================================================
 # These IPs are configured in Security > Priority Allow IPs
-SecRule REMOTE_ADDR "@ipMatch {{joinComma .AllowedIPs}}" "id:1,phase:1,pass,nolog,ctl:ruleEngine=Off"
+SecRule REMOTE_ADDR "@ipMatch {{joinComma .AllowedIPs}}" "id:900900,phase:1,pass,nolog,ctl:ruleEngine=Off"
 {{end}}
 
 # Include OWASP CRS rules
