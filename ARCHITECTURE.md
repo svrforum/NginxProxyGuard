@@ -622,10 +622,12 @@ nginx/
 │   ├── proxy_params.conf       # 프록시 헤더 (Host, X-Real-IP, X-Forwarded-*)
 │   └── block_exploits.conf     # 익스플로잇 차단 규칙 (SQLI, RFI, XSS, etc.)
 ├── modsec/
-│   ├── main.conf               # ModSecurity blocking 모드
-│   ├── detection-only.conf     # ModSecurity detection 모드
+│   ├── crs-global.conf          # CRS 글로벌 로드 (http 블록에서 1회, 성능 최적화)
 │   ├── modsec-base.conf        # 기본 설정 (body limits, audit, PCRE)
-│   └── host_{id}.conf          # API 생성: per-host WAF exclusions
+│   ├── custom-rules.conf       # 커스텀 규칙 (health check, WebSocket, HTTP/3)
+│   ├── main.conf               # (레거시) ModSecurity blocking 모드
+│   ├── detection-only.conf     # (레거시) ModSecurity detection 모드
+│   └── host_{id}.conf          # API 생성: per-host WAF 튜닝 (paranoia, threshold, exclusions, mode)
 ├── geoip/
 │   └── geoip-active.conf       # symlink → enabled or disabled
 └── owasp-crs/                  # OWASP CRS 4.21.0 rules
@@ -634,6 +636,8 @@ nginx/
 **Key nginx.conf Settings:**
 - `worker_processes auto`, `worker_rlimit_nofile 65535`
 - Dynamic modules: modsecurity, brotli, headers_more, geoip2
+- **ModSecurity global**: `modsecurity on; modsecurity_rules_file crs-global.conf;` at http level (CRS loaded once)
+- Per-host WAF: `modsecurity_rules_file host_{id}.conf` (tuning only) or `modsecurity off;` (disabled)
 - Real IP: trusted RFC 1918 ranges, `X-Forwarded-For` header
 - SSL: TLSv1.2 + TLSv1.3, ECDHE ciphers, OCSP stapling
 - HTTP/3: `ssl_early_data on`, `quic_retry on`
@@ -1030,9 +1034,11 @@ Custom Upload:
 ### 8.3 WAF (ModSecurity)
 
 - **Engine:** ModSecurity v3 + OWASP CRS 4.21
+- **Global CRS loading:** CRS rules loaded once at `http {}` level via `crs-global.conf` (성능 최적화: 호스트 수 무관하게 nginx -t < 1초)
 - **Modes:** blocking (403) / detection (log only)
 - **Paranoia:** 1-4 levels, anomaly threshold 1-100
-- **Per-host config:** `modsec/host_{id}.conf` with SecRuleRemoveById
+- **Per-host config:** `modsec/host_{id}.conf` — tuning overrides only (paranoia, threshold, exclusions, mode). CRS Include 없음.
+- **WAF disabled hosts:** `modsecurity off;` 명시적 비활성화 (글로벌 on 상속 방지)
 - **Exclusions:** global + host-specific, merged at config generation
 - **Auto-ban:** WAFAutoBanService monitors events, bans IPs exceeding threshold
 
