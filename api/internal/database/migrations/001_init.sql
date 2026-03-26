@@ -597,6 +597,7 @@ CREATE TABLE IF NOT EXISTS public.global_settings (
     ssl_session_tickets boolean DEFAULT false NOT NULL,
     ssl_stapling boolean DEFAULT true NOT NULL,
     ssl_stapling_verify boolean DEFAULT true NOT NULL,
+    ssl_ecdh_curve character varying(255) DEFAULT 'x25519_mlkem768:X25519:secp256r1:secp384r1'::character varying NOT NULL,
     access_log_enabled boolean DEFAULT true NOT NULL,
     error_log_level character varying(20) DEFAULT 'warn'::character varying NOT NULL,
     resolver character varying(255) DEFAULT '1.1.1.1 8.8.8.8 valid=300s'::character varying,
@@ -2114,6 +2115,7 @@ COMMENT ON COLUMN public.proxy_hosts.cache_ttl IS 'Cache duration for static ass
 -- global_settings table upgrades (v2.4.0+)
 ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS proxy_buffering character varying(10) DEFAULT '';
 ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS proxy_request_buffering character varying(10) DEFAULT '';
+ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS ssl_ecdh_curve character varying(255) DEFAULT 'x25519_mlkem768:X25519:secp256r1:secp384r1'::character varying NOT NULL;
 
 -- ============================================================================
 -- BUG FIXES (v1.3.9+)

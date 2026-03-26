@@ -728,6 +728,10 @@
         "label": "SSL Ciphers",
         "description": "List of enabled cipher suites. Balance between security and compatibility."
       },
+      "ssl_ecdh_curve": {
+        "label": "ECDH Curves",
+        "description": "Elliptic curve groups for key exchange. Include x25519_mlkem768 for post-quantum (ML-KEM) TLS support with modern browsers."
+      },
       "ssl_session_cache": {
         "label": "SSL Session Cache",
         "description": "Cache SSL sessions to speed up reconnects by skipping handshake."
@@ -1159,6 +1163,7 @@
       "brotli_types": "Content types to compress with Brotli.",
       "ssl_protocols": "Avoid using old protocols (SSLv3, TLSv1.0, TLSv1.1) as they have security vulnerabilities.",
       "ssl_ciphers": "List of encryption algorithms. Keep updated for strong security.",
+      "ssl_ecdh_curve": "Key exchange curve groups. x25519_mlkem768 enables post-quantum TLS for modern browsers (Chrome, Edge, Safari).",
       "ssl_session_cache": "Caches SSL handshake info to speed up reconnections.",
       "ssl_session_timeout": "Duration to keep SSL session cache.",
       "ssl_prefer_server_ciphers": "Prioritize server's cipher suite preference over client's.",

@@ -152,6 +152,7 @@ func (r *BackupRepository) exportGlobalSettings(ctx context.Context) (*model.Glo
 		       gzip_http_version, gzip_min_length, gzip_types,
 		       ssl_protocols, ssl_ciphers, ssl_prefer_server_ciphers, ssl_session_cache,
 		       ssl_session_timeout, ssl_session_tickets, ssl_stapling, ssl_stapling_verify,
+		       COALESCE(ssl_ecdh_curve, 'x25519_mlkem768:X25519:secp256r1:secp384r1') as ssl_ecdh_curve,
 		       access_log_enabled, error_log_level, resolver, resolver_timeout,
 		       custom_http_config, custom_stream_config
 		FROM global_settings LIMIT 1
@@ -172,6 +173,7 @@ func (r *BackupRepository) exportGlobalSettings(ctx context.Context) (*model.Glo
 		&gs.GzipHTTPVersion, &gs.GzipMinLength, &gs.GzipTypes,
 		&gs.SSLProtocols, &gs.SSLCiphers, &gs.SSLPreferServerCiphers, &gs.SSLSessionCache,
 		&gs.SSLSessionTimeout, &gs.SSLSessionTickets, &gs.SSLStapling, &gs.SSLStaplingVerify,
+		&gs.SSLECDHCurve,
 		&gs.AccessLogEnabled, &gs.ErrorLogLevel, &resolver, &resolverTimeout,
 		&customHttp, &customStream,
 	)

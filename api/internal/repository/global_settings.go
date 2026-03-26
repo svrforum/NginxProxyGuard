@@ -48,6 +48,7 @@ func (r *GlobalSettingsRepository) getFromDB(ctx context.Context) (*model.Global
 		       COALESCE(brotli_enabled, FALSE), COALESCE(brotli_static, TRUE), COALESCE(brotli_comp_level, 6), COALESCE(brotli_min_length, 1000), COALESCE(brotli_types, ''),
 		       ssl_protocols, ssl_ciphers, ssl_prefer_server_ciphers, ssl_session_cache, ssl_session_timeout,
 		       ssl_session_tickets, ssl_stapling, ssl_stapling_verify,
+		       COALESCE(ssl_ecdh_curve, 'x25519_mlkem768:X25519:secp256r1:secp384r1') as ssl_ecdh_curve,
 		       access_log_enabled, error_log_level, resolver, resolver_timeout,
 		       custom_http_config, custom_stream_config,
 		       COALESCE(direct_ip_access_action, 'allow') as direct_ip_access_action,
@@ -95,6 +96,7 @@ func (r *GlobalSettingsRepository) getFromDB(ctx context.Context) (*model.Global
 		&s.BrotliEnabled, &s.BrotliStatic, &s.BrotliCompLevel, &s.BrotliMinLength, &s.BrotliTypes,
 		&s.SSLProtocols, &s.SSLCiphers, &s.SSLPreferServerCiphers, &s.SSLSessionCache, &s.SSLSessionTimeout,
 		&s.SSLSessionTickets, &s.SSLStapling, &s.SSLStaplingVerify,
+		&s.SSLECDHCurve,
 		&s.AccessLogEnabled, &s.ErrorLogLevel, &resolver, &resolverTimeout,
 		&customHTTP, &customStream,
 		&s.DirectIPAccessAction,
@@ -154,6 +156,7 @@ func (r *GlobalSettingsRepository) getFromDB(ctx context.Context) (*model.Global
 			SSLSessionTickets:        false,
 			SSLStapling:              true,
 			SSLStaplingVerify:        true,
+			SSLECDHCurve:             "x25519_mlkem768:X25519:secp256r1:secp384r1",
 			AccessLogEnabled:         true,
 			ErrorLogLevel:            "warn",
 			Resolver:                 "8.8.8.8 8.8.4.4 valid=300s",
@@ -285,6 +288,7 @@ func (r *GlobalSettingsRepository) Update(ctx context.Context, req *model.Update
 			proxy_temp_file_write_size = CASE WHEN $64 != '' THEN $64 ELSE proxy_temp_file_write_size END,
 			proxy_buffering = CASE WHEN $65 != '' THEN $65 ELSE proxy_buffering END,
 			proxy_request_buffering = CASE WHEN $66 != '' THEN $66 ELSE proxy_request_buffering END,
+			ssl_ecdh_curve = CASE WHEN $67 != '' THEN $67 ELSE ssl_ecdh_curve END,
 			updated_at = NOW()
 	`
 
@@ -326,6 +330,7 @@ func (r *GlobalSettingsRepository) Update(ctx context.Context, req *model.Update
 		req.ProxyBufferSize, req.ProxyBuffers, req.ProxyBusyBuffersSize,
 		req.ProxyMaxTempFileSize, req.ProxyTempFileWriteSize,
 		req.ProxyBuffering, req.ProxyRequestBuffering,
+		req.SSLECDHCurve,
 	)
 	if err != nil {
 		return nil, err

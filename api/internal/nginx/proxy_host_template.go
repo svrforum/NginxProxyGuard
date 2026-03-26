@@ -925,9 +925,10 @@ server {
     # SSL configuration
     ssl_certificate /etc/nginx/certs/{{certPath .Host}}/fullchain.pem;
     ssl_certificate_key /etc/nginx/certs/{{certPath .Host}}/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_prefer_server_ciphers on;
-    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305;
+    ssl_protocols {{if .GlobalSettings}}{{if .GlobalSettings.SSLProtocols}}{{.GlobalSettings.SSLProtocols}}{{else}}TLSv1.2 TLSv1.3{{end}}{{else}}TLSv1.2 TLSv1.3{{end}};
+    ssl_prefer_server_ciphers {{if .GlobalSettings}}{{if .GlobalSettings.SSLPreferServerCiphers}}on{{else}}off{{end}}{{else}}off{{end}};
+    ssl_ciphers {{if .GlobalSettings}}{{if .GlobalSettings.SSLCiphers}}{{.GlobalSettings.SSLCiphers}}{{else}}ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305{{end}}{{else}}ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305{{end}};
+    ssl_ecdh_curve {{if .GlobalSettings}}{{if .GlobalSettings.SSLECDHCurve}}{{.GlobalSettings.SSLECDHCurve}}{{else}}x25519_mlkem768:X25519:secp256r1:secp384r1{{end}}{{else}}x25519_mlkem768:X25519:secp256r1:secp384r1{{end}};
 {{if .Host.SSLHTTP3}}
     # HTTP/3 settings
     ssl_early_data on;

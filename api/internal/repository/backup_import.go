@@ -273,6 +273,11 @@ func (r *BackupRepository) clearExistingData(ctx context.Context, tx *sql.Tx) er
 }
 
 func (r *BackupRepository) importGlobalSettings(ctx context.Context, tx *sql.Tx, gs *model.GlobalSettingsExport) error {
+	// Default ssl_ecdh_curve for old backups that don't have this field
+	if gs.SSLECDHCurve == "" {
+		gs.SSLECDHCurve = "x25519_mlkem768:X25519:secp256r1:secp384r1"
+	}
+
 	query := `
 		UPDATE global_settings SET
 			worker_processes = $1, worker_connections = $2, worker_rlimit_nofile = $3,
@@ -285,8 +290,9 @@ func (r *BackupRepository) importGlobalSettings(ctx context.Context, tx *sql.Tx,
 			gzip_http_version = $28, gzip_min_length = $29, gzip_types = $30,
 			ssl_protocols = $31, ssl_ciphers = $32, ssl_prefer_server_ciphers = $33, ssl_session_cache = $34,
 			ssl_session_timeout = $35, ssl_session_tickets = $36, ssl_stapling = $37, ssl_stapling_verify = $38,
-			access_log_enabled = $39, error_log_level = $40, resolver = $41, resolver_timeout = $42,
-			custom_http_config = $43, custom_stream_config = $44, updated_at = NOW()
+			ssl_ecdh_curve = $39,
+			access_log_enabled = $40, error_log_level = $41, resolver = $42, resolver_timeout = $43,
+			custom_http_config = $44, custom_stream_config = $45, updated_at = NOW()
 	`
 
 	_, err := tx.ExecContext(ctx, query,
@@ -300,6 +306,7 @@ func (r *BackupRepository) importGlobalSettings(ctx context.Context, tx *sql.Tx,
 		gs.GzipHTTPVersion, gs.GzipMinLength, gs.GzipTypes,
 		gs.SSLProtocols, gs.SSLCiphers, gs.SSLPreferServerCiphers, gs.SSLSessionCache,
 		gs.SSLSessionTimeout, gs.SSLSessionTickets, gs.SSLStapling, gs.SSLStaplingVerify,
+		gs.SSLECDHCurve,
 		gs.AccessLogEnabled, gs.ErrorLogLevel, gs.Resolver, gs.ResolverTimeout,
 		gs.CustomHTTPConfig, gs.CustomStreamConfig,
 	)

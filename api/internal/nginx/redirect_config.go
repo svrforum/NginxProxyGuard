@@ -77,11 +77,9 @@ server {
     # Disable WAF for redirect host
     modsecurity off;
 
-    # SSL configuration
+    # SSL configuration (inherits ssl_protocols, ssl_ciphers, ssl_ecdh_curve from http block)
     ssl_certificate /etc/nginx/certs/{{certPath .Host}}/fullchain.pem;
     ssl_certificate_key /etc/nginx/certs/{{certPath .Host}}/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_prefer_server_ciphers on;
     ssl_early_data on;
 
     # HTTP/3 Alt-Svc header (1 hour cache for faster fallback on connection issues)

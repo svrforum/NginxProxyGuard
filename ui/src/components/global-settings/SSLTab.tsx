@@ -20,6 +20,14 @@ export default function SSLTab({ getStringValue, getBoolValue, handleChange }: T
           className={`${inputClass} font-mono`}
         />
       </SettingField>
+      <SettingField settingKey="ssl_ecdh_curve">
+        <input
+          type="text"
+          value={getStringValue('ssl_ecdh_curve', 'x25519_mlkem768:X25519:secp256r1:secp384r1')}
+          onChange={(e) => handleChange('ssl_ecdh_curve', e.target.value)}
+          className={`${inputClass} font-mono`}
+        />
+      </SettingField>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <SettingField settingKey="ssl_session_cache">
           <input

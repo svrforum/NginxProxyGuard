@@ -148,6 +148,7 @@ func (s *SettingsService) ApplySettingsPreset(ctx context.Context, preset string
 		BrotliCompLevel:       &presetConfig.BrotliCompLevel,
 		SSLProtocols:          presetConfig.SSLProtocols,
 		SSLPreferServerCiphers: &presetConfig.SSLPreferServerCiphers,
+		SSLECDHCurve:          presetConfig.SSLECDHCurve,
 	}
 
 	settings, err := s.settingsRepo.Update(ctx, req)

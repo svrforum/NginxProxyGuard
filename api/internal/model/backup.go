@@ -286,6 +286,7 @@ type GlobalSettingsExport struct {
 	SSLSessionTickets      bool   `json:"ssl_session_tickets"`
 	SSLStapling            bool   `json:"ssl_stapling"`
 	SSLStaplingVerify      bool   `json:"ssl_stapling_verify"`
+	SSLECDHCurve           string `json:"ssl_ecdh_curve"`
 
 	// Logging settings
 	AccessLogEnabled bool   `json:"access_log_enabled"`

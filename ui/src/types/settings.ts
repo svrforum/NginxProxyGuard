@@ -79,6 +79,7 @@ export interface GlobalSettings {
   ssl_session_tickets: boolean;
   ssl_stapling: boolean;
   ssl_stapling_verify: boolean;
+  ssl_ecdh_curve: string;
 
   // Logging settings
   access_log_enabled: boolean;

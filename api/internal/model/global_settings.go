@@ -83,6 +83,7 @@ type GlobalSettings struct {
 	SSLSessionTickets       bool   `json:"ssl_session_tickets" db:"ssl_session_tickets"`
 	SSLStapling             bool   `json:"ssl_stapling" db:"ssl_stapling"`
 	SSLStaplingVerify       bool   `json:"ssl_stapling_verify" db:"ssl_stapling_verify"`
+	SSLECDHCurve            string `json:"ssl_ecdh_curve" db:"ssl_ecdh_curve"`
 
 	// Logging settings
 	AccessLogEnabled bool   `json:"access_log_enabled" db:"access_log_enabled"`
@@ -200,6 +201,7 @@ type UpdateGlobalSettingsRequest struct {
 	SSLSessionTickets      *bool  `json:"ssl_session_tickets,omitempty"`
 	SSLStapling            *bool  `json:"ssl_stapling,omitempty"`
 	SSLStaplingVerify      *bool  `json:"ssl_stapling_verify,omitempty"`
+	SSLECDHCurve           string `json:"ssl_ecdh_curve,omitempty"`
 
 	// Logging settings
 	AccessLogEnabled *bool  `json:"access_log_enabled,omitempty"`
@@ -271,6 +273,7 @@ var GlobalSettingsPresets = map[string]GlobalSettings{
 		SSLSessionTickets:      false,
 		SSLStapling:            true,
 		SSLStaplingVerify:      true,
+		SSLECDHCurve:           "x25519_mlkem768:X25519:secp256r1:secp384r1",
 		ClientMaxBodySize:      "10m",
 		BrotliStatic:           true,
 	},
@@ -293,6 +296,7 @@ var GlobalSettingsPresets = map[string]GlobalSettings{
 		BrotliMinLength:        1000,
 		ServerTokens:           false,
 		SSLProtocols:           "TLSv1.2 TLSv1.3",
+		SSLECDHCurve:           "x25519_mlkem768:X25519:secp256r1:secp384r1",
 		ProxyBufferSize:        "8k",
 		ProxyBuffers:           "8 32k",
 		ProxyBusyBuffersSize:   "128k",
