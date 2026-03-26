@@ -734,7 +734,7 @@
       },
       "ssl_ecdh_curve": {
         "label": "ECDH 커브",
-        "description": "키 교환에 사용할 타원 곡선 그룹입니다. x25519_mlkem768을 포함하면 최신 브라우저의 양자내성(ML-KEM) TLS를 지원합니다."
+        "description": "키 교환에 사용할 타원 곡선 그룹입니다. X25519MLKEM768을 포함하면 최신 브라우저의 양자내성(ML-KEM) TLS를 지원합니다."
       },
       "ssl_session_cache": {
         "label": "SSL 세션 캐시",
@@ -1167,7 +1167,7 @@
       "brotli_types": "Brotli로 압축할 콘텐츠 타입을 지정합니다.",
       "ssl_protocols": "보안 취약점이 있는 구버전 프로토콜(SSLv3, TLSv1.0, TLSv1.1)은 사용하지 않는 것이 안전합니다.",
       "ssl_ciphers": "사용할 암호화 알고리즘 목록입니다. 강력한 보안을 위해 최신 설정을 유지하세요.",
-      "ssl_ecdh_curve": "키 교환 커브 그룹입니다. x25519_mlkem768을 포함하면 최신 브라우저(Chrome, Edge, Safari)의 양자내성 TLS를 지원합니다.",
+      "ssl_ecdh_curve": "키 교환 커브 그룹입니다. X25519MLKEM768을 포함하면 최신 브라우저(Chrome, Edge, Safari)의 양자내성 TLS를 지원합니다.",
       "ssl_session_cache": "SSL 핸드셰이크 정보를 캐시하여 재접속 속도를 높입니다.",
       "ssl_session_timeout": "SSL 세션 캐시 유지 시간입니다.",
       "ssl_prefer_server_ciphers": "클라이언트가 아닌 서버가 지정한 암호화 알고리즘을 우선 사용합니다.",

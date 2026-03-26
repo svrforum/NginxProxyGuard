@@ -23,7 +23,7 @@ export default function SSLTab({ getStringValue, getBoolValue, handleChange }: T
       <SettingField settingKey="ssl_ecdh_curve">
         <input
           type="text"
-          value={getStringValue('ssl_ecdh_curve', 'x25519_mlkem768:X25519:secp256r1:secp384r1')}
+          value={getStringValue('ssl_ecdh_curve', 'X25519MLKEM768:X25519:secp256r1:secp384r1')}
           onChange={(e) => handleChange('ssl_ecdh_curve', e.target.value)}
           className={`${inputClass} font-mono`}
         />

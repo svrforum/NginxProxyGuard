@@ -275,7 +275,7 @@ func (r *BackupRepository) clearExistingData(ctx context.Context, tx *sql.Tx) er
 func (r *BackupRepository) importGlobalSettings(ctx context.Context, tx *sql.Tx, gs *model.GlobalSettingsExport) error {
 	// Default ssl_ecdh_curve for old backups that don't have this field
 	if gs.SSLECDHCurve == "" {
-		gs.SSLECDHCurve = "x25519_mlkem768:X25519:secp256r1:secp384r1"
+		gs.SSLECDHCurve = "X25519MLKEM768:X25519:secp256r1:secp384r1"
 	}
 
 	query := `

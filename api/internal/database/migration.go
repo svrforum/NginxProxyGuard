@@ -90,7 +90,7 @@ func (db *DB) RunMigrations() error {
 		ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS proxy_request_buffering character varying(10) DEFAULT '';
 
 		-- Global settings: ssl_ecdh_curve for ML-KEM/post-quantum TLS support (v2.5.0+)
-		ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS ssl_ecdh_curve character varying(255) DEFAULT 'x25519_mlkem768:X25519:secp256r1:secp384r1' NOT NULL;
+		ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS ssl_ecdh_curve character varying(255) DEFAULT 'X25519MLKEM768:X25519:secp256r1:secp384r1' NOT NULL;
 
 		-- Default exploit block rules (seed if not exists)
 		INSERT INTO public.exploit_block_rules (id, category, name, pattern, pattern_type, description, severity, enabled, is_system, sort_order) VALUES
