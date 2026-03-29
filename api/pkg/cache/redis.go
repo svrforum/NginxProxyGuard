@@ -21,17 +21,20 @@ var (
 	ErrNotReady  = errors.New("cache not ready")
 )
 
+// Global key prefix for all cache keys
+const KeyPrefix = "nginx_proxy_guard:"
+
 // Cache prefixes for different data types
 const (
-	PrefixBannedIP     = "banned_ip:"       // Set of banned IPs
-	PrefixRateLimit    = "rate_limit:"      // Rate limiting counters
-	PrefixFail2ban     = "fail2ban:"        // Fail2ban event counters
-	PrefixWAFCounter   = "waf_counter:"     // WAF auto-ban counters
-	PrefixConfig       = "config:"          // Configuration cache
-	PrefixSession      = "session:"         // Session data
-	PrefixLogBuffer    = "log_buffer"       // Log buffering stream
-	PrefixURIBlock     = "uri_block:"       // URI block rules per host
-	PrefixLock         = "lock:"            // Distributed locks
+	PrefixBannedIP     = KeyPrefix + "banned_ip:"       // Set of banned IPs
+	PrefixRateLimit    = KeyPrefix + "rate_limit:"      // Rate limiting counters
+	PrefixFail2ban     = KeyPrefix + "fail2ban:"        // Fail2ban event counters
+	PrefixWAFCounter   = KeyPrefix + "waf_counter:"     // WAF auto-ban counters
+	PrefixConfig       = KeyPrefix + "config:"          // Configuration cache
+	PrefixSession      = KeyPrefix + "session:"         // Session data
+	PrefixLogBuffer    = KeyPrefix + "log_buffer"       // Log buffering stream
+	PrefixURIBlock     = KeyPrefix + "uri_block:"       // URI block rules per host
+	PrefixLock         = KeyPrefix + "lock:"            // Distributed locks
 )
 
 // Retry configuration constants
@@ -699,15 +702,15 @@ func (r *RedisClient) InvalidateAllURIBlocks(ctx context.Context) error {
 // ========================================
 
 const (
-	PrefixDashboard      = "dashboard:"
-	PrefixGeoIP          = "geoip:"
-	PrefixProxyHost      = "proxy_host:"
-	PrefixJWTBlacklist   = "jwt_blacklist:"
-	PrefixAPIRateLimit   = "api_rate:"
-	PrefixSystemSettings = "system_settings:"
-	PrefixGlobalSettings = "global_settings:"
-	PrefixExploitRules   = "exploit_rules:"
-	PrefixWAFExclusions  = "waf_exclusions:"
+	PrefixDashboard      = KeyPrefix + "dashboard:"
+	PrefixGeoIP          = KeyPrefix + "geoip:"
+	PrefixProxyHost      = KeyPrefix + "proxy_host:"
+	PrefixJWTBlacklist   = KeyPrefix + "jwt_blacklist:"
+	PrefixAPIRateLimit   = KeyPrefix + "api_rate:"
+	PrefixSystemSettings = KeyPrefix + "system_settings:"
+	PrefixGlobalSettings = KeyPrefix + "global_settings:"
+	PrefixExploitRules   = KeyPrefix + "exploit_rules:"
+	PrefixWAFExclusions  = KeyPrefix + "waf_exclusions:"
 )
 
 // DashboardCacheTTL is the default TTL for dashboard cache
