@@ -141,7 +141,7 @@ func (s *Fail2banService) RecordFailedRequest(ctx context.Context, hostID string
 
 	// Try Redis first for distributed counting
 	if s.redisCache != nil && s.redisCache.IsReady() {
-		key := fmt.Sprintf("fail2ban:%s:%s", hostID, clientIP)
+		key := fmt.Sprintf("%s:%s", hostID, clientIP)
 		count, err := s.redisCache.IncrementCounter(ctx, key, findTime)
 		if err == nil {
 			eventCount = int(count)
@@ -179,7 +179,7 @@ func (s *Fail2banService) RecordFailedRequest(ctx context.Context, hostID string
 
 			// Clear events for this IP after banning
 			if s.redisCache != nil && s.redisCache.IsReady() {
-				key := fmt.Sprintf("fail2ban:%s:%s", hostID, clientIP)
+				key := fmt.Sprintf("%s:%s", hostID, clientIP)
 				s.redisCache.ResetCounter(ctx, key)
 			}
 			s.mu.Lock()
