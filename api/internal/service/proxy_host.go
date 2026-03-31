@@ -49,6 +49,7 @@ type ProxyHostService struct {
 	exploitBlockRuleRepo   *repository.ExploitBlockRuleRepository
 	certRepo               *repository.CertificateRepository
 	systemLogRepo          *repository.SystemLogRepository
+	filterSubscriptionRepo *repository.FilterSubscriptionRepository
 	nginx                  NginxManager
 	certService            CertificateCreator // Optional: for creating certificates during clone
 }
@@ -94,6 +95,10 @@ func NewProxyHostService(
 // SetCertificateService sets the certificate service for creating certificates during clone operations
 func (s *ProxyHostService) SetCertificateService(certService CertificateCreator) {
 	s.certService = certService
+}
+
+func (s *ProxyHostService) SetFilterSubscriptionRepo(repo *repository.FilterSubscriptionRepository) {
+	s.filterSubscriptionRepo = repo
 }
 
 func (s *ProxyHostService) Create(ctx context.Context, req *model.CreateProxyHostRequest) (*model.ProxyHost, error) {

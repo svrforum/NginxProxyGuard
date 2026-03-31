@@ -89,6 +89,7 @@ func main() {
 	uriBlockRepo := repository.NewURIBlockRepository(db)
 	geoIPHistoryRepo := repository.NewGeoIPHistoryRepository(db.DB)
 	exploitBlockRuleRepo := repository.NewExploitBlockRuleRepository(db.DB)
+	filterSubscriptionRepo := repository.NewFilterSubscriptionRepository(db.DB)
 
 	// Wire up Valkey cache to repositories (if available)
 	if redisCache != nil {
@@ -118,6 +119,9 @@ func main() {
 
 	// Inject certificate service into proxy host service for clone operations
 	proxyHostService.SetCertificateService(certificateService)
+
+	// Wire filter subscription repo into proxy host service for nginx config generation
+	proxyHostService.SetFilterSubscriptionRepo(filterSubscriptionRepo)
 
 	// Set up certificate ready callback to regenerate nginx configs
 	// when a certificate is issued or renewed
@@ -164,6 +168,9 @@ func main() {
 
 	// Initialize nginx reloader with debounce (for URI block etc.)
 	nginxReloader := service.NewNginxReloader(nginxManager, config.NginxReloaderDebounce)
+
+	// Initialize filter subscription service
+	filterSubscriptionService := service.NewFilterSubscriptionService(filterSubscriptionRepo, proxyHostService, nginxReloader)
 
 	// Initialize audit service
 	auditService := service.NewAuditService(auditLogRepo)
@@ -222,6 +229,7 @@ func main() {
 	auditLogHandler := handler.NewAuditLogHandler(auditLogRepo, apiTokenRepo)
 	challengeHandler := handler.NewChallengeHandler(challengeService, auditService)
 	cloudProviderHandler := handler.NewCloudProviderHandler(cloudProviderRepo, proxyHostService, auditService)
+	filterSubscriptionHandler := handler.NewFilterSubscriptionHandler(filterSubscriptionService, auditService)
 
 	// Initialize log collector (with Redis buffer if available)
 	var logCollector *service.LogCollector
@@ -262,6 +270,10 @@ func main() {
 	// Initialize backup scheduler (auto backups based on cron schedule)
 	backupScheduler := scheduler.NewBackupScheduler(backupRepo, systemSettingsRepo, cfg.BackupPath)
 	backupScheduler.Start()
+
+	// Initialize filter subscription refresh scheduler
+	filterRefreshScheduler := scheduler.NewFilterRefreshScheduler(filterSubscriptionService)
+	filterRefreshScheduler.Start()
 
 	// Start log collector (use context for graceful shutdown)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -802,6 +814,22 @@ func main() {
 		v1.GET("/proxy-hosts/:proxyHostId/blocked-cloud-providers", cloudProviderHandler.GetBlockedProviders)
 		v1.PUT("/proxy-hosts/:proxyHostId/blocked-cloud-providers", cloudProviderHandler.SetBlockedProviders)
 
+		// Filter Subscription routes
+		filterSubs := v1.Group("/filter-subscriptions")
+		{
+			filterSubs.GET("/catalog", filterSubscriptionHandler.GetCatalog)
+			filterSubs.POST("/catalog/subscribe", filterSubscriptionHandler.SubscribeFromCatalog)
+			filterSubs.GET("", filterSubscriptionHandler.List)
+			filterSubs.POST("", filterSubscriptionHandler.Create)
+			filterSubs.GET("/:id", filterSubscriptionHandler.GetByID)
+			filterSubs.PUT("/:id", filterSubscriptionHandler.Update)
+			filterSubs.DELETE("/:id", filterSubscriptionHandler.Delete)
+			filterSubs.POST("/:id/refresh", filterSubscriptionHandler.Refresh)
+			filterSubs.GET("/:id/exclusions", filterSubscriptionHandler.ListExclusions)
+			filterSubs.POST("/:id/exclusions/:hostId", filterSubscriptionHandler.AddExclusion)
+			filterSubs.DELETE("/:id/exclusions/:hostId", filterSubscriptionHandler.RemoveExclusion)
+		}
+
 		// Test endpoints (Phase 1 + Phase 7)
 		test := v1.Group("/test")
 		{
@@ -920,6 +948,7 @@ func main() {
 		dockerLogCollector.Stop()
 		renewalScheduler.Stop()
 		partitionScheduler.Stop()
+		filterRefreshScheduler.Stop()
 		e.Close()
 	}()
 
