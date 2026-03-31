@@ -1,0 +1,74 @@
+{
+  "title": "Filter Subscriptions",
+  "tabs": {
+    "catalog": "Catalog",
+    "subscriptions": "My Subscriptions"
+  },
+  "catalog": {
+    "title": "NPG Filter Catalog",
+    "description": "Community-maintained security filter lists.",
+    "empty": "Unable to load catalog.",
+    "subscribe": "Subscribe Selected",
+    "subscribed": "Subscribed",
+    "entries": "{{count}} entries",
+    "fetchError": "Failed to fetch catalog."
+  },
+  "list": {
+    "empty": "No active filter subscriptions.",
+    "addUrl": "Add by URL",
+    "lastFetch": "Last fetched",
+    "status": {
+      "ok": "OK",
+      "error": "Error",
+      "never": "Never"
+    }
+  },
+  "form": {
+    "url": "Filter List URL",
+    "urlPlaceholder": "https://example.com/blocklist.json",
+    "name": "Name",
+    "namePlaceholder": "Auto-detect or enter manually",
+    "type": "Type",
+    "refreshType": "Refresh Method",
+    "refreshValue": "Refresh Value",
+    "refreshTypes": {
+      "interval": "Interval",
+      "daily": "Daily",
+      "cron": "Advanced (Cron)"
+    },
+    "intervals": {
+      "6h": "6 hours",
+      "12h": "12 hours",
+      "24h": "24 hours",
+      "48h": "48 hours"
+    }
+  },
+  "settings": {
+    "title": "Subscription Settings",
+    "exclusions": "Host Exclusions",
+    "exclusionDescription": "This filter will not apply to the selected hosts.",
+    "excluded": "Excluded"
+  },
+  "actions": {
+    "refresh": "Refresh Now",
+    "refreshing": "Refreshing...",
+    "delete": "Delete Subscription",
+    "deleteConfirm": "Are you sure you want to delete this filter subscription? All entries will be removed.",
+    "settings": "Settings"
+  },
+  "types": {
+    "ip": "IP",
+    "cidr": "CIDR",
+    "user_agent": "User Agent"
+  },
+  "messages": {
+    "created": "Filter subscription has been added.",
+    "deleted": "Filter subscription has been deleted.",
+    "refreshed": "Filter has been refreshed.",
+    "updated": "Settings have been saved.",
+    "catalogSubscribed": "Selected filters have been subscribed."
+  },
+  "badge": {
+    "filterSubscription": "Filter Subscription"
+  }
+}

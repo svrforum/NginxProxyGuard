@@ -19,6 +19,7 @@ import koExploitExceptions from './locales/ko/exploitExceptions.json'
 import koExploitRules from './locales/ko/exploitRules.json'
 import koFail2ban from './locales/ko/fail2ban.json'
 import koExploitLogs from './locales/ko/exploitLogs.json'
+import koFilterSubscription from './locales/ko/filterSubscription.json'
 
 
 // English translations
@@ -38,6 +39,7 @@ import enExploitExceptions from './locales/en/exploitExceptions.json'
 import enExploitRules from './locales/en/exploitRules.json'
 import enFail2ban from './locales/en/fail2ban.json'
 import enExploitLogs from './locales/en/exploitLogs.json'
+import enFilterSubscription from './locales/en/filterSubscription.json'
 
 
 export const STORAGE_KEY = 'npg_language'
@@ -67,6 +69,7 @@ export const resources = {
     exploitRules: koExploitRules,
     fail2ban: koFail2ban,
     exploitLogs: koExploitLogs,
+    filterSubscription: koFilterSubscription,
   },
   en: {
     common: enCommon,
@@ -85,6 +88,7 @@ export const resources = {
     exploitRules: enExploitRules,
     fail2ban: enFail2ban,
     exploitLogs: enExploitLogs,
+    filterSubscription: enFilterSubscription,
   },
 }
 
@@ -113,6 +117,7 @@ i18n
       'exploitRules',
       'fail2ban',
       'exploitLogs',
+      'filterSubscription',
     ],
     interpolation: {
       escapeValue: false, // React already escapes

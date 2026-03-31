@@ -73,7 +73,8 @@
       "ssl": "SSL / ACME",
       "maintenance": "Maintenance",
       "backups": "Backups",
-      "systemLogs": "System Logs"
+      "systemLogs": "System Logs",
+      "filterSubscriptions": "Filter Subscriptions"
     }
   },
   "loading": "Loading..."

@@ -1,0 +1,74 @@
+{
+  "title": "필터 구독",
+  "tabs": {
+    "catalog": "카탈로그",
+    "subscriptions": "내 구독"
+  },
+  "catalog": {
+    "title": "NPG 필터 카탈로그",
+    "description": "커뮤니티가 관리하는 보안 필터 리스트입니다.",
+    "empty": "카탈로그를 불러올 수 없습니다.",
+    "subscribe": "선택한 항목 구독",
+    "subscribed": "구독 중",
+    "entries": "{{count}}개 항목",
+    "fetchError": "카탈로그를 가져올 수 없습니다."
+  },
+  "list": {
+    "empty": "구독 중인 필터가 없습니다.",
+    "addUrl": "URL로 추가",
+    "lastFetch": "마지막 갱신",
+    "status": {
+      "ok": "정상",
+      "error": "오류",
+      "never": "미갱신"
+    }
+  },
+  "form": {
+    "url": "필터 리스트 URL",
+    "urlPlaceholder": "https://example.com/blocklist.json",
+    "name": "이름",
+    "namePlaceholder": "자동 감지 또는 직접 입력",
+    "type": "타입",
+    "refreshType": "갱신 방식",
+    "refreshValue": "갱신 값",
+    "refreshTypes": {
+      "interval": "주기별",
+      "daily": "매일",
+      "cron": "고급 (Cron)"
+    },
+    "intervals": {
+      "6h": "6시간",
+      "12h": "12시간",
+      "24h": "24시간",
+      "48h": "48시간"
+    }
+  },
+  "settings": {
+    "title": "구독 설정",
+    "exclusions": "호스트 제외 설정",
+    "exclusionDescription": "선택한 호스트에는 이 필터가 적용되지 않습니다.",
+    "excluded": "제외됨"
+  },
+  "actions": {
+    "refresh": "지금 갱신",
+    "refreshing": "갱신 중...",
+    "delete": "구독 삭제",
+    "deleteConfirm": "이 필터 구독을 삭제하시겠습니까? 모든 항목이 제거됩니다.",
+    "settings": "설정"
+  },
+  "types": {
+    "ip": "IP",
+    "cidr": "CIDR",
+    "user_agent": "User Agent"
+  },
+  "messages": {
+    "created": "필터 구독이 추가되었습니다.",
+    "deleted": "필터 구독이 삭제되었습니다.",
+    "refreshed": "필터가 갱신되었습니다.",
+    "updated": "설정이 저장되었습니다.",
+    "catalogSubscribed": "선택한 필터가 구독되었습니다."
+  },
+  "badge": {
+    "filterSubscription": "필터 구독"
+  }
+}

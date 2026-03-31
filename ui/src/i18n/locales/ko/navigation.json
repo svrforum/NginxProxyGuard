@@ -73,7 +73,8 @@
       "ssl": "SSL / ACME",
       "maintenance": "유지보수",
       "backups": "백업",
-      "systemLogs": "시스템 로그"
+      "systemLogs": "시스템 로그",
+      "filterSubscriptions": "필터 구독"
     }
   },
   "loading": "로딩 중..."
