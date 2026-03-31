@@ -9,14 +9,21 @@
     "description": "커뮤니티가 관리하는 보안 필터 리스트입니다.",
     "empty": "카탈로그를 불러올 수 없습니다.",
     "subscribe": "선택한 항목 구독",
+    "unsubscribe": "구독 취소",
     "subscribed": "구독 중",
     "entries": "{{count}}개 항목",
-    "fetchError": "카탈로그를 가져올 수 없습니다."
+    "showEntries": "항목 보기",
+    "hideEntries": "항목 접기",
+    "fetchError": "카탈로그를 가져올 수 없습니다.",
+    "unsubscribeConfirm": "이 필터 구독을 취소하시겠습니까?"
   },
   "list": {
     "empty": "구독 중인 필터가 없습니다.",
     "addUrl": "URL로 추가",
     "lastFetch": "마지막 갱신",
+    "showEntries": "항목 보기",
+    "hideEntries": "항목 접기",
+    "noEntries": "항목이 없습니다.",
     "status": {
       "ok": "정상",
       "error": "오류",

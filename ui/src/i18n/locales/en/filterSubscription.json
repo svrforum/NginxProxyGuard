@@ -9,14 +9,21 @@
     "description": "Community-maintained security filter lists.",
     "empty": "Unable to load catalog.",
     "subscribe": "Subscribe Selected",
+    "unsubscribe": "Unsubscribe",
     "subscribed": "Subscribed",
     "entries": "{{count}} entries",
-    "fetchError": "Failed to fetch catalog."
+    "showEntries": "Show Entries",
+    "hideEntries": "Hide Entries",
+    "fetchError": "Failed to fetch catalog.",
+    "unsubscribeConfirm": "Are you sure you want to unsubscribe from this filter?"
   },
   "list": {
     "empty": "No active filter subscriptions.",
     "addUrl": "Add by URL",
     "lastFetch": "Last fetched",
+    "showEntries": "Show Entries",
+    "hideEntries": "Hide Entries",
+    "noEntries": "No entries.",
     "status": {
       "ok": "OK",
       "error": "Error",
