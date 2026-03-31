@@ -24,6 +24,8 @@
     "showEntries": "Show Entries",
     "hideEntries": "Hide Entries",
     "noEntries": "No entries.",
+    "searchPlaceholder": "Search IP or pattern...",
+    "searchResults": "results",
     "status": {
       "ok": "OK",
       "error": "Error",
@@ -74,6 +76,10 @@
     "refreshed": "Filter has been refreshed.",
     "updated": "Settings have been saved.",
     "catalogSubscribed": "Selected filters have been subscribed."
+  },
+  "presets": {
+    "title": "Recommended Blocklists",
+    "add": "Add"
   },
   "badge": {
     "filterSubscription": "Filter Subscription"

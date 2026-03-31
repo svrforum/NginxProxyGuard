@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useEscapeKey } from '../hooks/useEscapeKey';
@@ -20,6 +20,15 @@ import type {
   UpdateFilterSubscriptionRequest,
   FilterSubscriptionHostExclusion,
 } from '../types/filter-subscription';
+
+// Well-known community blocklists
+const PRESET_LISTS = [
+  { name: 'Spamhaus DROP', url: 'https://www.spamhaus.org/drop/drop.txt', type: 'cidr', description: 'Spamhaus Don\'t Route Or Peer — hijacked IP ranges' },
+  { name: 'FireHOL Level 1', url: 'https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/firehol_level1.netset', type: 'cidr', description: 'FireHOL aggregated threat intelligence (Level 1)' },
+  { name: 'Blocklist.de', url: 'https://lists.blocklist.de/lists/all.txt', type: 'ip', description: 'IPs reported for attacks (brute-force, bots, spam)' },
+  { name: 'IPsum Level 3', url: 'https://raw.githubusercontent.com/stamparm/ipsum/master/levels/3.txt', type: 'ip', description: 'IPsum threat intelligence — IPs seen on 3+ blacklists' },
+  { name: 'Emerging Threats', url: 'https://rules.emergingthreats.net/fwrules/emerging-Block-IPs.txt', type: 'ip', description: 'Emerging Threats compiled block list' },
+] as const;
 
 function getRelativeTime(dateStr: string): string {
   const now = Date.now();
@@ -94,20 +103,33 @@ function RefreshSelector({
   );
 }
 
-function EntriesPanel({ entries, isLoading }: { entries: { value: string; reason?: string }[]; isLoading?: boolean }) {
+function EntriesPanel({ entries, isLoading, searchQuery }: { entries: { value: string; reason?: string }[]; isLoading?: boolean; searchQuery?: string }) {
   const { t } = useTranslation('filterSubscription');
   if (isLoading) return <div className="text-xs text-slate-400 py-2 pl-4">...</div>;
   if (!entries.length) return <div className="text-xs text-slate-400 py-2 pl-4">{t('list.noEntries')}</div>;
+
+  const filtered = searchQuery
+    ? entries.filter(e => e.value.includes(searchQuery) || (e.reason && e.reason.toLowerCase().includes(searchQuery.toLowerCase())))
+    : entries;
+
   return (
-    <div className="mt-2 max-h-48 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-900/50">
+    <div className="mt-2 max-h-60 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-900/50">
+      {searchQuery && (
+        <div className="px-3 py-1.5 text-xs text-slate-400 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
+          {filtered.length} / {entries.length} {t('list.searchResults', 'results')}
+        </div>
+      )}
       <table className="w-full text-xs">
         <tbody>
-          {entries.map((entry, i) => (
+          {filtered.slice(0, 500).map((entry, i) => (
             <tr key={i} className="border-b border-slate-200 dark:border-slate-700 last:border-0">
               <td className="px-3 py-1.5 font-mono text-slate-700 dark:text-slate-300 whitespace-nowrap">{entry.value}</td>
               <td className="px-3 py-1.5 text-slate-500 dark:text-slate-400">{entry.reason || '-'}</td>
             </tr>
           ))}
+          {filtered.length > 500 && (
+            <tr><td colSpan={2} className="px-3 py-1.5 text-center text-slate-400">... +{filtered.length - 500} more</td></tr>
+          )}
         </tbody>
       </table>
     </div>
@@ -120,10 +142,12 @@ export default function FilterSubscriptionList() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [settingsTarget, setSettingsTarget] = useState<FilterSubscription | null>(null);
   const [expandedSub, setExpandedSub] = useState<string | null>(null);
+  const [entrySearch, setEntrySearch] = useState('');
 
   // Add URL form state
   const [addUrl, setAddUrl] = useState('');
   const [addName, setAddName] = useState('');
+  const [addType, setAddType] = useState('');
   const [addRefreshType, setAddRefreshType] = useState('interval');
   const [addRefreshValue, setAddRefreshValue] = useState('24h');
 
@@ -145,6 +169,7 @@ export default function FilterSubscriptionList() {
       setShowAddModal(false);
       setAddUrl('');
       setAddName('');
+      setAddType('');
     },
   });
 
@@ -164,12 +189,27 @@ export default function FilterSubscriptionList() {
   });
 
   const subs = subsData?.data || [];
+  const subscribedUrls = useMemo(() => new Set(subs.map(s => s.url)), [subs]);
+
+  // Available presets (not yet subscribed)
+  const availablePresets = PRESET_LISTS.filter(p => !subscribedUrls.has(p.url));
 
   const handleCreate = () => {
     if (!addUrl.trim()) return;
     const data: CreateFilterSubscriptionRequest = { url: addUrl.trim(), refresh_type: addRefreshType, refresh_value: addRefreshValue };
     if (addName.trim()) data.name = addName.trim();
+    if (addType) data.type = addType;
     createMutation.mutate(data);
+  };
+
+  const handlePresetAdd = (preset: typeof PRESET_LISTS[number]) => {
+    createMutation.mutate({
+      url: preset.url,
+      name: preset.name,
+      type: preset.type,
+      refresh_type: 'interval',
+      refresh_value: '24h',
+    });
   };
 
   const handleDelete = (id: string) => {
@@ -179,7 +219,13 @@ export default function FilterSubscriptionList() {
   };
 
   const toggleSubExpand = (id: string) => {
-    setExpandedSub(prev => prev === id ? null : id);
+    if (expandedSub === id) {
+      setExpandedSub(null);
+      setEntrySearch('');
+    } else {
+      setExpandedSub(id);
+      setEntrySearch('');
+    }
   };
 
   useEscapeKey(useCallback(() => {
@@ -197,6 +243,31 @@ export default function FilterSubscriptionList() {
           {t('list.addUrl')}
         </button>
       </div>
+
+      {/* Presets - only show if there are available presets */}
+      {availablePresets.length > 0 && (
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-4">
+          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">{t('presets.title')}</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+            {availablePresets.map(preset => (
+              <div key={preset.url} className="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-medium text-slate-900 dark:text-white truncate">{preset.name}</span>
+                    <TypeBadge type={preset.type} />
+                  </div>
+                  <p className="text-xs text-slate-400 truncate mt-0.5">{preset.description}</p>
+                </div>
+                <button onClick={() => handlePresetAdd(preset)}
+                  disabled={createMutation.isPending}
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors bg-cyan-600 hover:bg-cyan-700 text-white shrink-0 disabled:opacity-50">
+                  {createMutation.isPending ? '...' : t('presets.add')}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Subscription List */}
       {subsLoading ? (
@@ -259,9 +330,18 @@ export default function FilterSubscriptionList() {
                 </div>
                 {isExpanded && (
                   <div className="px-4 pb-4">
+                    {/* Search within entries */}
+                    <input
+                      type="text"
+                      value={entrySearch}
+                      onChange={e => setEntrySearch(e.target.value)}
+                      placeholder={t('list.searchPlaceholder')}
+                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-xs bg-white dark:bg-slate-700 text-slate-900 dark:text-white mb-2"
+                    />
                     <EntriesPanel
                       entries={expandedSubDetail?.entries || []}
                       isLoading={detailLoading}
+                      searchQuery={entrySearch}
                     />
                   </div>
                 )}

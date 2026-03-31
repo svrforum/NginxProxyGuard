@@ -24,6 +24,8 @@
     "showEntries": "항목 보기",
     "hideEntries": "항목 접기",
     "noEntries": "항목이 없습니다.",
+    "searchPlaceholder": "IP 또는 패턴 검색...",
+    "searchResults": "건 검색됨",
     "status": {
       "ok": "정상",
       "error": "오류",
@@ -74,6 +76,10 @@
     "refreshed": "필터가 갱신되었습니다.",
     "updated": "설정이 저장되었습니다.",
     "catalogSubscribed": "선택한 필터가 구독되었습니다."
+  },
+  "presets": {
+    "title": "추천 블랙리스트",
+    "add": "추가"
   },
   "badge": {
     "filterSubscription": "필터 구독"
