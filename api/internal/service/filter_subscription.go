@@ -495,6 +495,7 @@ func (s *FilterSubscriptionService) parseJSON(content string) ([]model.FilterSub
 	}
 
 	entries := make([]model.FilterSubscriptionEntry, 0, len(list.Entries))
+	seen := make(map[string]bool)
 	for _, e := range list.Entries {
 		if e.Value == "" {
 			continue
@@ -503,6 +504,11 @@ func (s *FilterSubscriptionService) parseJSON(content string) ([]model.FilterSub
 		if !validateEntryValue(filterType, e.Value) {
 			continue
 		}
+		// Skip duplicates
+		if seen[e.Value] {
+			continue
+		}
+		seen[e.Value] = true
 		entries = append(entries, model.FilterSubscriptionEntry{
 			Value:  e.Value,
 			Reason: e.Reason,
@@ -541,6 +547,7 @@ func validateEntryValue(entryType, value string) bool {
 // parsePlaintext parses plaintext IP/CIDR lists
 func (s *FilterSubscriptionService) parsePlaintext(content string) ([]model.FilterSubscriptionEntry, string, string, string, string, error) {
 	entries := []model.FilterSubscriptionEntry{}
+	seen := make(map[string]bool)
 	scanner := bufio.NewScanner(strings.NewReader(content))
 
 	for scanner.Scan() {
@@ -563,6 +570,12 @@ func (s *FilterSubscriptionService) parsePlaintext(content string) ([]model.Filt
 		if !isValidIPOrCIDR(line) {
 			continue
 		}
+
+		// Skip duplicates
+		if seen[line] {
+			continue
+		}
+		seen[line] = true
 
 		entries = append(entries, model.FilterSubscriptionEntry{
 			Value: line,
