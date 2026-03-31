@@ -5,8 +5,6 @@ import { useEscapeKey } from '../hooks/useEscapeKey';
 import {
   fetchFilterSubscriptions,
   fetchFilterSubscription,
-  fetchFilterCatalog,
-  subscribeFromCatalog,
   createFilterSubscription,
   updateFilterSubscription,
   deleteFilterSubscription,
@@ -18,13 +16,10 @@ import {
 import { fetchProxyHosts } from '../api/proxy-hosts';
 import type {
   FilterSubscription,
-  FilterCatalogEntry,
   CreateFilterSubscriptionRequest,
   UpdateFilterSubscriptionRequest,
   FilterSubscriptionHostExclusion,
 } from '../types/filter-subscription';
-
-type TabType = 'catalog' | 'subscriptions';
 
 function getRelativeTime(dateStr: string): string {
   const now = Date.now();
@@ -58,7 +53,7 @@ function StatusDot({ sub }: { sub: FilterSubscription }) {
     return <span className="flex items-center gap-1 text-xs text-slate-400"><span className="w-2 h-2 rounded-full bg-slate-400" />{t('list.status.never')}</span>;
   }
   if (sub.last_error) {
-    return <span className="flex items-center gap-1 text-xs text-red-500"><span className="w-2 h-2 rounded-full bg-red-500" />{t('list.status.error')}</span>;
+    return <span className="flex items-center gap-1 text-xs text-red-500" title={sub.last_error}><span className="w-2 h-2 rounded-full bg-red-500" />{t('list.status.error')}</span>;
   }
   return <span className="flex items-center gap-1 text-xs text-green-500"><span className="w-2 h-2 rounded-full bg-green-500" />{t('list.status.ok')}</span>;
 }
@@ -99,13 +94,12 @@ function RefreshSelector({
   );
 }
 
-/** Expandable entries list for a catalog item or subscription */
 function EntriesPanel({ entries, isLoading }: { entries: { value: string; reason?: string }[]; isLoading?: boolean }) {
   const { t } = useTranslation('filterSubscription');
-  if (isLoading) return <div className="text-xs text-slate-400 py-2 pl-8">...</div>;
-  if (!entries.length) return <div className="text-xs text-slate-400 py-2 pl-8">{t('list.noEntries')}</div>;
+  if (isLoading) return <div className="text-xs text-slate-400 py-2 pl-4">...</div>;
+  if (!entries.length) return <div className="text-xs text-slate-400 py-2 pl-4">{t('list.noEntries')}</div>;
   return (
-    <div className="mt-2 ml-8 max-h-48 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-900/50">
+    <div className="mt-2 max-h-48 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-900/50">
       <table className="w-full text-xs">
         <tbody>
           {entries.map((entry, i) => (
@@ -123,13 +117,8 @@ function EntriesPanel({ entries, isLoading }: { entries: { value: string; reason
 export default function FilterSubscriptionList() {
   const { t } = useTranslation('filterSubscription');
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<TabType>('catalog');
   const [showAddModal, setShowAddModal] = useState(false);
   const [settingsTarget, setSettingsTarget] = useState<FilterSubscription | null>(null);
-  const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
-  const [catalogRefreshType, setCatalogRefreshType] = useState('interval');
-  const [catalogRefreshValue, setCatalogRefreshValue] = useState('24h');
-  const [expandedCatalog, setExpandedCatalog] = useState<string | null>(null);
   const [expandedSub, setExpandedSub] = useState<string | null>(null);
 
   // Add URL form state
@@ -143,51 +132,16 @@ export default function FilterSubscriptionList() {
     queryFn: () => fetchFilterSubscriptions(),
   });
 
-  const { data: catalog, isLoading: catalogLoading } = useQuery({
-    queryKey: ['filterCatalog'],
-    queryFn: fetchFilterCatalog,
-    enabled: activeTab === 'catalog',
-  });
-
-  // Fetch detail (with entries) for expanded subscription
   const { data: expandedSubDetail, isLoading: detailLoading } = useQuery({
     queryKey: ['filterSubscriptionDetail', expandedSub],
     queryFn: () => fetchFilterSubscription(expandedSub!),
     enabled: !!expandedSub,
   });
 
-  // Fetch catalog entry content for expanded catalog item
-  const [catalogEntries, setCatalogEntries] = useState<Record<string, { value: string; reason?: string }[]>>({});
-  const [catalogEntriesLoading, setCatalogEntriesLoading] = useState<string | null>(null);
-
-  const loadCatalogEntries = useCallback(async (path: string) => {
-    if (catalogEntries[path]) return;
-    setCatalogEntriesLoading(path);
-    try {
-      const baseUrl = 'https://raw.githubusercontent.com/svrforum/npg-filters/main/';
-      const resp = await fetch(baseUrl + path);
-      const data = await resp.json();
-      setCatalogEntries(prev => ({ ...prev, [path]: data.entries || [] }));
-    } catch {
-      setCatalogEntries(prev => ({ ...prev, [path]: [] }));
-    }
-    setCatalogEntriesLoading(null);
-  }, [catalogEntries]);
-
-  const subscribeMutation = useMutation({
-    mutationFn: subscribeFromCatalog,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['filterSubscriptions'] });
-      queryClient.invalidateQueries({ queryKey: ['filterCatalog'] });
-      setSelectedPaths([]);
-    },
-  });
-
   const createMutation = useMutation({
     mutationFn: createFilterSubscription,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['filterSubscriptions'] });
-      queryClient.invalidateQueries({ queryKey: ['filterCatalog'] });
       setShowAddModal(false);
       setAddUrl('');
       setAddName('');
@@ -198,7 +152,6 @@ export default function FilterSubscriptionList() {
     mutationFn: deleteFilterSubscription,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['filterSubscriptions'] });
-      queryClient.invalidateQueries({ queryKey: ['filterCatalog'] });
     },
   });
 
@@ -211,25 +164,6 @@ export default function FilterSubscriptionList() {
   });
 
   const subs = subsData?.data || [];
-
-  // Find subscription by catalog path (for unsubscribe from catalog)
-  const findSubByPath = (path: string): FilterSubscription | undefined => {
-    const baseUrl = 'https://raw.githubusercontent.com/svrforum/npg-filters/main/';
-    return subs.find(s => s.url === baseUrl + path);
-  };
-
-  const handleSubscribeCatalog = () => {
-    if (selectedPaths.length === 0) return;
-    subscribeMutation.mutate({ paths: selectedPaths, refresh_type: catalogRefreshType, refresh_value: catalogRefreshValue });
-  };
-
-  const handleUnsubscribeFromCatalog = (path: string) => {
-    const sub = findSubByPath(path);
-    if (!sub) return;
-    if (window.confirm(t('catalog.unsubscribeConfirm'))) {
-      deleteMutation.mutate(sub.id);
-    }
-  };
 
   const handleCreate = () => {
     if (!addUrl.trim()) return;
@@ -244,33 +178,10 @@ export default function FilterSubscriptionList() {
     }
   };
 
-  const togglePath = (path: string) => {
-    setSelectedPaths(prev => prev.includes(path) ? prev.filter(p => p !== path) : [...prev, path]);
-  };
-
-  const toggleCatalogExpand = (path: string) => {
-    if (expandedCatalog === path) {
-      setExpandedCatalog(null);
-    } else {
-      setExpandedCatalog(path);
-      loadCatalogEntries(path);
-    }
-  };
-
   const toggleSubExpand = (id: string) => {
     setExpandedSub(prev => prev === id ? null : id);
   };
 
-  // Group catalog by type
-  const catalogByType: Record<string, FilterCatalogEntry[]> = {};
-  if (catalog?.lists) {
-    for (const entry of catalog.lists) {
-      if (!catalogByType[entry.type]) catalogByType[entry.type] = [];
-      catalogByType[entry.type].push(entry);
-    }
-  }
-
-  // ESC key for modals
   useEscapeKey(useCallback(() => {
     if (settingsTarget) setSettingsTarget(null);
     else if (showAddModal) setShowAddModal(false);
@@ -278,184 +189,89 @@ export default function FilterSubscriptionList() {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-slate-900 dark:text-white">{t('title')}</h2>
-        {activeTab === 'subscriptions' && (
-          <button onClick={() => setShowAddModal(true)}
-            className="px-4 py-2 rounded-lg font-medium transition-colors bg-primary-600 hover:bg-primary-700 text-white text-sm">
-            {t('list.addUrl')}
-          </button>
-        )}
+        <button onClick={() => setShowAddModal(true)}
+          className="px-4 py-2 rounded-lg font-medium transition-colors bg-primary-600 hover:bg-primary-700 text-white text-sm">
+          {t('list.addUrl')}
+        </button>
       </div>
 
-      {/* Tabs */}
-      <div className="border-b border-slate-200 dark:border-slate-700">
-        <div className="flex gap-4">
-          <button onClick={() => setActiveTab('catalog')}
-            className={`pb-2 text-sm font-semibold border-b-2 transition-colors ${activeTab === 'catalog' ? 'border-cyan-600 text-cyan-600 dark:text-cyan-400' : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}>
-            {t('tabs.catalog')}
-          </button>
-          <button onClick={() => setActiveTab('subscriptions')}
-            className={`pb-2 text-sm font-semibold border-b-2 transition-colors ${activeTab === 'subscriptions' ? 'border-cyan-600 text-cyan-600 dark:text-cyan-400' : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}>
-            {t('tabs.subscriptions')}
-            {subs.length > 0 && <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-xs bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300">{subs.length}</span>}
-          </button>
+      {/* Subscription List */}
+      {subsLoading ? (
+        <div className="flex justify-center py-8">
+          <svg className="animate-spin w-8 h-8 text-primary-600" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
         </div>
-      </div>
-
-      {/* ===== Catalog Tab ===== */}
-      {activeTab === 'catalog' && (
-        <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 space-y-4">
-          <div>
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-1">{t('catalog.title')}</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400">{t('catalog.description')}</p>
-          </div>
-
-          {catalogLoading ? (
-            <div className="flex justify-center py-8">
-              <svg className="animate-spin w-8 h-8 text-primary-600" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
-            </div>
-          ) : !catalog?.lists?.length ? (
-            <p className="text-sm text-slate-400 py-4">{t('catalog.empty')}</p>
-          ) : (
-            <>
-              {Object.entries(catalogByType).map(([type, entries]) => (
-                <div key={type} className="mb-4 last:mb-0">
-                  <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wider">{type}</h4>
-                  <div className="space-y-2">
-                    {entries.map(entry => {
-                      const isSubscribed = !!entry.subscribed;
-                      const isExpanded = expandedCatalog === entry.path;
-                      return (
-                        <div key={entry.path} className={`rounded-lg border transition-colors ${isSubscribed ? 'border-cyan-300 bg-cyan-50/50 dark:border-cyan-700 dark:bg-cyan-900/20' : 'border-slate-200 dark:border-slate-700'}`}>
-                          <div className="flex items-start gap-3 p-3">
-                            {!isSubscribed && (
-                              <input type="checkbox" checked={selectedPaths.includes(entry.path)} onChange={() => togglePath(entry.path)}
-                                className="mt-1 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500" />
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-medium text-sm text-slate-900 dark:text-white">{entry.name}</span>
-                                <TypeBadge type={entry.type} />
-                                {isSubscribed && (
-                                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300">{t('catalog.subscribed')}</span>
-                                )}
-                              </div>
-                              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{entry.description}</p>
-                              <div className="flex items-center gap-3 mt-1">
-                                <span className="text-xs text-slate-400">{t('catalog.entries', { count: entry.entry_count })}</span>
-                                <button onClick={() => toggleCatalogExpand(entry.path)}
-                                  className="text-xs text-cyan-600 dark:text-cyan-400 hover:underline">
-                                  {isExpanded ? t('catalog.hideEntries') : t('catalog.showEntries')}
-                                </button>
-                                {isSubscribed && (
-                                  <button onClick={() => handleUnsubscribeFromCatalog(entry.path)}
-                                    className="text-xs text-red-500 hover:underline">
-                                    {t('catalog.unsubscribe')}
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          {isExpanded && (
-                            <EntriesPanel
-                              entries={catalogEntries[entry.path] || []}
-                              isLoading={catalogEntriesLoading === entry.path}
-                            />
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-
-              {selectedPaths.length > 0 && (
-                <div className="flex items-center gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
-                  <RefreshSelector refreshType={catalogRefreshType} refreshValue={catalogRefreshValue}
-                    onTypeChange={setCatalogRefreshType} onValueChange={setCatalogRefreshValue} />
-                  <button onClick={handleSubscribeCatalog} disabled={subscribeMutation.isPending}
-                    className="px-4 py-2 rounded-lg font-medium transition-colors bg-cyan-600 hover:bg-cyan-700 text-white text-sm disabled:opacity-50">
-                    {subscribeMutation.isPending ? '...' : t('catalog.subscribe')} ({selectedPaths.length})
-                  </button>
-                </div>
-              )}
-            </>
-          )}
+      ) : subs.length === 0 ? (
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-8 text-center">
+          <p className="text-sm text-slate-400">{t('list.empty')}</p>
         </div>
-      )}
-
-      {/* ===== Subscriptions Tab ===== */}
-      {activeTab === 'subscriptions' && (
+      ) : (
         <div className="space-y-3">
-          {subsLoading ? (
-            <div className="flex justify-center py-8">
-              <svg className="animate-spin w-8 h-8 text-primary-600" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
-            </div>
-          ) : subs.length === 0 ? (
-            <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-8 text-center">
-              <p className="text-sm text-slate-400">{t('list.empty')}</p>
-            </div>
-          ) : (
-            subs.map(sub => {
-              const isExpanded = expandedSub === sub.id;
-              return (
-                <div key={sub.id} className="bg-white dark:bg-slate-800 rounded-lg shadow">
-                  <div className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className={`w-1 h-10 rounded-full ${sub.enabled ? 'bg-cyan-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-sm text-slate-900 dark:text-white truncate">{sub.name}</span>
-                            <TypeBadge type={sub.type} />
-                            <StatusDot sub={sub} />
-                          </div>
-                          <div className="flex items-center gap-3 text-xs text-slate-400 mt-0.5">
-                            <span>{t('catalog.entries', { count: sub.entry_count })}</span>
-                            <span>{sub.refresh_type}: {sub.refresh_value}</span>
-                            {sub.last_fetched_at && <span>{t('list.lastFetch')}: {getRelativeTime(sub.last_fetched_at)}</span>}
-                          </div>
-                          {sub.last_error && <p className="text-xs text-red-500 mt-1 truncate max-w-md" title={sub.last_error}>{sub.last_error}</p>}
+          {subs.map(sub => {
+            const isExpanded = expandedSub === sub.id;
+            return (
+              <div key={sub.id} className="bg-white dark:bg-slate-800 rounded-lg shadow">
+                <div className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={`w-1 h-10 rounded-full shrink-0 ${sub.enabled ? 'bg-cyan-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-sm text-slate-900 dark:text-white truncate">{sub.name}</span>
+                          <TypeBadge type={sub.type} />
+                          <StatusDot sub={sub} />
+                        </div>
+                        <div className="flex items-center gap-3 text-xs text-slate-400 mt-0.5 flex-wrap">
+                          <span>{t('catalog.entries', { count: sub.entry_count })}</span>
+                          <span>{sub.refresh_type}: {sub.refresh_value}</span>
+                          {sub.last_fetched_at && <span>{t('list.lastFetch')}: {getRelativeTime(sub.last_fetched_at)}</span>}
+                        </div>
+                        {sub.last_error && <p className="text-xs text-red-500 mt-1 truncate max-w-md" title={sub.last_error}>{sub.last_error}</p>}
+                        {sub.entry_count > 0 && (
                           <button onClick={() => toggleSubExpand(sub.id)}
                             className="text-xs text-cyan-600 dark:text-cyan-400 hover:underline mt-1">
                             {isExpanded ? t('list.hideEntries') : t('list.showEntries')}
                           </button>
-                        </div>
+                        )}
                       </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button onClick={() => refreshMutation.mutate(sub.id)}
-                          disabled={refreshMutation.isPending && refreshMutation.variables === sub.id}
-                          className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50">
-                          {refreshMutation.isPending && refreshMutation.variables === sub.id ? t('actions.refreshing') : t('actions.refresh')}
-                        </button>
-                        <button onClick={() => setSettingsTarget(sub)}
-                          className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600">
-                          {t('actions.settings')}
-                        </button>
-                        <button onClick={() => handleDelete(sub.id)}
-                          className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">
-                          {t('actions.delete')}
-                        </button>
-                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button onClick={() => refreshMutation.mutate(sub.id)}
+                        disabled={refreshMutation.isPending && refreshMutation.variables === sub.id}
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50">
+                        {refreshMutation.isPending && refreshMutation.variables === sub.id ? t('actions.refreshing') : t('actions.refresh')}
+                      </button>
+                      <button onClick={() => setSettingsTarget(sub)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600">
+                        {t('actions.settings')}
+                      </button>
+                      <button onClick={() => handleDelete(sub.id)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">
+                        {t('actions.delete')}
+                      </button>
                     </div>
                   </div>
-                  {isExpanded && (
-                    <div className="px-4 pb-4">
-                      <EntriesPanel
-                        entries={expandedSubDetail?.entries || []}
-                        isLoading={detailLoading}
-                      />
-                    </div>
-                  )}
                 </div>
-              );
-            })
-          )}
+                {isExpanded && (
+                  <div className="px-4 pb-4">
+                    <EntriesPanel
+                      entries={expandedSubDetail?.entries || []}
+                      isLoading={detailLoading}
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
-      {/* ===== Add URL Modal ===== */}
+      {/* Add URL Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowAddModal(false)}>
           <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
@@ -487,7 +303,7 @@ export default function FilterSubscriptionList() {
         </div>
       )}
 
-      {/* ===== Settings Modal ===== */}
+      {/* Settings Modal */}
       {settingsTarget && <SettingsModal subscription={settingsTarget} onClose={() => setSettingsTarget(null)} />}
     </div>
   );
