@@ -2088,6 +2088,45 @@ INSERT INTO public.exploit_block_rules (id, category, name, pattern, pattern_typ
 ('8ec83a35-dea8-4f51-9185-37035f0a4501', 'http_method', 'Dangerous Methods', '^(TRACE|TRACK|DEBUG|CONNECT)$', 'request_method', 'Blocks dangerous HTTP methods', 'warning', true, true, 50)
 ON CONFLICT (id) DO NOTHING;
 
+-- Filter subscription tables (v2.7.0+)
+CREATE TABLE IF NOT EXISTS public.filter_subscriptions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    name text NOT NULL,
+    description text,
+    url text NOT NULL UNIQUE,
+    format character varying(20) NOT NULL DEFAULT 'npg-json',
+    type character varying(20) NOT NULL,
+    enabled boolean DEFAULT true,
+    refresh_type character varying(20) NOT NULL DEFAULT 'interval',
+    refresh_value character varying(50) NOT NULL DEFAULT '24h',
+    last_fetched_at timestamp with time zone,
+    last_success_at timestamp with time zone,
+    last_error text,
+    entry_count integer DEFAULT 0,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.filter_subscription_entries (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    subscription_id uuid NOT NULL REFERENCES public.filter_subscriptions(id) ON DELETE CASCADE,
+    value text NOT NULL,
+    reason text,
+    created_at timestamp with time zone DEFAULT now(),
+    UNIQUE(subscription_id, value)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fse_subscription ON public.filter_subscription_entries(subscription_id);
+CREATE INDEX IF NOT EXISTS idx_fse_value ON public.filter_subscription_entries(value);
+
+CREATE TABLE IF NOT EXISTS public.filter_subscription_host_exclusions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    subscription_id uuid NOT NULL REFERENCES public.filter_subscriptions(id) ON DELETE CASCADE,
+    proxy_host_id uuid NOT NULL REFERENCES public.proxy_hosts(id) ON DELETE CASCADE,
+    created_at timestamp with time zone DEFAULT now(),
+    UNIQUE(subscription_id, proxy_host_id)
+);
+
 -- ============================================================================
 -- UPGRADE SECTION: Add new columns for existing installations
 -- This section uses ADD COLUMN IF NOT EXISTS to safely add columns
@@ -2116,6 +2155,45 @@ COMMENT ON COLUMN public.proxy_hosts.cache_ttl IS 'Cache duration for static ass
 ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS proxy_buffering character varying(10) DEFAULT '';
 ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS proxy_request_buffering character varying(10) DEFAULT '';
 ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS ssl_ecdh_curve character varying(255) DEFAULT 'X25519MLKEM768:X25519:secp256r1:secp384r1'::character varying NOT NULL;
+
+-- Filter subscription tables (v2.7.0+)
+CREATE TABLE IF NOT EXISTS public.filter_subscriptions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    name text NOT NULL,
+    description text,
+    url text NOT NULL UNIQUE,
+    format character varying(20) NOT NULL DEFAULT 'npg-json',
+    type character varying(20) NOT NULL,
+    enabled boolean DEFAULT true,
+    refresh_type character varying(20) NOT NULL DEFAULT 'interval',
+    refresh_value character varying(50) NOT NULL DEFAULT '24h',
+    last_fetched_at timestamp with time zone,
+    last_success_at timestamp with time zone,
+    last_error text,
+    entry_count integer DEFAULT 0,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.filter_subscription_entries (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    subscription_id uuid NOT NULL REFERENCES public.filter_subscriptions(id) ON DELETE CASCADE,
+    value text NOT NULL,
+    reason text,
+    created_at timestamp with time zone DEFAULT now(),
+    UNIQUE(subscription_id, value)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fse_subscription ON public.filter_subscription_entries(subscription_id);
+CREATE INDEX IF NOT EXISTS idx_fse_value ON public.filter_subscription_entries(value);
+
+CREATE TABLE IF NOT EXISTS public.filter_subscription_host_exclusions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    subscription_id uuid NOT NULL REFERENCES public.filter_subscriptions(id) ON DELETE CASCADE,
+    proxy_host_id uuid NOT NULL REFERENCES public.proxy_hosts(id) ON DELETE CASCADE,
+    created_at timestamp with time zone DEFAULT now(),
+    UNIQUE(subscription_id, proxy_host_id)
+);
 
 -- ============================================================================
 -- BUG FIXES (v1.3.9+)
