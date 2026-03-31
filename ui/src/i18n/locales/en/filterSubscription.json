@@ -1,8 +1,16 @@
 {
   "title": "Filter Subscriptions",
+  "subtitle": "Subscribe to external blocklists to automatically block malicious IPs, CIDRs, and User-Agents.",
   "tabs": {
     "catalog": "Catalog",
     "subscriptions": "My Subscriptions"
+  },
+  "howItWorks": {
+    "title": "How It Works",
+    "step1": "1. Add a recommended blocklist or enter an external URL to subscribe.",
+    "step2": "2. The list's IP/CIDR entries are fetched and stored in the database. New subscriptions are disabled by default.",
+    "step3": "3. Toggle ON to regenerate nginx config and reload — blocking takes effect immediately. Toggle OFF to remove blocking.",
+    "step4": "4. Lists are automatically refreshed at your configured interval to stay up-to-date. If refresh fails, existing data is preserved."
   },
   "catalog": {
     "title": "NPG Filter Catalog",
@@ -81,7 +89,28 @@
   },
   "presets": {
     "title": "Recommended Blocklists",
-    "add": "Add"
+    "add": "Add",
+    "visitSite": "Official Site",
+    "spamhaus": {
+      "description": "Spamhaus DROP (Don't Route Or Peer) — hijacked and spam-controlled IP ranges",
+      "detail": "Operated by the Spamhaus Project. One of the most trusted blocklists used by ISPs and enterprises worldwide. Provides CIDR ranges."
+    },
+    "firehol": {
+      "description": "FireHOL Level 1 — aggregated threat intelligence from multiple sources",
+      "detail": "Operated by the FireHOL project. Aggregates Spamhaus, DShield, Abuse.ch, and more. Level 1 (safest) list with very low false positive rate."
+    },
+    "blocklistde": {
+      "description": "Blocklist.de — IPs reported for actual attacks",
+      "detail": "German community project. Collects brute-force, bot, and spam attack IPs detected by Fail2ban and similar tools. Updated in real-time."
+    },
+    "ipsum": {
+      "description": "IPsum Level 3 — IPs appearing on 3+ blacklists",
+      "detail": "Operated by stamparm (sqlmap developer). Cross-checks 30+ blacklists daily. Level 3 = IPs confirmed by 3+ independent sources."
+    },
+    "emergingthreats": {
+      "description": "Emerging Threats — compiled threat block list",
+      "detail": "Operated by Proofpoint (formerly Emerging Threats). Aggregates Spamhaus, DShield, Abuse.ch data. Designed for firewall block rules."
+    }
   },
   "badge": {
     "filterSubscription": "Filter Subscription"

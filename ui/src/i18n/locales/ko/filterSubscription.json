@@ -1,8 +1,16 @@
 {
   "title": "필터 구독",
+  "subtitle": "외부 블랙리스트를 구독하여 악성 IP/CIDR/User-Agent를 자동으로 차단합니다.",
   "tabs": {
     "catalog": "카탈로그",
     "subscriptions": "내 구독"
+  },
+  "howItWorks": {
+    "title": "동작 방식",
+    "step1": "1. 추천 블랙리스트를 추가하거나 외부 URL을 직접 입력하여 구독합니다.",
+    "step2": "2. 구독하면 해당 리스트의 IP/CIDR 목록을 가져와 DB에 저장합니다. 추가 시 비활성화 상태이므로 바로 차단되지 않습니다.",
+    "step3": "3. 토글을 켜면 nginx 설정이 자동 재생성되고 reload되어 즉시 차단이 적용됩니다. 끄면 차단이 해제됩니다.",
+    "step4": "4. 설정한 갱신 주기에 따라 리스트를 자동으로 다시 가져와 최신 상태를 유지합니다. 갱신 실패 시 기존 데이터가 유지됩니다."
   },
   "catalog": {
     "title": "NPG 필터 카탈로그",
@@ -81,7 +89,28 @@
   },
   "presets": {
     "title": "추천 블랙리스트",
-    "add": "추가"
+    "add": "추가",
+    "visitSite": "공식 사이트",
+    "spamhaus": {
+      "description": "Spamhaus DROP(Don't Route Or Peer) — 하이재킹되거나 스팸에 사용되는 IP 대역",
+      "detail": "Spamhaus Project에서 운영. 전 세계 ISP와 기업에서 사용하는 가장 신뢰도 높은 블랙리스트 중 하나. CIDR 대역 단위로 제공."
+    },
+    "firehol": {
+      "description": "FireHOL Level 1 — 여러 위협 인텔리전스 소스를 통합한 블랙리스트",
+      "detail": "FireHOL 프로젝트에서 운영. Spamhaus, DShield, Abuse.ch 등 다수의 소스를 집계한 Level 1(가장 안전) 리스트. 오탐률이 매우 낮음."
+    },
+    "blocklistde": {
+      "description": "Blocklist.de — 실제 공격이 신고된 IP 주소 목록",
+      "detail": "독일 기반 커뮤니티 프로젝트. Fail2ban 등으로 탐지된 brute-force, 봇, 스팸 공격 IP를 수집. 실시간 업데이트."
+    },
+    "ipsum": {
+      "description": "IPsum Level 3 — 3개 이상의 블랙리스트에 등재된 IP",
+      "detail": "stamparm(sqlmap 개발자)이 운영. 매일 30개 이상의 블랙리스트를 크로스체크하여 다수에 등재된 IP만 추출. Level 3 = 3개 이상 소스에서 확인된 IP."
+    },
+    "emergingthreats": {
+      "description": "Emerging Threats — 종합 위협 차단 리스트",
+      "detail": "Proofpoint(구 Emerging Threats)에서 운영. Spamhaus, DShield, Abuse.ch 등의 데이터를 종합. 방화벽 차단 규칙용으로 설계됨."
+    }
   },
   "badge": {
     "filterSubscription": "필터 구독"
