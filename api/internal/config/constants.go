@@ -114,3 +114,16 @@ const (
 	LogCollectorMaxRetries = 3
 	LogBufferMultiplier    = 10
 )
+
+// Filter subscription constants
+const (
+	FilterFetchTimeout         = 30 * time.Second
+	FilterFetchConnectTimeout  = 5 * time.Second
+	FilterMaxResponseSize      = 10 * 1024 * 1024 // 10MB
+	FilterMaxTotalEntries      = 50000
+	FilterMaxEntriesPerFile    = 5000
+	FilterMaxRedirects         = 3
+	FilterRefreshCheckInterval = 10 * time.Minute
+	FilterCatalogBaseURL       = "https://raw.githubusercontent.com/svrforum/npg-filters/main/"
+	FilterCatalogIndexURL      = "https://raw.githubusercontent.com/svrforum/npg-filters/main/index.json"
+)
