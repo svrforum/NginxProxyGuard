@@ -32,6 +32,7 @@ import BotFilterLogs from './components/BotFilterLogs'
 import ExploitBlockLogs from './components/ExploitBlockLogs'
 import WAFAutoBanSettings from './components/WAFAutoBanSettings'
 import SystemLogSettings from './components/SystemLogSettings'
+import FilterSubscriptionList from './components/FilterSubscriptionList'
 import { Login } from './components/Login'
 import { InitialSetup } from './components/InitialSetup'
 import AccountSettings from './components/AccountSettings'
@@ -384,6 +385,7 @@ function AppContent({ user, onLogout }: AppContentProps) {
           <Route path="/settings/botfilter" element={<SettingsPage subTab="botfilter" />} />
           <Route path="/settings/waf-auto-ban" element={<SettingsPage subTab="waf-auto-ban" />} />
           <Route path="/settings/system-logs" element={<SettingsPage subTab="system-logs" />} />
+          <Route path="/settings/filter-subscriptions" element={<SettingsPage subTab="filter-subscriptions" />} />
         </Routes>
       </main>
 
@@ -671,7 +673,7 @@ function LogsPage({ subTab }: { subTab: 'access' | 'waf-events' | 'bot-filter' |
 }
 
 // Settings Page Component
-function SettingsPage({ subTab }: { subTab: 'global' | 'captcha' | 'geoip' | 'ssl' | 'maintenance' | 'backups' | 'botfilter' | 'waf-auto-ban' | 'system-logs' }) {
+function SettingsPage({ subTab }: { subTab: 'global' | 'captcha' | 'geoip' | 'ssl' | 'maintenance' | 'backups' | 'botfilter' | 'waf-auto-ban' | 'system-logs' | 'filter-subscriptions' }) {
   const { t } = useTranslation('navigation')
   const navigate = useNavigate()
 
@@ -761,6 +763,15 @@ function SettingsPage({ subTab }: { subTab: 'global' | 'captcha' | 'geoip' | 'ss
           >
             {t('subTabs.settings.systemLogs', 'System Logs')}
           </button>
+          <button
+            onClick={() => navigate('/settings/filter-subscriptions')}
+            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${subTab === 'filter-subscriptions'
+              ? 'border-cyan-600 text-cyan-600 dark:text-cyan-400'
+              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+          >
+            {t('subTabs.settings.filterSubscriptions', 'Filter Subscriptions')}
+          </button>
         </div>
       </div>
 
@@ -773,6 +784,7 @@ function SettingsPage({ subTab }: { subTab: 'global' | 'captcha' | 'geoip' | 'ss
       {subTab === 'maintenance' && <MaintenanceSettings />}
       {subTab === 'backups' && <BackupManager />}
       {subTab === 'system-logs' && <SystemLogSettings />}
+      {subTab === 'filter-subscriptions' && <FilterSubscriptionList />}
     </div>
   )
 }
