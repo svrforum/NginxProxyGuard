@@ -251,6 +251,47 @@ func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.Pr
 		}()
 	}
 
+	// Fetch filter subscription entries for this host
+	if s.filterSubscriptionRepo != nil {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			var ips []string
+			ipEntries, err := s.filterSubscriptionRepo.GetEntriesForHost(ctx, host.ID, "ip")
+			if err == nil {
+				for _, e := range ipEntries {
+					ips = append(ips, e.Value)
+				}
+			}
+			cidrEntries, err := s.filterSubscriptionRepo.GetEntriesForHost(ctx, host.ID, "cidr")
+			if err == nil {
+				for _, e := range cidrEntries {
+					ips = append(ips, e.Value)
+				}
+			}
+			if len(ips) > 0 {
+				mu.Lock()
+				data.FilterSubscriptionIPs = ips
+				mu.Unlock()
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			uaEntries, err := s.filterSubscriptionRepo.GetEntriesForHost(ctx, host.ID, "user_agent")
+			if err == nil {
+				var uas []string
+				for _, e := range uaEntries {
+					uas = append(uas, e.Value)
+				}
+				if len(uas) > 0 {
+					mu.Lock()
+					data.FilterSubscriptionUAs = uas
+					mu.Unlock()
+				}
+			}
+		}()
+	}
+
 	// Wait for all goroutines to complete
 	wg.Wait()
 

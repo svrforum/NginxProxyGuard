@@ -23,12 +23,15 @@ map $request_uri $rate_limit_key_{{sanitizeID .Host.ID}} {
 limit_req_zone $rate_limit_key_{{sanitizeID .Host.ID}} zone=rate_{{sanitizeID .Host.ID}}:{{.RateLimit.ZoneSize}} rate={{.RateLimit.RequestsPerSecond}}r/s;
 {{end}}{{end}}
 
-{{if .BannedIPs}}
+{{if or .BannedIPs .FilterSubscriptionIPs}}
 # Banned IPs geo mapping for {{join .Host.DomainNames ", "}}
 geo $banned_ip_{{sanitizeID .Host.ID}} {
     default 0;
 {{range .BannedIPs}}
     {{.IPAddress}} 1; # {{.Reason}}
+{{end}}
+{{range .FilterSubscriptionIPs}}
+    {{.}} 1; # filter subscription
 {{end}}
 }
 {{end}}
@@ -438,7 +441,7 @@ server {
 {{end}}
 {{end}}
 
-{{if .BannedIPs}}
+{{if or .BannedIPs .FilterSubscriptionIPs}}
     # Banned IPs check
     if ($banned_ip_{{sanitizeID .Host.ID}} = 1) {
         set $block_reason_var "banned_ip";
@@ -570,6 +573,19 @@ server {
     }
 {{end}}
 {{end}}{{end}}
+
+{{if .FilterSubscriptionUAs}}
+    # Filter Subscription User-Agent Blocking
+    set $block_filter_ua 0;
+    if ($http_user_agent ~* ({{join .FilterSubscriptionUAs "|"}})) {
+        set $block_filter_ua 1;
+        set $block_reason_var "bot_filter";
+    }
+    set $filter_ua_check "${priority_allow}${block_filter_ua}";
+    if ($filter_ua_check = "01") {
+        return 403;
+    }
+{{end}}
 
 {{if .RateLimit}}{{if .RateLimit.Enabled}}
     # Rate Limiting
@@ -1258,7 +1274,7 @@ server {
 {{end}}
 {{end}}
 
-{{if .BannedIPs}}
+{{if or .BannedIPs .FilterSubscriptionIPs}}
     # Banned IPs check
     if ($banned_ip_{{sanitizeID .Host.ID}} = 1) {
         set $block_reason_var "banned_ip";
@@ -1390,6 +1406,19 @@ server {
     }
 {{end}}
 {{end}}{{end}}
+
+{{if .FilterSubscriptionUAs}}
+    # Filter Subscription User-Agent Blocking
+    set $block_filter_ua 0;
+    if ($http_user_agent ~* ({{join .FilterSubscriptionUAs "|"}})) {
+        set $block_filter_ua 1;
+        set $block_reason_var "bot_filter";
+    }
+    set $filter_ua_check "${priority_allow}${block_filter_ua}";
+    if ($filter_ua_check = "01") {
+        return 403;
+    }
+{{end}}
 
 {{if .RateLimit}}{{if .RateLimit.Enabled}}
     # Rate Limiting
@@ -1647,6 +1676,8 @@ type ProxyHostConfigData struct {
 	URIBlock                      *model.URIBlock       // URI path blocking settings
 	GlobalBlockExploitsExceptions string                // Global newline-separated list of exploit exceptions from system settings
 	ExploitBlockRules             []model.ExploitBlockRule // Dynamic exploit blocking rules from database
+	FilterSubscriptionIPs         []string                // IP/CIDR entries from filter subscriptions
+	FilterSubscriptionUAs         []string                // User-Agent patterns from filter subscriptions
 	HasCustomLocationRoot         bool                  // True if AdvancedConfig contains a location / block
 	AdvancedConfigHasLocation     bool                  // True if AdvancedConfig contains any location directive
 	HTTPPort                      string                // HTTP listen port (default: 80)
