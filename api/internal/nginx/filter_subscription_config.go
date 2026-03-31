@@ -69,8 +69,8 @@ func (m *Manager) GenerateFilterSubscriptionUAsConfig(uas []string) error {
 // and the UA map block with nginx -t validation and automatic rollback on failure.
 //
 // Flow: backup → write → nginx -t → success: done / fail: rollback
-func (m *Manager) GenerateFilterSubscriptionConfigs(ips []string, uas []string) error {
-	return m.executeWithLock(context.Background(), func() error {
+func (m *Manager) GenerateFilterSubscriptionConfigs(ctx context.Context, ips []string, uas []string) error {
+	return m.executeWithLock(ctx, func() error {
 		ipsPath := filepath.Join(m.configPath, "includes", "filter_sub_ips.conf")
 		uasPath := filepath.Join(m.configPath, "filter_sub_uas.conf")
 
@@ -89,7 +89,7 @@ func (m *Manager) GenerateFilterSubscriptionConfigs(ips []string, uas []string) 
 		}
 
 		// 3. Test nginx configuration
-		if err := m.testConfigInternal(context.Background()); err != nil {
+		if err := m.testConfigInternal(ctx); err != nil {
 			// nginx -t failed — rollback both files
 			log.Printf("[FilterSubscription] nginx -t failed, rolling back filter configs: %v", err)
 			rollbackFile(ipsPath, ipsBackup, ipsExists)
@@ -110,11 +110,11 @@ func readFileIfExists(path string) ([]byte, bool) {
 }
 
 func rollbackFile(path string, backup []byte, existed bool) {
-	if existed && len(backup) > 0 {
+	if existed {
 		if err := os.WriteFile(path, backup, 0644); err != nil {
 			log.Printf("[FilterSubscription] Failed to rollback %s: %v", path, err)
 		}
-	} else if !existed {
+	} else {
 		os.Remove(path)
 	}
 }
