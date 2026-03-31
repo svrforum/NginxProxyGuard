@@ -1,7 +1,9 @@
 package nginx
 
 import (
+	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -64,14 +66,55 @@ func (m *Manager) GenerateFilterSubscriptionUAsConfig(uas []string) error {
 }
 
 // GenerateFilterSubscriptionConfigs generates both the shared IP include file
-// and the UA map block. This should be called when filter subscription entries
-// change (create, refresh, delete) instead of regenerating all host configs.
+// and the UA map block with nginx -t validation and automatic rollback on failure.
+//
+// Flow: backup → write → nginx -t → success: done / fail: rollback
 func (m *Manager) GenerateFilterSubscriptionConfigs(ips []string, uas []string) error {
-	if err := m.GenerateFilterSubscriptionIPsInclude(ips); err != nil {
-		return err
+	return m.executeWithLock(context.Background(), func() error {
+		ipsPath := filepath.Join(m.configPath, "includes", "filter_sub_ips.conf")
+		uasPath := filepath.Join(m.configPath, "filter_sub_uas.conf")
+
+		// 1. Backup existing files
+		ipsBackup, ipsExists := readFileIfExists(ipsPath)
+		uasBackup, uasExists := readFileIfExists(uasPath)
+
+		// 2. Write new config files
+		if err := m.GenerateFilterSubscriptionIPsInclude(ips); err != nil {
+			return err
+		}
+		if err := m.GenerateFilterSubscriptionUAsConfig(uas); err != nil {
+			// Rollback IPs
+			rollbackFile(ipsPath, ipsBackup, ipsExists)
+			return err
+		}
+
+		// 3. Test nginx configuration
+		if err := m.testConfigInternal(context.Background()); err != nil {
+			// nginx -t failed — rollback both files
+			log.Printf("[FilterSubscription] nginx -t failed, rolling back filter configs: %v", err)
+			rollbackFile(ipsPath, ipsBackup, ipsExists)
+			rollbackFile(uasPath, uasBackup, uasExists)
+			return fmt.Errorf("nginx config test failed after filter update: %w", err)
+		}
+
+		return nil
+	})
+}
+
+func readFileIfExists(path string) ([]byte, bool) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return nil, false
 	}
-	if err := m.GenerateFilterSubscriptionUAsConfig(uas); err != nil {
-		return err
+	return content, true
+}
+
+func rollbackFile(path string, backup []byte, existed bool) {
+	if existed && len(backup) > 0 {
+		if err := os.WriteFile(path, backup, 0644); err != nil {
+			log.Printf("[FilterSubscription] Failed to rollback %s: %v", path, err)
+		}
+	} else if !existed {
+		os.Remove(path)
 	}
-	return nil
 }
