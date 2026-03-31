@@ -44,19 +44,19 @@ func (h *FilterSubscriptionHandler) List(c echo.Context) error {
 	return c.JSON(http.StatusOK, result)
 }
 
-// GetByID returns a single filter subscription
+// GetByID returns a single filter subscription with entries and exclusions
 func (h *FilterSubscriptionHandler) GetByID(c echo.Context) error {
 	id := c.Param("id")
 
-	sub, err := h.service.GetByID(c.Request().Context(), id)
+	detail, err := h.service.GetDetail(c.Request().Context(), id)
 	if err != nil {
 		return databaseError(c, "get filter subscription", err)
 	}
-	if sub == nil {
+	if detail == nil {
 		return notFoundError(c, "Filter subscription")
 	}
 
-	return c.JSON(http.StatusOK, sub)
+	return c.JSON(http.StatusOK, detail)
 }
 
 // Create creates a new filter subscription

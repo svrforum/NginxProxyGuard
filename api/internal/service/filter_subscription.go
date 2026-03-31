@@ -88,6 +88,33 @@ func (s *FilterSubscriptionService) GetByID(ctx context.Context, id string) (*mo
 	return s.repo.GetByID(ctx, id)
 }
 
+// GetDetail returns a filter subscription with entries and exclusions
+func (s *FilterSubscriptionService) GetDetail(ctx context.Context, id string) (*model.FilterSubscriptionDetail, error) {
+	sub, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if sub == nil {
+		return nil, nil
+	}
+
+	entries, err := s.repo.GetEntries(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	exclusions, err := s.repo.ListExclusions(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.FilterSubscriptionDetail{
+		FilterSubscription: *sub,
+		Entries:            entries,
+		Exclusions:         exclusions,
+	}, nil
+}
+
 // Create creates a new filter subscription
 func (s *FilterSubscriptionService) Create(ctx context.Context, req *model.CreateFilterSubscriptionRequest) (*model.FilterSubscription, error) {
 	// Validate URL
@@ -524,8 +551,11 @@ func (s *FilterSubscriptionService) parsePlaintext(content string) ([]model.Filt
 			continue
 		}
 
-		// Remove inline comments
+		// Remove inline comments (# and ;)
 		if idx := strings.Index(line, "#"); idx > 0 {
+			line = strings.TrimSpace(line[:idx])
+		}
+		if idx := strings.Index(line, ";"); idx > 0 {
 			line = strings.TrimSpace(line[:idx])
 		}
 
