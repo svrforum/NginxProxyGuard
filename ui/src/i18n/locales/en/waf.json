@@ -137,6 +137,8 @@
     "subtitle": "IP addresses banned by WAF, Rate Limit, or Fail2ban",
     "totalCount": "Total {{count}}",
     "addBan": "Add IP Ban",
+    "filterSubscriptionBanner": "Subscribe to community blocklists (Spamhaus, FireHOL, etc.) to automatically block known malicious IPs.",
+    "goToFilterSubscriptions": "Manage Filter Subscriptions",
     "noBans": "No IPs currently banned.",
     "fetchError": "Failed to fetch banned IP list.",
     "global": "Global",

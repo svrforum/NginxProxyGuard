@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { HelpTip } from './common/HelpTip'
 import { fetchBannedIPs, fetchProxyHostsForBan, unbanIP, banIP } from '../api/banned-ips'
@@ -75,6 +76,7 @@ function getReasonCategory(reason?: string): string {
 
 export function BannedIPList() {
   const { t, i18n } = useTranslation('waf')
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [page, setPage] = useState(1)
   const [selectedIP, setSelectedIP] = useState<BannedIP | null>(null)
@@ -202,6 +204,22 @@ export function BannedIPList() {
             {t('bannedIp.addBan')}
           </button>
         </div>
+      </div>
+
+      {/* Filter Subscription Banner */}
+      <div className="flex items-center gap-3 p-3 rounded-lg bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-800">
+        <svg className="w-5 h-5 text-cyan-600 dark:text-cyan-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <p className="text-sm text-cyan-700 dark:text-cyan-300 flex-1">
+          {t('bannedIp.filterSubscriptionBanner')}
+        </p>
+        <button
+          onClick={() => navigate('/settings/filter-subscriptions')}
+          className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-cyan-600 hover:bg-cyan-700 text-white shrink-0"
+        >
+          {t('bannedIp.goToFilterSubscriptions')}
+        </button>
       </div>
 
       {/* Tabs */}
