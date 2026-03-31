@@ -97,13 +97,13 @@ api/
 │   │   ├── database.go             # DB 풀 (25 open, 5 idle, 5min lifetime)
 │   │   ├── migration.go            # 마이그레이션 실행기
 │   │   └── migrations/             # SQL 파일 (001_init.sql + 보조)
-│   ├── handler/                    # 25 핸들러 파일
+│   ├── handler/                    # 26 핸들러 파일
 │   ├── middleware/                  # auth.go, api_token.go, rate_limit.go
-│   ├── model/                      # 22 모델 파일
+│   ├── model/                      # 23 모델 파일
 │   ├── nginx/                      # 7 파일: config 생성 엔진
-│   ├── repository/                 # 29 레포지토리 파일
-│   ├── scheduler/                  # 4 스케줄러 파일
-│   ├── service/                    # 19 서비스 파일
+│   ├── repository/                 # 30 레포지토리 파일
+│   ├── scheduler/                  # 5 스케줄러 파일
+│   ├── service/                    # 20 서비스 파일
 │   └── util/query.go              # SQL 유틸리티
 ├── pkg/
 │   ├── acme/acme.go               # Let's Encrypt ACME (lego v4)
@@ -115,13 +115,13 @@ api/
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  Handler Layer (25 files)                                │ ← 요청 파싱, 응답, 에러 분류
+│  Handler Layer (26 files)                                │ ← 요청 파싱, 응답, 에러 분류
 │  Echo Context → Bind → Service call → classifyError     │
 ├─────────────────────────────────────────────────────────┤
-│  Service Layer (19 files)                                │ ← 비즈니스 로직, 다중 repo 조합
+│  Service Layer (20 files)                                │ ← 비즈니스 로직, 다중 repo 조합
 │  Data Aggregation → Config Generation → Test → Reload   │
 ├─────────────────────────────────────────────────────────┤
-│  Repository Layer (29 files)                             │ ← SQL, pq.Array, sql.Null*
+│  Repository Layer (30 files)                             │ ← SQL, pq.Array, sql.Null*
 │  DB + Optional Redis cache via SetCache()               │
 ├─────────────────────────────────────────────────────────┤
 │  Nginx Manager (7 files)                                 │ ← 템플릿 렌더링, atomic write
@@ -144,7 +144,7 @@ config.Load()
               → Startup: SyncAllConfigs() + GenerateDefaultServerConfig()
                 → Background Services: logCollector, wafAutoBan, fail2ban, statsCollector, dockerLogCollector, cloudProvider, geoIP
                   → Handlers 생성 (services 주입)
-                    → Schedulers: renewal(6h), partition, logRotate, backup
+                    → Schedulers: renewal(6h), partition, logRotate, backup, filterRefresh
                       → Echo 라우트 등록 + 미들웨어
                         → Graceful Shutdown (SIGINT/SIGTERM)
 ```
@@ -280,6 +280,7 @@ var domainNames pq.StringArray    // 읽기
 | `backup_import.go` | - | ImportAllData (full DB import) |
 | `ip_ban_history.go` | IPBanHistoryRepository | Create, List, GetByIP, GetStats |
 | `geoip_history.go` | GeoIPHistoryRepository | Create, Update, List, GetLatest |
+| `filter_subscription.go` | FilterSubscriptionRepository | Create, GetByID, List, Update, Delete, CreateEntry, DeleteEntries, ListEntries, AddHostExclusion, RemoveHostExclusion, ListHostExclusions |
 | `helpers.go` | - | SQL NULL 변환 헬퍼 (FromNullString, ToNullString, etc.) |
 
 ### 2.8 Nginx Manager
@@ -345,6 +346,7 @@ Protected: APITokenAuth → AuthMiddleware → Handler
 | CloudProviderService | 주기적 | 클라우드 IP 범위 업데이트 |
 | GeoIPScheduler | 설정 | MaxMind DB 자동 업데이트 |
 | DockerLogCollector | 실시간 | Docker 컨테이너 로그 수집 |
+| FilterRefreshScheduler | 사용자 지정 | 필터 구독 주기적 갱신 |
 
 ### 2.11 Key Constants
 
@@ -402,7 +404,7 @@ MaxPageSize             = 100
 ui/src/
 ├── main.tsx                        # React 18 root + QueryClient + Suspense
 ├── App.tsx                         # Auth 상태머신 + Router + Routes
-├── api/                            # API 클라이언트 (15개 모듈)
+├── api/                            # API 클라이언트 (16개 모듈)
 │   ├── client.ts                   # apiGet/Post/Put/Delete + ApiError
 │   ├── auth.ts                     # 인증, 2FA, 토큰
 │   ├── proxy-hosts.ts              # 프록시 호스트 CRUD
@@ -418,10 +420,12 @@ ui/src/
 │   ├── challenge.ts                # CAPTCHA
 │   ├── exploit-rules.ts            # 익스플로잇 규칙
 │   ├── api-tokens.ts               # API 토큰
+│   ├── filter-subscriptions.ts     # 필터 구독
 │   └── docker.ts                   # Docker 컨테이너 조회
-├── types/                          # TypeScript 타입 (8개)
+├── types/                          # TypeScript 타입 (9개)
 │   ├── proxy-host.ts, waf.ts, log.ts, security.ts
 │   ├── certificate.ts, settings.ts, access.ts, exploit-rules.ts
+│   ├── filter-subscription.ts
 ├── components/                     # 170+ 컴포넌트 파일
 │   ├── common/HelpTip.tsx          # 포털 기반 툴팁
 │   ├── proxy-host/                 # 프록시 호스트 폼 (탭 기반)
@@ -486,6 +490,7 @@ App mount → getToken() → if none → 'unauthenticated' → <Login />
 | `/settings/botfilter` | SettingsPage | orange |
 | `/settings/waf-auto-ban` | SettingsPage | red |
 | `/settings/system-logs` | SettingsPage | indigo |
+| `/settings/filter-subscriptions` | FilterSubscriptionList | primary |
 
 ### 3.4 State Management
 
@@ -551,7 +556,7 @@ ProxyHostForm.tsx (374줄, 모달)
 - **Library:** i18next + react-i18next
 - **Fallback:** Korean (`'ko'`)
 - **Storage:** localStorage `'npg_language'`
-- **Namespaces (16):** common, navigation, auth, dashboard, proxyHost, waf, logs, settings, certificates, accessControl, redirectHost, errors, exploitRules, exploitExceptions, exploitLogs, fail2ban
+- **Namespaces (17):** common, navigation, auth, dashboard, proxyHost, waf, logs, settings, certificates, accessControl, redirectHost, errors, exploitRules, exploitExceptions, exploitLogs, fail2ban, filterSubscription
 
 ```tsx
 const { t } = useTranslation('proxyHost')
@@ -754,6 +759,9 @@ Tag push (v*) → detect changes (SHA256 per component)
 | `waf_rule_change_events` | WAF 규칙 변경 감사 이력 | proxy_host_id, rule_id, action, created_at |
 | `waf_rule_snapshots` | WAF 설정 스냅샷 | proxy_host_id, created_at |
 | `waf_rule_snapshot_details` | 스냅샷 상세 레코드 | snapshot_id, rule_id |
+| `filter_subscriptions` | 외부 필터 리스트 구독 | name, url, filter_type, format, refresh_interval, enabled |
+| `filter_subscription_entries` | 구독에서 가져온 IP/CIDR/UA 항목 | subscription_id, entry_type, value |
+| `filter_subscription_host_exclusions` | 호스트별 구독 제외 | subscription_id, proxy_host_id |
 | `login_attempts` | 로그인 시도 추적 (잠금) | ip_address, username, success, attempted_at |
 
 ### 5.4 Auth/Settings Tables
@@ -903,7 +911,23 @@ system_log_level: 'debug','info','warn','error','fatal'
 | GET/PUT | `/api/v1/challenge-config` | 글로벌 CAPTCHA |
 | GET/POST | `/api/v1/cloud-providers` | 클라우드 프로바이더 |
 
-### 6.8 Dashboard & Settings
+### 6.8 Filter Subscriptions
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/filter-subscriptions` | 구독 목록 |
+| POST | `/api/v1/filter-subscriptions` | 구독 추가 |
+| GET | `/api/v1/filter-subscriptions/catalog` | 카탈로그 |
+| POST | `/api/v1/filter-subscriptions/catalog/subscribe` | 카탈로그 구독 |
+| GET | `/api/v1/filter-subscriptions/:id` | 구독 상세 |
+| PUT | `/api/v1/filter-subscriptions/:id` | 구독 수정 |
+| DELETE | `/api/v1/filter-subscriptions/:id` | 구독 삭제 |
+| POST | `/api/v1/filter-subscriptions/:id/refresh` | 수동 갱신 |
+| GET | `/api/v1/filter-subscriptions/:id/exclusions` | 호스트 제외 목록 |
+| POST | `/api/v1/filter-subscriptions/:id/exclusions/:hostId` | 호스트 제외 추가 |
+| DELETE | `/api/v1/filter-subscriptions/:id/exclusions/:hostId` | 호스트 제외 해제 |
+
+### 6.9 Dashboard & Settings
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -918,7 +942,7 @@ system_log_level: 'debug','info','warn','error','fatal'
 | GET/POST | `/api/v1/backups` | 백업 목록/생성 |
 | POST | `/api/v1/backups/:id/restore` | 백업 복원 |
 
-### 6.9 Logs
+### 6.10 Logs
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -1110,6 +1134,16 @@ Restore (2-phase):
 - **Docker Stats:** `docker stats --no-stream` + `docker system df`
 - **GeoIP Stats:** country 별 요청 분포
 - **React:** refetchInterval: 30000ms
+
+### 8.11 Filter Subscription
+
+- **목적:** 외부 커뮤니티 필터 리스트(IP/CIDR/User-Agent)를 구독하여 자동 차단
+- **카탈로그:** GitHub 호스팅 npg-filters 레포에서 공식 필터 목록 제공
+- **포맷 자동 감지:** plain text, JSON, CSV 등 다양한 리스트 형식 지원
+- **갱신:** FilterRefreshScheduler가 사용자 지정 간격으로 주기적 갱신
+- **SSRF 보호:** 내부 네트워크 주소 차단 (127.0.0.0/8, 10.0.0.0/8, 169.254.0.0/16 등)
+- **호스트 제외:** 특정 프록시 호스트에 대해 구독 적용 제외 가능
+- **Nginx 연동:** 구독 항목이 nginx config에 반영 → test → reload
 
 ---
 
