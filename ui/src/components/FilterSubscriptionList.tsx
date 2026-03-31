@@ -316,7 +316,7 @@ export default function FilterSubscriptionList() {
                         <StatusDot sub={sub} />
                       </div>
                       <div className="flex items-center gap-3 text-xs text-slate-400 mt-0.5">
-                        <span>{sub.entry_count} entries</span>
+                        <span>{t('catalog.entries', { count: sub.entry_count })}</span>
                         <span>{sub.refresh_type}: {sub.refresh_value}</span>
                         {sub.last_fetched_at && (
                           <span>{t('list.lastFetch')}: {getRelativeTime(sub.last_fetched_at)}</span>

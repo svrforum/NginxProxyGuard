@@ -186,6 +186,8 @@ func (db *DB) RunMigrations() error {
 			created_at timestamp with time zone DEFAULT now(),
 			UNIQUE(subscription_id, proxy_host_id)
 		);
+
+		CREATE INDEX IF NOT EXISTS idx_fshe_proxy_host ON public.filter_subscription_host_exclusions(proxy_host_id);
 	`
 	_, err = db.Exec(upgradeSQL)
 	if err != nil {
