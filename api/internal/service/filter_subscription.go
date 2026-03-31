@@ -1,0 +1,584 @@
+package service
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"net"
+	"net/http"
+	"net/url"
+	"strings"
+
+	"nginx-proxy-guard/internal/config"
+	"nginx-proxy-guard/internal/model"
+	"nginx-proxy-guard/internal/repository"
+)
+
+// FilterSubscriptionService handles filter subscription business logic
+type FilterSubscriptionService struct {
+	repo             *repository.FilterSubscriptionRepository
+	proxyHostService *ProxyHostService
+	nginxReloader    *NginxReloader
+	httpClient       *http.Client
+}
+
+// NewFilterSubscriptionService creates a new filter subscription service
+func NewFilterSubscriptionService(repo *repository.FilterSubscriptionRepository, proxyHostService *ProxyHostService, nginxReloader *NginxReloader) *FilterSubscriptionService {
+	transport := &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout: config.FilterFetchConnectTimeout,
+		}).DialContext,
+	}
+
+	client := &http.Client{
+		Timeout:   config.FilterFetchTimeout,
+		Transport: transport,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= config.FilterMaxRedirects {
+				return fmt.Errorf("too many redirects (max %d)", config.FilterMaxRedirects)
+			}
+			// Block redirects to private IPs
+			host := req.URL.Hostname()
+			if isPrivateAddr(host) {
+				return fmt.Errorf("redirect to private address blocked: %s", host)
+			}
+			return nil
+		},
+	}
+
+	return &FilterSubscriptionService{
+		repo:             repo,
+		proxyHostService: proxyHostService,
+		nginxReloader:    nginxReloader,
+		httpClient:       client,
+	}
+}
+
+// SetProxyHostService sets the proxy host service (used to avoid circular deps)
+func (s *FilterSubscriptionService) SetProxyHostService(phs *ProxyHostService) {
+	s.proxyHostService = phs
+}
+
+// List returns a paginated list of filter subscriptions
+func (s *FilterSubscriptionService) List(ctx context.Context, page, perPage int) (*model.FilterSubscriptionListResponse, error) {
+	return s.repo.List(ctx, page, perPage)
+}
+
+// GetByID returns a filter subscription by ID
+func (s *FilterSubscriptionService) GetByID(ctx context.Context, id string) (*model.FilterSubscription, error) {
+	return s.repo.GetByID(ctx, id)
+}
+
+// Create creates a new filter subscription
+func (s *FilterSubscriptionService) Create(ctx context.Context, req *model.CreateFilterSubscriptionRequest) (*model.FilterSubscription, error) {
+	// Validate URL
+	if req.URL == "" {
+		return nil, fmt.Errorf("url is required")
+	}
+
+	// SSRF protection: check for private URLs
+	if isPrivateURL(req.URL) {
+		return nil, fmt.Errorf("invalid URL: private addresses are not allowed")
+	}
+
+	// Check if URL already subscribed
+	existing, err := s.repo.GetByURL(ctx, req.URL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check existing subscription: %w", err)
+	}
+	if existing != nil {
+		return nil, fmt.Errorf("subscription for this URL already exists")
+	}
+
+	// Check total entry limit
+	totalCount, err := s.repo.GetTotalEntryCount(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check total entry count: %w", err)
+	}
+	if totalCount >= config.FilterMaxTotalEntries {
+		return nil, fmt.Errorf("total entry limit reached (%d)", config.FilterMaxTotalEntries)
+	}
+
+	// Fetch and parse the URL
+	entries, format, listName, listDescription, filterType, err := s.fetchAndParse(ctx, req.URL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch filter list: %w", err)
+	}
+
+	// Apply per-file limit
+	if len(entries) > config.FilterMaxEntriesPerFile {
+		entries = entries[:config.FilterMaxEntriesPerFile]
+	}
+
+	// Determine name
+	name := req.Name
+	if name == "" {
+		name = listName
+	}
+	if name == "" {
+		name = req.URL
+	}
+
+	// Determine type
+	subType := req.Type
+	if subType == "" {
+		subType = filterType
+	}
+	if subType == "" {
+		subType = "ip"
+	}
+
+	// Determine refresh settings
+	refreshType := req.RefreshType
+	if refreshType == "" {
+		refreshType = "interval"
+	}
+	refreshValue := req.RefreshValue
+	if refreshValue == "" {
+		refreshValue = "24h"
+	}
+
+	sub := &model.FilterSubscription{
+		Name:         name,
+		Description:  listDescription,
+		URL:          req.URL,
+		Format:       format,
+		Type:         subType,
+		Enabled:      true,
+		RefreshType:  refreshType,
+		RefreshValue: refreshValue,
+		EntryCount:   len(entries),
+	}
+
+	created, err := s.repo.Create(ctx, sub)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create subscription: %w", err)
+	}
+
+	// Store entries
+	if len(entries) > 0 {
+		if err := s.repo.ReplaceEntries(ctx, created.ID, entries); err != nil {
+			return nil, fmt.Errorf("failed to store entries: %w", err)
+		}
+	}
+
+	// Update fetch status
+	if err := s.repo.UpdateFetchStatus(ctx, created.ID, true, len(entries), ""); err != nil {
+		log.Printf("[FilterSubscription] Failed to update fetch status: %v", err)
+	}
+
+	// Trigger async nginx reload
+	s.triggerNginxReload()
+
+	return created, nil
+}
+
+// Update updates a filter subscription
+func (s *FilterSubscriptionService) Update(ctx context.Context, id string, req *model.UpdateFilterSubscriptionRequest) (*model.FilterSubscription, error) {
+	updated, err := s.repo.Update(ctx, id, req)
+	if err != nil {
+		return nil, err
+	}
+
+	// If enabled state changed, trigger nginx reload
+	if req.Enabled != nil {
+		s.triggerNginxReload()
+	}
+
+	return updated, nil
+}
+
+// Delete deletes a filter subscription
+func (s *FilterSubscriptionService) Delete(ctx context.Context, id string) error {
+	if err := s.repo.Delete(ctx, id); err != nil {
+		return err
+	}
+	s.triggerNginxReload()
+	return nil
+}
+
+// Refresh re-fetches a subscription and updates entries
+func (s *FilterSubscriptionService) Refresh(ctx context.Context, id string) (*model.FilterSubscription, error) {
+	sub, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get subscription: %w", err)
+	}
+	if sub == nil {
+		return nil, fmt.Errorf("subscription not found")
+	}
+
+	// Fetch and parse
+	entries, _, _, _, _, fetchErr := s.fetchAndParse(ctx, sub.URL)
+	if fetchErr != nil {
+		// Record failure but don't remove existing entries
+		if err := s.repo.UpdateFetchStatus(ctx, id, false, sub.EntryCount, fetchErr.Error()); err != nil {
+			log.Printf("[FilterSubscription] Failed to update fetch status: %v", err)
+		}
+		return nil, fmt.Errorf("failed to fetch filter list: %w", fetchErr)
+	}
+
+	// Empty response protection: if 0 entries fetched, keep existing
+	if len(entries) == 0 {
+		log.Printf("[FilterSubscription] Empty response for subscription %s, keeping existing %d entries", id, sub.EntryCount)
+		if err := s.repo.UpdateFetchStatus(ctx, id, true, sub.EntryCount, ""); err != nil {
+			log.Printf("[FilterSubscription] Failed to update fetch status: %v", err)
+		}
+		sub, _ = s.repo.GetByID(ctx, id)
+		return sub, nil
+	}
+
+	// Apply per-file limit
+	if len(entries) > config.FilterMaxEntriesPerFile {
+		entries = entries[:config.FilterMaxEntriesPerFile]
+	}
+
+	// Replace entries in transaction
+	if err := s.repo.ReplaceEntries(ctx, id, entries); err != nil {
+		return nil, fmt.Errorf("failed to replace entries: %w", err)
+	}
+
+	// Update fetch status
+	if err := s.repo.UpdateFetchStatus(ctx, id, true, len(entries), ""); err != nil {
+		log.Printf("[FilterSubscription] Failed to update fetch status: %v", err)
+	}
+
+	// Trigger async nginx reload
+	s.triggerNginxReload()
+
+	// Return updated subscription
+	sub, _ = s.repo.GetByID(ctx, id)
+	return sub, nil
+}
+
+// GetEntries returns entries for a subscription
+func (s *FilterSubscriptionService) GetEntries(ctx context.Context, subscriptionID string) ([]model.FilterSubscriptionEntry, error) {
+	return s.repo.GetEntries(ctx, subscriptionID)
+}
+
+// GetEntriesForHost returns entries applicable to a specific host
+func (s *FilterSubscriptionService) GetEntriesForHost(ctx context.Context, hostID, filterType string) ([]model.FilterSubscriptionEntry, error) {
+	return s.repo.GetEntriesForHost(ctx, hostID, filterType)
+}
+
+// ListExclusions returns host exclusions for a subscription
+func (s *FilterSubscriptionService) ListExclusions(ctx context.Context, subscriptionID string) ([]model.FilterSubscriptionHostExclusion, error) {
+	return s.repo.ListExclusions(ctx, subscriptionID)
+}
+
+// AddExclusion adds a host exclusion
+func (s *FilterSubscriptionService) AddExclusion(ctx context.Context, subscriptionID, hostID string) error {
+	if err := s.repo.AddExclusion(ctx, subscriptionID, hostID); err != nil {
+		return err
+	}
+	s.triggerNginxReload()
+	return nil
+}
+
+// RemoveExclusion removes a host exclusion
+func (s *FilterSubscriptionService) RemoveExclusion(ctx context.Context, subscriptionID, hostID string) error {
+	if err := s.repo.RemoveExclusion(ctx, subscriptionID, hostID); err != nil {
+		return err
+	}
+	s.triggerNginxReload()
+	return nil
+}
+
+// GetCatalog fetches the npg-filters index.json and marks subscribed lists
+func (s *FilterSubscriptionService) GetCatalog(ctx context.Context) (*model.FilterCatalog, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, config.FilterCatalogIndexURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create catalog request: %w", err)
+	}
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch catalog: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("catalog returned status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, config.FilterMaxResponseSize))
+	if err != nil {
+		return nil, fmt.Errorf("failed to read catalog body: %w", err)
+	}
+
+	var catalog model.FilterCatalog
+	if err := json.Unmarshal(body, &catalog); err != nil {
+		return nil, fmt.Errorf("failed to parse catalog: %w", err)
+	}
+
+	// Mark subscribed lists
+	subscribedURLs, err := s.repo.GetSubscribedURLs(ctx)
+	if err != nil {
+		log.Printf("[FilterSubscription] Failed to get subscribed URLs: %v", err)
+	} else {
+		for i := range catalog.Lists {
+			fullURL := config.FilterCatalogBaseURL + catalog.Lists[i].Path
+			if subscribedURLs[fullURL] {
+				catalog.Lists[i].Subscribed = true
+			}
+		}
+	}
+
+	return &catalog, nil
+}
+
+// SubscribeFromCatalog subscribes to lists from the catalog
+func (s *FilterSubscriptionService) SubscribeFromCatalog(ctx context.Context, req *model.CatalogSubscribeRequest) ([]model.FilterSubscription, error) {
+	var subscribed []model.FilterSubscription
+
+	for _, path := range req.Paths {
+		fullURL := config.FilterCatalogBaseURL + path
+
+		// Check if already subscribed
+		existing, err := s.repo.GetByURL(ctx, fullURL)
+		if err != nil {
+			log.Printf("[FilterSubscription] Error checking existing subscription for %s: %v", path, err)
+			continue
+		}
+		if existing != nil {
+			subscribed = append(subscribed, *existing)
+			continue
+		}
+
+		createReq := &model.CreateFilterSubscriptionRequest{
+			URL:          fullURL,
+			RefreshType:  req.RefreshType,
+			RefreshValue: req.RefreshValue,
+		}
+
+		sub, err := s.Create(ctx, createReq)
+		if err != nil {
+			log.Printf("[FilterSubscription] Failed to subscribe to %s: %v", path, err)
+			continue
+		}
+		subscribed = append(subscribed, *sub)
+	}
+
+	return subscribed, nil
+}
+
+// GetEnabledSubscriptions returns all enabled subscriptions
+func (s *FilterSubscriptionService) GetEnabledSubscriptions(ctx context.Context) ([]model.FilterSubscription, error) {
+	return s.repo.GetEnabledSubscriptions(ctx)
+}
+
+// fetchAndParse fetches a URL and auto-detects the format
+func (s *FilterSubscriptionService) fetchAndParse(ctx context.Context, fetchURL string) ([]model.FilterSubscriptionEntry, string, string, string, string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fetchURL, nil)
+	if err != nil {
+		return nil, "", "", "", "", fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("User-Agent", "NginxProxyGuard/"+config.AppVersion)
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, "", "", "", "", fmt.Errorf("failed to fetch URL: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, "", "", "", "", fmt.Errorf("URL returned status %d", resp.StatusCode)
+	}
+
+	// Read with size limit
+	body, err := io.ReadAll(io.LimitReader(resp.Body, config.FilterMaxResponseSize))
+	if err != nil {
+		return nil, "", "", "", "", fmt.Errorf("failed to read response: %w", err)
+	}
+
+	content := strings.TrimSpace(string(body))
+	if content == "" {
+		return []model.FilterSubscriptionEntry{}, "plaintext", "", "", "ip", nil
+	}
+
+	// Auto-detect format
+	if strings.HasPrefix(content, "{") {
+		return s.parseJSON(content)
+	}
+
+	return s.parsePlaintext(content)
+}
+
+// parseJSON parses NPG JSON format
+func (s *FilterSubscriptionService) parseJSON(content string) ([]model.FilterSubscriptionEntry, string, string, string, string, error) {
+	var list model.NPGFilterList
+	if err := json.Unmarshal([]byte(content), &list); err != nil {
+		return nil, "", "", "", "", fmt.Errorf("invalid JSON format: %w", err)
+	}
+
+	// Check for entries key
+	if list.Entries == nil {
+		return nil, "", "", "", "", fmt.Errorf("JSON format missing 'entries' key")
+	}
+
+	entries := make([]model.FilterSubscriptionEntry, 0, len(list.Entries))
+	for _, e := range list.Entries {
+		if e.Value == "" {
+			continue
+		}
+		entries = append(entries, model.FilterSubscriptionEntry{
+			Value:  e.Value,
+			Reason: e.Reason,
+		})
+	}
+
+	filterType := list.Type
+	if filterType == "" {
+		filterType = "ip"
+	}
+
+	return entries, "npg-json", list.Name, list.Description, filterType, nil
+}
+
+// parsePlaintext parses plaintext IP/CIDR lists
+func (s *FilterSubscriptionService) parsePlaintext(content string) ([]model.FilterSubscriptionEntry, string, string, string, string, error) {
+	entries := []model.FilterSubscriptionEntry{}
+	scanner := bufio.NewScanner(strings.NewReader(content))
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+
+		// Skip comments and empty lines
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") {
+			continue
+		}
+
+		// Remove inline comments
+		if idx := strings.Index(line, "#"); idx > 0 {
+			line = strings.TrimSpace(line[:idx])
+		}
+
+		// Validate as IP or CIDR
+		if !isValidIPOrCIDR(line) {
+			continue
+		}
+
+		entries = append(entries, model.FilterSubscriptionEntry{
+			Value: line,
+		})
+	}
+
+	return entries, "plaintext", "", "", "ip", scanner.Err()
+}
+
+// isValidIPOrCIDR checks if a string is a valid IP address or CIDR notation
+func isValidIPOrCIDR(s string) bool {
+	// Check CIDR
+	if strings.Contains(s, "/") {
+		_, _, err := net.ParseCIDR(s)
+		return err == nil
+	}
+	// Check IP
+	return net.ParseIP(s) != nil
+}
+
+// isPrivateURL checks if a URL points to a private/internal address
+func isPrivateURL(rawURL string) bool {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return true // Invalid URL, treat as private for safety
+	}
+
+	host := parsed.Hostname()
+	return isPrivateAddr(host)
+}
+
+// isPrivateAddr checks if an address is in a private IP range
+func isPrivateAddr(host string) bool {
+	// Check for localhost
+	if host == "localhost" || host == "127.0.0.1" || host == "::1" {
+		return true
+	}
+
+	// Resolve hostname
+	ips, err := net.LookupHost(host)
+	if err != nil {
+		// Can't resolve, check if it's already an IP
+		ip := net.ParseIP(host)
+		if ip != nil {
+			return isFilterPrivateIP(ip)
+		}
+		return false
+	}
+
+	for _, ipStr := range ips {
+		ip := net.ParseIP(ipStr)
+		if ip != nil && isFilterPrivateIP(ip) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// isFilterPrivateIP checks if an IP is in a private range
+func isFilterPrivateIP(ip net.IP) bool {
+	privateRanges := []struct {
+		network string
+	}{
+		{"10.0.0.0/8"},
+		{"172.16.0.0/12"},
+		{"192.168.0.0/16"},
+		{"127.0.0.0/8"},
+		{"169.254.0.0/16"},
+		{"::1/128"},
+		{"fc00::/7"},
+		{"fe80::/10"},
+	}
+
+	for _, r := range privateRanges {
+		_, network, err := net.ParseCIDR(r.network)
+		if err != nil {
+			continue
+		}
+		if network.Contains(ip) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// triggerNginxReload triggers an async nginx config regeneration
+func (s *FilterSubscriptionService) triggerNginxReload() {
+	if s.proxyHostService == nil {
+		return
+	}
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[FilterSubscription] Panic during nginx reload: %v", r)
+			}
+		}()
+
+		ctx, cancel := context.WithTimeout(context.Background(), config.ContextTimeout)
+		defer cancel()
+
+		// List all hosts via the public service method
+		result, err := s.proxyHostService.List(ctx, 1, config.MaxWAFRulesLimit, "", "", "")
+		if err != nil {
+			log.Printf("[FilterSubscription] Failed to list hosts for reload: %v", err)
+			return
+		}
+
+		for _, host := range result.Data {
+			if host.Enabled {
+				if _, err := s.proxyHostService.UpdateWithoutReload(ctx, host.ID, nil); err != nil {
+					log.Printf("[FilterSubscription] Failed to regenerate config for host %s: %v", host.ID, err)
+				}
+			}
+		}
+
+		// Request single debounced reload after all configs are generated
+		if s.nginxReloader != nil {
+			s.nginxReloader.RequestReload(ctx)
+		}
+	}()
+}

@@ -465,3 +465,32 @@ func (s *AuditService) LogIPBanned(ctx context.Context, ipAddress string, reason
 func (s *AuditService) LogIPUnbanned(ctx context.Context, ipAddress string) error {
 	return s.logEntry(ctx, "ip_unbanned", "banned_ip", "", ipAddress, nil)
 }
+
+// LogFilterSubscriptionCreated logs filter subscription creation
+func (s *AuditService) LogFilterSubscriptionCreated(ctx context.Context, name, url string) error {
+	return s.logEntry(ctx, "filter_subscription_created", "filter_subscription", "", name, map[string]interface{}{
+		"url": url,
+	})
+}
+
+// LogFilterSubscriptionUpdated logs filter subscription update
+func (s *AuditService) LogFilterSubscriptionUpdated(ctx context.Context, name string) error {
+	return s.logEntry(ctx, "filter_subscription_updated", "filter_subscription", "", name, nil)
+}
+
+// LogFilterSubscriptionDeleted logs filter subscription deletion
+func (s *AuditService) LogFilterSubscriptionDeleted(ctx context.Context, name string) error {
+	return s.logEntry(ctx, "filter_subscription_deleted", "filter_subscription", "", name, nil)
+}
+
+// LogFilterSubscriptionRefreshed logs filter subscription refresh
+func (s *AuditService) LogFilterSubscriptionRefreshed(ctx context.Context, name string) error {
+	return s.logEntry(ctx, "filter_subscription_refreshed", "filter_subscription", "", name, nil)
+}
+
+// LogFilterSubscriptionCatalogSubscribe logs catalog subscription
+func (s *AuditService) LogFilterSubscriptionCatalogSubscribe(ctx context.Context, count int) error {
+	return s.logEntry(ctx, "filter_subscription_catalog_subscribe", "filter_subscription", "", "", map[string]interface{}{
+		"count": count,
+	})
+}
