@@ -61,6 +61,8 @@
   "actions": {
     "refresh": "Refresh Now",
     "refreshing": "Refreshing...",
+    "enable": "Enable",
+    "disable": "Disable",
     "delete": "Delete Subscription",
     "deleteConfirm": "Are you sure you want to delete this filter subscription? All entries will be removed.",
     "settings": "Settings"

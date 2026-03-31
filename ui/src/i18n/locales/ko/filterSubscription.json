@@ -61,6 +61,8 @@
   "actions": {
     "refresh": "지금 갱신",
     "refreshing": "갱신 중...",
+    "enable": "활성화",
+    "disable": "비활성화",
     "delete": "구독 삭제",
     "deleteConfirm": "이 필터 구독을 삭제하시겠습니까? 모든 항목이 제거됩니다.",
     "settings": "설정"
