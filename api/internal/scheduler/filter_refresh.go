@@ -6,6 +6,7 @@ import (
 	"log"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"nginx-proxy-guard/internal/config"
@@ -18,7 +19,9 @@ type FilterRefreshScheduler struct {
 	service  *service.FilterSubscriptionService
 	interval time.Duration
 	stopChan chan struct{}
+	stopOnce sync.Once
 	running  bool
+	mu       sync.Mutex
 }
 
 // NewFilterRefreshScheduler creates a new filter refresh scheduler
@@ -32,6 +35,8 @@ func NewFilterRefreshScheduler(svc *service.FilterSubscriptionService) *FilterRe
 
 // Start begins the filter refresh scheduler
 func (s *FilterRefreshScheduler) Start() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.running {
 		return
 	}
@@ -43,10 +48,14 @@ func (s *FilterRefreshScheduler) Start() {
 
 // Stop stops the filter refresh scheduler
 func (s *FilterRefreshScheduler) Stop() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if !s.running {
 		return
 	}
-	close(s.stopChan)
+	s.stopOnce.Do(func() {
+		close(s.stopChan)
+	})
 	s.running = false
 	log.Println("[Scheduler] Filter refresh scheduler stopped")
 }

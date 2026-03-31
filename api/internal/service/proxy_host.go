@@ -27,7 +27,7 @@ type NginxManager interface {
 	GenerateConfigAndReloadWithCleanup(ctx context.Context, data nginx.ProxyHostConfigData, wafExclusions []model.WAFRuleExclusion, oldConfigFilename string) error
 	RemoveConfigAndReload(ctx context.Context, host *model.ProxyHost) error
 	// Filter subscription shared config generation
-	GenerateFilterSubscriptionConfigs(ips []string, uas []string) error
+	GenerateFilterSubscriptionConfigs(ctx context.Context, ips []string, uas []string) error
 }
 
 // CertificateCreator is an interface for creating certificates (used to avoid circular dependency)

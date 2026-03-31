@@ -303,6 +303,20 @@ func (s *FilterSubscriptionService) Refresh(ctx context.Context, id string) (*mo
 		return sub, nil
 	}
 
+	// Check total entry limit (exclude current subscription's existing count)
+	totalCount, err := s.repo.GetTotalEntryCount(ctx)
+	if err == nil {
+		otherEntries := totalCount - sub.EntryCount
+		if otherEntries+len(entries) > config.FilterMaxTotalEntries {
+			entries = entries[:config.FilterMaxTotalEntries-otherEntries]
+			if len(entries) <= 0 {
+				log.Printf("[FilterSubscription] Total entry limit reached during refresh for %s", sub.Name)
+				s.repo.UpdateFetchStatus(ctx, id, true, sub.EntryCount, "")
+				return s.repo.GetByID(ctx, id)
+			}
+		}
+	}
+
 	// Apply per-file limit
 	if len(entries) > config.FilterMaxEntriesPerFile {
 		entries = entries[:config.FilterMaxEntriesPerFile]
@@ -535,7 +549,7 @@ func validateEntryValue(entryType, value string) bool {
 			return false
 		}
 		// Reject entries containing nginx-dangerous characters
-		if strings.ContainsAny(value, ";{}()") {
+		if strings.ContainsAny(value, ";{}()\"\\$") {
 			return false
 		}
 		// Must compile as valid regex
@@ -736,7 +750,7 @@ func (s *FilterSubscriptionService) regenerateSharedConfigs(ctx context.Context)
 	}
 
 	// Generate shared config files
-	if err := s.nginxManager.GenerateFilterSubscriptionConfigs(allIPs, uas); err != nil {
+	if err := s.nginxManager.GenerateFilterSubscriptionConfigs(ctx, allIPs, uas); err != nil {
 		return fmt.Errorf("failed to generate shared filter configs: %w", err)
 	}
 
