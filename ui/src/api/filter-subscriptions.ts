@@ -68,7 +68,7 @@ export async function addExclusion(
   subscriptionId: string,
   hostId: string
 ): Promise<void> {
-  await apiPost(`${API_BASE}/${subscriptionId}/exclusions`, { proxy_host_id: hostId })
+  await apiPost(`${API_BASE}/${subscriptionId}/exclusions/${hostId}`)
 }
 
 export async function removeExclusion(

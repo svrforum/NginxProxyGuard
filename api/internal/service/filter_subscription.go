@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"nginx-proxy-guard/internal/config"
@@ -28,9 +29,24 @@ type FilterSubscriptionService struct {
 // NewFilterSubscriptionService creates a new filter subscription service
 func NewFilterSubscriptionService(repo *repository.FilterSubscriptionRepository, proxyHostService *ProxyHostService, nginxReloader *NginxReloader) *FilterSubscriptionService {
 	transport := &http.Transport{
-		DialContext: (&net.Dialer{
-			Timeout: config.FilterFetchConnectTimeout,
-		}).DialContext,
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			host, port, err := net.SplitHostPort(addr)
+			if err != nil {
+				return nil, fmt.Errorf("invalid address: %w", err)
+			}
+			ips, err := net.DefaultResolver.LookupHost(ctx, host)
+			if err != nil {
+				return nil, err
+			}
+			for _, ipStr := range ips {
+				ip := net.ParseIP(ipStr)
+				if ip != nil && isFilterPrivateIP(ip) {
+					return nil, fmt.Errorf("connection to private IP blocked: %s", ipStr)
+				}
+			}
+			dialer := &net.Dialer{Timeout: config.FilterFetchConnectTimeout}
+			return dialer.DialContext(ctx, network, net.JoinHostPort(host, port))
+		},
 	}
 
 	client := &http.Client{
@@ -131,6 +147,12 @@ func (s *FilterSubscriptionService) Create(ctx context.Context, req *model.Creat
 		subType = "ip"
 	}
 
+	// Validate type
+	validTypes := map[string]bool{"ip": true, "cidr": true, "user_agent": true}
+	if !validTypes[subType] {
+		return nil, fmt.Errorf("invalid type: must be ip, cidr, or user_agent")
+	}
+
 	// Determine refresh settings
 	refreshType := req.RefreshType
 	if refreshType == "" {
@@ -139,6 +161,26 @@ func (s *FilterSubscriptionService) Create(ctx context.Context, req *model.Creat
 	refreshValue := req.RefreshValue
 	if refreshValue == "" {
 		refreshValue = "24h"
+	}
+
+	// Validate refresh_type
+	validRefreshTypes := map[string]bool{"interval": true, "daily": true, "cron": true}
+	if !validRefreshTypes[refreshType] {
+		return nil, fmt.Errorf("invalid refresh_type: must be interval, daily, or cron")
+	}
+
+	// Validate refresh_value based on type
+	switch refreshType {
+	case "interval":
+		validIntervals := map[string]bool{"6h": true, "12h": true, "24h": true, "48h": true}
+		if !validIntervals[refreshValue] {
+			return nil, fmt.Errorf("invalid interval: must be 6h, 12h, 24h, or 48h")
+		}
+	case "daily":
+		parts := strings.Split(refreshValue, ":")
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid daily value: must be HH:MM format")
+		}
 	}
 
 	sub := &model.FilterSubscription{
@@ -161,6 +203,8 @@ func (s *FilterSubscriptionService) Create(ctx context.Context, req *model.Creat
 	// Store entries
 	if len(entries) > 0 {
 		if err := s.repo.ReplaceEntries(ctx, created.ID, entries); err != nil {
+			// Cleanup: delete the subscription to avoid orphan
+			s.repo.Delete(ctx, created.ID)
 			return nil, fmt.Errorf("failed to store entries: %w", err)
 		}
 	}
@@ -418,9 +462,18 @@ func (s *FilterSubscriptionService) parseJSON(content string) ([]model.FilterSub
 		return nil, "", "", "", "", fmt.Errorf("JSON format missing 'entries' key")
 	}
 
+	filterType := list.Type
+	if filterType == "" {
+		filterType = "ip"
+	}
+
 	entries := make([]model.FilterSubscriptionEntry, 0, len(list.Entries))
 	for _, e := range list.Entries {
 		if e.Value == "" {
+			continue
+		}
+		// Validate each entry value based on list type
+		if !validateEntryValue(filterType, e.Value) {
 			continue
 		}
 		entries = append(entries, model.FilterSubscriptionEntry{
@@ -429,12 +482,33 @@ func (s *FilterSubscriptionService) parseJSON(content string) ([]model.FilterSub
 		})
 	}
 
-	filterType := list.Type
-	if filterType == "" {
-		filterType = "ip"
-	}
-
 	return entries, "npg-json", list.Name, list.Description, filterType, nil
+}
+
+// validateEntryValue validates an entry value based on type.
+// Returns true if valid, false if it should be skipped.
+func validateEntryValue(entryType, value string) bool {
+	switch entryType {
+	case "ip":
+		return net.ParseIP(value) != nil
+	case "cidr":
+		_, _, err := net.ParseCIDR(value)
+		return err == nil
+	case "user_agent":
+		// Reject patterns longer than 200 characters
+		if len(value) > 200 {
+			return false
+		}
+		// Reject entries containing nginx-dangerous characters
+		if strings.ContainsAny(value, ";{}()") {
+			return false
+		}
+		// Must compile as valid regex
+		_, err := regexp.Compile(value)
+		return err == nil
+	default:
+		return false
+	}
 }
 
 // parsePlaintext parses plaintext IP/CIDR lists
@@ -520,10 +594,17 @@ func isPrivateAddr(host string) bool {
 
 // isFilterPrivateIP checks if an IP is in a private range
 func isFilterPrivateIP(ip net.IP) bool {
+	// Normalize IPv4-mapped IPv6 addresses (e.g., ::ffff:127.0.0.1 → 127.0.0.1)
+	if ip4 := ip.To4(); ip4 != nil {
+		ip = ip4
+	}
+
 	privateRanges := []struct {
 		network string
 	}{
+		{"0.0.0.0/8"},
 		{"10.0.0.0/8"},
+		{"100.64.0.0/10"},
 		{"172.16.0.0/12"},
 		{"192.168.0.0/16"},
 		{"127.0.0.0/8"},
