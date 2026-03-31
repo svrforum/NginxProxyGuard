@@ -188,6 +188,14 @@ export default function FilterSubscriptionList() {
     },
   });
 
+  const toggleMutation = useMutation({
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
+      updateFilterSubscription(id, { enabled }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['filterSubscriptions'] });
+    },
+  });
+
   const subs = subsData?.data || [];
   const subscribedUrls = useMemo(() => new Set(subs.map(s => s.url)), [subs]);
 
@@ -311,20 +319,29 @@ export default function FilterSubscriptionList() {
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button onClick={() => refreshMutation.mutate(sub.id)}
-                        disabled={refreshMutation.isPending && refreshMutation.variables === sub.id}
-                        className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50">
-                        {refreshMutation.isPending && refreshMutation.variables === sub.id ? t('actions.refreshing') : t('actions.refresh')}
+                    <div className="flex items-center gap-3 shrink-0">
+                      <button
+                        onClick={() => toggleMutation.mutate({ id: sub.id, enabled: !sub.enabled })}
+                        disabled={toggleMutation.isPending}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${sub.enabled ? 'bg-cyan-600' : 'bg-slate-300 dark:bg-slate-600'}`}
+                        title={sub.enabled ? t('actions.disable') : t('actions.enable')}>
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${sub.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
                       </button>
-                      <button onClick={() => setSettingsTarget(sub)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600">
-                        {t('actions.settings')}
-                      </button>
-                      <button onClick={() => handleDelete(sub.id)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">
-                        {t('actions.delete')}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => refreshMutation.mutate(sub.id)}
+                          disabled={refreshMutation.isPending && refreshMutation.variables === sub.id}
+                          className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50">
+                          {refreshMutation.isPending && refreshMutation.variables === sub.id ? t('actions.refreshing') : t('actions.refresh')}
+                        </button>
+                        <button onClick={() => setSettingsTarget(sub)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600">
+                          {t('actions.settings')}
+                        </button>
+                        <button onClick={() => handleDelete(sub.id)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">
+                          {t('actions.delete')}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>

@@ -218,7 +218,7 @@ func (s *FilterSubscriptionService) Create(ctx context.Context, req *model.Creat
 		URL:          req.URL,
 		Format:       format,
 		Type:         subType,
-		Enabled:      true,
+		Enabled:      false,
 		RefreshType:  refreshType,
 		RefreshValue: refreshValue,
 		EntryCount:   len(entries),
