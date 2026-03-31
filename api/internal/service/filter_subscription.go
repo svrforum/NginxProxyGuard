@@ -22,12 +22,13 @@ import (
 type FilterSubscriptionService struct {
 	repo             *repository.FilterSubscriptionRepository
 	proxyHostService *ProxyHostService
+	nginxManager     NginxManager
 	nginxReloader    *NginxReloader
 	httpClient       *http.Client
 }
 
 // NewFilterSubscriptionService creates a new filter subscription service
-func NewFilterSubscriptionService(repo *repository.FilterSubscriptionRepository, proxyHostService *ProxyHostService, nginxReloader *NginxReloader) *FilterSubscriptionService {
+func NewFilterSubscriptionService(repo *repository.FilterSubscriptionRepository, proxyHostService *ProxyHostService, nginxManager NginxManager, nginxReloader *NginxReloader) *FilterSubscriptionService {
 	transport := &http.Transport{
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			host, port, err := net.SplitHostPort(addr)
@@ -68,6 +69,7 @@ func NewFilterSubscriptionService(repo *repository.FilterSubscriptionRepository,
 	return &FilterSubscriptionService{
 		repo:             repo,
 		proxyHostService: proxyHostService,
+		nginxManager:     nginxManager,
 		nginxReloader:    nginxReloader,
 		httpClient:       client,
 	}
@@ -670,9 +672,11 @@ func isFilterPrivateIP(ip net.IP) bool {
 	return false
 }
 
-// triggerNginxReload triggers an async nginx config regeneration
+// triggerNginxReload regenerates shared filter subscription config files and triggers nginx reload.
+// Instead of regenerating ALL host configs (which duplicated 50k+ entries per host),
+// this writes two shared files (filter_sub_ips.conf, filter_sub_uas.conf) and reloads once.
 func (s *FilterSubscriptionService) triggerNginxReload() {
-	if s.proxyHostService == nil {
+	if s.nginxManager == nil {
 		return
 	}
 	go func() {
@@ -685,24 +689,63 @@ func (s *FilterSubscriptionService) triggerNginxReload() {
 		ctx, cancel := context.WithTimeout(context.Background(), config.ContextTimeout)
 		defer cancel()
 
-		// List all hosts via the public service method
-		result, err := s.proxyHostService.List(ctx, 1, config.MaxWAFRulesLimit, "", "", "")
-		if err != nil {
-			log.Printf("[FilterSubscription] Failed to list hosts for reload: %v", err)
+		if err := s.regenerateSharedConfigs(ctx); err != nil {
+			log.Printf("[FilterSubscription] Failed to regenerate shared configs: %v", err)
 			return
 		}
 
-		for _, host := range result.Data {
-			if host.Enabled {
-				if _, err := s.proxyHostService.UpdateWithoutReload(ctx, host.ID, nil); err != nil {
-					log.Printf("[FilterSubscription] Failed to regenerate config for host %s: %v", host.ID, err)
-				}
-			}
-		}
-
-		// Request single debounced reload after all configs are generated
+		// Request single debounced reload
 		if s.nginxReloader != nil {
 			s.nginxReloader.RequestReload(ctx)
 		}
 	}()
+}
+
+// regenerateSharedConfigs fetches all enabled filter entries and writes the shared config files.
+func (s *FilterSubscriptionService) regenerateSharedConfigs(ctx context.Context) error {
+	// Fetch all IP and CIDR entries from enabled subscriptions
+	ips, err := s.repo.GetAllEnabledEntriesByType(ctx, "ip")
+	if err != nil {
+		return fmt.Errorf("failed to get IP entries: %w", err)
+	}
+	cidrs, err := s.repo.GetAllEnabledEntriesByType(ctx, "cidr")
+	if err != nil {
+		return fmt.Errorf("failed to get CIDR entries: %w", err)
+	}
+
+	// Merge IPs and CIDRs, deduplicating
+	seen := make(map[string]bool, len(ips)+len(cidrs))
+	var allIPs []string
+	for _, ip := range ips {
+		if !seen[ip] {
+			seen[ip] = true
+			allIPs = append(allIPs, ip)
+		}
+	}
+	for _, cidr := range cidrs {
+		if !seen[cidr] {
+			seen[cidr] = true
+			allIPs = append(allIPs, cidr)
+		}
+	}
+
+	// Fetch all UA entries
+	uas, err := s.repo.GetAllEnabledEntriesByType(ctx, "user_agent")
+	if err != nil {
+		return fmt.Errorf("failed to get UA entries: %w", err)
+	}
+
+	// Generate shared config files
+	if err := s.nginxManager.GenerateFilterSubscriptionConfigs(allIPs, uas); err != nil {
+		return fmt.Errorf("failed to generate shared filter configs: %w", err)
+	}
+
+	log.Printf("[FilterSubscription] Shared configs regenerated: %d IPs/CIDRs, %d UAs", len(allIPs), len(uas))
+	return nil
+}
+
+// RegenerateSharedConfigs is a public method for regenerating shared config files.
+// Called during startup to ensure the files exist.
+func (s *FilterSubscriptionService) RegenerateSharedConfigs(ctx context.Context) error {
+	return s.regenerateSharedConfigs(ctx)
 }

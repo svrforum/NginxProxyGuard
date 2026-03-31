@@ -422,3 +422,49 @@ func (r *FilterSubscriptionRepository) GetSubscribedURLs(ctx context.Context) (m
 	}
 	return urls, rows.Err()
 }
+
+// GetAllEnabledEntriesByType returns all entries from enabled subscriptions of the given type.
+// This is used for generating shared filter subscription config files.
+func (r *FilterSubscriptionRepository) GetAllEnabledEntriesByType(ctx context.Context, filterType string) ([]string, error) {
+	query := `
+		SELECT DISTINCT e.value
+		FROM filter_subscription_entries e
+		INNER JOIN filter_subscriptions s ON e.subscription_id = s.id
+		WHERE s.enabled = true AND s.type = $1
+		ORDER BY e.value`
+
+	rows, err := r.db.QueryContext(ctx, query, filterType)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get all enabled entries by type: %w", err)
+	}
+	defer rows.Close()
+
+	var values []string
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			return nil, fmt.Errorf("failed to scan entry value: %w", err)
+		}
+		values = append(values, v)
+	}
+	return values, rows.Err()
+}
+
+// CountExclusionsForHost returns the number of subscriptions that exclude a given host
+func (r *FilterSubscriptionRepository) CountExclusionsForHost(ctx context.Context, hostID string) (int, error) {
+	var count int
+	err := r.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM filter_subscription_host_exclusions WHERE proxy_host_id = $1`,
+		hostID,
+	).Scan(&count)
+	return count, err
+}
+
+// CountEnabledSubscriptions returns the count of enabled subscriptions
+func (r *FilterSubscriptionRepository) CountEnabledSubscriptions(ctx context.Context) (int, error) {
+	var count int
+	err := r.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM filter_subscriptions WHERE enabled = true`,
+	).Scan(&count)
+	return count, err
+}

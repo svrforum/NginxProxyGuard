@@ -134,6 +134,18 @@ func main() {
 	startupCtx, startupCancel := context.WithTimeout(context.Background(), config.ContextTimeout)
 	defer startupCancel()
 
+	// Generate shared filter subscription config files BEFORE syncing host configs
+	// Host configs reference these via nginx include directives, so they must exist first
+	log.Println("[Startup] Generating shared filter subscription configs...")
+	{
+		filterSubStartupSvc := service.NewFilterSubscriptionService(filterSubscriptionRepo, nil, nginxManager, nil)
+		if err := filterSubStartupSvc.RegenerateSharedConfigs(startupCtx); err != nil {
+			log.Printf("[Startup] Warning: failed to generate filter subscription configs: %v", err)
+		} else {
+			log.Println("[Startup] Filter subscription configs generated successfully")
+		}
+	}
+
 	// Sync all proxy host configs on startup to apply any template changes
 	log.Println("[Startup] Syncing all proxy host configs...")
 	if err := proxyHostService.SyncAllConfigs(startupCtx); err != nil {
@@ -170,7 +182,7 @@ func main() {
 	nginxReloader := service.NewNginxReloader(nginxManager, config.NginxReloaderDebounce)
 
 	// Initialize filter subscription service
-	filterSubscriptionService := service.NewFilterSubscriptionService(filterSubscriptionRepo, proxyHostService, nginxReloader)
+	filterSubscriptionService := service.NewFilterSubscriptionService(filterSubscriptionRepo, proxyHostService, nginxManager, nginxReloader)
 
 	// Initialize audit service
 	auditService := service.NewAuditService(auditLogRepo)
