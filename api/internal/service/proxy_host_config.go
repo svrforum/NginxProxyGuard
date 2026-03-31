@@ -256,32 +256,54 @@ func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.Pr
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
+			seen := make(map[string]bool)
 			var ips []string
 			ipEntries, err := s.filterSubscriptionRepo.GetEntriesForHost(ctx, host.ID, "ip")
 			if err == nil {
 				for _, e := range ipEntries {
-					ips = append(ips, e.Value)
+					if !seen[e.Value] {
+						seen[e.Value] = true
+						ips = append(ips, e.Value)
+					}
 				}
 			}
 			cidrEntries, err := s.filterSubscriptionRepo.GetEntriesForHost(ctx, host.ID, "cidr")
 			if err == nil {
 				for _, e := range cidrEntries {
-					ips = append(ips, e.Value)
+					if !seen[e.Value] {
+						seen[e.Value] = true
+						ips = append(ips, e.Value)
+					}
 				}
 			}
 			if len(ips) > 0 {
 				mu.Lock()
-				data.FilterSubscriptionIPs = ips
+				// Also deduplicate against existing banned IPs
+				bannedSet := make(map[string]bool)
+				for _, b := range data.BannedIPs {
+					bannedSet[b.IPAddress] = true
+				}
+				var dedupIPs []string
+				for _, ip := range ips {
+					if !bannedSet[ip] {
+						dedupIPs = append(dedupIPs, ip)
+					}
+				}
+				data.FilterSubscriptionIPs = dedupIPs
 				mu.Unlock()
 			}
 		}()
 		go func() {
 			defer wg.Done()
+			seen := make(map[string]bool)
 			uaEntries, err := s.filterSubscriptionRepo.GetEntriesForHost(ctx, host.ID, "user_agent")
 			if err == nil {
 				var uas []string
 				for _, e := range uaEntries {
-					uas = append(uas, e.Value)
+					if !seen[e.Value] {
+						seen[e.Value] = true
+						uas = append(uas, e.Value)
+					}
 				}
 				if len(uas) > 0 {
 					mu.Lock()

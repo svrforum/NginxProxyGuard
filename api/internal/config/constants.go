@@ -120,8 +120,8 @@ const (
 	FilterFetchTimeout         = 30 * time.Second
 	FilterFetchConnectTimeout  = 5 * time.Second
 	FilterMaxResponseSize      = 10 * 1024 * 1024 // 10MB
-	FilterMaxTotalEntries      = 50000
-	FilterMaxEntriesPerFile    = 5000
+	FilterMaxTotalEntries      = 100000
+	FilterMaxEntriesPerFile    = 25000
 	FilterMaxRedirects         = 3
 	FilterRefreshCheckInterval = 10 * time.Minute
 	FilterCatalogBaseURL       = "https://raw.githubusercontent.com/svrforum/npg-filters/main/"
