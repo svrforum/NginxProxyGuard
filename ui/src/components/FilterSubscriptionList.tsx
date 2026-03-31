@@ -21,13 +21,48 @@ import type {
   FilterSubscriptionHostExclusion,
 } from '../types/filter-subscription';
 
-// Well-known community blocklists
+// Well-known community blocklists with detailed info
 const PRESET_LISTS = [
-  { name: 'Spamhaus DROP', url: 'https://www.spamhaus.org/drop/drop.txt', type: 'cidr', description: 'Spamhaus Don\'t Route Or Peer — hijacked IP ranges' },
-  { name: 'FireHOL Level 1', url: 'https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/firehol_level1.netset', type: 'cidr', description: 'FireHOL aggregated threat intelligence (Level 1)' },
-  { name: 'Blocklist.de', url: 'https://lists.blocklist.de/lists/all.txt', type: 'ip', description: 'IPs reported for attacks (brute-force, bots, spam)' },
-  { name: 'IPsum Level 3', url: 'https://raw.githubusercontent.com/stamparm/ipsum/master/levels/3.txt', type: 'ip', description: 'IPsum threat intelligence — IPs seen on 3+ blacklists' },
-  { name: 'Emerging Threats', url: 'https://rules.emergingthreats.net/fwrules/emerging-Block-IPs.txt', type: 'ip', description: 'Emerging Threats compiled block list' },
+  {
+    name: 'Spamhaus DROP',
+    url: 'https://www.spamhaus.org/drop/drop.txt',
+    type: 'cidr',
+    description: 'presets.spamhaus.description',
+    detail: 'presets.spamhaus.detail',
+    site: 'https://www.spamhaus.org/drop/',
+  },
+  {
+    name: 'FireHOL Level 1',
+    url: 'https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/firehol_level1.netset',
+    type: 'cidr',
+    description: 'presets.firehol.description',
+    detail: 'presets.firehol.detail',
+    site: 'https://github.com/firehol/blocklist-ipsets',
+  },
+  {
+    name: 'Blocklist.de',
+    url: 'https://lists.blocklist.de/lists/all.txt',
+    type: 'ip',
+    description: 'presets.blocklistde.description',
+    detail: 'presets.blocklistde.detail',
+    site: 'https://www.blocklist.de/',
+  },
+  {
+    name: 'IPsum Level 3',
+    url: 'https://raw.githubusercontent.com/stamparm/ipsum/master/levels/3.txt',
+    type: 'ip',
+    description: 'presets.ipsum.description',
+    detail: 'presets.ipsum.detail',
+    site: 'https://github.com/stamparm/ipsum',
+  },
+  {
+    name: 'Emerging Threats',
+    url: 'https://rules.emergingthreats.net/fwrules/emerging-Block-IPs.txt',
+    type: 'ip',
+    description: 'presets.emergingthreats.description',
+    detail: 'presets.emergingthreats.detail',
+    site: 'https://rules.emergingthreats.net/',
+  },
 ] as const;
 
 function getRelativeTime(dateStr: string): string {
@@ -143,6 +178,7 @@ export default function FilterSubscriptionList() {
   const [settingsTarget, setSettingsTarget] = useState<FilterSubscription | null>(null);
   const [expandedSub, setExpandedSub] = useState<string | null>(null);
   const [entrySearch, setEntrySearch] = useState('');
+  const [showHowItWorks, setShowHowItWorks] = useState(false);
 
   // Add URL form state
   const [addUrl, setAddUrl] = useState('');
@@ -245,32 +281,62 @@ export default function FilterSubscriptionList() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-slate-900 dark:text-white">{t('title')}</h2>
+        <div>
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white">{t('title')}</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{t('subtitle')}</p>
+        </div>
         <button onClick={() => setShowAddModal(true)}
           className="px-4 py-2 rounded-lg font-medium transition-colors bg-primary-600 hover:bg-primary-700 text-white text-sm">
           {t('list.addUrl')}
         </button>
       </div>
 
+      {/* How it works */}
+      <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
+        <button onClick={() => setShowHowItWorks(!showHowItWorks)}
+          className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300 w-full">
+          <svg className={`w-4 h-4 transition-transform ${showHowItWorks ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+          {t('howItWorks.title')}
+        </button>
+        {showHowItWorks && (
+          <div className="mt-3 pl-6 space-y-2 text-xs text-slate-600 dark:text-slate-400">
+            <p>{t('howItWorks.step1')}</p>
+            <p>{t('howItWorks.step2')}</p>
+            <p>{t('howItWorks.step3')}</p>
+            <p>{t('howItWorks.step4')}</p>
+          </div>
+        )}
+      </div>
+
       {/* Presets - only show if there are available presets */}
       {availablePresets.length > 0 && (
         <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-4">
           <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">{t('presets.title')}</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+          <div className="space-y-2">
             {availablePresets.map(preset => (
-              <div key={preset.url} className="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-medium text-slate-900 dark:text-white truncate">{preset.name}</span>
-                    <TypeBadge type={preset.type} />
+              <div key={preset.url} className="p-3 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium text-slate-900 dark:text-white">{preset.name}</span>
+                      <TypeBadge type={preset.type} />
+                      <a href={preset.site} target="_blank" rel="noopener noreferrer"
+                        className="text-xs text-cyan-600 dark:text-cyan-400 hover:underline"
+                        onClick={e => e.stopPropagation()}>
+                        {t('presets.visitSite')}
+                      </a>
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t(preset.description)}</p>
+                    <p className="text-xs text-slate-400 mt-0.5">{t(preset.detail)}</p>
                   </div>
-                  <p className="text-xs text-slate-400 truncate mt-0.5">{preset.description}</p>
+                  <button onClick={() => handlePresetAdd(preset)}
+                    disabled={createMutation.isPending}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-cyan-600 hover:bg-cyan-700 text-white shrink-0 disabled:opacity-50">
+                    {createMutation.isPending ? '...' : t('presets.add')}
+                  </button>
                 </div>
-                <button onClick={() => handlePresetAdd(preset)}
-                  disabled={createMutation.isPending}
-                  className="px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors bg-cyan-600 hover:bg-cyan-700 text-white shrink-0 disabled:opacity-50">
-                  {createMutation.isPending ? '...' : t('presets.add')}
-                </button>
               </div>
             ))}
           </div>
