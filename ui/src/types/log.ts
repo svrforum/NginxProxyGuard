@@ -21,7 +21,8 @@ export type BlockReason =
   | "uri_block"
   | "cloud_provider_challenge"
   | "cloud_provider_block"
-  | "access_denied";
+  | "access_denied"
+  | "filter_subscription";
 
 export type BotCategory = "bad_bot" | "ai_bot" | "suspicious" | "search_engine";
 

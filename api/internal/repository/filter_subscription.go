@@ -245,14 +245,29 @@ func (r *FilterSubscriptionRepository) ReplaceEntries(ctx context.Context, subsc
 		return fmt.Errorf("failed to delete old entries: %w", err)
 	}
 
-	// Insert new entries
-	for _, entry := range entries {
-		_, err = tx.ExecContext(ctx,
-			`INSERT INTO filter_subscription_entries (subscription_id, value, reason) VALUES ($1, $2, $3)`,
-			subscriptionID, entry.Value, entry.Reason,
+	// Insert new entries in batches of 500
+	const batchSize = 500
+	for i := 0; i < len(entries); i += batchSize {
+		end := i + batchSize
+		if end > len(entries) {
+			end = len(entries)
+		}
+		batch := entries[i:end]
+
+		valueStrings := make([]string, 0, len(batch))
+		valueArgs := make([]interface{}, 0, len(batch)*3)
+		for j, entry := range batch {
+			base := j*3 + 1
+			valueStrings = append(valueStrings, fmt.Sprintf("($%d, $%d, $%d)", base, base+1, base+2))
+			valueArgs = append(valueArgs, subscriptionID, entry.Value, entry.Reason)
+		}
+
+		query := fmt.Sprintf(
+			`INSERT INTO filter_subscription_entries (subscription_id, value, reason) VALUES %s ON CONFLICT (subscription_id, value) DO NOTHING`,
+			joinStrings(valueStrings, ", "),
 		)
-		if err != nil {
-			return fmt.Errorf("failed to insert entry: %w", err)
+		if _, err = tx.ExecContext(ctx, query, valueArgs...); err != nil {
+			return fmt.Errorf("failed to insert entries batch: %w", err)
 		}
 	}
 

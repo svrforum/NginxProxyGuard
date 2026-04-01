@@ -369,6 +369,7 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
               <option value="rate_limit">{t('reasons.rateLimit')}</option>
               <option value="geo_block">{t('reasons.geoBlock')}</option>
               <option value="banned_ip">{t('reasons.bannedIp')}</option>
+              <option value="filter_subscription">{t('reasons.filterSubscription')}</option>
             </select>
           </div>
         )}

@@ -25,13 +25,14 @@ limit_req_zone $rate_limit_key_{{sanitizeID .Host.ID}} zone=rate_{{sanitizeID .H
 
 {{if or .BannedIPs .UseFilterSubscription}}
 # Banned IPs geo mapping for {{join .Host.DomainNames ", "}}
+# Values: 1 = manual ban, 2 = filter subscription
 geo $banned_ip_{{sanitizeID .Host.ID}} {
     default 0;
-{{range .BannedIPs}}
-    {{.IPAddress}} 1; # {{.Reason}}
-{{end}}
 {{if .UseFilterSubscription}}
     include /etc/nginx/conf.d/includes/filter_sub_ips.conf;
+{{end}}
+{{range .BannedIPs}}
+    {{.IPAddress}} 1; # {{.Reason}}
 {{end}}
 }
 {{end}}
@@ -442,9 +443,13 @@ server {
 {{end}}
 
 {{if or .BannedIPs .UseFilterSubscription}}
-    # Banned IPs check
+    # Banned IPs check (1 = manual ban, 2 = filter subscription)
     if ($banned_ip_{{sanitizeID .Host.ID}} = 1) {
         set $block_reason_var "banned_ip";
+        return 403;
+    }
+    if ($banned_ip_{{sanitizeID .Host.ID}} = 2) {
+        set $block_reason_var "filter_subscription";
         return 403;
     }
 {{end}}
@@ -582,7 +587,7 @@ server {
     set $filter_ua_check "${skip_security_for_acme}${filter_sub_ua_blocked}";
 {{end}}
     if ($filter_ua_check = "01") {
-        set $block_reason_var "bot_filter";
+        set $block_reason_var "filter_subscription";
         return 403;
     }
 {{end}}
@@ -1275,9 +1280,13 @@ server {
 {{end}}
 
 {{if or .BannedIPs .UseFilterSubscription}}
-    # Banned IPs check
+    # Banned IPs check (1 = manual ban, 2 = filter subscription)
     if ($banned_ip_{{sanitizeID .Host.ID}} = 1) {
         set $block_reason_var "banned_ip";
+        return 403;
+    }
+    if ($banned_ip_{{sanitizeID .Host.ID}} = 2) {
+        set $block_reason_var "filter_subscription";
         return 403;
     }
 {{end}}
@@ -1415,7 +1424,7 @@ server {
     set $filter_ua_check "${skip_security_for_acme}${filter_sub_ua_blocked}";
 {{end}}
     if ($filter_ua_check = "01") {
-        set $block_reason_var "bot_filter";
+        set $block_reason_var "filter_subscription";
         return 403;
     }
 {{end}}

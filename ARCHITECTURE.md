@@ -1,6 +1,6 @@
 # NginxProxyGuard - Architecture Specification
 
-> **Version**: 2.2.0 | **Last Updated**: 2026-03-20
+> **Version**: 2.7.0 | **Last Updated**: 2026-03-31
 > 이 문서는 Claude Code가 개발 시 참조하는 프로젝트 아키텍처 명세서입니다.
 > 새 기능 추가, 버그 수정, 리팩토링 시 이 문서를 기준으로 작업합니다.
 
@@ -781,7 +781,8 @@ Tag push (v*) → detect changes (SHA256 per component)
 
 ```sql
 block_reason: 'none','waf','bot_filter','rate_limit','geo_block','exploit_block',
-              'banned_ip','uri_block','cloud_provider_challenge','cloud_provider_block','access_denied'
+              'banned_ip','uri_block','cloud_provider_challenge','cloud_provider_block',
+              'access_denied','filter_subscription'
 log_type: 'access','error','modsec'
 system_log_level: 'debug','info','warn','error','fatal'
 ```
@@ -1135,7 +1136,31 @@ Restore (2-phase):
 - **GeoIP Stats:** country 별 요청 분포
 - **React:** refetchInterval: 30000ms
 
-### 8.11 Filter Subscription
+### 8.11 Post-Quantum TLS (ML-KEM)
+
+- **목적:** 양자 컴퓨터 시대에 대비한 하이브리드 키 교환 지원
+- **기본값:** `X25519MLKEM768:X25519:secp256r1:secp384r1` (ssl_ecdh_curve)
+- **설정:** Global SSL Settings에서 ssl_ecdh_curve 변경 가능
+- **호환성:** OpenSSL 3.5+ 필요, 미지원 클라이언트는 X25519로 자동 폴백
+- **도입 버전:** v2.6.0
+
+### 8.12 Proxy Buffering Control
+
+- **목적:** 프록시 요청/응답 버퍼링을 글로벌 설정으로 제어
+- **설정:** Global Settings의 proxy_buffering (on/off), proxy_request_buffering (on/off)
+- **용도:** WebSocket, 스트리밍, 대용량 파일 업로드 시 버퍼링 비활성화
+- **Nginx 반영:** 모든 proxy host config에 `proxy_buffering`, `proxy_request_buffering` 지시자 포함
+- **도입 버전:** v2.3.2
+
+### 8.13 Config Error Diagnostics
+
+- **목적:** 프록시 호스트 설정 실패 시 원인 진단 및 자동 복구
+- **config_error 컬럼:** proxy_hosts 테이블에 에러 메시지 저장
+- **UI:** 에러 배지 클릭 → 에러 상세 + 실행 가능한 가이드 표시
+- **Auto-disable:** Nginx 시작 시 `nginx -t` 실패하는 호스트 자동 비활성화
+- **도입 버전:** v2.4.0
+
+### 8.14 Filter Subscription
 
 - **목적:** 외부 커뮤니티 필터 리스트(IP/CIDR/User-Agent)를 구독하여 자동 차단
 - **카탈로그:** GitHub 호스팅 npg-filters 레포에서 공식 필터 목록 제공

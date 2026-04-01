@@ -598,7 +598,19 @@ func (s *FilterSubscriptionService) parsePlaintext(content string) ([]model.Filt
 		})
 	}
 
-	return entries, "plaintext", "", "", "ip", scanner.Err()
+	// Auto-detect type: if majority of entries are CIDRs, type as "cidr"
+	detectedType := "ip"
+	cidrCount := 0
+	for _, e := range entries {
+		if strings.Contains(e.Value, "/") {
+			cidrCount++
+		}
+	}
+	if len(entries) > 0 && cidrCount > len(entries)/2 {
+		detectedType = "cidr"
+	}
+
+	return entries, "plaintext", "", "", detectedType, scanner.Err()
 }
 
 // isValidIPOrCIDR checks if a string is a valid IP address or CIDR notation

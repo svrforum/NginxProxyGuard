@@ -69,6 +69,7 @@ func (db *DB) RunMigrations() error {
 		ALTER TYPE public.block_reason ADD VALUE IF NOT EXISTS 'cloud_provider_block';
 		ALTER TYPE public.block_reason ADD VALUE IF NOT EXISTS 'uri_block';
 		ALTER TYPE public.block_reason ADD VALUE IF NOT EXISTS 'access_denied';
+		ALTER TYPE public.block_reason ADD VALUE IF NOT EXISTS 'filter_subscription';
 
 		-- Column upgrades
 		ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS cache_static_only boolean DEFAULT true NOT NULL;

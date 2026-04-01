@@ -231,6 +231,9 @@ type ExportData struct {
 
 	// Global Challenge Config (CAPTCHA)
 	GlobalChallengeConfig *ChallengeConfigExport `json:"global_challenge_config,omitempty"`
+
+	// Filter Subscriptions
+	FilterSubscriptions []FilterSubscriptionExport `json:"filter_subscriptions,omitempty"`
 }
 
 // GlobalSettingsExport represents global settings for export
@@ -598,6 +601,26 @@ type HostExploitExclusionExport struct {
 	RuleID      string `json:"rule_id"`
 	Reason      string `json:"reason,omitempty"`
 	DisabledBy  string `json:"disabled_by,omitempty"`
+}
+
+// FilterSubscriptionExport represents a filter subscription for export
+type FilterSubscriptionExport struct {
+	Name         string                            `json:"name"`
+	Description  string                            `json:"description,omitempty"`
+	URL          string                            `json:"url"`
+	Format       string                            `json:"format"`
+	Type         string                            `json:"type"`
+	Enabled      bool                              `json:"enabled"`
+	RefreshType  string                            `json:"refresh_type"`
+	RefreshValue string                            `json:"refresh_value"`
+	Entries      []FilterSubscriptionEntryExport   `json:"entries,omitempty"`
+	Exclusions   []string                          `json:"exclusion_host_ids,omitempty"`
+}
+
+// FilterSubscriptionEntryExport represents a filter subscription entry for export
+type FilterSubscriptionEntryExport struct {
+	Value  string `json:"value"`
+	Reason string `json:"reason,omitempty"`
 }
 
 // SystemSettingsExport represents system settings for export

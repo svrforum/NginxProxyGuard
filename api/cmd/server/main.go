@@ -134,8 +134,13 @@ func main() {
 	startupCtx, startupCancel := context.WithTimeout(context.Background(), config.ContextTimeout)
 	defer startupCancel()
 
+	// Ensure filter subscription include files exist BEFORE any config generation.
+	// Host configs reference these via nginx include directives — if missing, nginx -t fails.
+	if err := nginxManager.EnsureFilterSubscriptionFiles(); err != nil {
+		log.Printf("[Startup] Warning: failed to ensure filter subscription files: %v", err)
+	}
+
 	// Generate shared filter subscription config files BEFORE syncing host configs
-	// Host configs reference these via nginx include directives, so they must exist first
 	log.Println("[Startup] Generating shared filter subscription configs...")
 	{
 		filterSubStartupSvc := service.NewFilterSubscriptionService(filterSubscriptionRepo, nil, nginxManager, nil)

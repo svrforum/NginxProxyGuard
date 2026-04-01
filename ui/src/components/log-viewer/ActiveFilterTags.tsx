@@ -38,6 +38,7 @@ export function ActiveFilterTags({ filter, onRemove }: ActiveFilterTagsProps) {
       'geo_block': t('reasons.geoBlock'),
       'banned_ip': t('reasons.bannedIp'),
       'exploit_block': t('reasons.exploitBlock'),
+      'filter_subscription': t('reasons.filterSubscription'),
     };
     tags.push({ key: 'block_reason', label: t('filters.blockReason'), value: blockReasonLabels[filter.block_reason] || filter.block_reason });
   }

@@ -137,6 +137,13 @@ func (r *BackupRepository) ExportAllData(ctx context.Context) (*model.ExportData
 	}
 	export.GlobalChallengeConfig = globalChallengeConfig
 
+	// Export Filter Subscriptions
+	filterSubscriptions, err := r.exportFilterSubscriptions(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to export filter subscriptions: %w", err)
+	}
+	export.FilterSubscriptions = filterSubscriptions
+
 	return export, nil
 }
 
@@ -1013,4 +1020,71 @@ func (r *BackupRepository) exportGlobalChallengeConfig(ctx context.Context) (*mo
 	cc.SiteKey = siteKey.String
 	cc.SecretKey = secretKey.String
 	return &cc, nil
+}
+
+func (r *BackupRepository) exportFilterSubscriptions(ctx context.Context) ([]model.FilterSubscriptionExport, error) {
+	query := `
+		SELECT id, name, COALESCE(description, '') as description, url, format, type,
+		       enabled, refresh_type, refresh_value
+		FROM filter_subscriptions
+		ORDER BY created_at`
+
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query filter subscriptions: %w", err)
+	}
+	defer rows.Close()
+
+	var subs []model.FilterSubscriptionExport
+	for rows.Next() {
+		var sub model.FilterSubscriptionExport
+		var id string
+		if err := rows.Scan(&id, &sub.Name, &sub.Description, &sub.URL, &sub.Format, &sub.Type,
+			&sub.Enabled, &sub.RefreshType, &sub.RefreshValue); err != nil {
+			return nil, fmt.Errorf("failed to scan filter subscription: %w", err)
+		}
+
+		// Export entries
+		entryQuery := `SELECT value, COALESCE(reason, '') FROM filter_subscription_entries WHERE subscription_id = $1 ORDER BY created_at`
+		entryRows, err := r.db.QueryContext(ctx, entryQuery, id)
+		if err != nil {
+			return nil, fmt.Errorf("failed to export entries for subscription %s: %w", sub.Name, err)
+		}
+		for entryRows.Next() {
+			var e model.FilterSubscriptionEntryExport
+			if err := entryRows.Scan(&e.Value, &e.Reason); err != nil {
+				entryRows.Close()
+				return nil, err
+			}
+			sub.Entries = append(sub.Entries, e)
+		}
+		if err := entryRows.Err(); err != nil {
+			entryRows.Close()
+			return nil, fmt.Errorf("error iterating entries for subscription %s: %w", sub.Name, err)
+		}
+		entryRows.Close()
+
+		// Export exclusions (as proxy_host_id list)
+		exclQuery := `SELECT proxy_host_id FROM filter_subscription_host_exclusions WHERE subscription_id = $1`
+		exclRows, err := r.db.QueryContext(ctx, exclQuery, id)
+		if err != nil {
+			return nil, fmt.Errorf("failed to export exclusions for subscription %s: %w", sub.Name, err)
+		}
+		for exclRows.Next() {
+			var hostID string
+			if err := exclRows.Scan(&hostID); err != nil {
+				exclRows.Close()
+				return nil, err
+			}
+			sub.Exclusions = append(sub.Exclusions, hostID)
+		}
+		if err := exclRows.Err(); err != nil {
+			exclRows.Close()
+			return nil, fmt.Errorf("error iterating exclusions for subscription %s: %w", sub.Name, err)
+		}
+		exclRows.Close()
+
+		subs = append(subs, sub)
+	}
+	return subs, rows.Err()
 }

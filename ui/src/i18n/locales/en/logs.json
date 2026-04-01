@@ -130,7 +130,8 @@
     "uriBlock": "URI Block",
     "cloudChallenge": "Cloud",
     "cloudBlock": "Cloud",
-    "accessDenied": "Access Denied"
+    "accessDenied": "Access Denied",
+    "filterSubscription": "Filter"
   },
   "bots": {
     "badBot": "Bad Bot",

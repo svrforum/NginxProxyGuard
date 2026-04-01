@@ -8,7 +8,7 @@
 
 <img src="./NPG_banner.png" alt="Nginx Proxy Guard" width="800">
 
-[![Version](https://img.shields.io/badge/Version-2.3.1-brightgreen?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-2.7.0-brightgreen?style=for-the-badge)]()
 [![Nginx](https://img.shields.io/badge/Nginx-1.28.0-009639?style=for-the-badge&logo=nginx&logoColor=white)](https://nginx.org/)
 [![ModSecurity](https://img.shields.io/badge/ModSecurity-v3.0.14-red?style=for-the-badge)](https://modsecurity.org/)
 [![OWASP CRS](https://img.shields.io/badge/OWASP_CRS-v4.21.0-orange?style=for-the-badge)](https://coreruleset.org/)
@@ -88,6 +88,18 @@ Modern protocol support for faster, more reliable connections over UDP.
 ### 🔐 Security Hardening (v2.2.0)
 Strong password policy (10+ chars, complexity requirements). IP/CIDR input validation. Regex ReDoS prevention. Automatic Nginx config rollback on failure.
 
+### 📡 Filter Subscriptions (v2.7.0)
+Subscribe to external IP/CIDR blocklists that automatically sync and integrate with Nginx. Preset blocklists included, auto-refresh scheduling, entry deduplication across subscriptions and banned IPs. Up to 25K entries per list, 100K total.
+
+### 🔮 Post-Quantum TLS (v2.6.0)
+ML-KEM (X25519MLKEM768) hybrid key exchange support for future-proof TLS connections. Configurable via global SSL settings with OpenSSL 3.5 compatibility.
+
+### ⚙️ Proxy Buffering Control (v2.3.2)
+Global proxy request/response buffering settings for fine-tuned performance. Useful for WebSocket, streaming, and large file upload scenarios.
+
+### 🔍 Config Error Diagnostics (v2.4.0)
+Actionable error guides for proxy host configuration failures. Clickable error badges with detailed troubleshooting. Auto-disable broken configs on Nginx startup.
+
 ---
 
 ## 🛠 Tech Stack
@@ -152,11 +164,11 @@ docker compose pull
 docker compose up -d
 ```
 
-### Upgrading to v2.2.0
+### Upgrading to v2.7.0
 
-v2.2.0 is fully backward compatible. No migration needed.
+All versions are fully backward compatible. No manual migration needed — database schema upgrades are applied automatically on startup.
 
-> **Password policy change**: New passwords now require 10+ characters with complexity requirements. Existing users can still log in — the policy only applies when changing passwords.
+> **What's new in v2.7.0**: Filter Subscriptions — subscribe to external IP blocklists with automatic sync and Nginx integration. See [Key Features](#-key-features) for details.
 
 ---
 
@@ -181,6 +193,7 @@ All API endpoints require authentication via:
 | `POST /api/v1/certificates` | Request new certificate |
 | `GET /api/v1/waf/rules` | List WAF rules |
 | `POST /api/v1/backups` | Create backup |
+| `GET /api/v1/filter-subscriptions` | List filter subscriptions |
 | `GET /api/v1/dashboard` | Get dashboard stats |
 
 ### Swagger UI

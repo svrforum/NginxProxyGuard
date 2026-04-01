@@ -42,6 +42,7 @@ export function BlockReasonBadge({ reason, category }: { reason?: BlockReason; c
     cloud_provider_challenge: { bg: 'bg-cyan-100 dark:bg-cyan-900/30', text: 'text-cyan-800 dark:text-cyan-300', label: 'Cloud' },
     cloud_provider_block: { bg: 'bg-cyan-100 dark:bg-cyan-900/30', text: 'text-cyan-800 dark:text-cyan-300', label: 'Cloud' },
     access_denied: { bg: 'bg-rose-100 dark:bg-rose-900/30', text: 'text-rose-800 dark:text-rose-300', label: 'Denied' },
+    filter_subscription: { bg: 'bg-teal-100 dark:bg-teal-900/30', text: 'text-teal-800 dark:text-teal-300', label: 'Filter' },
   };
 
   const cfg = config[reason] || { bg: 'bg-gray-100 dark:bg-gray-700', text: 'text-gray-800 dark:text-gray-200', label: reason };

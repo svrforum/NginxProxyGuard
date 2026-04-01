@@ -130,7 +130,8 @@
     "uriBlock": "URI 차단",
     "cloudChallenge": "클라우드",
     "cloudBlock": "클라우드",
-    "accessDenied": "접근 거부"
+    "accessDenied": "접근 거부",
+    "filterSubscription": "필터 차단"
   },
   "bots": {
     "badBot": "Bad Bot",

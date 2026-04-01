@@ -218,6 +218,13 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 		}
 	}
 
+	// Import Filter Subscriptions
+	for _, fs := range data.FilterSubscriptions {
+		if err := r.importFilterSubscription(ctx, tx, &fs, proxyHostIDMap); err != nil {
+			return fmt.Errorf("failed to import filter subscription %s: %w", fs.Name, err)
+		}
+	}
+
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
@@ -230,6 +237,9 @@ func (r *BackupRepository) clearExistingData(ctx context.Context, tx *sql.Tx) er
 	// Delete in order respecting foreign key constraints
 	// 1. Delete proxy host related tables (they reference proxy_hosts)
 	tables := []string{
+		"filter_subscription_host_exclusions", // references filter_subscriptions + proxy_hosts
+		"filter_subscription_entries",         // references filter_subscriptions
+		"filter_subscriptions",
 		"waf_rule_exclusions",
 		"host_exploit_rule_exclusions", // references proxy_hosts
 		"challenge_configs",            // references proxy_hosts
@@ -864,4 +874,66 @@ func (r *BackupRepository) importGlobalChallengeConfig(ctx context.Context, tx *
 		cc.TokenValidity, cc.MinScore, cc.ApplyTo, cc.PageTitle, cc.PageMessage, cc.Theme,
 	)
 	return err
+}
+
+func (r *BackupRepository) importFilterSubscription(ctx context.Context, tx *sql.Tx, fs *model.FilterSubscriptionExport, proxyHostIDMap map[string]string) error {
+	// Insert subscription
+	var subID string
+	query := `
+		INSERT INTO filter_subscriptions (name, description, url, format, type, enabled, refresh_type, refresh_value, entry_count)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		ON CONFLICT (url) DO NOTHING
+		RETURNING id`
+
+	err := tx.QueryRowContext(ctx, query,
+		fs.Name, fs.Description, fs.URL, fs.Format, fs.Type,
+		fs.Enabled, fs.RefreshType, fs.RefreshValue, len(fs.Entries),
+	).Scan(&subID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// URL already exists, skip
+			return nil
+		}
+		return fmt.Errorf("failed to insert filter subscription: %w", err)
+	}
+
+	// Insert entries in batches
+	for i := 0; i < len(fs.Entries); i += 500 {
+		end := i + 500
+		if end > len(fs.Entries) {
+			end = len(fs.Entries)
+		}
+		batch := fs.Entries[i:end]
+
+		valueStrings := make([]string, 0, len(batch))
+		valueArgs := make([]interface{}, 0, len(batch)*3)
+		for j, e := range batch {
+			base := j*3 + 1
+			valueStrings = append(valueStrings, fmt.Sprintf("($%d, $%d, $%d)", base, base+1, base+2))
+			valueArgs = append(valueArgs, subID, e.Value, e.Reason)
+		}
+
+		entryQuery := fmt.Sprintf(
+			`INSERT INTO filter_subscription_entries (subscription_id, value, reason) VALUES %s ON CONFLICT (subscription_id, value) DO NOTHING`,
+			joinStrings(valueStrings, ", "),
+		)
+		if _, err := tx.ExecContext(ctx, entryQuery, valueArgs...); err != nil {
+			return fmt.Errorf("failed to insert filter subscription entries: %w", err)
+		}
+	}
+
+	// Insert exclusions with remapped proxy host IDs
+	for _, oldHostID := range fs.Exclusions {
+		newID, ok := proxyHostIDMap[oldHostID]
+		if !ok {
+			// Original proxy host not found in restored data, skip this exclusion
+			continue
+		}
+		exclQuery := `INSERT INTO filter_subscription_host_exclusions (subscription_id, proxy_host_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`
+		if _, err := tx.ExecContext(ctx, exclQuery, subID, newID); err != nil {
+			return fmt.Errorf("failed to insert filter subscription exclusion: %w", err)
+		}
+	}
+
+	return nil
 }
