@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
@@ -22,7 +22,7 @@ interface LogViewerProps {
   defaultBlockReason?: BlockReason;
 }
 
-const AUTO_REFRESH_INTERVAL = 5000;
+const AUTO_REFRESH_INTERVAL = 15000;
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
 
 export function LogViewer({ logType, defaultBlockReason }: LogViewerProps) {
@@ -57,7 +57,8 @@ export function LogViewer({ logType, defaultBlockReason }: LogViewerProps) {
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showVisualization, setShowVisualization] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [countdown, setCountdown] = useState(AUTO_REFRESH_INTERVAL / 1000);
+  const countdownRef = useRef(AUTO_REFRESH_INTERVAL / 1000);
+  const countdownElRef = useRef<HTMLSpanElement>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [searchInput, setSearchInput] = useState("");
 
@@ -135,7 +136,7 @@ export function LogViewer({ logType, defaultBlockReason }: LogViewerProps) {
   const statsQuery = useQuery({
     queryKey: ["log-stats", filterKey],
     queryFn: () => fetchLogStats(effectiveFilter),
-    refetchInterval: autoRefresh ? 10000 : false,
+    refetchInterval: autoRefresh ? 30000 : false,
   });
 
   const settingsQuery = useQuery({
@@ -146,18 +147,25 @@ export function LogViewer({ logType, defaultBlockReason }: LogViewerProps) {
   useEffect(() => {
     if (logsQuery.dataUpdatedAt) {
       setLastRefresh(new Date(logsQuery.dataUpdatedAt));
-      setCountdown(AUTO_REFRESH_INTERVAL / 1000);
+      if (autoRefresh) {
+        countdownRef.current = AUTO_REFRESH_INTERVAL / 1000;
+        if (countdownElRef.current) {
+          countdownElRef.current.textContent = `${countdownRef.current}s`;
+        }
+      }
     }
-  }, [logsQuery.dataUpdatedAt]);
+  }, [logsQuery.dataUpdatedAt, autoRefresh]);
 
   useEffect(() => {
     if (!autoRefresh) return;
 
     const timer = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) return AUTO_REFRESH_INTERVAL / 1000;
-        return prev - 1;
-      });
+      countdownRef.current = countdownRef.current <= 1
+        ? AUTO_REFRESH_INTERVAL / 1000
+        : countdownRef.current - 1;
+      if (countdownElRef.current) {
+        countdownElRef.current.textContent = `${countdownRef.current}s`;
+      }
     }, 1000);
 
     return () => clearInterval(timer);
@@ -167,7 +175,10 @@ export function LogViewer({ logType, defaultBlockReason }: LogViewerProps) {
     queryClient.invalidateQueries({ queryKey: ["logs"] });
     queryClient.invalidateQueries({ queryKey: ["log-stats"] });
     setLastRefresh(new Date());
-    setCountdown(AUTO_REFRESH_INTERVAL / 1000);
+    countdownRef.current = AUTO_REFRESH_INTERVAL / 1000;
+    if (countdownElRef.current) {
+      countdownElRef.current.textContent = `${countdownRef.current}s`;
+    }
   }, [queryClient]);
 
   const handleFilterChange = useCallback((newFilter: LogFilter) => {
@@ -423,7 +434,7 @@ export function LogViewer({ logType, defaultBlockReason }: LogViewerProps) {
             </button>
             <span className="text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">
               {autoRefresh ? (
-                <span className="font-medium">{countdown}s</span>
+                <span ref={countdownElRef} className="font-medium">{countdownRef.current}s</span>
               ) : (
                 "Auto"
               )}
@@ -705,23 +716,14 @@ export function LogViewer({ logType, defaultBlockReason }: LogViewerProps) {
                   current: page,
                   total: logsQuery.data.total_pages,
                 })}
+                {logsQuery.data.has_more && "+"}
               </span>
               <button
-                onClick={() =>
-                  setPage((p) => Math.min(logsQuery.data!.total_pages, p + 1))
-                }
-                disabled={page === logsQuery.data.total_pages}
+                onClick={() => setPage((p) => p + 1)}
+                disabled={!logsQuery.data.has_more}
                 className="px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
               >
                 {t("pagination.next")}
-              </button>
-              <button
-                onClick={() => setPage(logsQuery.data!.total_pages)}
-                disabled={page === logsQuery.data.total_pages}
-                className="px-2 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
-                title={t("pagination.last")}
-              >
-                »
               </button>
             </div>
           </div>

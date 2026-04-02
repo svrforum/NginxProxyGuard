@@ -2,7 +2,9 @@ package repository
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -11,14 +13,23 @@ import (
 
 	"nginx-proxy-guard/internal/database"
 	"nginx-proxy-guard/internal/model"
+	"nginx-proxy-guard/pkg/cache"
 )
 
+const statsCacheTTL = 10 * time.Second
+
 type LogRepository struct {
-	db *database.DB
+	db    *database.DB
+	cache *cache.RedisClient
 }
 
 func NewLogRepository(db *database.DB) *LogRepository {
 	return &LogRepository{db: db}
+}
+
+// SetCache sets the cache client for the repository
+func (r *LogRepository) SetCache(c *cache.RedisClient) {
+	r.cache = c
 }
 
 // buildHostFilter converts a host filter pattern to SQL condition and value.
@@ -340,7 +351,7 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 	}
 	offset := (page - 1) * perPage
 
-	// Build WHERE clause
+	// Build WHERE clause using shared builder
 	conditions := []string{}
 	args := []interface{}{}
 	argIndex := 1
@@ -592,13 +603,6 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 		whereClause = "WHERE " + strings.Join(conditions, " AND ")
 	}
 
-	// Get total count
-	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM logs_partitioned %s", whereClause)
-	var total int
-	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
-		return nil, 0, fmt.Errorf("failed to count logs: %w", err)
-	}
-
 	// Build ORDER BY clause
 	orderBy := "timestamp DESC" // default
 	if filter != nil && filter.SortBy != nil && *filter.SortBy != "" {
@@ -619,7 +623,8 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 		}
 	}
 
-	// Get paginated data
+	// Fetch perPage+1 rows to determine hasMore without COUNT(*)
+	fetchLimit := perPage + 1
 	query := fmt.Sprintf(`
 		SELECT id, log_type, timestamp, host, client_ip,
 			geo_country, geo_country_code, geo_city, geo_asn, geo_org,
@@ -636,7 +641,7 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 		LIMIT $%d OFFSET $%d
 	`, whereClause, orderBy, argIndex, argIndex+1)
 
-	args = append(args, perPage, offset)
+	args = append(args, fetchLimit, offset)
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -774,6 +779,20 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 		logs = append(logs, log)
 	}
 
+	// Determine hasMore: if we fetched more than perPage, there are more rows
+	hasMore := len(logs) > perPage
+	if hasMore {
+		logs = logs[:perPage] // trim the extra row
+	}
+
+	// Synthetic total avoids expensive COUNT(*).
+	// Add +1 when hasMore so the handler can detect it via total > page*perPage.
+	// The frontend relies on has_more for navigation, not on total.
+	total := offset + len(logs)
+	if hasMore {
+		total++
+	}
+
 	return logs, total, nil
 }
 
@@ -786,7 +805,23 @@ func (r *LogRepository) GetStats(ctx context.Context, startTime, endTime *time.T
 	return r.GetStatsWithFilter(ctx, filter)
 }
 
+// statsFilterCacheKey generates a short cache key for log stats based on filter content
+func statsFilterCacheKey(filter *model.LogFilter) string {
+	data, _ := json.Marshal(filter)
+	hash := sha256.Sum256(data)
+	return fmt.Sprintf("log_stats:%x", hash[:16])
+}
+
 func (r *LogRepository) GetStatsWithFilter(ctx context.Context, filter *model.LogFilter) (*model.LogStats, error) {
+	// Try cache first
+	if r.cache != nil {
+		cacheKey := statsFilterCacheKey(filter)
+		var cached model.LogStats
+		if err := r.cache.Get(ctx, cacheKey, &cached); err == nil {
+			return &cached, nil
+		}
+	}
+
 	stats := &model.LogStats{}
 
 	// Build WHERE clause from filter
@@ -983,6 +1018,22 @@ func (r *LogRepository) GetStatsWithFilter(ctx context.Context, filter *model.Lo
 			}
 			whereClause += fmt.Sprintf(" AND (geo_country_code IS NULL OR geo_country_code NOT IN (%s))", strings.Join(placeholders, ","))
 		}
+		// Block reason filters
+		if filter.BlockReason != nil && *filter.BlockReason != "" {
+			whereClause += fmt.Sprintf(" AND block_reason = $%d", argIndex)
+			args = append(args, *filter.BlockReason)
+			argIndex++
+		}
+		if filter.BotCategory != nil && *filter.BotCategory != "" {
+			whereClause += fmt.Sprintf(" AND bot_category = $%d", argIndex)
+			args = append(args, *filter.BotCategory)
+			argIndex++
+		}
+		if filter.ExploitRule != nil && *filter.ExploitRule != "" {
+			whereClause += fmt.Sprintf(" AND exploit_rule = $%d", argIndex)
+			args = append(args, *filter.ExploitRule)
+			argIndex++
+		}
 	}
 
 	// Total counts by type
@@ -1152,6 +1203,14 @@ func (r *LogRepository) GetStatsWithFilter(ctx context.Context, filter *model.Lo
 			return nil, fmt.Errorf("failed to scan country: %w", err)
 		}
 		stats.TopCountries = append(stats.TopCountries, stat)
+	}
+
+	// Cache the result
+	if r.cache != nil {
+		cacheKey := statsFilterCacheKey(filter)
+		if err := r.cache.Set(ctx, cacheKey, stats, statsCacheTTL); err != nil {
+			log.Printf("[LogRepository] Failed to cache stats: %v", err)
+		}
 	}
 
 	return stats, nil

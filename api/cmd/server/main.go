@@ -94,6 +94,7 @@ func main() {
 	// Wire up Valkey cache to repositories (if available)
 	if redisCache != nil {
 		proxyHostRepo.SetCache(redisCache)
+		logRepo.SetCache(redisCache)
 		globalSettingsRepo.SetCache(redisCache)
 		systemSettingsRepo.SetCache(redisCache)
 		exploitBlockRuleRepo.SetCache(redisCache)
