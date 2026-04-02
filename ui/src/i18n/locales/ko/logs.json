@@ -25,6 +25,8 @@
     "title": "필터",
     "apply": "필터 적용",
     "reset": "필터 초기화",
+    "nSelected": "{{count}}개 선택됨",
+    "addSelection": "추가",
     "startDate": "시작 일시",
     "endDate": "종료 일시",
     "host": "호스트",
@@ -496,7 +498,10 @@
       "warn": "Warning",
       "error": "Error",
       "fatal": "Fatal"
-    }
+    },
+    "pagination": "페이지 {{current}} / {{total}} (총 {{count}}건)",
+    "previous": "이전",
+    "next": "다음"
   },
   "rawFiles": {
     "title": "원본 로그 파일",

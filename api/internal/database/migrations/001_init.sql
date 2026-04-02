@@ -2412,3 +2412,9 @@ DO $$ BEGIN
         FOREIGN KEY (proxy_host_id) REFERENCES public.proxy_hosts(id) ON DELETE SET NULL;
 EXCEPTION WHEN OTHERS THEN NULL;
 END $$;
+
+-- Performance: pg_trgm GIN indexes for ILIKE search on logs_partitioned
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE INDEX IF NOT EXISTS idx_logs_part_host_trgm ON logs_partitioned USING gin (host gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_logs_part_uri_trgm ON logs_partitioned USING gin (request_uri gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_logs_part_ua_trgm ON logs_partitioned USING gin (http_user_agent gin_trgm_ops);

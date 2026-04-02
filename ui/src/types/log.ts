@@ -137,6 +137,7 @@ export interface LogListResponse {
   page: number;
   per_page: number;
   total_pages: number;
+  has_more?: boolean;
 }
 
 export interface LogStats {

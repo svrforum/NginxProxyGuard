@@ -225,6 +225,7 @@ type LogListResponse struct {
 	Page       int   `json:"page"`
 	PerPage    int   `json:"per_page"`
 	TotalPages int   `json:"total_pages"`
+	HasMore    bool  `json:"has_more"`
 }
 
 type LogStats struct {

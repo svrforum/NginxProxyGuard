@@ -1,7 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { TagInputProps } from '../types';
 
 export function TagInput({ values, onChange, placeholder, fetchSuggestions, className, helpText }: TagInputProps) {
+  const { t } = useTranslation('logs');
   const [inputValue, setInputValue] = useState('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -11,6 +13,39 @@ export function TagInput({ values, onChange, placeholder, fetchSuggestions, clas
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Debounced suggestion fetcher (300ms)
+  const debouncedFetchSuggestions = useCallback(
+    (query: string) => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      debounceTimerRef.current = setTimeout(async () => {
+        if (!fetchSuggestions) return;
+        setLoading(true);
+        try {
+          const results = await fetchSuggestions(query);
+          setSuggestions((results || []).filter(s => !values.includes(s)));
+          setShowSuggestions(true);
+        } catch {
+          setSuggestions([]);
+        } finally {
+          setLoading(false);
+        }
+      }, 300);
+    },
+    [fetchSuggestions, values]
+  );
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
 
   const addTag = (tag: string) => {
     const trimmed = tag.trim();
@@ -46,26 +81,21 @@ export function TagInput({ values, onChange, placeholder, fetchSuggestions, clas
     });
   };
 
-  const handleInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
     setInputValue(newValue);
     setSelectedIndex(-1);
     setPendingSelections([]);
 
     if (fetchSuggestions && newValue.length >= 1) {
-      setLoading(true);
-      try {
-        const results = await fetchSuggestions(newValue);
-        setSuggestions((results || []).filter(s => !values.includes(s)));
-        setShowSuggestions(true);
-      } catch {
-        setSuggestions([]);
-      } finally {
-        setLoading(false);
-      }
+      debouncedFetchSuggestions(newValue);
     } else {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
       setSuggestions([]);
       setShowSuggestions(false);
+      setLoading(false);
     }
   };
 
@@ -207,14 +237,14 @@ export function TagInput({ values, onChange, placeholder, fetchSuggestions, clas
           {pendingSelections.length > 0 && (
             <div className="flex items-center justify-between px-3 py-2 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
               <span className="text-xs text-slate-500 dark:text-slate-400">
-                {pendingSelections.length}개 선택됨
+                {t('filters.nSelected', { count: pendingSelections.length })}
               </span>
               <button
                 type="button"
                 onClick={handleApplySelection}
                 className="px-3 py-1 text-xs font-medium text-white bg-primary-600 hover:bg-primary-700 rounded transition-colors"
               >
-                추가
+                {t('filters.addSelection')}
               </button>
             </div>
           )}

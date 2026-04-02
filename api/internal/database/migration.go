@@ -215,6 +215,11 @@ func (db *DB) RunMigrations() error {
 		log.Printf("Warning: hypertable numeric fix migration had issues: %v", err)
 	}
 
+	// Add pg_trgm GIN indexes for ILIKE search performance on logs
+	if err := db.runTrgmIndexMigration(); err != nil {
+		log.Printf("Warning: pg_trgm index migration had issues: %v", err)
+	}
+
 	// Migrate logs table to logs_partitioned in background (for existing installations)
 	// This allows API to start immediately while migration runs
 	// Each migration has a 30-minute timeout to prevent indefinite memory consumption
@@ -1153,5 +1158,54 @@ func (db *DB) runHypertableNumericFixMigration() error {
 	}
 
 	log.Printf("[Migration] %s completed successfully!", migrationVersion)
+	return nil
+}
+
+// runTrgmIndexMigration adds pg_trgm GIN indexes for fast ILIKE search on logs
+func (db *DB) runTrgmIndexMigration() error {
+	const migVersion = "011_trgm_indexes"
+
+	var exists bool
+	err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = $1)", migVersion).Scan(&exists)
+	if err != nil {
+		return fmt.Errorf("failed to check migration status: %w", err)
+	}
+	if exists {
+		return nil
+	}
+
+	log.Printf("[Migration] Running %s...", migVersion)
+
+	// Enable pg_trgm extension
+	if _, err := db.Exec("CREATE EXTENSION IF NOT EXISTS pg_trgm"); err != nil {
+		return fmt.Errorf("failed to create pg_trgm extension: %w", err)
+	}
+
+	// Create GIN indexes on frequently searched text columns
+	indexes := []string{
+		"CREATE INDEX IF NOT EXISTS idx_logs_part_host_trgm ON logs_partitioned USING gin (host gin_trgm_ops)",
+		"CREATE INDEX IF NOT EXISTS idx_logs_part_uri_trgm ON logs_partitioned USING gin (request_uri gin_trgm_ops)",
+		"CREATE INDEX IF NOT EXISTS idx_logs_part_ua_trgm ON logs_partitioned USING gin (http_user_agent gin_trgm_ops)",
+	}
+
+	var indexFailed bool
+	for _, idx := range indexes {
+		if _, err := db.Exec(idx); err != nil {
+			log.Printf("[Migration] Warning: index creation failed: %v", err)
+			indexFailed = true
+		}
+	}
+
+	if indexFailed {
+		log.Printf("[Migration] %s: some indexes failed to create, will retry on next startup", migVersion)
+		return nil
+	}
+
+	_, err = db.Exec("INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT DO NOTHING", migVersion)
+	if err != nil {
+		return fmt.Errorf("failed to record migration: %w", err)
+	}
+
+	log.Printf("[Migration] %s completed successfully!", migVersion)
 	return nil
 }

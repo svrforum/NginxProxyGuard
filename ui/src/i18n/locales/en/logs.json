@@ -25,6 +25,8 @@
     "title": "Filters",
     "apply": "Apply Filters",
     "reset": "Reset Filters",
+    "nSelected": "{{count}} selected",
+    "addSelection": "Add",
     "startDate": "Start Date",
     "endDate": "End Date",
     "host": "Host",
@@ -494,7 +496,10 @@
       "warn": "Warning",
       "error": "Error",
       "fatal": "Fatal"
-    }
+    },
+    "pagination": "Page {{current}} of {{total}} ({{count}} total)",
+    "previous": "Previous",
+    "next": "Next"
   },
   "rawFiles": {
     "title": "Raw Log Files",

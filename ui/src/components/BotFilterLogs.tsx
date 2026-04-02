@@ -3,7 +3,7 @@ import { useQuery, useQueries } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import DatePicker from 'react-datepicker';
 import { ko, enUS } from 'date-fns/locale';
-import { fetchLogs } from '../api/logs';
+import { fetchLogs, fetchLogStats } from '../api/logs';
 import type { Log, LogFilter, BotCategory } from '../types/log';
 import { HelpTip } from './common/HelpTip';
 import { useEscapeKey } from '../hooks/useEscapeKey';
@@ -147,7 +147,7 @@ export function BotFilterLogs() {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['bot-filter-logs', filter, page, perPage],
     queryFn: () => fetchLogs(page, perPage, filter),
-    refetchInterval: 10000,
+    refetchInterval: 15000,
   });
 
   // Base filter for stats (without category filter)
@@ -158,20 +158,20 @@ export function BotFilterLogs() {
     end_time: endDate?.toISOString(),
   }), [startDate, endDate]);
 
-  // Fetch stats for each category in parallel
+  // Fetch stats for each category in parallel using stats API (accurate COUNT)
   const categoryQueries = useQueries({
     queries: ['bad_bot', 'ai_bot', 'suspicious', 'search_engine'].map(cat => ({
       queryKey: ['bot-filter-stats', cat, baseStatsFilter],
-      queryFn: () => fetchLogs(1, 1, { ...baseStatsFilter, bot_category: cat as BotCategory }),
-      refetchInterval: 10000,
+      queryFn: () => fetchLogStats({ ...baseStatsFilter, bot_category: cat as BotCategory }),
+      refetchInterval: 30000,
     })),
   });
 
-  // Fetch total blocked count
+  // Fetch total blocked count using stats API (accurate COUNT)
   const { data: totalData } = useQuery({
     queryKey: ['bot-filter-total', baseStatsFilter],
-    queryFn: () => fetchLogs(1, 1, baseStatsFilter),
-    refetchInterval: 10000,
+    queryFn: () => fetchLogStats(baseStatsFilter),
+    refetchInterval: 30000,
   });
 
   // Build stats from queries
@@ -179,7 +179,7 @@ export function BotFilterLogs() {
     const categories = ['bad_bot', 'ai_bot', 'suspicious', 'search_engine'];
     const stats: Record<string, number> = {};
     categoryQueries.forEach((query, idx) => {
-      stats[categories[idx]] = query.data?.total || 0;
+      stats[categories[idx]] = query.data?.total_logs || 0;
     });
     return stats;
   }, [categoryQueries]);
@@ -212,7 +212,7 @@ export function BotFilterLogs() {
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
-          <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{totalData?.total || 0}</div>
+          <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{totalData?.total_logs || 0}</div>
           <div className="text-xs text-slate-500 dark:text-slate-400">{t('botFilter.totalBlocked')}</div>
         </div>
         {Object.entries(BOT_CATEGORY_CONFIG).map(([key, config]) => {
@@ -382,10 +382,10 @@ export function BotFilterLogs() {
         )}
 
         {/* Pagination */}
-        {data && data.total_pages > 1 && (
+        {data && (data.has_more || page > 1) && (
           <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between bg-slate-50 dark:bg-slate-800">
             <div className="text-sm text-slate-500 dark:text-slate-400">
-              {t('botFilter.pageInfo', { page: data.page, total: data.total_pages, count: data.total })}
+              {t('botFilter.pageInfo', { page: data.page, total: data.total_pages, count: data.total })}{data.has_more && '+'}
             </div>
             <div className="flex gap-2">
               <button
@@ -396,8 +396,8 @@ export function BotFilterLogs() {
                 {t('botFilter.previous')}
               </button>
               <button
-                onClick={() => setPage(p => Math.min(data.total_pages, p + 1))}
-                disabled={page === data.total_pages}
+                onClick={() => setPage(p => p + 1)}
+                disabled={!data.has_more}
                 className="px-3 py-1 border border-slate-300 dark:border-slate-600 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-slate-700 dark:text-slate-300"
               >
                 {t('botFilter.next')}

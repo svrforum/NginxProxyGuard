@@ -118,7 +118,7 @@ function LogDetailModal({ log, onClose }: LogDetailModalProps) {
   );
 }
 
-const AUTO_REFRESH_INTERVAL = 5000;
+const AUTO_REFRESH_INTERVAL = 15000;
 
 // Isolated countdown component to prevent full SystemLogViewer re-render every second
 const CountdownDisplay = memo(function CountdownDisplay({ autoRefresh, dataUpdatedAt }: { autoRefresh: boolean; dataUpdatedAt: number }) {
@@ -166,7 +166,7 @@ export function SystemLogViewer() {
   const statsQuery = useQuery({
     queryKey: ['system-log-stats'],
     queryFn: fetchSystemLogStats,
-    refetchInterval: autoRefresh ? 10000 : false,
+    refetchInterval: autoRefresh ? 30000 : false,
   });
 
   const sourcesQuery = useQuery({
@@ -358,7 +358,7 @@ export function SystemLogViewer() {
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 dark:border-slate-700">
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              Page {currentPage} of {totalPages} ({logsQuery.data?.total} total)
+              {t('system.pagination', { current: currentPage, total: totalPages, count: logsQuery.data?.total })}
             </p>
             <div className="flex gap-2">
               <button
@@ -366,14 +366,14 @@ export function SystemLogViewer() {
                 disabled={offset === 0}
                 className="px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded-lg disabled:opacity-50 hover:bg-slate-50 dark:hover:bg-slate-700 dark:text-slate-300"
               >
-                Previous
+                {t('system.previous')}
               </button>
               <button
                 onClick={() => setOffset((o) => o + limit)}
                 disabled={currentPage >= totalPages}
                 className="px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded-lg disabled:opacity-50 hover:bg-slate-50 dark:hover:bg-slate-700 dark:text-slate-300"
               >
-                Next
+                {t('system.next')}
               </button>
             </div>
           </div>

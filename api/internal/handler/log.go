@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -32,6 +33,141 @@ func limitArray(arr []string, max int) []string {
 	return arr
 }
 
+// parseLogFilter extracts a LogFilter from query parameters.
+// This is shared between List and GetStats to avoid duplication.
+func parseLogFilter(q url.Values) *model.LogFilter {
+	filter := &model.LogFilter{}
+
+	if logType := q.Get("log_type"); logType != "" {
+		lt := model.LogType(logType)
+		filter.LogType = &lt
+	}
+	if host := q.Get("host"); host != "" {
+		filter.Host = &host
+	}
+	if clientIP := q.Get("client_ip"); clientIP != "" {
+		filter.ClientIP = &clientIP
+	}
+	// Array filters for multi-select support
+	if hosts := q["hosts"]; len(hosts) > 0 {
+		filter.Hosts = limitArray(hosts, maxFilterArraySize)
+	}
+	if clientIPs := q["client_ips"]; len(clientIPs) > 0 {
+		filter.ClientIPs = limitArray(clientIPs, maxFilterArraySize)
+	}
+	if uris := q["uris"]; len(uris) > 0 {
+		filter.URIs = limitArray(uris, maxFilterArraySize)
+	}
+	if userAgents := q["user_agents"]; len(userAgents) > 0 {
+		filter.UserAgents = limitArray(userAgents, maxFilterArraySize)
+	}
+	if statusCode := q.Get("status_code"); statusCode != "" {
+		if code, err := strconv.Atoi(statusCode); err == nil {
+			filter.StatusCode = &code
+		}
+	}
+	if severity := q.Get("severity"); severity != "" {
+		sev := model.LogSeverity(severity)
+		filter.Severity = &sev
+	}
+	if ruleID := q.Get("rule_id"); ruleID != "" {
+		if id, err := strconv.ParseInt(ruleID, 10, 64); err == nil {
+			filter.RuleID = &id
+		}
+	}
+	if proxyHostID := q.Get("proxy_host_id"); proxyHostID != "" {
+		filter.ProxyHostID = &proxyHostID
+	}
+	if startTime := q.Get("start_time"); startTime != "" {
+		if t, err := time.Parse(time.RFC3339, startTime); err == nil {
+			filter.StartTime = &t
+		}
+	}
+	if endTime := q.Get("end_time"); endTime != "" {
+		if t, err := time.Parse(time.RFC3339, endTime); err == nil {
+			filter.EndTime = &t
+		}
+	}
+	if search := q.Get("search"); search != "" {
+		filter.Search = &search
+	}
+
+	// Extended filters
+	if userAgent := q.Get("user_agent"); userAgent != "" {
+		filter.UserAgent = &userAgent
+	}
+	if uri := q.Get("uri"); uri != "" {
+		filter.URI = &uri
+	}
+	if method := q.Get("method"); method != "" {
+		filter.Method = &method
+	}
+	if geoCountryCode := q.Get("geo_country_code"); geoCountryCode != "" {
+		filter.GeoCountryCode = &geoCountryCode
+	}
+	if statusCodes := q["status_codes"]; len(statusCodes) > 0 {
+		for _, sc := range statusCodes {
+			if code, err := strconv.Atoi(sc); err == nil {
+				filter.StatusCodes = append(filter.StatusCodes, code)
+			}
+		}
+	}
+	if minSize := q.Get("min_size"); minSize != "" {
+		if size, err := strconv.ParseInt(minSize, 10, 64); err == nil {
+			filter.MinSize = &size
+		}
+	}
+	if maxSize := q.Get("max_size"); maxSize != "" {
+		if size, err := strconv.ParseInt(maxSize, 10, 64); err == nil {
+			filter.MaxSize = &size
+		}
+	}
+	if minRequestTime := q.Get("min_request_time"); minRequestTime != "" {
+		if t, err := strconv.ParseFloat(minRequestTime, 64); err == nil {
+			filter.MinRequestTime = &t
+		}
+	}
+
+	// Block reason filters
+	if blockReason := q.Get("block_reason"); blockReason != "" {
+		br := model.BlockReason(blockReason)
+		filter.BlockReason = &br
+	}
+	if botCategory := q.Get("bot_category"); botCategory != "" {
+		filter.BotCategory = &botCategory
+	}
+	if exploitRule := q.Get("exploit_rule"); exploitRule != "" {
+		filter.ExploitRule = &exploitRule
+	}
+
+	// Sorting
+	if sortBy := q.Get("sort_by"); sortBy != "" {
+		filter.SortBy = &sortBy
+	}
+	if sortOrder := q.Get("sort_order"); sortOrder != "" {
+		filter.SortOrder = &sortOrder
+	}
+
+	// Exclude filters - apply size limits to prevent DoS
+	if excludeIPs := q["exclude_ips"]; len(excludeIPs) > 0 {
+		filter.ExcludeIPs = limitArray(excludeIPs, maxFilterArraySize)
+	}
+	if excludeUserAgents := q["exclude_user_agents"]; len(excludeUserAgents) > 0 {
+		filter.ExcludeUserAgents = limitArray(excludeUserAgents, maxFilterArraySize)
+	}
+	if excludeURIs := q["exclude_uris"]; len(excludeURIs) > 0 {
+		filter.ExcludeURIs = limitArray(excludeURIs, maxFilterArraySize)
+	}
+	if excludeHosts := q["exclude_hosts"]; len(excludeHosts) > 0 {
+		filter.ExcludeHosts = limitArray(excludeHosts, maxFilterArraySize)
+	}
+	if excludeCountries := q["exclude_countries"]; len(excludeCountries) > 0 {
+		filter.ExcludeCountries = limitArray(excludeCountries, maxFilterArraySize)
+	}
+
+	return filter
+}
+
 func (h *LogHandler) List(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -45,135 +181,7 @@ func (h *LogHandler) List(w http.ResponseWriter, r *http.Request) {
 		perPage = 50
 	}
 
-	// Build filter from query params
-	filter := &model.LogFilter{}
-
-	if logType := r.URL.Query().Get("log_type"); logType != "" {
-		lt := model.LogType(logType)
-		filter.LogType = &lt
-	}
-	if host := r.URL.Query().Get("host"); host != "" {
-		filter.Host = &host
-	}
-	if clientIP := r.URL.Query().Get("client_ip"); clientIP != "" {
-		filter.ClientIP = &clientIP
-	}
-	// Array filters for multi-select support
-	if hosts := r.URL.Query()["hosts"]; len(hosts) > 0 {
-		filter.Hosts = limitArray(hosts, maxFilterArraySize)
-	}
-	if clientIPs := r.URL.Query()["client_ips"]; len(clientIPs) > 0 {
-		filter.ClientIPs = limitArray(clientIPs, maxFilterArraySize)
-	}
-	if uris := r.URL.Query()["uris"]; len(uris) > 0 {
-		filter.URIs = limitArray(uris, maxFilterArraySize)
-	}
-	if userAgents := r.URL.Query()["user_agents"]; len(userAgents) > 0 {
-		filter.UserAgents = limitArray(userAgents, maxFilterArraySize)
-	}
-	if statusCode := r.URL.Query().Get("status_code"); statusCode != "" {
-		if code, err := strconv.Atoi(statusCode); err == nil {
-			filter.StatusCode = &code
-		}
-	}
-	if severity := r.URL.Query().Get("severity"); severity != "" {
-		sev := model.LogSeverity(severity)
-		filter.Severity = &sev
-	}
-	if ruleID := r.URL.Query().Get("rule_id"); ruleID != "" {
-		if id, err := strconv.ParseInt(ruleID, 10, 64); err == nil {
-			filter.RuleID = &id
-		}
-	}
-	if proxyHostID := r.URL.Query().Get("proxy_host_id"); proxyHostID != "" {
-		filter.ProxyHostID = &proxyHostID
-	}
-	if startTime := r.URL.Query().Get("start_time"); startTime != "" {
-		if t, err := time.Parse(time.RFC3339, startTime); err == nil {
-			filter.StartTime = &t
-		}
-	}
-	if endTime := r.URL.Query().Get("end_time"); endTime != "" {
-		if t, err := time.Parse(time.RFC3339, endTime); err == nil {
-			filter.EndTime = &t
-		}
-	}
-	if search := r.URL.Query().Get("search"); search != "" {
-		filter.Search = &search
-	}
-
-	// Extended filters
-	if userAgent := r.URL.Query().Get("user_agent"); userAgent != "" {
-		filter.UserAgent = &userAgent
-	}
-	if uri := r.URL.Query().Get("uri"); uri != "" {
-		filter.URI = &uri
-	}
-	if method := r.URL.Query().Get("method"); method != "" {
-		filter.Method = &method
-	}
-	if geoCountryCode := r.URL.Query().Get("geo_country_code"); geoCountryCode != "" {
-		filter.GeoCountryCode = &geoCountryCode
-	}
-	if statusCodes := r.URL.Query()["status_codes"]; len(statusCodes) > 0 {
-		for _, sc := range statusCodes {
-			if code, err := strconv.Atoi(sc); err == nil {
-				filter.StatusCodes = append(filter.StatusCodes, code)
-			}
-		}
-	}
-	if minSize := r.URL.Query().Get("min_size"); minSize != "" {
-		if size, err := strconv.ParseInt(minSize, 10, 64); err == nil {
-			filter.MinSize = &size
-		}
-	}
-	if maxSize := r.URL.Query().Get("max_size"); maxSize != "" {
-		if size, err := strconv.ParseInt(maxSize, 10, 64); err == nil {
-			filter.MaxSize = &size
-		}
-	}
-	if minRequestTime := r.URL.Query().Get("min_request_time"); minRequestTime != "" {
-		if t, err := strconv.ParseFloat(minRequestTime, 64); err == nil {
-			filter.MinRequestTime = &t
-		}
-	}
-
-	// Block reason filters
-	if blockReason := r.URL.Query().Get("block_reason"); blockReason != "" {
-		br := model.BlockReason(blockReason)
-		filter.BlockReason = &br
-	}
-	if botCategory := r.URL.Query().Get("bot_category"); botCategory != "" {
-		filter.BotCategory = &botCategory
-	}
-	if exploitRule := r.URL.Query().Get("exploit_rule"); exploitRule != "" {
-		filter.ExploitRule = &exploitRule
-	}
-
-	// Sorting
-	if sortBy := r.URL.Query().Get("sort_by"); sortBy != "" {
-		filter.SortBy = &sortBy
-	}
-	if sortOrder := r.URL.Query().Get("sort_order"); sortOrder != "" {
-		filter.SortOrder = &sortOrder
-	}
-
-	// Exclude filters - apply size limits to prevent DoS
-	if excludeIPs := r.URL.Query()["exclude_ips"]; len(excludeIPs) > 0 {
-		filter.ExcludeIPs = limitArray(excludeIPs, maxFilterArraySize)
-	}
-	if excludeUserAgents := r.URL.Query()["exclude_user_agents"]; len(excludeUserAgents) > 0 {
-		filter.ExcludeUserAgents = limitArray(excludeUserAgents, maxFilterArraySize)
-	}
-	if excludeURIs := r.URL.Query()["exclude_uris"]; len(excludeURIs) > 0 {
-		filter.ExcludeURIs = limitArray(excludeURIs, maxFilterArraySize)
-	}
-	if excludeHosts := r.URL.Query()["exclude_hosts"]; len(excludeHosts) > 0 {
-		filter.ExcludeHosts = limitArray(excludeHosts, maxFilterArraySize)
-	}
-	if excludeCountries := r.URL.Query()["exclude_countries"]; len(excludeCountries) > 0 {
-		filter.ExcludeCountries = limitArray(excludeCountries, maxFilterArraySize)
-	}
+	filter := parseLogFilter(r.URL.Query())
 
 	logs, total, err := h.logRepo.List(ctx, filter, page, perPage)
 	if err != nil {
@@ -206,9 +214,15 @@ func (h *LogHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	totalPages := (total + perPage - 1) / perPage
-	if totalPages < 1 {
-		totalPages = 1
+	// hasMore: the repository fetches perPage+1 rows and trims.
+	// If total (synthetic) exceeds what the current page would show, more data exists.
+	hasMore := total > page*perPage
+
+	// totalPages is approximate since we don't run COUNT(*).
+	// Show current page as total when no more data; otherwise page+1 as minimum hint.
+	totalPages := page
+	if hasMore {
+		totalPages = page + 1
 	}
 
 	response := model.LogListResponse{
@@ -217,6 +231,7 @@ func (h *LogHandler) List(w http.ResponseWriter, r *http.Request) {
 		Page:       page,
 		PerPage:    perPage,
 		TotalPages: totalPages,
+		HasMore:    hasMore,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -226,101 +241,7 @@ func (h *LogHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *LogHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Build filter from query params (same as List)
-	filter := &model.LogFilter{}
-
-	if logType := r.URL.Query().Get("log_type"); logType != "" {
-		lt := model.LogType(logType)
-		filter.LogType = &lt
-	}
-	if host := r.URL.Query().Get("host"); host != "" {
-		filter.Host = &host
-	}
-	if clientIP := r.URL.Query().Get("client_ip"); clientIP != "" {
-		filter.ClientIP = &clientIP
-	}
-	// Array filters for multi-select support
-	if hosts := r.URL.Query()["hosts"]; len(hosts) > 0 {
-		filter.Hosts = limitArray(hosts, maxFilterArraySize)
-	}
-	if clientIPs := r.URL.Query()["client_ips"]; len(clientIPs) > 0 {
-		filter.ClientIPs = limitArray(clientIPs, maxFilterArraySize)
-	}
-	if uris := r.URL.Query()["uris"]; len(uris) > 0 {
-		filter.URIs = limitArray(uris, maxFilterArraySize)
-	}
-	if userAgents := r.URL.Query()["user_agents"]; len(userAgents) > 0 {
-		filter.UserAgents = limitArray(userAgents, maxFilterArraySize)
-	}
-	if statusCode := r.URL.Query().Get("status_code"); statusCode != "" {
-		if code, err := strconv.Atoi(statusCode); err == nil {
-			filter.StatusCode = &code
-		}
-	}
-	if startTime := r.URL.Query().Get("start_time"); startTime != "" {
-		if t, err := time.Parse(time.RFC3339, startTime); err == nil {
-			filter.StartTime = &t
-		}
-	}
-	if endTime := r.URL.Query().Get("end_time"); endTime != "" {
-		if t, err := time.Parse(time.RFC3339, endTime); err == nil {
-			filter.EndTime = &t
-		}
-	}
-	if search := r.URL.Query().Get("search"); search != "" {
-		filter.Search = &search
-	}
-	if userAgent := r.URL.Query().Get("user_agent"); userAgent != "" {
-		filter.UserAgent = &userAgent
-	}
-	if uri := r.URL.Query().Get("uri"); uri != "" {
-		filter.URI = &uri
-	}
-	if method := r.URL.Query().Get("method"); method != "" {
-		filter.Method = &method
-	}
-	if geoCountryCode := r.URL.Query().Get("geo_country_code"); geoCountryCode != "" {
-		filter.GeoCountryCode = &geoCountryCode
-	}
-	if statusCodes := r.URL.Query()["status_codes"]; len(statusCodes) > 0 {
-		for _, sc := range statusCodes {
-			if code, err := strconv.Atoi(sc); err == nil {
-				filter.StatusCodes = append(filter.StatusCodes, code)
-			}
-		}
-	}
-	if minSize := r.URL.Query().Get("min_size"); minSize != "" {
-		if size, err := strconv.ParseInt(minSize, 10, 64); err == nil {
-			filter.MinSize = &size
-		}
-	}
-	if maxSize := r.URL.Query().Get("max_size"); maxSize != "" {
-		if size, err := strconv.ParseInt(maxSize, 10, 64); err == nil {
-			filter.MaxSize = &size
-		}
-	}
-	if minRequestTime := r.URL.Query().Get("min_request_time"); minRequestTime != "" {
-		if t, err := strconv.ParseFloat(minRequestTime, 64); err == nil {
-			filter.MinRequestTime = &t
-		}
-	}
-
-	// Exclude filters - apply size limits to prevent DoS
-	if excludeIPs := r.URL.Query()["exclude_ips"]; len(excludeIPs) > 0 {
-		filter.ExcludeIPs = limitArray(excludeIPs, maxFilterArraySize)
-	}
-	if excludeUserAgents := r.URL.Query()["exclude_user_agents"]; len(excludeUserAgents) > 0 {
-		filter.ExcludeUserAgents = limitArray(excludeUserAgents, maxFilterArraySize)
-	}
-	if excludeURIs := r.URL.Query()["exclude_uris"]; len(excludeURIs) > 0 {
-		filter.ExcludeURIs = limitArray(excludeURIs, maxFilterArraySize)
-	}
-	if excludeHosts := r.URL.Query()["exclude_hosts"]; len(excludeHosts) > 0 {
-		filter.ExcludeHosts = limitArray(excludeHosts, maxFilterArraySize)
-	}
-	if excludeCountries := r.URL.Query()["exclude_countries"]; len(excludeCountries) > 0 {
-		filter.ExcludeCountries = limitArray(excludeCountries, maxFilterArraySize)
-	}
+	filter := parseLogFilter(r.URL.Query())
 
 	stats, err := h.logRepo.GetStatsWithFilter(ctx, filter)
 	if err != nil {
