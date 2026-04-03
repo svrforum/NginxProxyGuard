@@ -603,6 +603,12 @@ func (s *Service) createDNSProvider(provider *model.DNSProvider) (challenge.Prov
 			return nil, fmt.Errorf("invalid cloudflare credentials: %w", err)
 		}
 
+		// If Zone ID is specified, use custom provider that bypasses SOA-based zone detection.
+		// This fixes certificate issuance for domains under 2nd-level ccTLDs (e.g., .ai.kr, .pe.kr).
+		if creds.ZoneID != "" {
+			return newCloudflareZoneProvider(creds.ZoneID, creds.APIToken, creds.APIKey, creds.Email)
+		}
+
 		// Set environment variables for cloudflare provider
 		if creds.APIToken != "" {
 			os.Setenv("CLOUDFLARE_DNS_API_TOKEN", creds.APIToken)

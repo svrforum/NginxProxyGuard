@@ -31,6 +31,7 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
   const [cfApiToken, setCfApiToken] = useState('')
   const [cfApiKey, setCfApiKey] = useState('')
   const [cfEmail, setCfEmail] = useState('')
+  const [cfZoneId, setCfZoneId] = useState('')
 
   // Route53 credentials
   const [awsAccessKeyId, setAwsAccessKeyId] = useState('')
@@ -55,6 +56,7 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
       if (cfApiToken) creds.api_token = cfApiToken
       if (cfApiKey) creds.api_key = cfApiKey
       if (cfEmail) creds.email = cfEmail
+      if (cfZoneId) creds.zone_id = cfZoneId
       return creds
     }
     if (providerType === 'route53') {
@@ -282,6 +284,21 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
                 <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
                   {t('dnsProviders.form.cloudflare.apiTokenHelp')}
                 </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-2">
+                  {t('dnsProviders.form.cloudflare.zoneId')}
+                  <span className="text-xs font-normal text-slate-400 dark:text-slate-500">({t('dnsProviders.form.cloudflare.optional')})</span>
+                  <HelpTip content={t('dnsProviders.form.cloudflare.zoneIdHelp')} />
+                </label>
+                <input
+                  type="text"
+                  value={cfZoneId}
+                  onChange={(e) => { setCfZoneId(e.target.value); setCredentialsModified(true) }}
+                  placeholder={hasExistingCredentials ? t('dnsProviders.form.cloudflare.zoneIdPlaceholder') : t('dnsProviders.form.cloudflare.zoneIdPlaceholder')}
+                  className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 placeholder:text-slate-400 bg-white dark:bg-slate-700 dark:text-white font-mono"
+                />
               </div>
 
               <div className="border-t border-slate-200 dark:border-slate-700 pt-4">

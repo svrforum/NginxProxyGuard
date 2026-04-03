@@ -187,6 +187,10 @@
         "apiToken": "API 토큰 (권장)",
         "apiTokenPlaceholder": "Cloudflare API 토큰 입력",
         "apiTokenHelp": "Zone:DNS:Edit 및 Zone:Read 권한이 있는 API Token을 생성하세요.",
+        "zoneId": "Zone ID",
+        "zoneIdPlaceholder": "예: 023e105f4ecef8ad9ca31a8372d0c353",
+        "zoneIdHelp": "Cloudflare Zone ID를 직접 지정하여 자동 Zone 탐지를 우회합니다. 2차 도메인 TLD(.ai.kr, .pe.kr, .co.uk 등) 하위 도메인에서 필수입니다. Cloudflare 대시보드 > 도메인 > 개요 (우측 사이드바)에서 확인할 수 있습니다.",
+        "optional": "선택사항",
         "orGlobalKey": "또는 Global API Key 사용 (구버전)",
         "apiKey": "API Key",
         "email": "이메일"
