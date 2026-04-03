@@ -383,8 +383,8 @@
     "advanced": {
       "config": {
         "title": "Custom Nginx Configuration",
-        "description": "Custom Nginx location block configuration",
-        "placeholder": "# Enter custom configuration\nproxy_read_timeout 3600;\n",
+        "description": "Directives are placed inside the location / { ... } block. If a location directive is included, the config is placed in the server { ... } block instead.",
+        "placeholder": "# Directives go inside location / block\nproxy_set_header X-Custom-Header value;\nproxy_read_timeout 3600;\n",
         "warning": "Invalid configuration may cause the proxy host to fail"
       }
     },
@@ -473,7 +473,7 @@
       "proxyRequestBuffering": "When ON, nginx buffers the entire request body before forwarding to upstream. When OFF, the request body is streamed directly. Turn OFF for very large uploads (10GB+) to prevent excessive memory usage."
     },
     "advanced": {
-      "customConfig": "For experts. Inject custom Nginx directives into the location / { ... } block."
+      "customConfig": "Directives are placed inside the location / { ... } block. If you include a location directive, the config is placed in the server { ... } block instead."
     }
   },
   "actions": {

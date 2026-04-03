@@ -20,12 +20,21 @@ map $request_uri $rate_limit_key_{{sanitizeID .Host.ID}} {
     ~*\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot|webp|avif|mp4|webm|pdf|zip|tar|gz|rar)(\?.*)?$  "";
     default  ${{if eq .RateLimit.LimitBy "uri"}}request_uri{{else if eq .RateLimit.LimitBy "ip_uri"}}binary_remote_addr$request_uri{{else}}binary_remote_addr{{end}};
 }
+{{if $.GlobalTrustedIPs}}
+# Global trusted IPs bypass rate limiting (empty key = no rate limit)
+map $trusted_ip_{{sanitizeID .Host.ID}} $rate_final_key_{{sanitizeID .Host.ID}} {
+    1       "";
+    default $rate_limit_key_{{sanitizeID .Host.ID}};
+}
+limit_req_zone $rate_final_key_{{sanitizeID .Host.ID}} zone=rate_{{sanitizeID .Host.ID}}:{{.RateLimit.ZoneSize}} rate={{.RateLimit.RequestsPerSecond}}r/s;
+{{else}}
 limit_req_zone $rate_limit_key_{{sanitizeID .Host.ID}} zone=rate_{{sanitizeID .Host.ID}}:{{.RateLimit.ZoneSize}} rate={{.RateLimit.RequestsPerSecond}}r/s;
+{{end}}
 {{end}}{{end}}
 
 {{if or .BannedIPs .UseFilterSubscription}}
 # Banned IPs geo mapping for {{join .Host.DomainNames ", "}}
-# Values: 1 = manual ban, 2 = filter subscription
+# Values: 1 = manual ban, 2 = filter subscription, 0 = trusted (override)
 geo $banned_ip_{{sanitizeID .Host.ID}} {
     default 0;
 {{if .UseFilterSubscription}}
@@ -33,6 +42,19 @@ geo $banned_ip_{{sanitizeID .Host.ID}} {
 {{end}}
 {{range .BannedIPs}}
     {{.IPAddress}} 1; # {{.Reason}}
+{{end}}
+{{range .GlobalTrustedIPs}}
+    {{.}} 0; # global trusted IP (override)
+{{end}}
+}
+{{end}}
+
+{{if .GlobalTrustedIPs}}
+# Global trusted IPs geo mapping (bypass all security)
+geo $trusted_ip_{{sanitizeID .Host.ID}} {
+    default 0;
+{{range .GlobalTrustedIPs}}
+    {{.}} 1;
 {{end}}
 }
 {{end}}
@@ -302,6 +324,13 @@ server {
         set $block_reason_var "-";
     }
 {{end}}
+{{if $.GlobalTrustedIPs}}
+    # Global trusted IPs - bypass geo restriction
+    if ($trusted_ip_{{sanitizeID $.Host.ID}} = 1) {
+        set $geo_blocked 0;
+        set $block_reason_var "-";
+    }
+{{end}}
 {{end}}{{end}}{{end}}
 
 {{if .AccessList}}{{if .AccessList.Items}}
@@ -519,6 +548,12 @@ server {
         set $priority_allow 1;
     }
 {{end}}{{end}}
+{{if $.GlobalTrustedIPs}}
+    # Global trusted IPs bypass bot filter
+    if ($trusted_ip_{{sanitizeID $.Host.ID}} = 1) {
+        set $priority_allow 1;
+    }
+{{end}}
 {{if .BotFilter.CustomAllowedAgents}}
     # Custom allowed agents bypass all bot filtering
     if ($http_user_agent ~* ({{toRegexPattern .BotFilter.CustomAllowedAgents}})) {
@@ -679,6 +714,10 @@ server {
         return 301 https://$host$request_uri;
     }
 {{end}}
+{{if .Host.AdvancedConfig}}{{if not .AdvancedConfigHasLocation}}
+    # Advanced configuration (ForceHTTPS redirect server)
+    {{.Host.AdvancedConfig}}
+{{end}}{{end}}
     {{else}}
 {{if not .HasCustomLocationRoot}}
     location / {
@@ -765,6 +804,10 @@ server {
         proxy_cache_use_stale error timeout http_500 http_502 http_503 http_504;
         add_header X-Cache-Status $upstream_cache_status always;
         {{end}}
+{{if .Host.AdvancedConfig}}{{if not .AdvancedConfigHasLocation}}
+        # Custom configuration
+        {{.Host.AdvancedConfig}}
+{{end}}{{end}}
     }
 {{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}
     location @challenge_redirect {
@@ -859,6 +902,10 @@ server {
         proxy_cache_use_stale error timeout http_500 http_502 http_503 http_504;
         add_header X-Cache-Status $upstream_cache_status always;
         {{end}}
+{{if .Host.AdvancedConfig}}{{if not .AdvancedConfigHasLocation}}
+        # Custom configuration
+        {{.Host.AdvancedConfig}}
+{{end}}{{end}}
     }
 {{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}
     location @challenge_redirect {
@@ -883,10 +930,10 @@ server {
     }
 {{end}}{{end}}
 
-{{if .Host.AdvancedConfig}}
-    # Advanced configuration
+{{if .Host.AdvancedConfig}}{{if or .AdvancedConfigHasLocation .HasCustomLocationRoot}}
+    # Advanced configuration (server block)
     {{.Host.AdvancedConfig}}
-{{end}}
+{{end}}{{end}}
 }
 
 {{if .Host.SSLEnabled}}
@@ -1139,6 +1186,13 @@ server {
         set $block_reason_var "-";
     }
 {{end}}
+{{if $.GlobalTrustedIPs}}
+    # Global trusted IPs - bypass geo restriction
+    if ($trusted_ip_{{sanitizeID $.Host.ID}} = 1) {
+        set $geo_blocked 0;
+        set $block_reason_var "-";
+    }
+{{end}}
 {{end}}{{end}}{{end}}
 
 {{if .AccessList}}{{if .AccessList.Items}}
@@ -1356,6 +1410,12 @@ server {
         set $priority_allow 1;
     }
 {{end}}{{end}}
+{{if $.GlobalTrustedIPs}}
+    # Global trusted IPs bypass bot filter
+    if ($trusted_ip_{{sanitizeID $.Host.ID}} = 1) {
+        set $priority_allow 1;
+    }
+{{end}}
 {{if .BotFilter.CustomAllowedAgents}}
     # Custom allowed agents bypass all bot filtering
     if ($http_user_agent ~* ({{toRegexPattern .BotFilter.CustomAllowedAgents}})) {
@@ -1631,6 +1691,10 @@ server {
         add_header Permissions-Policy "{{.SecurityHeaders.PermissionsPolicy}}" always;
         {{end}}
         {{end}}{{end}}
+{{if .Host.AdvancedConfig}}{{if not .AdvancedConfigHasLocation}}
+        # Custom configuration
+        {{.Host.AdvancedConfig}}
+{{end}}{{end}}
     }
 
 {{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}
@@ -1655,10 +1719,10 @@ server {
     }
 {{end}}{{end}}
 
-{{if .Host.AdvancedConfig}}
-    # Advanced configuration
+{{if .Host.AdvancedConfig}}{{if or .AdvancedConfigHasLocation .HasCustomLocationRoot}}
+    # Advanced configuration (server block)
     {{.Host.AdvancedConfig}}
-{{end}}
+{{end}}{{end}}
 }
 {{end}}
 {{end}}
@@ -1688,6 +1752,7 @@ type ProxyHostConfigData struct {
 	UseFilterSubscription         bool                    // If true, include shared filter subscription configs (IPs + UAs)
 	HasCustomLocationRoot         bool                  // True if AdvancedConfig contains a location / block
 	AdvancedConfigHasLocation     bool                  // True if AdvancedConfig contains any location directive
+	GlobalTrustedIPs              []string              // Global trusted IPs that bypass all security (from system settings)
 	HTTPPort                      string                // HTTP listen port (default: 80)
 	HTTPSPort                     string                // HTTPS listen port (default: 443)
 }

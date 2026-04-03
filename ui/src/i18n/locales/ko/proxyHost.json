@@ -385,8 +385,8 @@
     "advanced": {
       "config": {
         "title": "사용자 정의 Nginx 설정",
-        "description": "사용자 정의 Nginx location 블록 설정",
-        "placeholder": "# 사용자 정의 설정을 입력하세요\nproxy_read_timeout 3600;\n",
+        "description": "지시자는 location / { ... } 블록 안에 배치됩니다. location 지시자가 포함되면 server { ... } 블록에 배치됩니다.",
+        "placeholder": "# location / 블록에 삽입됩니다\nproxy_set_header X-Custom-Header value;\nproxy_read_timeout 3600;\n",
         "warning": "잘못된 설정은 프록시 호스트가 작동하지 않을 수 있습니다"
       }
     },
@@ -475,7 +475,7 @@
       "proxyRequestBuffering": "켜면 nginx가 전체 요청 본문을 버퍼링한 후 업스트림으로 전달합니다. 끄면 요청 본문이 직접 스트리밍됩니다. 대용량 업로드(10GB+) 시 과도한 메모리 사용을 방지하려면 끄세요."
     },
     "advanced": {
-      "customConfig": "Nginx 설정을 직접 작성할 수 있는 전문가용 기능입니다. location / { ... } 블록 안에 들어갈 내용을 입력하세요."
+      "customConfig": "지시자는 location / { ... } 블록 안에 배치됩니다. location 지시자가 포함되면 server { ... } 블록에 배치됩니다."
     }
   },
   "actions": {
