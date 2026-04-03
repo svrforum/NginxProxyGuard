@@ -201,6 +201,9 @@ func GetTemplateFuncMap(apiHost string) template.FuncMap {
 			}
 			return false
 		},
+		"hasDirective": func(directives map[string]bool, name string) bool {
+			return directives[name]
+		},
 	}
 }
 

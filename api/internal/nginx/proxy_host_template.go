@@ -751,28 +751,28 @@ server {
         include /etc/nginx/includes/proxy_params.conf;
         {{if .GlobalSettings}}
         # Proxy settings (Host-level overrides Global)
-        {{if gt .Host.ProxyConnectTimeout 0}}proxy_connect_timeout {{.Host.ProxyConnectTimeout}}s;{{else if gt .GlobalSettings.ProxyConnectTimeout 0}}proxy_connect_timeout {{.GlobalSettings.ProxyConnectTimeout}}s;{{end}}
-        {{if .Host.AllowWebsocketUpgrade}}proxy_send_timeout 86400s;{{else if gt .Host.ProxySendTimeout 0}}proxy_send_timeout {{.Host.ProxySendTimeout}}s;{{else if gt .GlobalSettings.ProxySendTimeout 0}}proxy_send_timeout {{.GlobalSettings.ProxySendTimeout}}s;{{end}}
-        {{if .Host.AllowWebsocketUpgrade}}proxy_read_timeout 86400s;{{else if gt .Host.ProxyReadTimeout 0}}proxy_read_timeout {{.Host.ProxyReadTimeout}}s;{{else if gt .GlobalSettings.ProxyReadTimeout 0}}proxy_read_timeout {{.GlobalSettings.ProxyReadTimeout}}s;{{end}}
-        {{if gt .GlobalSettings.ClientBodyTimeout 0}}client_body_timeout {{.GlobalSettings.ClientBodyTimeout}}s;{{end}}
-        {{if gt .GlobalSettings.SendTimeout 0}}send_timeout {{.GlobalSettings.SendTimeout}}s;{{end}}
-        {{if .Host.ClientMaxBodySize}}client_max_body_size {{.Host.ClientMaxBodySize}};{{else if .GlobalSettings.ClientMaxBodySize}}client_max_body_size {{.GlobalSettings.ClientMaxBodySize}};{{end}}
-        {{if .Host.ProxyBuffering}}proxy_buffering {{.Host.ProxyBuffering}};{{else if .GlobalSettings.ProxyBuffering}}proxy_buffering {{.GlobalSettings.ProxyBuffering}};{{end}}
-        {{if .Host.ProxyRequestBuffering}}proxy_request_buffering {{.Host.ProxyRequestBuffering}};{{else if .GlobalSettings.ProxyRequestBuffering}}proxy_request_buffering {{.GlobalSettings.ProxyRequestBuffering}};{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_connect_timeout")}}{{if gt .Host.ProxyConnectTimeout 0}}proxy_connect_timeout {{.Host.ProxyConnectTimeout}}s;{{else if gt .GlobalSettings.ProxyConnectTimeout 0}}proxy_connect_timeout {{.GlobalSettings.ProxyConnectTimeout}}s;{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_send_timeout")}}{{if .Host.AllowWebsocketUpgrade}}proxy_send_timeout 86400s;{{else if gt .Host.ProxySendTimeout 0}}proxy_send_timeout {{.Host.ProxySendTimeout}}s;{{else if gt .GlobalSettings.ProxySendTimeout 0}}proxy_send_timeout {{.GlobalSettings.ProxySendTimeout}}s;{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_read_timeout")}}{{if .Host.AllowWebsocketUpgrade}}proxy_read_timeout 86400s;{{else if gt .Host.ProxyReadTimeout 0}}proxy_read_timeout {{.Host.ProxyReadTimeout}}s;{{else if gt .GlobalSettings.ProxyReadTimeout 0}}proxy_read_timeout {{.GlobalSettings.ProxyReadTimeout}}s;{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "client_body_timeout")}}{{if gt .GlobalSettings.ClientBodyTimeout 0}}client_body_timeout {{.GlobalSettings.ClientBodyTimeout}}s;{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "send_timeout")}}{{if gt .GlobalSettings.SendTimeout 0}}send_timeout {{.GlobalSettings.SendTimeout}}s;{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "client_max_body_size")}}{{if .Host.ClientMaxBodySize}}client_max_body_size {{.Host.ClientMaxBodySize}};{{else if .GlobalSettings.ClientMaxBodySize}}client_max_body_size {{.GlobalSettings.ClientMaxBodySize}};{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_buffering")}}{{if .Host.ProxyBuffering}}proxy_buffering {{.Host.ProxyBuffering}};{{else if .GlobalSettings.ProxyBuffering}}proxy_buffering {{.GlobalSettings.ProxyBuffering}};{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_request_buffering")}}{{if .Host.ProxyRequestBuffering}}proxy_request_buffering {{.Host.ProxyRequestBuffering}};{{else if .GlobalSettings.ProxyRequestBuffering}}proxy_request_buffering {{.GlobalSettings.ProxyRequestBuffering}};{{end}}{{end}}
         {{if and .Host.WAFEnabled (or (eq .Host.ProxyRequestBuffering "off") (and (eq .Host.ProxyRequestBuffering "") (eq .GlobalSettings.ProxyRequestBuffering "off")))}}
         # Disable ModSecurity request body inspection for large file upload support
         # WAF still protects headers, URL patterns, and response inspection
         modsecurity_rules 'SecRequestBodyAccess Off';
         {{end}}
         # Proxy buffer settings (from Global Settings)
-        {{if .GlobalSettings.ProxyBufferSize}}proxy_buffer_size {{.GlobalSettings.ProxyBufferSize}};{{end}}
-        {{if .GlobalSettings.ProxyBuffers}}proxy_buffers {{.GlobalSettings.ProxyBuffers}};{{end}}
-        {{if .GlobalSettings.ProxyBusyBuffersSize}}proxy_busy_buffers_size {{.GlobalSettings.ProxyBusyBuffersSize}};{{end}}
-        {{if .Host.ProxyMaxTempFileSize}}proxy_max_temp_file_size {{.Host.ProxyMaxTempFileSize}};{{else if .GlobalSettings.ProxyMaxTempFileSize}}proxy_max_temp_file_size {{.GlobalSettings.ProxyMaxTempFileSize}};{{end}}
-        {{if .GlobalSettings.ProxyTempFileWriteSize}}proxy_temp_file_write_size {{.GlobalSettings.ProxyTempFileWriteSize}};{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_buffer_size")}}{{if .GlobalSettings.ProxyBufferSize}}proxy_buffer_size {{.GlobalSettings.ProxyBufferSize}};{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_buffers")}}{{if .GlobalSettings.ProxyBuffers}}proxy_buffers {{.GlobalSettings.ProxyBuffers}};{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_busy_buffers_size")}}{{if .GlobalSettings.ProxyBusyBuffersSize}}proxy_busy_buffers_size {{.GlobalSettings.ProxyBusyBuffersSize}};{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_max_temp_file_size")}}{{if .Host.ProxyMaxTempFileSize}}proxy_max_temp_file_size {{.Host.ProxyMaxTempFileSize}};{{else if .GlobalSettings.ProxyMaxTempFileSize}}proxy_max_temp_file_size {{.GlobalSettings.ProxyMaxTempFileSize}};{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_temp_file_write_size")}}{{if .GlobalSettings.ProxyTempFileWriteSize}}proxy_temp_file_write_size {{.GlobalSettings.ProxyTempFileWriteSize}};{{end}}{{end}}
         # Bandwidth limiting (from Global Settings)
-        {{if gt .GlobalSettings.LimitRate 0}}limit_rate {{.GlobalSettings.LimitRate}};{{end}}
-        {{if .GlobalSettings.LimitRateAfter}}limit_rate_after {{.GlobalSettings.LimitRateAfter}};{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "limit_rate")}}{{if gt .GlobalSettings.LimitRate 0}}limit_rate {{.GlobalSettings.LimitRate}};{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "limit_rate_after")}}{{if .GlobalSettings.LimitRateAfter}}limit_rate_after {{.GlobalSettings.LimitRateAfter}};{{end}}{{end}}
         {{end}}
         {{if .Host.AllowWebsocketUpgrade}}
         # WebSocket support (proxy_http_version already set in proxy_params.conf)
@@ -849,28 +849,28 @@ server {
         include /etc/nginx/includes/proxy_params.conf;
         {{if .GlobalSettings}}
         # Proxy settings (Host-level overrides Global)
-        {{if gt .Host.ProxyConnectTimeout 0}}proxy_connect_timeout {{.Host.ProxyConnectTimeout}}s;{{else if gt .GlobalSettings.ProxyConnectTimeout 0}}proxy_connect_timeout {{.GlobalSettings.ProxyConnectTimeout}}s;{{end}}
-        {{if .Host.AllowWebsocketUpgrade}}proxy_send_timeout 86400s;{{else if gt .Host.ProxySendTimeout 0}}proxy_send_timeout {{.Host.ProxySendTimeout}}s;{{else if gt .GlobalSettings.ProxySendTimeout 0}}proxy_send_timeout {{.GlobalSettings.ProxySendTimeout}}s;{{end}}
-        {{if .Host.AllowWebsocketUpgrade}}proxy_read_timeout 86400s;{{else if gt .Host.ProxyReadTimeout 0}}proxy_read_timeout {{.Host.ProxyReadTimeout}}s;{{else if gt .GlobalSettings.ProxyReadTimeout 0}}proxy_read_timeout {{.GlobalSettings.ProxyReadTimeout}}s;{{end}}
-        {{if gt .GlobalSettings.ClientBodyTimeout 0}}client_body_timeout {{.GlobalSettings.ClientBodyTimeout}}s;{{end}}
-        {{if gt .GlobalSettings.SendTimeout 0}}send_timeout {{.GlobalSettings.SendTimeout}}s;{{end}}
-        {{if .Host.ClientMaxBodySize}}client_max_body_size {{.Host.ClientMaxBodySize}};{{else if .GlobalSettings.ClientMaxBodySize}}client_max_body_size {{.GlobalSettings.ClientMaxBodySize}};{{end}}
-        {{if .Host.ProxyBuffering}}proxy_buffering {{.Host.ProxyBuffering}};{{else if .GlobalSettings.ProxyBuffering}}proxy_buffering {{.GlobalSettings.ProxyBuffering}};{{end}}
-        {{if .Host.ProxyRequestBuffering}}proxy_request_buffering {{.Host.ProxyRequestBuffering}};{{else if .GlobalSettings.ProxyRequestBuffering}}proxy_request_buffering {{.GlobalSettings.ProxyRequestBuffering}};{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_connect_timeout")}}{{if gt .Host.ProxyConnectTimeout 0}}proxy_connect_timeout {{.Host.ProxyConnectTimeout}}s;{{else if gt .GlobalSettings.ProxyConnectTimeout 0}}proxy_connect_timeout {{.GlobalSettings.ProxyConnectTimeout}}s;{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_send_timeout")}}{{if .Host.AllowWebsocketUpgrade}}proxy_send_timeout 86400s;{{else if gt .Host.ProxySendTimeout 0}}proxy_send_timeout {{.Host.ProxySendTimeout}}s;{{else if gt .GlobalSettings.ProxySendTimeout 0}}proxy_send_timeout {{.GlobalSettings.ProxySendTimeout}}s;{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_read_timeout")}}{{if .Host.AllowWebsocketUpgrade}}proxy_read_timeout 86400s;{{else if gt .Host.ProxyReadTimeout 0}}proxy_read_timeout {{.Host.ProxyReadTimeout}}s;{{else if gt .GlobalSettings.ProxyReadTimeout 0}}proxy_read_timeout {{.GlobalSettings.ProxyReadTimeout}}s;{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "client_body_timeout")}}{{if gt .GlobalSettings.ClientBodyTimeout 0}}client_body_timeout {{.GlobalSettings.ClientBodyTimeout}}s;{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "send_timeout")}}{{if gt .GlobalSettings.SendTimeout 0}}send_timeout {{.GlobalSettings.SendTimeout}}s;{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "client_max_body_size")}}{{if .Host.ClientMaxBodySize}}client_max_body_size {{.Host.ClientMaxBodySize}};{{else if .GlobalSettings.ClientMaxBodySize}}client_max_body_size {{.GlobalSettings.ClientMaxBodySize}};{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_buffering")}}{{if .Host.ProxyBuffering}}proxy_buffering {{.Host.ProxyBuffering}};{{else if .GlobalSettings.ProxyBuffering}}proxy_buffering {{.GlobalSettings.ProxyBuffering}};{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_request_buffering")}}{{if .Host.ProxyRequestBuffering}}proxy_request_buffering {{.Host.ProxyRequestBuffering}};{{else if .GlobalSettings.ProxyRequestBuffering}}proxy_request_buffering {{.GlobalSettings.ProxyRequestBuffering}};{{end}}{{end}}
         {{if and .Host.WAFEnabled (or (eq .Host.ProxyRequestBuffering "off") (and (eq .Host.ProxyRequestBuffering "") (eq .GlobalSettings.ProxyRequestBuffering "off")))}}
         # Disable ModSecurity request body inspection for large file upload support
         # WAF still protects headers, URL patterns, and response inspection
         modsecurity_rules 'SecRequestBodyAccess Off';
         {{end}}
         # Proxy buffer settings (from Global Settings)
-        {{if .GlobalSettings.ProxyBufferSize}}proxy_buffer_size {{.GlobalSettings.ProxyBufferSize}};{{end}}
-        {{if .GlobalSettings.ProxyBuffers}}proxy_buffers {{.GlobalSettings.ProxyBuffers}};{{end}}
-        {{if .GlobalSettings.ProxyBusyBuffersSize}}proxy_busy_buffers_size {{.GlobalSettings.ProxyBusyBuffersSize}};{{end}}
-        {{if .Host.ProxyMaxTempFileSize}}proxy_max_temp_file_size {{.Host.ProxyMaxTempFileSize}};{{else if .GlobalSettings.ProxyMaxTempFileSize}}proxy_max_temp_file_size {{.GlobalSettings.ProxyMaxTempFileSize}};{{end}}
-        {{if .GlobalSettings.ProxyTempFileWriteSize}}proxy_temp_file_write_size {{.GlobalSettings.ProxyTempFileWriteSize}};{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_buffer_size")}}{{if .GlobalSettings.ProxyBufferSize}}proxy_buffer_size {{.GlobalSettings.ProxyBufferSize}};{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_buffers")}}{{if .GlobalSettings.ProxyBuffers}}proxy_buffers {{.GlobalSettings.ProxyBuffers}};{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_busy_buffers_size")}}{{if .GlobalSettings.ProxyBusyBuffersSize}}proxy_busy_buffers_size {{.GlobalSettings.ProxyBusyBuffersSize}};{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_max_temp_file_size")}}{{if .Host.ProxyMaxTempFileSize}}proxy_max_temp_file_size {{.Host.ProxyMaxTempFileSize}};{{else if .GlobalSettings.ProxyMaxTempFileSize}}proxy_max_temp_file_size {{.GlobalSettings.ProxyMaxTempFileSize}};{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_temp_file_write_size")}}{{if .GlobalSettings.ProxyTempFileWriteSize}}proxy_temp_file_write_size {{.GlobalSettings.ProxyTempFileWriteSize}};{{end}}{{end}}
         # Bandwidth limiting (from Global Settings)
-        {{if gt .GlobalSettings.LimitRate 0}}limit_rate {{.GlobalSettings.LimitRate}};{{end}}
-        {{if .GlobalSettings.LimitRateAfter}}limit_rate_after {{.GlobalSettings.LimitRateAfter}};{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "limit_rate")}}{{if gt .GlobalSettings.LimitRate 0}}limit_rate {{.GlobalSettings.LimitRate}};{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "limit_rate_after")}}{{if .GlobalSettings.LimitRateAfter}}limit_rate_after {{.GlobalSettings.LimitRateAfter}};{{end}}{{end}}
         {{end}}
         {{if .Host.AllowWebsocketUpgrade}}
         # WebSocket support (proxy_http_version already set in proxy_params.conf)
@@ -1607,28 +1607,28 @@ server {
         include /etc/nginx/includes/proxy_params.conf;
         {{if .GlobalSettings}}
         # Proxy settings (Host-level overrides Global)
-        {{if gt .Host.ProxyConnectTimeout 0}}proxy_connect_timeout {{.Host.ProxyConnectTimeout}}s;{{else if gt .GlobalSettings.ProxyConnectTimeout 0}}proxy_connect_timeout {{.GlobalSettings.ProxyConnectTimeout}}s;{{end}}
-        {{if .Host.AllowWebsocketUpgrade}}proxy_send_timeout 86400s;{{else if gt .Host.ProxySendTimeout 0}}proxy_send_timeout {{.Host.ProxySendTimeout}}s;{{else if gt .GlobalSettings.ProxySendTimeout 0}}proxy_send_timeout {{.GlobalSettings.ProxySendTimeout}}s;{{end}}
-        {{if .Host.AllowWebsocketUpgrade}}proxy_read_timeout 86400s;{{else if gt .Host.ProxyReadTimeout 0}}proxy_read_timeout {{.Host.ProxyReadTimeout}}s;{{else if gt .GlobalSettings.ProxyReadTimeout 0}}proxy_read_timeout {{.GlobalSettings.ProxyReadTimeout}}s;{{end}}
-        {{if gt .GlobalSettings.ClientBodyTimeout 0}}client_body_timeout {{.GlobalSettings.ClientBodyTimeout}}s;{{end}}
-        {{if gt .GlobalSettings.SendTimeout 0}}send_timeout {{.GlobalSettings.SendTimeout}}s;{{end}}
-        {{if .Host.ClientMaxBodySize}}client_max_body_size {{.Host.ClientMaxBodySize}};{{else if .GlobalSettings.ClientMaxBodySize}}client_max_body_size {{.GlobalSettings.ClientMaxBodySize}};{{end}}
-        {{if .Host.ProxyBuffering}}proxy_buffering {{.Host.ProxyBuffering}};{{else if .GlobalSettings.ProxyBuffering}}proxy_buffering {{.GlobalSettings.ProxyBuffering}};{{end}}
-        {{if .Host.ProxyRequestBuffering}}proxy_request_buffering {{.Host.ProxyRequestBuffering}};{{else if .GlobalSettings.ProxyRequestBuffering}}proxy_request_buffering {{.GlobalSettings.ProxyRequestBuffering}};{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_connect_timeout")}}{{if gt .Host.ProxyConnectTimeout 0}}proxy_connect_timeout {{.Host.ProxyConnectTimeout}}s;{{else if gt .GlobalSettings.ProxyConnectTimeout 0}}proxy_connect_timeout {{.GlobalSettings.ProxyConnectTimeout}}s;{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_send_timeout")}}{{if .Host.AllowWebsocketUpgrade}}proxy_send_timeout 86400s;{{else if gt .Host.ProxySendTimeout 0}}proxy_send_timeout {{.Host.ProxySendTimeout}}s;{{else if gt .GlobalSettings.ProxySendTimeout 0}}proxy_send_timeout {{.GlobalSettings.ProxySendTimeout}}s;{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_read_timeout")}}{{if .Host.AllowWebsocketUpgrade}}proxy_read_timeout 86400s;{{else if gt .Host.ProxyReadTimeout 0}}proxy_read_timeout {{.Host.ProxyReadTimeout}}s;{{else if gt .GlobalSettings.ProxyReadTimeout 0}}proxy_read_timeout {{.GlobalSettings.ProxyReadTimeout}}s;{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "client_body_timeout")}}{{if gt .GlobalSettings.ClientBodyTimeout 0}}client_body_timeout {{.GlobalSettings.ClientBodyTimeout}}s;{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "send_timeout")}}{{if gt .GlobalSettings.SendTimeout 0}}send_timeout {{.GlobalSettings.SendTimeout}}s;{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "client_max_body_size")}}{{if .Host.ClientMaxBodySize}}client_max_body_size {{.Host.ClientMaxBodySize}};{{else if .GlobalSettings.ClientMaxBodySize}}client_max_body_size {{.GlobalSettings.ClientMaxBodySize}};{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_buffering")}}{{if .Host.ProxyBuffering}}proxy_buffering {{.Host.ProxyBuffering}};{{else if .GlobalSettings.ProxyBuffering}}proxy_buffering {{.GlobalSettings.ProxyBuffering}};{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_request_buffering")}}{{if .Host.ProxyRequestBuffering}}proxy_request_buffering {{.Host.ProxyRequestBuffering}};{{else if .GlobalSettings.ProxyRequestBuffering}}proxy_request_buffering {{.GlobalSettings.ProxyRequestBuffering}};{{end}}{{end}}
         {{if and .Host.WAFEnabled (or (eq .Host.ProxyRequestBuffering "off") (and (eq .Host.ProxyRequestBuffering "") (eq .GlobalSettings.ProxyRequestBuffering "off")))}}
         # Disable ModSecurity request body inspection for large file upload support
         # WAF still protects headers, URL patterns, and response inspection
         modsecurity_rules 'SecRequestBodyAccess Off';
         {{end}}
         # Proxy buffer settings (from Global Settings)
-        {{if .GlobalSettings.ProxyBufferSize}}proxy_buffer_size {{.GlobalSettings.ProxyBufferSize}};{{end}}
-        {{if .GlobalSettings.ProxyBuffers}}proxy_buffers {{.GlobalSettings.ProxyBuffers}};{{end}}
-        {{if .GlobalSettings.ProxyBusyBuffersSize}}proxy_busy_buffers_size {{.GlobalSettings.ProxyBusyBuffersSize}};{{end}}
-        {{if .Host.ProxyMaxTempFileSize}}proxy_max_temp_file_size {{.Host.ProxyMaxTempFileSize}};{{else if .GlobalSettings.ProxyMaxTempFileSize}}proxy_max_temp_file_size {{.GlobalSettings.ProxyMaxTempFileSize}};{{end}}
-        {{if .GlobalSettings.ProxyTempFileWriteSize}}proxy_temp_file_write_size {{.GlobalSettings.ProxyTempFileWriteSize}};{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_buffer_size")}}{{if .GlobalSettings.ProxyBufferSize}}proxy_buffer_size {{.GlobalSettings.ProxyBufferSize}};{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_buffers")}}{{if .GlobalSettings.ProxyBuffers}}proxy_buffers {{.GlobalSettings.ProxyBuffers}};{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_busy_buffers_size")}}{{if .GlobalSettings.ProxyBusyBuffersSize}}proxy_busy_buffers_size {{.GlobalSettings.ProxyBusyBuffersSize}};{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_max_temp_file_size")}}{{if .Host.ProxyMaxTempFileSize}}proxy_max_temp_file_size {{.Host.ProxyMaxTempFileSize}};{{else if .GlobalSettings.ProxyMaxTempFileSize}}proxy_max_temp_file_size {{.GlobalSettings.ProxyMaxTempFileSize}};{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_temp_file_write_size")}}{{if .GlobalSettings.ProxyTempFileWriteSize}}proxy_temp_file_write_size {{.GlobalSettings.ProxyTempFileWriteSize}};{{end}}{{end}}
         # Bandwidth limiting (from Global Settings)
-        {{if gt .GlobalSettings.LimitRate 0}}limit_rate {{.GlobalSettings.LimitRate}};{{end}}
-        {{if .GlobalSettings.LimitRateAfter}}limit_rate_after {{.GlobalSettings.LimitRateAfter}};{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "limit_rate")}}{{if gt .GlobalSettings.LimitRate 0}}limit_rate {{.GlobalSettings.LimitRate}};{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "limit_rate_after")}}{{if .GlobalSettings.LimitRateAfter}}limit_rate_after {{.GlobalSettings.LimitRateAfter}};{{end}}{{end}}
         {{end}}
         {{if .Host.AllowWebsocketUpgrade}}
         # WebSocket support (proxy_http_version already set in proxy_params.conf)
@@ -1752,6 +1752,7 @@ type ProxyHostConfigData struct {
 	UseFilterSubscription         bool                    // If true, include shared filter subscription configs (IPs + UAs)
 	HasCustomLocationRoot         bool                  // True if AdvancedConfig contains a location / block
 	AdvancedConfigHasLocation     bool                  // True if AdvancedConfig contains any location directive
+	AdvancedConfigDirectives      map[string]bool       // Set of directive names present in AdvancedConfig (e.g. "proxy_connect_timeout")
 	GlobalTrustedIPs              []string              // Global trusted IPs that bypass all security (from system settings)
 	HTTPPort                      string                // HTTP listen port (default: 80)
 	HTTPSPort                     string                // HTTPS listen port (default: 443)

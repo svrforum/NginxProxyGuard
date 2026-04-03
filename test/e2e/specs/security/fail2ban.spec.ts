@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { WAFPage } from '../../pages';
 import { APIHelper } from '../../utils/api-helper';
+import { TestDataFactory } from '../../utils/test-data-factory';
 import { TIMEOUTS } from '../../fixtures/test-data';
 
 test.describe('Fail2ban Integration', () => {
@@ -224,5 +225,119 @@ test.describe('IP Validation', () => {
     } catch (error) {
       expect(error).toBeDefined();
     }
+  });
+});
+
+test.describe('Banned IP Deduplication (Issue #91)', () => {
+  let apiHelper: APIHelper;
+  const testIp = '198.51.100.50';
+
+  test.beforeEach(async ({ request }) => {
+    apiHelper = new APIHelper(request);
+    await apiHelper.login();
+  });
+
+  test.afterEach(async () => {
+    // Cleanup all bans for the test IP
+    const bannedIps = await apiHelper.getWafBannedIps();
+    for (const ban of bannedIps.filter(b => b.ip_address === testIp)) {
+      await apiHelper.unbanIp(ban.id);
+    }
+    await apiHelper.cleanupTestHosts();
+  });
+
+  test('should ban same IP globally and per-host without breaking nginx', async () => {
+    // Create a test proxy host
+    const testData = TestDataFactory.createProxyHost();
+    const host = await apiHelper.createProxyHost(testData);
+
+    // Ban the IP globally (no proxy_host_id)
+    await apiHelper.banIp(testIp, 'Global ban');
+
+    // Ban the same IP for a specific host
+    await apiHelper.banIp(testIp, 'Host-specific ban', host.id);
+
+    // Verify both bans exist in the database
+    const bannedIps = await apiHelper.getWafBannedIps();
+    const globalBan = bannedIps.find(b => b.ip_address === testIp && !b.proxy_host_id);
+    const hostBan = bannedIps.find(b => b.ip_address === testIp && b.proxy_host_id === host.id);
+    expect(globalBan).toBeDefined();
+    expect(hostBan).toBeDefined();
+
+    // Sync all configs — this should NOT fail even with duplicate IPs
+    const syncResult = await apiHelper.syncAllConfigs();
+    expect(syncResult.test_success).toBe(true);
+    expect(syncResult.reload_success).toBe(true);
+  });
+
+  test('should handle multiple duplicate IPs across hosts', async () => {
+    const testData1 = TestDataFactory.createProxyHost();
+    const testData2 = TestDataFactory.createProxyHost();
+    const host1 = await apiHelper.createProxyHost(testData1);
+    const host2 = await apiHelper.createProxyHost(testData2);
+
+    // Ban globally
+    await apiHelper.banIp(testIp, 'Global ban');
+
+    // Ban for both hosts
+    await apiHelper.banIp(testIp, 'Host1 ban', host1.id);
+    await apiHelper.banIp(testIp, 'Host2 ban', host2.id);
+
+    // Sync — should succeed without duplicate network warnings causing failure
+    const syncResult = await apiHelper.syncAllConfigs();
+    expect(syncResult.test_success).toBe(true);
+    expect(syncResult.reload_success).toBe(true);
+  });
+});
+
+test.describe('AdvancedConfig Directive Conflict (Issue #91)', () => {
+  let apiHelper: APIHelper;
+
+  test.beforeEach(async ({ request }) => {
+    apiHelper = new APIHelper(request);
+    await apiHelper.login();
+  });
+
+  test.afterEach(async () => {
+    await apiHelper.cleanupTestHosts();
+  });
+
+  test('should handle proxy_connect_timeout in AdvancedConfig without nginx failure', async () => {
+    const testData = TestDataFactory.createProxyHost({
+      advanced_config: 'proxy_connect_timeout 60s;',
+    });
+    await apiHelper.createProxyHost(testData);
+
+    // Sync — should NOT fail with "directive is duplicate"
+    const syncResult = await apiHelper.syncAllConfigs();
+    expect(syncResult.test_success).toBe(true);
+    expect(syncResult.reload_success).toBe(true);
+  });
+
+  test('should handle multiple proxy directives in AdvancedConfig', async () => {
+    const testData = TestDataFactory.createProxyHost({
+      advanced_config: [
+        'proxy_connect_timeout 60s;',
+        'proxy_send_timeout 120s;',
+        'proxy_read_timeout 120s;',
+        'client_max_body_size 100m;',
+      ].join('\n'),
+    });
+    await apiHelper.createProxyHost(testData);
+
+    const syncResult = await apiHelper.syncAllConfigs();
+    expect(syncResult.test_success).toBe(true);
+    expect(syncResult.reload_success).toBe(true);
+  });
+
+  test('should still apply non-conflicting AdvancedConfig directives', async () => {
+    const testData = TestDataFactory.createProxyHost({
+      advanced_config: 'add_header X-Custom-Header "test-value" always;',
+    });
+    await apiHelper.createProxyHost(testData);
+
+    const syncResult = await apiHelper.syncAllConfigs();
+    expect(syncResult.test_success).toBe(true);
+    expect(syncResult.reload_success).toBe(true);
   });
 });

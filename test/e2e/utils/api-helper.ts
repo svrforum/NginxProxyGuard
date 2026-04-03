@@ -846,18 +846,36 @@ export class APIHelper {
   }
 
   /**
-   * Ban an IP address.
+   * Ban an IP address. Optionally specify proxy_host_id for host-specific ban.
    */
-  async banIp(ip: string, reason?: string): Promise<void> {
+  async banIp(ip: string, reason?: string, proxyHostId?: string): Promise<void> {
+    const data: Record<string, string | undefined> = { ip_address: ip, reason };
+    if (proxyHostId) {
+      data.proxy_host_id = proxyHostId;
+    }
     const response = await this.request.post(API_ENDPOINTS.wafBannedIps, {
       headers: this.getHeaders(),
-      data: { ip_address: ip, reason },
+      data,
     });
 
     if (!response.ok()) {
       const error = await response.json();
       throw new Error(`Failed to ban IP: ${error.error || response.status()}`);
     }
+  }
+
+  /**
+   * Sync all proxy host configs (triggers nginx config regeneration).
+   */
+  async syncAllConfigs(): Promise<{ test_success: boolean; reload_success: boolean }> {
+    const response = await this.request.post(`${API_ENDPOINTS.proxyHosts}/sync`, {
+      headers: this.getHeaders(),
+      timeout: 30000,
+    });
+    if (!response.ok()) {
+      throw new Error(`Failed to sync configs: ${response.status()}`);
+    }
+    return response.json();
   }
 
   /**
