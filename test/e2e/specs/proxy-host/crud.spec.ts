@@ -68,6 +68,10 @@ test.describe('Proxy Host CRUD', () => {
     const testDomain = testData.domain_names[0];
 
     await listPage.goto();
+    await listPage.waitForHostsLoad();
+
+    // Search for the host to ensure it's visible (may be on different page due to pagination)
+    await listPage.searchHosts(testDomain);
 
     // Click on the host to edit
     await listPage.clickHost(testDomain);
@@ -260,5 +264,80 @@ test.describe('Proxy Host Form Tabs', () => {
 
     // Data should be preserved (verify form still has values)
     // This depends on implementation, but form should not reset
+  });
+});
+
+test.describe('Advanced Config', () => {
+  let apiHelper: APIHelper;
+
+  test.beforeEach(async ({ request }) => {
+    apiHelper = new APIHelper(request);
+    await apiHelper.login();
+  });
+
+  test.afterEach(async () => {
+    await apiHelper.cleanupTestHosts();
+  });
+
+  test('should create proxy host with advanced_config', async () => {
+    const advancedConfig = 'proxy_read_timeout 300s;';
+    const testData = TestDataFactory.createProxyHost({
+      domain_names: [TestDataFactory.generateDomain('adv-cfg-create')],
+      advanced_config: advancedConfig,
+    });
+    const created = await apiHelper.createProxyHost(testData);
+
+    expect(created.advanced_config).toBe(advancedConfig);
+
+    // Verify via list API
+    const hosts = await apiHelper.getProxyHosts();
+    const found = hosts.find(h => h.id === created.id);
+    expect(found).toBeDefined();
+    expect(found?.advanced_config).toBe(advancedConfig);
+  });
+
+  test('should update proxy host to add advanced_config', async () => {
+    const testData = TestDataFactory.createProxyHost({
+      domain_names: [TestDataFactory.generateDomain('adv-cfg-add')],
+    });
+    const created = await apiHelper.createProxyHost(testData);
+    expect(created.advanced_config).toBeFalsy();
+
+    const advancedConfig = 'client_max_body_size 50m;';
+    const updated = await apiHelper.updateProxyHost(created.id, {
+      advanced_config: advancedConfig,
+    });
+    expect(updated.advanced_config).toBe(advancedConfig);
+  });
+
+  test('should update proxy host to remove advanced_config', async () => {
+    const testData = TestDataFactory.createProxyHost({
+      domain_names: [TestDataFactory.generateDomain('adv-cfg-remove')],
+      advanced_config: 'proxy_connect_timeout 60s;',
+    });
+    const created = await apiHelper.createProxyHost(testData);
+    expect(created.advanced_config).toBeTruthy();
+
+    const updated = await apiHelper.updateProxyHost(created.id, {
+      advanced_config: '',
+    });
+    expect(updated.advanced_config).toBeFalsy();
+  });
+
+  test('should sync successfully with advanced_config containing proxy directives', async () => {
+    const advancedConfig = [
+      'proxy_set_header X-Custom-Header "test";',
+      'proxy_read_timeout 120s;',
+      'proxy_buffering off;',
+    ].join('\n');
+    const testData = TestDataFactory.createProxyHost({
+      domain_names: [TestDataFactory.generateDomain('adv-cfg-sync')],
+      advanced_config: advancedConfig,
+    });
+    await apiHelper.createProxyHost(testData);
+
+    const syncResult = await apiHelper.syncAllConfigs();
+    expect(syncResult.test_success).toBe(true);
+    expect(syncResult.reload_success).toBe(true);
   });
 });
