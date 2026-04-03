@@ -1257,6 +1257,7 @@ export interface GlobalSettingsData {
   ssl_dhparam_bits?: number;
   proxy_buffering?: string;
   proxy_request_buffering?: string;
+  global_trusted_ips?: string;
 }
 
 // WAF Types

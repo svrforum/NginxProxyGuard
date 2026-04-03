@@ -1,6 +1,6 @@
 # NginxProxyGuard - Architecture Specification
 
-> **Version**: 2.7.0 | **Last Updated**: 2026-03-31
+> **Version**: 2.7.4 | **Last Updated**: 2026-04-04
 > 이 문서는 Claude Code가 개발 시 참조하는 프로젝트 아키텍처 명세서입니다.
 > 새 기능 추가, 버그 수정, 리팩토링 시 이 문서를 기준으로 작업합니다.
 
@@ -104,6 +104,9 @@ api/
 │   ├── repository/                 # 30 레포지토리 파일
 │   ├── scheduler/                  # 5 스케줄러 파일
 │   ├── service/                    # 20 서비스 파일
+│   │   ├── proxy_host_config.go        # 호스트별 설정 데이터 조합
+│   │   ├── proxy_host_config_utils.go  # URI 병합, IP 필터링 유틸리티
+│   │   ├── proxy_host_sync.go          # 전체 동기화, 재생성, 자동 복구
 │   └── util/query.go              # SQL 유틸리티
 ├── pkg/
 │   ├── acme/acme.go               # Let's Encrypt ACME (lego v4)
@@ -142,6 +145,8 @@ config.Load()
           → Services 생성 (repos + nginxManager 주입)
             → Cross-service Callback 연결
               → Startup: SyncAllConfigs() + GenerateDefaultServerConfig()
+                  (Auto-Recovery: nginx -t 실패 시 에러 호스트 config 제거 + 재시도, 최대 5회)
+                  (실패 호스트는 config_status="error"로 DB 업데이트, 나머지 정상 운영)
                 → Background Services: logCollector, wafAutoBan, fail2ban, statsCollector, dockerLogCollector, cloudProvider, geoIP
                   → Handlers 생성 (services 주입)
                     → Schedulers: renewal(6h), partition, logRotate, backup, filterRefresh
@@ -280,7 +285,7 @@ var domainNames pq.StringArray    // 읽기
 | `backup_import.go` | - | ImportAllData (full DB import) |
 | `ip_ban_history.go` | IPBanHistoryRepository | Create, List, GetByIP, GetStats |
 | `geoip_history.go` | GeoIPHistoryRepository | Create, Update, List, GetLatest |
-| `filter_subscription.go` | FilterSubscriptionRepository | Create, GetByID, List, Update, Delete, CreateEntry, DeleteEntries, ListEntries, AddHostExclusion, RemoveHostExclusion, ListHostExclusions |
+| `filter_subscription.go` | FilterSubscriptionRepository | Create, GetByID, List, Update, Delete, CreateEntry, DeleteEntries, ListEntries, CountEnabledSubscriptions, AddHostExclusion, RemoveHostExclusion, ListHostExclusions |
 | `helpers.go` | - | SQL NULL 변환 헬퍼 (FromNullString, ToNullString, etc.) |
 
 ### 2.8 Nginx Manager
@@ -307,6 +312,22 @@ GenerateConfigAndReload(ctx, data, wafExclusions):
 // Atomic File Write
 writeFileAtomic(path, data, perm):
   MkdirAll → CreateTemp → Write → Sync → Chmod → Rename
+
+// AdvancedConfig Directive Conflict Prevention
+parseAdvancedConfigDirectives(advancedConfig) → set of directive names
+hasDirective(directives, name) → bool  // 템플릿 함수로 등록
+// 템플릿에서 auto-generated directive (proxy_connect_timeout 등)를 출력하기 전
+// hasDirective로 체크 → AdvancedConfig에 동일 directive 있으면 skip
+// → nginx -t 실패 방지 (duplicate directive 에러 제거)
+
+// SyncAllConfigs Auto-Recovery
+SyncAllConfigs():
+  1. 모든 enabled proxy host config 재생성
+  2. nginx -t 실행
+  3. 실패 시 에러 메시지에서 failing host config 파일명 파싱
+  4. 해당 host의 .conf + WAF config 제거, config_status="error" DB 업데이트
+  5. nginx -t 재시도 (최대 5회 반복)
+  6. 나머지 호스트는 정상 운영 계속
 ```
 
 **생성 파일:**
@@ -351,7 +372,7 @@ Protected: APITokenAuth → AuthMiddleware → Handler
 ### 2.11 Key Constants
 
 ```go
-const AppVersion = "2.2.0"
+const AppVersion = "2.7.4"
 
 // Timeouts
 HTTPClientTimeout       = 30s
@@ -1188,6 +1209,18 @@ Layer 8: Authentication (session + 2FA TOTP + API tokens)
 Layer 9: Audit Trail (all admin actions logged)
 Layer 10: Advanced Config Sandbox (blocks dangerous nginx directives)
 ```
+
+### 9.1.1 Global Trusted IPs
+
+- 모든 보안 기능(WAF, rate limit, geo block, bot filter, banned IPs)을 우회하는 신뢰 IP 목록
+- 저장: `system_settings.global_trusted_ips` (줄바꿈으로 구분)
+- Nginx config 적용: `geo` 블록에서 `{ip} 0; # global trusted IP (override)` 로 추가
+- IP/CIDR 형식 유효성 검증 후 config 생성에 반영
+
+### 9.1.2 Banned IP Deduplication
+
+- 호스트별 banned IP + 글로벌 banned IP를 nginx config 생성 전 IP 주소 기준으로 중복 제거
+- nginx geo 블록의 "duplicate network" 경고 방지
 
 ### 9.2 Token Security
 
