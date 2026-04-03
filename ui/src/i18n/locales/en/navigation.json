@@ -69,7 +69,7 @@
       "captcha": "CAPTCHA",
       "geoip": "GeoIP",
       "botfilter": "Bot Filter",
-      "wafAutoBan": "WAF Auto-Ban",
+      "wafAutoBan": "Security",
       "ssl": "SSL / ACME",
       "maintenance": "Maintenance",
       "backups": "Backups",

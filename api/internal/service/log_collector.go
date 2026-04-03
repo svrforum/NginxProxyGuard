@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"net"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -142,6 +143,13 @@ type LogCollector struct {
 	domainCacheMu    sync.RWMutex
 	domainCache      map[string]string // domain -> hostID
 	domainCacheTime  time.Time
+
+	// Global trusted IPs cache (bypass all security)
+	settingsRepo     *repository.SystemSettingsRepository
+	trustedIPsMu     sync.RWMutex
+	trustedIPs       map[string]bool   // exact IP -> true
+	trustedCIDRs     []string          // CIDR ranges
+	trustedIPsTime   time.Time
 }
 
 func NewLogCollector(logRepo *repository.LogRepository, nginxContainer string, geoIP *GeoIPService, redisCache *cache.RedisClient) *LogCollector {
@@ -176,6 +184,95 @@ func (c *LogCollector) SetWAFAutoBanService(svc *WAFAutoBanService) {
 // SetFail2banService sets the Fail2ban service for processing failed requests
 func (c *LogCollector) SetFail2banService(svc *Fail2banService) {
 	c.fail2ban = svc
+}
+
+// SetSystemSettingsRepo sets the system settings repository for trusted IP lookups
+func (c *LogCollector) SetSystemSettingsRepo(repo *repository.SystemSettingsRepository) {
+	c.settingsRepo = repo
+}
+
+// trustedIPCacheTTL is how long the trusted IP list is cached before refreshing from DB.
+const trustedIPCacheTTL = 60 * time.Second
+
+// isTrustedIP checks if the given IP is in the global trusted IPs list.
+// The list is cached and refreshed every 60 seconds.
+func (c *LogCollector) isTrustedIP(ctx context.Context, ip string) bool {
+	if ip == "" || c.settingsRepo == nil {
+		return false
+	}
+
+	c.trustedIPsMu.RLock()
+	cacheValid := time.Since(c.trustedIPsTime) < trustedIPCacheTTL
+	exactIPs := c.trustedIPs
+	cidrs := c.trustedCIDRs
+	c.trustedIPsMu.RUnlock()
+
+	if cacheValid {
+		return c.matchTrustedIP(ip, exactIPs, cidrs)
+	}
+
+	// Refresh cache under write lock (re-check to avoid thundering herd)
+	c.trustedIPsMu.Lock()
+	if time.Since(c.trustedIPsTime) < trustedIPCacheTTL {
+		// Another goroutine already refreshed
+		exactIPs = c.trustedIPs
+		cidrs = c.trustedCIDRs
+		c.trustedIPsMu.Unlock()
+		return c.matchTrustedIP(ip, exactIPs, cidrs)
+	}
+	c.trustedIPsMu.Unlock()
+
+	// Fetch from DB (outside lock to avoid blocking other goroutines)
+	settings, err := c.settingsRepo.Get(ctx)
+
+	newExactIPs := make(map[string]bool)
+	var newCIDRs []string
+	if err == nil && settings.GlobalTrustedIPs != "" {
+		for _, line := range strings.Split(settings.GlobalTrustedIPs, "\n") {
+			entry := strings.TrimSpace(line)
+			if entry == "" || strings.HasPrefix(entry, "#") {
+				continue
+			}
+			if strings.Contains(entry, "/") {
+				newCIDRs = append(newCIDRs, entry)
+			} else {
+				newExactIPs[entry] = true
+			}
+		}
+	}
+
+	c.trustedIPsMu.Lock()
+	c.trustedIPs = newExactIPs
+	c.trustedCIDRs = newCIDRs
+	c.trustedIPsTime = time.Now()
+	c.trustedIPsMu.Unlock()
+
+	return c.matchTrustedIP(ip, newExactIPs, newCIDRs)
+}
+
+func (c *LogCollector) matchTrustedIP(ip string, exactIPs map[string]bool, cidrs []string) bool {
+	if exactIPs[ip] {
+		return true
+	}
+	for _, cidr := range cidrs {
+		if ipMatchesCIDR(ip, cidr) {
+			return true
+		}
+	}
+	return false
+}
+
+// ipMatchesCIDR checks if an IP address falls within a CIDR range
+func ipMatchesCIDR(ip, cidr string) bool {
+	_, network, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return false
+	}
+	parsedIP := net.ParseIP(ip)
+	if parsedIP == nil {
+		return false
+	}
+	return network.Contains(parsedIP)
 }
 
 // getHostIDByDomain returns the host ID for a given domain (with caching)
@@ -497,7 +594,8 @@ func (c *LogCollector) streamAccessLogs(ctx context.Context) {
 				c.addLog(*logReq)
 
 				// Notify WAF auto-ban service (only for blocked requests, not logged/detection mode)
-				if c.wafAutoBan != nil && logReq.ClientIP != "" && logReq.ActionTaken == "blocked" {
+				// Skip for globally trusted IPs
+				if c.wafAutoBan != nil && logReq.ClientIP != "" && logReq.ActionTaken == "blocked" && !c.isTrustedIP(ctx, logReq.ClientIP) {
 					c.wafAutoBan.RecordWAFEvent(ctx, logReq.ClientIP, logReq.Host, logReq.RuleID, logReq.RuleMessage)
 				}
 			} else {
@@ -535,7 +633,8 @@ func (c *LogCollector) streamAccessLogs(ctx context.Context) {
 			}
 
 			// Notify Fail2ban service for error responses (4xx, 5xx)
-			if c.fail2ban != nil && logReq.ClientIP != "" && logReq.StatusCode >= 400 && logReq.ProxyHostID != "" {
+			// Skip for globally trusted IPs
+			if c.fail2ban != nil && logReq.ClientIP != "" && logReq.StatusCode >= 400 && logReq.ProxyHostID != "" && !c.isTrustedIP(ctx, logReq.ClientIP) {
 				c.fail2ban.RecordFailedRequest(ctx, logReq.ProxyHostID, logReq.ClientIP, logReq.StatusCode, logReq.RequestURI)
 			}
 

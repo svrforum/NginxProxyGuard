@@ -76,6 +76,9 @@ type SystemSettings struct {
 	WAFAutoBanWindow    int  `json:"waf_auto_ban_window" db:"waf_auto_ban_window"`       // Time window in seconds (default: 300 = 5 minutes)
 	WAFAutoBanDuration  int  `json:"waf_auto_ban_duration" db:"waf_auto_ban_duration"`   // Ban duration in seconds (default: 3600 = 1 hour, 0 = permanent)
 
+	// Global Trusted IPs (bypass all security: fail2ban, WAF auto-ban, banned IPs, bot filter, rate limit)
+	GlobalTrustedIPs string `json:"global_trusted_ips" db:"global_trusted_ips"` // Newline-separated IP addresses or CIDRs that bypass all security features
+
 	// Global Block Exploits Exceptions
 	GlobalBlockExploitsExceptions string `json:"global_block_exploits_exceptions" db:"global_block_exploits_exceptions"` // Line-separated regex patterns for URI paths that bypass RFI/exploit blocking globally
 
@@ -167,6 +170,9 @@ type SystemSettingsResponse struct {
 	WAFAutoBanWindow    int  `json:"waf_auto_ban_window"`
 	WAFAutoBanDuration  int  `json:"waf_auto_ban_duration"`
 
+	// Global Trusted IPs
+	GlobalTrustedIPs string `json:"global_trusted_ips"`
+
 	// Global Block Exploits Exceptions
 	GlobalBlockExploitsExceptions string `json:"global_block_exploits_exceptions"`
 
@@ -233,6 +239,7 @@ func (s *SystemSettings) ToResponse() *SystemSettingsResponse {
 		WAFAutoBanThreshold:                 s.WAFAutoBanThreshold,
 		WAFAutoBanWindow:                    s.WAFAutoBanWindow,
 		WAFAutoBanDuration:                  s.WAFAutoBanDuration,
+		GlobalTrustedIPs:                    s.GlobalTrustedIPs,
 		GlobalBlockExploitsExceptions:       s.GlobalBlockExploitsExceptions,
 
 		DirectIPAccessAction:                s.DirectIPAccessAction,
@@ -339,6 +346,9 @@ type UpdateSystemSettingsRequest struct {
 	WAFAutoBanThreshold *int  `json:"waf_auto_ban_threshold,omitempty"`
 	WAFAutoBanWindow    *int  `json:"waf_auto_ban_window,omitempty"`
 	WAFAutoBanDuration  *int  `json:"waf_auto_ban_duration,omitempty"`
+
+	// Global Trusted IPs
+	GlobalTrustedIPs *string `json:"global_trusted_ips,omitempty"`
 
 	// Global Block Exploits Exceptions
 	GlobalBlockExploitsExceptions *string `json:"global_block_exploits_exceptions,omitempty"`

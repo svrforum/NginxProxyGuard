@@ -77,6 +77,7 @@ func (r *SystemSettingsRepository) getFromDB(ctx context.Context) (*model.System
 		       COALESCE(waf_auto_ban_threshold, 10) as waf_auto_ban_threshold,
 		       COALESCE(waf_auto_ban_window, 300) as waf_auto_ban_window,
 		       COALESCE(waf_auto_ban_duration, 3600) as waf_auto_ban_duration,
+		       COALESCE(global_trusted_ips, '') as global_trusted_ips,
 		       COALESCE(global_block_exploits_exceptions, '^/wp-json/
 ^/api/v1/challenge/
 ^/wp-admin/admin-ajax.php
@@ -149,6 +150,7 @@ func (r *SystemSettingsRepository) getFromDB(ctx context.Context) (*model.System
 		&settings.WAFAutoBanThreshold,
 		&settings.WAFAutoBanWindow,
 		&settings.WAFAutoBanDuration,
+		&settings.GlobalTrustedIPs,
 		&settings.GlobalBlockExploitsExceptions,
 		&settings.DirectIPAccessAction,
 		&settings.UIFontFamily,
@@ -511,6 +513,13 @@ func (r *SystemSettingsRepository) Update(ctx context.Context, req *model.Update
 	if req.WAFAutoBanDuration != nil {
 		setClauses = append(setClauses, fmt.Sprintf("waf_auto_ban_duration = $%d", argIndex))
 		args = append(args, *req.WAFAutoBanDuration)
+		argIndex++
+	}
+
+	// Global Trusted IPs
+	if req.GlobalTrustedIPs != nil {
+		setClauses = append(setClauses, fmt.Sprintf("global_trusted_ips = $%d", argIndex))
+		args = append(args, *req.GlobalTrustedIPs)
 		argIndex++
 	}
 

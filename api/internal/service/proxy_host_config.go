@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"regexp"
 	"strings"
 	"sync"
@@ -324,12 +325,33 @@ func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.Pr
 		}
 	}
 
-	// Fetch global block_exploits exceptions from system settings
-	if host.BlockExploits && s.systemSettingsRepo != nil {
+	// Fetch global trusted IPs and block_exploits exceptions from system settings
+	if s.systemSettingsRepo != nil {
 		settings, err := s.systemSettingsRepo.Get(ctx)
 		if err == nil && settings != nil {
-			data.GlobalBlockExploitsExceptions = settings.GlobalBlockExploitsExceptions
+			if host.BlockExploits {
+				data.GlobalBlockExploitsExceptions = settings.GlobalBlockExploitsExceptions
+			}
+			// Parse global trusted IPs for nginx ban bypass (with strict validation)
+			if settings.GlobalTrustedIPs != "" {
+				for _, line := range strings.Split(settings.GlobalTrustedIPs, "\n") {
+					entry := strings.TrimSpace(line)
+					if entry == "" || strings.HasPrefix(entry, "#") {
+						continue
+					}
+					// Validate: must be a valid IP or CIDR (prevents nginx config injection)
+					if isValidIPOrCIDR(entry) {
+						data.GlobalTrustedIPs = append(data.GlobalTrustedIPs, entry)
+					}
+				}
+			}
 		}
+	}
+
+	// Filter out banned IPs that match any global trusted IP/CIDR.
+	// This ensures trusted IPs are never blocked regardless of nginx geo ordering.
+	if len(data.GlobalTrustedIPs) > 0 && len(data.BannedIPs) > 0 {
+		data.BannedIPs = filterBannedByTrustedIPs(data.BannedIPs, data.GlobalTrustedIPs)
 	}
 
 	// Fetch exploit block rules from database when block_exploits is enabled
@@ -829,4 +851,47 @@ func mergeURIBlocks(global *model.GlobalURIBlock, host *model.URIBlock) *model.U
 	}
 
 	return result
+}
+
+// filterBannedByTrustedIPs removes banned IPs that match any trusted IP or fall within a trusted CIDR.
+func filterBannedByTrustedIPs(banned []model.BannedIP, trusted []string) []model.BannedIP {
+	exactTrusted := make(map[string]bool)
+	var trustedNets []*net.IPNet
+	for _, entry := range trusted {
+		if strings.Contains(entry, "/") {
+			_, network, err := net.ParseCIDR(entry)
+			if err == nil {
+				trustedNets = append(trustedNets, network)
+			}
+		} else {
+			exactTrusted[entry] = true
+		}
+	}
+
+	filtered := make([]model.BannedIP, 0, len(banned))
+	for _, b := range banned {
+		ip := strings.TrimSpace(b.IPAddress)
+		// Strip CIDR suffix if present (e.g., "1.2.3.4/32" → "1.2.3.4")
+		if idx := strings.Index(ip, "/"); idx > 0 {
+			ip = ip[:idx]
+		}
+		if exactTrusted[ip] {
+			continue
+		}
+		parsedIP := net.ParseIP(ip)
+		if parsedIP != nil {
+			skip := false
+			for _, network := range trustedNets {
+				if network.Contains(parsedIP) {
+					skip = true
+					break
+				}
+			}
+			if skip {
+				continue
+			}
+		}
+		filtered = append(filtered, b)
+	}
+	return filtered
 }

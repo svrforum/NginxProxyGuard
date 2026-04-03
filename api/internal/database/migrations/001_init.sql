@@ -1465,7 +1465,8 @@ geckodriver'::text,
     global_block_exploits_exceptions text DEFAULT '^/wp-json/
 ^/api/v1/challenge/
 ^/wp-admin/admin-ajax.php
-^/webapi/'::text
+^/webapi/'::text,
+    global_trusted_ips text DEFAULT ''
 );
 COMMENT ON COLUMN public.system_settings.access_log_retention_days IS 'Retention period for access logs in days (default: 3 years)';
 COMMENT ON COLUMN public.system_settings.waf_log_retention_days IS 'Retention period for WAF/ModSecurity logs in days (default: 3 months)';
@@ -2412,6 +2413,9 @@ DO $$ BEGIN
         FOREIGN KEY (proxy_host_id) REFERENCES public.proxy_hosts(id) ON DELETE SET NULL;
 EXCEPTION WHEN OTHERS THEN NULL;
 END $$;
+
+-- v2.7.3: Global trusted IPs for bypassing all security features (Issue #90)
+ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS global_trusted_ips text DEFAULT '';
 
 -- Performance: pg_trgm GIN indexes for ILIKE search on logs_partitioned
 CREATE EXTENSION IF NOT EXISTS pg_trgm;

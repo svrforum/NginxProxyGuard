@@ -42,7 +42,7 @@ export default function WAFAutoBanSettings() {
 
   const isModified = Object.keys(editedSettings).length > 0;
 
-  const inputClass = "mt-1 w-full px-3 py-2.5 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-sm text-slate-700 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors";
+  const inputClass = "mt-1 w-full px-3 py-2.5 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-sm text-slate-700 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors";
 
   if (isLoading) {
     return (
@@ -65,7 +65,7 @@ export default function WAFAutoBanSettings() {
         <button
           onClick={handleSave}
           disabled={!isModified || updateMutation.isPending}
-          className="px-4 py-2 text-[13px] font-semibold bg-blue-600 text-white hover:bg-blue-700 rounded-lg disabled:opacity-50 disabled:bg-slate-300 transition-colors"
+          className="px-4 py-2 text-[13px] font-semibold bg-primary-600 text-white hover:bg-primary-700 rounded-lg disabled:opacity-50 disabled:bg-slate-300 transition-colors"
         >
           {updateMutation.isPending ? t('system.buttons.saving') : t('system.buttons.save')}
         </button>
@@ -207,6 +207,39 @@ export default function WAFAutoBanSettings() {
               {t('system.waf.info.description')}
             </p>
           </div>
+        </div>
+      </div>
+
+      {/* Global Trusted IPs */}
+      <div className="mt-6 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+            <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+            </svg>
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+              {t('system.waf.trustedIps.title')}
+            </h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              {t('system.waf.trustedIps.description')}
+            </p>
+          </div>
+          <HelpTip content={t('system.waf.trustedIps.help')} />
+        </div>
+
+        <div>
+          <textarea
+            value={(getValue('global_trusted_ips') as string) || ''}
+            onChange={(e) => handleChange('global_trusted_ips', e.target.value)}
+            rows={10}
+            className={`${inputClass} font-mono`}
+            placeholder={t('system.waf.trustedIps.placeholder')}
+          />
+          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+            {t('system.waf.trustedIps.format')}
+          </p>
         </div>
       </div>
     </div>

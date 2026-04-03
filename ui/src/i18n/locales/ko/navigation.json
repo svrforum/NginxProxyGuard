@@ -69,7 +69,7 @@
       "captcha": "CAPTCHA",
       "geoip": "GeoIP",
       "botfilter": "봇 필터",
-      "wafAutoBan": "WAF 자동 차단",
+      "wafAutoBan": "보안",
       "ssl": "SSL / ACME",
       "maintenance": "유지보수",
       "backups": "백업",

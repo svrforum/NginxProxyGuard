@@ -335,8 +335,8 @@
       }
     },
     "waf": {
-      "title": "WAF 자동 차단 설정",
-      "description": "WAF 이벤트 기반 자동 IP 차단 설정을 관리합니다.",
+      "title": "보안 설정",
+      "description": "자동 IP 차단 및 전역 신뢰 IP 설정을 관리합니다.",
       "status": {
         "title": "WAF 자동 차단 상태",
         "activeDescription": "WAF 이벤트 기반 자동 IP 차단이 활성화되어 있습니다.",
@@ -366,6 +366,13 @@
       "info": {
         "title": "작동 방식",
         "description": "WAF에서 차단된 요청(SQL Injection, XSS 등)이 설정한 임계값을 초과하면 해당 IP가 자동으로 차단됩니다. 차단된 IP는 WAF/Ban IP 탭에서 확인하고 관리할 수 있습니다."
+      },
+      "trustedIps": {
+        "title": "전역 신뢰 IP",
+        "description": "Fail2ban, WAF 자동 차단, IP 차단을 우회하는 IP 목록입니다. 이 IP들은 자동으로 차단되지 않습니다.",
+        "help": "내부 네트워크, 모니터링 시스템 또는 신뢰할 수 있는 서비스 IP를 추가하세요. 자동 차단(Fail2ban, WAF 자동 차단)에서 제외되고, nginx 설정의 차단 IP 목록에서도 제거됩니다. IPv4, IPv6, CIDR 표기법을 지원합니다.",
+        "placeholder": "# 내부 네트워크\n192.168.1.0/24\n10.0.0.0/8\n# 모니터링 서버\n203.0.113.50",
+        "format": "한 줄에 하나의 IP 또는 CIDR을 입력합니다. #으로 시작하는 줄은 주석입니다. IPv4, IPv6, CIDR을 지원합니다. 유효하지 않은 항목은 자동 무시됩니다."
       }
     },
     "maintenance": {

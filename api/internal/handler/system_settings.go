@@ -34,6 +34,7 @@ type SystemSettingsHandler struct {
 	dockerLogCollector   *service.DockerLogCollector
 	geoipScheduler       *service.GeoIPScheduler
 	cloudProviderService *service.CloudProviderService
+	proxyHostService     *service.ProxyHostService
 }
 
 func NewSystemSettingsHandler(
@@ -44,6 +45,7 @@ func NewSystemSettingsHandler(
 	dockerLogCollector *service.DockerLogCollector,
 	geoipScheduler *service.GeoIPScheduler,
 	cloudProviderService *service.CloudProviderService,
+	proxyHostService *service.ProxyHostService,
 ) *SystemSettingsHandler {
 	h := &SystemSettingsHandler{
 		repo:                 repo,
@@ -53,6 +55,7 @@ func NewSystemSettingsHandler(
 		dockerLogCollector:   dockerLogCollector,
 		geoipScheduler:       geoipScheduler,
 		cloudProviderService: cloudProviderService,
+		proxyHostService:     proxyHostService,
 	}
 
 	// Initialize raw log settings on startup
@@ -128,6 +131,15 @@ func (h *SystemSettingsHandler) UpdateSystemSettings(c echo.Context) error {
 		if err := h.generateRawLogConfig(settings); err != nil {
 			log.Printf("[SystemSettings] Warning: failed to generate raw log config: %v", err)
 		}
+	}
+
+	// Regenerate all nginx configs when global trusted IPs change
+	if req.GlobalTrustedIPs != nil && h.proxyHostService != nil {
+		go func() {
+			if err := h.proxyHostService.SyncAllConfigs(context.Background()); err != nil {
+				log.Printf("[SystemSettings] Warning: failed to sync nginx configs after trusted IPs change: %v", err)
+			}
+		}()
 	}
 
 	// Generate default server config if direct IP access action changed

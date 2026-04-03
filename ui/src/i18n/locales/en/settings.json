@@ -331,8 +331,8 @@
       }
     },
     "waf": {
-      "title": "WAF Auto-Ban Settings",
-      "description": "Manage WAF event-based automatic IP banning settings.",
+      "title": "Security Settings",
+      "description": "Manage automatic IP banning and global trusted IP settings.",
       "status": {
         "title": "WAF Auto-Ban Status",
         "activeDescription": "WAF event-based automatic IP banning is active.",
@@ -362,6 +362,13 @@
       "info": {
         "title": "How it works",
         "description": "If blocked requests (SQL Injection, XSS, etc.) from WAF exceed the set threshold, the IP will be automatically blocked. Blocked IPs can be managed in the WAF/Ban IP tab."
+      },
+      "trustedIps": {
+        "title": "Global Trusted IPs",
+        "description": "IPs that bypass Fail2ban, WAF Auto-Ban, and IP bans. These IPs will never be automatically blocked.",
+        "help": "Add internal network ranges, monitoring systems, or trusted service IPs. These addresses are excluded from automatic banning (Fail2ban, WAF Auto-Ban) and removed from the banned IP list in nginx configs. Supports IPv4, IPv6, and CIDR notation.",
+        "placeholder": "# Internal network\n192.168.1.0/24\n10.0.0.0/8\n# Monitoring server\n203.0.113.50",
+        "format": "One IP or CIDR per line. Lines starting with # are comments. Supports IPv4, IPv6, and CIDR. Invalid entries are silently ignored."
       }
     },
     "maintenance": {

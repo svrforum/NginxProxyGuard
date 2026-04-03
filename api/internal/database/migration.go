@@ -189,6 +189,9 @@ func (db *DB) RunMigrations() error {
 		);
 
 		CREATE INDEX IF NOT EXISTS idx_fshe_proxy_host ON public.filter_subscription_host_exclusions(proxy_host_id);
+
+		-- Global trusted IPs for bypassing all security features (v2.7.3+)
+		ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS global_trusted_ips text DEFAULT '';
 	`
 	_, err = db.Exec(upgradeSQL)
 	if err != nil {

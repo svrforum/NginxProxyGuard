@@ -398,6 +398,9 @@ export interface SystemSettings {
   // Direct IP Access Settings
   direct_ip_access_action: 'allow' | 'block_403' | 'block_444';
 
+  // Global Trusted IPs
+  global_trusted_ips: string;
+
   // Global Block Exploits Exceptions
   global_block_exploits_exceptions: string;
 
@@ -472,6 +475,9 @@ export interface UpdateSystemSettingsRequest {
 
   // Direct IP Access Settings
   direct_ip_access_action?: 'allow' | 'block_403' | 'block_444';
+
+  // Global Trusted IPs
+  global_trusted_ips?: string;
 
   // Global Block Exploits Exceptions
   global_block_exploits_exceptions?: string;

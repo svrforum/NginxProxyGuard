@@ -242,7 +242,7 @@ func main() {
 	geoIPScheduler.Start()
 	defer geoIPScheduler.Stop()
 
-	systemSettingsHandler := handler.NewSystemSettingsHandler(systemSettingsRepo, geoIPHistoryRepo, nginxManager, auditService, dockerLogCollector, geoIPScheduler, cloudProviderService)
+	systemSettingsHandler := handler.NewSystemSettingsHandler(systemSettingsRepo, geoIPHistoryRepo, nginxManager, auditService, dockerLogCollector, geoIPScheduler, cloudProviderService, proxyHostService)
 	apiTokenHandler := handler.NewAPITokenHandler(apiTokenRepo, auditLogRepo)
 	auditLogHandler := handler.NewAuditLogHandler(auditLogRepo, apiTokenRepo)
 	challengeHandler := handler.NewChallengeHandler(challengeService, auditService)
@@ -266,6 +266,7 @@ func main() {
 	if logCollector != nil {
 		logCollector.SetFail2banService(fail2banService)
 		logCollector.SetProxyHostRepo(proxyHostRepo)
+		logCollector.SetSystemSettingsRepo(systemSettingsRepo)
 	}
 
 	// Initialize renewal scheduler (check every 6 hours, renew 30 days before expiry)
