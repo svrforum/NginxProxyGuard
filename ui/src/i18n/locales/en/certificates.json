@@ -187,6 +187,10 @@
         "apiToken": "API Token (Recommended)",
         "apiTokenPlaceholder": "Enter Cloudflare API Token",
         "apiTokenHelp": "Create an API Token with Zone:DNS:Edit and Zone:Read permissions.",
+        "zoneId": "Zone ID",
+        "zoneIdPlaceholder": "e.g. 023e105f4ecef8ad9ca31a8372d0c353",
+        "zoneIdHelp": "Specify the Cloudflare Zone ID to bypass automatic zone detection. Required for domains under 2nd-level ccTLDs (e.g., .ai.kr, .pe.kr, .co.uk). Find it in Cloudflare Dashboard > Your Domain > Overview (right sidebar).",
+        "optional": "Optional",
         "orGlobalKey": "Or use Global API Key (Legacy)",
         "apiKey": "API Key",
         "email": "Email"
