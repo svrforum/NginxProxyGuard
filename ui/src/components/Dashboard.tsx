@@ -37,7 +37,7 @@ export default function Dashboard() {
   const { data: containerStats } = useQuery({
     queryKey: ['containerStats'],
     queryFn: getContainerStats,
-    refetchInterval: 15000, // Refresh every 15 seconds
+    refetchInterval: 30000, // Refresh every 30 seconds
   });
 
   const { data: geoIPStats, isLoading: geoIPLoading } = useQuery({

@@ -69,5 +69,5 @@ export interface LogViewerProps {
   embedded?: boolean;
 }
 
-export const AUTO_REFRESH_INTERVAL = 5000;
+export const AUTO_REFRESH_INTERVAL = 10000;
 export const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];

@@ -9,14 +9,16 @@ import (
 	"log"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
+	"golang.org/x/sync/errgroup"
 	"nginx-proxy-guard/internal/database"
 	"nginx-proxy-guard/internal/model"
 	"nginx-proxy-guard/pkg/cache"
 )
 
-const statsCacheTTL = 10 * time.Second
+const statsCacheTTL = 30 * time.Second
 
 type LogRepository struct {
 	db    *database.DB
@@ -218,20 +220,31 @@ func (r *LogRepository) CreateBatch(ctx context.Context, logs []model.CreateLogR
 		return nil
 	}
 
-	// Batch failed - fall back to individual inserts to avoid losing all logs
-	log.Printf("[LogRepository] Batch insert failed, falling back to individual inserts: %v", err)
+	// Batch failed - fall back to mini-batch inserts (50 at a time) to avoid N round-trips
+	log.Printf("[LogRepository] Batch insert failed, falling back to mini-batch inserts: %v", err)
+	const miniBatchSize = 50
 	var failCount int
-	for i, req := range logs {
-		if err := r.createSingle(ctx, &req); err != nil {
-			failCount++
-			log.Printf("[LogRepository] Failed to insert log %d/%d: %v", i+1, len(logs), err)
+	for i := 0; i < len(logs); i += miniBatchSize {
+		end := i + miniBatchSize
+		if end > len(logs) {
+			end = len(logs)
+		}
+		chunk := logs[i:end]
+		if err := r.createBatchTx(ctx, chunk); err != nil {
+			// Mini-batch failed, fall back to individual inserts for this chunk
+			for j, req := range chunk {
+				if err := r.createSingle(ctx, &req); err != nil {
+					failCount++
+					log.Printf("[LogRepository] Failed to insert log %d/%d: %v", i+j+1, len(logs), err)
+				}
+			}
 		}
 	}
 	if failCount > 0 {
-		log.Printf("[LogRepository] Individual insert fallback: %d/%d logs failed", failCount, len(logs))
+		log.Printf("[LogRepository] Mini-batch fallback: %d/%d logs failed", failCount, len(logs))
 	}
 	if failCount == len(logs) {
-		return fmt.Errorf("all %d individual log inserts failed after batch failure", failCount)
+		return fmt.Errorf("all %d log inserts failed after batch failure", failCount)
 	}
 	return nil
 }
@@ -624,17 +637,17 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 	}
 
 	// Fetch perPage+1 rows to determine hasMore without COUNT(*)
+	// Select only columns needed for list view to reduce IO (~60% less data)
 	fetchLimit := perPage + 1
 	query := fmt.Sprintf(`
 		SELECT id, log_type, timestamp, host, client_ip,
-			geo_country, geo_country_code, geo_city, geo_asn, geo_org,
-			request_method, request_uri, request_protocol, status_code,
-			body_bytes_sent, request_time, upstream_response_time,
-			http_referer, http_user_agent, http_x_forwarded_for,
+			geo_country, geo_country_code, geo_org,
+			request_method, request_uri, status_code,
+			body_bytes_sent, request_time,
 			severity, error_message,
-			rule_id, rule_message, rule_severity, rule_data, attack_type, action_taken,
-			block_reason, bot_category, exploit_rule,
-			proxy_host_id, raw_log, created_at
+			rule_id, rule_message, action_taken,
+			block_reason, bot_category,
+			created_at
 		FROM logs_partitioned
 		%s
 		ORDER BY %s
@@ -652,34 +665,30 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 	var logs []model.Log
 	for rows.Next() {
 		var log model.Log
-		var host, clientIP, requestMethod, requestURI, requestProtocol sql.NullString
-		var geoCountry, geoCountryCode, geoCity, geoASN, geoOrg sql.NullString
+		var host, clientIP, requestMethod, requestURI sql.NullString
+		var geoCountry, geoCountryCode, geoOrg sql.NullString
 		var statusCode sql.NullInt32
 		var ruleID sql.NullInt64
 		var bodyBytesSent sql.NullInt64
-		var requestTime, upstreamResponseTime sql.NullFloat64
-		var httpReferer, httpUserAgent, httpXForwardedFor sql.NullString
+		var requestTime sql.NullFloat64
 		var severity, errorMessage sql.NullString
-		var ruleMessage, ruleSeverity, ruleData, attackType, actionTaken sql.NullString
-		var blockReason, botCategory, exploitRule sql.NullString
-		var proxyHostID, rawLog sql.NullString
+		var ruleMessage, actionTaken sql.NullString
+		var blockReason, botCategory sql.NullString
 
 		err := rows.Scan(
 			&log.ID, &log.LogType, &log.Timestamp, &host, &clientIP,
-			&geoCountry, &geoCountryCode, &geoCity, &geoASN, &geoOrg,
-			&requestMethod, &requestURI, &requestProtocol, &statusCode,
-			&bodyBytesSent, &requestTime, &upstreamResponseTime,
-			&httpReferer, &httpUserAgent, &httpXForwardedFor,
+			&geoCountry, &geoCountryCode, &geoOrg,
+			&requestMethod, &requestURI, &statusCode,
+			&bodyBytesSent, &requestTime,
 			&severity, &errorMessage,
-			&ruleID, &ruleMessage, &ruleSeverity, &ruleData, &attackType, &actionTaken,
-			&blockReason, &botCategory, &exploitRule,
-			&proxyHostID, &rawLog, &log.CreatedAt,
+			&ruleID, &ruleMessage, &actionTaken,
+			&blockReason, &botCategory,
+			&log.CreatedAt,
 		)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to scan log: %w", err)
 		}
 
-		// Map nullable fields (same as Create)
 		if host.Valid {
 			log.Host = &host.String
 		}
@@ -693,12 +702,6 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 		if geoCountryCode.Valid {
 			log.GeoCountryCode = &geoCountryCode.String
 		}
-		if geoCity.Valid {
-			log.GeoCity = &geoCity.String
-		}
-		if geoASN.Valid {
-			log.GeoASN = &geoASN.String
-		}
 		if geoOrg.Valid {
 			log.GeoOrg = &geoOrg.String
 		}
@@ -707,9 +710,6 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 		}
 		if requestURI.Valid {
 			log.RequestURI = &requestURI.String
-		}
-		if requestProtocol.Valid {
-			log.RequestProtocol = &requestProtocol.String
 		}
 		if statusCode.Valid {
 			code := int(statusCode.Int32)
@@ -720,18 +720,6 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 		}
 		if requestTime.Valid {
 			log.RequestTime = &requestTime.Float64
-		}
-		if upstreamResponseTime.Valid {
-			log.UpstreamResponseTime = &upstreamResponseTime.Float64
-		}
-		if httpReferer.Valid {
-			log.HTTPReferer = &httpReferer.String
-		}
-		if httpUserAgent.Valid {
-			log.HTTPUserAgent = &httpUserAgent.String
-		}
-		if httpXForwardedFor.Valid {
-			log.HTTPXForwardedFor = &httpXForwardedFor.String
 		}
 		if severity.Valid {
 			sev := model.LogSeverity(severity.String)
@@ -747,15 +735,6 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 		if ruleMessage.Valid {
 			log.RuleMessage = &ruleMessage.String
 		}
-		if ruleSeverity.Valid {
-			log.RuleSeverity = &ruleSeverity.String
-		}
-		if ruleData.Valid {
-			log.RuleData = &ruleData.String
-		}
-		if attackType.Valid {
-			log.AttackType = &attackType.String
-		}
 		if actionTaken.Valid {
 			log.ActionTaken = &actionTaken.String
 		}
@@ -765,15 +744,6 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 		}
 		if botCategory.Valid {
 			log.BotCategory = &botCategory.String
-		}
-		if exploitRule.Valid {
-			log.ExploitRule = &exploitRule.String
-		}
-		if proxyHostID.Valid {
-			log.ProxyHostID = &proxyHostID.String
-		}
-		if rawLog.Valid {
-			log.RawLog = &rawLog.String
 		}
 
 		logs = append(logs, log)
@@ -1036,173 +1006,209 @@ func (r *LogRepository) GetStatsWithFilter(ctx context.Context, filter *model.Lo
 		}
 	}
 
-	// Total counts by type
-	countQuery := fmt.Sprintf(`
-		SELECT
-			COUNT(*) as total,
-			COUNT(*) FILTER (WHERE log_type = 'access') as access_logs,
-			COUNT(*) FILTER (WHERE log_type = 'error') as error_logs,
-			COUNT(*) FILTER (WHERE log_type = 'modsec') as modsec_logs
-		FROM logs_partitioned
-		WHERE %s
-	`, whereClause)
+	// Run all stats queries in parallel using errgroup
+	var mu sync.Mutex
+	g, gctx := errgroup.WithContext(ctx)
 
-	err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(
-		&stats.TotalLogs, &stats.AccessLogs, &stats.ErrorLogs, &stats.ModSecLogs,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get log counts: %w", err)
-	}
+	// 1. Total counts by type
+	g.Go(func() error {
+		countQuery := fmt.Sprintf(`
+			SELECT
+				COUNT(*) as total,
+				COUNT(*) FILTER (WHERE log_type = 'access') as access_logs,
+				COUNT(*) FILTER (WHERE log_type = 'error') as error_logs,
+				COUNT(*) FILTER (WHERE log_type = 'modsec') as modsec_logs
+			FROM logs_partitioned
+			WHERE %s
+		`, whereClause)
+		return r.db.QueryRowContext(gctx, countQuery, args...).Scan(
+			&stats.TotalLogs, &stats.AccessLogs, &stats.ErrorLogs, &stats.ModSecLogs,
+		)
+	})
 
-	// Top status codes
-	statusQuery := fmt.Sprintf(`
-		SELECT status_code, COUNT(*) as count
-		FROM logs_partitioned
-		WHERE status_code IS NOT NULL AND %s
-		GROUP BY status_code
-		ORDER BY count DESC
-		LIMIT 10
-	`, whereClause)
-
-	statusRows, err := r.db.QueryContext(ctx, statusQuery, args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get status codes: %w", err)
-	}
-	defer statusRows.Close()
-
-	for statusRows.Next() {
-		var stat model.StatusCodeStat
-		if err := statusRows.Scan(&stat.StatusCode, &stat.Count); err != nil {
-			return nil, fmt.Errorf("failed to scan status code: %w", err)
+	// 2. Top status codes
+	g.Go(func() error {
+		statusQuery := fmt.Sprintf(`
+			SELECT status_code, COUNT(*) as count
+			FROM logs_partitioned
+			WHERE status_code IS NOT NULL AND %s
+			GROUP BY status_code
+			ORDER BY count DESC
+			LIMIT 10
+		`, whereClause)
+		rows, err := r.db.QueryContext(gctx, statusQuery, args...)
+		if err != nil {
+			return err
 		}
-		stats.TopStatusCodes = append(stats.TopStatusCodes, stat)
-	}
-
-	// Top client IPs
-	ipQuery := fmt.Sprintf(`
-		SELECT client_ip::text, COUNT(*) as count
-		FROM logs_partitioned
-		WHERE client_ip IS NOT NULL AND %s
-		GROUP BY client_ip
-		ORDER BY count DESC
-		LIMIT 10
-	`, whereClause)
-
-	ipRows, err := r.db.QueryContext(ctx, ipQuery, args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get client IPs: %w", err)
-	}
-	defer ipRows.Close()
-
-	for ipRows.Next() {
-		var stat model.ClientIPStat
-		if err := ipRows.Scan(&stat.ClientIP, &stat.Count); err != nil {
-			return nil, fmt.Errorf("failed to scan client IP: %w", err)
+		defer rows.Close()
+		var results []model.StatusCodeStat
+		for rows.Next() {
+			var stat model.StatusCodeStat
+			if err := rows.Scan(&stat.StatusCode, &stat.Count); err != nil {
+				return err
+			}
+			results = append(results, stat)
 		}
-		stats.TopClientIPs = append(stats.TopClientIPs, stat)
-	}
+		mu.Lock()
+		stats.TopStatusCodes = results
+		mu.Unlock()
+		return nil
+	})
 
-	// Top user agents
-	uaQuery := fmt.Sprintf(`
-		SELECT http_user_agent, COUNT(*) as count
-		FROM logs_partitioned
-		WHERE http_user_agent IS NOT NULL AND http_user_agent != '' AND %s
-		GROUP BY http_user_agent
-		ORDER BY count DESC
-		LIMIT 10
-	`, whereClause)
-
-	uaRows, err := r.db.QueryContext(ctx, uaQuery, args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get user agents: %w", err)
-	}
-	defer uaRows.Close()
-
-	for uaRows.Next() {
-		var stat model.UserAgentStat
-		if err := uaRows.Scan(&stat.UserAgent, &stat.Count); err != nil {
-			return nil, fmt.Errorf("failed to scan user agent: %w", err)
+	// 3. Top client IPs
+	g.Go(func() error {
+		ipQuery := fmt.Sprintf(`
+			SELECT host(client_ip), COUNT(*) as count
+			FROM logs_partitioned
+			WHERE client_ip IS NOT NULL AND %s
+			GROUP BY client_ip
+			ORDER BY count DESC
+			LIMIT 10
+		`, whereClause)
+		rows, err := r.db.QueryContext(gctx, ipQuery, args...)
+		if err != nil {
+			return err
 		}
-		stats.TopUserAgents = append(stats.TopUserAgents, stat)
-	}
-
-	// Top attacked URIs (from modsec logs or access logs depending on log_type filter)
-	uriLogType := "modsec"
-	if filter != nil && filter.LogType != nil && *filter.LogType == "access" {
-		uriLogType = "access"
-	}
-	uriQuery := fmt.Sprintf(`
-		SELECT request_uri, COUNT(*) as count
-		FROM logs_partitioned
-		WHERE log_type = '%s' AND request_uri IS NOT NULL AND %s
-		GROUP BY request_uri
-		ORDER BY count DESC
-		LIMIT 10
-	`, uriLogType, whereClause)
-
-	uriRows, err := r.db.QueryContext(ctx, uriQuery, args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get attacked URIs: %w", err)
-	}
-	defer uriRows.Close()
-
-	for uriRows.Next() {
-		var stat model.URIStat
-		if err := uriRows.Scan(&stat.URI, &stat.Count); err != nil {
-			return nil, fmt.Errorf("failed to scan URI: %w", err)
+		defer rows.Close()
+		var results []model.ClientIPStat
+		for rows.Next() {
+			var stat model.ClientIPStat
+			if err := rows.Scan(&stat.ClientIP, &stat.Count); err != nil {
+				return err
+			}
+			results = append(results, stat)
 		}
-		stats.TopAttackedURIs = append(stats.TopAttackedURIs, stat)
-	}
+		mu.Lock()
+		stats.TopClientIPs = results
+		mu.Unlock()
+		return nil
+	})
 
-	// Top rule IDs
-	ruleQuery := fmt.Sprintf(`
-		SELECT rule_id, COALESCE(rule_message, 'Unknown'), COUNT(*) as count
-		FROM logs_partitioned
-		WHERE log_type = 'modsec' AND rule_id IS NOT NULL AND %s
-		GROUP BY rule_id, rule_message
-		ORDER BY count DESC
-		LIMIT 10
-	`, whereClause)
-
-	ruleRows, err := r.db.QueryContext(ctx, ruleQuery, args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get rule IDs: %w", err)
-	}
-	defer ruleRows.Close()
-
-	for ruleRows.Next() {
-		var stat model.RuleIDStat
-		if err := ruleRows.Scan(&stat.RuleID, &stat.Message, &stat.Count); err != nil {
-			return nil, fmt.Errorf("failed to scan rule ID: %w", err)
+	// 4. Top user agents
+	g.Go(func() error {
+		uaQuery := fmt.Sprintf(`
+			SELECT http_user_agent, COUNT(*) as count
+			FROM logs_partitioned
+			WHERE http_user_agent IS NOT NULL AND http_user_agent != '' AND %s
+			GROUP BY http_user_agent
+			ORDER BY count DESC
+			LIMIT 10
+		`, whereClause)
+		rows, err := r.db.QueryContext(gctx, uaQuery, args...)
+		if err != nil {
+			return err
 		}
-		stats.TopRuleIDs = append(stats.TopRuleIDs, stat)
-	}
-
-	// Top countries
-	countryQuery := fmt.Sprintf(`
-		SELECT 
-			COALESCE(geo_country_code, 'Unknown') as country_code,
-			COALESCE(geo_country, 'Unknown') as country,
-			COUNT(*) as count
-		FROM logs_partitioned
-		WHERE %s
-		GROUP BY geo_country_code, geo_country
-		ORDER BY count DESC
-		LIMIT 10
-	`, whereClause)
-
-	countryRows, err := r.db.QueryContext(ctx, countryQuery, args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get countries: %w", err)
-	}
-	defer countryRows.Close()
-
-	for countryRows.Next() {
-		var stat model.CountryStat
-		if err := countryRows.Scan(&stat.CountryCode, &stat.Country, &stat.Count); err != nil {
-			return nil, fmt.Errorf("failed to scan country: %w", err)
+		defer rows.Close()
+		var results []model.UserAgentStat
+		for rows.Next() {
+			var stat model.UserAgentStat
+			if err := rows.Scan(&stat.UserAgent, &stat.Count); err != nil {
+				return err
+			}
+			results = append(results, stat)
 		}
-		stats.TopCountries = append(stats.TopCountries, stat)
+		mu.Lock()
+		stats.TopUserAgents = results
+		mu.Unlock()
+		return nil
+	})
+
+	// 5. Top attacked URIs
+	g.Go(func() error {
+		uriLogType := "modsec"
+		if filter != nil && filter.LogType != nil && *filter.LogType == "access" {
+			uriLogType = "access"
+		}
+		uriQuery := fmt.Sprintf(`
+			SELECT request_uri, COUNT(*) as count
+			FROM logs_partitioned
+			WHERE log_type = '%s' AND request_uri IS NOT NULL AND %s
+			GROUP BY request_uri
+			ORDER BY count DESC
+			LIMIT 10
+		`, uriLogType, whereClause)
+		rows, err := r.db.QueryContext(gctx, uriQuery, args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		var results []model.URIStat
+		for rows.Next() {
+			var stat model.URIStat
+			if err := rows.Scan(&stat.URI, &stat.Count); err != nil {
+				return err
+			}
+			results = append(results, stat)
+		}
+		mu.Lock()
+		stats.TopAttackedURIs = results
+		mu.Unlock()
+		return nil
+	})
+
+	// 6. Top rule IDs
+	g.Go(func() error {
+		ruleQuery := fmt.Sprintf(`
+			SELECT rule_id, COALESCE(rule_message, 'Unknown'), COUNT(*) as count
+			FROM logs_partitioned
+			WHERE log_type = 'modsec' AND rule_id IS NOT NULL AND %s
+			GROUP BY rule_id, rule_message
+			ORDER BY count DESC
+			LIMIT 10
+		`, whereClause)
+		rows, err := r.db.QueryContext(gctx, ruleQuery, args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		var results []model.RuleIDStat
+		for rows.Next() {
+			var stat model.RuleIDStat
+			if err := rows.Scan(&stat.RuleID, &stat.Message, &stat.Count); err != nil {
+				return err
+			}
+			results = append(results, stat)
+		}
+		mu.Lock()
+		stats.TopRuleIDs = results
+		mu.Unlock()
+		return nil
+	})
+
+	// 7. Top countries
+	g.Go(func() error {
+		countryQuery := fmt.Sprintf(`
+			SELECT
+				COALESCE(geo_country_code, 'Unknown') as country_code,
+				COALESCE(geo_country, 'Unknown') as country,
+				COUNT(*) as count
+			FROM logs_partitioned
+			WHERE %s
+			GROUP BY geo_country_code, geo_country
+			ORDER BY count DESC
+			LIMIT 10
+		`, whereClause)
+		rows, err := r.db.QueryContext(gctx, countryQuery, args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		var results []model.CountryStat
+		for rows.Next() {
+			var stat model.CountryStat
+			if err := rows.Scan(&stat.CountryCode, &stat.Country, &stat.Count); err != nil {
+				return err
+			}
+			results = append(results, stat)
+		}
+		mu.Lock()
+		stats.TopCountries = results
+		mu.Unlock()
+		return nil
+	})
+
+	if err := g.Wait(); err != nil {
+		return nil, fmt.Errorf("failed to get log stats: %w", err)
 	}
 
 	// Cache the result
@@ -1280,10 +1286,24 @@ func (r *LogRepository) createDefaultSettings(ctx context.Context) (*model.LogSe
 	return &settings, nil
 }
 
+// autocomplete cache TTL
+const autocompleteCacheTTL = 1 * time.Hour
+
 // GetDistinctHosts returns unique hosts from logs for autocomplete
 func (r *LogRepository) GetDistinctHosts(ctx context.Context, search string, limit int) ([]string, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
+	}
+
+	// Cache initial load (no search term)
+	if search == "" && r.cache != nil {
+		var cached []string
+		if err := r.cache.Get(ctx, "autocomplete:hosts", &cached); err == nil {
+			if len(cached) > limit {
+				return cached[:limit], nil
+			}
+			return cached, nil
+		}
 	}
 
 	query := `
@@ -1318,6 +1338,10 @@ func (r *LogRepository) GetDistinctHosts(ctx context.Context, search string, lim
 		}
 		hosts = append(hosts, host)
 	}
+
+	if search == "" && r.cache != nil {
+		r.cache.Set(ctx, "autocomplete:hosts", hosts, autocompleteCacheTTL)
+	}
 	return hosts, nil
 }
 
@@ -1325,6 +1349,16 @@ func (r *LogRepository) GetDistinctHosts(ctx context.Context, search string, lim
 func (r *LogRepository) GetDistinctIPs(ctx context.Context, search string, limit int) ([]string, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
+	}
+
+	if search == "" && r.cache != nil {
+		var cached []string
+		if err := r.cache.Get(ctx, "autocomplete:ips", &cached); err == nil {
+			if len(cached) > limit {
+				return cached[:limit], nil
+			}
+			return cached, nil
+		}
 	}
 
 	// Use host() function to get IP without /32 suffix
@@ -1360,6 +1394,10 @@ func (r *LogRepository) GetDistinctIPs(ctx context.Context, search string, limit
 		}
 		ips = append(ips, ip)
 	}
+
+	if search == "" && r.cache != nil {
+		r.cache.Set(ctx, "autocomplete:ips", ips, autocompleteCacheTTL)
+	}
 	return ips, nil
 }
 
@@ -1367,6 +1405,16 @@ func (r *LogRepository) GetDistinctIPs(ctx context.Context, search string, limit
 func (r *LogRepository) GetDistinctUserAgents(ctx context.Context, search string, limit int) ([]string, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
+	}
+
+	if search == "" && r.cache != nil {
+		var cached []string
+		if err := r.cache.Get(ctx, "autocomplete:user_agents", &cached); err == nil {
+			if len(cached) > limit {
+				return cached[:limit], nil
+			}
+			return cached, nil
+		}
 	}
 
 	query := `
@@ -1401,11 +1449,22 @@ func (r *LogRepository) GetDistinctUserAgents(ctx context.Context, search string
 		}
 		agents = append(agents, agent)
 	}
+
+	if search == "" && r.cache != nil {
+		r.cache.Set(ctx, "autocomplete:user_agents", agents, autocompleteCacheTTL)
+	}
 	return agents, nil
 }
 
 // GetDistinctCountries returns unique country codes with counts from logs
 func (r *LogRepository) GetDistinctCountries(ctx context.Context) ([]model.CountryStat, error) {
+	if r.cache != nil {
+		var cached []model.CountryStat
+		if err := r.cache.Get(ctx, "autocomplete:countries", &cached); err == nil {
+			return cached, nil
+		}
+	}
+
 	query := `
 		SELECT geo_country_code, geo_country, COUNT(*) as count
 		FROM logs_partitioned
@@ -1434,6 +1493,10 @@ func (r *LogRepository) GetDistinctCountries(ctx context.Context) ([]model.Count
 		}
 		countries = append(countries, stat)
 	}
+
+	if r.cache != nil {
+		r.cache.Set(ctx, "autocomplete:countries", countries, autocompleteCacheTTL)
+	}
 	return countries, nil
 }
 
@@ -1441,6 +1504,16 @@ func (r *LogRepository) GetDistinctCountries(ctx context.Context) ([]model.Count
 func (r *LogRepository) GetDistinctURIs(ctx context.Context, search string, limit int) ([]string, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
+	}
+
+	if search == "" && r.cache != nil {
+		var cached []string
+		if err := r.cache.Get(ctx, "autocomplete:uris", &cached); err == nil {
+			if len(cached) > limit {
+				return cached[:limit], nil
+			}
+			return cached, nil
+		}
 	}
 
 	query := `
@@ -1477,11 +1550,22 @@ func (r *LogRepository) GetDistinctURIs(ctx context.Context, search string, limi
 		}
 		uris = append(uris, uri)
 	}
+
+	if search == "" && r.cache != nil {
+		r.cache.Set(ctx, "autocomplete:uris", uris, autocompleteCacheTTL)
+	}
 	return uris, nil
 }
 
 // GetDistinctMethods returns unique HTTP methods from logs
 func (r *LogRepository) GetDistinctMethods(ctx context.Context) ([]string, error) {
+	if r.cache != nil {
+		var cached []string
+		if err := r.cache.Get(ctx, "autocomplete:methods", &cached); err == nil {
+			return cached, nil
+		}
+	}
+
 	query := `
 		SELECT DISTINCT request_method
 		FROM logs_partitioned
@@ -1503,6 +1587,10 @@ func (r *LogRepository) GetDistinctMethods(ctx context.Context) ([]string, error
 			return nil, err
 		}
 		methods = append(methods, method)
+	}
+
+	if r.cache != nil {
+		r.cache.Set(ctx, "autocomplete:methods", methods, autocompleteCacheTTL)
 	}
 	return methods, nil
 }

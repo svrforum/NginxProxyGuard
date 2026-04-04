@@ -48,7 +48,7 @@ export default function BackupManager() {
   const { data: backups, isLoading } = useQuery({
     queryKey: ['backups'],
     queryFn: () => listBackups(1, 50),
-    refetchInterval: 5000, // Refresh to check backup status
+    refetchInterval: 15000, // Refresh to check backup status
   });
 
   const { data: stats } = useQuery({
