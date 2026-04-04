@@ -1855,6 +1855,11 @@ CREATE INDEX IF NOT EXISTS idx_logs_part_block_reason_ts ON ONLY public.logs_par
 CREATE INDEX IF NOT EXISTS idx_logs_part_client_ip ON ONLY public.logs_partitioned USING btree (client_ip);
 CREATE INDEX IF NOT EXISTS idx_logs_part_created_at ON ONLY public.logs_partitioned USING btree (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_logs_part_status_code ON ONLY public.logs_partitioned USING btree (status_code) WHERE (status_code IS NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_logs_part_host_ts ON ONLY public.logs_partitioned USING btree (host, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS idx_logs_part_status_ts ON ONLY public.logs_partitioned USING btree (status_code, "timestamp" DESC) WHERE (status_code IS NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_logs_part_proxy_host_ts ON ONLY public.logs_partitioned USING btree (proxy_host_id, "timestamp" DESC) WHERE (proxy_host_id IS NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_logs_part_geo_ts ON ONLY public.logs_partitioned USING btree (geo_country_code, "timestamp" DESC) WHERE (geo_country_code IS NOT NULL AND (geo_country_code)::text <> ''::text);
+CREATE INDEX IF NOT EXISTS idx_logs_part_type_created ON ONLY public.logs_partitioned USING btree (log_type, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_logs_proxy_host_id ON public.logs USING btree (proxy_host_id) WHERE (proxy_host_id IS NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_logs_request_uri_trgm ON public.logs USING gin (request_uri public.gin_trgm_ops) WHERE (request_uri IS NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_logs_rule_id ON public.logs USING btree (rule_id) WHERE (rule_id IS NOT NULL);
@@ -2422,3 +2427,10 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE INDEX IF NOT EXISTS idx_logs_part_host_trgm ON logs_partitioned USING gin (host gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_logs_part_uri_trgm ON logs_partitioned USING gin (request_uri gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_logs_part_ua_trgm ON logs_partitioned USING gin (http_user_agent gin_trgm_ops);
+
+-- v2.8.0: DB Performance composite indexes for logs_partitioned
+CREATE INDEX IF NOT EXISTS idx_logs_part_host_ts ON logs_partitioned (host, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_logs_part_status_ts ON logs_partitioned (status_code, timestamp DESC) WHERE status_code IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_logs_part_proxy_host_ts ON logs_partitioned (proxy_host_id, timestamp DESC) WHERE proxy_host_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_logs_part_geo_ts ON logs_partitioned (geo_country_code, timestamp DESC) WHERE geo_country_code IS NOT NULL AND geo_country_code != '';
+CREATE INDEX IF NOT EXISTS idx_logs_part_type_created ON logs_partitioned (log_type, created_at DESC);

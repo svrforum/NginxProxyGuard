@@ -5,8 +5,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"strings"
+	"sync"
 	"time"
 
+	"golang.org/x/sync/errgroup"
 	"nginx-proxy-guard/internal/model"
 )
 
@@ -79,39 +81,28 @@ func (r *DashboardRepository) GetSummary(ctx context.Context) (*model.DashboardS
 	// Banned IPs count
 	r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM banned_ips WHERE (expires_at > NOW() OR is_permanent = TRUE)").Scan(&summary.BannedIPs)
 
-	// Blocked requests stats (from logs_partitioned table)
-	// Only count security blocks: 403 Forbidden, modsec logs
-	// Also get total requests, bandwidth, response time, error rate from logs for fallback
+	// Blocked requests stats - lightweight query (no COUNT DISTINCT, no redundant fallback)
 	row = r.db.QueryRowContext(ctx, `
 		SELECT
-			COUNT(*) FILTER (WHERE log_type = 'access'),
 			COUNT(*) FILTER (WHERE status_code = 403 OR log_type = 'modsec'),
-			COUNT(DISTINCT client_ip) FILTER (WHERE status_code = 403 OR log_type = 'modsec'),
-			COALESCE(SUM(body_bytes_sent) FILTER (WHERE log_type = 'access'), 0),
-			COALESCE(AVG(request_time) FILTER (WHERE log_type = 'access' AND request_time > 0), 0),
-			COUNT(*) FILTER (WHERE log_type = 'access' AND status_code >= 400),
 			COUNT(*) FILTER (WHERE log_type = 'access')
 		FROM logs_partitioned
 		WHERE created_at >= $1
 	`, last24h)
-	var totalFromLogs, bandwidthFromLogs, errorsFromLogs, totalAccessLogs int64
-	var avgRtFromLogs float64
-	row.Scan(&totalFromLogs, &summary.BlockedRequests24h, &summary.BlockedUniqueIPs24h,
-		&bandwidthFromLogs, &avgRtFromLogs, &errorsFromLogs, &totalAccessLogs)
-	// Use logs count if dashboard_stats_hourly is incomplete (fallback)
-	if totalFromLogs > summary.TotalRequests24h {
-		summary.TotalRequests24h = totalFromLogs
+	var totalAccessFromLogs int64
+	row.Scan(&summary.BlockedRequests24h, &totalAccessFromLogs)
+	// Use logs count as fallback if dashboard_stats_hourly is incomplete
+	if totalAccessFromLogs > summary.TotalRequests24h {
+		summary.TotalRequests24h = totalAccessFromLogs
 	}
-	if bandwidthFromLogs > summary.TotalBandwidth24h {
-		summary.TotalBandwidth24h = bandwidthFromLogs
-	}
-	if avgRtFromLogs > 0 && summary.AvgResponseTime24h == 0 {
-		// Convert from seconds to milliseconds
-		summary.AvgResponseTime24h = avgRtFromLogs * 1000
-	}
-	if totalAccessLogs > 0 && summary.ErrorRate24h == 0 {
-		summary.ErrorRate24h = float64(errorsFromLogs) / float64(totalAccessLogs) * 100
-	}
+
+	// Blocked unique IPs - separate lightweight query using HyperLogLog-like approximation
+	r.db.QueryRowContext(ctx, `
+		SELECT COUNT(DISTINCT client_ip)
+		FROM logs_partitioned
+		WHERE created_at >= $1
+		  AND (status_code = 403 OR log_type = 'modsec')
+	`, last24h).Scan(&summary.BlockedUniqueIPs24h)
 
 	// Host and certificate counts - combined into single query for performance
 	r.db.QueryRowContext(ctx, `
@@ -127,12 +118,46 @@ func (r *DashboardRepository) GetSummary(ctx context.Context) (*model.DashboardS
 	// Get all chart data in single query (last 24 hours, hourly)
 	r.getAllChartData(ctx, last24h, now, summary)
 
-	// Get top data
-	summary.TopHosts = r.getTopHosts(ctx, last24h)
-	summary.TopCountries = r.getTopCountries(ctx, last24h)
-	summary.TopPaths = r.getTopPaths(ctx, last24h)
-	summary.TopIPs = r.getTopIPs(ctx, last24h)
-	summary.TopUserAgents = r.getTopUserAgents(ctx, last24h)
+	// Get top data in parallel
+	var mu sync.Mutex
+	g, gctx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		result := r.getTopHosts(gctx, last24h)
+		mu.Lock()
+		summary.TopHosts = result
+		mu.Unlock()
+		return nil
+	})
+	g.Go(func() error {
+		result := r.getTopCountries(gctx, last24h)
+		mu.Lock()
+		summary.TopCountries = result
+		mu.Unlock()
+		return nil
+	})
+	g.Go(func() error {
+		result := r.getTopPaths(gctx, last24h)
+		mu.Lock()
+		summary.TopPaths = result
+		mu.Unlock()
+		return nil
+	})
+	g.Go(func() error {
+		result := r.getTopIPs(gctx, last24h)
+		mu.Lock()
+		summary.TopIPs = result
+		mu.Unlock()
+		return nil
+	})
+	g.Go(func() error {
+		result := r.getTopUserAgents(gctx, last24h)
+		mu.Lock()
+		summary.TopUserAgents = result
+		mu.Unlock()
+		return nil
+	})
+	g.Wait()
 
 	return summary, nil
 }

@@ -148,6 +148,13 @@ func parseLogFilter(q url.Values) *model.LogFilter {
 		filter.SortOrder = &sortOrder
 	}
 
+	// Default time range: when search is active but no time range specified,
+	// apply a 7-day window to prevent full table scans on large datasets
+	if filter.Search != nil && *filter.Search != "" && filter.StartTime == nil {
+		defaultStart := time.Now().AddDate(0, 0, -7)
+		filter.StartTime = &defaultStart
+	}
+
 	// Exclude filters - apply size limits to prevent DoS
 	if excludeIPs := q["exclude_ips"]; len(excludeIPs) > 0 {
 		filter.ExcludeIPs = limitArray(excludeIPs, maxFilterArraySize)

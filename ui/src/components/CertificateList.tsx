@@ -63,7 +63,7 @@ export default function CertificateList() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['certificates', currentPage, perPage, searchQuery, sortBy, sortOrder, statusFilter, providerFilter],
     queryFn: () => listCertificates(currentPage, perPage, searchQuery, sortBy, sortOrder, statusFilter, providerFilter),
-    refetchInterval: 5000,
+    refetchInterval: 15000,
   });
 
   const { data: proxyHostsData } = useQuery({

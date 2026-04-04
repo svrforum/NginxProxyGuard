@@ -63,8 +63,8 @@ export function CertificateLogModal({ isOpen = true, certificateId, onClose, onC
     // Initial fetch
     fetchLogs()
 
-    // Start polling every 1 second
-    pollIntervalRef.current = window.setInterval(fetchLogs, 1000)
+    // Start polling every 3 seconds
+    pollIntervalRef.current = window.setInterval(fetchLogs, 3000)
 
     return () => {
       if (pollIntervalRef.current) {
