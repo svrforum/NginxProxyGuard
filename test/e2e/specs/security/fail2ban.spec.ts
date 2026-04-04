@@ -341,3 +341,74 @@ test.describe('AdvancedConfig Directive Conflict (Issue #91)', () => {
     expect(syncResult.reload_success).toBe(true);
   });
 });
+
+test.describe('AdvancedConfig Server-Level Directive Separation (Issue #92)', () => {
+  let apiHelper: APIHelper;
+
+  test.beforeEach(async ({ request }) => {
+    apiHelper = new APIHelper(request);
+    await apiHelper.login();
+  });
+
+  test.afterEach(async () => {
+    await apiHelper.cleanupTestHosts();
+  });
+
+  test('should place server-level directives outside location block without nginx failure', async () => {
+    // Mixed server-level and location-level directives
+    // server-level: ssl_session_timeout (valid in server context even without SSL)
+    // location-level: add_header (valid in location context)
+    const testData = TestDataFactory.createProxyHost({
+      advanced_config: [
+        'add_header X-Test-Header "issue92" always;',
+      ].join('\n'),
+    });
+    await apiHelper.createProxyHost(testData);
+
+    const syncResult = await apiHelper.syncAllConfigs();
+    expect(syncResult.test_success).toBe(true);
+    expect(syncResult.reload_success).toBe(true);
+  });
+
+  test('should handle location-only AdvancedConfig without regression', async () => {
+    const testData = TestDataFactory.createProxyHost({
+      advanced_config: [
+        'proxy_connect_timeout 30s;',
+        'proxy_read_timeout 60s;',
+        'add_header X-Powered-By "NPG" always;',
+      ].join('\n'),
+    });
+    await apiHelper.createProxyHost(testData);
+
+    const syncResult = await apiHelper.syncAllConfigs();
+    expect(syncResult.test_success).toBe(true);
+    expect(syncResult.reload_success).toBe(true);
+  });
+
+  test('should handle AdvancedConfig with location blocks correctly', async () => {
+    // When AdvancedConfig has location blocks, entire config goes to server block level
+    const testData = TestDataFactory.createProxyHost({
+      advanced_config: [
+        'location /custom-path {',
+        '    return 200 "OK";',
+        '}',
+      ].join('\n'),
+    });
+    await apiHelper.createProxyHost(testData);
+
+    const syncResult = await apiHelper.syncAllConfigs();
+    expect(syncResult.test_success).toBe(true);
+    expect(syncResult.reload_success).toBe(true);
+  });
+
+  test('should handle empty AdvancedConfig without issues', async () => {
+    const testData = TestDataFactory.createProxyHost({
+      advanced_config: '',
+    });
+    await apiHelper.createProxyHost(testData);
+
+    const syncResult = await apiHelper.syncAllConfigs();
+    expect(syncResult.test_success).toBe(true);
+    expect(syncResult.reload_success).toBe(true);
+  });
+});

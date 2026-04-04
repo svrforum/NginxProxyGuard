@@ -714,9 +714,9 @@ server {
         return 301 https://$host$request_uri;
     }
 {{end}}
-{{if .Host.AdvancedConfig}}{{if not .AdvancedConfigHasLocation}}
+{{if .AdvancedConfigLocationLevel}}{{if not .AdvancedConfigHasLocation}}
     # Advanced configuration (ForceHTTPS redirect server)
-    {{.Host.AdvancedConfig}}
+    {{.AdvancedConfigLocationLevel}}
 {{end}}{{end}}
     {{else}}
 {{if not .HasCustomLocationRoot}}
@@ -804,9 +804,9 @@ server {
         proxy_cache_use_stale error timeout http_500 http_502 http_503 http_504;
         add_header X-Cache-Status $upstream_cache_status always;
         {{end}}
-{{if .Host.AdvancedConfig}}{{if not .AdvancedConfigHasLocation}}
+{{if .AdvancedConfigLocationLevel}}{{if not .AdvancedConfigHasLocation}}
         # Custom configuration
-        {{.Host.AdvancedConfig}}
+        {{.AdvancedConfigLocationLevel}}
 {{end}}{{end}}
     }
 {{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}
@@ -902,9 +902,9 @@ server {
         proxy_cache_use_stale error timeout http_500 http_502 http_503 http_504;
         add_header X-Cache-Status $upstream_cache_status always;
         {{end}}
-{{if .Host.AdvancedConfig}}{{if not .AdvancedConfigHasLocation}}
+{{if .AdvancedConfigLocationLevel}}{{if not .AdvancedConfigHasLocation}}
         # Custom configuration
-        {{.Host.AdvancedConfig}}
+        {{.AdvancedConfigLocationLevel}}
 {{end}}{{end}}
     }
 {{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}
@@ -1691,9 +1691,9 @@ server {
         add_header Permissions-Policy "{{.SecurityHeaders.PermissionsPolicy}}" always;
         {{end}}
         {{end}}{{end}}
-{{if .Host.AdvancedConfig}}{{if not .AdvancedConfigHasLocation}}
+{{if .AdvancedConfigLocationLevel}}{{if not .AdvancedConfigHasLocation}}
         # Custom configuration
-        {{.Host.AdvancedConfig}}
+        {{.AdvancedConfigLocationLevel}}
 {{end}}{{end}}
     }
 
@@ -1722,7 +1722,10 @@ server {
 {{if .Host.AdvancedConfig}}{{if or .AdvancedConfigHasLocation .HasCustomLocationRoot}}
     # Advanced configuration (server block)
     {{.Host.AdvancedConfig}}
-{{end}}{{end}}
+{{else}}{{if .AdvancedConfigServerLevel}}
+    # Advanced configuration - server level directives
+    {{.AdvancedConfigServerLevel}}
+{{end}}{{end}}{{end}}
 }
 {{end}}
 {{end}}
@@ -1753,6 +1756,8 @@ type ProxyHostConfigData struct {
 	HasCustomLocationRoot         bool                  // True if AdvancedConfig contains a location / block
 	AdvancedConfigHasLocation     bool                  // True if AdvancedConfig contains any location directive
 	AdvancedConfigDirectives      map[string]bool       // Set of directive names present in AdvancedConfig (e.g. "proxy_connect_timeout")
+	AdvancedConfigServerLevel     string                // Server-level directives extracted from AdvancedConfig (ssl_stapling, etc.)
+	AdvancedConfigLocationLevel   string                // Location-level directives extracted from AdvancedConfig
 	GlobalTrustedIPs              []string              // Global trusted IPs that bypass all security (from system settings)
 	HTTPPort                      string                // HTTP listen port (default: 80)
 	HTTPSPort                     string                // HTTPS listen port (default: 443)

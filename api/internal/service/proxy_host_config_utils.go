@@ -124,6 +124,25 @@ func mergeURIBlocks(global *model.GlobalURIBlock, host *model.URIBlock) *model.U
 	return result
 }
 
+// filterBannedByFilterSubscription removes banned IPs that already exist in filter subscription entries.
+// This prevents nginx "duplicate network" errors in geo blocks where both the include file
+// (filter_sub_ips.conf with value=2) and inline BannedIPs (value=1) contain the same IP.
+func filterBannedByFilterSubscription(banned []model.BannedIP, filterSubIPs []string) []model.BannedIP {
+	subSet := make(map[string]bool, len(filterSubIPs))
+	for _, ip := range filterSubIPs {
+		subSet[strings.TrimSpace(ip)] = true
+	}
+
+	filtered := make([]model.BannedIP, 0, len(banned))
+	for _, b := range banned {
+		ip := strings.TrimSpace(b.IPAddress)
+		if !subSet[ip] {
+			filtered = append(filtered, b)
+		}
+	}
+	return filtered
+}
+
 // filterBannedByTrustedIPs removes banned IPs that match any trusted IP or fall within a trusted CIDR.
 func filterBannedByTrustedIPs(banned []model.BannedIP, trusted []string) []model.BannedIP {
 	exactTrusted := make(map[string]bool)
