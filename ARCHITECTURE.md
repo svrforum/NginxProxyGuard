@@ -1,6 +1,6 @@
 # NginxProxyGuard - Architecture Specification
 
-> **Version**: 2.7.4 | **Last Updated**: 2026-04-04
+> **Version**: 2.7.6 | **Last Updated**: 2026-04-06
 > 이 문서는 Claude Code가 개발 시 참조하는 프로젝트 아키텍처 명세서입니다.
 > 새 기능 추가, 버그 수정, 리팩토링 시 이 문서를 기준으로 작업합니다.
 
@@ -265,7 +265,7 @@ var domainNames pq.StringArray    // 읽기
 | `rate_limit.go` | RateLimitRepository | Get, Upsert, Delete, GetFail2ban, UpsertFail2ban, ListBannedIPs, BanIP, UnbanIP |
 | `bot_filter.go` | BotFilterRepository | Get, Upsert, Delete, GetKnownBots |
 | `security_headers.go` | SecurityHeadersRepository | Get, Upsert, Delete |
-| `upstream.go` | UpstreamRepository | Get, Upsert, Delete, GetHealthStatus |
+| `upstream.go` | UpstreamRepository | Get, Upsert, Delete, GetHealthStatus (Upsert/Delete trigger nginx config regeneration) |
 | `log.go` | LogRepository | Create, List, GetStats, GetSettings, Cleanup, GetDistinct* (6) |
 | `redirect_host.go` | RedirectHostRepository | Create, GetByID, List, Update, Delete |
 | `dns_provider.go` | DNSProviderRepository | Create, GetByID, GetDefault, List, Update, Delete |
@@ -452,7 +452,7 @@ ui/src/
 │   ├── proxy-host/                 # 프록시 호스트 폼 (탭 기반)
 │   │   ├── ProxyHostForm.tsx       # 메인 모달 (374줄)
 │   │   ├── hooks/useProxyHostForm.ts # 폼 로직 (665줄)
-│   │   ├── tabs/                   # Basic, SSL, Security, Protection, Performance, Advanced
+│   │   ├── tabs/                   # Basic, SSL, Security, Protection, Performance, Upstream, Advanced
 │   │   └── tabs/security/          # WAF, BotFilter, GeoIP, URIBlock, CloudProvider
 │   ├── log-viewer/                 # 로그 뷰어 (badges, charts, filters, modals)
 │   ├── exploit-rules/              # 익스플로잇 규칙
@@ -560,6 +560,7 @@ ProxyHostForm.tsx (374줄, 모달)
   → tabs/SecurityTab.tsx    ← WAF, Access List, 보안 서브컴포넌트
   → tabs/ProtectionTab.tsx  ← Rate Limit, Fail2ban, URI Block (편집 모드만)
   → tabs/PerformanceTab.tsx ← 캐시, 프록시 버퍼 설정
+  → tabs/UpstreamTab.tsx    ← Upstream/Load Balancing 설정 (편집 모드만)
   → tabs/AdvancedTab.tsx    ← Raw nginx config
   → SaveProgressModal.tsx   ← 저장 진행 상태
 ```
@@ -885,7 +886,7 @@ system_log_level: 'debug','info','warn','error','fatal'
 | GET/PUT/DELETE | `/api/v1/proxy-hosts/:id/bot-filter` | Bot Filter |
 | GET/PUT/DELETE | `/api/v1/proxy-hosts/:id/security-headers` | Security Headers |
 | POST | `/api/v1/proxy-hosts/:id/security-headers/preset/:preset` | 프리셋 적용 |
-| GET/PUT/DELETE | `/api/v1/proxy-hosts/:id/upstream` | Upstream/LB |
+| GET/PUT/DELETE | `/api/v1/proxy-hosts/:id/upstream` | Upstream/LB (Upsert/Delete triggers config regeneration via RegenerateConfigForHost; name validation: alphanumeric+underscore only; server address/port validation) |
 | GET/PUT/DELETE | `/api/v1/proxy-hosts/:id/uri-block` | URI Block |
 | POST/DELETE | `/api/v1/proxy-hosts/:id/uri-block/rules(/:ruleId)` | URI Block 규칙 |
 | GET/POST/PUT/DELETE | `/api/v1/proxy-hosts/:id/geo` | GeoIP 제한 |
