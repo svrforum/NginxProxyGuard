@@ -285,7 +285,7 @@ var domainNames pq.StringArray    // 읽기
 | `backup_import.go` | - | ImportAllData (full DB import) |
 | `ip_ban_history.go` | IPBanHistoryRepository | Create, List, GetByIP, GetStats |
 | `geoip_history.go` | GeoIPHistoryRepository | Create, Update, List, GetLatest |
-| `filter_subscription.go` | FilterSubscriptionRepository | Create, GetByID, List, Update, Delete, CreateEntry, DeleteEntries, ListEntries, CountEnabledSubscriptions, AddHostExclusion, RemoveHostExclusion, ListHostExclusions |
+| `filter_subscription.go` | FilterSubscriptionRepository | Create, GetByID, List, Update, Delete, CreateEntry, DeleteEntries, ListEntries, CountEnabledSubscriptions, AddHostExclusion, RemoveHostExclusion, ListHostExclusions, AddEntryExclusion, RemoveEntryExclusion, ListEntryExclusions |
 | `helpers.go` | - | SQL NULL 변환 헬퍼 (FromNullString, ToNullString, etc.) |
 
 ### 2.8 Nginx Manager
@@ -780,9 +780,10 @@ Tag push (v*) → detect changes (SHA256 per component)
 | `waf_rule_change_events` | WAF 규칙 변경 감사 이력 | proxy_host_id, rule_id, action, created_at |
 | `waf_rule_snapshots` | WAF 설정 스냅샷 | proxy_host_id, created_at |
 | `waf_rule_snapshot_details` | 스냅샷 상세 레코드 | snapshot_id, rule_id |
-| `filter_subscriptions` | 외부 필터 리스트 구독 | name, url, filter_type, format, refresh_interval, enabled |
+| `filter_subscriptions` | 외부 필터 리스트 구독 | name, url, filter_type, format, refresh_interval, enabled, exclude_private_ips |
 | `filter_subscription_entries` | 구독에서 가져온 IP/CIDR/UA 항목 | subscription_id, entry_type, value |
 | `filter_subscription_host_exclusions` | 호스트별 구독 제외 | subscription_id, proxy_host_id |
+| `filter_subscription_entry_exclusions` | 구독 항목별 제외 | subscription_id, value, created_at |
 | `login_attempts` | 로그인 시도 추적 (잠금) | ip_address, username, success, attempted_at |
 
 ### 5.4 Auth/Settings Tables
@@ -948,6 +949,9 @@ system_log_level: 'debug','info','warn','error','fatal'
 | GET | `/api/v1/filter-subscriptions/:id/exclusions` | 호스트 제외 목록 |
 | POST | `/api/v1/filter-subscriptions/:id/exclusions/:hostId` | 호스트 제외 추가 |
 | DELETE | `/api/v1/filter-subscriptions/:id/exclusions/:hostId` | 호스트 제외 해제 |
+| GET | `/api/v1/filter-subscriptions/:id/entry-exclusions` | 항목 제외 목록 |
+| POST | `/api/v1/filter-subscriptions/:id/entry-exclusions` | 항목 제외 추가 |
+| DELETE | `/api/v1/filter-subscriptions/:id/entry-exclusions` | 항목 제외 해제 |
 
 ### 6.9 Dashboard & Settings
 
