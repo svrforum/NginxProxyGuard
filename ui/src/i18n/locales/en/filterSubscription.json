@@ -64,6 +64,13 @@
     "title": "Subscription Settings",
     "exclusions": "Host Exclusions",
     "exclusionDescription": "This filter will not apply to the selected hosts.",
+    "excluded": "Excluded",
+    "excludePrivateIPs": "Exclude Private IP Ranges",
+    "excludePrivateIPsDescription": "Exclude RFC 1918 private IP ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16) from the blocklist."
+  },
+  "entryExclusions": {
+    "exclude": "Exclude",
+    "include": "Include",
     "excluded": "Excluded"
   },
   "actions": {
