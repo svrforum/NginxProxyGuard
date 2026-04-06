@@ -220,6 +220,58 @@ func (h *FilterSubscriptionHandler) RemoveExclusion(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
+// ListEntryExclusions returns entry exclusions for a subscription
+func (h *FilterSubscriptionHandler) ListEntryExclusions(c echo.Context) error {
+	subscriptionID := c.Param("id")
+
+	exclusions, err := h.service.ListEntryExclusions(c.Request().Context(), subscriptionID)
+	if err != nil {
+		return databaseError(c, "list entry exclusions", err)
+	}
+
+	return c.JSON(http.StatusOK, exclusions)
+}
+
+// AddEntryExclusion adds an entry exclusion to a subscription
+func (h *FilterSubscriptionHandler) AddEntryExclusion(c echo.Context) error {
+	subscriptionID := c.Param("id")
+
+	var req model.AddEntryExclusionRequest
+	if err := c.Bind(&req); err != nil {
+		return badRequestError(c, "Invalid request body")
+	}
+
+	if req.Value == "" {
+		return badRequestError(c, "value is required")
+	}
+
+	if err := h.service.AddEntryExclusion(c.Request().Context(), subscriptionID, req.Value); err != nil {
+		return databaseError(c, "add entry exclusion", err)
+	}
+
+	return c.NoContent(http.StatusNoContent)
+}
+
+// RemoveEntryExclusion removes an entry exclusion from a subscription
+func (h *FilterSubscriptionHandler) RemoveEntryExclusion(c echo.Context) error {
+	subscriptionID := c.Param("id")
+
+	var req model.AddEntryExclusionRequest
+	if err := c.Bind(&req); err != nil {
+		return badRequestError(c, "Invalid request body")
+	}
+
+	if req.Value == "" {
+		return badRequestError(c, "value query parameter is required")
+	}
+
+	if err := h.service.RemoveEntryExclusion(c.Request().Context(), subscriptionID, req.Value); err != nil {
+		return databaseError(c, "remove entry exclusion", err)
+	}
+
+	return c.NoContent(http.StatusNoContent)
+}
+
 // isConflictError checks if an error indicates a conflict
 func isConflictError(err error) bool {
 	msg := err.Error()

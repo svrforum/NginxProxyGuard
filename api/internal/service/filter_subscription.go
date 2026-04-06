@@ -110,10 +110,16 @@ func (s *FilterSubscriptionService) GetDetail(ctx context.Context, id string) (*
 		return nil, err
 	}
 
+	entryExclusions, err := s.repo.ListEntryExclusions(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
 	return &model.FilterSubscriptionDetail{
 		FilterSubscription: *sub,
 		Entries:            entries,
 		Exclusions:         exclusions,
+		EntryExclusions:    entryExclusions,
 	}, nil
 }
 
@@ -256,8 +262,8 @@ func (s *FilterSubscriptionService) Update(ctx context.Context, id string, req *
 		return nil, err
 	}
 
-	// If enabled state changed, trigger nginx reload
-	if req.Enabled != nil {
+	// If enabled state or exclude_private_ips changed, trigger nginx reload
+	if req.Enabled != nil || req.ExcludePrivateIPs != nil {
 		s.triggerNginxReload()
 	}
 
@@ -367,6 +373,29 @@ func (s *FilterSubscriptionService) AddExclusion(ctx context.Context, subscripti
 // RemoveExclusion removes a host exclusion
 func (s *FilterSubscriptionService) RemoveExclusion(ctx context.Context, subscriptionID, hostID string) error {
 	if err := s.repo.RemoveExclusion(ctx, subscriptionID, hostID); err != nil {
+		return err
+	}
+	s.triggerNginxReload()
+	return nil
+}
+
+// ListEntryExclusions returns entry exclusions for a subscription
+func (s *FilterSubscriptionService) ListEntryExclusions(ctx context.Context, subscriptionID string) ([]model.FilterSubscriptionEntryExclusion, error) {
+	return s.repo.ListEntryExclusions(ctx, subscriptionID)
+}
+
+// AddEntryExclusion adds an entry exclusion
+func (s *FilterSubscriptionService) AddEntryExclusion(ctx context.Context, subscriptionID, value string) error {
+	if err := s.repo.AddEntryExclusion(ctx, subscriptionID, value); err != nil {
+		return err
+	}
+	s.triggerNginxReload()
+	return nil
+}
+
+// RemoveEntryExclusion removes an entry exclusion
+func (s *FilterSubscriptionService) RemoveEntryExclusion(ctx context.Context, subscriptionID, value string) error {
+	if err := s.repo.RemoveEntryExclusion(ctx, subscriptionID, value); err != nil {
 		return err
 	}
 	s.triggerNginxReload()
@@ -698,6 +727,22 @@ func isFilterPrivateIP(ip net.IP) bool {
 	return false
 }
 
+// isPrivateIPOrCIDR checks if a string (IP or CIDR) falls within private ranges
+func isPrivateIPOrCIDR(value string) bool {
+	if strings.Contains(value, "/") {
+		ip, _, err := net.ParseCIDR(value)
+		if err != nil {
+			return false
+		}
+		return isFilterPrivateIP(ip)
+	}
+	ip := net.ParseIP(value)
+	if ip == nil {
+		return false
+	}
+	return isFilterPrivateIP(ip)
+}
+
 // triggerNginxReload regenerates shared filter subscription config files and triggers nginx reload.
 // Instead of regenerating ALL host configs (which duplicated 50k+ entries per host),
 // this writes two shared files (filter_sub_ips.conf, filter_sub_uas.conf) and reloads once.
@@ -753,6 +798,22 @@ func (s *FilterSubscriptionService) regenerateSharedConfigs(ctx context.Context)
 			seen[cidr] = true
 			allIPs = append(allIPs, cidr)
 		}
+	}
+
+	// Filter out private IPs if any enabled subscription has exclude_private_ips=true
+	hasExcludePrivate, err := s.repo.HasExcludePrivateIPsEnabled(ctx)
+	if err != nil {
+		log.Printf("[FilterSubscription] Warning: failed to check exclude_private_ips: %v", err)
+	}
+	if hasExcludePrivate {
+		filteredIPs := make([]string, 0, len(allIPs))
+		for _, ipStr := range allIPs {
+			if isPrivateIPOrCIDR(ipStr) {
+				continue
+			}
+			filteredIPs = append(filteredIPs, ipStr)
+		}
+		allIPs = filteredIPs
 	}
 
 	// Fetch all UA entries

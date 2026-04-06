@@ -847,6 +847,9 @@ func main() {
 			filterSubs.GET("/:id/exclusions", filterSubscriptionHandler.ListExclusions)
 			filterSubs.POST("/:id/exclusions/:hostId", filterSubscriptionHandler.AddExclusion)
 			filterSubs.DELETE("/:id/exclusions/:hostId", filterSubscriptionHandler.RemoveExclusion)
+			filterSubs.GET("/:id/entry-exclusions", filterSubscriptionHandler.ListEntryExclusions)
+			filterSubs.POST("/:id/entry-exclusions", filterSubscriptionHandler.AddEntryExclusion)
+			filterSubs.DELETE("/:id/entry-exclusions", filterSubscriptionHandler.RemoveEntryExclusion)
 		}
 
 		// Test endpoints (Phase 1 + Phase 7)
