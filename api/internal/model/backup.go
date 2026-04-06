@@ -605,16 +605,23 @@ type HostExploitExclusionExport struct {
 
 // FilterSubscriptionExport represents a filter subscription for export
 type FilterSubscriptionExport struct {
-	Name         string                            `json:"name"`
-	Description  string                            `json:"description,omitempty"`
-	URL          string                            `json:"url"`
-	Format       string                            `json:"format"`
-	Type         string                            `json:"type"`
-	Enabled      bool                              `json:"enabled"`
-	RefreshType  string                            `json:"refresh_type"`
-	RefreshValue string                            `json:"refresh_value"`
-	Entries      []FilterSubscriptionEntryExport   `json:"entries,omitempty"`
-	Exclusions   []string                          `json:"exclusion_host_ids,omitempty"`
+	Name              string                                 `json:"name"`
+	Description       string                                 `json:"description,omitempty"`
+	URL               string                                 `json:"url"`
+	Format            string                                 `json:"format"`
+	Type              string                                 `json:"type"`
+	Enabled           bool                                   `json:"enabled"`
+	ExcludePrivateIPs bool                                   `json:"exclude_private_ips"`
+	RefreshType       string                                 `json:"refresh_type"`
+	RefreshValue      string                                 `json:"refresh_value"`
+	Entries           []FilterSubscriptionEntryExport        `json:"entries,omitempty"`
+	Exclusions        []string                               `json:"exclusion_host_ids,omitempty"`
+	EntryExclusions   []FilterSubscriptionEntryExclusionExport `json:"entry_exclusions,omitempty"`
+}
+
+// FilterSubscriptionEntryExclusionExport represents a filter subscription entry exclusion for export
+type FilterSubscriptionEntryExclusionExport struct {
+	Value string `json:"value"`
 }
 
 // FilterSubscriptionEntryExport represents a filter subscription entry for export

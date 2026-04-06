@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 
 	"github.com/lib/pq"
 	"nginx-proxy-guard/internal/model"
@@ -237,6 +238,7 @@ func (r *BackupRepository) clearExistingData(ctx context.Context, tx *sql.Tx) er
 	// Delete in order respecting foreign key constraints
 	// 1. Delete proxy host related tables (they reference proxy_hosts)
 	tables := []string{
+		"filter_subscription_entry_exclusions", // references filter_subscriptions
 		"filter_subscription_host_exclusions", // references filter_subscriptions + proxy_hosts
 		"filter_subscription_entries",         // references filter_subscriptions
 		"filter_subscriptions",
@@ -880,14 +882,14 @@ func (r *BackupRepository) importFilterSubscription(ctx context.Context, tx *sql
 	// Insert subscription
 	var subID string
 	query := `
-		INSERT INTO filter_subscriptions (name, description, url, format, type, enabled, refresh_type, refresh_value, entry_count)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO filter_subscriptions (name, description, url, format, type, enabled, exclude_private_ips, refresh_type, refresh_value, entry_count)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		ON CONFLICT (url) DO NOTHING
 		RETURNING id`
 
 	err := tx.QueryRowContext(ctx, query,
 		fs.Name, fs.Description, fs.URL, fs.Format, fs.Type,
-		fs.Enabled, fs.RefreshType, fs.RefreshValue, len(fs.Entries),
+		fs.Enabled, fs.ExcludePrivateIPs, fs.RefreshType, fs.RefreshValue, len(fs.Entries),
 	).Scan(&subID)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -932,6 +934,14 @@ func (r *BackupRepository) importFilterSubscription(ctx context.Context, tx *sql
 		exclQuery := `INSERT INTO filter_subscription_host_exclusions (subscription_id, proxy_host_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`
 		if _, err := tx.ExecContext(ctx, exclQuery, subID, newID); err != nil {
 			return fmt.Errorf("failed to insert filter subscription exclusion: %w", err)
+		}
+	}
+
+	// Insert entry exclusions
+	entryExclQuery := `INSERT INTO filter_subscription_entry_exclusions (subscription_id, value) VALUES ($1, $2) ON CONFLICT DO NOTHING`
+	for _, excl := range fs.EntryExclusions {
+		if _, err := tx.ExecContext(ctx, entryExclQuery, subID, excl.Value); err != nil {
+			log.Printf("[Backup Import] Warning: failed to import entry exclusion %s: %v", excl.Value, err)
 		}
 	}
 

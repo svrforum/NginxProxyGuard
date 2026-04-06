@@ -1025,7 +1025,7 @@ func (r *BackupRepository) exportGlobalChallengeConfig(ctx context.Context) (*mo
 func (r *BackupRepository) exportFilterSubscriptions(ctx context.Context) ([]model.FilterSubscriptionExport, error) {
 	query := `
 		SELECT id, name, COALESCE(description, '') as description, url, format, type,
-		       enabled, refresh_type, refresh_value
+		       enabled, COALESCE(exclude_private_ips, false), refresh_type, refresh_value
 		FROM filter_subscriptions
 		ORDER BY created_at`
 
@@ -1040,7 +1040,7 @@ func (r *BackupRepository) exportFilterSubscriptions(ctx context.Context) ([]mod
 		var sub model.FilterSubscriptionExport
 		var id string
 		if err := rows.Scan(&id, &sub.Name, &sub.Description, &sub.URL, &sub.Format, &sub.Type,
-			&sub.Enabled, &sub.RefreshType, &sub.RefreshValue); err != nil {
+			&sub.Enabled, &sub.ExcludePrivateIPs, &sub.RefreshType, &sub.RefreshValue); err != nil {
 			return nil, fmt.Errorf("failed to scan filter subscription: %w", err)
 		}
 
@@ -1083,6 +1083,26 @@ func (r *BackupRepository) exportFilterSubscriptions(ctx context.Context) ([]mod
 			return nil, fmt.Errorf("error iterating exclusions for subscription %s: %w", sub.Name, err)
 		}
 		exclRows.Close()
+
+		// Export entry exclusions
+		entryExclQuery := `SELECT value FROM filter_subscription_entry_exclusions WHERE subscription_id = $1`
+		entryExclRows, err := r.db.QueryContext(ctx, entryExclQuery, id)
+		if err != nil {
+			return nil, fmt.Errorf("failed to export entry exclusions for subscription %s: %w", sub.Name, err)
+		}
+		for entryExclRows.Next() {
+			var excl model.FilterSubscriptionEntryExclusionExport
+			if err := entryExclRows.Scan(&excl.Value); err != nil {
+				entryExclRows.Close()
+				return nil, err
+			}
+			sub.EntryExclusions = append(sub.EntryExclusions, excl)
+		}
+		if err := entryExclRows.Err(); err != nil {
+			entryExclRows.Close()
+			return nil, fmt.Errorf("error iterating entry exclusions for subscription %s: %w", sub.Name, err)
+		}
+		entryExclRows.Close()
 
 		subs = append(subs, sub)
 	}
