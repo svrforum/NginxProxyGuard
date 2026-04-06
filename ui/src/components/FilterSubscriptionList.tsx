@@ -12,6 +12,8 @@ import {
   fetchExclusions,
   addExclusion,
   removeExclusion,
+  addEntryExclusion,
+  removeEntryExclusion,
 } from '../api/filter-subscriptions';
 import { fetchProxyHosts } from '../api/proxy-hosts';
 import type {
@@ -138,7 +140,16 @@ function RefreshSelector({
   );
 }
 
-function EntriesPanel({ entries, isLoading, searchQuery }: { entries: { value: string; reason?: string }[]; isLoading?: boolean; searchQuery?: string }) {
+function EntriesPanel({
+  entries, isLoading, searchQuery, entryExclusions, onToggleExclusion, isTogglingExclusion,
+}: {
+  entries: { value: string; reason?: string }[];
+  isLoading?: boolean;
+  searchQuery?: string;
+  entryExclusions?: Set<string>;
+  onToggleExclusion?: (value: string) => void;
+  isTogglingExclusion?: boolean;
+}) {
   const { t } = useTranslation('filterSubscription');
   if (isLoading) return <div className="text-xs text-slate-400 py-2 pl-4">...</div>;
   if (!entries.length) return <div className="text-xs text-slate-400 py-2 pl-4">{t('list.noEntries')}</div>;
@@ -156,14 +167,32 @@ function EntriesPanel({ entries, isLoading, searchQuery }: { entries: { value: s
       )}
       <table className="w-full text-xs">
         <tbody>
-          {filtered.slice(0, 500).map((entry, i) => (
-            <tr key={i} className="border-b border-slate-200 dark:border-slate-700 last:border-0">
-              <td className="px-3 py-1.5 font-mono text-slate-700 dark:text-slate-300 whitespace-nowrap">{entry.value}</td>
-              <td className="px-3 py-1.5 text-slate-500 dark:text-slate-400">{entry.reason || '-'}</td>
-            </tr>
-          ))}
+          {filtered.slice(0, 500).map((entry, i) => {
+            const isExcluded = entryExclusions?.has(entry.value) ?? false;
+            return (
+              <tr key={i} className={`border-b border-slate-200 dark:border-slate-700 last:border-0 ${isExcluded ? 'opacity-50' : ''}`}>
+                <td className={`px-3 py-1.5 font-mono text-slate-700 dark:text-slate-300 whitespace-nowrap ${isExcluded ? 'line-through' : ''}`}>{entry.value}</td>
+                <td className="px-3 py-1.5 text-slate-500 dark:text-slate-400">{entry.reason || '-'}</td>
+                {onToggleExclusion && (
+                  <td className="px-3 py-1.5 text-right">
+                    <button
+                      onClick={() => onToggleExclusion(entry.value)}
+                      disabled={isTogglingExclusion}
+                      className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
+                        isExcluded
+                          ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-300'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-400'
+                      }`}
+                    >
+                      {isExcluded ? t('entryExclusions.include') : t('entryExclusions.exclude')}
+                    </button>
+                  </td>
+                )}
+              </tr>
+            );
+          })}
           {filtered.length > 500 && (
-            <tr><td colSpan={2} className="px-3 py-1.5 text-center text-slate-400">... +{filtered.length - 500} more</td></tr>
+            <tr><td colSpan={onToggleExclusion ? 3 : 2} className="px-3 py-1.5 text-center text-slate-400">... +{filtered.length - 500} more</td></tr>
           )}
         </tbody>
       </table>
@@ -231,6 +260,19 @@ export default function FilterSubscriptionList() {
       queryClient.invalidateQueries({ queryKey: ['filterSubscriptions'] });
     },
   });
+
+  const entryExclusionMutation = useMutation({
+    mutationFn: ({ subscriptionId, value, excluded }: { subscriptionId: string; value: string; excluded: boolean }) =>
+      excluded ? removeEntryExclusion(subscriptionId, value) : addEntryExclusion(subscriptionId, value),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['filterSubscriptionDetail'] });
+    },
+  });
+
+  const entryExclusionSet = useMemo(() => {
+    if (!expandedSubDetail?.entry_exclusions) return new Set<string>();
+    return new Set(expandedSubDetail.entry_exclusions.map(e => e.value));
+  }, [expandedSubDetail]);
 
   const subs = subsData?.data || [];
   const subscribedUrls = useMemo(() => new Set(subs.map(s => s.url)), [subs]);
@@ -425,6 +467,12 @@ export default function FilterSubscriptionList() {
                       entries={expandedSubDetail?.entries || []}
                       isLoading={detailLoading}
                       searchQuery={entrySearch}
+                      entryExclusions={entryExclusionSet}
+                      onToggleExclusion={(value) => {
+                        const isExcluded = entryExclusionSet.has(value);
+                        entryExclusionMutation.mutate({ subscriptionId: expandedSub!, value, excluded: isExcluded });
+                      }}
+                      isTogglingExclusion={entryExclusionMutation.isPending}
                     />
                   </div>
                 )}
@@ -477,6 +525,7 @@ function SettingsModal({ subscription, onClose }: { subscription: FilterSubscrip
   const queryClient = useQueryClient();
   const [name, setName] = useState(subscription.name);
   const [enabled, setEnabled] = useState(subscription.enabled);
+  const [excludePrivateIPs, setExcludePrivateIPs] = useState(subscription.exclude_private_ips);
   const [refreshType, setRefreshType] = useState(subscription.refresh_type);
   const [refreshValue, setRefreshValue] = useState(subscription.refresh_value);
 
@@ -516,6 +565,7 @@ function SettingsModal({ subscription, onClose }: { subscription: FilterSubscrip
       enabled: enabled !== subscription.enabled ? enabled : undefined,
       refresh_type: refreshType !== subscription.refresh_type ? refreshType : undefined,
       refresh_value: refreshValue !== subscription.refresh_value ? refreshValue : undefined,
+      exclude_private_ips: excludePrivateIPs !== subscription.exclude_private_ips ? excludePrivateIPs : undefined,
     });
   };
 
@@ -539,6 +589,16 @@ function SettingsModal({ subscription, onClose }: { subscription: FilterSubscrip
             <button onClick={() => setEnabled(!enabled)}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${enabled ? 'bg-cyan-600' : 'bg-slate-300 dark:bg-slate-600'}`}>
               <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('settings.excludePrivateIPs')}</span>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{t('settings.excludePrivateIPsDescription')}</p>
+            </div>
+            <button onClick={() => setExcludePrivateIPs(!excludePrivateIPs)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 ${excludePrivateIPs ? 'bg-cyan-600' : 'bg-slate-300 dark:bg-slate-600'}`}>
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${excludePrivateIPs ? 'translate-x-6' : 'translate-x-1'}`} />
             </button>
           </div>
           <div>

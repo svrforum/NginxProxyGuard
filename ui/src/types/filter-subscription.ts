@@ -12,6 +12,7 @@ export interface FilterSubscription {
   last_success_at?: string;
   last_error?: string;
   entry_count: number;
+  exclude_private_ips: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -31,9 +32,17 @@ export interface FilterSubscriptionHostExclusion {
   created_at: string;
 }
 
+export interface FilterSubscriptionEntryExclusion {
+  id: string;
+  subscription_id: string;
+  value: string;
+  created_at: string;
+}
+
 export interface FilterSubscriptionDetail extends FilterSubscription {
   entries: FilterSubscriptionEntry[];
   exclusions: FilterSubscriptionHostExclusion[];
+  entry_exclusions: FilterSubscriptionEntryExclusion[];
 }
 
 export interface FilterSubscriptionListResponse {
@@ -57,6 +66,7 @@ export interface UpdateFilterSubscriptionRequest {
   enabled?: boolean;
   refresh_type?: string;
   refresh_value?: string;
+  exclude_private_ips?: boolean;
 }
 
 export interface CatalogSubscribeRequest {

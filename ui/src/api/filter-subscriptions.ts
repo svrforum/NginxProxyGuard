@@ -3,12 +3,13 @@ import type {
   FilterSubscriptionDetail,
   FilterSubscriptionListResponse,
   FilterSubscriptionHostExclusion,
+  FilterSubscriptionEntryExclusion,
   CreateFilterSubscriptionRequest,
   UpdateFilterSubscriptionRequest,
   CatalogSubscribeRequest,
   FilterCatalog,
 } from '../types/filter-subscription'
-import { apiGet, apiPost, apiPut, apiDelete } from './client'
+import { apiGet, apiPost, apiPut, apiDelete, getAuthHeaders } from './client'
 
 const API_BASE = '/api/v1/filter-subscriptions'
 
@@ -76,4 +77,32 @@ export async function removeExclusion(
   hostId: string
 ): Promise<void> {
   return apiDelete(`${API_BASE}/${subscriptionId}/exclusions/${hostId}`)
+}
+
+export async function fetchEntryExclusions(
+  subscriptionId: string
+): Promise<FilterSubscriptionEntryExclusion[]> {
+  return apiGet<FilterSubscriptionEntryExclusion[]>(`${API_BASE}/${subscriptionId}/entry-exclusions`)
+}
+
+export async function addEntryExclusion(
+  subscriptionId: string,
+  value: string
+): Promise<void> {
+  await apiPost(`${API_BASE}/${subscriptionId}/entry-exclusions`, { value })
+}
+
+export async function removeEntryExclusion(
+  subscriptionId: string,
+  value: string
+): Promise<void> {
+  const resp = await fetch(`${API_BASE}/${subscriptionId}/entry-exclusions`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ value }),
+  })
+  if (!resp.ok) {
+    const error = await resp.json().catch(() => ({ error: 'Unknown error' }))
+    throw new Error(error.error || `Failed to remove entry exclusion: ${resp.status}`)
+  }
 }
