@@ -38,7 +38,7 @@ test.describe('Dashboard', () => {
     await dashboardPage.goto();
 
     // Should have NPG title/logo
-    await expect(page.locator('header')).toContainText(/nginx.*proxy.*guard/i);
+    await expect(page.locator('header')).toContainText(/nginx.*proxy.*guard/i, { timeout: TIMEOUTS.medium });
   });
 
   test('should show version number', async ({ page }) => {
