@@ -57,6 +57,7 @@ export const API_ENDPOINTS = {
 
   // Settings
   settingsGlobal: '/api/v1/settings',
+  systemSettings: '/api/v1/system-settings',
   settingsBackups: '/api/v1/backups',
   settingsCaptcha: '/api/v1/settings',
   settingsGeoip: '/api/v1/settings',
