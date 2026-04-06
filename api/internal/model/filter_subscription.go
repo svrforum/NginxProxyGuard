@@ -15,9 +15,10 @@ type FilterSubscription struct {
 	LastFetchedAt *time.Time `json:"last_fetched_at,omitempty"`
 	LastSuccessAt *time.Time `json:"last_success_at,omitempty"`
 	LastError     *string    `json:"last_error,omitempty"`
-	EntryCount    int        `json:"entry_count"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
+	EntryCount        int        `json:"entry_count"`
+	ExcludePrivateIPs bool       `json:"exclude_private_ips"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
 }
 
 type FilterSubscriptionEntry struct {
@@ -35,6 +36,17 @@ type FilterSubscriptionHostExclusion struct {
 	CreatedAt      time.Time `json:"created_at"`
 }
 
+type FilterSubscriptionEntryExclusion struct {
+	ID             string    `json:"id"`
+	SubscriptionID string    `json:"subscription_id"`
+	Value          string    `json:"value"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+type AddEntryExclusionRequest struct {
+	Value string `json:"value"`
+}
+
 type CreateFilterSubscriptionRequest struct {
 	URL          string `json:"url"`
 	Name         string `json:"name,omitempty"`
@@ -47,7 +59,8 @@ type UpdateFilterSubscriptionRequest struct {
 	Name         *string `json:"name,omitempty"`
 	Enabled      *bool   `json:"enabled,omitempty"`
 	RefreshType  *string `json:"refresh_type,omitempty"`
-	RefreshValue *string `json:"refresh_value,omitempty"`
+	RefreshValue      *string `json:"refresh_value,omitempty"`
+	ExcludePrivateIPs *bool   `json:"exclude_private_ips,omitempty"`
 }
 
 type CatalogSubscribeRequest struct {
@@ -66,8 +79,9 @@ type FilterSubscriptionListResponse struct {
 
 type FilterSubscriptionDetail struct {
 	FilterSubscription
-	Entries    []FilterSubscriptionEntry         `json:"entries"`
-	Exclusions []FilterSubscriptionHostExclusion `json:"exclusions"`
+	Entries         []FilterSubscriptionEntry          `json:"entries"`
+	Exclusions      []FilterSubscriptionHostExclusion  `json:"exclusions"`
+	EntryExclusions []FilterSubscriptionEntryExclusion `json:"entry_exclusions"`
 }
 
 type FilterCatalog struct {

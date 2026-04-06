@@ -2109,6 +2109,7 @@ CREATE TABLE IF NOT EXISTS public.filter_subscriptions (
     last_success_at timestamp with time zone,
     last_error text,
     entry_count integer DEFAULT 0,
+    exclude_private_ips boolean DEFAULT false,
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now()
 );
@@ -2134,6 +2135,16 @@ CREATE TABLE IF NOT EXISTS public.filter_subscription_host_exclusions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_fshe_proxy_host ON public.filter_subscription_host_exclusions(proxy_host_id);
+
+CREATE TABLE IF NOT EXISTS public.filter_subscription_entry_exclusions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    subscription_id uuid NOT NULL REFERENCES public.filter_subscriptions(id) ON DELETE CASCADE,
+    value text NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    UNIQUE(subscription_id, value)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fsee_subscription ON public.filter_subscription_entry_exclusions(subscription_id);
 
 -- ============================================================================
 -- UPGRADE SECTION: Add new columns for existing installations
@@ -2181,6 +2192,7 @@ CREATE TABLE IF NOT EXISTS public.filter_subscriptions (
     last_success_at timestamp with time zone,
     last_error text,
     entry_count integer DEFAULT 0,
+    exclude_private_ips boolean DEFAULT false,
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now()
 );
@@ -2206,6 +2218,19 @@ CREATE TABLE IF NOT EXISTS public.filter_subscription_host_exclusions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_fshe_proxy_host ON public.filter_subscription_host_exclusions(proxy_host_id);
+
+-- Filter subscription entry exclusions (v2.8.0+)
+CREATE TABLE IF NOT EXISTS public.filter_subscription_entry_exclusions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    subscription_id uuid NOT NULL REFERENCES public.filter_subscriptions(id) ON DELETE CASCADE,
+    value text NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    UNIQUE(subscription_id, value)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fsee_subscription ON public.filter_subscription_entry_exclusions(subscription_id);
+
+ALTER TABLE public.filter_subscriptions ADD COLUMN IF NOT EXISTS exclude_private_ips boolean DEFAULT false;
 
 -- ============================================================================
 -- BUG FIXES (v1.3.9+)

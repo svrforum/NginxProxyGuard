@@ -34,7 +34,8 @@ func (r *FilterSubscriptionRepository) List(ctx context.Context, page, perPage i
 		SELECT id, name, COALESCE(description, '') as description, url, format, type,
 		       enabled, refresh_type, refresh_value,
 		       last_fetched_at, last_success_at, last_error,
-		       entry_count, created_at, updated_at
+		       entry_count, COALESCE(exclude_private_ips, false) as exclude_private_ips,
+		       created_at, updated_at
 		FROM filter_subscriptions
 		ORDER BY created_at DESC
 		LIMIT $1 OFFSET $2`
@@ -52,7 +53,7 @@ func (r *FilterSubscriptionRepository) List(ctx context.Context, page, perPage i
 			&sub.ID, &sub.Name, &sub.Description, &sub.URL, &sub.Format, &sub.Type,
 			&sub.Enabled, &sub.RefreshType, &sub.RefreshValue,
 			&sub.LastFetchedAt, &sub.LastSuccessAt, &sub.LastError,
-			&sub.EntryCount, &sub.CreatedAt, &sub.UpdatedAt,
+			&sub.EntryCount, &sub.ExcludePrivateIPs, &sub.CreatedAt, &sub.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan filter subscription: %w", err)
 		}
@@ -74,7 +75,8 @@ func (r *FilterSubscriptionRepository) GetByID(ctx context.Context, id string) (
 		SELECT id, name, COALESCE(description, '') as description, url, format, type,
 		       enabled, refresh_type, refresh_value,
 		       last_fetched_at, last_success_at, last_error,
-		       entry_count, created_at, updated_at
+		       entry_count, COALESCE(exclude_private_ips, false) as exclude_private_ips,
+		       created_at, updated_at
 		FROM filter_subscriptions
 		WHERE id = $1`
 
@@ -83,7 +85,7 @@ func (r *FilterSubscriptionRepository) GetByID(ctx context.Context, id string) (
 		&sub.ID, &sub.Name, &sub.Description, &sub.URL, &sub.Format, &sub.Type,
 		&sub.Enabled, &sub.RefreshType, &sub.RefreshValue,
 		&sub.LastFetchedAt, &sub.LastSuccessAt, &sub.LastError,
-		&sub.EntryCount, &sub.CreatedAt, &sub.UpdatedAt,
+		&sub.EntryCount, &sub.ExcludePrivateIPs, &sub.CreatedAt, &sub.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -100,7 +102,8 @@ func (r *FilterSubscriptionRepository) GetByURL(ctx context.Context, url string)
 		SELECT id, name, COALESCE(description, '') as description, url, format, type,
 		       enabled, refresh_type, refresh_value,
 		       last_fetched_at, last_success_at, last_error,
-		       entry_count, created_at, updated_at
+		       entry_count, COALESCE(exclude_private_ips, false) as exclude_private_ips,
+		       created_at, updated_at
 		FROM filter_subscriptions
 		WHERE url = $1`
 
@@ -109,7 +112,7 @@ func (r *FilterSubscriptionRepository) GetByURL(ctx context.Context, url string)
 		&sub.ID, &sub.Name, &sub.Description, &sub.URL, &sub.Format, &sub.Type,
 		&sub.Enabled, &sub.RefreshType, &sub.RefreshValue,
 		&sub.LastFetchedAt, &sub.LastSuccessAt, &sub.LastError,
-		&sub.EntryCount, &sub.CreatedAt, &sub.UpdatedAt,
+		&sub.EntryCount, &sub.ExcludePrivateIPs, &sub.CreatedAt, &sub.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -123,13 +126,13 @@ func (r *FilterSubscriptionRepository) GetByURL(ctx context.Context, url string)
 // Create creates a new filter subscription
 func (r *FilterSubscriptionRepository) Create(ctx context.Context, sub *model.FilterSubscription) (*model.FilterSubscription, error) {
 	query := `
-		INSERT INTO filter_subscriptions (name, description, url, format, type, enabled, refresh_type, refresh_value, entry_count)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO filter_subscriptions (name, description, url, format, type, enabled, refresh_type, refresh_value, entry_count, exclude_private_ips)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING id, created_at, updated_at`
 
 	err := r.db.QueryRowContext(ctx, query,
 		sub.Name, sub.Description, sub.URL, sub.Format, sub.Type,
-		sub.Enabled, sub.RefreshType, sub.RefreshValue, sub.EntryCount,
+		sub.Enabled, sub.RefreshType, sub.RefreshValue, sub.EntryCount, sub.ExcludePrivateIPs,
 	).Scan(&sub.ID, &sub.CreatedAt, &sub.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create filter subscription: %w", err)
@@ -163,6 +166,11 @@ func (r *FilterSubscriptionRepository) Update(ctx context.Context, id string, re
 		args = append(args, *req.RefreshValue)
 		argIndex++
 	}
+	if req.ExcludePrivateIPs != nil {
+		setClauses = append(setClauses, fmt.Sprintf("exclude_private_ips = $%d", argIndex))
+		args = append(args, *req.ExcludePrivateIPs)
+		argIndex++
+	}
 
 	if len(args) == 0 {
 		return r.GetByID(ctx, id)
@@ -176,7 +184,8 @@ func (r *FilterSubscriptionRepository) Update(ctx context.Context, id string, re
 		RETURNING id, name, COALESCE(description, '') as description, url, format, type,
 		          enabled, refresh_type, refresh_value,
 		          last_fetched_at, last_success_at, last_error,
-		          entry_count, created_at, updated_at`,
+		          entry_count, COALESCE(exclude_private_ips, false) as exclude_private_ips,
+		          created_at, updated_at`,
 		joinStrings(setClauses, ", "), argIndex)
 
 	var sub model.FilterSubscription
@@ -184,7 +193,7 @@ func (r *FilterSubscriptionRepository) Update(ctx context.Context, id string, re
 		&sub.ID, &sub.Name, &sub.Description, &sub.URL, &sub.Format, &sub.Type,
 		&sub.Enabled, &sub.RefreshType, &sub.RefreshValue,
 		&sub.LastFetchedAt, &sub.LastSuccessAt, &sub.LastError,
-		&sub.EntryCount, &sub.CreatedAt, &sub.UpdatedAt,
+		&sub.EntryCount, &sub.ExcludePrivateIPs, &sub.CreatedAt, &sub.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update filter subscription: %w", err)
@@ -391,7 +400,8 @@ func (r *FilterSubscriptionRepository) GetEnabledSubscriptions(ctx context.Conte
 		SELECT id, name, COALESCE(description, '') as description, url, format, type,
 		       enabled, refresh_type, refresh_value,
 		       last_fetched_at, last_success_at, last_error,
-		       entry_count, created_at, updated_at
+		       entry_count, COALESCE(exclude_private_ips, false) as exclude_private_ips,
+		       created_at, updated_at
 		FROM filter_subscriptions
 		WHERE enabled = true
 		ORDER BY created_at`
@@ -409,7 +419,7 @@ func (r *FilterSubscriptionRepository) GetEnabledSubscriptions(ctx context.Conte
 			&sub.ID, &sub.Name, &sub.Description, &sub.URL, &sub.Format, &sub.Type,
 			&sub.Enabled, &sub.RefreshType, &sub.RefreshValue,
 			&sub.LastFetchedAt, &sub.LastSuccessAt, &sub.LastError,
-			&sub.EntryCount, &sub.CreatedAt, &sub.UpdatedAt,
+			&sub.EntryCount, &sub.ExcludePrivateIPs, &sub.CreatedAt, &sub.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan filter subscription: %w", err)
 		}
@@ -445,7 +455,10 @@ func (r *FilterSubscriptionRepository) GetAllEnabledEntriesByType(ctx context.Co
 		SELECT DISTINCT e.value
 		FROM filter_subscription_entries e
 		INNER JOIN filter_subscriptions s ON e.subscription_id = s.id
+		LEFT JOIN filter_subscription_entry_exclusions ex
+			ON e.subscription_id = ex.subscription_id AND e.value = ex.value
 		WHERE s.enabled = true AND s.type = $1
+		  AND ex.id IS NULL
 		ORDER BY e.value`
 
 	rows, err := r.db.QueryContext(ctx, query, filterType)
@@ -482,4 +495,62 @@ func (r *FilterSubscriptionRepository) CountEnabledSubscriptions(ctx context.Con
 		`SELECT COUNT(*) FROM filter_subscriptions WHERE enabled = true`,
 	).Scan(&count)
 	return count, err
+}
+
+// ListEntryExclusions returns all entry exclusions for a subscription
+func (r *FilterSubscriptionRepository) ListEntryExclusions(ctx context.Context, subscriptionID string) ([]model.FilterSubscriptionEntryExclusion, error) {
+	query := `
+		SELECT id, subscription_id, value, created_at
+		FROM filter_subscription_entry_exclusions
+		WHERE subscription_id = $1
+		ORDER BY created_at DESC`
+
+	rows, err := r.db.QueryContext(ctx, query, subscriptionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list entry exclusions: %w", err)
+	}
+	defer rows.Close()
+
+	exclusions := []model.FilterSubscriptionEntryExclusion{}
+	for rows.Next() {
+		var e model.FilterSubscriptionEntryExclusion
+		if err := rows.Scan(&e.ID, &e.SubscriptionID, &e.Value, &e.CreatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan entry exclusion: %w", err)
+		}
+		exclusions = append(exclusions, e)
+	}
+	return exclusions, rows.Err()
+}
+
+// AddEntryExclusion adds an entry exclusion for a subscription
+func (r *FilterSubscriptionRepository) AddEntryExclusion(ctx context.Context, subscriptionID, value string) error {
+	_, err := r.db.ExecContext(ctx,
+		`INSERT INTO filter_subscription_entry_exclusions (subscription_id, value) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+		subscriptionID, value,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to add entry exclusion: %w", err)
+	}
+	return nil
+}
+
+// RemoveEntryExclusion removes an entry exclusion for a subscription
+func (r *FilterSubscriptionRepository) RemoveEntryExclusion(ctx context.Context, subscriptionID, value string) error {
+	_, err := r.db.ExecContext(ctx,
+		`DELETE FROM filter_subscription_entry_exclusions WHERE subscription_id = $1 AND value = $2`,
+		subscriptionID, value,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to remove entry exclusion: %w", err)
+	}
+	return nil
+}
+
+// HasExcludePrivateIPsEnabled returns true if any enabled subscription has exclude_private_ips=true
+func (r *FilterSubscriptionRepository) HasExcludePrivateIPsEnabled(ctx context.Context) (bool, error) {
+	var exists bool
+	err := r.db.QueryRowContext(ctx,
+		`SELECT EXISTS(SELECT 1 FROM filter_subscriptions WHERE enabled = true AND exclude_private_ips = true)`,
+	).Scan(&exists)
+	return exists, err
 }
