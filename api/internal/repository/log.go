@@ -18,7 +18,7 @@ import (
 	"nginx-proxy-guard/pkg/cache"
 )
 
-const statsCacheTTL = 2 * time.Minute
+const statsCacheTTL = 5 * time.Minute
 
 type LogRepository struct {
 	db    *database.DB
@@ -1223,12 +1223,19 @@ func (r *LogRepository) GetStatsWithFilter(ctx context.Context, filter *model.Lo
 }
 
 func (r *LogRepository) DeleteOld(ctx context.Context, retentionDays int) (int64, error) {
-	query := `DELETE FROM logs_partitioned WHERE created_at < NOW() - ($1 || ' days')::INTERVAL`
-	result, err := r.db.ExecContext(ctx, query, retentionDays)
-	if err != nil {
-		return 0, fmt.Errorf("failed to delete old logs: %w", err)
+	// Use partition DROP instead of row-level DELETE for efficiency.
+	// drop_old_partitions() drops entire monthly partitions older than the cutoff,
+	// which is orders of magnitude faster than DELETE on large tables.
+	retentionMonths := retentionDays / 30
+	if retentionMonths < 1 {
+		retentionMonths = 1
 	}
-	return result.RowsAffected()
+	var dropped int
+	err := r.db.QueryRowContext(ctx, `SELECT drop_old_partitions('logs_p', $1)`, retentionMonths).Scan(&dropped)
+	if err != nil {
+		return 0, fmt.Errorf("failed to drop old log partitions: %w", err)
+	}
+	return int64(dropped), nil
 }
 
 func (r *LogRepository) GetSettings(ctx context.Context) (*model.LogSettings, error) {

@@ -84,6 +84,7 @@ func (s *PartitionScheduler) run() {
 	s.enforceRetention()
 	s.cleanupLogsTable()
 	s.cleanupDashboardStats()
+	s.compressOldPartitions()
 }
 
 func (s *PartitionScheduler) cleanupDashboardStats() {
@@ -106,6 +107,50 @@ func (s *PartitionScheduler) cleanupDashboardStats() {
 		log.Printf("[PartitionScheduler] Failed to cleanup dashboard stats: %v", err)
 	} else {
 		log.Printf("[PartitionScheduler] Cleaned up dashboard stats (hourly retention: %d days, daily retention: %d days)", hourlyRetention, dailyRetention)
+	}
+}
+
+func (s *PartitionScheduler) compressOldPartitions() {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	// Run ANALYZE on old partitions so the query planner has accurate statistics.
+	// This improves query performance on partitioned tables after bulk inserts/deletes.
+	// Target: partitions older than current month (no longer actively written to).
+	now := time.Now().UTC()
+	currentPartName := fmt.Sprintf("logs_p%d_%02d", now.Year(), int(now.Month()))
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT tablename FROM pg_tables
+		WHERE schemaname = 'public'
+		  AND tablename LIKE 'logs_p%'
+		  AND tablename NOT LIKE '%_default'
+		  AND tablename < $1
+		ORDER BY tablename
+	`, currentPartName)
+	if err != nil {
+		log.Printf("[PartitionScheduler] Failed to list partitions for maintenance: %v", err)
+		return
+	}
+
+	var partitions []string
+	for rows.Next() {
+		var name string
+		if rows.Scan(&name) == nil {
+			partitions = append(partitions, name)
+		}
+	}
+	rows.Close()
+
+	for _, part := range partitions {
+		_, err := s.db.ExecContext(ctx, fmt.Sprintf(`ANALYZE %s`, part))
+		if err != nil {
+			log.Printf("[PartitionScheduler] Failed to ANALYZE partition %s: %v", part, err)
+		}
+	}
+
+	if len(partitions) > 0 {
+		log.Printf("[PartitionScheduler] ANALYZE completed on %d old partitions", len(partitions))
 	}
 }
 
