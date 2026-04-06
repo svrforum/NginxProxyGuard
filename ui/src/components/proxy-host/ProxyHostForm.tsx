@@ -6,6 +6,7 @@ import { SecurityTabContent } from './tabs/SecurityTab'
 import { PerformanceTabContent } from './tabs/PerformanceTab'
 import { AdvancedTabContent } from './tabs/AdvancedTab'
 import { ProtectionTabContent } from './tabs/ProtectionTab'
+import { UpstreamTabContent } from './tabs/UpstreamTab'
 import { SaveProgressModal } from './SaveProgressModal'
 import { CertificateLogModal } from '../CertificateLogModal'
 import type { TabType } from './types'
@@ -106,6 +107,7 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
     { id: 'security' as TabType, label: t('form.tabs.security'), icon: '🛡️' },
     { id: 'protection' as TabType, label: t('form.tabs.protection'), icon: '🚫' },
     { id: 'performance' as TabType, label: t('form.tabs.performance'), icon: '⚡' },
+    ...(isEditing ? [{ id: 'upstream' as TabType, label: t('form.tabs.upstream'), icon: '⚖️' }] : []),
     { id: 'advanced' as TabType, label: t('form.tabs.advanced'), icon: '⚙️' },
   ]
 
@@ -287,6 +289,11 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
                 formData={formData}
                 setFormData={setFormData}
               />
+            )}
+
+            {/* Upstream Tab */}
+            {activeTab === 'upstream' && isEditing && host && (
+              <UpstreamTabContent hostId={host.id} />
             )}
 
             {/* Advanced Tab */}

@@ -3,7 +3,7 @@ import type { CreateCertificateRequest } from '../../types/certificate'
 import type { CreateBotFilterRequest, CreateURIBlockRequest, URIBlockRule } from '../../types/security'
 import type { CreateGeoRestrictionRequest } from '../../types/access'
 
-export type TabType = 'basic' | 'ssl' | 'security' | 'performance' | 'advanced' | 'protection'
+export type TabType = 'basic' | 'ssl' | 'security' | 'performance' | 'advanced' | 'protection' | 'upstream'
 
 export interface ProxyHostFormProps {
   host?: ProxyHost | null

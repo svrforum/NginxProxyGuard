@@ -79,6 +79,7 @@
       "security": "Security",
       "protection": "Protection",
       "performance": "Performance",
+      "upstream": "Load Balancing",
       "advanced": "Advanced"
     },
     "basic": {
@@ -625,5 +626,39 @@
     "certificateRequired": "Select a certificate to use SSL",
     "certSelectionRequired": "Please select a certificate or switch to \"Create New\"",
     "addDomainsBeforeCert": "Add domains first to create certificate"
+  },
+  "upstream": {
+    "description": "Distribute traffic across multiple backend servers for load balancing and high availability.",
+    "loadBalance": "Method",
+    "methods": {
+      "roundRobin": "Round Robin (sequential)",
+      "leastConn": "Least Connections",
+      "ipHash": "IP Hash (session persistence)",
+      "random": "Random"
+    },
+    "keepalive": "Keepalive Connections",
+    "backendServers": "Backend Servers",
+    "addServer": "Add Server",
+    "noServers": "No servers configured. Add servers to enable load balancing.",
+    "addressPlaceholder": "192.168.1.10 or hostname",
+    "port": "Port",
+    "weight": "Weight",
+    "backupServer": "Backup server",
+    "backup": "backup",
+    "enableHealthCheck": "Enable Health Check",
+    "healthCheckNote": "config only, auto-check not yet implemented",
+    "checkInterval": "Check Interval (sec)",
+    "checkTimeout": "Timeout (sec)",
+    "checkPath": "Check Path",
+    "expectedStatus": "Expected Status",
+    "healthy": "Healthy",
+    "unhealthy": "Unhealthy",
+    "serversUp": "servers up",
+    "saveUpstream": "Save",
+    "saving": "Saving...",
+    "deleteUpstream": "Delete Upstream",
+    "deleteConfirm": "Delete upstream configuration? This will switch back to single server mode.",
+    "saveError": "Save failed",
+    "saveSuccess": "Upstream configuration saved."
   }
 }
