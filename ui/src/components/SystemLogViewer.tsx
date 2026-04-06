@@ -166,7 +166,7 @@ export function SystemLogViewer() {
   const statsQuery = useQuery({
     queryKey: ['system-log-stats'],
     queryFn: fetchSystemLogStats,
-    refetchInterval: autoRefresh ? 30000 : false,
+    refetchInterval: autoRefresh ? 60000 : false,
   });
 
   const sourcesQuery = useQuery({

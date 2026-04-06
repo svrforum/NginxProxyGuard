@@ -25,7 +25,7 @@ export default function Dashboard() {
   const { data: dashboard, isLoading, error, refetch } = useQuery({
     queryKey: ['dashboard'],
     queryFn: getDashboard,
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 60000,
   });
 
   const { data: selfCheck, refetch: runCheck } = useQuery({
@@ -37,13 +37,13 @@ export default function Dashboard() {
   const { data: containerStats } = useQuery({
     queryKey: ['containerStats'],
     queryFn: getContainerStats,
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 60000,
   });
 
   const { data: geoIPStats, isLoading: geoIPLoading } = useQuery({
     queryKey: ['geoIPStats'],
     queryFn: () => getGeoIPStats(24),
-    refetchInterval: 60000, // Refresh every minute
+    refetchInterval: 120000,
   });
 
   const countryCodePattern = /^[A-Z]{2}$/i;

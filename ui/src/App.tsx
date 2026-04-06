@@ -1,46 +1,27 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BrowserRouter, Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import ErrorBoundary from './components/ErrorBoundary'
-import { ProxyHostList } from './components/ProxyHostList'
-import { ProxyHostForm } from './components/ProxyHostForm'
-import CertificateList from './components/CertificateList'
-import CertificateHistoryList from './components/CertificateHistory'
-import DNSProviderList from './components/DNSProviderList'
-import { LogViewer } from './components/LogViewer'
-import { SystemLogViewer } from './components/SystemLogViewer'
-import AuditLog from './components/AuditLog'
-import { WAFTester } from './components/WAFTester'
-import { WAFSettings } from './components/WAFSettings'
-import { ExploitBlockRules } from './components/ExploitBlockRules'
-import { Fail2banManagement } from './components/Fail2banManagement'
-import AccessListManager from './components/AccessListManager'
-import { BannedIPList } from './components/BannedIPList'
-import { URIBlockManager } from './components/URIBlockManager'
-import RedirectHostManager from './components/RedirectHostManager'
-import Dashboard from './components/Dashboard'
-import GlobalSettings from './components/GlobalSettings'
-import ChallengeSettings from './components/ChallengeSettings'
-import GeoIPSettings from './components/GeoIPSettings'
-import SSLACMESettings from './components/SSLACMESettings'
-import MaintenanceSettings from './components/MaintenanceSettings'
-import BackupManager from './components/BackupManager'
-import RawLogFiles from './components/RawLogFiles'
-import BotFilterSettings from './components/BotFilterSettings'
-import BotFilterLogs from './components/BotFilterLogs'
-import ExploitBlockLogs from './components/ExploitBlockLogs'
-import WAFAutoBanSettings from './components/WAFAutoBanSettings'
-import SystemLogSettings from './components/SystemLogSettings'
-import FilterSubscriptionList from './components/FilterSubscriptionList'
 import { Login } from './components/Login'
 import { InitialSetup } from './components/InitialSetup'
-import AccountSettings from './components/AccountSettings'
 import { getAuthStatus, logout, getToken, User } from './api/auth'
 import { apiPost } from './api/client'
 import type { ProxyHost } from './types/proxy-host'
 import { useDarkMode } from './hooks/useDarkMode'
 import { SyncProgressModal, SyncAllResult } from './components/SyncProgressModal'
+
+// Lazy-loaded route components
+const Dashboard = lazy(() => import('./components/Dashboard'))
+const ProxyHostList = lazy(() => import('./components/ProxyHostList').then(m => ({ default: m.ProxyHostList })))
+const ProxyHostForm = lazy(() => import('./components/ProxyHostForm').then(m => ({ default: m.ProxyHostForm })))
+const RedirectHostManager = lazy(() => import('./components/RedirectHostManager'))
+const AccessListManager = lazy(() => import('./components/AccessListManager'))
+const AccountSettings = lazy(() => import('./components/AccountSettings'))
+const CertificatesPage = lazy(() => import('./pages/CertificatesPage'))
+const WAFPage = lazy(() => import('./pages/WAFPage'))
+const LogsPage = lazy(() => import('./pages/LogsPage'))
+const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 
 interface HealthResponse {
   status: string
@@ -91,7 +72,7 @@ function AppContent({ user, onLogout }: AppContentProps) {
   const [showSyncModal, setShowSyncModal] = useState(false)
   const [syncResult, setSyncResult] = useState<SyncAllResult | null>(null)
 
-  const health = useQuery({ queryKey: ['health'], queryFn: fetchHealth, refetchInterval: 10000 })
+  const health = useQuery({ queryKey: ['health'], queryFn: fetchHealth, refetchInterval: 30000 })
 
   const handleSyncAll = async () => {
     if (isSyncing) return
@@ -200,7 +181,7 @@ function AppContent({ user, onLogout }: AppContentProps) {
             onClick={() => navigate('/dashboard')}
           >
             <img
-              src="/favicon.ico"
+              src="/shield.svg"
               alt="NPG Logo"
               className="w-8 h-8 lg:w-10 lg:h-10 rounded-lg flex-shrink-0"
             />
@@ -349,6 +330,11 @@ function AppContent({ user, onLogout }: AppContentProps) {
 
       {/* Main Content */}
       <main className="flex-1 max-w-7xl mx-auto px-4 py-8 w-full">
+        <Suspense fallback={
+          <div className="flex items-center justify-center h-64">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          </div>
+        }>
         <Routes>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<Dashboard />} />
@@ -387,6 +373,7 @@ function AppContent({ user, onLogout }: AppContentProps) {
           <Route path="/settings/system-logs" element={<SettingsPage subTab="system-logs" />} />
           <Route path="/settings/filter-subscriptions" element={<SettingsPage subTab="filter-subscriptions" />} />
         </Routes>
+        </Suspense>
       </main>
 
       {/* Form Modal */}
@@ -419,7 +406,7 @@ function AppContent({ user, onLogout }: AppContentProps) {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-slate-500 dark:text-slate-400">
             <div className="flex items-center gap-2">
-              <img src="/favicon.ico" alt="NPG Logo" className="w-5 h-5 rounded" />
+              <img src="/shield.svg" alt="NPG Logo" className="w-5 h-5 rounded" />
               <span className="font-semibold text-slate-700 dark:text-gray-300">Nginx Proxy Guard</span>
               <span className="text-slate-400">v{health.data?.version || '0.0.0'}</span>
             </div>
@@ -451,340 +438,6 @@ function AppContent({ user, onLogout }: AppContentProps) {
           </div>
         </div>
       </footer>
-    </div>
-  )
-}
-
-// Certificates Page Component
-function CertificatesPage({ subTab }: { subTab: 'certificates' | 'history' | 'dns-providers' }) {
-  const { t } = useTranslation('navigation')
-  const navigate = useNavigate()
-
-  return (
-    <div className="space-y-6">
-      {/* Sub-tabs for certificates */}
-      <div className="border-b border-slate-200">
-        <div className="flex gap-4">
-          <button
-            onClick={() => navigate('/certificates/list')}
-            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors ${subTab === 'certificates'
-              ? 'border-primary-600 text-primary-600 dark:text-primary-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.certificates.list')}
-          </button>
-          <button
-            onClick={() => navigate('/certificates/history')}
-            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors ${subTab === 'history'
-              ? 'border-primary-600 text-primary-600 dark:text-primary-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.certificates.history')}
-          </button>
-          <button
-            onClick={() => navigate('/certificates/dns-providers')}
-            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors ${subTab === 'dns-providers'
-              ? 'border-primary-600 text-primary-600 dark:text-primary-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.certificates.dnsProviders')}
-          </button>
-        </div>
-      </div>
-
-      {subTab === 'certificates' && <CertificateList />}
-      {subTab === 'history' && <CertificateHistoryList />}
-      {subTab === 'dns-providers' && <DNSProviderList />}
-    </div>
-  )
-}
-
-// WAF Page Component
-function WAFPage({ subTab }: { subTab: 'settings' | 'tester' | 'banned-ips' | 'uri-blocks' | 'exploit-rules' | 'fail2ban' }) {
-  const { t } = useTranslation('navigation')
-  const navigate = useNavigate()
-
-  return (
-    <div className="space-y-6">
-      {/* Sub-tabs for WAF */}
-      <div className="border-b border-slate-200">
-        <div className="flex gap-4">
-          <button
-            onClick={() => navigate('/waf/settings')}
-            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors ${subTab === 'settings'
-              ? 'border-orange-600 text-orange-600 dark:text-orange-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.waf.ruleSettings')}
-          </button>
-          <button
-            onClick={() => navigate('/waf/banned-ips')}
-            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors ${subTab === 'banned-ips'
-              ? 'border-red-600 text-red-600 dark:text-red-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.waf.bannedIps')}
-          </button>
-          <button
-            onClick={() => navigate('/waf/uri-blocks')}
-            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors ${subTab === 'uri-blocks'
-              ? 'border-rose-600 text-rose-600 dark:text-rose-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.waf.uriBlocks')}
-          </button>
-          <button
-            onClick={() => navigate('/waf/exploit-rules')}
-            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors ${subTab === 'exploit-rules'
-              ? 'border-amber-600 text-amber-600 dark:text-amber-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.waf.exploitRules')}
-          </button>
-          <button
-            onClick={() => navigate('/waf/fail2ban')}
-            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors ${subTab === 'fail2ban'
-              ? 'border-red-600 text-red-600 dark:text-red-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.waf.fail2ban')}
-          </button>
-          <button
-            onClick={() => navigate('/waf/tester')}
-            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors ${subTab === 'tester'
-              ? 'border-purple-600 text-purple-600 dark:text-purple-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.waf.tester')}
-          </button>
-        </div>
-      </div>
-
-      {subTab === 'settings' && <WAFSettings />}
-      {subTab === 'banned-ips' && <BannedIPList />}
-      {subTab === 'uri-blocks' && <URIBlockManager />}
-      {subTab === 'exploit-rules' && <ExploitBlockRules />}
-      {subTab === 'fail2ban' && <Fail2banManagement />}
-      {subTab === 'tester' && <WAFTester />}
-    </div>
-  )
-}
-
-// Logs Page Component
-function LogsPage({ subTab }: { subTab: 'access' | 'waf-events' | 'bot-filter' | 'exploit-blocks' | 'system' | 'audit' | 'raw-files' }) {
-  const { t } = useTranslation('navigation')
-  const navigate = useNavigate()
-
-  return (
-    <div className="space-y-6">
-      {/* Sub-tabs for logs */}
-      <div className="border-b border-slate-200 overflow-x-auto scrollbar-hide">
-        <div className="flex gap-2 lg:gap-4 min-w-max">
-          <button
-            onClick={() => navigate('/logs/access')}
-            className={`pb-2 px-1 text-xs lg:text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${subTab === 'access'
-              ? 'border-primary-600 text-primary-600 dark:text-primary-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.logs.access')}
-          </button>
-          <button
-            onClick={() => navigate('/logs/waf-events')}
-            className={`pb-2 px-1 text-xs lg:text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${subTab === 'waf-events'
-              ? 'border-orange-600 text-orange-600 dark:text-orange-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.logs.wafEvents')}
-          </button>
-          <button
-            onClick={() => navigate('/logs/bot-filter')}
-            className={`pb-2 px-1 text-xs lg:text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${subTab === 'bot-filter'
-              ? 'border-purple-600 text-purple-600 dark:text-purple-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.logs.botFilter')}
-          </button>
-          <button
-            onClick={() => navigate('/logs/exploit-blocks')}
-            className={`pb-2 px-1 text-xs lg:text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${subTab === 'exploit-blocks'
-              ? 'border-red-600 text-red-600 dark:text-red-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.logs.exploitBlocks')}
-          </button>
-          <button
-            onClick={() => navigate('/logs/system')}
-            className={`pb-2 px-1 text-xs lg:text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${subTab === 'system'
-              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.logs.system')}
-          </button>
-          <button
-            onClick={() => navigate('/logs/audit')}
-            className={`pb-2 px-1 text-xs lg:text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${subTab === 'audit'
-              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.logs.audit')}
-          </button>
-          <button
-            onClick={() => navigate('/logs/raw-files')}
-            className={`pb-2 px-1 text-xs lg:text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${subTab === 'raw-files'
-              ? 'border-amber-600 text-amber-600 dark:text-amber-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.logs.rawFiles')}
-          </button>
-        </div>
-      </div>
-
-      {subTab === 'system' ? (
-        <SystemLogViewer />
-      ) : subTab === 'audit' ? (
-        <AuditLog />
-      ) : subTab === 'raw-files' ? (
-        <RawLogFiles />
-      ) : subTab === 'bot-filter' ? (
-        <BotFilterLogs />
-      ) : subTab === 'exploit-blocks' ? (
-        <ExploitBlockLogs />
-      ) : (
-        <LogViewer logType={subTab === 'waf-events' ? 'modsec' : subTab} />
-      )}
-    </div>
-  )
-}
-
-// Settings Page Component
-function SettingsPage({ subTab }: { subTab: 'global' | 'captcha' | 'geoip' | 'ssl' | 'maintenance' | 'backups' | 'botfilter' | 'waf-auto-ban' | 'system-logs' | 'filter-subscriptions' }) {
-  const { t } = useTranslation('navigation')
-  const navigate = useNavigate()
-
-  return (
-    <div className="space-y-6">
-      {/* Sub-tabs for settings */}
-      <div className="border-b border-slate-200">
-        <div className="flex gap-4 overflow-x-auto">
-          <button
-            onClick={() => navigate('/settings/global')}
-            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${subTab === 'global'
-              ? 'border-teal-600 text-teal-600 dark:text-teal-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.settings.global')}
-          </button>
-          <button
-            onClick={() => navigate('/settings/captcha')}
-            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${subTab === 'captcha'
-              ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.settings.captcha')}
-          </button>
-          <button
-            onClick={() => navigate('/settings/geoip')}
-            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${subTab === 'geoip'
-              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.settings.geoip')}
-          </button>
-          <button
-            onClick={() => navigate('/settings/botfilter')}
-            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${subTab === 'botfilter'
-              ? 'border-orange-600 text-orange-600 dark:text-orange-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.settings.botfilter')}
-          </button>
-          <button
-            onClick={() => navigate('/settings/waf-auto-ban')}
-            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${subTab === 'waf-auto-ban'
-              ? 'border-red-600 text-red-600 dark:text-red-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.settings.wafAutoBan')}
-          </button>
-          <button
-            onClick={() => navigate('/settings/ssl')}
-            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${subTab === 'ssl'
-              ? 'border-amber-600 text-amber-600 dark:text-amber-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.settings.ssl')}
-          </button>
-          <button
-            onClick={() => navigate('/settings/maintenance')}
-            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${subTab === 'maintenance'
-              ? 'border-purple-600 text-purple-600 dark:text-purple-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.settings.maintenance')}
-          </button>
-          <button
-            onClick={() => navigate('/settings/backups')}
-            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${subTab === 'backups'
-              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.settings.backups')}
-          </button>
-          <button
-            onClick={() => navigate('/settings/system-logs')}
-            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${subTab === 'system-logs'
-              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.settings.systemLogs', 'System Logs')}
-          </button>
-          <button
-            onClick={() => navigate('/settings/filter-subscriptions')}
-            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${subTab === 'filter-subscriptions'
-              ? 'border-cyan-600 text-cyan-600 dark:text-cyan-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.settings.filterSubscriptions', 'Filter Subscriptions')}
-          </button>
-        </div>
-      </div>
-
-      {subTab === 'global' && <GlobalSettings />}
-      {subTab === 'captcha' && <ChallengeSettings />}
-      {subTab === 'geoip' && <GeoIPSettings />}
-      {subTab === 'botfilter' && <BotFilterSettings />}
-      {subTab === 'waf-auto-ban' && <WAFAutoBanSettings />}
-      {subTab === 'ssl' && <SSLACMESettings />}
-      {subTab === 'maintenance' && <MaintenanceSettings />}
-      {subTab === 'backups' && <BackupManager />}
-      {subTab === 'system-logs' && <SystemLogSettings />}
-      {subTab === 'filter-subscriptions' && <FilterSubscriptionList />}
     </div>
   )
 }
