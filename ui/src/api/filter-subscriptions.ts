@@ -9,7 +9,7 @@ import type {
   CatalogSubscribeRequest,
   FilterCatalog,
 } from '../types/filter-subscription'
-import { apiGet, apiPost, apiPut, apiDelete, getAuthHeaders } from './client'
+import { apiGet, apiPost, apiPut, apiDelete } from './client'
 
 const API_BASE = '/api/v1/filter-subscriptions'
 
@@ -96,13 +96,5 @@ export async function removeEntryExclusion(
   subscriptionId: string,
   value: string
 ): Promise<void> {
-  const resp = await fetch(`${API_BASE}/${subscriptionId}/entry-exclusions`, {
-    method: 'DELETE',
-    headers: getAuthHeaders(),
-    body: JSON.stringify({ value }),
-  })
-  if (!resp.ok) {
-    const error = await resp.json().catch(() => ({ error: 'Unknown error' }))
-    throw new Error(error.error || `Failed to remove entry exclusion: ${resp.status}`)
-  }
+  return apiDelete(`${API_BASE}/${subscriptionId}/entry-exclusions?value=${encodeURIComponent(value)}`)
 }

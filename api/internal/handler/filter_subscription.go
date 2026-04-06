@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"net"
 	"net/http"
 	"strconv"
 
@@ -245,6 +246,13 @@ func (h *FilterSubscriptionHandler) AddEntryExclusion(c echo.Context) error {
 		return badRequestError(c, "value is required")
 	}
 
+	// Validate format
+	if net.ParseIP(req.Value) == nil {
+		if _, _, err := net.ParseCIDR(req.Value); err != nil {
+			return badRequestError(c, "value must be a valid IP address or CIDR")
+		}
+	}
+
 	if err := h.service.AddEntryExclusion(c.Request().Context(), subscriptionID, req.Value); err != nil {
 		return databaseError(c, "add entry exclusion", err)
 	}
@@ -255,17 +263,13 @@ func (h *FilterSubscriptionHandler) AddEntryExclusion(c echo.Context) error {
 // RemoveEntryExclusion removes an entry exclusion from a subscription
 func (h *FilterSubscriptionHandler) RemoveEntryExclusion(c echo.Context) error {
 	subscriptionID := c.Param("id")
+	value := c.QueryParam("value")
 
-	var req model.AddEntryExclusionRequest
-	if err := c.Bind(&req); err != nil {
-		return badRequestError(c, "Invalid request body")
+	if value == "" {
+		return badRequestError(c, "value is required")
 	}
 
-	if req.Value == "" {
-		return badRequestError(c, "value query parameter is required")
-	}
-
-	if err := h.service.RemoveEntryExclusion(c.Request().Context(), subscriptionID, req.Value); err != nil {
+	if err := h.service.RemoveEntryExclusion(c.Request().Context(), subscriptionID, value); err != nil {
 		return databaseError(c, "remove entry exclusion", err)
 	}
 

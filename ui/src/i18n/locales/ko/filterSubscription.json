@@ -66,7 +66,7 @@
     "exclusionDescription": "선택한 호스트에는 이 필터가 적용되지 않습니다.",
     "excluded": "제외됨",
     "excludePrivateIPs": "사설 IP 대역 제외",
-    "excludePrivateIPsDescription": "RFC 1918 사설 IP 대역(10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)을 차단 목록에서 제외합니다."
+    "excludePrivateIPsDescription": "활성화 시 모든 구독의 차단 목록에서 RFC 1918 사설 IP 대역(10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)을 제외합니다."
   },
   "entryExclusions": {
     "exclude": "제외",
