@@ -13,7 +13,7 @@ test.describe('Global Trusted IPs', () => {
   test.afterEach(async () => {
     // Clear trusted IPs after each test
     try {
-      await apiHelper.updateGlobalSettings({ global_trusted_ips: '' });
+      await apiHelper.updateSystemSettings({ global_trusted_ips: '' });
     } catch {
       // Ignore cleanup errors
     }
@@ -21,45 +21,45 @@ test.describe('Global Trusted IPs', () => {
 
   test.describe('Set Trusted IPs via API', () => {
     test('should set a single trusted IP', async () => {
-      await apiHelper.updateGlobalSettings({
+      await apiHelper.updateSystemSettings({
         global_trusted_ips: '192.168.1.100',
       });
 
-      const settings = await apiHelper.getGlobalSettings();
+      const settings = await apiHelper.getSystemSettings();
       expect(settings.global_trusted_ips).toBe('192.168.1.100');
     });
 
     test('should set trusted IP with CIDR notation', async () => {
-      await apiHelper.updateGlobalSettings({
+      await apiHelper.updateSystemSettings({
         global_trusted_ips: '10.0.0.0/24',
       });
 
-      const settings = await apiHelper.getGlobalSettings();
+      const settings = await apiHelper.getSystemSettings();
       expect(settings.global_trusted_ips).toBe('10.0.0.0/24');
     });
 
     test('should set multiple trusted IPs (newline-separated)', async () => {
       const trustedIps = '192.168.1.100\n10.0.0.0/24\n172.16.0.1';
-      await apiHelper.updateGlobalSettings({
+      await apiHelper.updateSystemSettings({
         global_trusted_ips: trustedIps,
       });
 
-      const settings = await apiHelper.getGlobalSettings();
+      const settings = await apiHelper.getSystemSettings();
       expect(settings.global_trusted_ips).toBe(trustedIps);
     });
 
     test('should clear trusted IPs', async () => {
       // Set first
-      await apiHelper.updateGlobalSettings({
+      await apiHelper.updateSystemSettings({
         global_trusted_ips: '192.168.1.100',
       });
 
       // Clear
-      await apiHelper.updateGlobalSettings({
+      await apiHelper.updateSystemSettings({
         global_trusted_ips: '',
       });
 
-      const settings = await apiHelper.getGlobalSettings();
+      const settings = await apiHelper.getSystemSettings();
       expect(settings.global_trusted_ips || '').toBe('');
     });
   });
@@ -67,11 +67,11 @@ test.describe('Global Trusted IPs', () => {
   test.describe('Comment Lines and Invalid IPs', () => {
     test('should accept comment lines starting with #', async () => {
       const trustedIps = '# Office network\n192.168.1.0/24\n# VPN\n10.0.0.1';
-      await apiHelper.updateGlobalSettings({
+      await apiHelper.updateSystemSettings({
         global_trusted_ips: trustedIps,
       });
 
-      const settings = await apiHelper.getGlobalSettings();
+      const settings = await apiHelper.getSystemSettings();
       expect(settings.global_trusted_ips).toBe(trustedIps);
 
       // Config generation should succeed (comments are ignored)
@@ -82,7 +82,7 @@ test.describe('Global Trusted IPs', () => {
 
     test('should handle invalid IP formats gracefully', async () => {
       const trustedIps = 'not-an-ip\n192.168.1.100\nabc.def.ghi.jkl';
-      await apiHelper.updateGlobalSettings({
+      await apiHelper.updateSystemSettings({
         global_trusted_ips: trustedIps,
       });
 
@@ -111,13 +111,13 @@ test.describe('Global Trusted IPs', () => {
 
     test('should coexist with banned IPs without breaking nginx config', async () => {
       // Set the IP as both trusted and banned
-      await apiHelper.updateGlobalSettings({
+      await apiHelper.updateSystemSettings({
         global_trusted_ips: testIp,
       });
       await apiHelper.banIp(testIp, 'Test ban for trusted IP');
 
       // Verify both exist
-      const settings = await apiHelper.getGlobalSettings();
+      const settings = await apiHelper.getSystemSettings();
       expect(settings.global_trusted_ips).toContain(testIp);
 
       const bannedIps = await apiHelper.getWafBannedIps();
@@ -138,7 +138,7 @@ test.describe('Global Trusted IPs', () => {
 
     test('should generate valid nginx config with trusted IPs and proxy host', async () => {
       // Set trusted IPs
-      await apiHelper.updateGlobalSettings({
+      await apiHelper.updateSystemSettings({
         global_trusted_ips: '192.168.1.0/24\n10.0.0.0/8',
       });
 
@@ -155,7 +155,7 @@ test.describe('Global Trusted IPs', () => {
     });
 
     test('should handle empty trusted IPs with active proxy hosts', async () => {
-      await apiHelper.updateGlobalSettings({
+      await apiHelper.updateSystemSettings({
         global_trusted_ips: '',
       });
 

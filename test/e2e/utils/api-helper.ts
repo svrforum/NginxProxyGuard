@@ -825,6 +825,40 @@ export class APIHelper {
     return response.json();
   }
 
+  // ==================== System Settings ====================
+
+  /**
+   * Get system settings.
+   */
+  async getSystemSettings(): Promise<SystemSettingsData> {
+    const response = await this.request.get(API_ENDPOINTS.systemSettings, {
+      headers: this.getHeaders(),
+    });
+
+    if (!response.ok()) {
+      throw new Error(`Failed to get system settings: ${response.status()}`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Update system settings.
+   */
+  async updateSystemSettings(data: Partial<SystemSettingsData>): Promise<SystemSettingsData> {
+    const response = await this.request.put(API_ENDPOINTS.systemSettings, {
+      headers: this.getHeaders(),
+      data,
+    });
+
+    if (!response.ok()) {
+      const error = await response.json();
+      throw new Error(`Failed to update system settings: ${error.error || response.status()}`);
+    }
+
+    return response.json();
+  }
+
   // ==================== WAF ====================
 
   /**
@@ -1258,6 +1292,11 @@ export interface GlobalSettingsData {
   proxy_buffering?: string;
   proxy_request_buffering?: string;
   global_trusted_ips?: string;
+}
+
+export interface SystemSettingsData {
+  global_trusted_ips?: string;
+  [key: string]: unknown;
 }
 
 // WAF Types
