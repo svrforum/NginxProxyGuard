@@ -178,10 +178,42 @@ func (s *SecurityService) GetUpstream(ctx context.Context, proxyHostID string) (
 }
 
 func (s *SecurityService) UpsertUpstream(ctx context.Context, proxyHostID string, req *model.CreateUpstreamRequest) (*model.Upstream, error) {
+	// Validate load balance method
+	if req.LoadBalance != "" {
+		valid := false
+		for _, m := range model.ValidLoadBalanceMethods {
+			if req.LoadBalance == m {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			return nil, fmt.Errorf("invalid load_balance method: %s", req.LoadBalance)
+		}
+	}
+
+	// Validate server addresses
+	for i, srv := range req.Servers {
+		if srv.Address == "" {
+			return nil, fmt.Errorf("server %d: address is required", i+1)
+		}
+		if srv.Port < 0 || srv.Port > 65535 {
+			return nil, fmt.Errorf("server %d: invalid port %d", i+1, srv.Port)
+		}
+	}
+
 	upstream, err := s.upstreamRepo.Upsert(ctx, proxyHostID, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to upsert upstream: %w", err)
 	}
+
+	// Regenerate nginx config to apply upstream changes
+	if s.proxyHostService != nil {
+		if regenErr := s.proxyHostService.RegenerateConfigForHost(ctx, proxyHostID); regenErr != nil {
+			log.Printf("[Upstream] Warning: failed to regenerate config for host %s: %v", proxyHostID, regenErr)
+		}
+	}
+
 	return upstream, nil
 }
 
@@ -189,6 +221,14 @@ func (s *SecurityService) DeleteUpstream(ctx context.Context, proxyHostID string
 	if err := s.upstreamRepo.Delete(ctx, proxyHostID); err != nil {
 		return fmt.Errorf("failed to delete upstream: %w", err)
 	}
+
+	// Regenerate nginx config to remove upstream block
+	if s.proxyHostService != nil {
+		if regenErr := s.proxyHostService.RegenerateConfigForHost(ctx, proxyHostID); regenErr != nil {
+			log.Printf("[Upstream] Warning: failed to regenerate config after upstream delete for host %s: %v", proxyHostID, regenErr)
+		}
+	}
+
 	return nil
 }
 

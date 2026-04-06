@@ -4,10 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
+	"regexp"
 	"time"
 
 	"nginx-proxy-guard/internal/model"
 )
+
+var validUpstreamName = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
 
 type UpstreamRepository struct {
 	db *sql.DB
@@ -47,7 +51,9 @@ func (r *UpstreamRepository) GetByProxyHostID(ctx context.Context, proxyHostID s
 	}
 
 	if len(serversJSON) > 0 {
-		json.Unmarshal(serversJSON, &u.Servers)
+		if err := json.Unmarshal(serversJSON, &u.Servers); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal servers JSON: %w", err)
+		}
 	}
 
 	return &u, nil
@@ -83,7 +89,9 @@ func (r *UpstreamRepository) GetByID(ctx context.Context, id string) (*model.Ups
 	}
 
 	if len(serversJSON) > 0 {
-		json.Unmarshal(serversJSON, &u.Servers)
+		if err := json.Unmarshal(serversJSON, &u.Servers); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal servers JSON: %w", err)
+		}
 	}
 
 	return &u, nil
@@ -117,7 +125,11 @@ func (r *UpstreamRepository) Upsert(ctx context.Context, proxyHostID string, req
 				servers[i].FailTimeout = 30
 			}
 		}
-		serversJSON, _ = json.Marshal(servers)
+		var marshalErr error
+		serversJSON, marshalErr = json.Marshal(servers)
+		if marshalErr != nil {
+			return nil, fmt.Errorf("failed to marshal servers JSON: %w", marshalErr)
+		}
 	}
 
 	// Generate default name in Go to avoid PostgreSQL type inference issues
@@ -128,6 +140,10 @@ func (r *UpstreamRepository) Upsert(ctx context.Context, proxyHostID string, req
 		} else {
 			name = "upstream_" + proxyHostID
 		}
+	}
+
+	if !validUpstreamName.MatchString(name) {
+		return nil, fmt.Errorf("invalid upstream name: only alphanumeric and underscore allowed")
 	}
 
 	query := `
@@ -174,7 +190,9 @@ func (r *UpstreamRepository) Upsert(ctx context.Context, proxyHostID string, req
 	}
 
 	if len(returnedServersJSON) > 0 {
-		json.Unmarshal(returnedServersJSON, &u.Servers)
+		if err := json.Unmarshal(returnedServersJSON, &u.Servers); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal servers JSON: %w", err)
+		}
 	}
 
 	return &u, nil
@@ -205,7 +223,9 @@ func (r *UpstreamRepository) UpdateServerHealth(ctx context.Context, upstreamID,
 
 	var servers []model.UpstreamServer
 	if len(serversJSON) > 0 {
-		json.Unmarshal(serversJSON, &servers)
+		if err := json.Unmarshal(serversJSON, &servers); err != nil {
+			return fmt.Errorf("failed to unmarshal servers JSON: %w", err)
+		}
 	}
 
 	// Update the matching server
@@ -220,7 +240,10 @@ func (r *UpstreamRepository) UpdateServerHealth(ctx context.Context, upstreamID,
 	}
 
 	// Save back
-	updatedJSON, _ := json.Marshal(servers)
+	updatedJSON, marshalErr := json.Marshal(servers)
+	if marshalErr != nil {
+		return fmt.Errorf("failed to marshal servers JSON: %w", marshalErr)
+	}
 	_, err = r.db.ExecContext(ctx, "UPDATE upstreams SET servers = $2, updated_at = NOW() WHERE id = $1", upstreamID, updatedJSON)
 	return err
 }
@@ -261,7 +284,9 @@ func (r *UpstreamRepository) ListWithHealthCheck(ctx context.Context) ([]model.U
 		}
 
 		if len(serversJSON) > 0 {
-			json.Unmarshal(serversJSON, &u.Servers)
+			if err := json.Unmarshal(serversJSON, &u.Servers); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal servers JSON: %w", err)
+			}
 		}
 
 		upstreams = append(upstreams, u)

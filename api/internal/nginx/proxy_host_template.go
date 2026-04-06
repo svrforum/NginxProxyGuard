@@ -10,7 +10,7 @@ const proxyHostTemplate = `# nginx-guard generated config
 # Access List: {{if .AccessList}}{{.AccessList.Name}}{{else}}none{{end}}
 # Geo Restriction: {{if .GeoRestriction}}{{.GeoRestriction.Mode}} ({{len .GeoRestriction.Countries}} countries){{else}}none{{end}}
 # Rate Limit: {{if .RateLimit}}{{if .RateLimit.Enabled}}{{.RateLimit.RequestsPerSecond}}r/s{{else}}disabled{{end}}{{else}}none{{end}}
-# Upstream: {{if .Upstream}}{{.Upstream.Name}} ({{.Upstream.LoadBalance}}){{else}}none{{end}}
+# Upstream: {{if and .Upstream .Upstream.Servers}}{{.Upstream.Name}} ({{.Upstream.LoadBalance}}){{else}}none{{end}}
 # Generated at: {{now}}
 
 {{if .RateLimit}}{{if .RateLimit.Enabled}}
@@ -68,7 +68,7 @@ geo $blocked_cloud_{{sanitizeID .Host.ID}} {
 }
 {{end}}
 
-{{if .Upstream}}
+{{if and .Upstream .Upstream.Servers}}
 # Upstream definition for load balancing
 upstream {{.Upstream.Name}} {
 {{if eq .Upstream.LoadBalance "least_conn"}}
@@ -664,7 +664,7 @@ server {
             return 403;
         }
         # Pass through to upstream if exception matched
-        {{if $.Upstream}}proxy_pass http://{{$.Upstream.Name}};{{else}}proxy_pass {{$.Host.ForwardScheme}}://{{$.Host.ForwardHost}}:{{$.Host.ForwardPort}};{{end}}
+        {{if and $.Upstream $.Upstream.Servers}}proxy_pass http://{{$.Upstream.Name}};{{else}}proxy_pass {{$.Host.ForwardScheme}}://{{$.Host.ForwardHost}}:{{$.Host.ForwardPort}};{{end}}
         include /etc/nginx/includes/proxy_params.conf;
 {{else}}
         set $block_reason_var "uri_block";
@@ -701,7 +701,7 @@ server {
         # API is down - allow request to proceed (graceful degradation)
         # Log this event for monitoring
         access_log /etc/nginx/logs/access_raw.log main buffer=64k flush=5s;
-        {{if .Upstream}}proxy_pass http://{{.Upstream.Name}};{{else}}proxy_pass {{.Host.ForwardScheme}}://{{.Host.ForwardHost}}:{{.Host.ForwardPort}};{{end}}
+        {{if and .Upstream .Upstream.Servers}}proxy_pass http://{{.Upstream.Name}};{{else}}proxy_pass {{.Host.ForwardScheme}}://{{.Host.ForwardHost}}:{{.Host.ForwardPort}};{{end}}
         include /etc/nginx/includes/proxy_params.conf;
     }
 {{end}}{{end}}
@@ -747,7 +747,7 @@ server {
         error_page 401 = @challenge_redirect;
         error_page 500 502 503 504 = @api_fallback;
 {{end}}{{end}}
-        {{if .Upstream}}proxy_pass http://{{.Upstream.Name}};{{else}}proxy_pass {{.Host.ForwardScheme}}://{{.Host.ForwardHost}}:{{.Host.ForwardPort}};{{end}}
+        {{if and .Upstream .Upstream.Servers}}proxy_pass http://{{.Upstream.Name}};{{else}}proxy_pass {{.Host.ForwardScheme}}://{{.Host.ForwardHost}}:{{.Host.ForwardPort}};{{end}}
         include /etc/nginx/includes/proxy_params.conf;
         {{if .GlobalSettings}}
         # Proxy settings (Host-level overrides Global)
@@ -845,7 +845,7 @@ server {
         error_page 401 = @challenge_redirect;
         error_page 500 502 503 504 = @api_fallback;
 {{end}}{{end}}
-        {{if .Upstream}}proxy_pass http://{{.Upstream.Name}};{{else}}proxy_pass {{.Host.ForwardScheme}}://{{.Host.ForwardHost}}:{{.Host.ForwardPort}};{{end}}
+        {{if and .Upstream .Upstream.Servers}}proxy_pass http://{{.Upstream.Name}};{{else}}proxy_pass {{.Host.ForwardScheme}}://{{.Host.ForwardHost}}:{{.Host.ForwardPort}};{{end}}
         include /etc/nginx/includes/proxy_params.conf;
         {{if .GlobalSettings}}
         # Proxy settings (Host-level overrides Global)
@@ -1526,7 +1526,7 @@ server {
             return 403;
         }
         # Pass through to upstream if exception matched
-        {{if $.Upstream}}proxy_pass http://{{$.Upstream.Name}};{{else}}proxy_pass {{$.Host.ForwardScheme}}://{{$.Host.ForwardHost}}:{{$.Host.ForwardPort}};{{end}}
+        {{if and $.Upstream $.Upstream.Servers}}proxy_pass http://{{$.Upstream.Name}};{{else}}proxy_pass {{$.Host.ForwardScheme}}://{{$.Host.ForwardHost}}:{{$.Host.ForwardPort}};{{end}}
         include /etc/nginx/includes/proxy_params.conf;
 {{else}}
         set $block_reason_var "uri_block";
@@ -1556,7 +1556,7 @@ server {
     location @api_fallback {
         # API is down - allow request to proceed (graceful degradation)
         access_log /etc/nginx/logs/access_raw.log main buffer=64k flush=5s;
-        {{if .Upstream}}proxy_pass http://{{.Upstream.Name}};{{else}}proxy_pass {{.Host.ForwardScheme}}://{{.Host.ForwardHost}}:{{.Host.ForwardPort}};{{end}}
+        {{if and .Upstream .Upstream.Servers}}proxy_pass http://{{.Upstream.Name}};{{else}}proxy_pass {{.Host.ForwardScheme}}://{{.Host.ForwardHost}}:{{.Host.ForwardPort}};{{end}}
         include /etc/nginx/includes/proxy_params.conf;
     }
 
@@ -1603,7 +1603,7 @@ server {
         error_page 401 = @challenge_redirect;
         error_page 500 502 503 504 = @api_fallback;
 {{end}}{{end}}
-        {{if .Upstream}}proxy_pass http://{{.Upstream.Name}};{{else}}proxy_pass {{.Host.ForwardScheme}}://{{.Host.ForwardHost}}:{{.Host.ForwardPort}};{{end}}
+        {{if and .Upstream .Upstream.Servers}}proxy_pass http://{{.Upstream.Name}};{{else}}proxy_pass {{.Host.ForwardScheme}}://{{.Host.ForwardHost}}:{{.Host.ForwardPort}};{{end}}
         include /etc/nginx/includes/proxy_params.conf;
         {{if .GlobalSettings}}
         # Proxy settings (Host-level overrides Global)
