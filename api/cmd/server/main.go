@@ -279,7 +279,7 @@ func main() {
 	renewalScheduler.Start()
 
 	// Initialize partition scheduler (creates monthly partitions for logs/stats)
-	partitionScheduler := scheduler.NewPartitionScheduler(db.DB, systemSettingsRepo, systemLogRepo)
+	partitionScheduler := scheduler.NewPartitionScheduler(db.DB, systemSettingsRepo, systemLogRepo, dashboardRepo)
 	partitionScheduler.Start()
 
 	// Initialize log rotate scheduler (rotates raw nginx logs daily)

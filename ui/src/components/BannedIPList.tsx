@@ -112,7 +112,7 @@ export function BannedIPList() {
       const proxyHostId = activeTab === 'hosts' && hostFilter !== 'all' ? hostFilter : undefined
       return fetchBannedIPs(page, 50, proxyHostId, filter)
     },
-    refetchInterval: 30000,
+    refetchInterval: 60000,
   })
 
   // Client-side filtering for type filter only (global/hosts filtering is server-side)

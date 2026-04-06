@@ -75,7 +75,7 @@ export default function HostResourcesSection({ systemHealth }: {
   const { data: historyData, isLoading: historyLoading } = useQuery({
     queryKey: ['systemHealthHistory', timeRange.value],
     queryFn: () => getSystemHealthHistory(timeRange.value, timeRange.points),
-    refetchInterval: 30000,
+    refetchInterval: 60000,
     enabled: showCharts,
   });
 

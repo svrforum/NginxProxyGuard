@@ -147,7 +147,7 @@ export function BotFilterLogs() {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['bot-filter-logs', filter, page, perPage],
     queryFn: () => fetchLogs(page, perPage, filter),
-    refetchInterval: 15000,
+    refetchInterval: 60000,
   });
 
   // Base filter for stats (without category filter)
@@ -163,7 +163,7 @@ export function BotFilterLogs() {
     queries: ['bad_bot', 'ai_bot', 'suspicious', 'search_engine'].map(cat => ({
       queryKey: ['bot-filter-stats', cat, baseStatsFilter],
       queryFn: () => fetchLogStats({ ...baseStatsFilter, bot_category: cat as BotCategory }),
-      refetchInterval: 30000,
+      refetchInterval: 60000,
     })),
   });
 
@@ -171,7 +171,7 @@ export function BotFilterLogs() {
   const { data: totalData } = useQuery({
     queryKey: ['bot-filter-total', baseStatsFilter],
     queryFn: () => fetchLogStats(baseStatsFilter),
-    refetchInterval: 30000,
+    refetchInterval: 60000,
   });
 
   // Build stats from queries

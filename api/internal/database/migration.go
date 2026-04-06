@@ -212,6 +212,26 @@ func (db *DB) RunMigrations() error {
 		CREATE INDEX IF NOT EXISTS idx_logs_part_proxy_host_ts ON logs_partitioned (proxy_host_id, timestamp DESC) WHERE proxy_host_id IS NOT NULL;
 		CREATE INDEX IF NOT EXISTS idx_logs_part_geo_ts ON logs_partitioned (geo_country_code, timestamp DESC) WHERE geo_country_code IS NOT NULL AND geo_country_code != '';
 		CREATE INDEX IF NOT EXISTS idx_logs_part_type_created ON logs_partitioned (log_type, created_at DESC);
+
+		-- Performance indexes for log queries (GitHub Issue #96)
+		CREATE INDEX IF NOT EXISTS idx_logs_part_block_reason ON logs_partitioned (block_reason) WHERE block_reason != 'none';
+		CREATE INDEX IF NOT EXISTS idx_logs_part_status_created ON logs_partitioned (status_code, created_at);
+
+		-- Deduplicate dashboard_stats_hourly rows with NULL proxy_host_id (GitHub Issue #96)
+		-- Previous versions inserted duplicate rows per hour_bucket because NULL != NULL in UNIQUE constraints.
+		-- Keep the row with the highest total_requests for each hour_bucket, delete the rest.
+		DELETE FROM dashboard_stats_hourly a
+		USING dashboard_stats_hourly b
+		WHERE a.proxy_host_id IS NULL
+		  AND b.proxy_host_id IS NULL
+		  AND a.hour_bucket = b.hour_bucket
+		  AND a.id != b.id
+		  AND (a.total_requests < b.total_requests OR (a.total_requests = b.total_requests AND a.id < b.id));
+
+		-- Create a partial unique index for NULL proxy_host_id to prevent future duplicates.
+		-- The standard UNIQUE(proxy_host_id, hour_bucket) does not prevent duplicate NULLs.
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_dashboard_stats_hourly_null_host_bucket
+			ON dashboard_stats_hourly (hour_bucket) WHERE proxy_host_id IS NULL;
 	`
 	_, err = db.Exec(upgradeSQL)
 	if err != nil {

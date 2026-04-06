@@ -136,7 +136,7 @@ export function LogViewer({ logType, defaultBlockReason }: LogViewerProps) {
   const statsQuery = useQuery({
     queryKey: ["log-stats", filterKey],
     queryFn: () => fetchLogStats(effectiveFilter),
-    refetchInterval: autoRefresh ? 30000 : false,
+    refetchInterval: autoRefresh ? 60000 : false,
   });
 
   const settingsQuery = useQuery({

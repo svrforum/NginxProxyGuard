@@ -17,13 +17,13 @@ export function BanHistoryTab({ hostMap }: { hostMap: Record<string, string> }) 
       source: sourceFilter !== 'all' ? sourceFilter as BanSource : undefined,
       page, per_page: 30,
     }),
-    refetchInterval: 30000,
+    refetchInterval: 60000,
   })
 
   const { data: statsData } = useQuery({
     queryKey: ['ip-ban-history-stats'],
     queryFn: getIPBanHistoryStats,
-    refetchInterval: 60000,
+    refetchInterval: 120000,
   })
 
   const history = data?.data || []

@@ -24,7 +24,7 @@ export default function ChallengeSettings() {
   const { data: stats } = useQuery({
     queryKey: ['challengeStats'],
     queryFn: () => getChallengeStats(),
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 60000, // Refresh every 30 seconds
   });
 
   const updateMutation = useMutation({

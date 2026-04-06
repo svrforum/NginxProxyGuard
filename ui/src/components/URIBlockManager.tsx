@@ -50,13 +50,13 @@ export function URIBlockManager() {
   const { data: globalBlock, isLoading: globalLoading } = useQuery({
     queryKey: ['global-uri-block'],
     queryFn: getGlobalURIBlock,
-    refetchInterval: 30000,
+    refetchInterval: 60000,
   })
 
   const { data: blocks = [], isLoading, error } = useQuery({
     queryKey: ['uri-blocks'],
     queryFn: listAllURIBlocks,
-    refetchInterval: 30000,
+    refetchInterval: 60000,
   })
 
   // Fetch all proxy hosts for new host selection
@@ -75,7 +75,7 @@ export function URIBlockManager() {
       return response.logs || []
     },
     enabled: activeTab === 'history',
-    refetchInterval: 30000,
+    refetchInterval: 60000,
   })
 
   // Update editing state when block data changes
