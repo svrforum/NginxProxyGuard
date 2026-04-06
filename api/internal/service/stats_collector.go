@@ -27,12 +27,13 @@ import (
 var combinedLogPattern = regexp.MustCompile(`^(\S+) \S+ \S+ \[([^\]]+)\] "(\S+) (\S+)[^"]*" (\d+) (\d+)`)
 
 type StatsCollector struct {
-	db              *sql.DB
-	nginxStatusURL  string
-	accessLogPath   string
-	lastLogPosition int64
-	mu              sync.Mutex
-	stopCh          chan struct{}
+	db               *sql.DB
+	nginxStatusURL   string
+	accessLogPath    string
+	lastLogPosition  int64
+	mu               sync.Mutex
+	stopCh           chan struct{}
+	lastHealthCleanup time.Time
 }
 
 type NginxStatus struct {
@@ -509,6 +510,13 @@ func (sc *StatsCollector) recordStats(nginxStatus NginxStatus, stats AggregatedS
 		log.Println("[StatsCollector] System health recorded successfully")
 	}
 
+	// Cleanup old system_health records (keep last 24 hours)
+	// Run once per hour using elapsed time tracking instead of fragile minute==0 check
+	if time.Since(sc.lastHealthCleanup) >= time.Hour {
+		sc.db.ExecContext(ctx, `DELETE FROM system_health WHERE recorded_at < NOW() - INTERVAL '24 hours'`)
+		sc.lastHealthCleanup = now
+	}
+
 	// Skip traffic stats if no new data
 	if stats.TotalRequests == 0 {
 		return nil
@@ -520,7 +528,9 @@ func (sc *StatsCollector) recordStats(nginxStatus NginxStatus, stats AggregatedS
 		avgResponseTime = stats.TotalTime / float64(stats.TotalRequests) * 1000 // Convert to ms
 	}
 
-	// Insert hourly stats (global, not per proxy host)
+	// Upsert hourly stats for global (proxy_host_id IS NULL) bucket.
+	// Uses partial unique index idx_dashboard_stats_hourly_null_host_bucket
+	// which covers (hour_bucket) WHERE proxy_host_id IS NULL. (GitHub Issue #96)
 	_, err = sc.db.Exec(`
 		INSERT INTO dashboard_stats_hourly (
 			proxy_host_id, hour_bucket, total_requests,
@@ -528,6 +538,19 @@ func (sc *StatsCollector) recordStats(nginxStatus NginxStatus, stats AggregatedS
 			avg_response_time, bytes_sent,
 			waf_blocked, rate_limited, bot_blocked
 		) VALUES (NULL, $1, $2, $3, $4, $5, $6, $7, $8, 0, 0, 0)
+		ON CONFLICT (hour_bucket) WHERE proxy_host_id IS NULL DO UPDATE SET
+			total_requests = dashboard_stats_hourly.total_requests + EXCLUDED.total_requests,
+			status_2xx = dashboard_stats_hourly.status_2xx + EXCLUDED.status_2xx,
+			status_3xx = dashboard_stats_hourly.status_3xx + EXCLUDED.status_3xx,
+			status_4xx = dashboard_stats_hourly.status_4xx + EXCLUDED.status_4xx,
+			status_5xx = dashboard_stats_hourly.status_5xx + EXCLUDED.status_5xx,
+			avg_response_time = CASE
+				WHEN dashboard_stats_hourly.total_requests > 0
+				THEN (dashboard_stats_hourly.avg_response_time * dashboard_stats_hourly.total_requests + EXCLUDED.avg_response_time * EXCLUDED.total_requests)
+					/ (dashboard_stats_hourly.total_requests + EXCLUDED.total_requests)
+				ELSE EXCLUDED.avg_response_time
+			END,
+			bytes_sent = dashboard_stats_hourly.bytes_sent + EXCLUDED.bytes_sent
 	`, hourBucket, stats.TotalRequests,
 		stats.Status2xx, stats.Status3xx, stats.Status4xx, stats.Status5xx,
 		avgResponseTime, stats.TotalBytes)

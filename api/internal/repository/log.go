@@ -18,7 +18,7 @@ import (
 	"nginx-proxy-guard/pkg/cache"
 )
 
-const statsCacheTTL = 30 * time.Second
+const statsCacheTTL = 2 * time.Minute
 
 type LogRepository struct {
 	db    *database.DB
@@ -1310,7 +1310,7 @@ func (r *LogRepository) GetDistinctHosts(ctx context.Context, search string, lim
 		SELECT DISTINCT host
 		FROM logs_partitioned
 		WHERE host IS NOT NULL AND host != ''
-		  AND created_at >= NOW() - INTERVAL '30 days'
+		  AND created_at >= NOW() - INTERVAL '7 days'
 	`
 	args := []interface{}{}
 	argIndex := 1
@@ -1366,7 +1366,7 @@ func (r *LogRepository) GetDistinctIPs(ctx context.Context, search string, limit
 		SELECT DISTINCT host(client_ip) as ip
 		FROM logs_partitioned
 		WHERE client_ip IS NOT NULL
-		  AND created_at >= NOW() - INTERVAL '30 days'
+		  AND created_at >= NOW() - INTERVAL '7 days'
 	`
 	args := []interface{}{}
 	argIndex := 1
@@ -1421,7 +1421,7 @@ func (r *LogRepository) GetDistinctUserAgents(ctx context.Context, search string
 		SELECT DISTINCT http_user_agent
 		FROM logs_partitioned
 		WHERE http_user_agent IS NOT NULL AND http_user_agent != ''
-		  AND created_at >= NOW() - INTERVAL '30 days'
+		  AND created_at >= NOW() - INTERVAL '7 days'
 	`
 	args := []interface{}{}
 	argIndex := 1
@@ -1469,7 +1469,7 @@ func (r *LogRepository) GetDistinctCountries(ctx context.Context) ([]model.Count
 		SELECT geo_country_code, geo_country, COUNT(*) as count
 		FROM logs_partitioned
 		WHERE geo_country_code IS NOT NULL AND geo_country_code != ''
-		  AND created_at >= NOW() - INTERVAL '30 days'
+		  AND created_at >= NOW() - INTERVAL '7 days'
 		GROUP BY geo_country_code, geo_country
 		ORDER BY count DESC
 		LIMIT 50
@@ -1522,7 +1522,7 @@ func (r *LogRepository) GetDistinctURIs(ctx context.Context, search string, limi
 		WHERE request_uri IS NOT NULL AND request_uri != ''
 			AND request_uri NOT IN ('/health', '/nginx_status')
 			AND request_uri NOT LIKE '/.well-known/%'
-			AND created_at >= NOW() - INTERVAL '30 days'
+			AND created_at >= NOW() - INTERVAL '7 days'
 	`
 	args := []interface{}{}
 	argIndex := 1
@@ -1570,7 +1570,7 @@ func (r *LogRepository) GetDistinctMethods(ctx context.Context) ([]string, error
 		SELECT DISTINCT request_method
 		FROM logs_partitioned
 		WHERE request_method IS NOT NULL AND request_method != ''
-		  AND created_at >= NOW() - INTERVAL '30 days'
+		  AND created_at >= NOW() - INTERVAL '7 days'
 		ORDER BY request_method
 	`
 

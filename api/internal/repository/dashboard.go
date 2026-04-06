@@ -65,7 +65,8 @@ func (r *DashboardRepository) GetSummary(ctx context.Context) (*model.DashboardS
 	`, last24h)
 	row.Scan(&summary.WAFBlocked24h, &summary.RateLimited24h, &summary.BotBlocked24h)
 
-	// Fallback: Get security stats from logs_partitioned table if dashboard_stats_hourly is empty
+	// Fallback: Get security stats from logs_partitioned if hourly stats are empty
+	// Uses idx_logs_part_block_reason partial index for efficient lookup
 	if summary.WAFBlocked24h == 0 && summary.RateLimited24h == 0 && summary.BotBlocked24h == 0 {
 		row = r.db.QueryRowContext(ctx, `
 			SELECT
@@ -74,6 +75,7 @@ func (r *DashboardRepository) GetSummary(ctx context.Context) (*model.DashboardS
 				COUNT(*) FILTER (WHERE block_reason = 'bot_filter')
 			FROM logs_partitioned
 			WHERE created_at >= $1
+			  AND block_reason != 'none'
 		`, last24h)
 		row.Scan(&summary.WAFBlocked24h, &summary.RateLimited24h, &summary.BotBlocked24h)
 	}
@@ -81,28 +83,35 @@ func (r *DashboardRepository) GetSummary(ctx context.Context) (*model.DashboardS
 	// Banned IPs count
 	r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM banned_ips WHERE (expires_at > NOW() OR is_permanent = TRUE)").Scan(&summary.BannedIPs)
 
-	// Blocked requests stats - lightweight query (no COUNT DISTINCT, no redundant fallback)
-	row = r.db.QueryRowContext(ctx, `
-		SELECT
-			COUNT(*) FILTER (WHERE status_code = 403 OR log_type = 'modsec'),
-			COUNT(*) FILTER (WHERE log_type = 'access')
-		FROM logs_partitioned
-		WHERE created_at >= $1
-	`, last24h)
-	var totalAccessFromLogs int64
-	row.Scan(&summary.BlockedRequests24h, &totalAccessFromLogs)
-	// Use logs count as fallback if dashboard_stats_hourly is incomplete
-	if totalAccessFromLogs > summary.TotalRequests24h {
-		summary.TotalRequests24h = totalAccessFromLogs
+	// Blocked requests stats - only fall back to logs_partitioned when hourly stats are incomplete (GitHub Issue #96)
+	if summary.TotalRequests24h == 0 {
+		row = r.db.QueryRowContext(ctx, `
+			SELECT
+				COUNT(*) FILTER (WHERE status_code = 403 OR log_type = 'modsec'),
+				COUNT(*) FILTER (WHERE log_type = 'access')
+			FROM logs_partitioned
+			WHERE created_at >= $1
+		`, last24h)
+		var totalAccessFromLogs int64
+		row.Scan(&summary.BlockedRequests24h, &totalAccessFromLogs)
+		if totalAccessFromLogs > summary.TotalRequests24h {
+			summary.TotalRequests24h = totalAccessFromLogs
+		}
+	} else {
+		// Use actual security block counts from hourly stats instead of all 4xx/5xx
+		summary.BlockedRequests24h = summary.WAFBlocked24h + summary.RateLimited24h + summary.BotBlocked24h
 	}
 
-	// Blocked unique IPs - separate lightweight query using HyperLogLog-like approximation
-	r.db.QueryRowContext(ctx, `
-		SELECT COUNT(DISTINCT client_ip)
-		FROM logs_partitioned
-		WHERE created_at >= $1
-		  AND (status_code = 403 OR log_type = 'modsec')
-	`, last24h).Scan(&summary.BlockedUniqueIPs24h)
+	// Blocked unique IPs - only query when we have blocked requests to count
+	// Uses block_reason index for efficient lookup
+	if summary.BlockedRequests24h > 0 {
+		r.db.QueryRowContext(ctx, `
+			SELECT COUNT(DISTINCT client_ip)
+			FROM logs_partitioned
+			WHERE created_at >= $1
+			  AND block_reason != 'none'
+		`, last24h).Scan(&summary.BlockedUniqueIPs24h)
+	}
 
 	// Host and certificate counts - combined into single query for performance
 	r.db.QueryRowContext(ctx, `

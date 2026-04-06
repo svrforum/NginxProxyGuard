@@ -942,6 +942,762 @@ CREATE TABLE IF NOT EXISTS public.logs_p2026_03 (
     bot_category text,
     exploit_rule character varying(50)
 );
+CREATE TABLE IF NOT EXISTS public.logs_p2026_04 (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    log_type public.log_type NOT NULL,
+    "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
+    host text,
+    client_ip inet,
+    request_method text,
+    request_uri text,
+    request_protocol text,
+    status_code integer,
+    body_bytes_sent bigint,
+    request_time double precision,
+    upstream_response_time double precision,
+    http_referer text,
+    http_user_agent text,
+    http_x_forwarded_for text,
+    severity public.log_severity,
+    error_message text,
+    rule_id bigint,
+    rule_message text,
+    rule_severity text,
+    rule_data text,
+    attack_type text,
+    action_taken text,
+    proxy_host_id uuid,
+    raw_log text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    geo_country text,
+    geo_country_code character varying(2),
+    geo_city text,
+    geo_asn text,
+    geo_org text,
+    block_reason public.block_reason DEFAULT 'none'::public.block_reason,
+    bot_category text,
+    exploit_rule character varying(50)
+);
+CREATE TABLE IF NOT EXISTS public.logs_p2026_05 (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    log_type public.log_type NOT NULL,
+    "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
+    host text,
+    client_ip inet,
+    request_method text,
+    request_uri text,
+    request_protocol text,
+    status_code integer,
+    body_bytes_sent bigint,
+    request_time double precision,
+    upstream_response_time double precision,
+    http_referer text,
+    http_user_agent text,
+    http_x_forwarded_for text,
+    severity public.log_severity,
+    error_message text,
+    rule_id bigint,
+    rule_message text,
+    rule_severity text,
+    rule_data text,
+    attack_type text,
+    action_taken text,
+    proxy_host_id uuid,
+    raw_log text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    geo_country text,
+    geo_country_code character varying(2),
+    geo_city text,
+    geo_asn text,
+    geo_org text,
+    block_reason public.block_reason DEFAULT 'none'::public.block_reason,
+    bot_category text,
+    exploit_rule character varying(50)
+);
+CREATE TABLE IF NOT EXISTS public.logs_p2026_06 (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    log_type public.log_type NOT NULL,
+    "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
+    host text,
+    client_ip inet,
+    request_method text,
+    request_uri text,
+    request_protocol text,
+    status_code integer,
+    body_bytes_sent bigint,
+    request_time double precision,
+    upstream_response_time double precision,
+    http_referer text,
+    http_user_agent text,
+    http_x_forwarded_for text,
+    severity public.log_severity,
+    error_message text,
+    rule_id bigint,
+    rule_message text,
+    rule_severity text,
+    rule_data text,
+    attack_type text,
+    action_taken text,
+    proxy_host_id uuid,
+    raw_log text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    geo_country text,
+    geo_country_code character varying(2),
+    geo_city text,
+    geo_asn text,
+    geo_org text,
+    block_reason public.block_reason DEFAULT 'none'::public.block_reason,
+    bot_category text,
+    exploit_rule character varying(50)
+);
+CREATE TABLE IF NOT EXISTS public.logs_p2026_07 (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    log_type public.log_type NOT NULL,
+    "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
+    host text,
+    client_ip inet,
+    request_method text,
+    request_uri text,
+    request_protocol text,
+    status_code integer,
+    body_bytes_sent bigint,
+    request_time double precision,
+    upstream_response_time double precision,
+    http_referer text,
+    http_user_agent text,
+    http_x_forwarded_for text,
+    severity public.log_severity,
+    error_message text,
+    rule_id bigint,
+    rule_message text,
+    rule_severity text,
+    rule_data text,
+    attack_type text,
+    action_taken text,
+    proxy_host_id uuid,
+    raw_log text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    geo_country text,
+    geo_country_code character varying(2),
+    geo_city text,
+    geo_asn text,
+    geo_org text,
+    block_reason public.block_reason DEFAULT 'none'::public.block_reason,
+    bot_category text,
+    exploit_rule character varying(50)
+);
+CREATE TABLE IF NOT EXISTS public.logs_p2026_08 (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    log_type public.log_type NOT NULL,
+    "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
+    host text,
+    client_ip inet,
+    request_method text,
+    request_uri text,
+    request_protocol text,
+    status_code integer,
+    body_bytes_sent bigint,
+    request_time double precision,
+    upstream_response_time double precision,
+    http_referer text,
+    http_user_agent text,
+    http_x_forwarded_for text,
+    severity public.log_severity,
+    error_message text,
+    rule_id bigint,
+    rule_message text,
+    rule_severity text,
+    rule_data text,
+    attack_type text,
+    action_taken text,
+    proxy_host_id uuid,
+    raw_log text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    geo_country text,
+    geo_country_code character varying(2),
+    geo_city text,
+    geo_asn text,
+    geo_org text,
+    block_reason public.block_reason DEFAULT 'none'::public.block_reason,
+    bot_category text,
+    exploit_rule character varying(50)
+);
+CREATE TABLE IF NOT EXISTS public.logs_p2026_09 (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    log_type public.log_type NOT NULL,
+    "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
+    host text,
+    client_ip inet,
+    request_method text,
+    request_uri text,
+    request_protocol text,
+    status_code integer,
+    body_bytes_sent bigint,
+    request_time double precision,
+    upstream_response_time double precision,
+    http_referer text,
+    http_user_agent text,
+    http_x_forwarded_for text,
+    severity public.log_severity,
+    error_message text,
+    rule_id bigint,
+    rule_message text,
+    rule_severity text,
+    rule_data text,
+    attack_type text,
+    action_taken text,
+    proxy_host_id uuid,
+    raw_log text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    geo_country text,
+    geo_country_code character varying(2),
+    geo_city text,
+    geo_asn text,
+    geo_org text,
+    block_reason public.block_reason DEFAULT 'none'::public.block_reason,
+    bot_category text,
+    exploit_rule character varying(50)
+);
+CREATE TABLE IF NOT EXISTS public.logs_p2026_10 (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    log_type public.log_type NOT NULL,
+    "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
+    host text,
+    client_ip inet,
+    request_method text,
+    request_uri text,
+    request_protocol text,
+    status_code integer,
+    body_bytes_sent bigint,
+    request_time double precision,
+    upstream_response_time double precision,
+    http_referer text,
+    http_user_agent text,
+    http_x_forwarded_for text,
+    severity public.log_severity,
+    error_message text,
+    rule_id bigint,
+    rule_message text,
+    rule_severity text,
+    rule_data text,
+    attack_type text,
+    action_taken text,
+    proxy_host_id uuid,
+    raw_log text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    geo_country text,
+    geo_country_code character varying(2),
+    geo_city text,
+    geo_asn text,
+    geo_org text,
+    block_reason public.block_reason DEFAULT 'none'::public.block_reason,
+    bot_category text,
+    exploit_rule character varying(50)
+);
+CREATE TABLE IF NOT EXISTS public.logs_p2026_11 (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    log_type public.log_type NOT NULL,
+    "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
+    host text,
+    client_ip inet,
+    request_method text,
+    request_uri text,
+    request_protocol text,
+    status_code integer,
+    body_bytes_sent bigint,
+    request_time double precision,
+    upstream_response_time double precision,
+    http_referer text,
+    http_user_agent text,
+    http_x_forwarded_for text,
+    severity public.log_severity,
+    error_message text,
+    rule_id bigint,
+    rule_message text,
+    rule_severity text,
+    rule_data text,
+    attack_type text,
+    action_taken text,
+    proxy_host_id uuid,
+    raw_log text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    geo_country text,
+    geo_country_code character varying(2),
+    geo_city text,
+    geo_asn text,
+    geo_org text,
+    block_reason public.block_reason DEFAULT 'none'::public.block_reason,
+    bot_category text,
+    exploit_rule character varying(50)
+);
+CREATE TABLE IF NOT EXISTS public.logs_p2026_12 (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    log_type public.log_type NOT NULL,
+    "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
+    host text,
+    client_ip inet,
+    request_method text,
+    request_uri text,
+    request_protocol text,
+    status_code integer,
+    body_bytes_sent bigint,
+    request_time double precision,
+    upstream_response_time double precision,
+    http_referer text,
+    http_user_agent text,
+    http_x_forwarded_for text,
+    severity public.log_severity,
+    error_message text,
+    rule_id bigint,
+    rule_message text,
+    rule_severity text,
+    rule_data text,
+    attack_type text,
+    action_taken text,
+    proxy_host_id uuid,
+    raw_log text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    geo_country text,
+    geo_country_code character varying(2),
+    geo_city text,
+    geo_asn text,
+    geo_org text,
+    block_reason public.block_reason DEFAULT 'none'::public.block_reason,
+    bot_category text,
+    exploit_rule character varying(50)
+);
+CREATE TABLE IF NOT EXISTS public.logs_p2027_01 (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    log_type public.log_type NOT NULL,
+    "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
+    host text,
+    client_ip inet,
+    request_method text,
+    request_uri text,
+    request_protocol text,
+    status_code integer,
+    body_bytes_sent bigint,
+    request_time double precision,
+    upstream_response_time double precision,
+    http_referer text,
+    http_user_agent text,
+    http_x_forwarded_for text,
+    severity public.log_severity,
+    error_message text,
+    rule_id bigint,
+    rule_message text,
+    rule_severity text,
+    rule_data text,
+    attack_type text,
+    action_taken text,
+    proxy_host_id uuid,
+    raw_log text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    geo_country text,
+    geo_country_code character varying(2),
+    geo_city text,
+    geo_asn text,
+    geo_org text,
+    block_reason public.block_reason DEFAULT 'none'::public.block_reason,
+    bot_category text,
+    exploit_rule character varying(50)
+);
+CREATE TABLE IF NOT EXISTS public.logs_p2027_02 (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    log_type public.log_type NOT NULL,
+    "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
+    host text,
+    client_ip inet,
+    request_method text,
+    request_uri text,
+    request_protocol text,
+    status_code integer,
+    body_bytes_sent bigint,
+    request_time double precision,
+    upstream_response_time double precision,
+    http_referer text,
+    http_user_agent text,
+    http_x_forwarded_for text,
+    severity public.log_severity,
+    error_message text,
+    rule_id bigint,
+    rule_message text,
+    rule_severity text,
+    rule_data text,
+    attack_type text,
+    action_taken text,
+    proxy_host_id uuid,
+    raw_log text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    geo_country text,
+    geo_country_code character varying(2),
+    geo_city text,
+    geo_asn text,
+    geo_org text,
+    block_reason public.block_reason DEFAULT 'none'::public.block_reason,
+    bot_category text,
+    exploit_rule character varying(50)
+);
+CREATE TABLE IF NOT EXISTS public.logs_p2027_03 (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    log_type public.log_type NOT NULL,
+    "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
+    host text,
+    client_ip inet,
+    request_method text,
+    request_uri text,
+    request_protocol text,
+    status_code integer,
+    body_bytes_sent bigint,
+    request_time double precision,
+    upstream_response_time double precision,
+    http_referer text,
+    http_user_agent text,
+    http_x_forwarded_for text,
+    severity public.log_severity,
+    error_message text,
+    rule_id bigint,
+    rule_message text,
+    rule_severity text,
+    rule_data text,
+    attack_type text,
+    action_taken text,
+    proxy_host_id uuid,
+    raw_log text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    geo_country text,
+    geo_country_code character varying(2),
+    geo_city text,
+    geo_asn text,
+    geo_org text,
+    block_reason public.block_reason DEFAULT 'none'::public.block_reason,
+    bot_category text,
+    exploit_rule character varying(50)
+);
+CREATE TABLE IF NOT EXISTS public.logs_p2027_04 (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    log_type public.log_type NOT NULL,
+    "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
+    host text,
+    client_ip inet,
+    request_method text,
+    request_uri text,
+    request_protocol text,
+    status_code integer,
+    body_bytes_sent bigint,
+    request_time double precision,
+    upstream_response_time double precision,
+    http_referer text,
+    http_user_agent text,
+    http_x_forwarded_for text,
+    severity public.log_severity,
+    error_message text,
+    rule_id bigint,
+    rule_message text,
+    rule_severity text,
+    rule_data text,
+    attack_type text,
+    action_taken text,
+    proxy_host_id uuid,
+    raw_log text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    geo_country text,
+    geo_country_code character varying(2),
+    geo_city text,
+    geo_asn text,
+    geo_org text,
+    block_reason public.block_reason DEFAULT 'none'::public.block_reason,
+    bot_category text,
+    exploit_rule character varying(50)
+);
+CREATE TABLE IF NOT EXISTS public.logs_p2027_05 (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    log_type public.log_type NOT NULL,
+    "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
+    host text,
+    client_ip inet,
+    request_method text,
+    request_uri text,
+    request_protocol text,
+    status_code integer,
+    body_bytes_sent bigint,
+    request_time double precision,
+    upstream_response_time double precision,
+    http_referer text,
+    http_user_agent text,
+    http_x_forwarded_for text,
+    severity public.log_severity,
+    error_message text,
+    rule_id bigint,
+    rule_message text,
+    rule_severity text,
+    rule_data text,
+    attack_type text,
+    action_taken text,
+    proxy_host_id uuid,
+    raw_log text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    geo_country text,
+    geo_country_code character varying(2),
+    geo_city text,
+    geo_asn text,
+    geo_org text,
+    block_reason public.block_reason DEFAULT 'none'::public.block_reason,
+    bot_category text,
+    exploit_rule character varying(50)
+);
+CREATE TABLE IF NOT EXISTS public.logs_p2027_06 (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    log_type public.log_type NOT NULL,
+    "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
+    host text,
+    client_ip inet,
+    request_method text,
+    request_uri text,
+    request_protocol text,
+    status_code integer,
+    body_bytes_sent bigint,
+    request_time double precision,
+    upstream_response_time double precision,
+    http_referer text,
+    http_user_agent text,
+    http_x_forwarded_for text,
+    severity public.log_severity,
+    error_message text,
+    rule_id bigint,
+    rule_message text,
+    rule_severity text,
+    rule_data text,
+    attack_type text,
+    action_taken text,
+    proxy_host_id uuid,
+    raw_log text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    geo_country text,
+    geo_country_code character varying(2),
+    geo_city text,
+    geo_asn text,
+    geo_org text,
+    block_reason public.block_reason DEFAULT 'none'::public.block_reason,
+    bot_category text,
+    exploit_rule character varying(50)
+);
+CREATE TABLE IF NOT EXISTS public.logs_p2027_07 (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    log_type public.log_type NOT NULL,
+    "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
+    host text,
+    client_ip inet,
+    request_method text,
+    request_uri text,
+    request_protocol text,
+    status_code integer,
+    body_bytes_sent bigint,
+    request_time double precision,
+    upstream_response_time double precision,
+    http_referer text,
+    http_user_agent text,
+    http_x_forwarded_for text,
+    severity public.log_severity,
+    error_message text,
+    rule_id bigint,
+    rule_message text,
+    rule_severity text,
+    rule_data text,
+    attack_type text,
+    action_taken text,
+    proxy_host_id uuid,
+    raw_log text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    geo_country text,
+    geo_country_code character varying(2),
+    geo_city text,
+    geo_asn text,
+    geo_org text,
+    block_reason public.block_reason DEFAULT 'none'::public.block_reason,
+    bot_category text,
+    exploit_rule character varying(50)
+);
+CREATE TABLE IF NOT EXISTS public.logs_p2027_08 (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    log_type public.log_type NOT NULL,
+    "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
+    host text,
+    client_ip inet,
+    request_method text,
+    request_uri text,
+    request_protocol text,
+    status_code integer,
+    body_bytes_sent bigint,
+    request_time double precision,
+    upstream_response_time double precision,
+    http_referer text,
+    http_user_agent text,
+    http_x_forwarded_for text,
+    severity public.log_severity,
+    error_message text,
+    rule_id bigint,
+    rule_message text,
+    rule_severity text,
+    rule_data text,
+    attack_type text,
+    action_taken text,
+    proxy_host_id uuid,
+    raw_log text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    geo_country text,
+    geo_country_code character varying(2),
+    geo_city text,
+    geo_asn text,
+    geo_org text,
+    block_reason public.block_reason DEFAULT 'none'::public.block_reason,
+    bot_category text,
+    exploit_rule character varying(50)
+);
+CREATE TABLE IF NOT EXISTS public.logs_p2027_09 (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    log_type public.log_type NOT NULL,
+    "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
+    host text,
+    client_ip inet,
+    request_method text,
+    request_uri text,
+    request_protocol text,
+    status_code integer,
+    body_bytes_sent bigint,
+    request_time double precision,
+    upstream_response_time double precision,
+    http_referer text,
+    http_user_agent text,
+    http_x_forwarded_for text,
+    severity public.log_severity,
+    error_message text,
+    rule_id bigint,
+    rule_message text,
+    rule_severity text,
+    rule_data text,
+    attack_type text,
+    action_taken text,
+    proxy_host_id uuid,
+    raw_log text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    geo_country text,
+    geo_country_code character varying(2),
+    geo_city text,
+    geo_asn text,
+    geo_org text,
+    block_reason public.block_reason DEFAULT 'none'::public.block_reason,
+    bot_category text,
+    exploit_rule character varying(50)
+);
+CREATE TABLE IF NOT EXISTS public.logs_p2027_10 (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    log_type public.log_type NOT NULL,
+    "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
+    host text,
+    client_ip inet,
+    request_method text,
+    request_uri text,
+    request_protocol text,
+    status_code integer,
+    body_bytes_sent bigint,
+    request_time double precision,
+    upstream_response_time double precision,
+    http_referer text,
+    http_user_agent text,
+    http_x_forwarded_for text,
+    severity public.log_severity,
+    error_message text,
+    rule_id bigint,
+    rule_message text,
+    rule_severity text,
+    rule_data text,
+    attack_type text,
+    action_taken text,
+    proxy_host_id uuid,
+    raw_log text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    geo_country text,
+    geo_country_code character varying(2),
+    geo_city text,
+    geo_asn text,
+    geo_org text,
+    block_reason public.block_reason DEFAULT 'none'::public.block_reason,
+    bot_category text,
+    exploit_rule character varying(50)
+);
+CREATE TABLE IF NOT EXISTS public.logs_p2027_11 (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    log_type public.log_type NOT NULL,
+    "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
+    host text,
+    client_ip inet,
+    request_method text,
+    request_uri text,
+    request_protocol text,
+    status_code integer,
+    body_bytes_sent bigint,
+    request_time double precision,
+    upstream_response_time double precision,
+    http_referer text,
+    http_user_agent text,
+    http_x_forwarded_for text,
+    severity public.log_severity,
+    error_message text,
+    rule_id bigint,
+    rule_message text,
+    rule_severity text,
+    rule_data text,
+    attack_type text,
+    action_taken text,
+    proxy_host_id uuid,
+    raw_log text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    geo_country text,
+    geo_country_code character varying(2),
+    geo_city text,
+    geo_asn text,
+    geo_org text,
+    block_reason public.block_reason DEFAULT 'none'::public.block_reason,
+    bot_category text,
+    exploit_rule character varying(50)
+);
+CREATE TABLE IF NOT EXISTS public.logs_p2027_12 (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    log_type public.log_type NOT NULL,
+    "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
+    host text,
+    client_ip inet,
+    request_method text,
+    request_uri text,
+    request_protocol text,
+    status_code integer,
+    body_bytes_sent bigint,
+    request_time double precision,
+    upstream_response_time double precision,
+    http_referer text,
+    http_user_agent text,
+    http_x_forwarded_for text,
+    severity public.log_severity,
+    error_message text,
+    rule_id bigint,
+    rule_message text,
+    rule_severity text,
+    rule_data text,
+    attack_type text,
+    action_taken text,
+    proxy_host_id uuid,
+    raw_log text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    geo_country text,
+    geo_country_code character varying(2),
+    geo_city text,
+    geo_asn text,
+    geo_org text,
+    block_reason public.block_reason DEFAULT 'none'::public.block_reason,
+    bot_category text,
+    exploit_rule character varying(50)
+);
 CREATE TABLE IF NOT EXISTS public.logs_p_default (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     log_type public.log_type NOT NULL,
@@ -1606,6 +2362,27 @@ DO $$ BEGIN ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.log
 DO $$ BEGIN ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p2026_01 FOR VALUES FROM ('2026-01-01 00:00:00+00') TO ('2026-02-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p2026_02 FOR VALUES FROM ('2026-02-01 00:00:00+00') TO ('2026-03-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p2026_03 FOR VALUES FROM ('2026-03-01 00:00:00+00') TO ('2026-04-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p2026_04 FOR VALUES FROM ('2026-04-01 00:00:00+00') TO ('2026-05-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p2026_05 FOR VALUES FROM ('2026-05-01 00:00:00+00') TO ('2026-06-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p2026_06 FOR VALUES FROM ('2026-06-01 00:00:00+00') TO ('2026-07-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p2026_07 FOR VALUES FROM ('2026-07-01 00:00:00+00') TO ('2026-08-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p2026_08 FOR VALUES FROM ('2026-08-01 00:00:00+00') TO ('2026-09-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p2026_09 FOR VALUES FROM ('2026-09-01 00:00:00+00') TO ('2026-10-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p2026_10 FOR VALUES FROM ('2026-10-01 00:00:00+00') TO ('2026-11-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p2026_11 FOR VALUES FROM ('2026-11-01 00:00:00+00') TO ('2026-12-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p2026_12 FOR VALUES FROM ('2026-12-01 00:00:00+00') TO ('2027-01-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p2027_01 FOR VALUES FROM ('2027-01-01 00:00:00+00') TO ('2027-02-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p2027_02 FOR VALUES FROM ('2027-02-01 00:00:00+00') TO ('2027-03-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p2027_03 FOR VALUES FROM ('2027-03-01 00:00:00+00') TO ('2027-04-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p2027_04 FOR VALUES FROM ('2027-04-01 00:00:00+00') TO ('2027-05-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p2027_05 FOR VALUES FROM ('2027-05-01 00:00:00+00') TO ('2027-06-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p2027_06 FOR VALUES FROM ('2027-06-01 00:00:00+00') TO ('2027-07-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p2027_07 FOR VALUES FROM ('2027-07-01 00:00:00+00') TO ('2027-08-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p2027_08 FOR VALUES FROM ('2027-08-01 00:00:00+00') TO ('2027-09-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p2027_09 FOR VALUES FROM ('2027-09-01 00:00:00+00') TO ('2027-10-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p2027_10 FOR VALUES FROM ('2027-10-01 00:00:00+00') TO ('2027-11-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p2027_11 FOR VALUES FROM ('2027-11-01 00:00:00+00') TO ('2027-12-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p2027_12 FOR VALUES FROM ('2027-12-01 00:00:00+00') TO ('2028-01-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE ONLY public.logs_partitioned ATTACH PARTITION public.logs_p_default DEFAULT; EXCEPTION WHEN OTHERS THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE ONLY public.dashboard_stats_hourly_partitioned ATTACH PARTITION public.stats_hourly_p2025_12 FOR VALUES FROM ('2025-12-01 00:00:00+00') TO ('2026-01-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE ONLY public.dashboard_stats_hourly_partitioned ATTACH PARTITION public.stats_hourly_p2026_01 FOR VALUES FROM ('2026-01-01 00:00:00+00') TO ('2026-02-01 00:00:00+00'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
@@ -1708,6 +2485,48 @@ ALTER TABLE ONLY public.logs_p2026_02
     ADD CONSTRAINT logs_p2026_02_pkey PRIMARY KEY (id, created_at);
 ALTER TABLE ONLY public.logs_p2026_03
     ADD CONSTRAINT logs_p2026_03_pkey PRIMARY KEY (id, created_at);
+ALTER TABLE ONLY public.logs_p2026_04
+    ADD CONSTRAINT logs_p2026_04_pkey PRIMARY KEY (id, created_at);
+ALTER TABLE ONLY public.logs_p2026_05
+    ADD CONSTRAINT logs_p2026_05_pkey PRIMARY KEY (id, created_at);
+ALTER TABLE ONLY public.logs_p2026_06
+    ADD CONSTRAINT logs_p2026_06_pkey PRIMARY KEY (id, created_at);
+ALTER TABLE ONLY public.logs_p2026_07
+    ADD CONSTRAINT logs_p2026_07_pkey PRIMARY KEY (id, created_at);
+ALTER TABLE ONLY public.logs_p2026_08
+    ADD CONSTRAINT logs_p2026_08_pkey PRIMARY KEY (id, created_at);
+ALTER TABLE ONLY public.logs_p2026_09
+    ADD CONSTRAINT logs_p2026_09_pkey PRIMARY KEY (id, created_at);
+ALTER TABLE ONLY public.logs_p2026_10
+    ADD CONSTRAINT logs_p2026_10_pkey PRIMARY KEY (id, created_at);
+ALTER TABLE ONLY public.logs_p2026_11
+    ADD CONSTRAINT logs_p2026_11_pkey PRIMARY KEY (id, created_at);
+ALTER TABLE ONLY public.logs_p2026_12
+    ADD CONSTRAINT logs_p2026_12_pkey PRIMARY KEY (id, created_at);
+ALTER TABLE ONLY public.logs_p2027_01
+    ADD CONSTRAINT logs_p2027_01_pkey PRIMARY KEY (id, created_at);
+ALTER TABLE ONLY public.logs_p2027_02
+    ADD CONSTRAINT logs_p2027_02_pkey PRIMARY KEY (id, created_at);
+ALTER TABLE ONLY public.logs_p2027_03
+    ADD CONSTRAINT logs_p2027_03_pkey PRIMARY KEY (id, created_at);
+ALTER TABLE ONLY public.logs_p2027_04
+    ADD CONSTRAINT logs_p2027_04_pkey PRIMARY KEY (id, created_at);
+ALTER TABLE ONLY public.logs_p2027_05
+    ADD CONSTRAINT logs_p2027_05_pkey PRIMARY KEY (id, created_at);
+ALTER TABLE ONLY public.logs_p2027_06
+    ADD CONSTRAINT logs_p2027_06_pkey PRIMARY KEY (id, created_at);
+ALTER TABLE ONLY public.logs_p2027_07
+    ADD CONSTRAINT logs_p2027_07_pkey PRIMARY KEY (id, created_at);
+ALTER TABLE ONLY public.logs_p2027_08
+    ADD CONSTRAINT logs_p2027_08_pkey PRIMARY KEY (id, created_at);
+ALTER TABLE ONLY public.logs_p2027_09
+    ADD CONSTRAINT logs_p2027_09_pkey PRIMARY KEY (id, created_at);
+ALTER TABLE ONLY public.logs_p2027_10
+    ADD CONSTRAINT logs_p2027_10_pkey PRIMARY KEY (id, created_at);
+ALTER TABLE ONLY public.logs_p2027_11
+    ADD CONSTRAINT logs_p2027_11_pkey PRIMARY KEY (id, created_at);
+ALTER TABLE ONLY public.logs_p2027_12
+    ADD CONSTRAINT logs_p2027_12_pkey PRIMARY KEY (id, created_at);
 ALTER TABLE ONLY public.logs_p_default
     ADD CONSTRAINT logs_p_default_pkey PRIMARY KEY (id, created_at);
 ALTER TABLE ONLY public.logs
@@ -1917,6 +2736,111 @@ CREATE INDEX IF NOT EXISTS logs_p2026_03_host_idx ON public.logs_p2026_03 USING 
 CREATE INDEX IF NOT EXISTS logs_p2026_03_log_type_idx ON public.logs_p2026_03 USING btree (log_type);
 CREATE INDEX IF NOT EXISTS logs_p2026_03_log_type_timestamp_idx ON public.logs_p2026_03 USING btree (log_type, "timestamp" DESC);
 CREATE INDEX IF NOT EXISTS logs_p2026_03_timestamp_idx ON public.logs_p2026_03 USING btree ("timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2026_04_exploit_rule_idx ON public.logs_p2026_04 USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
+CREATE INDEX IF NOT EXISTS logs_p2026_04_host_idx ON public.logs_p2026_04 USING btree (host);
+CREATE INDEX IF NOT EXISTS logs_p2026_04_log_type_idx ON public.logs_p2026_04 USING btree (log_type);
+CREATE INDEX IF NOT EXISTS logs_p2026_04_log_type_timestamp_idx ON public.logs_p2026_04 USING btree (log_type, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2026_04_timestamp_idx ON public.logs_p2026_04 USING btree ("timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2026_05_exploit_rule_idx ON public.logs_p2026_05 USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
+CREATE INDEX IF NOT EXISTS logs_p2026_05_host_idx ON public.logs_p2026_05 USING btree (host);
+CREATE INDEX IF NOT EXISTS logs_p2026_05_log_type_idx ON public.logs_p2026_05 USING btree (log_type);
+CREATE INDEX IF NOT EXISTS logs_p2026_05_log_type_timestamp_idx ON public.logs_p2026_05 USING btree (log_type, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2026_05_timestamp_idx ON public.logs_p2026_05 USING btree ("timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2026_06_exploit_rule_idx ON public.logs_p2026_06 USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
+CREATE INDEX IF NOT EXISTS logs_p2026_06_host_idx ON public.logs_p2026_06 USING btree (host);
+CREATE INDEX IF NOT EXISTS logs_p2026_06_log_type_idx ON public.logs_p2026_06 USING btree (log_type);
+CREATE INDEX IF NOT EXISTS logs_p2026_06_log_type_timestamp_idx ON public.logs_p2026_06 USING btree (log_type, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2026_06_timestamp_idx ON public.logs_p2026_06 USING btree ("timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2026_07_exploit_rule_idx ON public.logs_p2026_07 USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
+CREATE INDEX IF NOT EXISTS logs_p2026_07_host_idx ON public.logs_p2026_07 USING btree (host);
+CREATE INDEX IF NOT EXISTS logs_p2026_07_log_type_idx ON public.logs_p2026_07 USING btree (log_type);
+CREATE INDEX IF NOT EXISTS logs_p2026_07_log_type_timestamp_idx ON public.logs_p2026_07 USING btree (log_type, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2026_07_timestamp_idx ON public.logs_p2026_07 USING btree ("timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2026_08_exploit_rule_idx ON public.logs_p2026_08 USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
+CREATE INDEX IF NOT EXISTS logs_p2026_08_host_idx ON public.logs_p2026_08 USING btree (host);
+CREATE INDEX IF NOT EXISTS logs_p2026_08_log_type_idx ON public.logs_p2026_08 USING btree (log_type);
+CREATE INDEX IF NOT EXISTS logs_p2026_08_log_type_timestamp_idx ON public.logs_p2026_08 USING btree (log_type, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2026_08_timestamp_idx ON public.logs_p2026_08 USING btree ("timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2026_09_exploit_rule_idx ON public.logs_p2026_09 USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
+CREATE INDEX IF NOT EXISTS logs_p2026_09_host_idx ON public.logs_p2026_09 USING btree (host);
+CREATE INDEX IF NOT EXISTS logs_p2026_09_log_type_idx ON public.logs_p2026_09 USING btree (log_type);
+CREATE INDEX IF NOT EXISTS logs_p2026_09_log_type_timestamp_idx ON public.logs_p2026_09 USING btree (log_type, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2026_09_timestamp_idx ON public.logs_p2026_09 USING btree ("timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2026_10_exploit_rule_idx ON public.logs_p2026_10 USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
+CREATE INDEX IF NOT EXISTS logs_p2026_10_host_idx ON public.logs_p2026_10 USING btree (host);
+CREATE INDEX IF NOT EXISTS logs_p2026_10_log_type_idx ON public.logs_p2026_10 USING btree (log_type);
+CREATE INDEX IF NOT EXISTS logs_p2026_10_log_type_timestamp_idx ON public.logs_p2026_10 USING btree (log_type, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2026_10_timestamp_idx ON public.logs_p2026_10 USING btree ("timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2026_11_exploit_rule_idx ON public.logs_p2026_11 USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
+CREATE INDEX IF NOT EXISTS logs_p2026_11_host_idx ON public.logs_p2026_11 USING btree (host);
+CREATE INDEX IF NOT EXISTS logs_p2026_11_log_type_idx ON public.logs_p2026_11 USING btree (log_type);
+CREATE INDEX IF NOT EXISTS logs_p2026_11_log_type_timestamp_idx ON public.logs_p2026_11 USING btree (log_type, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2026_11_timestamp_idx ON public.logs_p2026_11 USING btree ("timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2026_12_exploit_rule_idx ON public.logs_p2026_12 USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
+CREATE INDEX IF NOT EXISTS logs_p2026_12_host_idx ON public.logs_p2026_12 USING btree (host);
+CREATE INDEX IF NOT EXISTS logs_p2026_12_log_type_idx ON public.logs_p2026_12 USING btree (log_type);
+CREATE INDEX IF NOT EXISTS logs_p2026_12_log_type_timestamp_idx ON public.logs_p2026_12 USING btree (log_type, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2026_12_timestamp_idx ON public.logs_p2026_12 USING btree ("timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2027_01_exploit_rule_idx ON public.logs_p2027_01 USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
+CREATE INDEX IF NOT EXISTS logs_p2027_01_host_idx ON public.logs_p2027_01 USING btree (host);
+CREATE INDEX IF NOT EXISTS logs_p2027_01_log_type_idx ON public.logs_p2027_01 USING btree (log_type);
+CREATE INDEX IF NOT EXISTS logs_p2027_01_log_type_timestamp_idx ON public.logs_p2027_01 USING btree (log_type, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2027_01_timestamp_idx ON public.logs_p2027_01 USING btree ("timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2027_02_exploit_rule_idx ON public.logs_p2027_02 USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
+CREATE INDEX IF NOT EXISTS logs_p2027_02_host_idx ON public.logs_p2027_02 USING btree (host);
+CREATE INDEX IF NOT EXISTS logs_p2027_02_log_type_idx ON public.logs_p2027_02 USING btree (log_type);
+CREATE INDEX IF NOT EXISTS logs_p2027_02_log_type_timestamp_idx ON public.logs_p2027_02 USING btree (log_type, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2027_02_timestamp_idx ON public.logs_p2027_02 USING btree ("timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2027_03_exploit_rule_idx ON public.logs_p2027_03 USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
+CREATE INDEX IF NOT EXISTS logs_p2027_03_host_idx ON public.logs_p2027_03 USING btree (host);
+CREATE INDEX IF NOT EXISTS logs_p2027_03_log_type_idx ON public.logs_p2027_03 USING btree (log_type);
+CREATE INDEX IF NOT EXISTS logs_p2027_03_log_type_timestamp_idx ON public.logs_p2027_03 USING btree (log_type, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2027_03_timestamp_idx ON public.logs_p2027_03 USING btree ("timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2027_04_exploit_rule_idx ON public.logs_p2027_04 USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
+CREATE INDEX IF NOT EXISTS logs_p2027_04_host_idx ON public.logs_p2027_04 USING btree (host);
+CREATE INDEX IF NOT EXISTS logs_p2027_04_log_type_idx ON public.logs_p2027_04 USING btree (log_type);
+CREATE INDEX IF NOT EXISTS logs_p2027_04_log_type_timestamp_idx ON public.logs_p2027_04 USING btree (log_type, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2027_04_timestamp_idx ON public.logs_p2027_04 USING btree ("timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2027_05_exploit_rule_idx ON public.logs_p2027_05 USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
+CREATE INDEX IF NOT EXISTS logs_p2027_05_host_idx ON public.logs_p2027_05 USING btree (host);
+CREATE INDEX IF NOT EXISTS logs_p2027_05_log_type_idx ON public.logs_p2027_05 USING btree (log_type);
+CREATE INDEX IF NOT EXISTS logs_p2027_05_log_type_timestamp_idx ON public.logs_p2027_05 USING btree (log_type, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2027_05_timestamp_idx ON public.logs_p2027_05 USING btree ("timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2027_06_exploit_rule_idx ON public.logs_p2027_06 USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
+CREATE INDEX IF NOT EXISTS logs_p2027_06_host_idx ON public.logs_p2027_06 USING btree (host);
+CREATE INDEX IF NOT EXISTS logs_p2027_06_log_type_idx ON public.logs_p2027_06 USING btree (log_type);
+CREATE INDEX IF NOT EXISTS logs_p2027_06_log_type_timestamp_idx ON public.logs_p2027_06 USING btree (log_type, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2027_06_timestamp_idx ON public.logs_p2027_06 USING btree ("timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2027_07_exploit_rule_idx ON public.logs_p2027_07 USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
+CREATE INDEX IF NOT EXISTS logs_p2027_07_host_idx ON public.logs_p2027_07 USING btree (host);
+CREATE INDEX IF NOT EXISTS logs_p2027_07_log_type_idx ON public.logs_p2027_07 USING btree (log_type);
+CREATE INDEX IF NOT EXISTS logs_p2027_07_log_type_timestamp_idx ON public.logs_p2027_07 USING btree (log_type, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2027_07_timestamp_idx ON public.logs_p2027_07 USING btree ("timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2027_08_exploit_rule_idx ON public.logs_p2027_08 USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
+CREATE INDEX IF NOT EXISTS logs_p2027_08_host_idx ON public.logs_p2027_08 USING btree (host);
+CREATE INDEX IF NOT EXISTS logs_p2027_08_log_type_idx ON public.logs_p2027_08 USING btree (log_type);
+CREATE INDEX IF NOT EXISTS logs_p2027_08_log_type_timestamp_idx ON public.logs_p2027_08 USING btree (log_type, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2027_08_timestamp_idx ON public.logs_p2027_08 USING btree ("timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2027_09_exploit_rule_idx ON public.logs_p2027_09 USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
+CREATE INDEX IF NOT EXISTS logs_p2027_09_host_idx ON public.logs_p2027_09 USING btree (host);
+CREATE INDEX IF NOT EXISTS logs_p2027_09_log_type_idx ON public.logs_p2027_09 USING btree (log_type);
+CREATE INDEX IF NOT EXISTS logs_p2027_09_log_type_timestamp_idx ON public.logs_p2027_09 USING btree (log_type, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2027_09_timestamp_idx ON public.logs_p2027_09 USING btree ("timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2027_10_exploit_rule_idx ON public.logs_p2027_10 USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
+CREATE INDEX IF NOT EXISTS logs_p2027_10_host_idx ON public.logs_p2027_10 USING btree (host);
+CREATE INDEX IF NOT EXISTS logs_p2027_10_log_type_idx ON public.logs_p2027_10 USING btree (log_type);
+CREATE INDEX IF NOT EXISTS logs_p2027_10_log_type_timestamp_idx ON public.logs_p2027_10 USING btree (log_type, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2027_10_timestamp_idx ON public.logs_p2027_10 USING btree ("timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2027_11_exploit_rule_idx ON public.logs_p2027_11 USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
+CREATE INDEX IF NOT EXISTS logs_p2027_11_host_idx ON public.logs_p2027_11 USING btree (host);
+CREATE INDEX IF NOT EXISTS logs_p2027_11_log_type_idx ON public.logs_p2027_11 USING btree (log_type);
+CREATE INDEX IF NOT EXISTS logs_p2027_11_log_type_timestamp_idx ON public.logs_p2027_11 USING btree (log_type, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2027_11_timestamp_idx ON public.logs_p2027_11 USING btree ("timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2027_12_exploit_rule_idx ON public.logs_p2027_12 USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
+CREATE INDEX IF NOT EXISTS logs_p2027_12_host_idx ON public.logs_p2027_12 USING btree (host);
+CREATE INDEX IF NOT EXISTS logs_p2027_12_log_type_idx ON public.logs_p2027_12 USING btree (log_type);
+CREATE INDEX IF NOT EXISTS logs_p2027_12_log_type_timestamp_idx ON public.logs_p2027_12 USING btree (log_type, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS logs_p2027_12_timestamp_idx ON public.logs_p2027_12 USING btree ("timestamp" DESC);
 CREATE INDEX IF NOT EXISTS logs_p_default_exploit_rule_idx ON public.logs_p_default USING btree (exploit_rule) WHERE ((exploit_rule IS NOT NULL) AND ((exploit_rule)::text <> '-'::text));
 CREATE INDEX IF NOT EXISTS logs_p_default_host_idx ON public.logs_p_default USING btree (host);
 CREATE INDEX IF NOT EXISTS logs_p_default_log_type_idx ON public.logs_p_default USING btree (log_type);
@@ -1957,6 +2881,132 @@ DO $$ BEGIN ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.lo
 DO $$ BEGIN ALTER INDEX public.idx_logs_part_type_timestamp ATTACH PARTITION public.logs_p2026_03_log_type_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
 DO $$ BEGIN ALTER INDEX public.logs_partitioned_pkey ATTACH PARTITION public.logs_p2026_03_pkey; EXCEPTION WHEN OTHERS THEN NULL; END $$;
 DO $$ BEGIN ALTER INDEX public.idx_logs_part_timestamp ATTACH PARTITION public.logs_p2026_03_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_partitioned_exploit_rule ATTACH PARTITION public.logs_p2026_04_exploit_rule_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_host ATTACH PARTITION public.logs_p2026_04_host_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.logs_p2026_04_log_type_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_type_timestamp ATTACH PARTITION public.logs_p2026_04_log_type_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.logs_partitioned_pkey ATTACH PARTITION public.logs_p2026_04_pkey; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_timestamp ATTACH PARTITION public.logs_p2026_04_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_partitioned_exploit_rule ATTACH PARTITION public.logs_p2026_05_exploit_rule_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_host ATTACH PARTITION public.logs_p2026_05_host_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.logs_p2026_05_log_type_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_type_timestamp ATTACH PARTITION public.logs_p2026_05_log_type_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.logs_partitioned_pkey ATTACH PARTITION public.logs_p2026_05_pkey; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_timestamp ATTACH PARTITION public.logs_p2026_05_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_partitioned_exploit_rule ATTACH PARTITION public.logs_p2026_06_exploit_rule_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_host ATTACH PARTITION public.logs_p2026_06_host_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.logs_p2026_06_log_type_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_type_timestamp ATTACH PARTITION public.logs_p2026_06_log_type_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.logs_partitioned_pkey ATTACH PARTITION public.logs_p2026_06_pkey; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_timestamp ATTACH PARTITION public.logs_p2026_06_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_partitioned_exploit_rule ATTACH PARTITION public.logs_p2026_07_exploit_rule_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_host ATTACH PARTITION public.logs_p2026_07_host_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.logs_p2026_07_log_type_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_type_timestamp ATTACH PARTITION public.logs_p2026_07_log_type_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.logs_partitioned_pkey ATTACH PARTITION public.logs_p2026_07_pkey; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_timestamp ATTACH PARTITION public.logs_p2026_07_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_partitioned_exploit_rule ATTACH PARTITION public.logs_p2026_08_exploit_rule_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_host ATTACH PARTITION public.logs_p2026_08_host_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.logs_p2026_08_log_type_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_type_timestamp ATTACH PARTITION public.logs_p2026_08_log_type_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.logs_partitioned_pkey ATTACH PARTITION public.logs_p2026_08_pkey; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_timestamp ATTACH PARTITION public.logs_p2026_08_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_partitioned_exploit_rule ATTACH PARTITION public.logs_p2026_09_exploit_rule_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_host ATTACH PARTITION public.logs_p2026_09_host_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.logs_p2026_09_log_type_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_type_timestamp ATTACH PARTITION public.logs_p2026_09_log_type_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.logs_partitioned_pkey ATTACH PARTITION public.logs_p2026_09_pkey; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_timestamp ATTACH PARTITION public.logs_p2026_09_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_partitioned_exploit_rule ATTACH PARTITION public.logs_p2026_10_exploit_rule_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_host ATTACH PARTITION public.logs_p2026_10_host_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.logs_p2026_10_log_type_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_type_timestamp ATTACH PARTITION public.logs_p2026_10_log_type_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.logs_partitioned_pkey ATTACH PARTITION public.logs_p2026_10_pkey; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_timestamp ATTACH PARTITION public.logs_p2026_10_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_partitioned_exploit_rule ATTACH PARTITION public.logs_p2026_11_exploit_rule_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_host ATTACH PARTITION public.logs_p2026_11_host_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.logs_p2026_11_log_type_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_type_timestamp ATTACH PARTITION public.logs_p2026_11_log_type_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.logs_partitioned_pkey ATTACH PARTITION public.logs_p2026_11_pkey; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_timestamp ATTACH PARTITION public.logs_p2026_11_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_partitioned_exploit_rule ATTACH PARTITION public.logs_p2026_12_exploit_rule_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_host ATTACH PARTITION public.logs_p2026_12_host_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.logs_p2026_12_log_type_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_type_timestamp ATTACH PARTITION public.logs_p2026_12_log_type_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.logs_partitioned_pkey ATTACH PARTITION public.logs_p2026_12_pkey; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_timestamp ATTACH PARTITION public.logs_p2026_12_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_partitioned_exploit_rule ATTACH PARTITION public.logs_p2027_01_exploit_rule_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_host ATTACH PARTITION public.logs_p2027_01_host_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.logs_p2027_01_log_type_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_type_timestamp ATTACH PARTITION public.logs_p2027_01_log_type_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.logs_partitioned_pkey ATTACH PARTITION public.logs_p2027_01_pkey; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_timestamp ATTACH PARTITION public.logs_p2027_01_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_partitioned_exploit_rule ATTACH PARTITION public.logs_p2027_02_exploit_rule_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_host ATTACH PARTITION public.logs_p2027_02_host_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.logs_p2027_02_log_type_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_type_timestamp ATTACH PARTITION public.logs_p2027_02_log_type_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.logs_partitioned_pkey ATTACH PARTITION public.logs_p2027_02_pkey; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_timestamp ATTACH PARTITION public.logs_p2027_02_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_partitioned_exploit_rule ATTACH PARTITION public.logs_p2027_03_exploit_rule_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_host ATTACH PARTITION public.logs_p2027_03_host_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.logs_p2027_03_log_type_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_type_timestamp ATTACH PARTITION public.logs_p2027_03_log_type_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.logs_partitioned_pkey ATTACH PARTITION public.logs_p2027_03_pkey; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_timestamp ATTACH PARTITION public.logs_p2027_03_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_partitioned_exploit_rule ATTACH PARTITION public.logs_p2027_04_exploit_rule_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_host ATTACH PARTITION public.logs_p2027_04_host_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.logs_p2027_04_log_type_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_type_timestamp ATTACH PARTITION public.logs_p2027_04_log_type_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.logs_partitioned_pkey ATTACH PARTITION public.logs_p2027_04_pkey; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_timestamp ATTACH PARTITION public.logs_p2027_04_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_partitioned_exploit_rule ATTACH PARTITION public.logs_p2027_05_exploit_rule_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_host ATTACH PARTITION public.logs_p2027_05_host_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.logs_p2027_05_log_type_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_type_timestamp ATTACH PARTITION public.logs_p2027_05_log_type_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.logs_partitioned_pkey ATTACH PARTITION public.logs_p2027_05_pkey; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_timestamp ATTACH PARTITION public.logs_p2027_05_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_partitioned_exploit_rule ATTACH PARTITION public.logs_p2027_06_exploit_rule_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_host ATTACH PARTITION public.logs_p2027_06_host_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.logs_p2027_06_log_type_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_type_timestamp ATTACH PARTITION public.logs_p2027_06_log_type_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.logs_partitioned_pkey ATTACH PARTITION public.logs_p2027_06_pkey; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_timestamp ATTACH PARTITION public.logs_p2027_06_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_partitioned_exploit_rule ATTACH PARTITION public.logs_p2027_07_exploit_rule_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_host ATTACH PARTITION public.logs_p2027_07_host_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.logs_p2027_07_log_type_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_type_timestamp ATTACH PARTITION public.logs_p2027_07_log_type_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.logs_partitioned_pkey ATTACH PARTITION public.logs_p2027_07_pkey; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_timestamp ATTACH PARTITION public.logs_p2027_07_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_partitioned_exploit_rule ATTACH PARTITION public.logs_p2027_08_exploit_rule_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_host ATTACH PARTITION public.logs_p2027_08_host_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.logs_p2027_08_log_type_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_type_timestamp ATTACH PARTITION public.logs_p2027_08_log_type_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.logs_partitioned_pkey ATTACH PARTITION public.logs_p2027_08_pkey; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_timestamp ATTACH PARTITION public.logs_p2027_08_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_partitioned_exploit_rule ATTACH PARTITION public.logs_p2027_09_exploit_rule_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_host ATTACH PARTITION public.logs_p2027_09_host_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.logs_p2027_09_log_type_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_type_timestamp ATTACH PARTITION public.logs_p2027_09_log_type_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.logs_partitioned_pkey ATTACH PARTITION public.logs_p2027_09_pkey; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_timestamp ATTACH PARTITION public.logs_p2027_09_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_partitioned_exploit_rule ATTACH PARTITION public.logs_p2027_10_exploit_rule_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_host ATTACH PARTITION public.logs_p2027_10_host_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.logs_p2027_10_log_type_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_type_timestamp ATTACH PARTITION public.logs_p2027_10_log_type_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.logs_partitioned_pkey ATTACH PARTITION public.logs_p2027_10_pkey; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_timestamp ATTACH PARTITION public.logs_p2027_10_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_partitioned_exploit_rule ATTACH PARTITION public.logs_p2027_11_exploit_rule_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_host ATTACH PARTITION public.logs_p2027_11_host_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.logs_p2027_11_log_type_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_type_timestamp ATTACH PARTITION public.logs_p2027_11_log_type_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.logs_partitioned_pkey ATTACH PARTITION public.logs_p2027_11_pkey; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_timestamp ATTACH PARTITION public.logs_p2027_11_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_partitioned_exploit_rule ATTACH PARTITION public.logs_p2027_12_exploit_rule_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_host ATTACH PARTITION public.logs_p2027_12_host_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.logs_p2027_12_log_type_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_type_timestamp ATTACH PARTITION public.logs_p2027_12_log_type_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.logs_partitioned_pkey ATTACH PARTITION public.logs_p2027_12_pkey; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER INDEX public.idx_logs_part_timestamp ATTACH PARTITION public.logs_p2027_12_timestamp_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
 DO $$ BEGIN ALTER INDEX public.idx_logs_partitioned_exploit_rule ATTACH PARTITION public.logs_p_default_exploit_rule_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
 DO $$ BEGIN ALTER INDEX public.idx_logs_part_host ATTACH PARTITION public.logs_p_default_host_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
 DO $$ BEGIN ALTER INDEX public.idx_logs_part_log_type ATTACH PARTITION public.logs_p_default_log_type_idx; EXCEPTION WHEN OTHERS THEN NULL; END $$;
@@ -2459,3 +3509,11 @@ CREATE INDEX IF NOT EXISTS idx_logs_part_status_ts ON logs_partitioned (status_c
 CREATE INDEX IF NOT EXISTS idx_logs_part_proxy_host_ts ON logs_partitioned (proxy_host_id, timestamp DESC) WHERE proxy_host_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_logs_part_geo_ts ON logs_partitioned (geo_country_code, timestamp DESC) WHERE geo_country_code IS NOT NULL AND geo_country_code != '';
 CREATE INDEX IF NOT EXISTS idx_logs_part_type_created ON logs_partitioned (log_type, created_at DESC);
+
+-- Performance indexes for log queries (GitHub Issue #96)
+CREATE INDEX IF NOT EXISTS idx_logs_part_block_reason ON logs_partitioned (block_reason) WHERE block_reason != 'none';
+CREATE INDEX IF NOT EXISTS idx_logs_part_status_created ON logs_partitioned (status_code, created_at);
+
+-- Partial unique index to prevent duplicate NULL proxy_host_id rows per hour_bucket (GitHub Issue #96)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_dashboard_stats_hourly_null_host_bucket
+    ON dashboard_stats_hourly (hour_bucket) WHERE proxy_host_id IS NULL;
