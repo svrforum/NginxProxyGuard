@@ -18,7 +18,7 @@ import (
 	"nginx-proxy-guard/pkg/cache"
 )
 
-const statsCacheTTL = 30 * time.Second
+const statsCacheTTL = 5 * time.Minute
 
 type LogRepository struct {
 	db    *database.DB
@@ -1223,12 +1223,19 @@ func (r *LogRepository) GetStatsWithFilter(ctx context.Context, filter *model.Lo
 }
 
 func (r *LogRepository) DeleteOld(ctx context.Context, retentionDays int) (int64, error) {
-	query := `DELETE FROM logs_partitioned WHERE created_at < NOW() - ($1 || ' days')::INTERVAL`
-	result, err := r.db.ExecContext(ctx, query, retentionDays)
-	if err != nil {
-		return 0, fmt.Errorf("failed to delete old logs: %w", err)
+	// Use partition DROP instead of row-level DELETE for efficiency.
+	// drop_old_partitions() drops entire monthly partitions older than the cutoff,
+	// which is orders of magnitude faster than DELETE on large tables.
+	retentionMonths := retentionDays / 30
+	if retentionMonths < 1 {
+		retentionMonths = 1
 	}
-	return result.RowsAffected()
+	var dropped int
+	err := r.db.QueryRowContext(ctx, `SELECT drop_old_partitions('logs_p', $1)`, retentionMonths).Scan(&dropped)
+	if err != nil {
+		return 0, fmt.Errorf("failed to drop old log partitions: %w", err)
+	}
+	return int64(dropped), nil
 }
 
 func (r *LogRepository) GetSettings(ctx context.Context) (*model.LogSettings, error) {
@@ -1310,7 +1317,7 @@ func (r *LogRepository) GetDistinctHosts(ctx context.Context, search string, lim
 		SELECT DISTINCT host
 		FROM logs_partitioned
 		WHERE host IS NOT NULL AND host != ''
-		  AND created_at >= NOW() - INTERVAL '30 days'
+		  AND created_at >= NOW() - INTERVAL '7 days'
 	`
 	args := []interface{}{}
 	argIndex := 1
@@ -1366,7 +1373,7 @@ func (r *LogRepository) GetDistinctIPs(ctx context.Context, search string, limit
 		SELECT DISTINCT host(client_ip) as ip
 		FROM logs_partitioned
 		WHERE client_ip IS NOT NULL
-		  AND created_at >= NOW() - INTERVAL '30 days'
+		  AND created_at >= NOW() - INTERVAL '7 days'
 	`
 	args := []interface{}{}
 	argIndex := 1
@@ -1421,7 +1428,7 @@ func (r *LogRepository) GetDistinctUserAgents(ctx context.Context, search string
 		SELECT DISTINCT http_user_agent
 		FROM logs_partitioned
 		WHERE http_user_agent IS NOT NULL AND http_user_agent != ''
-		  AND created_at >= NOW() - INTERVAL '30 days'
+		  AND created_at >= NOW() - INTERVAL '7 days'
 	`
 	args := []interface{}{}
 	argIndex := 1
@@ -1469,7 +1476,7 @@ func (r *LogRepository) GetDistinctCountries(ctx context.Context) ([]model.Count
 		SELECT geo_country_code, geo_country, COUNT(*) as count
 		FROM logs_partitioned
 		WHERE geo_country_code IS NOT NULL AND geo_country_code != ''
-		  AND created_at >= NOW() - INTERVAL '30 days'
+		  AND created_at >= NOW() - INTERVAL '7 days'
 		GROUP BY geo_country_code, geo_country
 		ORDER BY count DESC
 		LIMIT 50
@@ -1522,7 +1529,7 @@ func (r *LogRepository) GetDistinctURIs(ctx context.Context, search string, limi
 		WHERE request_uri IS NOT NULL AND request_uri != ''
 			AND request_uri NOT IN ('/health', '/nginx_status')
 			AND request_uri NOT LIKE '/.well-known/%'
-			AND created_at >= NOW() - INTERVAL '30 days'
+			AND created_at >= NOW() - INTERVAL '7 days'
 	`
 	args := []interface{}{}
 	argIndex := 1
@@ -1570,7 +1577,7 @@ func (r *LogRepository) GetDistinctMethods(ctx context.Context) ([]string, error
 		SELECT DISTINCT request_method
 		FROM logs_partitioned
 		WHERE request_method IS NOT NULL AND request_method != ''
-		  AND created_at >= NOW() - INTERVAL '30 days'
+		  AND created_at >= NOW() - INTERVAL '7 days'
 		ORDER BY request_method
 	`
 

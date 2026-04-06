@@ -32,7 +32,7 @@ export default function GeoIPSettings() {
   const { data: historyData, refetch: refetchHistory } = useQuery({
     queryKey: ['geoipHistory'],
     queryFn: () => getGeoIPHistory(1, 10),
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 60000, // Refresh every 30 seconds
   });
 
   const updateMutation = useMutation({

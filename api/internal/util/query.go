@@ -39,12 +39,12 @@ func ParseLimitParam(c echo.Context, defaultLimit int) int {
 
 // ParseOffsetParam parses an offset parameter
 func ParseOffsetParam(c echo.Context) int {
-	return ParseIntParam(c, "offset", 0, 0, 1000000)
+	return ParseIntParam(c, "offset", 0, 0, 10000)
 }
 
 // ParsePageParam parses a page parameter (1-based)
 func ParsePageParam(c echo.Context) int {
-	return ParseIntParam(c, "page", 1, 1, 1000000)
+	return ParseIntParam(c, "page", 1, 1, 10000)
 }
 
 // ParseTimeParam parses a time parameter in RFC3339 format

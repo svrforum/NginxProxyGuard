@@ -21,7 +21,7 @@ export default function UpstreamPanel({ proxyHostId, onClose }: UpstreamPanelPro
     queryKey: ['upstream-health', upstream?.id],
     queryFn: () => getUpstreamHealth(upstream!.id),
     enabled: !!upstream?.id && upstream?.health_check_enabled,
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 60000, // Refresh every 30 seconds
   });
 
   const mutation = useMutation({

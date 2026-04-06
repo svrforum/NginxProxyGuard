@@ -148,10 +148,10 @@ func parseLogFilter(q url.Values) *model.LogFilter {
 		filter.SortOrder = &sortOrder
 	}
 
-	// Default time range: when search is active but no time range specified,
-	// apply a 7-day window to prevent full table scans on large datasets
-	if filter.Search != nil && *filter.Search != "" && filter.StartTime == nil {
-		defaultStart := time.Now().AddDate(0, 0, -7)
+	// Default time range: always apply a 24-hour window when no start_time specified
+	// to prevent full table scans on large datasets (GitHub Issue #96)
+	if filter.StartTime == nil {
+		defaultStart := time.Now().Add(-24 * time.Hour)
 		filter.StartTime = &defaultStart
 	}
 
@@ -186,6 +186,9 @@ func (h *LogHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	if perPage < 1 {
 		perPage = 50
+	}
+	if perPage > 200 {
+		perPage = 200
 	}
 
 	filter := parseLogFilter(r.URL.Query())
