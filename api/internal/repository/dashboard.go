@@ -55,56 +55,35 @@ func (r *DashboardRepository) GetSummary(ctx context.Context) (*model.DashboardS
 		summary.ErrorRate24h = float64(totalErrors) / float64(totalForRate) * 100
 	}
 
-	// Security stats in last 24h from dashboard_stats_hourly
+	// Security stats in last 24h - query logs_partitioned directly for accuracy.
+	// The dashboard_stats_hourly table only tracks waf/rate/bot counts,
+	// but block_reason includes many more types (geo_block, uri_block, banned_ip,
+	// exploit_block, access_denied, cloud_provider_*, filter_subscription).
+	// Uses idx_logs_part_block_reason partial index for efficient lookup.
 	row = r.db.QueryRowContext(ctx, `
-		SELECT COALESCE(SUM(waf_blocked), 0),
-		       COALESCE(SUM(rate_limited), 0),
-		       COALESCE(SUM(bot_blocked), 0)
-		FROM dashboard_stats_hourly
-		WHERE hour_bucket >= $1
+		SELECT
+			COUNT(*),
+			COUNT(DISTINCT client_ip),
+			COUNT(*) FILTER (WHERE block_reason = 'waf'),
+			COUNT(*) FILTER (WHERE block_reason = 'rate_limit'),
+			COUNT(*) FILTER (WHERE block_reason = 'bot_filter')
+		FROM logs_partitioned
+		WHERE created_at >= $1
+		  AND block_reason != 'none'
 	`, last24h)
-	row.Scan(&summary.WAFBlocked24h, &summary.RateLimited24h, &summary.BotBlocked24h)
-
-	// Fallback: Get security stats from logs_partitioned if hourly stats are empty
-	// Uses idx_logs_part_block_reason partial index for efficient lookup
-	if summary.WAFBlocked24h == 0 && summary.RateLimited24h == 0 && summary.BotBlocked24h == 0 {
-		row = r.db.QueryRowContext(ctx, `
-			SELECT
-				COUNT(*) FILTER (WHERE block_reason = 'waf'),
-				COUNT(*) FILTER (WHERE block_reason = 'rate_limit'),
-				COUNT(*) FILTER (WHERE block_reason = 'bot_filter')
-			FROM logs_partitioned
-			WHERE created_at >= $1
-			  AND block_reason != 'none'
-		`, last24h)
-		row.Scan(&summary.WAFBlocked24h, &summary.RateLimited24h, &summary.BotBlocked24h)
-	}
+	row.Scan(&summary.BlockedRequests24h, &summary.BlockedUniqueIPs24h,
+		&summary.WAFBlocked24h, &summary.RateLimited24h, &summary.BotBlocked24h)
 
 	// Banned IPs count
 	r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM banned_ips WHERE (expires_at > NOW() OR is_permanent = TRUE)").Scan(&summary.BannedIPs)
 
-	// Calculate blocked requests from security block counts.
-	// These may come from dashboard_stats_hourly or the logs_partitioned fallback above.
-	summary.BlockedRequests24h = summary.WAFBlocked24h + summary.RateLimited24h + summary.BotBlocked24h
-
-	// If hourly stats are completely empty, also fill total requests from logs
+	// If hourly stats are completely empty, fill total requests from logs
 	if summary.TotalRequests24h == 0 {
 		row = r.db.QueryRowContext(ctx, `
 			SELECT COUNT(*) FROM logs_partitioned
 			WHERE created_at >= $1 AND log_type = 'access'
 		`, last24h)
 		row.Scan(&summary.TotalRequests24h)
-	}
-
-	// Blocked unique IPs - only query when we have blocked requests to count
-	// Uses block_reason index for efficient lookup
-	if summary.BlockedRequests24h > 0 {
-		r.db.QueryRowContext(ctx, `
-			SELECT COUNT(DISTINCT client_ip)
-			FROM logs_partitioned
-			WHERE created_at >= $1
-			  AND block_reason != 'none'
-		`, last24h).Scan(&summary.BlockedUniqueIPs24h)
 	}
 
 	// Host and certificate counts - combined into single query for performance
