@@ -16,8 +16,8 @@ const defaultServerTemplate = `# Default server - catch-all for unmatched reques
 
 # HTTP default server
 server {
-    listen {{.HTTPPort}} default_server;
-    listen [::]:{{.HTTPPort}} default_server;
+    listen {{.HTTPPort}} default_server;{{if not .DisableIPv6}}
+    listen [::]:{{.HTTPPort}} default_server;{{end}}
     server_name _;
 
     # Disable WAF for default server (health check, ACME, etc.)
@@ -104,8 +104,8 @@ server {
 
 # HTTPS default server - reject SSL handshake for unknown/disabled hosts
 server {
-    listen {{.HTTPSPort}} ssl default_server;
-    listen [::]:{{.HTTPSPort}} ssl default_server;
+    listen {{.HTTPSPort}} ssl default_server;{{if not .DisableIPv6}}
+    listen [::]:{{.HTTPSPort}} ssl default_server;{{end}}
     server_name _;
 
     # Reject SSL handshake immediately - no certificate warning, just connection reset
@@ -115,10 +115,11 @@ server {
 
 // DefaultServerConfigData holds data for default server config generation
 type DefaultServerConfigData struct {
-	Action    string // allow, block_403, block_444
-	HTTPPort  string // HTTP listen port (default: 80)
-	HTTPSPort string // HTTPS listen port (default: 443)
-	APIURL    string // API URL for nginx to reach API (default: http://127.0.0.1:9080)
+	Action      string // allow, block_403, block_444
+	HTTPPort    string // HTTP listen port (default: 80)
+	HTTPSPort   string // HTTPS listen port (default: 443)
+	APIURL      string // API URL for nginx to reach API (default: http://127.0.0.1:9080)
+	DisableIPv6 bool
 }
 
 // GenerateDefaultServerConfig generates the default server config based on settings
@@ -136,10 +137,11 @@ func (m *Manager) GenerateDefaultServerConfig(ctx context.Context, action string
 	}
 
 	data := DefaultServerConfigData{
-		Action:    action,
-		HTTPPort:  m.httpPort,
-		HTTPSPort: m.httpsPort,
-		APIURL:    m.apiURL,
+		Action:      action,
+		HTTPPort:    m.httpPort,
+		HTTPSPort:   m.httpsPort,
+		APIURL:      m.apiURL,
+		DisableIPv6: m.disableIPv6,
 	}
 
 	var buf bytes.Buffer

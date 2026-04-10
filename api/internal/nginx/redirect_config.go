@@ -15,9 +15,10 @@ import (
 
 // RedirectHostConfigData holds data for redirect host config generation
 type RedirectHostConfigData struct {
-	Host      *model.RedirectHost
-	HTTPPort  string
-	HTTPSPort string
+	Host        *model.RedirectHost
+	HTTPPort    string
+	HTTPSPort   string
+	DisableIPv6 bool
 }
 
 // Redirect host config template
@@ -29,8 +30,8 @@ const redirectHostTemplate = `# nginx-guard generated redirect config
 
 {{if .Host.Enabled}}
 server {
-    listen {{.HTTPPort}};
-    listen [::]:{{.HTTPPort}};
+    listen {{.HTTPPort}};{{if not .DisableIPv6}}
+    listen [::]:{{.HTTPPort}};{{end}}
     server_name {{join .Host.DomainNames " "}};
 
     # Disable WAF for redirect host
@@ -67,11 +68,11 @@ server {
 
 {{if .Host.SSLEnabled}}
 server {
-    listen {{.HTTPSPort}} ssl;
-    listen [::]:{{.HTTPSPort}} ssl;
+    listen {{.HTTPSPort}} ssl;{{if not .DisableIPv6}}
+    listen [::]:{{.HTTPSPort}} ssl;{{end}}
     http2 on;
-    listen {{.HTTPSPort}} quic;
-    listen [::]:{{.HTTPSPort}} quic;
+    listen {{.HTTPSPort}} quic;{{if not .DisableIPv6}}
+    listen [::]:{{.HTTPSPort}} quic;{{end}}
     server_name {{join .Host.DomainNames " "}};
 
     # Disable WAF for redirect host
@@ -124,9 +125,10 @@ func (m *Manager) GenerateRedirectConfig(ctx context.Context, host *model.Redire
 	}
 
 	data := RedirectHostConfigData{
-		Host:      host,
-		HTTPPort:  m.httpPort,
-		HTTPSPort: m.httpsPort,
+		Host:        host,
+		HTTPPort:    m.httpPort,
+		HTTPSPort:   m.httpsPort,
+		DisableIPv6: m.disableIPv6,
 	}
 
 	var buf bytes.Buffer

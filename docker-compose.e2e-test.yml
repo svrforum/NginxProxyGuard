@@ -84,6 +84,7 @@ services:
       NGINX_HTTPS_PORT: "18443"
       API_HOST_PORT: "19080"
       API_HOST: "127.0.0.1:19080"
+      DISABLE_IPV6: ${DISABLE_IPV6:-false}
     ports:
       - "19080:8080"
     depends_on:

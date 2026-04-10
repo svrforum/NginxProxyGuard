@@ -89,8 +89,8 @@ upstream {{.Upstream.Name}} {
 
 {{if .Host.Enabled}}
 server {
-    listen {{.HTTPPort}};
-    listen [::]:{{.HTTPPort}};
+    listen {{.HTTPPort}};{{if not .DisableIPv6}}
+    listen [::]:{{.HTTPPort}};{{end}}
     server_name {{join .Host.DomainNames " "}};
 
     # Initialize tracking variables
@@ -938,16 +938,16 @@ server {
 
 {{if .Host.SSLEnabled}}
 server {
-    listen {{.HTTPSPort}} ssl;
-    listen [::]:{{.HTTPSPort}} ssl;
+    listen {{.HTTPSPort}} ssl;{{if not .DisableIPv6}}
+    listen [::]:{{.HTTPSPort}} ssl;{{end}}
 {{if .Host.SSLHTTP2}}
     # HTTP/2 over TCP (new directive style)
     http2 on;
 {{end}}
 {{if .Host.SSLHTTP3}}
     # HTTP/3 over QUIC (UDP)
-    listen {{.HTTPSPort}} quic;
-    listen [::]:{{.HTTPSPort}} quic;
+    listen {{.HTTPSPort}} quic;{{if not .DisableIPv6}}
+    listen [::]:{{.HTTPSPort}} quic;{{end}}
 {{end}}
     server_name {{join .Host.DomainNames " "}};
 
@@ -1761,4 +1761,5 @@ type ProxyHostConfigData struct {
 	GlobalTrustedIPs              []string              // Global trusted IPs that bypass all security (from system settings)
 	HTTPPort                      string                // HTTP listen port (default: 80)
 	HTTPSPort                     string                // HTTPS listen port (default: 443)
+	DisableIPv6                   bool                  // If true, removes [::] bindings
 }

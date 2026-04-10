@@ -68,6 +68,7 @@ services:
       NGINX_HTTPS_PORT: ${NGINX_HTTPS_PORT:-28443}
       API_HOST_PORT: ${API_HOST_PORT:-29080}
       API_HOST: 127.0.0.1:${API_HOST_PORT:-29080}
+      DISABLE_IPV6: ${DISABLE_IPV6:-false}
     ports:
       - "${API_HOST_PORT:-29080}:8080"  # Bind to all interfaces for test access
     depends_on:
