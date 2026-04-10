@@ -83,23 +83,17 @@ func (r *DashboardRepository) GetSummary(ctx context.Context) (*model.DashboardS
 	// Banned IPs count
 	r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM banned_ips WHERE (expires_at > NOW() OR is_permanent = TRUE)").Scan(&summary.BannedIPs)
 
-	// Blocked requests stats - only fall back to logs_partitioned when hourly stats are incomplete (GitHub Issue #96)
+	// Calculate blocked requests from security block counts.
+	// These may come from dashboard_stats_hourly or the logs_partitioned fallback above.
+	summary.BlockedRequests24h = summary.WAFBlocked24h + summary.RateLimited24h + summary.BotBlocked24h
+
+	// If hourly stats are completely empty, also fill total requests from logs
 	if summary.TotalRequests24h == 0 {
 		row = r.db.QueryRowContext(ctx, `
-			SELECT
-				COUNT(*) FILTER (WHERE status_code = 403 OR log_type = 'modsec'),
-				COUNT(*) FILTER (WHERE log_type = 'access')
-			FROM logs_partitioned
-			WHERE created_at >= $1
+			SELECT COUNT(*) FROM logs_partitioned
+			WHERE created_at >= $1 AND log_type = 'access'
 		`, last24h)
-		var totalAccessFromLogs int64
-		row.Scan(&summary.BlockedRequests24h, &totalAccessFromLogs)
-		if totalAccessFromLogs > summary.TotalRequests24h {
-			summary.TotalRequests24h = totalAccessFromLogs
-		}
-	} else {
-		// Use actual security block counts from hourly stats instead of all 4xx/5xx
-		summary.BlockedRequests24h = summary.WAFBlocked24h + summary.RateLimited24h + summary.BotBlocked24h
+		row.Scan(&summary.TotalRequests24h)
 	}
 
 	// Blocked unique IPs - only query when we have blocked requests to count

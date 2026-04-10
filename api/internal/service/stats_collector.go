@@ -355,6 +355,9 @@ type AggregatedStats struct {
 	Status3xx       int
 	Status4xx       int
 	Status5xx       int
+	WAFBlocked      int
+	RateLimited     int
+	BotBlocked      int
 	HostStats       map[string]int64
 	PathStats       map[string]int64
 	ErrorCount      int
@@ -374,7 +377,7 @@ func (sc *StatsCollector) aggregateStatsFromDB() AggregatedStats {
 	// Only include requests to actual proxy hosts (exclude internal like localhost, nginx)
 	// LIMIT 10000 to prevent unbounded memory growth during traffic spikes
 	query := `
-		SELECT status_code, body_bytes_sent, request_time, host, request_uri
+		SELECT status_code, body_bytes_sent, request_time, host, request_uri, COALESCE(block_reason, 'none')
 		FROM logs_partitioned
 		WHERE log_type = 'access'
 		  AND created_at > NOW() - INTERVAL '35 seconds'
@@ -397,9 +400,9 @@ func (sc *StatsCollector) aggregateStatsFromDB() AggregatedStats {
 		var statusCode int
 		var bodyBytes int64
 		var requestTime float64
-		var host, uri string
+		var host, uri, blockReason string
 
-		if err := rows.Scan(&statusCode, &bodyBytes, &requestTime, &host, &uri); err != nil {
+		if err := rows.Scan(&statusCode, &bodyBytes, &requestTime, &host, &uri, &blockReason); err != nil {
 			continue
 		}
 
@@ -416,6 +419,16 @@ func (sc *StatsCollector) aggregateStatsFromDB() AggregatedStats {
 		case statusCode >= 500:
 			stats.Status5xx++
 			stats.ErrorCount++
+		}
+
+		// Count security blocks by reason
+		switch blockReason {
+		case "waf":
+			stats.WAFBlocked++
+		case "rate_limit":
+			stats.RateLimited++
+		case "bot_filter":
+			stats.BotBlocked++
 		}
 
 		// Accumulate bytes and time
@@ -537,7 +550,7 @@ func (sc *StatsCollector) recordStats(nginxStatus NginxStatus, stats AggregatedS
 			status_2xx, status_3xx, status_4xx, status_5xx,
 			avg_response_time, bytes_sent,
 			waf_blocked, rate_limited, bot_blocked
-		) VALUES (NULL, $1, $2, $3, $4, $5, $6, $7, $8, 0, 0, 0)
+		) VALUES (NULL, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		ON CONFLICT (hour_bucket) WHERE proxy_host_id IS NULL DO UPDATE SET
 			total_requests = dashboard_stats_hourly.total_requests + EXCLUDED.total_requests,
 			status_2xx = dashboard_stats_hourly.status_2xx + EXCLUDED.status_2xx,
@@ -550,10 +563,14 @@ func (sc *StatsCollector) recordStats(nginxStatus NginxStatus, stats AggregatedS
 					/ (dashboard_stats_hourly.total_requests + EXCLUDED.total_requests)
 				ELSE EXCLUDED.avg_response_time
 			END,
-			bytes_sent = dashboard_stats_hourly.bytes_sent + EXCLUDED.bytes_sent
+			bytes_sent = dashboard_stats_hourly.bytes_sent + EXCLUDED.bytes_sent,
+			waf_blocked = dashboard_stats_hourly.waf_blocked + EXCLUDED.waf_blocked,
+			rate_limited = dashboard_stats_hourly.rate_limited + EXCLUDED.rate_limited,
+			bot_blocked = dashboard_stats_hourly.bot_blocked + EXCLUDED.bot_blocked
 	`, hourBucket, stats.TotalRequests,
 		stats.Status2xx, stats.Status3xx, stats.Status4xx, stats.Status5xx,
-		avgResponseTime, stats.TotalBytes)
+		avgResponseTime, stats.TotalBytes,
+		stats.WAFBlocked, stats.RateLimited, stats.BotBlocked)
 	if err != nil {
 		return fmt.Errorf("failed to record hourly stats: %w", err)
 	}
