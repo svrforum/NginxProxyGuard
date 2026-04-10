@@ -284,11 +284,12 @@ func (r *DNSProviderRepository) TestConnection(ctx context.Context, providerType
 func testCloudflareConnection(creds model.CloudflareCredentials) error {
 	client := &http.Client{Timeout: 10 * time.Second}
 
-	// Use zones endpoint for both API Token and Global API Key
-	// The /user/tokens/verify endpoint returns 401 for tokens scoped to
-	// specific accounts/zones without User resource access, so we use
-	// /zones?per_page=1 which validates DNS-related permissions directly.
-	req, err := http.NewRequest("GET", "https://api.cloudflare.com/client/v4/zones?per_page=1", nil)
+	testURL := "https://api.cloudflare.com/client/v4/zones?per_page=1"
+	if creds.ZoneID != "" {
+		testURL = fmt.Sprintf("https://api.cloudflare.com/client/v4/zones/%s/dns_records?per_page=1", creds.ZoneID)
+	}
+
+	req, err := http.NewRequest("GET", testURL, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -299,8 +300,6 @@ func testCloudflareConnection(creds model.CloudflareCredentials) error {
 		req.Header.Set("X-Auth-Email", creds.Email)
 		req.Header.Set("X-Auth-Key", creds.APIKey)
 	}
-
-	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -323,6 +322,21 @@ func testCloudflareConnection(creds model.CloudflareCredentials) error {
 
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("cloudflare API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// For zone listing (no ZoneID), verify we can actually see zones
+	if creds.ZoneID == "" {
+		var apiResp struct {
+			Success bool          `json:"success"`
+			Result  []interface{} `json:"result"`
+		}
+		if err := json.Unmarshal(body, &apiResp); err == nil {
+			if apiResp.Success && len(apiResp.Result) == 0 {
+				return fmt.Errorf("API token can connect but cannot list any zones. " +
+					"Please ensure the token has Zone:Zone:Read permission, " +
+					"or provide a Zone ID to bypass zone discovery")
+			}
+		}
 	}
 
 	return nil
