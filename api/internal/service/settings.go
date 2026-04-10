@@ -105,6 +105,18 @@ func (s *SettingsService) UpdateGlobalSettings(ctx context.Context, req *model.U
 		}
 	}
 
+	// Regenerate all redirect host configs (IPv6, port changes affect listen directives)
+	if s.redirectHostRepo != nil {
+		redirectHosts, err := s.redirectHostRepo.GetAllEnabled(ctx)
+		if err != nil {
+			log.Printf("[SettingsService] Warning: failed to get redirect hosts for config regeneration: %v", err)
+		} else if len(redirectHosts) > 0 {
+			if err := s.nginxManager.GenerateAllRedirectConfigs(ctx, redirectHosts); err != nil {
+				log.Printf("[SettingsService] Warning: failed to regenerate redirect host configs after global settings change: %v", err)
+			}
+		}
+	}
+
 	// Reload nginx to apply all changes
 	if err := s.nginxManager.ReloadNginx(ctx); err != nil {
 		log.Printf("[SettingsService] Warning: failed to reload nginx after global settings change: %v", err)
@@ -123,6 +135,18 @@ func (s *SettingsService) ResetGlobalSettings(ctx context.Context) (*model.Globa
 	if s.proxyHostService != nil {
 		if err := s.proxyHostService.SyncAllConfigs(ctx); err != nil {
 			log.Printf("[SettingsService] Warning: failed to regenerate proxy host configs after global settings reset: %v", err)
+		}
+	}
+
+	// Regenerate all redirect host configs to apply default global settings
+	if s.redirectHostRepo != nil {
+		redirectHosts, err := s.redirectHostRepo.GetAllEnabled(ctx)
+		if err != nil {
+			log.Printf("[SettingsService] Warning: failed to get redirect hosts for config regeneration after reset: %v", err)
+		} else if len(redirectHosts) > 0 {
+			if err := s.nginxManager.GenerateAllRedirectConfigs(ctx, redirectHosts); err != nil {
+				log.Printf("[SettingsService] Warning: failed to regenerate redirect host configs after global settings reset: %v", err)
+			}
 		}
 	}
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -71,8 +72,10 @@ func (r *DashboardRepository) GetSummary(ctx context.Context) (*model.DashboardS
 		WHERE created_at >= $1
 		  AND block_reason != 'none'
 	`, last24h)
-	row.Scan(&summary.BlockedRequests24h, &summary.BlockedUniqueIPs24h,
-		&summary.WAFBlocked24h, &summary.RateLimited24h, &summary.BotBlocked24h)
+	if err := row.Scan(&summary.BlockedRequests24h, &summary.BlockedUniqueIPs24h,
+		&summary.WAFBlocked24h, &summary.RateLimited24h, &summary.BotBlocked24h); err != nil {
+		log.Printf("[DashboardRepository] Warning: failed to scan security stats from logs_partitioned: %v", err)
+	}
 
 	// Banned IPs count
 	r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM banned_ips WHERE (expires_at > NOW() OR is_permanent = TRUE)").Scan(&summary.BannedIPs)
