@@ -90,6 +90,14 @@ func (s *SettingsService) UpdateGlobalSettings(ctx context.Context, req *model.U
 		}
 	}
 
+	// Update manager IPv6 setting and regenerate default server config
+	if req.EnableIPv6 != nil {
+		s.nginxManager.SetEnableIPv6(*req.EnableIPv6)
+		if err := s.nginxManager.GenerateDefaultServerConfig(ctx, settings.DirectIPAccessAction); err != nil {
+			log.Printf("[SettingsService] Warning: failed to regenerate default server config for IPv6 change: %v", err)
+		}
+	}
+
 	// Regenerate all proxy host configs to apply global settings (timeouts, body size, etc.)
 	if s.proxyHostService != nil {
 		if err := s.proxyHostService.SyncAllConfigs(ctx); err != nil {

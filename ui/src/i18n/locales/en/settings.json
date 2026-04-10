@@ -894,6 +894,13 @@
           "description": "Health check (/health) and ACME challenge (/.well-known/acme-challenge/) are always allowed regardless of this setting."
         }
       },
+      "ipv6": {
+        "title": "IPv6 Support",
+        "description": "Enable or disable IPv6 listen directives in nginx configurations. Disable this if your server does not support IPv6.",
+        "enabled": "Enable IPv6",
+        "enabledDescription": "Include listen [::]: directives in nginx configs",
+        "warning": "Changing this setting will regenerate all nginx configurations and reload nginx."
+      },
       "ddos": {
         "title": "DDoS Protection (Global)",
         "description": "Global DDoS protection settings applied to all hosts. Proxy Host-specific Rate Limits are applied in addition to these settings.",

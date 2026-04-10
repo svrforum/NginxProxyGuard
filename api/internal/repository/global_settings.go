@@ -52,6 +52,7 @@ func (r *GlobalSettingsRepository) getFromDB(ctx context.Context) (*model.Global
 		       access_log_enabled, error_log_level, resolver, resolver_timeout,
 		       custom_http_config, custom_stream_config,
 		       COALESCE(direct_ip_access_action, 'allow') as direct_ip_access_action,
+		       COALESCE(enable_ipv6, true) as enable_ipv6,
 		       COALESCE(limit_conn_enabled, false) as limit_conn_enabled,
 		       COALESCE(limit_conn_zone_size, '10m') as limit_conn_zone_size,
 		       COALESCE(limit_conn_per_ip, 100) as limit_conn_per_ip,
@@ -100,6 +101,7 @@ func (r *GlobalSettingsRepository) getFromDB(ctx context.Context) (*model.Global
 		&s.AccessLogEnabled, &s.ErrorLogLevel, &resolver, &resolverTimeout,
 		&customHTTP, &customStream,
 		&s.DirectIPAccessAction,
+		&s.EnableIPv6,
 		&s.LimitConnEnabled, &s.LimitConnZoneSize, &s.LimitConnPerIP,
 		&s.LimitReqEnabled, &s.LimitReqZoneSize, &s.LimitReqRate, &s.LimitReqBurst,
 		&s.ResetTimedoutConnection,
@@ -162,6 +164,7 @@ func (r *GlobalSettingsRepository) getFromDB(ctx context.Context) (*model.Global
 			Resolver:                 "8.8.8.8 8.8.4.4 valid=300s",
 			ResolverTimeout:          "5s",
 			DirectIPAccessAction:     "allow",
+			EnableIPv6:               true,
 			LimitConnEnabled:         false,
 			LimitConnZoneSize:        "10m",
 			LimitConnPerIP:           200, // more generous
@@ -289,6 +292,7 @@ func (r *GlobalSettingsRepository) Update(ctx context.Context, req *model.Update
 			proxy_buffering = CASE WHEN $65 != '' THEN $65 ELSE proxy_buffering END,
 			proxy_request_buffering = CASE WHEN $66 != '' THEN $66 ELSE proxy_request_buffering END,
 			ssl_ecdh_curve = CASE WHEN $67 != '' THEN $67 ELSE ssl_ecdh_curve END,
+			enable_ipv6 = COALESCE($68, enable_ipv6),
 			updated_at = NOW()
 	`
 
@@ -331,6 +335,7 @@ func (r *GlobalSettingsRepository) Update(ctx context.Context, req *model.Update
 		req.ProxyMaxTempFileSize, req.ProxyTempFileWriteSize,
 		req.ProxyBuffering, req.ProxyRequestBuffering,
 		req.SSLECDHCurve,
+		req.EnableIPv6,
 	)
 	if err != nil {
 		return nil, err

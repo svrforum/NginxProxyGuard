@@ -88,6 +88,44 @@ export default function AdvancedTab({ getStringValue, getNumberValue, getBoolVal
         </div>
       </div>
 
+      {/* IPv6 Settings */}
+      <div className="border-b border-slate-200 dark:border-slate-700 pb-6">
+        <div className="flex items-center gap-2 mb-4">
+          <svg className="w-5 h-5 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+          </svg>
+          <h3 className="text-base font-semibold text-slate-800 dark:text-white">{t('global.advanced.ipv6.title')}</h3>
+        </div>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+          {t('global.advanced.ipv6.description')}
+        </p>
+        <div className="bg-slate-50 dark:bg-slate-700/30 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{t('global.advanced.ipv6.enabled')}</span>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{t('global.advanced.ipv6.enabledDescription')}</p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={getBoolValue('enable_ipv6')}
+                onChange={(e) => handleChange('enable_ipv6', e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-gray-200 dark:bg-slate-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+            </label>
+          </div>
+        </div>
+        <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/20 rounded-xl p-4 mt-4">
+          <div className="flex gap-3">
+            <svg className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <p className="text-sm text-amber-800 dark:text-amber-300">{t('global.advanced.ipv6.warning')}</p>
+          </div>
+        </div>
+      </div>
+
       <SettingField settingKey="resolver">
         <input
           type="text"

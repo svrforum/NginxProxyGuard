@@ -100,6 +100,9 @@ type GlobalSettings struct {
 	// Direct IP Access settings
 	DirectIPAccessAction string `json:"direct_ip_access_action" db:"direct_ip_access_action"` // allow, block_403, block_444
 
+	// IPv6 settings
+	EnableIPv6 bool `json:"enable_ipv6" db:"enable_ipv6"`
+
 	// DDoS Protection - Connection limiting
 	LimitConnEnabled  bool   `json:"limit_conn_enabled" db:"limit_conn_enabled"`
 	LimitConnZoneSize string `json:"limit_conn_zone_size" db:"limit_conn_zone_size"`
@@ -217,6 +220,9 @@ type UpdateGlobalSettingsRequest struct {
 
 	// Direct IP Access settings
 	DirectIPAccessAction *string `json:"direct_ip_access_action,omitempty"`
+
+	// IPv6 settings
+	EnableIPv6 *bool `json:"enable_ipv6,omitempty"`
 
 	// DDoS Protection - Connection limiting
 	LimitConnEnabled  *bool   `json:"limit_conn_enabled,omitempty"`

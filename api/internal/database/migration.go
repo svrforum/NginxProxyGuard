@@ -232,6 +232,9 @@ func (db *DB) RunMigrations() error {
 		-- The standard UNIQUE(proxy_host_id, hour_bucket) does not prevent duplicate NULLs.
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_dashboard_stats_hourly_null_host_bucket
 			ON dashboard_stats_hourly (hour_bucket) WHERE proxy_host_id IS NULL;
+
+		-- v2.9.0: IPv6 toggle
+		ALTER TABLE global_settings ADD COLUMN IF NOT EXISTS enable_ipv6 BOOLEAN NOT NULL DEFAULT TRUE;
 	`
 	_, err = db.Exec(upgradeSQL)
 	if err != nil {
