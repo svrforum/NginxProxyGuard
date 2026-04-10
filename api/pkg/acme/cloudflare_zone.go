@@ -2,9 +2,11 @@ package acme
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"regexp"
 	"sync"
@@ -100,6 +102,8 @@ func (p *cloudflareZoneProvider) Present(domain, token, keyAuth string) error {
 	p.mu.Lock()
 	p.recordIDs[token] = record.ID
 	p.mu.Unlock()
+
+	p.waitForDNSPropagation(info.EffectiveFQDN, info.Value, 60*time.Second, 5*time.Second)
 	return nil
 }
 
@@ -126,6 +130,40 @@ func (p *cloudflareZoneProvider) Timeout() (timeout, interval time.Duration) {
 	return 180 * time.Second, 5 * time.Second
 }
 
+// waitForDNSPropagation polls public DNS resolvers until the TXT record is visible
+// or the timeout expires. It returns nil in all cases — if propagation hasn't
+// completed by the deadline, the ACME server will perform its own retry logic.
+func (p *cloudflareZoneProvider) waitForDNSPropagation(fqdn, value string, timeout, interval time.Duration) {
+	resolvers := []string{"8.8.8.8:53", "1.1.1.1:53"}
+	deadline := time.Now().Add(timeout)
+
+	for time.Now().Before(deadline) {
+		for _, resolver := range resolvers {
+			r := &net.Resolver{
+				PreferGo: true,
+				Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+					d := net.Dialer{Timeout: 5 * time.Second}
+					return d.DialContext(ctx, "udp", resolver)
+				},
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			txts, err := r.LookupTXT(ctx, fqdn)
+			cancel()
+
+			if err == nil {
+				for _, txt := range txts {
+					if txt == value {
+						return
+					}
+				}
+			}
+		}
+
+		time.Sleep(interval)
+	}
+}
+
 func (p *cloudflareZoneProvider) doRequest(method, url string, body io.Reader) (*cfAPIResponse, error) {
 	req, err := http.NewRequest(method, url, body)
 	if err != nil {
@@ -138,7 +176,9 @@ func (p *cloudflareZoneProvider) doRequest(method, url string, body io.Reader) (
 		req.Header.Set("X-Auth-Email", p.email)
 		req.Header.Set("X-Auth-Key", p.apiKey)
 	}
-	req.Header.Set("Content-Type", "application/json")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)

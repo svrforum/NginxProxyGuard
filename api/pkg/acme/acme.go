@@ -609,30 +609,18 @@ func (s *Service) createDNSProvider(provider *model.DNSProvider) (challenge.Prov
 			return newCloudflareZoneProvider(creds.ZoneID, creds.APIToken, creds.APIKey, creds.Email)
 		}
 
-		// Set environment variables for cloudflare provider
+		// Use config-based API to avoid race conditions with concurrent goroutines
+		cfg := cloudflare.NewDefaultConfig()
+		cfg.PropagationTimeout = 180 * time.Second
+		cfg.PollingInterval = 5 * time.Second
 		if creds.APIToken != "" {
-			os.Setenv("CLOUDFLARE_DNS_API_TOKEN", creds.APIToken)
-			os.Setenv("CLOUDFLARE_ZONE_API_TOKEN", creds.APIToken)
+			cfg.AuthToken = creds.APIToken
+			cfg.ZoneToken = creds.APIToken
 		} else {
-			os.Setenv("CLOUDFLARE_EMAIL", creds.Email)
-			os.Setenv("CLOUDFLARE_API_KEY", creds.APIKey)
+			cfg.AuthEmail = creds.Email
+			cfg.AuthKey = creds.APIKey
 		}
-
-		// Increase propagation timeout for DNS propagation reliability
-		os.Setenv("CLOUDFLARE_PROPAGATION_TIMEOUT", "180")
-		os.Setenv("CLOUDFLARE_POLLING_INTERVAL", "5")
-
-		p, err := cloudflare.NewDNSProvider()
-
-		// Cleanup environment variables
-		os.Unsetenv("CLOUDFLARE_DNS_API_TOKEN")
-		os.Unsetenv("CLOUDFLARE_ZONE_API_TOKEN")
-		os.Unsetenv("CLOUDFLARE_EMAIL")
-		os.Unsetenv("CLOUDFLARE_API_KEY")
-		os.Unsetenv("CLOUDFLARE_PROPAGATION_TIMEOUT")
-		os.Unsetenv("CLOUDFLARE_POLLING_INTERVAL")
-
-		return p, err
+		return cloudflare.NewDNSProviderConfig(cfg)
 
 	case model.DNSProviderDuckDNS:
 		var creds model.DuckDNSCredentials
@@ -640,12 +628,9 @@ func (s *Service) createDNSProvider(provider *model.DNSProvider) (challenge.Prov
 			return nil, fmt.Errorf("invalid duckdns credentials: %w", err)
 		}
 
-		// Set environment variable for DuckDNS provider
-		os.Setenv("DUCKDNS_TOKEN", creds.Token)
-
-		p, err := duckdns.NewDNSProvider()
-		os.Unsetenv("DUCKDNS_TOKEN")
-		return p, err
+		cfg := duckdns.NewDefaultConfig()
+		cfg.Token = creds.Token
+		return duckdns.NewDNSProviderConfig(cfg)
 
 	case model.DNSProviderRoute53:
 		var creds model.Route53Credentials
@@ -653,31 +638,18 @@ func (s *Service) createDNSProvider(provider *model.DNSProvider) (challenge.Prov
 			return nil, fmt.Errorf("invalid route53 credentials: %w", err)
 		}
 
-		// Set environment variables for Route53 provider
-		os.Setenv("AWS_ACCESS_KEY_ID", creds.AccessKeyID)
-		os.Setenv("AWS_SECRET_ACCESS_KEY", creds.SecretAccessKey)
+		cfg := route53.NewDefaultConfig()
+		cfg.PropagationTimeout = 180 * time.Second
+		cfg.PollingInterval = 5 * time.Second
+		cfg.AccessKeyID = creds.AccessKeyID
+		cfg.SecretAccessKey = creds.SecretAccessKey
 		if creds.Region != "" {
-			os.Setenv("AWS_REGION", creds.Region)
+			cfg.Region = creds.Region
 		}
 		if creds.HostedZoneID != "" {
-			os.Setenv("AWS_HOSTED_ZONE_ID", creds.HostedZoneID)
+			cfg.HostedZoneID = creds.HostedZoneID
 		}
-
-		// Increase propagation timeout for DNS propagation reliability
-		os.Setenv("AWS_PROPAGATION_TIMEOUT", "180")
-		os.Setenv("AWS_POLLING_INTERVAL", "5")
-
-		p, err := route53.NewDNSProvider()
-
-		// Cleanup environment variables
-		os.Unsetenv("AWS_ACCESS_KEY_ID")
-		os.Unsetenv("AWS_SECRET_ACCESS_KEY")
-		os.Unsetenv("AWS_REGION")
-		os.Unsetenv("AWS_HOSTED_ZONE_ID")
-		os.Unsetenv("AWS_PROPAGATION_TIMEOUT")
-		os.Unsetenv("AWS_POLLING_INTERVAL")
-
-		return p, err
+		return route53.NewDNSProviderConfig(cfg)
 
 	case model.DNSProviderDynu:
 		var creds model.DynuCredentials
@@ -685,12 +657,9 @@ func (s *Service) createDNSProvider(provider *model.DNSProvider) (challenge.Prov
 			return nil, fmt.Errorf("invalid dynu credentials: %w", err)
 		}
 
-		// Set environment variable for Dynu provider
-		os.Setenv("DYNU_API_KEY", creds.APIKey)
-
-		p, err := dynu.NewDNSProvider()
-		os.Unsetenv("DYNU_API_KEY")
-		return p, err
+		cfg := dynu.NewDefaultConfig()
+		cfg.APIKey = creds.APIKey
+		return dynu.NewDNSProviderConfig(cfg)
 
 	default:
 		return nil, fmt.Errorf("unsupported DNS provider type: %s", provider.ProviderType)
