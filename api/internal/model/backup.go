@@ -302,6 +302,9 @@ type GlobalSettingsExport struct {
 	// Custom config
 	CustomHTTPConfig   string `json:"custom_http_config,omitempty"`
 	CustomStreamConfig string `json:"custom_stream_config,omitempty"`
+
+	// IPv6 settings
+	EnableIPv6 *bool `json:"enable_ipv6,omitempty"` // pointer for old backup compatibility (nil = default true)
 }
 
 // ProxyHostData represents proxy host data for export

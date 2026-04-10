@@ -898,6 +898,13 @@
           "description": "Health check (/health)와 ACME 챌린지 (/.well-known/acme-challenge/)는 이 설정과 관계없이 항상 허용됩니다."
         }
       },
+      "ipv6": {
+        "title": "IPv6 지원",
+        "description": "nginx 설정에서 IPv6 listen 지시자를 활성화하거나 비활성화합니다. 서버가 IPv6를 지원하지 않는 경우 비활성화하세요.",
+        "enabled": "IPv6 활성화",
+        "enabledDescription": "nginx 설정에 listen [::]: 지시자 포함",
+        "warning": "이 설정을 변경하면 모든 nginx 설정이 재생성되고 nginx가 리로드됩니다."
+      },
       "ddos": {
         "title": "DDoS 보호 (전역 설정)",
         "description": "모든 호스트에 적용되는 전역 DDoS 보호 설정입니다. Proxy Host별 Rate Limit은 이 설정에 추가로 적용됩니다.",

@@ -141,6 +141,16 @@ func main() {
 		log.Printf("[Startup] Warning: failed to ensure filter subscription files: %v", err)
 	}
 
+	// Load global settings early so IPv6/port settings apply to ALL config generation
+	directIPAction := "allow"
+	if settings, err := globalSettingsRepo.Get(startupCtx); err == nil && settings != nil {
+		directIPAction = settings.DirectIPAccessAction
+		nginxManager.SetEnableIPv6(settings.EnableIPv6)
+		log.Printf("[Startup] Global settings loaded: enable_ipv6=%v, direct_ip_action=%s", settings.EnableIPv6, directIPAction)
+	} else if err != nil {
+		log.Printf("[Startup] Warning: failed to load global settings: %v", err)
+	}
+
 	// Generate shared filter subscription config files BEFORE syncing host configs
 	log.Println("[Startup] Generating shared filter subscription configs...")
 	{
@@ -172,12 +182,7 @@ func main() {
 	}
 
 	// Regenerate default server config on startup
-	// Read from global_settings (used by /settings/global UI)
 	log.Println("[Startup] Regenerating default server config...")
-	directIPAction := "allow" // Default
-	if settings, err := globalSettingsRepo.Get(startupCtx); err == nil && settings != nil {
-		directIPAction = settings.DirectIPAccessAction
-	}
 	if err := nginxManager.GenerateDefaultServerConfig(startupCtx, directIPAction); err != nil {
 		log.Printf("[Startup] Warning: failed to regenerate default server config: %v", err)
 	} else {

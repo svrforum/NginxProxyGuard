@@ -290,6 +290,12 @@ func (r *BackupRepository) importGlobalSettings(ctx context.Context, tx *sql.Tx,
 		gs.SSLECDHCurve = "X25519MLKEM768:X25519:secp256r1:secp384r1"
 	}
 
+	// Default enable_ipv6 for old backups that don't have this field
+	enableIPv6 := true
+	if gs.EnableIPv6 != nil {
+		enableIPv6 = *gs.EnableIPv6
+	}
+
 	query := `
 		UPDATE global_settings SET
 			worker_processes = $1, worker_connections = $2, worker_rlimit_nofile = $3,
@@ -304,7 +310,8 @@ func (r *BackupRepository) importGlobalSettings(ctx context.Context, tx *sql.Tx,
 			ssl_session_timeout = $35, ssl_session_tickets = $36, ssl_stapling = $37, ssl_stapling_verify = $38,
 			ssl_ecdh_curve = $39,
 			access_log_enabled = $40, error_log_level = $41, resolver = $42, resolver_timeout = $43,
-			custom_http_config = $44, custom_stream_config = $45, updated_at = NOW()
+			custom_http_config = $44, custom_stream_config = $45,
+			enable_ipv6 = $46, updated_at = NOW()
 	`
 
 	_, err := tx.ExecContext(ctx, query,
@@ -321,6 +328,7 @@ func (r *BackupRepository) importGlobalSettings(ctx context.Context, tx *sql.Tx,
 		gs.SSLECDHCurve,
 		gs.AccessLogEnabled, gs.ErrorLogLevel, gs.Resolver, gs.ResolverTimeout,
 		gs.CustomHTTPConfig, gs.CustomStreamConfig,
+		enableIPv6,
 	)
 	return err
 }

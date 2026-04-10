@@ -32,6 +32,7 @@ type Manager struct {
 	httpsPort      string // HTTPS listen port (default: 443)
 	apiURL         string // API URL for nginx to reach API (default: http://127.0.0.1:9080)
 	dnsResolver    string // DNS resolver for nginx (default: 127.0.0.53 8.8.8.8)
+	enableIPv6     bool   // Enable IPv6 listen directives (default: true)
 }
 
 func NewManager(configPath, certsPath string) *Manager {
@@ -81,6 +82,7 @@ func NewManager(configPath, certsPath string) *Manager {
 		httpsPort:      httpsPort,
 		apiURL:         apiURL,
 		dnsResolver:    dnsResolver,
+		enableIPv6:     true,
 	}
 }
 
@@ -92,6 +94,16 @@ func (m *Manager) GetHTTPPort() string {
 // GetHTTPSPort returns the HTTPS listen port
 func (m *Manager) GetHTTPSPort() string {
 	return m.httpsPort
+}
+
+// GetEnableIPv6 returns whether IPv6 listen directives are enabled
+func (m *Manager) GetEnableIPv6() bool {
+	return m.enableIPv6
+}
+
+// SetEnableIPv6 sets whether IPv6 listen directives should be included in configs
+func (m *Manager) SetEnableIPv6(enabled bool) {
+	m.enableIPv6 = enabled
 }
 
 // writeFileAtomic writes data to a file atomically using temp file + fsync + rename
@@ -412,6 +424,7 @@ func (m *Manager) GenerateConfigFull(ctx context.Context, data ProxyHostConfigDa
 	// Set listen ports from manager config
 	data.HTTPPort = m.httpPort
 	data.HTTPSPort = m.httpsPort
+	data.EnableIPv6 = m.enableIPv6
 
 	// Get API host from environment or default (host network mode)
 	apiHostValue := os.Getenv("API_HOST")

@@ -610,6 +610,7 @@ CREATE TABLE IF NOT EXISTS public.global_settings (
     brotli_comp_level integer DEFAULT 6 NOT NULL,
     brotli_types text DEFAULT 'text/plain text/css text/xml text/javascript application/json application/javascript application/xml application/xml+rss image/svg+xml'::text NOT NULL,
     direct_ip_access_action character varying(20) DEFAULT 'allow'::character varying,
+    enable_ipv6 boolean DEFAULT true NOT NULL,
     limit_conn_zone_size character varying(10) DEFAULT '10m'::character varying,
     limit_conn_per_ip integer DEFAULT 100,
     limit_conn_enabled boolean DEFAULT false,
@@ -3517,3 +3518,6 @@ CREATE INDEX IF NOT EXISTS idx_logs_part_status_created ON logs_partitioned (sta
 -- Partial unique index to prevent duplicate NULL proxy_host_id rows per hour_bucket (GitHub Issue #96)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_dashboard_stats_hourly_null_host_bucket
     ON dashboard_stats_hourly (hour_bucket) WHERE proxy_host_id IS NULL;
+
+-- v2.9.0: IPv6 toggle
+ALTER TABLE global_settings ADD COLUMN IF NOT EXISTS enable_ipv6 BOOLEAN NOT NULL DEFAULT TRUE;
