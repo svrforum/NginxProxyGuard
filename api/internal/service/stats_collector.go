@@ -27,13 +27,12 @@ import (
 var combinedLogPattern = regexp.MustCompile(`^(\S+) \S+ \S+ \[([^\]]+)\] "(\S+) (\S+)[^"]*" (\d+) (\d+)`)
 
 type StatsCollector struct {
-	db               *sql.DB
-	nginxStatusURL   string
-	accessLogPath    string
-	lastLogPosition  int64
-	mu               sync.Mutex
-	stopCh           chan struct{}
-	lastHealthCleanup time.Time
+	db              *sql.DB
+	nginxStatusURL  string
+	accessLogPath   string
+	lastLogPosition int64
+	mu              sync.Mutex
+	stopCh          chan struct{}
 }
 
 type NginxStatus struct {
@@ -523,12 +522,8 @@ func (sc *StatsCollector) recordStats(nginxStatus NginxStatus, stats AggregatedS
 		log.Println("[StatsCollector] System health recorded successfully")
 	}
 
-	// Cleanup old system_health records (keep last 24 hours)
-	// Run once per hour using elapsed time tracking instead of fragile minute==0 check
-	if time.Since(sc.lastHealthCleanup) >= time.Hour {
-		sc.db.ExecContext(ctx, `DELETE FROM system_health WHERE recorded_at < NOW() - INTERVAL '24 hours'`)
-		sc.lastHealthCleanup = now
-	}
+	// Note: system_health cleanup is handled by PartitionScheduler.cleanupDashboardStats()
+	// which runs daily via DashboardRepository.CleanupOldStats()
 
 	// Skip traffic stats if no new data
 	if stats.TotalRequests == 0 {

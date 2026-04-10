@@ -84,7 +84,7 @@ func (s *PartitionScheduler) run() {
 	s.enforceRetention()
 	s.cleanupLogsTable()
 	s.cleanupDashboardStats()
-	s.compressOldPartitions()
+	s.analyzeOldPartitions()
 }
 
 func (s *PartitionScheduler) cleanupDashboardStats() {
@@ -110,7 +110,7 @@ func (s *PartitionScheduler) cleanupDashboardStats() {
 	}
 }
 
-func (s *PartitionScheduler) compressOldPartitions() {
+func (s *PartitionScheduler) analyzeOldPartitions() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
@@ -229,7 +229,8 @@ func (s *PartitionScheduler) createPartitions() {
 			}
 			log.Printf("[PartitionScheduler] Found %d rows in logs_p_default, migrating to proper partitions...", defaultCount)
 			totalMoved := int64(0)
-			for {
+			maxBatches := 10000 // Safety limit: 10000 batches × 10000 rows = 100M rows max
+			for batch := 0; batch < maxBatches; batch++ {
 				result, err := s.db.ExecContext(ctx, `
 					WITH moved AS (
 						DELETE FROM logs_p_default
@@ -247,6 +248,9 @@ func (s *PartitionScheduler) createPartitions() {
 				log.Printf("[PartitionScheduler] Migrated %d rows from logs_p_default (total: %d)", n, totalMoved)
 				if n < 10000 {
 					break
+				}
+				if batch == maxBatches-1 {
+					log.Printf("[PartitionScheduler] Reached max batch limit (%d), remaining rows will be migrated on next run", maxBatches)
 				}
 				time.Sleep(100 * time.Millisecond)
 			}
