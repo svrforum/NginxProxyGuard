@@ -96,6 +96,9 @@ export interface GlobalSettings {
   // Direct IP Access settings
   direct_ip_access_action: 'allow' | 'block_403' | 'block_444';
 
+  // IPv6 settings
+  enable_ipv6: boolean;
+
   // DDoS Protection - Connection limiting
   limit_conn_enabled: boolean;
   limit_conn_zone_size: string;
@@ -133,6 +136,7 @@ export interface UpdateSettingsRequest {
   ssl_protocols?: string;
   server_tokens?: boolean;
   direct_ip_access_action?: 'allow' | 'block_403' | 'block_444';
+  enable_ipv6?: boolean;
   // DDoS Protection
   limit_conn_enabled?: boolean;
   limit_conn_zone_size?: string;
@@ -398,6 +402,9 @@ export interface SystemSettings {
   // Direct IP Access Settings
   direct_ip_access_action: 'allow' | 'block_403' | 'block_444';
 
+  // IPv6 settings
+  enable_ipv6: boolean;
+
   // Global Trusted IPs
   global_trusted_ips: string;
 
@@ -475,6 +482,7 @@ export interface UpdateSystemSettingsRequest {
 
   // Direct IP Access Settings
   direct_ip_access_action?: 'allow' | 'block_403' | 'block_444';
+  enable_ipv6?: boolean;
 
   // Global Trusted IPs
   global_trusted_ips?: string;
