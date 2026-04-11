@@ -905,6 +905,12 @@
         "enabledDescription": "nginx 설정에 listen [::]: 지시자 포함",
         "warning": "이 설정을 변경하면 모든 nginx 설정이 재생성되고 nginx가 리로드됩니다."
       },
+      "errorPageLanguage": {
+        "title": "공개 에러 페이지 언어",
+        "description": "403(접근 차단) 등 공개 에러 페이지와, per-host GeoIP Challenge Mode가 트리거되었을 때 노출되는 CAPTCHA 챌린지 페이지의 기본 표시 언어입니다.",
+        "label": "기본 언어",
+        "help": "Auto: 방문자의 브라우저 언어를 따릅니다(브라우저가 한국어면 한국어, 아니면 영어). ko/en: 방문자 브라우저와 무관하게 지정 언어로 고정합니다. 우선순위: 방문자의 언어 버튼 클릭 > 이 전역 기본값 > 브라우저 감지."
+      },
       "ddos": {
         "title": "DDoS 보호 (전역 설정)",
         "description": "모든 호스트에 적용되는 전역 DDoS 보호 설정입니다. Proxy Host별 Rate Limit은 이 설정에 추가로 적용됩니다.",

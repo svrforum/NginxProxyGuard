@@ -25,8 +25,9 @@ var (
 )
 
 type ChallengeService struct {
-	repo       *repository.ChallengeRepository
-	httpClient *http.Client
+	repo              *repository.ChallengeRepository
+	systemSettingsRepo *repository.SystemSettingsRepository
+	httpClient        *http.Client
 }
 
 func NewChallengeService(repo *repository.ChallengeRepository) *ChallengeService {
@@ -36,6 +37,13 @@ func NewChallengeService(repo *repository.ChallengeRepository) *ChallengeService
 			Timeout: 10 * time.Second,
 		},
 	}
+}
+
+// SetSystemSettingsRepo wires the system settings repository used to resolve
+// the global error page language default. Optional — if unset, the challenge
+// page falls back to browser-only detection.
+func (s *ChallengeService) SetSystemSettingsRepo(r *repository.SystemSettingsRepository) {
+	s.systemSettingsRepo = r
 }
 
 // GetConfig returns challenge config for a proxy host
@@ -283,14 +291,25 @@ func (s *ChallengeService) GenerateChallengePageData(ctx context.Context, proxyH
 		return nil, ErrChallengeDisabled
 	}
 
+	// Resolve admin-configured default error page language so the challenge
+	// page honors the same setting as the 403 page (Issue #105).
+	// Default "auto" means "follow visitor's browser language", same as 403.html.
+	errorPageLanguage := "auto"
+	if s.systemSettingsRepo != nil {
+		if sys, sysErr := s.systemSettingsRepo.Get(ctx); sysErr == nil && sys != nil && sys.UIErrorPageLanguage != "" {
+			errorPageLanguage = sys.UIErrorPageLanguage
+		}
+	}
+
 	return map[string]interface{}{
-		"site_key":       config.SiteKey,
-		"challenge_type": config.ChallengeType,
-		"theme":          config.Theme,
-		"page_title":     config.PageTitle,
-		"page_message":   config.PageMessage,
-		"reason":         reason,
-		"proxy_host_id":  proxyHostID,
+		"site_key":            config.SiteKey,
+		"challenge_type":      config.ChallengeType,
+		"theme":               config.Theme,
+		"page_title":          config.PageTitle,
+		"page_message":        config.PageMessage,
+		"reason":              reason,
+		"proxy_host_id":       proxyHostID,
+		"error_page_language": errorPageLanguage,
 	}, nil
 }
 

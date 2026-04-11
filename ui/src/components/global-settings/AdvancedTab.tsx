@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { HelpTip } from '../common/HelpTip';
 import { SettingField, CheckboxField, inputClass } from './SettingFields';
+import ErrorPageLanguageSection from './ErrorPageLanguageSection';
 import type { TabContentProps } from './types';
 
 export default function AdvancedTab({ getStringValue, getNumberValue, getBoolValue, handleChange }: TabContentProps) {
@@ -125,6 +126,9 @@ export default function AdvancedTab({ getStringValue, getNumberValue, getBoolVal
           </div>
         </div>
       </div>
+
+      {/* Public Error Page Language (system_settings) */}
+      <ErrorPageLanguageSection />
 
       <SettingField settingKey="resolver">
         <input
