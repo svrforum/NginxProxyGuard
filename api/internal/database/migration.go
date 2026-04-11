@@ -235,13 +235,30 @@ func (db *DB) RunMigrations() error {
 
 		-- v2.9.0: IPv6 toggle
 		ALTER TABLE global_settings ADD COLUMN IF NOT EXISTS enable_ipv6 BOOLEAN NOT NULL DEFAULT TRUE;
-
-		-- v2.9.0: Default language for public error pages (403, etc.) - Issue #105
-		ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS ui_error_page_language character varying(10) DEFAULT 'auto'::character varying;
 	`
 	_, err = db.Exec(upgradeSQL)
 	if err != nil {
 		log.Printf("Warning: upgrade statements had errors (may be already applied): %v", err)
+	}
+
+	// Independent column upgrades — each runs in its own Exec so a failure
+	// in one does not prevent the others (the big upgradeSQL block above
+	// can abort early on pre-existing schema state like TimescaleDB chunk
+	// issues, so newer columns must not live inside it).
+	independentAlters := []struct {
+		desc string
+		sql  string
+	}{
+		{
+			// Issue #105 — Default language for public error pages (403, etc.)
+			desc: "system_settings.ui_error_page_language",
+			sql:  `ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS ui_error_page_language character varying(10) DEFAULT 'auto'::character varying`,
+		},
+	}
+	for _, a := range independentAlters {
+		if _, err := db.Exec(a.sql); err != nil {
+			log.Printf("Warning: independent upgrade %s failed: %v", a.desc, err)
+		}
 	}
 
 	// Run 006_fix_numeric_overflow migration for existing installations (Issue #29 fix)
