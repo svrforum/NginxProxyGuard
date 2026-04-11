@@ -241,10 +241,29 @@ func (db *DB) RunMigrations() error {
 		log.Printf("Warning: upgrade statements had errors (may be already applied): %v", err)
 	}
 
-	// Independent column upgrades — each runs in its own Exec so a failure
-	// in one does not prevent the others (the big upgradeSQL block above
-	// can abort early on pre-existing schema state like TimescaleDB chunk
-	// issues, so newer columns must not live inside it).
+	// ===========================================================================
+	// Independent upgrade statements — REQUIRED for any NEW column upgrade.
+	// ===========================================================================
+	//
+	// The big upgradeSQL block above is sent to lib/pq as a single multi-statement
+	// Exec. On production databases where an earlier statement fails (e.g. the
+	// dashboard_stats_hourly DELETE hits `pq: chunk not found` from an orphaned
+	// TimescaleDB chunk), PostgreSQL aborts the implicit transaction and every
+	// subsequent statement in the same Exec is silently skipped. The error is
+	// swallowed by the `log.Printf("Warning: ...")` above and startup continues,
+	// but any ALTER TABLE sitting after the failing statement never ran.
+	//
+	// That exact bug kept `ui_error_page_language` (Issue #105) from being added
+	// on some v2.8.3 upgrades. To prevent a recurrence:
+	//
+	//   Any column upgrade that MUST land on existing installations should be
+	//   added to `independentAlters` below, NOT to the upgradeSQL block above.
+	//   Each entry runs in its own db.Exec, so one failure cannot cascade to
+	//   the next.
+	//
+	// The old upgradeSQL block is kept for historical/TimescaleDB statements we
+	// cannot easily split, but it is effectively frozen — do not add new column
+	// upgrades there.
 	independentAlters := []struct {
 		desc string
 		sql  string
