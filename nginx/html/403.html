@@ -168,23 +168,30 @@
     </div>
 
     <script>
-        function setLang(lang) {
+        function applyLang(lang) {
+            document.documentElement.lang = lang;
             document.body.className = lang === 'en' ? 'en' : '';
             document.getElementById('btn-ko').className = 'lang-btn' + (lang === 'ko' ? ' active' : '');
             document.getElementById('btn-en').className = 'lang-btn' + (lang === 'en' ? ' active' : '');
+        }
+        function setLang(lang) {
             localStorage.setItem('npg_lang', lang);
+            applyLang(lang);
         }
-        // Load saved language preference or detect from browser
-        const savedLang = localStorage.getItem('npg_lang');
-        if (savedLang) {
-            setLang(savedLang);
-        } else {
-            const browserLang = navigator.language.split('-')[0];
-            if (browserLang === 'ko') setLang('ko');
+        function detectBrowserLang() {
+            var browserLang = (navigator.language || 'en').split('-')[0];
+            return browserLang === 'ko' ? 'ko' : 'en';
         }
+        // Initial lang resolution (before API):
+        // 1) Prefer the user's saved click
+        // 2) Else follow browser language
+        // This avoids the Korean flash for non-Korean visitors with no saved preference.
+        var savedLang = localStorage.getItem('npg_lang');
+        var initialLang = (savedLang === 'ko' || savedLang === 'en') ? savedLang : detectBrowserLang();
+        applyLang(initialLang);
 
-        // Load font from API (global setting)
-        async function loadFont() {
+        // Load global UI settings (font + admin-configured default error page language)
+        async function loadUISettings() {
             try {
                 const res = await fetch('/api/v1/public/ui-settings');
                 if (res.ok) {
@@ -192,16 +199,26 @@
                     if (data.font_family && data.font_family !== 'system') {
                         document.body.setAttribute('data-font', data.font_family);
                     }
+                    // Admin default only applies when the visitor has no saved preference.
+                    // 'auto' (or missing) means follow browser language.
+                    if (savedLang !== 'ko' && savedLang !== 'en') {
+                        var adminDefault = data.error_page_language;
+                        if (adminDefault === 'ko' || adminDefault === 'en') {
+                            applyLang(adminDefault);
+                        }
+                        // else 'auto' → keep the browser-detected lang already applied.
+                    }
+                    return;
                 }
             } catch (e) {
-                // Fallback to localStorage if API fails
-                const savedFont = localStorage.getItem('npg_font_family');
+                // API unavailable — fall back to saved font preference if any
+                var savedFont = localStorage.getItem('npg_font_family');
                 if (savedFont && savedFont !== 'system') {
                     document.body.setAttribute('data-font', savedFont);
                 }
             }
         }
-        loadFont();
+        loadUISettings();
     </script>
 </body>
 </html>

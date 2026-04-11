@@ -524,10 +524,10 @@
   },
   "captcha": {
     "title": "CAPTCHA Challenge Settings",
-    "description": "Configure CAPTCHA settings when using Challenge Mode in GeoIP restrictions",
+    "description": "Configure the CAPTCHA provider used by per-host Challenge Mode. After enabling this, open each proxy host's Security → GeoIP tab and turn on 'Challenge Mode' to actually show the CAPTCHA page.",
     "enable": {
-      "label": "Enable CAPTCHA Challenge",
-      "description": "If enabled, a CAPTCHA page will be shown instead of blocking when GeoIP Challenge Mode is triggered."
+      "label": "Enable CAPTCHA Provider",
+      "description": "This only configures the provider (Turnstile / reCAPTCHA). A visitor will only see the CAPTCHA if the proxy host has GeoIP → Challenge Mode enabled. Otherwise, geo-blocked visitors are shown the 403 page."
     },
     "stats": {
       "title": "Challenge Statistics (24h)",
