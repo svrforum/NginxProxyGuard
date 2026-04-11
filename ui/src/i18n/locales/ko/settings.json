@@ -528,10 +528,10 @@
   },
   "captcha": {
     "title": "CAPTCHA 챌린지 설정",
-    "description": "GeoIP 제한에서 Challenge Mode를 사용할 때 보여줄 CAPTCHA 설정입니다",
+    "description": "각 프록시 호스트의 Challenge Mode에서 사용할 CAPTCHA 제공자(Turnstile / reCAPTCHA)를 설정합니다. 이 토글을 켠 후, 각 프록시 호스트의 보안(Security) 탭 → GeoIP 섹션에서 '챌린지 모드(Challenge Mode)'를 따로 체크해야 실제로 CAPTCHA 페이지가 노출됩니다.",
     "enable": {
-      "label": "CAPTCHA Challenge 활성화",
-      "description": "활성화하면 GeoIP Challenge Mode가 설정된 프록시 호스트에서 차단 대신 CAPTCHA 페이지를 표시합니다."
+      "label": "CAPTCHA 제공자 활성화",
+      "description": "이 토글은 제공자(Turnstile / reCAPTCHA)를 활성화하는 역할만 합니다. 방문자가 CAPTCHA를 보려면 해당 프록시 호스트의 GeoIP → '챌린지 모드' 체크박스도 반드시 켜져 있어야 합니다. 그렇지 않으면 GeoIP로 차단된 방문자에게는 403 페이지가 표시됩니다."
     },
     "stats": {
       "title": "챌린지 통계 (24시간)",

@@ -235,6 +235,9 @@ func (db *DB) RunMigrations() error {
 
 		-- v2.9.0: IPv6 toggle
 		ALTER TABLE global_settings ADD COLUMN IF NOT EXISTS enable_ipv6 BOOLEAN NOT NULL DEFAULT TRUE;
+
+		-- v2.9.0: Default language for public error pages (403, etc.) - Issue #105
+		ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS ui_error_page_language character varying(10) DEFAULT 'auto'::character varying;
 	`
 	_, err = db.Exec(upgradeSQL)
 	if err != nil {

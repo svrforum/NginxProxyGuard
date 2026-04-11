@@ -411,6 +411,10 @@ export interface SystemSettings {
   // Global Block Exploits Exceptions
   global_block_exploits_exceptions: string;
 
+  // UI Settings (global)
+  ui_font_family?: string;
+  ui_error_page_language?: string; // 'auto' | 'ko' | 'en'
+
   updated_at: string;
 }
 
@@ -492,6 +496,7 @@ export interface UpdateSystemSettingsRequest {
 
   // UI Settings (global)
   ui_font_family?: string;
+  ui_error_page_language?: string;
 }
 
 export interface GeoIPStatus {

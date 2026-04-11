@@ -2219,6 +2219,7 @@ geckodriver'::text,
     system_logs_exclude_patterns text[] DEFAULT ARRAY['/health'::text, '/nginx_status'::text, '/.well-known/'::text, 'HEAD /'::text],
     system_logs_stdout_excluded text[] DEFAULT ARRAY['npm-guard-proxy'::text],
     ui_font_family character varying(50) DEFAULT 'system'::character varying,
+    ui_error_page_language character varying(10) DEFAULT 'auto'::character varying,
     global_block_exploits_exceptions text DEFAULT '^/wp-json/
 ^/api/v1/challenge/
 ^/wp-admin/admin-ajax.php
@@ -3497,6 +3498,9 @@ END $$;
 
 -- v2.7.3: Global trusted IPs for bypassing all security features (Issue #90)
 ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS global_trusted_ips text DEFAULT '';
+
+-- v2.8.4: Default language for public error pages (403, etc.) - Issue #105
+ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS ui_error_page_language character varying(10) DEFAULT 'auto'::character varying;
 
 -- Performance: pg_trgm GIN indexes for ILIKE search on logs_partitioned
 CREATE EXTENSION IF NOT EXISTS pg_trgm;

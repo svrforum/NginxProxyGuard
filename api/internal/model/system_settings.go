@@ -86,7 +86,8 @@ type SystemSettings struct {
 	DirectIPAccessAction string `json:"direct_ip_access_action" db:"direct_ip_access_action"` // How to handle direct IP access: allow, block_403, block_444
 
 	// UI Settings (global)
-	UIFontFamily string `json:"ui_font_family" db:"ui_font_family"` // Global font family: system, gowun-batang, noto-sans-kr, pretendard, inter
+	UIFontFamily         string `json:"ui_font_family" db:"ui_font_family"`                   // Global font family: system, gowun-batang, noto-sans-kr, pretendard, inter
+	UIErrorPageLanguage  string `json:"ui_error_page_language" db:"ui_error_page_language"` // Default language for error pages (403, etc.): auto, ko, en
 
 	// System Log Settings
 	SystemLogsEnabled         bool            `json:"system_logs_enabled" db:"system_logs_enabled"`
@@ -179,6 +180,10 @@ type SystemSettingsResponse struct {
 	// Direct IP Access Settings
 	DirectIPAccessAction string `json:"direct_ip_access_action"`
 
+	// UI Settings
+	UIFontFamily        string `json:"ui_font_family"`
+	UIErrorPageLanguage string `json:"ui_error_page_language"`
+
 	// System Log Settings
 	SystemLogsEnabled         bool            `json:"system_logs_enabled"`
 	SystemLogsLevels          json.RawMessage `json:"system_logs_levels"`
@@ -243,6 +248,8 @@ func (s *SystemSettings) ToResponse() *SystemSettingsResponse {
 		GlobalBlockExploitsExceptions:       s.GlobalBlockExploitsExceptions,
 
 		DirectIPAccessAction:                s.DirectIPAccessAction,
+		UIFontFamily:                        s.UIFontFamily,
+		UIErrorPageLanguage:                 s.UIErrorPageLanguage,
 		SystemLogsEnabled:                   s.SystemLogsEnabled,
 		SystemLogsLevels:                    s.SystemLogsLevels,
 		SystemLogsExcludePatterns:           s.SystemLogsExcludePatterns,
@@ -357,7 +364,8 @@ type UpdateSystemSettingsRequest struct {
 	DirectIPAccessAction *string `json:"direct_ip_access_action,omitempty"`
 
 	// UI Settings (global)
-	UIFontFamily *string `json:"ui_font_family,omitempty"`
+	UIFontFamily        *string `json:"ui_font_family,omitempty"`
+	UIErrorPageLanguage *string `json:"ui_error_page_language,omitempty"`
 
 	// System Log Settings
 	SystemLogsEnabled         *bool            `json:"system_logs_enabled,omitempty"`

@@ -91,14 +91,15 @@ func (h *SystemSettingsHandler) GetSystemSettings(c echo.Context) error {
 	return c.JSON(http.StatusOK, settings.ToResponse())
 }
 
-// GetPublicUISettings returns public UI settings (font, etc.) without authentication
+// GetPublicUISettings returns public UI settings (font, language, etc.) without authentication
 // This is used by welcome page, 403 page, and other public pages
 func (h *SystemSettingsHandler) GetPublicUISettings(c echo.Context) error {
 	settings, err := h.repo.Get(c.Request().Context())
 	if err != nil {
 		// Return default on error
 		return c.JSON(http.StatusOK, map[string]string{
-			"font_family": "system",
+			"font_family":         "system",
+			"error_page_language": "auto",
 		})
 	}
 
@@ -107,8 +108,14 @@ func (h *SystemSettingsHandler) GetPublicUISettings(c echo.Context) error {
 		fontFamily = "system"
 	}
 
+	errorPageLanguage := settings.UIErrorPageLanguage
+	if errorPageLanguage == "" {
+		errorPageLanguage = "auto"
+	}
+
 	return c.JSON(http.StatusOK, map[string]string{
-		"font_family": fontFamily,
+		"font_family":         fontFamily,
+		"error_page_language": errorPageLanguage,
 	})
 }
 
