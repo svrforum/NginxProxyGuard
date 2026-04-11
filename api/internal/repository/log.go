@@ -646,7 +646,7 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 			body_bytes_sent, request_time,
 			severity, error_message,
 			rule_id, rule_message, action_taken,
-			block_reason, bot_category,
+			block_reason, bot_category, exploit_rule,
 			created_at
 		FROM logs_partitioned
 		%s
@@ -673,7 +673,7 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 		var requestTime sql.NullFloat64
 		var severity, errorMessage sql.NullString
 		var ruleMessage, actionTaken sql.NullString
-		var blockReason, botCategory sql.NullString
+		var blockReason, botCategory, exploitRule sql.NullString
 
 		err := rows.Scan(
 			&log.ID, &log.LogType, &log.Timestamp, &host, &clientIP,
@@ -682,7 +682,7 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 			&bodyBytesSent, &requestTime,
 			&severity, &errorMessage,
 			&ruleID, &ruleMessage, &actionTaken,
-			&blockReason, &botCategory,
+			&blockReason, &botCategory, &exploitRule,
 			&log.CreatedAt,
 		)
 		if err != nil {
@@ -744,6 +744,9 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 		}
 		if botCategory.Valid {
 			log.BotCategory = &botCategory.String
+		}
+		if exploitRule.Valid && exploitRule.String != "" {
+			log.ExploitRule = &exploitRule.String
 		}
 
 		logs = append(logs, log)

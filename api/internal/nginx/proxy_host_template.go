@@ -376,10 +376,12 @@ server {
     # Request URI rules with RFI exception handling
 {{if hasRulesOfType .ExploitBlockRules "request_uri"}}
     set $rfi_block 0;
+    set $rfi_rule "-";
 {{range filterRulesByPatternType .ExploitBlockRules "request_uri"}}
     # {{.Name}} ({{.Category}})
     if ($request_uri ~* "{{escapeNginxPattern .Pattern}}") {
         set $rfi_block 1;
+        set $rfi_rule "{{.ID}}";
     }
 {{end}}
 {{if hasMergedExceptions .GlobalBlockExploitsExceptions .Host.BlockExploitsExceptions}}
@@ -392,6 +394,7 @@ server {
 {{end}}
     if ($rfi_block = 1) {
         set $block_reason_var "exploit_block";
+        set $exploit_rule_var $rfi_rule;
         return 403;
     }
 {{end}}
@@ -1238,10 +1241,12 @@ server {
     # Request URI rules with RFI exception handling
 {{if hasRulesOfType .ExploitBlockRules "request_uri"}}
     set $rfi_block 0;
+    set $rfi_rule "-";
 {{range filterRulesByPatternType .ExploitBlockRules "request_uri"}}
     # {{.Name}} ({{.Category}})
     if ($request_uri ~* "{{escapeNginxPattern .Pattern}}") {
         set $rfi_block 1;
+        set $rfi_rule "{{.ID}}";
     }
 {{end}}
 {{if hasMergedExceptions .GlobalBlockExploitsExceptions .Host.BlockExploitsExceptions}}
@@ -1254,6 +1259,7 @@ server {
 {{end}}
     if ($rfi_block = 1) {
         set $block_reason_var "exploit_block";
+        set $exploit_rule_var $rfi_rule;
         return 403;
     }
 {{end}}
