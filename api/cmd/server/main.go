@@ -200,6 +200,7 @@ func main() {
 
 	// Initialize challenge service
 	challengeService := service.NewChallengeService(challengeRepo)
+	challengeService.SetSystemSettingsRepo(systemSettingsRepo)
 
 	// Initialize auth service
 	authService := service.NewAuthServiceWithCache(authRepo, cfg.JWTSecret, redisCache)

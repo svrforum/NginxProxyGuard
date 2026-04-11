@@ -901,6 +901,12 @@
         "enabledDescription": "Include listen [::]: directives in nginx configs",
         "warning": "Changing this setting will regenerate all nginx configurations and reload nginx."
       },
+      "errorPageLanguage": {
+        "title": "Public Error Page Language",
+        "description": "Default language shown on public error pages (403 access blocked, etc.) and on the CAPTCHA challenge page when a per-host GeoIP Challenge Mode is triggered.",
+        "label": "Default Language",
+        "help": "Auto: follows the visitor's browser language (Korean if the browser is set to Korean, otherwise English). ko/en: force the specified language regardless of the visitor's browser. Priority: visitor's explicit language button click > this global default > browser detection."
+      },
       "ddos": {
         "title": "DDoS Protection (Global)",
         "description": "Global DDoS protection settings applied to all hosts. Proxy Host-specific Rate Limits are applied in addition to these settings.",

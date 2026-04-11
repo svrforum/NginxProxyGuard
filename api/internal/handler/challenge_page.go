@@ -49,6 +49,13 @@ func generateChallengePageHTML(data map[string]interface{}) string {
 		proxyHostID = *v
 	}
 
+	// Admin-configured default language ('auto' | 'ko' | 'en'). Resolved by the
+	// service, falls back to 'auto' when system_settings is unavailable.
+	errorPageLanguage := "auto"
+	if v, ok := data["error_page_language"].(string); ok && v != "" {
+		errorPageLanguage = v
+	}
+
 	// Determine script and widget based on challenge type
 	// Use escapeHTML to prevent XSS attacks from malicious siteKey values
 	var captchaScript, captchaWidget string
@@ -189,10 +196,17 @@ func generateChallengePageHTML(data map[string]interface{}) string {
             }
         };
 
-        // Detect browser language
+        // Admin-configured global default ('auto' | 'ko' | 'en'), injected by the server.
+        const adminDefaultLang = '` + escapeJS(errorPageLanguage) + `';
+
+        // Resolve language using the same priority as /403.html:
+        //   1. Visitor's explicit click (localStorage)
+        //   2. Admin-configured global default (if not 'auto')
+        //   3. Browser language, with English fallback for unsupported locales
         function detectLang() {
             const saved = localStorage.getItem('npg_lang');
             if (saved && i18n[saved]) return saved;
+            if (i18n[adminDefaultLang]) return adminDefaultLang;
             const browserLang = navigator.language.split('-')[0];
             return i18n[browserLang] ? browserLang : 'en';
         }
@@ -202,6 +216,7 @@ func generateChallengePageHTML(data map[string]interface{}) string {
         function setLang(lang) {
             currentLang = lang;
             localStorage.setItem('npg_lang', lang);
+            document.documentElement.lang = lang;
             updateTexts();
             document.querySelectorAll('.lang-switch button').forEach(btn => btn.classList.remove('active'));
             document.getElementById('lang-' + lang).classList.add('active');
@@ -221,6 +236,7 @@ func generateChallengePageHTML(data map[string]interface{}) string {
         }
 
         // Initialize
+        document.documentElement.lang = currentLang;
         updateTexts();
         document.getElementById('lang-' + currentLang).classList.add('active');
 

@@ -14,7 +14,7 @@ import {
   ChangeUsernameRequest,
   Disable2FARequest
 } from '../api/auth'
-import { getSystemSettings, updateSystemSettings } from '../api/settings'
+import { updateSystemSettings } from '../api/settings'
 import { useLanguage } from '../i18n/hooks/useLanguage'
 import APITokenManager from './APITokenManager'
 
@@ -25,13 +25,6 @@ const FONT_OPTIONS = [
   { value: 'noto-sans-kr', label: 'Noto Sans KR', labelKo: 'Noto Sans KR' },
   { value: 'pretendard', label: 'Pretendard', labelKo: 'Pretendard' },
   { value: 'inter', label: 'Inter', labelKo: 'Inter' },
-]
-
-// Error page language options
-const ERROR_PAGE_LANGUAGE_OPTIONS = [
-  { value: 'auto', label: 'Auto (browser language)', labelKo: '자동 (브라우저 언어)' },
-  { value: 'ko', label: '한국어', labelKo: '한국어' },
-  { value: 'en', label: 'English', labelKo: 'English' },
 ]
 
 interface AccountSettingsProps {
@@ -73,10 +66,6 @@ export default function AccountSettings({ onClose, onLogout }: AccountSettingsPr
   const [currentFontFamily, setCurrentFontFamily] = useState('system')
   const [changingFont, setChangingFont] = useState(false)
 
-  // Error page language state
-  const [currentErrorPageLanguage, setCurrentErrorPageLanguage] = useState('auto')
-  const [changingErrorPageLanguage, setChangingErrorPageLanguage] = useState(false)
-
   // Username change state
   const [usernameForm, setUsernameForm] = useState({
     current_password: '',
@@ -96,16 +85,6 @@ export default function AccountSettings({ onClose, onLogout }: AccountSettingsPr
       const info = await getAccountInfo()
       setAccountInfo(info)
       setCurrentFontFamily(info.font_family || 'system')
-      // Error page language is a global system setting, admin-only.
-      // Skip the fetch entirely for non-admin roles to avoid needless 403s.
-      if (info.role === 'admin') {
-        try {
-          const sys = await getSystemSettings()
-          setCurrentErrorPageLanguage(sys.ui_error_page_language || 'auto')
-        } catch {
-          // Best-effort: fall back to default even if the fetch fails
-        }
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : t('errors.failedToLoadAccount'))
     } finally {
@@ -128,18 +107,6 @@ export default function AccountSettings({ onClose, onLogout }: AccountSettingsPr
       setError(err instanceof Error ? err.message : 'Failed to change font')
     } finally {
       setChangingFont(false)
-    }
-  }
-
-  const handleErrorPageLanguageChange = async (lang: string) => {
-    try {
-      setChangingErrorPageLanguage(true)
-      await updateSystemSettings({ ui_error_page_language: lang })
-      setCurrentErrorPageLanguage(lang)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to change error page language')
-    } finally {
-      setChangingErrorPageLanguage(false)
     }
   }
 
@@ -450,31 +417,6 @@ export default function AccountSettings({ onClose, onLogout }: AccountSettingsPr
                     ))}
                   </select>
                 </div>
-                {accountInfo.role === 'admin' && (
-                  <div className="bg-gray-100 dark:bg-gray-700/50 p-4 rounded col-span-2">
-                    <p className="text-gray-500 dark:text-gray-400 text-sm">
-                      {t('account.info.errorPageLanguage', '에러 페이지 언어 (전역)')}
-                    </p>
-                    <select
-                      value={currentErrorPageLanguage}
-                      onChange={(e) => handleErrorPageLanguageChange(e.target.value)}
-                      disabled={changingErrorPageLanguage}
-                      className="mt-1 w-full px-3 py-1.5 bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded text-gray-900 dark:text-white text-sm focus:border-blue-500 focus:outline-none disabled:opacity-50"
-                    >
-                      {ERROR_PAGE_LANGUAGE_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {currentLanguage === 'ko' ? opt.labelKo : opt.label}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
-                      {t(
-                        'account.info.errorPageLanguageHelp',
-                        '공개 에러 페이지(403 등)에 표시될 기본 언어입니다. Auto 선택 시 방문자의 브라우저 언어를 따릅니다.'
-                      )}
-                    </p>
-                  </div>
-                )}
               </div>
 
               <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
