@@ -282,22 +282,27 @@ func (r *ChallengeRepository) ValidateToken(ctx context.Context, token, clientIP
 	var query string
 	var args []interface{}
 
+	// Skip client_ip in WHERE clause: on dual-stack networks desktop browsers
+	// may use IPv4 for the fetch() verify call but IPv6 for the subsequent
+	// page navigation (Happy Eyeballs / RFC 8305), causing a permanent
+	// validation mismatch. The 32-byte random token (SHA256-hashed) provides
+	// sufficient security without IP binding.
 	if proxyHostID != nil {
 		query = `
 			SELECT id, proxy_host_id, token_hash, client_ip, user_agent, challenge_reason,
 			       issued_at, expires_at, use_count, last_used_at, revoked, revoked_at, revoked_reason
 			FROM challenge_tokens
-			WHERE token_hash = $1 AND client_ip = $2 AND (proxy_host_id = $3 OR proxy_host_id IS NULL)
+			WHERE token_hash = $1 AND (proxy_host_id = $2 OR proxy_host_id IS NULL)
 			  AND revoked = FALSE AND expires_at > NOW()`
-		args = []interface{}{tokenHash, clientIP, *proxyHostID}
+		args = []interface{}{tokenHash, *proxyHostID}
 	} else {
 		query = `
 			SELECT id, proxy_host_id, token_hash, client_ip, user_agent, challenge_reason,
 			       issued_at, expires_at, use_count, last_used_at, revoked, revoked_at, revoked_reason
 			FROM challenge_tokens
-			WHERE token_hash = $1 AND client_ip = $2
+			WHERE token_hash = $1
 			  AND revoked = FALSE AND expires_at > NOW()`
-		args = []interface{}{tokenHash, clientIP}
+		args = []interface{}{tokenHash}
 	}
 
 	var ct model.ChallengeToken
