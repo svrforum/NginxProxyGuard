@@ -39,6 +39,7 @@ const NUMERIC_TO_ISO2: Record<string, string> = {
   "68": "BO",
   "76": "BR",
   "100": "BG",
+  "112": "BY",
   "104": "MM",
   "116": "KH",
   "120": "CM",

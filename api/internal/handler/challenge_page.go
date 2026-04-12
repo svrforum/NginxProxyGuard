@@ -116,6 +116,8 @@ func generateChallengePageHTML(data map[string]interface{}) string {
         #recaptcha-v3-notice { padding: 16px; background: ` + getNoticeBackground(theme) + `; border-radius: 8px; margin-bottom: 20px; color: ` + getSubtextColor(theme) + `; }
         .error { color: #ef4444; margin-top: 12px; display: none; font-size: 0.9rem; }
         .success { color: #22c55e; margin-top: 12px; display: none; font-size: 0.9rem; }
+        .manual-link { display: none; margin-top: 16px; }
+        .manual-link a { color: #3b82f6; text-decoration: underline; font-size: 0.9rem; }
         .loading { display: none; margin-top: 12px; }
         .spinner {
             border: 3px solid ` + getSpinnerBg(theme) + `;
@@ -158,6 +160,7 @@ func generateChallengePageHTML(data map[string]interface{}) string {
         <div class="loading"><div class="spinner"></div></div>
         <div class="error" id="error"></div>
         <div class="success" id="success"></div>
+        <div class="manual-link" id="manual-link"><a id="manual-link-a" href="/"></a></div>
 
         <div class="footer">
             <span id="footer-text"></span>
@@ -183,7 +186,8 @@ func generateChallengePageHTML(data map[string]interface{}) string {
                 success: '인증 완료! 이동 중...',
                 error: '인증에 실패했습니다. 다시 시도해주세요.',
                 networkError: '오류가 발생했습니다. 다시 시도해주세요.',
-                footer: '이 보안 확인은 자동화된 접근으로부터 보호합니다.'
+                footer: '이 보안 확인은 자동화된 접근으로부터 보호합니다.',
+                manualRedirect: '자동 이동되지 않으면 여기를 클릭하세요'
             },
             en: {
                 title: 'Security Check',
@@ -192,7 +196,8 @@ func generateChallengePageHTML(data map[string]interface{}) string {
                 success: 'Verified! Redirecting...',
                 error: 'Verification failed. Please try again.',
                 networkError: 'An error occurred. Please try again.',
-                footer: 'This security check helps protect against automated access.'
+                footer: 'This security check helps protect against automated access.',
+                manualRedirect: 'Click here if you are not redirected automatically'
             }
         };
 
@@ -275,12 +280,28 @@ func generateChallengePageHTML(data map[string]interface{}) string {
 
                 if (data.success) {
                     const expires = new Date(data.expires_at).toUTCString();
-                    document.cookie = 'ng_challenge=' + data.token + '; path=/; expires=' + expires + '; SameSite=Lax';
+                    const securePart = window.location.protocol === 'https:' ? '; Secure' : '';
+                    document.cookie = 'ng_challenge=' + data.token + '; path=/; expires=' + expires + '; SameSite=Lax' + securePart;
 
                     showSuccess();
 
+                    // Extract return URL: use substring instead of URLSearchParams
+                    // because the return URL may contain '&' (unencoded query params)
+                    // and 'return=' is always the last parameter in the redirect URL.
+                    const search = window.location.search;
+                    const returnIdx = search.indexOf('return=');
+                    const returnUrl = returnIdx !== -1 ? search.substring(returnIdx + 7) : '/';
+
+                    // Show manual redirect link after 3s as fallback
                     setTimeout(() => {
-                        const returnUrl = new URLSearchParams(window.location.search).get('return') || '/';
+                        const linkEl = document.getElementById('manual-link');
+                        const linkA = document.getElementById('manual-link-a');
+                        linkA.href = returnUrl;
+                        linkA.textContent = t('manualRedirect');
+                        linkEl.style.display = 'block';
+                    }, 3000);
+
+                    setTimeout(() => {
                         window.location.href = returnUrl;
                     }, 1000);
                 } else {

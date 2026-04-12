@@ -100,6 +100,7 @@ export interface UpdateProxyHostRequest {
   waf_mode?: 'blocking' | 'detection'
   waf_paranoia_level?: number
   waf_anomaly_threshold?: number
+  access_list_id?: string
   advanced_config?: string
   enabled?: boolean
 }

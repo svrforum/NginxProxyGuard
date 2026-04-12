@@ -485,7 +485,11 @@ func (r *ProxyHostRepository) Update(ctx context.Context, id string, req *model.
 		existing.SSLHTTP3 = *req.SSLHTTP3
 	}
 	if req.CertificateID != nil {
-		existing.CertificateID = req.CertificateID
+		if *req.CertificateID == "" {
+			existing.CertificateID = nil // Clear certificate
+		} else {
+			existing.CertificateID = req.CertificateID
+		}
 	}
 	if req.AllowWebsocketUpgrade != nil {
 		existing.AllowWebsocketUpgrade = *req.AllowWebsocketUpgrade
@@ -545,7 +549,11 @@ func (r *ProxyHostRepository) Update(ctx context.Context, id string, req *model.
 		existing.Enabled = *req.Enabled
 	}
 	if req.AccessListID != nil {
-		existing.AccessListID = req.AccessListID
+		if *req.AccessListID == "" {
+			existing.AccessListID = nil // Clear access list
+		} else {
+			existing.AccessListID = req.AccessListID
+		}
 	}
 
 	query := `
