@@ -290,16 +290,15 @@ func generateChallengePageHTML(data map[string]interface{}) string {
                     // and 'return=' is always the last parameter in the redirect URL.
                     const search = window.location.search;
                     const returnIdx = search.indexOf('return=');
-                    const returnUrl = returnIdx !== -1 ? search.substring(returnIdx + 7) : '/';
+                    let returnUrl = returnIdx !== -1 ? search.substring(returnIdx + 7) : '/';
+                    try { returnUrl = decodeURIComponent(returnUrl); } catch(e) {}
 
-                    // Show manual redirect link after 3s as fallback
-                    setTimeout(() => {
-                        const linkEl = document.getElementById('manual-link');
-                        const linkA = document.getElementById('manual-link-a');
-                        linkA.href = returnUrl;
-                        linkA.textContent = t('manualRedirect');
-                        linkEl.style.display = 'block';
-                    }, 3000);
+                    // Show manual redirect link immediately as fallback
+                    const linkEl = document.getElementById('manual-link');
+                    const linkA = document.getElementById('manual-link-a');
+                    linkA.href = returnUrl;
+                    linkA.textContent = t('manualRedirect');
+                    linkEl.style.display = 'block';
 
                     setTimeout(() => {
                         window.location.href = returnUrl;
