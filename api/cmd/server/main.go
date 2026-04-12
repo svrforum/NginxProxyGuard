@@ -445,7 +445,8 @@ func main() {
 	challenge := v1.Group("/challenge")
 	{
 		challenge.GET("/page", challengeHandler.GetChallengePage)       // Get challenge HTML page
-		challenge.POST("/verify", challengeHandler.VerifyCaptcha)       // Verify CAPTCHA and get bypass token
+		challenge.POST("/verify", challengeHandler.VerifyCaptcha)       // Verify CAPTCHA and get bypass token (JSON/fetch)
+		challenge.POST("/verify-redirect", challengeHandler.VerifyAndRedirect) // Verify CAPTCHA and redirect (form POST fallback)
 		challenge.GET("/validate", challengeHandler.ValidateToken)      // For nginx auth_request
 		challenge.GET("/favicon.ico", handler.ServeFavicon)             // Serve favicon for challenge pages
 	}

@@ -262,8 +262,45 @@ func generateChallengePageHTML(data map[string]interface{}) string {
             document.getElementById('error').style.display = 'none';
         }
 
+        function getReturnUrl() {
+            const search = window.location.search;
+            const returnIdx = search.indexOf('return=');
+            let url = returnIdx !== -1 ? search.substring(returnIdx + 7) : '/';
+            try { url = decodeURIComponent(url); } catch(e) {}
+            return url;
+        }
+
+        // Form-based fallback: submits a real HTML form POST so the server
+        // sets the cookie via Set-Cookie header and redirects. This bypasses
+        // browser extensions that silently block fetch() requests.
+        function formFallback(token) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/api/v1/challenge/verify-redirect';
+            const fields = {
+                token: token,
+                proxy_host_id: proxyHostId,
+                challenge_reason: reason,
+                return_url: getReturnUrl()
+            };
+            for (const [k, v] of Object.entries(fields)) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = k;
+                input.value = v;
+                form.appendChild(input);
+            }
+            document.body.appendChild(form);
+            form.submit();
+        }
+
         async function verifyCaptcha(token) {
             showLoading();
+
+            // Use AbortController to timeout fetch after 8 seconds.
+            // If fetch is blocked by a browser extension, fall back to form POST.
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 8000);
 
             try {
                 const response = await fetch('/api/v1/challenge/verify', {
@@ -273,8 +310,10 @@ func generateChallengePageHTML(data map[string]interface{}) string {
                         token: token,
                         proxy_host_id: proxyHostId,
                         challenge_reason: reason
-                    })
+                    }),
+                    signal: controller.signal
                 });
+                clearTimeout(timeoutId);
 
                 const data = await response.json();
 
@@ -284,14 +323,7 @@ func generateChallengePageHTML(data map[string]interface{}) string {
                     document.cookie = 'ng_challenge=' + data.token + '; path=/; expires=' + expires + '; SameSite=Lax' + securePart;
 
                     showSuccess();
-
-                    // Extract return URL: use substring instead of URLSearchParams
-                    // because the return URL may contain '&' (unencoded query params)
-                    // and 'return=' is always the last parameter in the redirect URL.
-                    const search = window.location.search;
-                    const returnIdx = search.indexOf('return=');
-                    let returnUrl = returnIdx !== -1 ? search.substring(returnIdx + 7) : '/';
-                    try { returnUrl = decodeURIComponent(returnUrl); } catch(e) {}
+                    const returnUrl = getReturnUrl();
 
                     // Show manual redirect link immediately as fallback
                     const linkEl = document.getElementById('manual-link');
@@ -310,8 +342,9 @@ func generateChallengePageHTML(data map[string]interface{}) string {
                     }
                 }
             } catch (err) {
-                showError(t('networkError'));
-                console.error(err);
+                clearTimeout(timeoutId);
+                // fetch blocked or timed out — fall back to form submission
+                formFallback(token);
             }
         }
 
