@@ -203,6 +203,58 @@ func (h *ChallengeHandler) VerifyCaptcha(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
+// VerifyAndRedirect handles form-based CAPTCHA verification. Unlike the JSON
+// /verify endpoint (which relies on fetch), this accepts a form POST and
+// responds with Set-Cookie + 302 redirect. This bypasses browser extensions
+// or ad-blockers that silently block fetch() requests to "challenge/verify".
+func (h *ChallengeHandler) VerifyAndRedirect(c echo.Context) error {
+	token := c.FormValue("token")
+	proxyHostID := c.FormValue("proxy_host_id")
+	reason := c.FormValue("challenge_reason")
+	returnURL := c.FormValue("return_url")
+
+	if returnURL == "" {
+		returnURL = "/"
+	}
+
+	referer := c.Request().Referer()
+	if referer == "" {
+		referer = "/"
+	}
+
+	if token == "" {
+		return c.Redirect(http.StatusFound, referer)
+	}
+
+	clientIP := normalizeIP(c.RealIP())
+	userAgent := c.Request().UserAgent()
+
+	req := &model.VerifyCaptchaRequest{
+		Token:           token,
+		ProxyHostID:     proxyHostID,
+		ChallengeReason: reason,
+	}
+
+	resp, err := h.svc.VerifyCaptcha(c.Request().Context(), req, clientIP, userAgent)
+	if err != nil || !resp.Success {
+		return c.Redirect(http.StatusFound, referer)
+	}
+
+	// Set ng_challenge cookie via Set-Cookie header
+	secure := c.Scheme() == "https"
+	cookie := &http.Cookie{
+		Name:     "ng_challenge",
+		Value:    resp.Token,
+		Path:     "/",
+		Expires:  resp.ExpiresAt,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   secure,
+	}
+	c.SetCookie(cookie)
+
+	return c.Redirect(http.StatusFound, returnURL)
+}
+
 // ValidateToken validates a bypass token (internal endpoint for nginx auth_request)
 func (h *ChallengeHandler) ValidateToken(c echo.Context) error {
 	// Check if country is allowed (not geo-blocked) - pass through without challenge
