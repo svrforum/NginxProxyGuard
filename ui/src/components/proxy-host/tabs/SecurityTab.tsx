@@ -258,7 +258,7 @@ export function SecurityTabContent({
           onChange={(e) =>
             setFormData((prev) => ({
               ...prev,
-              access_list_id: e.target.value || undefined,
+              access_list_id: e.target.value || '',
             }))
           }
           className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"

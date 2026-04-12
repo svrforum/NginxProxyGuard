@@ -2,6 +2,7 @@ package handler
 
 import (
 	"html"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -13,6 +14,20 @@ import (
 	"nginx-proxy-guard/internal/model"
 	"nginx-proxy-guard/internal/service"
 )
+
+// normalizeIP strips IPv4-mapped IPv6 prefixes (::ffff:) and zone IDs
+// to ensure consistent IP comparison across dual-stack environments.
+// e.g. "::ffff:192.168.1.1" → "192.168.1.1", "fe80::1%eth0" → "fe80::1"
+func normalizeIP(ip string) string {
+	parsed := net.ParseIP(strings.TrimSpace(ip))
+	if parsed == nil {
+		return ip
+	}
+	if v4 := parsed.To4(); v4 != nil {
+		return v4.String()
+	}
+	return parsed.String()
+}
 
 // escapeJS escapes a string for safe use in JavaScript string literals
 // Prevents XSS attacks when embedding user data in JavaScript
@@ -171,7 +186,7 @@ func (h *ChallengeHandler) VerifyCaptcha(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "CAPTCHA token is required"})
 	}
 
-	clientIP := c.RealIP()
+	clientIP := normalizeIP(c.RealIP())
 	userAgent := c.Request().UserAgent()
 
 	resp, err := h.svc.VerifyCaptcha(c.Request().Context(), &req, clientIP, userAgent)
@@ -215,7 +230,7 @@ func (h *ChallengeHandler) ValidateToken(c echo.Context) error {
 		return c.NoContent(http.StatusUnauthorized)
 	}
 
-	clientIP := c.RealIP()
+	clientIP := normalizeIP(c.RealIP())
 	proxyHostID := c.Request().Header.Get("X-Proxy-Host-ID")
 
 	var proxyHostPtr *string
