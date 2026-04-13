@@ -213,9 +213,9 @@ func (h *ChallengeHandler) VerifyAndRedirect(c echo.Context) error {
 	reason := c.FormValue("challenge_reason")
 	returnURL := c.FormValue("return_url")
 
-	if returnURL == "" {
-		returnURL = "/"
-	}
+	// Validate returnURL to prevent open redirect attacks.
+	// Only allow relative paths (starting with /) or same-host URLs.
+	returnURL = sanitizeReturnURL(returnURL, c.Request().Host)
 
 	referer := c.Request().Referer()
 	if referer == "" {
@@ -236,7 +236,15 @@ func (h *ChallengeHandler) VerifyAndRedirect(c echo.Context) error {
 	}
 
 	resp, err := h.svc.VerifyCaptcha(c.Request().Context(), req, clientIP, userAgent)
-	if err != nil || !resp.Success {
+	if err != nil {
+		// Service-level error (CAPTCHA provider unreachable, config missing, etc.)
+		// Return a 503 error page instead of silently redirecting back to challenge
+		// page, which would cause an infinite loop.
+		return c.HTML(http.StatusServiceUnavailable, `<!DOCTYPE html><html><head><title>Service Unavailable</title>
+<meta http-equiv="refresh" content="5"></head><body style="font-family:sans-serif;text-align:center;padding:60px">
+<h1>Service Temporarily Unavailable</h1><p>CAPTCHA verification service is currently unavailable. Retrying in 5 seconds...</p></body></html>`)
+	}
+	if !resp.Success {
 		return c.Redirect(http.StatusFound, referer)
 	}
 
@@ -249,10 +257,46 @@ func (h *ChallengeHandler) VerifyAndRedirect(c echo.Context) error {
 		Expires:  resp.ExpiresAt,
 		SameSite: http.SameSiteLaxMode,
 		Secure:   secure,
+		HttpOnly: true,
 	}
 	c.SetCookie(cookie)
 
 	return c.Redirect(http.StatusFound, returnURL)
+}
+
+// sanitizeReturnURL validates that returnURL is safe for redirection.
+// Only allows relative paths or URLs whose host matches the request host.
+// Falls back to "/" for any other value to prevent open redirect attacks.
+func sanitizeReturnURL(returnURL, requestHost string) string {
+	if returnURL == "" {
+		return "/"
+	}
+
+	// Allow relative paths
+	if strings.HasPrefix(returnURL, "/") && !strings.HasPrefix(returnURL, "//") {
+		return returnURL
+	}
+
+	// Allow same-host absolute URLs
+	if strings.HasPrefix(returnURL, "http://") || strings.HasPrefix(returnURL, "https://") {
+		// Extract host from returnURL
+		afterScheme := returnURL[strings.Index(returnURL, "://")+3:]
+		slashIdx := strings.Index(afterScheme, "/")
+		var urlHost string
+		if slashIdx >= 0 {
+			urlHost = afterScheme[:slashIdx]
+		} else {
+			urlHost = afterScheme
+		}
+		// Strip port from both for comparison
+		urlHostNoPort := strings.Split(urlHost, ":")[0]
+		reqHostNoPort := strings.Split(requestHost, ":")[0]
+		if strings.EqualFold(urlHostNoPort, reqHostNoPort) {
+			return returnURL
+		}
+	}
+
+	return "/"
 }
 
 // ValidateToken validates a bypass token (internal endpoint for nginx auth_request)

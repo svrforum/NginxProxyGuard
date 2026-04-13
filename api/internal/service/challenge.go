@@ -107,12 +107,12 @@ func (s *ChallengeService) VerifyCaptcha(ctx context.Context, req *model.VerifyC
 	}
 
 	if err != nil {
-		// Log failed attempt
+		// Provider-level error (network timeout, unreachable, parse failure).
+		// Propagate as a real error so the handler can return 503 instead of
+		// silently redirecting back to the challenge page (which causes an
+		// infinite loop when the provider is down).
 		s.repo.LogChallenge(ctx, nilIfEmpty(req.ProxyHostID), clientIP, userAgent, "failed", req.ChallengeReason, nil, nil)
-		return &model.VerifyCaptchaResponse{
-			Success: false,
-			Error:   err.Error(),
-		}, nil
+		return nil, fmt.Errorf("CAPTCHA provider error: %w", err)
 	}
 
 	if !verified {
@@ -190,11 +190,10 @@ func (s *ChallengeService) verifyRecaptcha(ctx context.Context, config *model.Ch
 	}
 
 	if !result.Success {
-		errMsg := "verification failed"
-		if len(result.ErrorCodes) > 0 {
-			errMsg = result.ErrorCodes[0]
-		}
-		return false, 0, fmt.Errorf("reCAPTCHA: %s", errMsg)
+		// CAPTCHA answer wrong — not a provider error, so return nil error.
+		// The caller distinguishes provider errors (err != nil) from
+		// verification failures (verified == false, err == nil).
+		return false, 0, nil
 	}
 
 	return true, result.Score, nil
@@ -226,11 +225,8 @@ func (s *ChallengeService) verifyTurnstile(ctx context.Context, config *model.Ch
 	}
 
 	if !result.Success {
-		errMsg := "verification failed"
-		if len(result.ErrorCodes) > 0 {
-			errMsg = result.ErrorCodes[0]
-		}
-		return false, fmt.Errorf("Turnstile: %s", errMsg)
+		// CAPTCHA answer wrong — not a provider error
+		return false, nil
 	}
 
 	return true, nil
