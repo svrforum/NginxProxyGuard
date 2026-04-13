@@ -74,8 +74,16 @@ func generateChallengePageHTML(data map[string]interface{}) string {
 		captchaWidget = `<div class="g-recaptcha" data-sitekey="` + safeSiteKey + `" data-theme="` + safeTheme + `" data-callback="onCaptchaSuccess"></div>`
 	}
 
+	// Determine initial lang attribute for the HTML tag based on admin setting.
+	// JavaScript will override this when the page loads, but this ensures
+	// correct metadata for screen readers and crawlers that don't run JS.
+	htmlLang := "en"
+	if errorPageLanguage == "ko" {
+		htmlLang = "ko"
+	}
+
 	return `<!DOCTYPE html>
-<html lang="en">
+<html lang="` + htmlLang + `">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -185,7 +193,7 @@ func generateChallengePageHTML(data map[string]interface{}) string {
                 verifying: '확인 중...',
                 success: '인증 완료! 이동 중...',
                 error: '인증에 실패했습니다. 다시 시도해주세요.',
-                networkError: '오류가 발생했습니다. 다시 시도해주세요.',
+                networkError: '서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.',
                 footer: '이 보안 확인은 자동화된 접근으로부터 보호합니다.',
                 manualRedirect: '자동 이동되지 않으면 여기를 클릭하세요'
             },
@@ -195,7 +203,7 @@ func generateChallengePageHTML(data map[string]interface{}) string {
                 verifying: 'Verifying...',
                 success: 'Verified! Redirecting...',
                 error: 'Verification failed. Please try again.',
-                networkError: 'An error occurred. Please try again.',
+                networkError: 'Cannot reach the server. Please try again in a moment.',
                 footer: 'This security check helps protect against automated access.',
                 manualRedirect: 'Click here if you are not redirected automatically'
             }
@@ -270,10 +278,13 @@ func generateChallengePageHTML(data map[string]interface{}) string {
             return url;
         }
 
-        // Form-based fallback: submits a real HTML form POST so the server
-        // sets the cookie via Set-Cookie header and redirects. This bypasses
-        // browser extensions that silently block fetch() requests.
-        function formFallback(token) {
+        // Form-based verification: submits a real HTML form POST so the server
+        // sets the cookie via Set-Cookie header and redirects with 302.
+        // This is used as the primary method because it:
+        //   1. Works even when browser extensions block fetch() requests
+        //   2. Avoids race conditions between fetch and form fallback
+        //   3. Lets the server handle cookie + redirect atomically
+        function formVerify(token) {
             const form = document.createElement('form');
             form.method = 'POST';
             form.action = '/api/v1/challenge/verify-redirect';
@@ -294,58 +305,19 @@ func generateChallengePageHTML(data map[string]interface{}) string {
             form.submit();
         }
 
-        async function verifyCaptcha(token) {
+        // Prevent double-submission from CAPTCHA callbacks
+        let isVerifying = false;
+
+        function verifyCaptcha(token) {
+            if (isVerifying) return;
+            isVerifying = true;
             showLoading();
-
-            // Use AbortController to timeout fetch after 8 seconds.
-            // If fetch is blocked by a browser extension, fall back to form POST.
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 8000);
-
-            try {
-                const response = await fetch('/api/v1/challenge/verify', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        token: token,
-                        proxy_host_id: proxyHostId,
-                        challenge_reason: reason
-                    }),
-                    signal: controller.signal
-                });
-                clearTimeout(timeoutId);
-
-                const data = await response.json();
-
-                if (data.success) {
-                    const expires = new Date(data.expires_at).toUTCString();
-                    const securePart = window.location.protocol === 'https:' ? '; Secure' : '';
-                    document.cookie = 'ng_challenge=' + data.token + '; path=/; expires=' + expires + '; SameSite=Lax' + securePart;
-
-                    showSuccess();
-                    const returnUrl = getReturnUrl();
-
-                    // Show manual redirect link immediately as fallback
-                    const linkEl = document.getElementById('manual-link');
-                    const linkA = document.getElementById('manual-link-a');
-                    linkA.href = returnUrl;
-                    linkA.textContent = t('manualRedirect');
-                    linkEl.style.display = 'block';
-
-                    setTimeout(() => {
-                        window.location.href = returnUrl;
-                    }, 1000);
-                } else {
-                    showError(data.error || t('error'));
-                    if (typeof grecaptcha !== 'undefined' && challengeType === 'recaptcha_v2') {
-                        grecaptcha.reset();
-                    }
-                }
-            } catch (err) {
-                clearTimeout(timeoutId);
-                // fetch blocked or timed out — fall back to form submission
-                formFallback(token);
-            }
+            // Use form POST as the sole verification method.
+            // Previous approach tried fetch() first and fell back to form POST,
+            // but this caused a race condition: if fetch reached the server and
+            // consumed the CAPTCHA token, the form fallback would fail because
+            // CAPTCHA providers reject already-used tokens.
+            formVerify(token);
         }
 
         function onCaptchaSuccess(token) {
@@ -354,7 +326,7 @@ func generateChallengePageHTML(data map[string]interface{}) string {
 
         if (challengeType === 'recaptcha_v3') {
             grecaptcha.ready(function() {
-                grecaptcha.execute('` + siteKey + `', {action: 'challenge'}).then(function(token) {
+                grecaptcha.execute('` + escapeJS(siteKey) + `', {action: 'challenge'}).then(function(token) {
                     verifyCaptcha(token);
                 });
             });

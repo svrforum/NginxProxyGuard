@@ -218,7 +218,7 @@ export function LogDetailModal({ log, onClose, onRuleDisabled }: LogDetailModalP
                 {/* Scope Toggle */}
                 <div>
                   <label className="text-xs font-medium text-red-700 dark:text-red-400 uppercase mb-2 block">
-                    {t('banIP.scope', { defaultValue: '적용 범위' })}
+                    {t('banIP.scope')}
                   </label>
                   <div className="flex gap-2">
                     <button
@@ -230,7 +230,7 @@ export function LogDetailModal({ log, onClose, onRuleDisabled }: LogDetailModalP
                           : 'bg-white dark:bg-slate-800 text-red-700 dark:text-red-400 border border-red-300 dark:border-red-700 hover:bg-red-50 dark:hover:bg-red-900/30'
                       }`}
                     >
-                      {t('banIP.perHost', { defaultValue: '이 호스트만', host: log.host })}
+                      {t('banIP.perHost')}
                     </button>
                     <button
                       type="button"
@@ -241,12 +241,12 @@ export function LogDetailModal({ log, onClose, onRuleDisabled }: LogDetailModalP
                           : 'bg-white dark:bg-slate-800 text-purple-700 dark:text-purple-400 border border-purple-300 dark:border-purple-700 hover:bg-purple-50 dark:hover:bg-purple-900/30'
                       }`}
                     >
-                      {t('banIP.global', { defaultValue: '전역 차단 (모든 호스트)' })}
+                      {t('banIP.global')}
                     </button>
                   </div>
                   {isGlobalBan && (
                     <p className="mt-1 text-xs text-purple-600 dark:text-purple-400">
-                      {t('banIP.globalDescription', { defaultValue: '이 IP는 모든 프록시 호스트에서 차단됩니다.' })}
+                      {t('banIP.globalDescription')}
                     </p>
                   )}
                 </div>
@@ -286,7 +286,7 @@ export function LogDetailModal({ log, onClose, onRuleDisabled }: LogDetailModalP
                       isGlobalBan ? 'bg-purple-600 hover:bg-purple-700' : 'bg-red-600 hover:bg-red-700'
                     }`}
                   >
-                    {banMutation.isPending ? t('banIP.processing') : (isGlobalBan ? t('banIP.submitGlobal', { defaultValue: '전역 차단' }) : t('banIP.submit'))}
+                    {banMutation.isPending ? t('banIP.processing') : (isGlobalBan ? t('banIP.submitGlobal') : t('banIP.submit'))}
                   </button>
                   <button
                     onClick={() => {

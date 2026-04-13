@@ -88,8 +88,15 @@ func (r *ChallengeRepository) GetGlobalConfig(ctx context.Context) (*model.Chall
 
 // UpsertConfig creates or updates challenge config
 func (r *ChallengeRepository) UpsertConfig(ctx context.Context, proxyHostID *string, req *model.ChallengeConfigRequest) (*model.ChallengeConfig, error) {
-	// For global config (proxyHostID is nil), we need to handle NULL specially
-	// since PostgreSQL's UNIQUE constraint doesn't consider NULL = NULL as a conflict
+	// Use a serializable transaction to prevent TOCTOU race conditions.
+	// PostgreSQL's UNIQUE constraint doesn't consider NULL = NULL as a conflict,
+	// so we can't use INSERT ... ON CONFLICT for the global (NULL proxy_host_id) case.
+	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
 	var existingID string
 	var checkQuery string
 	var checkArgs []interface{}
@@ -101,7 +108,7 @@ func (r *ChallengeRepository) UpsertConfig(ctx context.Context, proxyHostID *str
 		checkQuery = `SELECT id FROM challenge_configs WHERE proxy_host_id IS NULL`
 	}
 
-	err := r.db.QueryRowContext(ctx, checkQuery, checkArgs...).Scan(&existingID)
+	err = tx.QueryRowContext(ctx, checkQuery, checkArgs...).Scan(&existingID)
 	recordExists := err == nil
 
 	var query string
@@ -138,20 +145,10 @@ func (r *ChallengeRepository) UpsertConfig(ctx context.Context, proxyHostID *str
 			          created_at, updated_at`
 	}
 
-	var config model.ChallengeConfig
-	var hostID sql.NullString
-	var siteKey, secretKey sql.NullString
-
-	// Handle optional values
-	var enabled, challengeType, applyTo, pageTitle, pageMessage, theme *string
-	var tokenValidity *int
-	var minScore *float64
+	// Prepare parameter values
+	var challengeType *string
 	var siteKeyVal, secretKeyVal string
 
-	if req.Enabled != nil {
-		e := fmt.Sprintf("%t", *req.Enabled)
-		enabled = &e
-	}
 	if req.ChallengeType != nil {
 		challengeType = req.ChallengeType
 	}
@@ -160,24 +157,6 @@ func (r *ChallengeRepository) UpsertConfig(ctx context.Context, proxyHostID *str
 	}
 	if req.SecretKey != nil {
 		secretKeyVal = *req.SecretKey
-	}
-	if req.TokenValidity != nil {
-		tokenValidity = req.TokenValidity
-	}
-	if req.MinScore != nil {
-		minScore = req.MinScore
-	}
-	if req.ApplyTo != nil {
-		applyTo = req.ApplyTo
-	}
-	if req.PageTitle != nil {
-		pageTitle = req.PageTitle
-	}
-	if req.PageMessage != nil {
-		pageMessage = req.PageMessage
-	}
-	if req.Theme != nil {
-		theme = req.Theme
 	}
 
 	// For UPDATE, first param is existingID; for INSERT, first param is proxyHostID
@@ -188,9 +167,13 @@ func (r *ChallengeRepository) UpsertConfig(ctx context.Context, proxyHostID *str
 		firstParam = proxyHostID
 	}
 
-	err = r.db.QueryRowContext(ctx, query,
+	var config model.ChallengeConfig
+	var hostID sql.NullString
+	var siteKey, secretKey sql.NullString
+
+	err = tx.QueryRowContext(ctx, query,
 		firstParam, req.Enabled, challengeType, siteKeyVal, secretKeyVal,
-		tokenValidity, minScore, applyTo, pageTitle, pageMessage, theme,
+		req.TokenValidity, req.MinScore, req.ApplyTo, req.PageTitle, req.PageMessage, req.Theme,
 	).Scan(
 		&config.ID, &hostID, &config.Enabled, &config.ChallengeType,
 		&siteKey, &secretKey, &config.TokenValidity, &config.MinScore,
@@ -201,18 +184,15 @@ func (r *ChallengeRepository) UpsertConfig(ctx context.Context, proxyHostID *str
 		return nil, fmt.Errorf("failed to upsert challenge config: %w", err)
 	}
 
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
 	if hostID.Valid {
 		config.ProxyHostID = &hostID.String
 	}
 	config.SiteKey = siteKey.String
 	config.SecretKey = secretKey.String
-
-	// Don't return nil for unused variables
-	_ = enabled
-	_ = applyTo
-	_ = pageTitle
-	_ = pageMessage
-	_ = theme
 
 	return &config, nil
 }

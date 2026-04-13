@@ -366,6 +366,10 @@ server {
     }
 {{end}}
 {{end}}
+    # Skip exploit blocking for ACME challenge and CAPTCHA challenge paths
+    if ($skip_security_for_acme = 1) {
+        set $exploit_qs_block 0;
+    }
     if ($exploit_qs_block = 1) {
         set $block_reason_var "exploit_block";
         set $exploit_rule_var $exploit_qs_rule;
@@ -392,6 +396,10 @@ server {
     }
 {{end}}
 {{end}}
+    # Skip exploit blocking for ACME challenge and CAPTCHA challenge paths
+    if ($skip_security_for_acme = 1) {
+        set $rfi_block 0;
+    }
     if ($rfi_block = 1) {
         set $block_reason_var "exploit_block";
         set $exploit_rule_var $rfi_rule;
@@ -426,14 +434,21 @@ server {
 {{else}}
     # Fallback: No DB rules found, using hardcoded rules
     # SQL injection attempts in query string
+    set $sqli_fallback_block 0;
     if ($query_string ~* "union.*select") {
-        set $block_reason_var "exploit_block";
+        set $sqli_fallback_block 1;
         set $exploit_rule_var "SQLI-FALLBACK-001";
-        return 403;
     }
     if ($query_string ~* "(;|<|>|'|\"|\)|%0A|%0D|%22|%27|%3C|%3E|%00)") {
-        set $block_reason_var "exploit_block";
+        set $sqli_fallback_block 1;
         set $exploit_rule_var "SQLI-FALLBACK-002";
+    }
+    # Skip exploit blocking for ACME challenge and CAPTCHA challenge paths
+    if ($skip_security_for_acme = 1) {
+        set $sqli_fallback_block 0;
+    }
+    if ($sqli_fallback_block = 1) {
+        set $block_reason_var "exploit_block";
         return 403;
     }
     # File injection / path traversal (RFI)
@@ -448,12 +463,23 @@ server {
     }
 {{end}}
 {{end}}
+    # Skip exploit blocking for ACME challenge and CAPTCHA challenge paths
+    if ($skip_security_for_acme = 1) {
+        set $rfi_block 0;
+    }
     if ($rfi_block = 1) {
         set $block_reason_var "exploit_block";
         set $exploit_rule_var "RFI-FALLBACK-001";
         return 403;
     }
+    set $lfi_fallback_block 0;
     if ($query_string ~* "\.\./") {
+        set $lfi_fallback_block 1;
+    }
+    if ($skip_security_for_acme = 1) {
+        set $lfi_fallback_block 0;
+    }
+    if ($lfi_fallback_block = 1) {
         set $block_reason_var "exploit_block";
         set $exploit_rule_var "LFI-FALLBACK-001";
         return 403;
@@ -693,12 +719,6 @@ server {
         proxy_read_timeout 5s;
     }
 
-    # Challenge page redirect for geo-blocked users
-    location = /_challenge/page {
-        internal;
-        return 302 /api/v1/challenge/page?host={{.Host.ID}}&reason=geo_restriction&return=$scheme://$host$request_uri;
-    }
-
     # API error fallback - allow traffic through when API is down
     location @api_fallback {
         # API is down - allow request to proceed (graceful degradation)
@@ -706,6 +726,18 @@ server {
         access_log /etc/nginx/logs/access_raw.log main buffer=64k flush=5s;
         {{if and .Upstream .Upstream.Servers}}proxy_pass http://{{.Upstream.Name}};{{else}}proxy_pass {{.Host.ForwardScheme}}://{{.Host.ForwardHost}}:{{.Host.ForwardPort}};{{end}}
         include /etc/nginx/includes/proxy_params.conf;
+    }
+
+    # Challenge API - Bypass GeoIP and proxy to API service (HTTP server block)
+    location /api/v1/challenge/ {
+        modsecurity off;
+
+        proxy_pass http://{{apiHost}}/api/v1/challenge/;
+        proxy_pass_request_body on;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 {{end}}{{end}}
 
@@ -722,6 +754,30 @@ server {
     {{.AdvancedConfigLocationLevel}}
 {{end}}{{end}}
     {{else}}
+{{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}{{if .HasCustomLocationRoot}}
+    # Server-level challenge redirect for custom location / (HTTP server, SSL no ForceHTTPS)
+    set $need_challenge 0;
+    if ($geo_blocked = 1) {
+        set $need_challenge 1;
+    }
+    if ($cookie_ng_challenge != "") {
+        set $need_challenge 0;
+    }
+    if ($request_uri ~ "^/api/v1/challenge/") {
+        set $need_challenge 0;
+    }
+    if ($request_uri ~ "^/.well-known/acme-challenge/") {
+        set $need_challenge 0;
+    }
+{{if .GeoRestriction.AllowSearchBots}}
+    if ($is_search_bot = 1) {
+        set $need_challenge 0;
+    }
+{{end}}
+    if ($need_challenge = 1) {
+        return 302 /api/v1/challenge/page?host={{.Host.ID}}&reason=geo_restriction&return=$scheme://$host$request_uri;
+    }
+{{end}}{{end}}{{end}}
 {{if not .HasCustomLocationRoot}}
     location / {
 {{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}
@@ -820,6 +876,30 @@ server {
 {{end}}
     {{end}}
 {{else}}
+{{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}{{if .HasCustomLocationRoot}}
+    # Server-level challenge redirect for custom location / (HTTP server, no SSL)
+    set $need_challenge 0;
+    if ($geo_blocked = 1) {
+        set $need_challenge 1;
+    }
+    if ($cookie_ng_challenge != "") {
+        set $need_challenge 0;
+    }
+    if ($request_uri ~ "^/api/v1/challenge/") {
+        set $need_challenge 0;
+    }
+    if ($request_uri ~ "^/.well-known/acme-challenge/") {
+        set $need_challenge 0;
+    }
+{{if .GeoRestriction.AllowSearchBots}}
+    if ($is_search_bot = 1) {
+        set $need_challenge 0;
+    }
+{{end}}
+    if ($need_challenge = 1) {
+        return 302 /api/v1/challenge/page?host={{.Host.ID}}&reason=geo_restriction&return=$scheme://$host$request_uri;
+    }
+{{end}}{{end}}{{end}}
 {{if not .HasCustomLocationRoot}}
     location / {
 {{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}
@@ -1231,6 +1311,10 @@ server {
     }
 {{end}}
 {{end}}
+    # Skip exploit blocking for ACME challenge and CAPTCHA challenge paths
+    if ($skip_security_for_acme = 1) {
+        set $exploit_qs_block 0;
+    }
     if ($exploit_qs_block = 1) {
         set $block_reason_var "exploit_block";
         set $exploit_rule_var $exploit_qs_rule;
@@ -1257,6 +1341,10 @@ server {
     }
 {{end}}
 {{end}}
+    # Skip exploit blocking for ACME challenge and CAPTCHA challenge paths
+    if ($skip_security_for_acme = 1) {
+        set $rfi_block 0;
+    }
     if ($rfi_block = 1) {
         set $block_reason_var "exploit_block";
         set $exploit_rule_var $rfi_rule;
@@ -1291,14 +1379,21 @@ server {
 {{else}}
     # Fallback: No DB rules found, using hardcoded rules
     # SQL injection attempts in query string
+    set $sqli_fallback_block 0;
     if ($query_string ~* "union.*select") {
-        set $block_reason_var "exploit_block";
+        set $sqli_fallback_block 1;
         set $exploit_rule_var "SQLI-FALLBACK-001";
-        return 403;
     }
     if ($query_string ~* "(;|<|>|'|\"|\)|%0A|%0D|%22|%27|%3C|%3E|%00)") {
-        set $block_reason_var "exploit_block";
+        set $sqli_fallback_block 1;
         set $exploit_rule_var "SQLI-FALLBACK-002";
+    }
+    # Skip exploit blocking for ACME challenge and CAPTCHA challenge paths
+    if ($skip_security_for_acme = 1) {
+        set $sqli_fallback_block 0;
+    }
+    if ($sqli_fallback_block = 1) {
+        set $block_reason_var "exploit_block";
         return 403;
     }
     # File injection / path traversal (RFI)
@@ -1313,12 +1408,23 @@ server {
     }
 {{end}}
 {{end}}
+    # Skip exploit blocking for ACME challenge and CAPTCHA challenge paths
+    if ($skip_security_for_acme = 1) {
+        set $rfi_block 0;
+    }
     if ($rfi_block = 1) {
         set $block_reason_var "exploit_block";
         set $exploit_rule_var "RFI-FALLBACK-001";
         return 403;
     }
+    set $lfi_fallback_block 0;
     if ($query_string ~* "\.\./") {
+        set $lfi_fallback_block 1;
+    }
+    if ($skip_security_for_acme = 1) {
+        set $lfi_fallback_block 0;
+    }
+    if ($lfi_fallback_block = 1) {
         set $block_reason_var "exploit_block";
         set $exploit_rule_var "LFI-FALLBACK-001";
         return 403;
@@ -1565,8 +1671,11 @@ server {
         {{if and .Upstream .Upstream.Servers}}proxy_pass http://{{.Upstream.Name}};{{else}}proxy_pass {{.Host.ForwardScheme}}://{{.Host.ForwardHost}}:{{.Host.ForwardPort}};{{end}}
         include /etc/nginx/includes/proxy_params.conf;
     }
+{{end}}{{end}}
 
-    # Challenge API - Bypass GeoIP and proxy to API service
+{{if or (and .GeoRestriction .GeoRestriction.ChallengeMode) .CloudProviderChallengeMode}}
+    # Challenge API - Bypass all security and proxy to API service
+    # Generated for both GeoRestriction ChallengeMode and CloudProvider ChallengeMode
     location /api/v1/challenge/ {
         # Disable WAF for challenge parameters (return URL triggers SQLi/RFI rules)
         modsecurity off;
@@ -1579,7 +1688,37 @@ server {
         proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
-{{end}}{{end}}
+{{end}}
+
+{{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}{{if .HasCustomLocationRoot}}
+    # Server-level challenge redirect for custom location / configurations.
+    # When AdvancedConfig contains a custom "location / { ... }", the default
+    # location / block (with auth_request challenge validation) is not generated.
+    # This ensures geo-blocked visitors without a challenge cookie are still
+    # redirected to the CAPTCHA page regardless of custom location config.
+    set $need_challenge 0;
+    if ($geo_blocked = 1) {
+        set $need_challenge 1;
+    }
+    if ($cookie_ng_challenge != "") {
+        set $need_challenge 0;
+    }
+    # Skip challenge API paths to prevent redirect loops
+    if ($request_uri ~ "^/api/v1/challenge/") {
+        set $need_challenge 0;
+    }
+    if ($request_uri ~ "^/.well-known/acme-challenge/") {
+        set $need_challenge 0;
+    }
+{{if .GeoRestriction.AllowSearchBots}}
+    if ($is_search_bot = 1) {
+        set $need_challenge 0;
+    }
+{{end}}
+    if ($need_challenge = 1) {
+        return 302 /api/v1/challenge/page?host={{.Host.ID}}&reason=geo_restriction&return=$scheme://$host$request_uri;
+    }
+{{end}}{{end}}{{end}}
 
 {{if not .HasCustomLocationRoot}}
     location / {
