@@ -333,6 +333,7 @@ func (r *BackupRepository) getProxyHostFail2ban(ctx context.Context, proxyHostID
 func (r *BackupRepository) getProxyHostBotFilter(ctx context.Context, proxyHostID string) (*model.BotFilterExport, error) {
 	query := `
 		SELECT enabled, block_bad_bots, block_ai_bots, allow_search_engines,
+		       COALESCE(block_suspicious_clients, FALSE) as block_suspicious_clients,
 		       custom_blocked_agents, custom_allowed_agents, challenge_suspicious
 		FROM bot_filters WHERE proxy_host_id = $1
 	`
@@ -340,7 +341,7 @@ func (r *BackupRepository) getProxyHostBotFilter(ctx context.Context, proxyHostI
 	var blockedAgents, allowedAgents sql.NullString
 	err := r.db.QueryRowContext(ctx, query, proxyHostID).Scan(
 		&bf.Enabled, &bf.BlockBadBots, &bf.BlockAIBots, &bf.AllowSearchEngines,
-		&blockedAgents, &allowedAgents, &bf.ChallengeSuspicious,
+		&bf.BlockSuspiciousClients, &blockedAgents, &allowedAgents, &bf.ChallengeSuspicious,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil

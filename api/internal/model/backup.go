@@ -383,13 +383,14 @@ type Fail2banExport struct {
 
 // BotFilterExport represents bot filter config for export
 type BotFilterExport struct {
-	Enabled             bool   `json:"enabled"`
-	BlockBadBots        bool   `json:"block_bad_bots"`
-	BlockAIBots         bool   `json:"block_ai_bots"`
-	AllowSearchEngines  bool   `json:"allow_search_engines"`
-	CustomBlockedAgents string `json:"custom_blocked_agents,omitempty"`
-	CustomAllowedAgents string `json:"custom_allowed_agents,omitempty"`
-	ChallengeSuspicious bool   `json:"challenge_suspicious"`
+	Enabled                bool   `json:"enabled"`
+	BlockBadBots           bool   `json:"block_bad_bots"`
+	BlockAIBots            bool   `json:"block_ai_bots"`
+	AllowSearchEngines     bool   `json:"allow_search_engines"`
+	BlockSuspiciousClients bool   `json:"block_suspicious_clients"`
+	CustomBlockedAgents    string `json:"custom_blocked_agents,omitempty"`
+	CustomAllowedAgents    string `json:"custom_allowed_agents,omitempty"`
+	ChallengeSuspicious    bool   `json:"challenge_suspicious"`
 }
 
 // SecurityHeadersExport represents security headers config for export

@@ -118,8 +118,8 @@ func (r *ChallengeRepository) UpsertConfig(ctx context.Context, proxyHostID *str
 			UPDATE challenge_configs SET
 			    enabled = COALESCE($2, enabled),
 			    challenge_type = COALESCE($3, challenge_type),
-			    site_key = COALESCE(NULLIF($4, ''), site_key),
-			    secret_key = COALESCE(NULLIF($5, ''), secret_key),
+			    site_key = COALESCE($4, site_key),
+			    secret_key = COALESCE($5, secret_key),
 			    token_validity = COALESCE($6, token_validity),
 			    min_score = COALESCE($7, min_score),
 			    apply_to = COALESCE($8, apply_to),
@@ -147,16 +147,18 @@ func (r *ChallengeRepository) UpsertConfig(ctx context.Context, proxyHostID *str
 
 	// Prepare parameter values
 	var challengeType *string
-	var siteKeyVal, secretKeyVal string
+	// Use interface{} to distinguish nil (*string not provided → SQL NULL → keep existing)
+	// from empty string (*string provided as "" → SQL '' → clear the field)
+	var siteKeyParam, secretKeyParam interface{}
 
 	if req.ChallengeType != nil {
 		challengeType = req.ChallengeType
 	}
 	if req.SiteKey != nil {
-		siteKeyVal = *req.SiteKey
+		siteKeyParam = *req.SiteKey
 	}
 	if req.SecretKey != nil {
-		secretKeyVal = *req.SecretKey
+		secretKeyParam = *req.SecretKey
 	}
 
 	// For UPDATE, first param is existingID; for INSERT, first param is proxyHostID
@@ -172,7 +174,7 @@ func (r *ChallengeRepository) UpsertConfig(ctx context.Context, proxyHostID *str
 	var siteKey, secretKey sql.NullString
 
 	err = tx.QueryRowContext(ctx, query,
-		firstParam, req.Enabled, challengeType, siteKeyVal, secretKeyVal,
+		firstParam, req.Enabled, challengeType, siteKeyParam, secretKeyParam,
 		req.TokenValidity, req.MinScore, req.ApplyTo, req.PageTitle, req.PageMessage, req.Theme,
 	).Scan(
 		&config.ID, &hostID, &config.Enabled, &config.ChallengeType,

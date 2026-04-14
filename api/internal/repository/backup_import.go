@@ -543,11 +543,11 @@ func (r *BackupRepository) importFail2ban(ctx context.Context, tx *sql.Tx, proxy
 func (r *BackupRepository) importBotFilter(ctx context.Context, tx *sql.Tx, proxyHostID string, bf *model.BotFilterExport) error {
 	query := `
 		INSERT INTO bot_filters (proxy_host_id, enabled, block_bad_bots, block_ai_bots, allow_search_engines,
-		                         custom_blocked_agents, custom_allowed_agents, challenge_suspicious)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		                         block_suspicious_clients, custom_blocked_agents, custom_allowed_agents, challenge_suspicious)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
 	_, err := tx.ExecContext(ctx, query, proxyHostID, bf.Enabled, bf.BlockBadBots, bf.BlockAIBots,
-		bf.AllowSearchEngines, bf.CustomBlockedAgents, bf.CustomAllowedAgents, bf.ChallengeSuspicious)
+		bf.AllowSearchEngines, bf.BlockSuspiciousClients, bf.CustomBlockedAgents, bf.CustomAllowedAgents, bf.ChallengeSuspicious)
 	return err
 }
 
