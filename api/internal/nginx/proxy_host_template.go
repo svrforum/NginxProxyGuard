@@ -593,12 +593,12 @@ server {
     set $block_bad_bot 0;
     if ($http_user_agent ~* ({{toRegexPattern .BadBotsList}})) {
         set $block_bad_bot 1;
-        set $block_reason_var "bot_filter";
-        set $bot_category_var "bad_bot";
     }
     # Block only if not in priority allow list
     set $bad_bot_check "${priority_allow}${block_bad_bot}";
     if ($bad_bot_check = "01") {
+        set $block_reason_var "bot_filter";
+        set $bot_category_var "bad_bot";
         return 403;
     }
 {{end}}{{end}}
@@ -606,12 +606,12 @@ server {
     set $block_ai_bot 0;
     if ($http_user_agent ~* ({{toRegexPattern .AIBotsList}})) {
         set $block_ai_bot 1;
-        set $block_reason_var "bot_filter";
-        set $bot_category_var "ai_bot";
     }
     # Block only if not in priority allow list
     set $ai_bot_check "${priority_allow}${block_ai_bot}";
     if ($ai_bot_check = "01") {
+        set $block_reason_var "bot_filter";
+        set $bot_category_var "ai_bot";
         return 403;
     }
 {{end}}{{end}}
@@ -619,12 +619,12 @@ server {
     set $block_suspicious 0;
     if ($http_user_agent ~* ({{toRegexPattern .SuspiciousClientsList}})) {
         set $block_suspicious 1;
-        set $block_reason_var "bot_filter";
-        set $bot_category_var "suspicious";
     }
     # Block only if not in priority allow list
     set $suspicious_check "${priority_allow}${block_suspicious}";
     if ($suspicious_check = "01") {
+        set $block_reason_var "bot_filter";
+        set $bot_category_var "suspicious";
         return 403;
     }
 {{end}}{{end}}
@@ -632,12 +632,12 @@ server {
     set $block_custom 0;
     if ($http_user_agent ~* ({{toRegexPattern .BotFilter.CustomBlockedAgents}})) {
         set $block_custom 1;
-        set $block_reason_var "bot_filter";
-        set $bot_category_var "custom";
     }
     # Block only if not in priority allow list
     set $custom_check "${priority_allow}${block_custom}";
     if ($custom_check = "01") {
+        set $block_reason_var "bot_filter";
+        set $bot_category_var "custom";
         return 403;
     }
 {{end}}
@@ -1538,12 +1538,12 @@ server {
     set $block_bad_bot 0;
     if ($http_user_agent ~* ({{toRegexPattern .BadBotsList}})) {
         set $block_bad_bot 1;
-        set $block_reason_var "bot_filter";
-        set $bot_category_var "bad_bot";
     }
     # Block only if not in priority allow list
     set $bad_bot_check "${priority_allow}${block_bad_bot}";
     if ($bad_bot_check = "01") {
+        set $block_reason_var "bot_filter";
+        set $bot_category_var "bad_bot";
         return 403;
     }
 {{end}}{{end}}
@@ -1551,12 +1551,12 @@ server {
     set $block_ai_bot 0;
     if ($http_user_agent ~* ({{toRegexPattern .AIBotsList}})) {
         set $block_ai_bot 1;
-        set $block_reason_var "bot_filter";
-        set $bot_category_var "ai_bot";
     }
     # Block only if not in priority allow list
     set $ai_bot_check "${priority_allow}${block_ai_bot}";
     if ($ai_bot_check = "01") {
+        set $block_reason_var "bot_filter";
+        set $bot_category_var "ai_bot";
         return 403;
     }
 {{end}}{{end}}
@@ -1564,12 +1564,12 @@ server {
     set $block_suspicious 0;
     if ($http_user_agent ~* ({{toRegexPattern .SuspiciousClientsList}})) {
         set $block_suspicious 1;
-        set $block_reason_var "bot_filter";
-        set $bot_category_var "suspicious";
     }
     # Block only if not in priority allow list
     set $suspicious_check "${priority_allow}${block_suspicious}";
     if ($suspicious_check = "01") {
+        set $block_reason_var "bot_filter";
+        set $bot_category_var "suspicious";
         return 403;
     }
 {{end}}{{end}}
@@ -1577,12 +1577,12 @@ server {
     set $block_custom 0;
     if ($http_user_agent ~* ({{toRegexPattern .BotFilter.CustomBlockedAgents}})) {
         set $block_custom 1;
-        set $block_reason_var "bot_filter";
-        set $bot_category_var "custom";
     }
     # Block only if not in priority allow list
     set $custom_check "${priority_allow}${block_custom}";
     if ($custom_check = "01") {
+        set $block_reason_var "bot_filter";
+        set $bot_category_var "custom";
         return 403;
     }
 {{end}}

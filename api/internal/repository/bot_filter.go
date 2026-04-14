@@ -55,8 +55,8 @@ func (r *BotFilterRepository) Upsert(ctx context.Context, proxyHostID string, re
 			block_ai_bots = COALESCE($4, bot_filters.block_ai_bots),
 			allow_search_engines = COALESCE($5, bot_filters.allow_search_engines),
 			block_suspicious_clients = COALESCE($6, bot_filters.block_suspicious_clients),
-			custom_blocked_agents = COALESCE(NULLIF($7, ''), bot_filters.custom_blocked_agents),
-			custom_allowed_agents = COALESCE(NULLIF($8, ''), bot_filters.custom_allowed_agents),
+			custom_blocked_agents = $7,
+			custom_allowed_agents = $8,
 			challenge_suspicious = COALESCE($9, bot_filters.challenge_suspicious),
 			updated_at = NOW()
 		RETURNING id, proxy_host_id, enabled, block_bad_bots, block_ai_bots, allow_search_engines,
@@ -70,8 +70,8 @@ func (r *BotFilterRepository) Upsert(ctx context.Context, proxyHostID string, re
 	err := r.db.QueryRowContext(ctx, query,
 		proxyHostID, req.Enabled, req.BlockBadBots, req.BlockAIBots, req.AllowSearchEngines,
 		req.BlockSuspiciousClients,
-		sql.NullString{String: req.CustomBlockedAgents, Valid: req.CustomBlockedAgents != ""},
-		sql.NullString{String: req.CustomAllowedAgents, Valid: req.CustomAllowedAgents != ""},
+		req.CustomBlockedAgents,
+		req.CustomAllowedAgents,
 		req.ChallengeSuspicious,
 	).Scan(
 		&bf.ID, &bf.ProxyHostID, &bf.Enabled, &bf.BlockBadBots, &bf.BlockAIBots, &bf.AllowSearchEngines,

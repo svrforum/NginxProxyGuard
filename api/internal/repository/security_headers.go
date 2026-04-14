@@ -74,8 +74,8 @@ func (r *SecurityHeadersRepository) Upsert(ctx context.Context, proxyHostID stri
 			x_content_type_options = COALESCE($8, security_headers.x_content_type_options),
 			x_xss_protection = COALESCE($9, security_headers.x_xss_protection),
 			referrer_policy = CASE WHEN $10 != '' THEN $10 ELSE security_headers.referrer_policy END,
-			content_security_policy = COALESCE(NULLIF($11, ''), security_headers.content_security_policy),
-			permissions_policy = COALESCE(NULLIF($12, ''), security_headers.permissions_policy),
+			content_security_policy = $11,
+			permissions_policy = $12,
 			custom_headers = COALESCE($13, security_headers.custom_headers),
 			updated_at = NOW()
 		RETURNING id, proxy_host_id, enabled, hsts_enabled, hsts_max_age, hsts_include_subdomains, hsts_preload,
@@ -90,8 +90,8 @@ func (r *SecurityHeadersRepository) Upsert(ctx context.Context, proxyHostID stri
 	err := r.db.QueryRowContext(ctx, query,
 		proxyHostID, req.Enabled, req.HSTSEnabled, req.HSTSMaxAge, req.HSTSIncludeSubdomains, req.HSTSPreload,
 		req.XFrameOptions, req.XContentTypeOptions, req.XXSSProtection, req.ReferrerPolicy,
-		sql.NullString{String: req.ContentSecurityPolicy, Valid: req.ContentSecurityPolicy != ""},
-		sql.NullString{String: req.PermissionsPolicy, Valid: req.PermissionsPolicy != ""},
+		req.ContentSecurityPolicy,
+		req.PermissionsPolicy,
 		customHeadersJSON,
 	).Scan(
 		&sh.ID, &sh.ProxyHostID, &sh.Enabled, &sh.HSTSEnabled, &sh.HSTSMaxAge, &sh.HSTSIncludeSubdomains, &sh.HSTSPreload,
