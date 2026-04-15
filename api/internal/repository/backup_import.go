@@ -604,13 +604,17 @@ func (r *BackupRepository) importGeoRestriction(ctx context.Context, tx *sql.Tx,
 func (r *BackupRepository) importUpstream(ctx context.Context, tx *sql.Tx, proxyHostID string, u *model.UpstreamExport) error {
 	servers, _ := json.Marshal(u.Servers)
 
+	// Older backups (pre-2.9.0) have no scheme field — default to "http" to preserve behavior.
+	scheme := model.NormalizeUpstreamScheme(u.Scheme)
+
 	query := `
-		INSERT INTO upstreams (proxy_host_id, name, servers, load_balance, health_check_enabled,
+		INSERT INTO upstreams (proxy_host_id, name, scheme, servers, load_balance, health_check_enabled,
 		                       health_check_interval, health_check_timeout, health_check_path,
 		                       health_check_expected_status, keepalive)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		ON CONFLICT (proxy_host_id) DO UPDATE SET
 			name = EXCLUDED.name,
+			scheme = EXCLUDED.scheme,
 			servers = EXCLUDED.servers,
 			load_balance = EXCLUDED.load_balance,
 			health_check_enabled = EXCLUDED.health_check_enabled,
@@ -621,7 +625,7 @@ func (r *BackupRepository) importUpstream(ctx context.Context, tx *sql.Tx, proxy
 			keepalive = EXCLUDED.keepalive,
 			updated_at = NOW()
 	`
-	_, err := tx.ExecContext(ctx, query, proxyHostID, u.Name, servers, u.LoadBalance,
+	_, err := tx.ExecContext(ctx, query, proxyHostID, u.Name, scheme, servers, u.LoadBalance,
 		u.HealthCheckEnabled, u.HealthCheckInterval, u.HealthCheckTimeout, u.HealthCheckPath,
 		u.HealthCheckExpectedStatus, u.Keepalive)
 	return err

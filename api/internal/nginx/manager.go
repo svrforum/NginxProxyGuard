@@ -437,6 +437,14 @@ func (m *Manager) GenerateConfigFull(ctx context.Context, data ProxyHostConfigDa
 	funcMap["dnsResolver"] = func() string {
 		return m.dnsResolver
 	}
+	// Normalize upstream scheme for proxy_pass: "https" only when explicitly set, else "http".
+	// Defends against stale data (empty string from old rows) so generated nginx configs are always valid.
+	funcMap["upstreamScheme"] = func(u *model.Upstream) string {
+		if u == nil {
+			return "http"
+		}
+		return model.NormalizeUpstreamScheme(u.Scheme)
+	}
 
 	// Check if SSL is enabled but certificate files don't exist
 	// If so, temporarily disable SSL to generate a working config

@@ -417,14 +417,14 @@ func (r *BackupRepository) getProxyHostGeoRestriction(ctx context.Context, proxy
 
 func (r *BackupRepository) getProxyHostUpstream(ctx context.Context, proxyHostID string) (*model.UpstreamExport, error) {
 	query := `
-		SELECT name, servers, load_balance, health_check_enabled, health_check_interval,
+		SELECT name, scheme, servers, load_balance, health_check_enabled, health_check_interval,
 		       health_check_timeout, health_check_path, health_check_expected_status, keepalive
 		FROM upstreams WHERE proxy_host_id = $1
 	`
 	var u model.UpstreamExport
 	var servers []byte
 	err := r.db.QueryRowContext(ctx, query, proxyHostID).Scan(
-		&u.Name, &servers, &u.LoadBalance, &u.HealthCheckEnabled, &u.HealthCheckInterval,
+		&u.Name, &u.Scheme, &servers, &u.LoadBalance, &u.HealthCheckEnabled, &u.HealthCheckInterval,
 		&u.HealthCheckTimeout, &u.HealthCheckPath, &u.HealthCheckExpectedStatus, &u.Keepalive,
 	)
 	if err == sql.ErrNoRows {

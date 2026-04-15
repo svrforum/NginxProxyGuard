@@ -886,7 +886,7 @@ system_log_level: 'debug','info','warn','error','fatal'
 | GET/PUT/DELETE | `/api/v1/proxy-hosts/:id/bot-filter` | Bot Filter |
 | GET/PUT/DELETE | `/api/v1/proxy-hosts/:id/security-headers` | Security Headers |
 | POST | `/api/v1/proxy-hosts/:id/security-headers/preset/:preset` | 프리셋 적용 |
-| GET/PUT/DELETE | `/api/v1/proxy-hosts/:id/upstream` | Upstream/LB (Upsert/Delete triggers config regeneration via RegenerateConfigForHost; name validation: alphanumeric+underscore only; server address/port validation) |
+| GET/PUT/DELETE | `/api/v1/proxy-hosts/:id/upstream` | Upstream/LB (Upsert/Delete triggers config regeneration via RegenerateConfigForHost; name validation: alphanumeric+underscore only; server address/port validation; `scheme` field selects http/https for proxy_pass — Issue #108) |
 | GET/PUT/DELETE | `/api/v1/proxy-hosts/:id/uri-block` | URI Block |
 | POST/DELETE | `/api/v1/proxy-hosts/:id/uri-block/rules(/:ruleId)` | URI Block 규칙 |
 | GET/POST/PUT/DELETE | `/api/v1/proxy-hosts/:id/geo` | GeoIP 제한 |

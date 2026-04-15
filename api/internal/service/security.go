@@ -163,6 +163,7 @@ func (s *SecurityService) GetUpstream(ctx context.Context, proxyHostID string) (
 	if upstream == nil {
 		upstream = &model.Upstream{
 			ProxyHostID:               proxyHostID,
+			Scheme:                    "http",
 			LoadBalance:               "round_robin",
 			HealthCheckEnabled:        false,
 			HealthCheckInterval:       30,
@@ -190,6 +191,11 @@ func (s *SecurityService) UpsertUpstream(ctx context.Context, proxyHostID string
 		if !valid {
 			return nil, fmt.Errorf("invalid load_balance method: %s", req.LoadBalance)
 		}
+	}
+
+	// Validate scheme (http or https only)
+	if req.Scheme != "" && req.Scheme != "http" && req.Scheme != "https" {
+		return nil, fmt.Errorf("invalid scheme: %s (must be http or https)", req.Scheme)
 	}
 
 	// Validate server addresses

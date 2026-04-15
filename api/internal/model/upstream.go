@@ -7,6 +7,7 @@ type Upstream struct {
 	ID                        string           `json:"id"`
 	ProxyHostID               string           `json:"proxy_host_id"`
 	Name                      string           `json:"name"`
+	Scheme                    string           `json:"scheme"` // "http" or "https" - protocol used to reach upstream servers
 	Servers                   []UpstreamServer `json:"servers"`
 	LoadBalance               string           `json:"load_balance"`
 	HealthCheckEnabled        bool             `json:"health_check_enabled"`
@@ -42,6 +43,7 @@ type UpstreamServer struct {
 // CreateUpstreamRequest is the request to create/update upstream config
 type CreateUpstreamRequest struct {
 	Name                      string                        `json:"name,omitempty"`
+	Scheme                    string                        `json:"scheme,omitempty"` // "http" (default) or "https"
 	Servers                   []CreateUpstreamServerRequest `json:"servers,omitempty"`
 	LoadBalance               string                        `json:"load_balance,omitempty"`
 	HealthCheckEnabled        *bool                         `json:"health_check_enabled,omitempty"`
@@ -92,4 +94,15 @@ var ValidLoadBalanceMethods = []string{
 	"least_conn",
 	"ip_hash",
 	"random",
+}
+
+// Valid upstream schemes
+var ValidUpstreamSchemes = []string{"http", "https"}
+
+// NormalizeUpstreamScheme returns "http" (default) or "https". Anything else falls back to "http".
+func NormalizeUpstreamScheme(s string) string {
+	if s == "https" {
+		return "https"
+	}
+	return "http"
 }

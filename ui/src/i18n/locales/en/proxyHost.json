@@ -629,6 +629,8 @@
   },
   "upstream": {
     "description": "Distribute traffic across multiple backend servers for load balancing and high availability.",
+    "scheme": "Protocol",
+    "schemeHint": "Select HTTPS if the backend servers serve TLS. Upstream TLS verification is disabled so self-signed backend certificates are accepted.",
     "loadBalance": "Method",
     "methods": {
       "roundRobin": "Round Robin (sequential)",

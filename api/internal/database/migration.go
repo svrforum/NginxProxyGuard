@@ -273,6 +273,11 @@ func (db *DB) RunMigrations() error {
 			desc: "system_settings.ui_error_page_language",
 			sql:  `ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS ui_error_page_language character varying(10) DEFAULT 'auto'::character varying`,
 		},
+		{
+			// Issue #108 — Allow HTTPS upstream backends in load-balanced proxy hosts
+			desc: "upstreams.scheme",
+			sql:  `ALTER TABLE public.upstreams ADD COLUMN IF NOT EXISTS scheme character varying(10) DEFAULT 'http'::character varying NOT NULL`,
+		},
 	}
 	for _, a := range independentAlters {
 		if _, err := db.Exec(a.sql); err != nil {
