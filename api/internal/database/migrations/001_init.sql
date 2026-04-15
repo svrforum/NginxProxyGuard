@@ -2257,6 +2257,7 @@ CREATE TABLE IF NOT EXISTS public.upstreams (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     proxy_host_id uuid NOT NULL,
     name character varying(255) NOT NULL,
+    scheme character varying(10) DEFAULT 'http'::character varying NOT NULL,
     servers jsonb DEFAULT '[]'::jsonb NOT NULL,
     load_balance character varying(20) DEFAULT 'round_robin'::character varying,
     health_check_enabled boolean DEFAULT false,
@@ -3223,6 +3224,10 @@ ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS config_error text;
 -- Add column comments
 COMMENT ON COLUMN public.proxy_hosts.cache_static_only IS 'Only cache static assets (js, css, images, fonts) - excludes API paths';
 COMMENT ON COLUMN public.proxy_hosts.cache_ttl IS 'Cache duration for static assets (e.g., 1h, 7d, 30m)';
+
+-- upstreams table upgrades (v2.9.0+: Issue #108 - allow HTTPS upstream backends)
+ALTER TABLE public.upstreams ADD COLUMN IF NOT EXISTS scheme character varying(10) DEFAULT 'http'::character varying NOT NULL;
+COMMENT ON COLUMN public.upstreams.scheme IS 'Protocol used to reach upstream servers: http (default) or https';
 
 -- global_settings table upgrades (v2.4.0+)
 ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS proxy_buffering character varying(10) DEFAULT '';

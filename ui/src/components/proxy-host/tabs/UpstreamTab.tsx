@@ -20,6 +20,7 @@ export function UpstreamTabContent({ hostId }: UpstreamTabProps) {
   const queryClient = useQueryClient()
 
   // Form state
+  const [scheme, setScheme] = useState<'http' | 'https'>('http')
   const [loadBalance, setLoadBalance] = useState<string>('round_robin')
   const [keepalive, setKeepalive] = useState<number>(32)
   const [servers, setServers] = useState<ServerEntry[]>([])
@@ -50,6 +51,7 @@ export function UpstreamTabContent({ hostId }: UpstreamTabProps) {
   // Sync form state from upstream data
   useEffect(() => {
     if (upstream) {
+      setScheme(upstream.scheme === 'https' ? 'https' : 'http')
       setLoadBalance(upstream.load_balance || 'round_robin')
       setKeepalive(upstream.keepalive ?? 32)
       setServers(
@@ -98,6 +100,7 @@ export function UpstreamTabContent({ hostId }: UpstreamTabProps) {
 
   const handleSave = useCallback(() => {
     const data: CreateUpstreamRequest = {
+      scheme,
       servers: servers.map((s) => ({
         address: s.address,
         port: s.port,
@@ -113,7 +116,7 @@ export function UpstreamTabContent({ hostId }: UpstreamTabProps) {
       health_check_expected_status: healthCheckExpectedStatus,
     }
     saveMutation.mutate(data)
-  }, [servers, loadBalance, keepalive, healthCheckEnabled, healthCheckInterval, healthCheckTimeout, healthCheckPath, healthCheckExpectedStatus, saveMutation])
+  }, [scheme, servers, loadBalance, keepalive, healthCheckEnabled, healthCheckInterval, healthCheckTimeout, healthCheckPath, healthCheckExpectedStatus, saveMutation])
 
   const addServer = useCallback(() => {
     setServers((prev) => [...prev, { address: '', port: 80, weight: 1, is_backup: false }])
@@ -153,6 +156,24 @@ export function UpstreamTabContent({ hostId }: UpstreamTabProps) {
           {feedback.message}
         </div>
       )}
+
+      {/* Upstream Scheme (http / https) */}
+      <div>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+          {t('upstream.scheme')}
+        </label>
+        <select
+          value={scheme}
+          onChange={(e) => setScheme(e.target.value === 'https' ? 'https' : 'http')}
+          className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+        >
+          <option value="http">HTTP</option>
+          <option value="https">HTTPS</option>
+        </select>
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          {t('upstream.schemeHint')}
+        </p>
+      </div>
 
       {/* Load Balance Method */}
       <div>

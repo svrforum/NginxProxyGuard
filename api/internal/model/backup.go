@@ -426,6 +426,7 @@ type GeoRestrictionExport struct {
 // UpstreamExport represents upstream config for export
 type UpstreamExport struct {
 	Name                      string        `json:"name"`
+	Scheme                    string        `json:"scheme,omitempty"` // "http" (default) or "https"
 	Servers                   []interface{} `json:"servers"`
 	LoadBalance               string        `json:"load_balance"`
 	HealthCheckEnabled        bool          `json:"health_check_enabled"`

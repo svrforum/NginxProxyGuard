@@ -217,6 +217,7 @@ export interface Upstream {
   id: string;
   proxy_host_id: string;
   name: string;
+  scheme: 'http' | 'https';
   servers: UpstreamServer[];
   load_balance: 'round_robin' | 'least_conn' | 'ip_hash' | 'random';
   health_check_enabled: boolean;
@@ -233,6 +234,7 @@ export interface Upstream {
 
 export interface CreateUpstreamRequest {
   name?: string;
+  scheme?: 'http' | 'https';
   servers?: {
     address: string;
     port?: number;

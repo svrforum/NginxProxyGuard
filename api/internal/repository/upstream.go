@@ -23,7 +23,7 @@ func NewUpstreamRepository(db *sql.DB) *UpstreamRepository {
 
 func (r *UpstreamRepository) GetByProxyHostID(ctx context.Context, proxyHostID string) (*model.Upstream, error) {
 	query := `
-		SELECT id, proxy_host_id, name, servers, load_balance, health_check_enabled, health_check_interval,
+		SELECT id, proxy_host_id, name, scheme, servers, load_balance, health_check_enabled, health_check_interval,
 		       health_check_timeout, health_check_path, health_check_expected_status, keepalive,
 		       is_healthy, last_check_at, created_at, updated_at
 		FROM upstreams
@@ -35,7 +35,7 @@ func (r *UpstreamRepository) GetByProxyHostID(ctx context.Context, proxyHostID s
 	var lastCheckAt sql.NullTime
 
 	err := r.db.QueryRowContext(ctx, query, proxyHostID).Scan(
-		&u.ID, &u.ProxyHostID, &u.Name, &serversJSON, &u.LoadBalance, &u.HealthCheckEnabled, &u.HealthCheckInterval,
+		&u.ID, &u.ProxyHostID, &u.Name, &u.Scheme, &serversJSON, &u.LoadBalance, &u.HealthCheckEnabled, &u.HealthCheckInterval,
 		&u.HealthCheckTimeout, &u.HealthCheckPath, &u.HealthCheckExpectedStatus, &u.Keepalive,
 		&u.IsHealthy, &lastCheckAt, &u.CreatedAt, &u.UpdatedAt,
 	)
@@ -44,6 +44,9 @@ func (r *UpstreamRepository) GetByProxyHostID(ctx context.Context, proxyHostID s
 	}
 	if err != nil {
 		return nil, err
+	}
+	if u.Scheme == "" {
+		u.Scheme = "http"
 	}
 
 	if lastCheckAt.Valid {
@@ -61,7 +64,7 @@ func (r *UpstreamRepository) GetByProxyHostID(ctx context.Context, proxyHostID s
 
 func (r *UpstreamRepository) GetByID(ctx context.Context, id string) (*model.Upstream, error) {
 	query := `
-		SELECT id, proxy_host_id, name, servers, load_balance, health_check_enabled, health_check_interval,
+		SELECT id, proxy_host_id, name, scheme, servers, load_balance, health_check_enabled, health_check_interval,
 		       health_check_timeout, health_check_path, health_check_expected_status, keepalive,
 		       is_healthy, last_check_at, created_at, updated_at
 		FROM upstreams
@@ -73,7 +76,7 @@ func (r *UpstreamRepository) GetByID(ctx context.Context, id string) (*model.Ups
 	var lastCheckAt sql.NullTime
 
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
-		&u.ID, &u.ProxyHostID, &u.Name, &serversJSON, &u.LoadBalance, &u.HealthCheckEnabled, &u.HealthCheckInterval,
+		&u.ID, &u.ProxyHostID, &u.Name, &u.Scheme, &serversJSON, &u.LoadBalance, &u.HealthCheckEnabled, &u.HealthCheckInterval,
 		&u.HealthCheckTimeout, &u.HealthCheckPath, &u.HealthCheckExpectedStatus, &u.Keepalive,
 		&u.IsHealthy, &lastCheckAt, &u.CreatedAt, &u.UpdatedAt,
 	)
@@ -82,6 +85,9 @@ func (r *UpstreamRepository) GetByID(ctx context.Context, id string) (*model.Ups
 	}
 	if err != nil {
 		return nil, err
+	}
+	if u.Scheme == "" {
+		u.Scheme = "http"
 	}
 
 	if lastCheckAt.Valid {
@@ -146,14 +152,17 @@ func (r *UpstreamRepository) Upsert(ctx context.Context, proxyHostID string, req
 		return nil, fmt.Errorf("invalid upstream name: only alphanumeric and underscore allowed")
 	}
 
+	scheme := model.NormalizeUpstreamScheme(req.Scheme)
+
 	query := `
-		INSERT INTO upstreams (proxy_host_id, name, servers, load_balance, health_check_enabled, health_check_interval,
+		INSERT INTO upstreams (proxy_host_id, name, scheme, servers, load_balance, health_check_enabled, health_check_interval,
 		                       health_check_timeout, health_check_path, health_check_expected_status, keepalive)
-		VALUES ($1::UUID, $2, $3::JSONB, COALESCE(NULLIF($4, ''), 'round_robin'), COALESCE($5, FALSE),
-		        COALESCE(NULLIF($6, 0), 30), COALESCE(NULLIF($7, 0), 5), COALESCE(NULLIF($8, ''), '/'),
-		        COALESCE(NULLIF($9, 0), 200), COALESCE(NULLIF($10, 0), 32))
+		VALUES ($1::UUID, $2, $3, $4::JSONB, COALESCE(NULLIF($5, ''), 'round_robin'), COALESCE($6, FALSE),
+		        COALESCE(NULLIF($7, 0), 30), COALESCE(NULLIF($8, 0), 5), COALESCE(NULLIF($9, ''), '/'),
+		        COALESCE(NULLIF($10, 0), 200), COALESCE(NULLIF($11, 0), 32))
 		ON CONFLICT (proxy_host_id) DO UPDATE SET
 			name = EXCLUDED.name,
+			scheme = EXCLUDED.scheme,
 			servers = EXCLUDED.servers,
 			load_balance = EXCLUDED.load_balance,
 			health_check_enabled = EXCLUDED.health_check_enabled,
@@ -163,7 +172,7 @@ func (r *UpstreamRepository) Upsert(ctx context.Context, proxyHostID string, req
 			health_check_expected_status = EXCLUDED.health_check_expected_status,
 			keepalive = EXCLUDED.keepalive,
 			updated_at = NOW()
-		RETURNING id, proxy_host_id, name, servers, load_balance, health_check_enabled, health_check_interval,
+		RETURNING id, proxy_host_id, name, scheme, servers, load_balance, health_check_enabled, health_check_interval,
 		          health_check_timeout, health_check_path, health_check_expected_status, keepalive,
 		          is_healthy, last_check_at, created_at, updated_at
 	`
@@ -173,11 +182,11 @@ func (r *UpstreamRepository) Upsert(ctx context.Context, proxyHostID string, req
 	var lastCheckAt sql.NullTime
 
 	err := r.db.QueryRowContext(ctx, query,
-		proxyHostID, name, serversJSON, req.LoadBalance, req.HealthCheckEnabled,
+		proxyHostID, name, scheme, serversJSON, req.LoadBalance, req.HealthCheckEnabled,
 		req.HealthCheckInterval, req.HealthCheckTimeout, req.HealthCheckPath,
 		req.HealthCheckExpectedStatus, req.Keepalive,
 	).Scan(
-		&u.ID, &u.ProxyHostID, &u.Name, &returnedServersJSON, &u.LoadBalance, &u.HealthCheckEnabled, &u.HealthCheckInterval,
+		&u.ID, &u.ProxyHostID, &u.Name, &u.Scheme, &returnedServersJSON, &u.LoadBalance, &u.HealthCheckEnabled, &u.HealthCheckInterval,
 		&u.HealthCheckTimeout, &u.HealthCheckPath, &u.HealthCheckExpectedStatus, &u.Keepalive,
 		&u.IsHealthy, &lastCheckAt, &u.CreatedAt, &u.UpdatedAt,
 	)
@@ -250,7 +259,7 @@ func (r *UpstreamRepository) UpdateServerHealth(ctx context.Context, upstreamID,
 
 func (r *UpstreamRepository) ListWithHealthCheck(ctx context.Context) ([]model.Upstream, error) {
 	query := `
-		SELECT id, proxy_host_id, name, servers, load_balance, health_check_enabled, health_check_interval,
+		SELECT id, proxy_host_id, name, scheme, servers, load_balance, health_check_enabled, health_check_interval,
 		       health_check_timeout, health_check_path, health_check_expected_status, keepalive,
 		       is_healthy, last_check_at, created_at, updated_at
 		FROM upstreams
@@ -271,10 +280,13 @@ func (r *UpstreamRepository) ListWithHealthCheck(ctx context.Context) ([]model.U
 		var lastCheckAt sql.NullTime
 
 		err := rows.Scan(
-			&u.ID, &u.ProxyHostID, &u.Name, &serversJSON, &u.LoadBalance, &u.HealthCheckEnabled, &u.HealthCheckInterval,
+			&u.ID, &u.ProxyHostID, &u.Name, &u.Scheme, &serversJSON, &u.LoadBalance, &u.HealthCheckEnabled, &u.HealthCheckInterval,
 			&u.HealthCheckTimeout, &u.HealthCheckPath, &u.HealthCheckExpectedStatus, &u.Keepalive,
 			&u.IsHealthy, &lastCheckAt, &u.CreatedAt, &u.UpdatedAt,
 		)
+		if u.Scheme == "" {
+			u.Scheme = "http"
+		}
 		if err != nil {
 			return nil, err
 		}

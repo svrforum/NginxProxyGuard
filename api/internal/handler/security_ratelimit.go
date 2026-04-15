@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -138,6 +139,11 @@ func (h *SecurityHandler) UpsertUpstream(c echo.Context) error {
 
 	upstream, err := h.securityService.UpsertUpstream(c.Request().Context(), proxyHostID, &req)
 	if err != nil {
+		// Service-level validation errors (invalid scheme, load_balance, server address, port) → 400
+		msg := err.Error()
+		if strings.Contains(msg, "invalid") || strings.Contains(msg, "is required") {
+			return badRequestError(c, msg)
+		}
 		return databaseError(c, "upsert upstream", err)
 	}
 
