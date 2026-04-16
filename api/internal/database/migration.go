@@ -479,6 +479,7 @@ func (db *DB) migrateLogsToPartitioned() {
 				id, log_type, timestamp, host, client_ip,
 				request_method, request_uri, request_protocol, status_code,
 				body_bytes_sent, request_time, upstream_response_time,
+				upstream_addr, upstream_status,
 				http_referer, http_user_agent, http_x_forwarded_for,
 				severity, error_message,
 				rule_id, rule_message, rule_severity, rule_data, attack_type, action_taken,
@@ -490,6 +491,7 @@ func (db *DB) migrateLogsToPartitioned() {
 				l.id, l.log_type, l.timestamp, l.host, l.client_ip,
 				l.request_method, l.request_uri, l.request_protocol, l.status_code,
 				l.body_bytes_sent, l.request_time, l.upstream_response_time,
+				l.upstream_addr, l.upstream_status,
 				l.http_referer, l.http_user_agent, l.http_x_forwarded_for,
 				l.severity, l.error_message,
 				l.rule_id, l.rule_message, l.rule_severity, l.rule_data, l.attack_type, l.action_taken,
@@ -526,6 +528,31 @@ func (db *DB) migrateLogsToPartitioned() {
 		log.Printf("[Migration] Warning: failed to drop old logs table: %v", err)
 	} else {
 		log.Println("[Migration] Old logs table dropped successfully")
+
+		// `DROP ... CASCADE` also drops dependent objects, which includes logs_unified
+		// if it was built from both `logs` and `logs_partitioned` during startup.
+		// Rebuild it immediately so live log queries don't hit "relation does not exist".
+		_, rebuildErr := db.Exec(`
+			DROP VIEW IF EXISTS public.logs_unified CASCADE;
+			CREATE VIEW public.logs_unified AS
+			 SELECT id, log_type, "timestamp", host, client_ip,
+			        geo_country, geo_country_code, geo_city, geo_asn, geo_org,
+			        request_method, request_uri, request_protocol, status_code,
+			        body_bytes_sent, request_time, upstream_response_time,
+			        http_referer, http_user_agent, http_x_forwarded_for,
+			        severity, error_message,
+			        rule_id, rule_message, rule_severity, rule_data,
+			        attack_type, action_taken,
+			        block_reason, bot_category,
+			        proxy_host_id, raw_log, created_at,
+			        upstream_addr, upstream_status
+			   FROM public.logs_partitioned
+		`)
+		if rebuildErr != nil {
+			log.Printf("[Migration] Warning: failed to rebuild logs_unified view after drop: %v", rebuildErr)
+		} else {
+			log.Println("[Migration] logs_unified view rebuilt (single-table form)")
+		}
 	}
 }
 
