@@ -350,6 +350,40 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
           </div>
         )}
 
+        {/* Upstream Address (Issue #109) */}
+        {logType === 'access' && (
+          <div>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 flex items-center gap-1">
+              {t('filters.upstreamAddr')}
+              <HelpTip content={t('filters.upstreamAddrHelp')} />
+            </label>
+            <input
+              type="text"
+              value={localFilter.upstream_addr || ''}
+              onChange={(e) => updateFilter('upstream_addr', e.target.value || undefined)}
+              placeholder={t('filters.upstreamAddrPlaceholder')}
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 dark:text-white"
+            />
+          </div>
+        )}
+
+        {/* Upstream Status (Issue #109) */}
+        {logType === 'access' && (
+          <div>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 flex items-center gap-1">
+              {t('filters.upstreamStatus')}
+              <HelpTip content={t('filters.upstreamStatusHelp')} />
+            </label>
+            <input
+              type="text"
+              value={localFilter.upstream_status || ''}
+              onChange={(e) => updateFilter('upstream_status', e.target.value || undefined)}
+              placeholder={t('filters.upstreamStatusPlaceholder')}
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 dark:text-white"
+            />
+          </div>
+        )}
+
         {/* Block Reason Filter */}
         {logType === 'access' && (
           <div>

@@ -498,6 +498,8 @@ type LogEntry struct {
 	RequestTime          float64           `json:"request_time,omitempty"`
 	XForwardedFor        string            `json:"x_forwarded_for,omitempty"`
 	UpstreamResponseTime float64           `json:"upstream_response_time,omitempty"`
+	UpstreamAddr         string            `json:"upstream_addr,omitempty"`
+	UpstreamStatus       string            `json:"upstream_status,omitempty"`
 	Severity             string            `json:"severity,omitempty"`
 	ErrorMessage         string            `json:"error_message,omitempty"`
 	ProxyHostID          string            `json:"proxy_host_id,omitempty"`

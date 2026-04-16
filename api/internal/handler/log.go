@@ -127,6 +127,12 @@ func parseLogFilter(q url.Values) *model.LogFilter {
 			filter.MinRequestTime = &t
 		}
 	}
+	if upstreamAddr := q.Get("upstream_addr"); upstreamAddr != "" {
+		filter.UpstreamAddr = &upstreamAddr
+	}
+	if upstreamStatus := q.Get("upstream_status"); upstreamStatus != "" {
+		filter.UpstreamStatus = &upstreamStatus
+	}
 
 	// Block reason filters
 	if blockReason := q.Get("block_reason"); blockReason != "" {

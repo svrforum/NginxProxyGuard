@@ -29,6 +29,8 @@ export function ActiveFilterTags({ filter, onRemove }: ActiveFilterTagsProps) {
   if (filter.min_size) tags.push({ key: 'min_size', label: t('filters.minSize'), value: formatBytes(filter.min_size) });
   if (filter.max_size) tags.push({ key: 'max_size', label: t('filters.maxSize'), value: formatBytes(filter.max_size) });
   if (filter.min_request_time) tags.push({ key: 'min_request_time', label: t('filters.minRequestTime'), value: `>${filter.min_request_time}s` });
+  if (filter.upstream_addr) tags.push({ key: 'upstream_addr', label: t('filters.upstreamAddr'), value: filter.upstream_addr });
+  if (filter.upstream_status) tags.push({ key: 'upstream_status', label: t('filters.upstreamStatus'), value: filter.upstream_status });
   if (filter.block_reason) {
     const blockReasonLabels: Record<string, string> = {
       'none': t('reasons.none'),

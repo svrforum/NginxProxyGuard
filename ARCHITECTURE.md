@@ -670,6 +670,8 @@ nginx/
 - HTTP/3: `ssl_early_data on`, `quic_retry on`
 - Gzip level 6 + Brotli level 6
 - Proxy cache: 100m keys zone, 10g max, 60m inactive
+- Access log format: `main`에 `ua="$upstream_addr" us="$upstream_status"` 포함 (Issue #109) — 로드밸런싱된 백엔드 중 실제 응답 서버 추적용. 재시도 발생 시 두 필드 모두 콤마 구분 목록
+- Entrypoint에서 이미지 defaults의 `nginx.conf`를 볼륨에 덮어씀 — 사용자 커스텀은 `conf.d/*.conf`에만 저장되므로 `nginx.conf` 자체는 프로젝트 소유 템플릿 취급 (로그 포맷/모듈 변경이 기존 배포에 전파되도록 함)
 
 ### 4.3 Docker Build
 
@@ -756,6 +758,9 @@ Tag push (v*) → detect changes (SHA256 per component)
 | client_ip | inet | |
 | status_code | integer | |
 | request_time | double precision | |
+| upstream_response_time | double precision | 업스트림 응답 시간 |
+| upstream_addr | text | `$upstream_addr` 원문. 재시도 시 콤마 구분 목록 ("10.0.0.1:8080, 10.0.0.2:8080"). 마지막 값이 최종 응답 서버 (Issue #109) |
+| upstream_status | text | `$upstream_status` 원문. upstream_addr과 동일한 콤마 구분 시퀀스 |
 | geo_country_code | varchar | GeoIP |
 | block_reason | block_reason enum | none/waf/bot_filter/rate_limit/... |
 | bot_category | text | |

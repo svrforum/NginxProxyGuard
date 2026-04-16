@@ -15,6 +15,8 @@ import {
   SettingsModal,
   ActiveFilterTags,
   LogRowTyped,
+  ColumnChooser,
+  useAccessColumnVisibility,
 } from "./log-viewer";
 
 interface LogViewerProps {
@@ -55,6 +57,7 @@ export function LogViewer({ logType, defaultBlockReason }: LogViewerProps) {
   const [selectedLog, setSelectedLog] = useState<Log | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const { visible: visibleColumns, toggle: toggleColumn, reset: resetColumns } = useAccessColumnVisibility();
   const [showVisualization, setShowVisualization] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const countdownRef = useRef(AUTO_REFRESH_INTERVAL / 1000);
@@ -191,6 +194,22 @@ export function LogViewer({ logType, defaultBlockReason }: LogViewerProps) {
       const newFilter = { ...prev };
       delete newFilter[key];
       return newFilter;
+    });
+    setPage(1);
+  }, []);
+
+  const handleClientIPClick = useCallback((ip: string) => {
+    // Replace any existing multi-IP filter with the single-value form. If the user
+    // re-clicks the same IP, fall back to clearing so it's a toggle.
+    setFilter((prev) => {
+      if (prev.client_ip === ip) {
+        const next = { ...prev };
+        delete next.client_ip;
+        return next;
+      }
+      const next = { ...prev, client_ip: ip };
+      delete next.client_ips; // mutually exclusive with the multi-IP form
+      return next;
     });
     setPage(1);
   }, []);
@@ -471,6 +490,15 @@ export function LogViewer({ logType, defaultBlockReason }: LogViewerProps) {
             </svg>
           </button>
 
+          {/* Column Chooser (access log only — error/modsec have too few columns to need this) */}
+          {logType === "access" && (
+            <ColumnChooser
+              visible={visibleColumns}
+              onToggle={toggleColumn}
+              onReset={resetColumns}
+            />
+          )}
+
           {/* Settings */}
           <button
             onClick={() => setShowSettings(true)}
@@ -520,66 +548,96 @@ export function LogViewer({ logType, defaultBlockReason }: LogViewerProps) {
             <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
               {logType === "access" && (
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[140px]">
-                    {t("table.columns.time")}
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[180px]">
-                    {t("table.columns.host")}
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[120px]">
-                    {t("table.columns.ip")}
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[60px]">
-                    {t("table.columns.country")}
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[60px]">
-                    {t("table.columns.method")}
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[200px]">
-                    {t("table.columns.path")}
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[55px]">
-                    {t("table.columns.status")}
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[85px]">
-                    {t("table.columns.block")}
-                  </th>
-                  <th
-                    className="px-4 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 w-[65px]"
-                    onClick={() =>
-                      handleFilterChange({
-                        ...filter,
-                        sort_by: "body_bytes_sent",
-                        sort_order:
-                          filter.sort_by === "body_bytes_sent" &&
-                          filter.sort_order === "desc"
-                            ? "asc"
-                            : "desc",
-                      })
-                    }
-                  >
-                    {t("table.columns.size")}{" "}
-                    {filter.sort_by === "body_bytes_sent" &&
-                      (filter.sort_order === "desc" ? "↓" : "↑")}
-                  </th>
-                  <th
-                    className="px-4 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 w-[70px]"
-                    onClick={() =>
-                      handleFilterChange({
-                        ...filter,
-                        sort_by: "request_time",
-                        sort_order:
-                          filter.sort_by === "request_time" &&
-                          filter.sort_order === "desc"
-                            ? "asc"
-                            : "desc",
-                      })
-                    }
-                  >
-                    {t("table.columns.responseTime")}{" "}
-                    {filter.sort_by === "request_time" &&
-                      (filter.sort_order === "desc" ? "↓" : "↑")}
-                  </th>
+                  {visibleColumns.has("time") && (
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[140px]">
+                      {t("table.columns.time")}
+                    </th>
+                  )}
+                  {visibleColumns.has("host") && (
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[150px]">
+                      {t("table.columns.host")}
+                    </th>
+                  )}
+                  {visibleColumns.has("ip") && (
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[160px]">
+                      {t("table.columns.ip")}
+                    </th>
+                  )}
+                  {visibleColumns.has("country") && (
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[60px]">
+                      {t("table.columns.country")}
+                    </th>
+                  )}
+                  {visibleColumns.has("method") && (
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[60px]">
+                      {t("table.columns.method")}
+                    </th>
+                  )}
+                  {visibleColumns.has("uri") && (
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[200px]">
+                      {t("table.columns.path")}
+                    </th>
+                  )}
+                  {visibleColumns.has("status") && (
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[55px]">
+                      {t("table.columns.status")}
+                    </th>
+                  )}
+                  {visibleColumns.has("block") && (
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[85px]">
+                      {t("table.columns.block")}
+                    </th>
+                  )}
+                  {visibleColumns.has("size") && (
+                    <th
+                      className="px-4 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 w-[65px]"
+                      onClick={() =>
+                        handleFilterChange({
+                          ...filter,
+                          sort_by: "body_bytes_sent",
+                          sort_order:
+                            filter.sort_by === "body_bytes_sent" &&
+                            filter.sort_order === "desc"
+                              ? "asc"
+                              : "desc",
+                        })
+                      }
+                    >
+                      {t("table.columns.size")}{" "}
+                      {filter.sort_by === "body_bytes_sent" &&
+                        (filter.sort_order === "desc" ? "↓" : "↑")}
+                    </th>
+                  )}
+                  {visibleColumns.has("responseTime") && (
+                    <th
+                      className="px-4 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 w-[70px]"
+                      onClick={() =>
+                        handleFilterChange({
+                          ...filter,
+                          sort_by: "request_time",
+                          sort_order:
+                            filter.sort_by === "request_time" &&
+                            filter.sort_order === "desc"
+                              ? "asc"
+                              : "desc",
+                        })
+                      }
+                    >
+                      {t("table.columns.responseTime")}{" "}
+                      {filter.sort_by === "request_time" &&
+                        (filter.sort_order === "desc" ? "↓" : "↑")}
+                    </th>
+                  )}
+                  {visibleColumns.has("upstream") && (
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[150px]">
+                      {t("table.columns.upstream")}
+                    </th>
+                  )}
+                  {visibleColumns.has("userAgent") && (
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[200px]">
+                      {t("table.columns.userAgent")}
+                    </th>
+                  )}
                 </tr>
               )}
               {logType === "modsec" && (
@@ -628,38 +686,52 @@ export function LogViewer({ logType, defaultBlockReason }: LogViewerProps) {
               )}
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
-              {logsQuery.isLoading ? (
-                <tr>
-                  <td
-                    colSpan={10}
-                    className="px-4 py-8 text-center text-slate-500 dark:text-slate-400"
-                  >
-                    {t("table.loading")}
-                  </td>
-                </tr>
-              ) : logsQuery.data?.data?.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={10}
-                    className="px-4 py-8 text-center text-slate-500 dark:text-slate-400"
-                  >
-                    {logType === "modsec"
-                      ? t("table.noWafEvents")
-                      : logType === "error"
-                      ? t("table.noErrors")
-                      : t("table.noLogs")}
-                  </td>
-                </tr>
-              ) : (
-                logsQuery.data?.data?.map((log) => (
+              {(() => {
+                // colSpan must match the rendered header cell count so the empty/loading row
+                // spans the full width. Each log type has a fixed header count except access,
+                // whose width is driven by the column-chooser state.
+                const accessSpan = visibleColumns.size;
+                const emptyColSpan =
+                  logType === "access" ? accessSpan : logType === "modsec" ? 8 : 4;
+                if (logsQuery.isLoading) {
+                  return (
+                    <tr>
+                      <td
+                        colSpan={emptyColSpan}
+                        className="px-4 py-8 text-center text-slate-500 dark:text-slate-400"
+                      >
+                        {t("table.loading")}
+                      </td>
+                    </tr>
+                  );
+                }
+                if (logsQuery.data?.data?.length === 0) {
+                  return (
+                    <tr>
+                      <td
+                        colSpan={emptyColSpan}
+                        className="px-4 py-8 text-center text-slate-500 dark:text-slate-400"
+                      >
+                        {logType === "modsec"
+                          ? t("table.noWafEvents")
+                          : logType === "error"
+                          ? t("table.noErrors")
+                          : t("table.noLogs")}
+                      </td>
+                    </tr>
+                  );
+                }
+                return logsQuery.data?.data?.map((log) => (
                   <LogRowTyped
                     key={log.id}
                     log={log}
                     logType={logType}
                     onClick={() => setSelectedLog(log)}
+                    onClientIPClick={handleClientIPClick}
+                    visibleColumns={logType === "access" ? visibleColumns : undefined}
                   />
-                ))
-              )}
+                ));
+              })()}
             </tbody>
           </table>
         </div>

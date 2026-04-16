@@ -54,6 +54,7 @@ func (r *LogRepository) Create(ctx context.Context, req *model.CreateLogRequest)
 			geo_country, geo_country_code, geo_city, geo_asn, geo_org,
 			request_method, request_uri, request_protocol, status_code,
 			body_bytes_sent, request_time, upstream_response_time,
+			upstream_addr, upstream_status,
 			http_referer, http_user_agent, http_x_forwarded_for,
 			severity, error_message,
 			rule_id, rule_message, rule_severity, rule_data, attack_type, action_taken,
@@ -63,15 +64,17 @@ func (r *LogRepository) Create(ctx context.Context, req *model.CreateLogRequest)
 			NULLIF($5, ''), NULLIF($6, ''), NULLIF($7, ''), NULLIF($8, ''), NULLIF($9, ''),
 			NULLIF($10, ''), NULLIF($11, ''), NULLIF($12, ''), NULLIF($13, 0),
 			NULLIF($14::bigint, 0), NULLIF($15::double precision, 0), NULLIF($16::double precision, 0),
-			NULLIF($17, ''), NULLIF($18, ''), NULLIF($19, ''),
-			NULLIF($20, '')::log_severity, NULLIF($21, ''),
-			NULLIF($22::bigint, 0), NULLIF($23, ''), NULLIF($24, ''), NULLIF($25, ''), NULLIF($26, ''), NULLIF($27, ''),
-			NULLIF($28, '')::uuid, NULLIF($29, '')
+			NULLIF($17, ''), NULLIF($18, ''),
+			NULLIF($19, ''), NULLIF($20, ''), NULLIF($21, ''),
+			NULLIF($22, '')::log_severity, NULLIF($23, ''),
+			NULLIF($24::bigint, 0), NULLIF($25, ''), NULLIF($26, ''), NULLIF($27, ''), NULLIF($28, ''), NULLIF($29, ''),
+			NULLIF($30, '')::uuid, NULLIF($31, '')
 		)
 		RETURNING id, log_type, timestamp, host, client_ip,
 			geo_country, geo_country_code, geo_city, geo_asn, geo_org,
 			request_method, request_uri, request_protocol, status_code,
 			body_bytes_sent, request_time, upstream_response_time,
+			upstream_addr, upstream_status,
 			http_referer, http_user_agent, http_x_forwarded_for,
 			severity, error_message,
 			rule_id, rule_message, rule_severity, rule_data, attack_type, action_taken,
@@ -90,6 +93,7 @@ func (r *LogRepository) Create(ctx context.Context, req *model.CreateLogRequest)
 	var ruleID sql.NullInt64
 	var bodyBytesSent sql.NullInt64
 	var requestTime, upstreamResponseTime sql.NullFloat64
+	var upstreamAddr, upstreamStatus sql.NullString
 	var httpReferer, httpUserAgent, httpXForwardedFor sql.NullString
 	var severity, errorMessage sql.NullString
 	var ruleMessage, ruleSeverity, ruleData, attackType, actionTaken sql.NullString
@@ -100,6 +104,7 @@ func (r *LogRepository) Create(ctx context.Context, req *model.CreateLogRequest)
 		req.GeoCountry, req.GeoCountryCode, req.GeoCity, req.GeoASN, req.GeoOrg,
 		req.RequestMethod, req.RequestURI, req.RequestProtocol, req.StatusCode,
 		req.BodyBytesSent, req.RequestTime, req.UpstreamResponseTime,
+		req.UpstreamAddr, req.UpstreamStatus,
 		req.HTTPReferer, req.HTTPUserAgent, req.HTTPXForwardedFor,
 		req.Severity, req.ErrorMessage,
 		req.RuleID, req.RuleMessage, req.RuleSeverity, req.RuleData, req.AttackType, req.ActionTaken,
@@ -109,6 +114,7 @@ func (r *LogRepository) Create(ctx context.Context, req *model.CreateLogRequest)
 		&geoCountry, &geoCountryCode, &geoCity, &geoASN, &geoOrg,
 		&requestMethod, &requestURI, &requestProtocol, &statusCode,
 		&bodyBytesSent, &requestTime, &upstreamResponseTime,
+		&upstreamAddr, &upstreamStatus,
 		&httpReferer, &httpUserAgent, &httpXForwardedFor,
 		&severity, &errorMessage,
 		&ruleID, &ruleMessage, &ruleSeverity, &ruleData, &attackType, &actionTaken,
@@ -163,6 +169,12 @@ func (r *LogRepository) Create(ctx context.Context, req *model.CreateLogRequest)
 	}
 	if upstreamResponseTime.Valid {
 		log.UpstreamResponseTime = &upstreamResponseTime.Float64
+	}
+	if upstreamAddr.Valid {
+		log.UpstreamAddr = &upstreamAddr.String
+	}
+	if upstreamStatus.Valid {
+		log.UpstreamStatus = &upstreamStatus.String
 	}
 	if httpReferer.Valid {
 		log.HTTPReferer = &httpReferer.String
@@ -263,6 +275,7 @@ func (r *LogRepository) createBatchTx(ctx context.Context, logs []model.CreateLo
 			geo_country, geo_country_code, geo_city, geo_asn, geo_org,
 			request_method, request_uri, request_protocol, status_code,
 			body_bytes_sent, request_time, upstream_response_time,
+			upstream_addr, upstream_status,
 			http_referer, http_user_agent, http_x_forwarded_for,
 			severity, error_message,
 			rule_id, rule_message, rule_severity, rule_data, attack_type, action_taken,
@@ -273,11 +286,12 @@ func (r *LogRepository) createBatchTx(ctx context.Context, logs []model.CreateLo
 			NULLIF($5, ''), NULLIF($6, ''), NULLIF($7, ''), NULLIF($8, ''), NULLIF($9, ''),
 			NULLIF($10, ''), NULLIF($11, ''), NULLIF($12, ''), NULLIF($13, 0),
 			NULLIF($14::bigint, 0), NULLIF($15::double precision, 0), NULLIF($16::double precision, 0),
-			NULLIF($17, ''), NULLIF($18, ''), NULLIF($19, ''),
-			NULLIF($20, '')::log_severity, NULLIF($21, ''),
-			NULLIF($22::bigint, 0), NULLIF($23, ''), NULLIF($24, ''), NULLIF($25, ''), NULLIF($26, ''), NULLIF($27, ''),
-			COALESCE(NULLIF($28, '')::block_reason, 'none'), NULLIF($29, ''), NULLIF($30, ''),
-			NULLIF($31, '')::uuid, NULLIF($32, '')
+			NULLIF($17, ''), NULLIF($18, ''),
+			NULLIF($19, ''), NULLIF($20, ''), NULLIF($21, ''),
+			NULLIF($22, '')::log_severity, NULLIF($23, ''),
+			NULLIF($24::bigint, 0), NULLIF($25, ''), NULLIF($26, ''), NULLIF($27, ''), NULLIF($28, ''), NULLIF($29, ''),
+			COALESCE(NULLIF($30, '')::block_reason, 'none'), NULLIF($31, ''), NULLIF($32, ''),
+			NULLIF($33, '')::uuid, NULLIF($34, '')
 		)
 	`)
 	if err != nil {
@@ -296,6 +310,7 @@ func (r *LogRepository) createBatchTx(ctx context.Context, logs []model.CreateLo
 			req.GeoCountry, req.GeoCountryCode, req.GeoCity, req.GeoASN, req.GeoOrg,
 			req.RequestMethod, req.RequestURI, req.RequestProtocol, req.StatusCode,
 			req.BodyBytesSent, req.RequestTime, req.UpstreamResponseTime,
+			req.UpstreamAddr, req.UpstreamStatus,
 			req.HTTPReferer, req.HTTPUserAgent, req.HTTPXForwardedFor,
 			req.Severity, req.ErrorMessage,
 			req.RuleID, req.RuleMessage, req.RuleSeverity, req.RuleData, req.AttackType, req.ActionTaken,
@@ -323,6 +338,7 @@ func (r *LogRepository) createSingle(ctx context.Context, req *model.CreateLogRe
 			geo_country, geo_country_code, geo_city, geo_asn, geo_org,
 			request_method, request_uri, request_protocol, status_code,
 			body_bytes_sent, request_time, upstream_response_time,
+			upstream_addr, upstream_status,
 			http_referer, http_user_agent, http_x_forwarded_for,
 			severity, error_message,
 			rule_id, rule_message, rule_severity, rule_data, attack_type, action_taken,
@@ -333,16 +349,18 @@ func (r *LogRepository) createSingle(ctx context.Context, req *model.CreateLogRe
 			NULLIF($5, ''), NULLIF($6, ''), NULLIF($7, ''), NULLIF($8, ''), NULLIF($9, ''),
 			NULLIF($10, ''), NULLIF($11, ''), NULLIF($12, ''), NULLIF($13, 0),
 			NULLIF($14::bigint, 0), NULLIF($15::double precision, 0), NULLIF($16::double precision, 0),
-			NULLIF($17, ''), NULLIF($18, ''), NULLIF($19, ''),
-			NULLIF($20, '')::log_severity, NULLIF($21, ''),
-			NULLIF($22::bigint, 0), NULLIF($23, ''), NULLIF($24, ''), NULLIF($25, ''), NULLIF($26, ''), NULLIF($27, ''),
-			COALESCE(NULLIF($28, '')::block_reason, 'none'), NULLIF($29, ''), NULLIF($30, ''),
-			NULLIF($31, '')::uuid, NULLIF($32, '')
+			NULLIF($17, ''), NULLIF($18, ''),
+			NULLIF($19, ''), NULLIF($20, ''), NULLIF($21, ''),
+			NULLIF($22, '')::log_severity, NULLIF($23, ''),
+			NULLIF($24::bigint, 0), NULLIF($25, ''), NULLIF($26, ''), NULLIF($27, ''), NULLIF($28, ''), NULLIF($29, ''),
+			COALESCE(NULLIF($30, '')::block_reason, 'none'), NULLIF($31, ''), NULLIF($32, ''),
+			NULLIF($33, '')::uuid, NULLIF($34, '')
 		)`,
 		req.LogType, timestamp, req.Host, req.ClientIP,
 		req.GeoCountry, req.GeoCountryCode, req.GeoCity, req.GeoASN, req.GeoOrg,
 		req.RequestMethod, req.RequestURI, req.RequestProtocol, req.StatusCode,
 		req.BodyBytesSent, req.RequestTime, req.UpstreamResponseTime,
+		req.UpstreamAddr, req.UpstreamStatus,
 		req.HTTPReferer, req.HTTPUserAgent, req.HTTPXForwardedFor,
 		req.Severity, req.ErrorMessage,
 		req.RuleID, req.RuleMessage, req.RuleSeverity, req.RuleData, req.AttackType, req.ActionTaken,
@@ -565,6 +583,18 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 			args = append(args, *filter.MinRequestTime)
 			argIndex++
 		}
+		// Upstream filters (Issue #109). Substring match since upstream_addr may be a
+		// comma-separated list on retries; we want "10.0.0.1" to hit "10.0.0.1:8080" too.
+		if filter.UpstreamAddr != nil && *filter.UpstreamAddr != "" {
+			conditions = append(conditions, fmt.Sprintf("upstream_addr ILIKE $%d", argIndex))
+			args = append(args, "%"+*filter.UpstreamAddr+"%")
+			argIndex++
+		}
+		if filter.UpstreamStatus != nil && *filter.UpstreamStatus != "" {
+			conditions = append(conditions, fmt.Sprintf("upstream_status ILIKE $%d", argIndex))
+			args = append(args, "%"+*filter.UpstreamStatus+"%")
+			argIndex++
+		}
 
 		// Exclude filters
 		if len(filter.ExcludeIPs) > 0 {
@@ -644,6 +674,8 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 			geo_country, geo_country_code, geo_org,
 			request_method, request_uri, status_code,
 			body_bytes_sent, request_time,
+			upstream_addr, upstream_status,
+			http_user_agent,
 			severity, error_message,
 			rule_id, rule_message, action_taken,
 			block_reason, bot_category, exploit_rule,
@@ -671,6 +703,8 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 		var ruleID sql.NullInt64
 		var bodyBytesSent sql.NullInt64
 		var requestTime sql.NullFloat64
+		var upstreamAddr, upstreamStatus sql.NullString
+		var httpUserAgent sql.NullString
 		var severity, errorMessage sql.NullString
 		var ruleMessage, actionTaken sql.NullString
 		var blockReason, botCategory, exploitRule sql.NullString
@@ -680,6 +714,8 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 			&geoCountry, &geoCountryCode, &geoOrg,
 			&requestMethod, &requestURI, &statusCode,
 			&bodyBytesSent, &requestTime,
+			&upstreamAddr, &upstreamStatus,
+			&httpUserAgent,
 			&severity, &errorMessage,
 			&ruleID, &ruleMessage, &actionTaken,
 			&blockReason, &botCategory, &exploitRule,
@@ -720,6 +756,15 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 		}
 		if requestTime.Valid {
 			log.RequestTime = &requestTime.Float64
+		}
+		if upstreamAddr.Valid {
+			log.UpstreamAddr = &upstreamAddr.String
+		}
+		if upstreamStatus.Valid {
+			log.UpstreamStatus = &upstreamStatus.String
+		}
+		if httpUserAgent.Valid {
+			log.HTTPUserAgent = &httpUserAgent.String
 		}
 		if severity.Valid {
 			sev := model.LogSeverity(severity.String)

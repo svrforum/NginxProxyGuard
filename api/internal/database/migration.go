@@ -278,6 +278,75 @@ func (db *DB) RunMigrations() error {
 			desc: "upstreams.scheme",
 			sql:  `ALTER TABLE public.upstreams ADD COLUMN IF NOT EXISTS scheme character varying(10) DEFAULT 'http'::character varying NOT NULL`,
 		},
+		{
+			// Issue #109 — Expose which load-balanced upstream served each request.
+			// text (not inet/smallint) because Nginx reports a comma-separated list on retries,
+			// e.g. "10.0.0.1:8080, 10.0.0.2:8080" / "502, 200".
+			// The legacy `logs` table may have been dropped by migrateLogsToPartitioned on
+			// installations that already switched to the partitioned table — guard accordingly.
+			desc: "logs.upstream_addr",
+			sql: `DO $$ BEGIN
+				IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'logs') THEN
+					ALTER TABLE public.logs ADD COLUMN IF NOT EXISTS upstream_addr text;
+				END IF;
+			END $$`,
+		},
+		{
+			desc: "logs.upstream_status",
+			sql: `DO $$ BEGIN
+				IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'logs') THEN
+					ALTER TABLE public.logs ADD COLUMN IF NOT EXISTS upstream_status text;
+				END IF;
+			END $$`,
+		},
+		{
+			// Native partitioned parent — ALTER cascades to every attached logs_p* partition.
+			desc: "logs_partitioned.upstream_addr",
+			sql:  `ALTER TABLE public.logs_partitioned ADD COLUMN IF NOT EXISTS upstream_addr text`,
+		},
+		{
+			desc: "logs_partitioned.upstream_status",
+			sql:  `ALTER TABLE public.logs_partitioned ADD COLUMN IF NOT EXISTS upstream_status text`,
+		},
+		{
+			// Rebuild logs_unified so it exposes the new columns. The view UNIONs `logs`
+			// (which may no longer exist post-migration) with `logs_partitioned`, so we
+			// build the SQL dynamically: skip the legacy branch when the table is gone.
+			desc: "logs_unified view rebuild",
+			sql: `DO $$
+			DECLARE
+				has_legacy_logs boolean;
+				view_sql text;
+				col_list text := 'id, log_type, "timestamp", host, client_ip,
+					geo_country, geo_country_code, geo_city, geo_asn, geo_org,
+					request_method, request_uri, request_protocol, status_code,
+					body_bytes_sent, request_time, upstream_response_time,
+					http_referer, http_user_agent, http_x_forwarded_for,
+					severity, error_message,
+					rule_id, rule_message, rule_severity, rule_data,
+					attack_type, action_taken,
+					block_reason, bot_category,
+					proxy_host_id, raw_log, created_at,
+					upstream_addr, upstream_status';
+			BEGIN
+				SELECT EXISTS (
+					SELECT 1 FROM information_schema.tables
+					WHERE table_schema = 'public' AND table_name = 'logs'
+				) INTO has_legacy_logs;
+
+				EXECUTE 'DROP VIEW IF EXISTS public.logs_unified CASCADE';
+				IF has_legacy_logs THEN
+					view_sql := 'CREATE VIEW public.logs_unified AS ' ||
+						'SELECT ' || col_list || ' FROM public.logs ' ||
+						'UNION ALL ' ||
+						'SELECT ' || col_list || ' FROM public.logs_partitioned';
+				ELSE
+					view_sql := 'CREATE VIEW public.logs_unified AS ' ||
+						'SELECT ' || col_list || ' FROM public.logs_partitioned';
+				END IF;
+				EXECUTE view_sql;
+			END $$`,
+		},
 	}
 	for _, a := range independentAlters {
 		if _, err := db.Exec(a.sql); err != nil {
