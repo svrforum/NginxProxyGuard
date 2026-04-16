@@ -94,9 +94,13 @@ type Log struct {
 	BodyBytesSent        *int64   `json:"body_bytes_sent,omitempty"`
 	RequestTime          *float64 `json:"request_time,omitempty"`
 	UpstreamResponseTime *float64 `json:"upstream_response_time,omitempty"`
-	HTTPReferer          *string  `json:"http_referer,omitempty"`
-	HTTPUserAgent        *string  `json:"http_user_agent,omitempty"`
-	HTTPXForwardedFor    *string  `json:"http_x_forwarded_for,omitempty"`
+	// UpstreamAddr is the raw Nginx $upstream_addr value; on upstream retries it's a
+	// comma-separated list (e.g. "10.0.0.1:8080, 10.0.0.2:8080") — last entry is the final responder.
+	UpstreamAddr      *string `json:"upstream_addr,omitempty"`
+	UpstreamStatus    *string `json:"upstream_status,omitempty"`
+	HTTPReferer       *string `json:"http_referer,omitempty"`
+	HTTPUserAgent     *string `json:"http_user_agent,omitempty"`
+	HTTPXForwardedFor *string `json:"http_x_forwarded_for,omitempty"`
 
 	// Error log fields
 	Severity     *LogSeverity `json:"severity,omitempty"`
@@ -148,6 +152,8 @@ type CreateLogRequest struct {
 	BodyBytesSent        int64   `json:"body_bytes_sent,omitempty"`
 	RequestTime          float64 `json:"request_time,omitempty"`
 	UpstreamResponseTime float64 `json:"upstream_response_time,omitempty"`
+	UpstreamAddr         string  `json:"upstream_addr,omitempty"`
+	UpstreamStatus       string  `json:"upstream_status,omitempty"`
 	HTTPReferer          string  `json:"http_referer,omitempty"`
 	HTTPUserAgent        string  `json:"http_user_agent,omitempty"`
 	HTTPXForwardedFor    string  `json:"http_x_forwarded_for,omitempty"`
@@ -206,6 +212,8 @@ type LogFilter struct {
 	MinSize        *int64   `json:"min_size,omitempty"`         // Minimum response size (bytes)
 	MaxSize        *int64   `json:"max_size,omitempty"`         // Maximum response size (bytes)
 	MinRequestTime *float64 `json:"min_request_time,omitempty"` // Minimum request time (seconds)
+	UpstreamAddr   *string  `json:"upstream_addr,omitempty"`    // Filter by upstream server address (ILIKE substring)
+	UpstreamStatus *string  `json:"upstream_status,omitempty"`  // Filter by upstream status code (ILIKE substring)
 
 	// Exclude filters
 	ExcludeIPs        []string `json:"exclude_ips,omitempty"`         // Exclude specific IPs

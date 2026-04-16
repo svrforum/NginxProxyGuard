@@ -455,18 +455,64 @@ export function LogDetailModal({ log, onClose, onRuleDisabled }: LogDetailModalP
                   <p className="text-sm text-slate-900 dark:text-slate-200">{log.request_time ? `${log.request_time}s` : '-'}</p>
                 </div>
               </div>
-              {log.http_user_agent && (
-                <div className="mb-4">
-                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">{t('detail.userAgent')}</label>
-                  <p className="text-sm text-slate-600 dark:text-slate-300 break-all">{log.http_user_agent}</p>
+              {(() => {
+                const addrParts = (log.upstream_addr || '').split(',').map((p) => p.trim()).filter(Boolean);
+                const statusParts = (log.upstream_status || '').split(',').map((p) => p.trim()).filter(Boolean);
+                if (addrParts.length === 0) return null;
+                const attempts = addrParts.map((addr, idx) => ({ addr, status: statusParts[idx] || '-' }));
+                const final = attempts[attempts.length - 1];
+                const hasRetries = attempts.length > 1;
+                return (
+                  <div className="mb-4 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase block">{t('detail.upstream')}</label>
+                      {hasRetries && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-[11px] font-medium">
+                          ↻ {t('detail.upstreamRetryCount', { count: attempts.length - 1 })}
+                        </span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <span className="text-xs text-slate-500 dark:text-slate-400">{t('detail.upstreamFinal')}</span>
+                        <p className="text-sm text-slate-900 dark:text-white font-mono truncate" title={final.addr}>{final.addr}</p>
+                      </div>
+                      <div>
+                        <span className="text-xs text-slate-500 dark:text-slate-400">{t('detail.status')}</span>
+                        <p className="text-sm text-slate-900 dark:text-white font-mono">{final.status}</p>
+                      </div>
+                    </div>
+                    {hasRetries && (
+                      <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700/60">
+                        <span className="text-xs text-slate-500 dark:text-slate-400 block mb-1">{t('detail.upstreamPath')}</span>
+                        <ol className="space-y-1 text-xs font-mono text-slate-700 dark:text-slate-300">
+                          {attempts.map((attempt, idx) => (
+                            <li key={idx} className="flex items-center gap-2">
+                              <span className="text-slate-400 dark:text-slate-500 min-w-[1.5rem]">{idx + 1}.</span>
+                              <span>{attempt.addr}</span>
+                              <span className="text-slate-400 dark:text-slate-500">→</span>
+                              <span>{attempt.status}</span>
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+              <div className="mb-4 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg">
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase mb-2 block">{t('detail.clientInfo')}</label>
+                <div className="space-y-2">
+                  <div>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">{t('detail.userAgent')}</span>
+                    <p className="text-sm text-slate-900 dark:text-white break-all">{log.http_user_agent || '-'}</p>
+                  </div>
+                  <div>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">{t('detail.referer')}</span>
+                    <p className="text-sm text-slate-900 dark:text-white break-all">{log.http_referer || '-'}</p>
+                  </div>
                 </div>
-              )}
-              {log.http_referer && (
-                <div className="mb-4">
-                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">{t('detail.referer')}</label>
-                  <p className="text-sm text-slate-600 dark:text-slate-300 break-all">{log.http_referer}</p>
-                </div>
-              )}
+              </div>
             </>
           )}
 

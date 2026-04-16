@@ -48,6 +48,11 @@ export interface Log {
   body_bytes_sent?: number;
   request_time?: number;
   upstream_response_time?: number;
+  // Raw Nginx $upstream_addr / $upstream_status values. On upstream retries these
+  // become comma-separated lists (e.g. "10.0.0.1:8080, 10.0.0.2:8080" / "502, 200")
+  // — the last entry is the server that actually responded.
+  upstream_addr?: string;
+  upstream_status?: string;
   http_referer?: string;
   http_user_agent?: string;
   http_x_forwarded_for?: string;
@@ -107,6 +112,8 @@ export interface LogFilter {
   min_size?: number;
   max_size?: number;
   min_request_time?: number;
+  upstream_addr?: string;
+  upstream_status?: string;
 
   // Block reason filters
   block_reason?: BlockReason;

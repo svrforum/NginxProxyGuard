@@ -27,7 +27,12 @@ var (
 	requestTimeRegex          = regexp.MustCompile(`rt=([0-9.]+)`)
 	geoCountryRegex           = regexp.MustCompile(`geo="([^"]*)"`)
 	upstreamResponseTimeRegex = regexp.MustCompile(`urt="([^"]*)"`)
-	errorLogClientIPRegex     = regexp.MustCompile(`client:\s+([0-9a-fA-F:.]+)`)
+	// $upstream_addr / $upstream_status from nginx. On retries these become comma-separated
+	// lists, e.g. ua="10.0.0.1:8080, 10.0.0.2:8080" / us="502, 200". We preserve the raw
+	// value so the UI can show the full retry path; the DB column is text (not inet/int).
+	upstreamAddrRegex     = regexp.MustCompile(`ua="([^"]*)"`)
+	upstreamStatusRegex   = regexp.MustCompile(`us="([^"]*)"`)
+	errorLogClientIPRegex = regexp.MustCompile(`client:\s+([0-9a-fA-F:.]+)`)
 )
 
 // Old access log format (without host) - fallback
@@ -111,6 +116,12 @@ func (c *LogCollector) parseAccessLog(line string) (*model.CreateLogRequest, err
 			}
 		}
 
+		// Preserve raw $upstream_addr / $upstream_status strings (may be "-" when no upstream
+		// was reached, or a comma-separated list on retries). Normalize "-" to empty so the
+		// DB stores NULL and the UI can render "direct" cleanly.
+		upstreamAddr := extractUpstreamField(line, upstreamAddrRegex)
+		upstreamStatus := extractUpstreamField(line, upstreamStatusRegex)
+
 		return &model.CreateLogRequest{
 			LogType:              model.LogTypeAccess,
 			Timestamp:            timestamp,
@@ -130,6 +141,8 @@ func (c *LogCollector) parseAccessLog(line string) (*model.CreateLogRequest, err
 			GeoCountryCode:       geoCountryCode,
 			RequestTime:          requestTime,
 			UpstreamResponseTime: upstreamResponseTime,
+			UpstreamAddr:         upstreamAddr,
+			UpstreamStatus:       upstreamStatus,
 			RawLog:               line,
 		}, nil
 	}
@@ -418,4 +431,19 @@ func (c *LogCollector) parseModSecLog(line string) (*model.CreateLogRequest, err
 		BlockReason:     blockReason,
 		RawLog:          line,
 	}, nil
+}
+
+// extractUpstreamField reads a "key=value" pair like ua="..." from a log line.
+// Returns "" when the field is missing, quoted as "-", or empty — nginx uses "-"
+// for requests that never reached an upstream (e.g. local 403 / cached responses).
+func extractUpstreamField(line string, re *regexp.Regexp) string {
+	matches := re.FindStringSubmatch(line)
+	if matches == nil {
+		return ""
+	}
+	value := strings.TrimSpace(matches[1])
+	if value == "" || value == "-" {
+		return ""
+	}
+	return value
 }
