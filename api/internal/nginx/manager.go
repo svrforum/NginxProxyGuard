@@ -6,14 +6,12 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
 	"text/template"
 
-	"nginx-proxy-guard/internal/config"
 	"nginx-proxy-guard/internal/model"
 )
 
@@ -33,6 +31,8 @@ type Manager struct {
 	apiURL         string // API URL for nginx to reach API (default: http://127.0.0.1:9080)
 	dnsResolver    string // DNS resolver for nginx (default: 127.0.0.53 8.8.8.8)
 	enableIPv6     bool   // Enable IPv6 listen directives (default: true)
+
+	cli nginxCLI // extracted for testability (Phase 0)
 }
 
 func NewManager(configPath, certsPath string) *Manager {
@@ -72,7 +72,7 @@ func NewManager(configPath, certsPath string) *Manager {
 		dnsResolver = "127.0.0.53 8.8.8.8"
 	}
 
-	return &Manager{
+	m := &Manager{
 		configPath:     configPath,
 		certsPath:      certsPath,
 		modsecPath:     modsecPath,
@@ -84,6 +84,8 @@ func NewManager(configPath, certsPath string) *Manager {
 		dnsResolver:    dnsResolver,
 		enableIPv6:     true,
 	}
+	m.cli = newDockerNginxCLI(nginxContainer)
+	return m
 }
 
 // GetHTTPPort returns the HTTP listen port
@@ -362,23 +364,7 @@ func (m *Manager) testConfigInternal(ctx context.Context) error {
 	if m.skipTest {
 		return nil
 	}
-
-	testCtx, cancel := context.WithTimeout(ctx, config.NginxTestTimeout)
-	defer cancel()
-
-	cmd := exec.CommandContext(testCtx, "docker", "exec", m.nginxContainer, "nginx", "-t")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		if testCtx.Err() == context.DeadlineExceeded {
-			return fmt.Errorf("nginx config test timed out after %s", config.NginxTestTimeout)
-		}
-		outputStr := strings.TrimSpace(string(output))
-		if outputStr != "" {
-			return fmt.Errorf("nginx config test failed: %s", outputStr)
-		}
-		return fmt.Errorf("nginx config test failed: %v", err)
-	}
-	return nil
+	return m.cli.Test(ctx)
 }
 
 // reloadNginxInternal is the internal reload function without locking
@@ -386,19 +372,7 @@ func (m *Manager) reloadNginxInternal(ctx context.Context) error {
 	if m.skipTest {
 		return nil
 	}
-
-	reloadCtx, cancel := context.WithTimeout(ctx, config.NginxReloadTimeout)
-	defer cancel()
-
-	cmd := exec.CommandContext(reloadCtx, "docker", "exec", m.nginxContainer, "nginx", "-s", "reload")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		if reloadCtx.Err() == context.DeadlineExceeded {
-			return fmt.Errorf("nginx reload timed out after %s", config.NginxReloadTimeout)
-		}
-		return fmt.Errorf("nginx reload failed: %s", string(output))
-	}
-	return nil
+	return m.cli.Reload(ctx)
 }
 
 func (m *Manager) GenerateConfig(ctx context.Context, host *model.ProxyHost) error {
