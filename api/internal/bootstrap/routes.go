@@ -80,6 +80,10 @@ func RegisterRoutes(e *echo.Echo, c *Container) {
 	registerHealth(e, c)
 	registerSwagger(e, c.Handlers.Swagger)
 
+	// Prometheus metrics — public on the internal network only. Operators
+	// wanting external access should gate via upstream ACL / firewall.
+	e.GET("/metrics", c.Handlers.Metrics.ServeMetrics)
+
 	v1 := e.Group("/api/v1")
 	v1.Use(authMiddleware.APIRateLimit(c.Cache, authMiddleware.DefaultAPIRateLimitConfig()))
 

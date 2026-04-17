@@ -29,6 +29,7 @@ type Handlers struct {
 	CloudProvider      *handler.CloudProviderHandler
 	FilterSubscription *handler.FilterSubscriptionHandler
 	Swagger            *handler.SwaggerHandler
+	Metrics            *handler.MetricsHandler
 }
 
 // InitHandlers constructs every HTTP handler with the previously built
@@ -80,6 +81,7 @@ func InitHandlers(
 	h.CloudProvider = handler.NewCloudProviderHandler(repos.CloudProvider, svcs.ProxyHost, svcs.Audit)
 	h.FilterSubscription = handler.NewFilterSubscriptionHandler(svcs.FilterSubscription, svcs.Audit)
 	h.Swagger = handler.NewSwaggerHandler()
+	h.Metrics = handler.NewMetricsHandler()
 
 	return h
 }
