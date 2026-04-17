@@ -11,7 +11,9 @@ import (
 	"strings"
 	"sync"
 	"text/template"
+	"time"
 
+	"nginx-proxy-guard/internal/metrics"
 	"nginx-proxy-guard/internal/model"
 )
 
@@ -421,6 +423,11 @@ func (m *Manager) GenerateConfigWithAccessControl(ctx context.Context, host *mod
 
 // GenerateConfigFull generates nginx config with all Phase 6 features support
 func (m *Manager) GenerateConfigFull(ctx context.Context, data ProxyHostConfigData) error {
+	start := time.Now()
+	defer func() {
+		metrics.NginxConfigGenerationDurationSeconds.Observe(time.Since(start).Seconds())
+	}()
+
 	// Note: WAF config is generated separately by the service layer
 	// to properly include any rule exclusions
 

@@ -7,6 +7,7 @@ import (
 	"log"
 	"strings"
 
+	"nginx-proxy-guard/internal/metrics"
 	"nginx-proxy-guard/internal/model"
 	"nginx-proxy-guard/internal/nginx"
 	"nginx-proxy-guard/internal/repository"
@@ -192,10 +193,12 @@ func (s *ProxyHostService) updateConfigStatuses(ctx context.Context, result *Syn
 			if err := s.repo.UpdateConfigStatus(ctx, h.HostID, "ok", ""); err != nil {
 				log.Printf("[SyncConfigs] Failed to update config status for host %s: %v", h.HostID, err)
 			}
+			metrics.NginxConfigStatus.WithLabelValues(h.HostID).Set(1)
 		} else {
 			if err := s.repo.UpdateConfigStatus(ctx, h.HostID, "error", h.Error); err != nil {
 				log.Printf("[SyncConfigs] Failed to update config status for host %s: %v", h.HostID, err)
 			}
+			metrics.NginxConfigStatus.WithLabelValues(h.HostID).Set(0)
 			// Write system log for failed host
 			if s.systemLogRepo != nil {
 				details, _ := json.Marshal(map[string]string{
@@ -357,6 +360,7 @@ func (s *ProxyHostService) RegenerateConfigForHost(ctx context.Context, hostID s
 			}
 		}
 		_ = s.repo.UpdateConfigStatus(ctx, host.ID, "ok", "")
+		metrics.NginxConfigStatus.WithLabelValues(host.ID).Set(1)
 		log.Printf("[ProxyHost] Nginx config removed and reloaded for disabled host %s", hostID)
 		return nil
 	}
@@ -375,10 +379,12 @@ func (s *ProxyHostService) RegenerateConfigForHost(ctx context.Context, hostID s
 	// Atomic: generate config + WAF config + test + reload (with global lock)
 	if err := s.nginx.GenerateConfigAndReload(ctx, configData, wafExclusions); err != nil {
 		_ = s.repo.UpdateConfigStatus(ctx, host.ID, "error", err.Error())
+		metrics.NginxConfigStatus.WithLabelValues(host.ID).Set(0)
 		return fmt.Errorf("failed to generate config for host %s: %w", hostID, err)
 	}
 
 	_ = s.repo.UpdateConfigStatus(ctx, host.ID, "ok", "")
+	metrics.NginxConfigStatus.WithLabelValues(host.ID).Set(1)
 	log.Printf("[ProxyHost] Nginx config regenerated and reloaded for host %s", hostID)
 	return nil
 }

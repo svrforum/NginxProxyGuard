@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"log"
 	"regexp"
+	"strings"
 	"time"
 
 	"nginx-proxy-guard/internal/config"
+	"nginx-proxy-guard/internal/metrics"
 )
 
 // reloadTransientErrorPattern matches error messages that signal a transient
@@ -34,16 +36,23 @@ func isTransientReloadError(err error) bool {
 //
 // Must be called within executeWithLock (same contract as testAndReloadNginx).
 func (m *Manager) testAndReloadNginxWithRetry(ctx context.Context) error {
+	start := time.Now()
+	defer func() {
+		metrics.NginxReloadDurationSeconds.Observe(time.Since(start).Seconds())
+	}()
+
 	var lastErr error
 	delay := config.ReloadRetryBaseDelay
 
 	for attempt := 0; attempt <= config.ReloadMaxRetries; attempt++ {
 		if attempt > 0 {
+			metrics.NginxReloadRetryTotal.Inc()
 			log.Printf("[NginxReload] Retry %d/%d after %v (last error: %v)",
 				attempt, config.ReloadMaxRetries, delay, lastErr)
 			select {
 			case <-time.After(delay):
 			case <-ctx.Done():
+				metrics.NginxReloadTotal.WithLabelValues("failed").Inc()
 				return ctx.Err()
 			}
 			delay *= 2
@@ -53,6 +62,15 @@ func (m *Manager) testAndReloadNginxWithRetry(ctx context.Context) error {
 		if err != nil {
 			lastErr = err
 			if !isTransientReloadError(err) {
+				metrics.NginxReloadTotal.WithLabelValues("failed").Inc()
+				// testAndReloadNginx runs `nginx -t` before `nginx -s reload`,
+				// so if the message mentions "reload" the reload step failed;
+				// otherwise the config test failed.
+				reason := "test_failed"
+				if strings.Contains(err.Error(), "reload") {
+					reason = "reload_failed"
+				}
+				metrics.NginxReloadRollbackTotal.WithLabelValues(reason).Inc()
 				return err
 			}
 			continue
@@ -66,12 +84,19 @@ func (m *Manager) testAndReloadNginxWithRetry(ctx context.Context) error {
 				lastErr = fmt.Errorf("post-reload health probe failed: %w", verifyErr)
 				// Health failures are effectively non-transient — config must be rolled back.
 				// Return immediately so the caller restores the previous-good config.
+				metrics.NginxReloadTotal.WithLabelValues("failed").Inc()
+				metrics.NginxReloadRollbackTotal.WithLabelValues("health_failed").Inc()
 				return lastErr
 			}
 		}
+
+		metrics.NginxReloadTotal.WithLabelValues("success").Inc()
+		metrics.NginxLastReloadTimestampSeconds.SetToCurrentTime()
 		return nil
 	}
 
+	metrics.NginxReloadTotal.WithLabelValues("failed").Inc()
+	metrics.NginxReloadRollbackTotal.WithLabelValues("retry_exhausted").Inc()
 	return fmt.Errorf("nginx reload failed after %d attempts: %w",
 		config.ReloadMaxRetries+1, lastErr)
 }

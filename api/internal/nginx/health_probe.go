@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"nginx-proxy-guard/internal/config"
+	"nginx-proxy-guard/internal/metrics"
 )
 
 // healthExecutor wraps the docker exec call so tests can substitute a fake
@@ -51,12 +52,23 @@ func (p *HealthProber) Verify(ctx context.Context) error {
 	if p.disabled {
 		return nil
 	}
+
+	start := time.Now()
 	if err := p.waitForWorkersReady(ctx, config.WorkerReadyTimeout); err != nil {
+		metrics.NginxHealthProbeDurationSeconds.WithLabelValues("workers").Observe(time.Since(start).Seconds())
+		metrics.NginxHealthProbeFailureTotal.WithLabelValues("workers").Inc()
 		return fmt.Errorf("worker readiness: %w", err)
 	}
+	metrics.NginxHealthProbeDurationSeconds.WithLabelValues("workers").Observe(time.Since(start).Seconds())
+
+	start = time.Now()
 	if err := p.probeHTTP(ctx, config.HealthProbeTimeout); err != nil {
+		metrics.NginxHealthProbeDurationSeconds.WithLabelValues("http").Observe(time.Since(start).Seconds())
+		metrics.NginxHealthProbeFailureTotal.WithLabelValues("http").Inc()
 		return fmt.Errorf("http probe: %w", err)
 	}
+	metrics.NginxHealthProbeDurationSeconds.WithLabelValues("http").Observe(time.Since(start).Seconds())
+
 	return nil
 }
 

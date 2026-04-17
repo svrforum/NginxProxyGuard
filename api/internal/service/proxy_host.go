@@ -6,6 +6,7 @@ import (
 	"log"
 	"strings"
 
+	"nginx-proxy-guard/internal/metrics"
 	"nginx-proxy-guard/internal/model"
 	"nginx-proxy-guard/internal/nginx"
 	"nginx-proxy-guard/internal/repository"
@@ -529,6 +530,7 @@ func (s *ProxyHostService) Update(ctx context.Context, id string, req *model.Upd
 
 	// Clear config error on successful update
 	_ = s.repo.UpdateConfigStatus(ctx, host.ID, "ok", "")
+	metrics.NginxConfigStatus.WithLabelValues(host.ID).Set(1)
 	host.ConfigStatus = "ok"
 	host.ConfigError = ""
 
