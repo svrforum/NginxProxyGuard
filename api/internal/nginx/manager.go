@@ -33,6 +33,8 @@ type Manager struct {
 	enableIPv6     bool   // Enable IPv6 listen directives (default: true)
 
 	cli nginxCLI // extracted for testability (Phase 0)
+
+	healthProber *HealthProber
 }
 
 func NewManager(configPath, certsPath string) *Manager {
@@ -106,6 +108,12 @@ func (m *Manager) GetEnableIPv6() bool {
 // SetEnableIPv6 sets whether IPv6 listen directives should be included in configs
 func (m *Manager) SetEnableIPv6(enabled bool) {
 	m.enableIPv6 = enabled
+}
+
+// SetHealthProber wires the post-reload health verifier. May be called once
+// after NewManager. Pass nil or a disabled prober to opt out.
+func (m *Manager) SetHealthProber(p *HealthProber) {
+	m.healthProber = p
 }
 
 // writeFileAtomic writes data to a file atomically using temp file + fsync + rename

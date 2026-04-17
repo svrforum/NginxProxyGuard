@@ -124,6 +124,25 @@ func TestTestAndReloadNginxWithRetry_NonTransientImmediate(t *testing.T) {
 	}
 }
 
+// TestTestAndReloadNginxWithRetry_HealthProbeFail — reload succeeds, health probe
+// rejects: caller must see an error so it can roll back.
+func TestTestAndReloadNginxWithRetry_HealthProbeFail(t *testing.T) {
+	cli := &fakeNginxCLI{} // test + reload both succeed
+	badExec := &fakeHealthExec{ // health exec returns workers-ready but http fails
+		outputs: []string{"4\n", ""},
+		errs:    []error{nil, errors.New("exit status 22")},
+	}
+	m := &Manager{cli: cli, healthProber: &HealthProber{exec: badExec}}
+
+	err := m.testAndReloadNginxWithRetry(context.Background())
+	if err == nil {
+		t.Fatal("expected error from failing health probe")
+	}
+	if cli.reloadCalls != 1 {
+		t.Errorf("reload calls = %d, want 1 (no retry on health fail)", cli.reloadCalls)
+	}
+}
+
 // TestIsTransientReloadError — verify classification of common errors.
 func TestIsTransientReloadError(t *testing.T) {
 	cases := []struct {

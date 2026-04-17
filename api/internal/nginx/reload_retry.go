@@ -50,14 +50,26 @@ func (m *Manager) testAndReloadNginxWithRetry(ctx context.Context) error {
 		}
 
 		err := m.testAndReloadNginx(ctx)
-		if err == nil {
-			return nil
+		if err != nil {
+			lastErr = err
+			if !isTransientReloadError(err) {
+				return err
+			}
+			continue
 		}
-		lastErr = err
 
-		if !isTransientReloadError(err) {
-			return err // non-transient: caller rolls back immediately
+		// Reload reported success. Verify workers + HTTP probe before
+		// considering the attempt complete.
+		if m.healthProber != nil {
+			if verifyErr := m.healthProber.Verify(ctx); verifyErr != nil {
+				log.Printf("[NginxReload] Post-reload health probe failed: %v", verifyErr)
+				lastErr = fmt.Errorf("post-reload health probe failed: %w", verifyErr)
+				// Health failures are effectively non-transient — config must be rolled back.
+				// Return immediately so the caller restores the previous-good config.
+				return lastErr
+			}
 		}
+		return nil
 	}
 
 	return fmt.Errorf("nginx reload failed after %d attempts: %w",
