@@ -89,8 +89,17 @@ npg_nginx_data (/etc/nginx)
 
 ```
 api/
-├── cmd/server/main.go              # DI 조립, 라우트 등록, 서버 시작
+├── cmd/server/main.go              # 얇은 엔트리포인트 (~60줄): bootstrap 조립 호출 + graceful shutdown
 ├── internal/
+│   ├── bootstrap/                  # 8 파일: DI 조립, 라우트/미들웨어 등록, startup, 스케줄러
+│   │   ├── container.go            # Container 구조체 + NewContainer + Startup + StartSchedulers + StopAll
+│   │   ├── storage.go              # InitDB + InitCache
+│   │   ├── repositories.go         # Repositories 구조체 + InitRepositories (캐시 주입 5개)
+│   │   ├── services.go             # Services 구조체 + InitServices + wireServiceCallbacks
+│   │   ├── handlers.go             # Handlers 구조체 + InitHandlers
+│   │   ├── routes.go               # RegisterMiddleware + RegisterRoutes (232개 엔드포인트)
+│   │   ├── schedulers.go           # Schedulers 구조체 + Start/Stop
+│   │   └── startup.go              # SyncAllConfigs + GenerateDefaultServerConfig + 백그라운드 서비스
 │   ├── config/
 │   │   ├── config.go               # Config struct, Load() from env
 │   │   └── constants.go            # AppVersion, 모든 상수
@@ -102,12 +111,15 @@ api/
 │   ├── middleware/                  # auth.go, api_token.go, rate_limit.go
 │   ├── model/                      # 25 모델 파일
 │   ├── nginx/                      # 10 파일: config 생성 엔진
-│   ├── repository/                 # 30 레포지토리 파일
+│   │   └── templates/proxy_host/   # 9 `.tmpl` 파일: embed.FS 기반 섹션 분할 (base/ssl/waf/cache/upstream/security_headers/access_list/header/rate_limit/advanced)
+│   ├── repository/                 # 45 레포지토리 파일 (log/backup/proxy_host/waf 분할됨)
 │   ├── scheduler/                  # 5 스케줄러 파일
-│   ├── service/                    # 28 서비스 파일
+│   ├── service/                    # 30 서비스 파일 (waf_merge.go, sync_auto_recovery.go 포함)
 │   │   ├── proxy_host_config.go        # 호스트별 설정 데이터 조합
 │   │   ├── proxy_host_config_utils.go  # URI 병합, IP 필터링 유틸리티
 │   │   ├── proxy_host_sync.go          # 전체 동기화, 재생성, 자동 복구
+│   │   ├── waf_merge.go                # 순수 함수: 글로벌+호스트 WAF exclusion 병합
+│   │   └── sync_auto_recovery.go       # 순수 함수: nginx -t 실패 시 에러 호스트 격리 루프
 │   └── util/query.go              # SQL 유틸리티
 ├── pkg/
 │   ├── acme/acme.go               # Let's Encrypt ACME (lego v4)
@@ -125,7 +137,7 @@ api/
 │  Service Layer (28 files)                                │ ← 비즈니스 로직, 다중 repo 조합
 │  Data Aggregation → Config Generation → Test → Reload   │
 ├─────────────────────────────────────────────────────────┤
-│  Repository Layer (30 files)                             │ ← SQL, pq.Array, sql.Null*
+│  Repository Layer (45 files)                             │ ← SQL, pq.Array, sql.Null*
 │  DB + Optional Redis cache via SetCache()               │
 ├─────────────────────────────────────────────────────────┤
 │  Nginx Manager (10 files)                                │ ← 템플릿 렌더링, atomic write
@@ -135,24 +147,32 @@ api/
 └─────────────────────────────────────────────────────────┘
 ```
 
-### 2.3 Dependency Injection (main.go 조립 순서)
+### 2.3 Dependency Injection (bootstrap 조립 순서)
+
+> v2.10.0부터 `main.go`는 ~60줄 얇은 엔트리포인트이고, DI 조립은 `internal/bootstrap/` 패키지가 전담한다.
+> `bootstrap.NewContainer(cfg)`가 아래 순서를 실행한다.
 
 ```
 config.Load()
-  → database.New() + cache.NewRedisClient()
-    → nginx.NewManager()
-      → 30 Repositories 생성 (db 주입)
-        → Cache 주입 (proxyHostRepo, globalSettingsRepo, systemSettingsRepo, exploitBlockRuleRepo)
-          → Services 생성 (repos + nginxManager 주입)
-            → Cross-service Callback 연결
-              → Startup: SyncAllConfigs() + GenerateDefaultServerConfig()
-                  (Auto-Recovery: nginx -t 실패 시 에러 호스트 config 제거 + 재시도, 최대 5회)
-                  (실패 호스트는 config_status="error"로 DB 업데이트, 나머지 정상 운영)
-                → Background Services: logCollector, wafAutoBan, fail2ban, statsCollector, dockerLogCollector, cloudProvider, geoIP
-                  → Handlers 생성 (services 주입)
-                    → Schedulers: renewal(6h), partition, logRotate, backup, filterRefresh
-                      → Echo 라우트 등록 + 미들웨어
-                        → Graceful Shutdown (SIGINT/SIGTERM)
+  → bootstrap.NewContainer(cfg):
+      → database.New() + cache.NewRedisClient()
+        → nginx.NewManager()
+          → InitRepositories: 45 Repositories 생성 (db 주입)
+            → Cache 주입 (proxyHostRepo, logRepo, globalSettingsRepo, systemSettingsRepo, exploitBlockRuleRepo — 5개)
+          → InitServices (repos + nginxManager 주입)
+            → wireServiceCallbacks (Cross-service Callback 연결)
+              → InitHandlers (services 주입)
+                → NewSchedulers (services 주입)
+
+(main) → container.Startup(ctx):
+  → SyncAllConfigs() + GenerateDefaultServerConfig()
+      (Auto-Recovery: nginx -t 실패 시 에러 호스트 config 제거 + 재시도, 최대 5회)
+      (실패 호스트는 config_status="error"로 DB 업데이트, 나머지 정상 운영)
+  → Background Services 고루틴 기동: logCollector, wafAutoBan, fail2ban, statsCollector, dockerLogCollector, cloudProvider, geoIP
+
+(main) → bootstrap.RegisterMiddleware(e) + RegisterRoutes(e, c) → Echo 서버 시작
+(main) → container.StartSchedulers(ctx): renewal(6h), partition, logRotate, backup, filterRefresh
+(main) → Graceful Shutdown (SIGINT/SIGTERM) → container.StopAll() → DB/Cache close
 ```
 
 ### 2.4 Handler Pattern
@@ -373,7 +393,7 @@ Protected: APITokenAuth → AuthMiddleware → Handler
 ### 2.11 Key Constants
 
 ```go
-const AppVersion = "2.9.1"  // See api/internal/config/constants.go — single source of truth
+const AppVersion = "2.10.0"  // See api/internal/config/constants.go — single source of truth
 
 // Timeouts
 HTTPClientTimeout       = 30s
