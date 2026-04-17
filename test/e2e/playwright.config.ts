@@ -18,9 +18,16 @@ export default defineConfig({
   // Retry flaky tests (parallel execution can cause timing issues)
   retries: process.env.CI ? 2 : 1,
 
-  // Limit workers to prevent OOM - each Chromium process uses ~200MB+
-  // CI: 1 worker for stability, Local: 2 workers (down from 4) to reduce memory pressure
-  workers: process.env.CI ? 1 : 2,
+  // Limit workers to prevent OOM and test state contention.
+  // CI: 1 worker for stability
+  // Local: 2 workers (4 causes flakes in proxy-host/sync, waf, global-trusted-ips
+  //                    specs due to shared DB/nginx state; 2 is the stable sweet spot)
+  // Override via PLAYWRIGHT_WORKERS env if needed.
+  workers: process.env.CI
+    ? 1
+    : process.env.PLAYWRIGHT_WORKERS
+      ? Number(process.env.PLAYWRIGHT_WORKERS)
+      : 2,
 
   // Reporter to use
   reporter: [
