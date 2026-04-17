@@ -1,0 +1,36 @@
+{{if or .BannedIPs .UseFilterSubscription}}
+# Banned IPs geo mapping for {{join .Host.DomainNames ", "}}
+# Values: 1 = manual ban, 2 = filter subscription, 0 = trusted (override)
+geo $banned_ip_{{sanitizeID .Host.ID}} {
+    default 0;
+{{if .UseFilterSubscription}}
+    include /etc/nginx/conf.d/includes/filter_sub_ips.conf;
+{{end}}
+{{range .BannedIPs}}
+    {{.IPAddress}} 1; # {{.Reason}}
+{{end}}
+{{range .GlobalTrustedIPs}}
+    {{.}} 0; # global trusted IP (override)
+{{end}}
+}
+{{end}}
+
+{{if .GlobalTrustedIPs}}
+# Global trusted IPs geo mapping (bypass all security)
+geo $trusted_ip_{{sanitizeID .Host.ID}} {
+    default 0;
+{{range .GlobalTrustedIPs}}
+    {{.}} 1;
+{{end}}
+}
+{{end}}
+
+{{if .BlockedCloudIPRanges}}
+# Blocked Cloud Provider IPs geo mapping for {{join .Host.DomainNames ", "}}
+# Using include file for efficiency ({{len .BlockedCloudIPRanges}} ranges)
+geo $blocked_cloud_{{sanitizeID .Host.ID}} {
+    default 0;
+    include /etc/nginx/conf.d/includes/cloud_ips_{{.Host.ID}}.conf;
+}
+{{end}}
+
