@@ -6,6 +6,7 @@ import (
 
 	"nginx-proxy-guard/internal/config"
 	"nginx-proxy-guard/internal/database"
+	"nginx-proxy-guard/internal/metrics"
 	"nginx-proxy-guard/internal/nginx"
 	"nginx-proxy-guard/pkg/cache"
 )
@@ -30,6 +31,10 @@ type Container struct {
 //	DB → Cache → Nginx → Repositories → Services → cross-service callbacks
 //	   → Handlers → Schedulers.
 func NewContainer(cfg *config.Config) (*Container, error) {
+	// Register Prometheus metrics with the default registry exactly once.
+	// Register is sync.Once-guarded so additional calls are no-ops.
+	metrics.Register()
+
 	db, err := InitDB(cfg)
 	if err != nil {
 		return nil, err

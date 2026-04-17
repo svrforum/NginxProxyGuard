@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 
+	"nginx-proxy-guard/internal/metrics"
 	"nginx-proxy-guard/internal/model"
 )
 
@@ -61,6 +62,10 @@ func runAutoRecovery(
 			result.Hosts[hostIdx].Error = testErr.Error()
 			result.SuccessCount--
 			result.FailedCount++
+			// Auto-recovery observability: every host isolation is a signal
+			// that we're shedding load to keep nginx healthy.
+			metrics.NginxAutoRecoveryTotal.Inc()
+			metrics.NginxConfigStatus.WithLabelValues(result.Hosts[hostIdx].HostID).Set(0)
 		}
 		// Remove the failing host's config and WAF config to recover nginx
 		failingHost := findHostByID(hosts, result.Hosts[hostIdx].HostID)
