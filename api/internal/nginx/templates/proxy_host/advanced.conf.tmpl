@@ -1,0 +1,26 @@
+
+{{if .RateLimit}}{{if .RateLimit.Enabled}}
+    # Rate limited response handler
+    location @rate_limited {
+        set $block_reason_var "rate_limit";
+        return {{.RateLimit.LimitResponse}};
+    }
+{{end}}{{end}}
+
+{{if .BlockedCloudIPRanges}}{{if .CloudProviderChallengeMode}}
+    # Cloud provider challenge redirect handler
+    location @cloud_challenge {
+        return 302 /api/v1/challenge/page?host={{.Host.ID}}&reason=cloud_provider&return=$scheme://$host$request_uri;
+    }
+{{end}}{{end}}
+
+{{if .Host.AdvancedConfig}}{{if or .AdvancedConfigHasLocation .HasCustomLocationRoot}}
+    # Advanced configuration (server block)
+    {{.Host.AdvancedConfig}}
+{{else}}{{if .AdvancedConfigServerLevel}}
+    # Advanced configuration - server level directives
+    {{.AdvancedConfigServerLevel}}
+{{end}}{{end}}{{end}}
+}
+{{end}}
+{{end}}
