@@ -158,47 +158,14 @@ func (s *ProxyHostService) SyncAllConfigsWithDetails(ctx context.Context) (*Sync
 		result.Hosts = append(result.Hosts, hostResult)
 	}
 
-	// Test nginx config — on failure, remove the failing host's config and retry
+	// Test nginx config — on failure, run the auto-recovery loop that
+	// iteratively removes the config of hosts nginx reports as failing.
+	// See runAutoRecovery (sync_auto_recovery.go) for the loop details.
 	if err := s.nginx.TestConfig(ctx); err != nil {
-		testErr := err
-		recovered := false
-
-		// Try to recover by removing failing host configs one at a time
-		for attempt := 0; attempt < 5; attempt++ {
-			failingDomain := parseNginxErrorForHost(testErr.Error())
-			if failingDomain == "" {
-				break
-			}
-			hostIdx := findHostByDomain(result.Hosts, failingDomain)
-			if hostIdx < 0 {
-				break
-			}
-			// Mark the host as failed
-			if result.Hosts[hostIdx].Success {
-				result.Hosts[hostIdx].Success = false
-				result.Hosts[hostIdx].Error = testErr.Error()
-				result.SuccessCount--
-				result.FailedCount++
-			}
-			// Remove the failing host's config and WAF config to recover nginx
-			failingHost := findHostByID(hosts, result.Hosts[hostIdx].HostID)
-			if failingHost != nil {
-				log.Printf("[SyncConfigs] Removing failing config for %s to recover nginx", result.Hosts[hostIdx].DomainNames)
-				_ = s.nginx.RemoveConfig(ctx, failingHost)
-				_ = s.nginx.RemoveHostWAFConfig(ctx, failingHost.ID)
-			}
-			// Retry nginx test
-			if retryErr := s.nginx.TestConfig(ctx); retryErr != nil {
-				testErr = retryErr
-				continue
-			}
-			recovered = true
-			break
-		}
-
+		recovered, lastErr := runAutoRecovery(ctx, s.nginx, hosts, result, err)
 		if !recovered {
 			result.TestSuccess = false
-			result.TestError = testErr.Error()
+			result.TestError = lastErr.Error()
 			return result, nil
 		}
 	}
