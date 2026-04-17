@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"nginx-proxy-guard/internal/config"
 )
 
 // nginxCLI abstracts the two docker exec calls the manager needs so
@@ -15,6 +17,9 @@ type nginxCLI interface {
 }
 
 // dockerNginxCLI runs nginx commands via docker exec against the configured container.
+// Each method applies its own timeout (NginxTestTimeout / NginxReloadTimeout) so a
+// hung docker exec cannot block callers beyond the configured budget even when
+// the caller-supplied context has no deadline.
 type dockerNginxCLI struct {
 	containerName string
 }
@@ -26,6 +31,8 @@ func newDockerNginxCLI(containerName string) *dockerNginxCLI {
 // Test runs `nginx -t` inside the container. Returns a non-nil error when the
 // configuration is invalid or the exec itself fails.
 func (d *dockerNginxCLI) Test(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, config.NginxTestTimeout)
+	defer cancel()
 	cmd := exec.CommandContext(ctx, "docker", "exec", d.containerName, "nginx", "-t")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -37,6 +44,8 @@ func (d *dockerNginxCLI) Test(ctx context.Context) error {
 // Reload runs `nginx -s reload` inside the container. A nil error means the
 // reload signal was delivered (post-signal worker health is verified separately).
 func (d *dockerNginxCLI) Reload(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, config.NginxReloadTimeout)
+	defer cancel()
 	cmd := exec.CommandContext(ctx, "docker", "exec", d.containerName, "nginx", "-s", "reload")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
