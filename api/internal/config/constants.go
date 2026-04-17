@@ -98,6 +98,14 @@ const (
 	NginxReloadTimeout      = 30 * time.Second
 )
 
+// Reload retry behavior — governs testAndReloadNginxWithRetry.
+// Transient errors (docker/network/IO glitches) retry with exponential backoff.
+// Non-transient errors (nginx syntax, reload rejection) return immediately.
+const (
+	ReloadMaxRetries     = 2                      // additional retries after first attempt (total 3 tries)
+	ReloadRetryBaseDelay = 500 * time.Millisecond // 500ms, 1s, 2s doubling
+)
+
 // GeoIP constants
 const (
 	MinGeoIPDatabaseSize = 1000000 // 1MB minimum for valid GeoIP database
