@@ -17,15 +17,10 @@ import {
 import { updateSystemSettings } from '../api/settings'
 import { useLanguage } from '../i18n/hooks/useLanguage'
 import APITokenManager from './APITokenManager'
-
-// Font family options
-const FONT_OPTIONS = [
-  { value: 'system', label: 'System Default', labelKo: '시스템 기본' },
-  { value: 'gowun-batang', label: 'Gowun Batang', labelKo: '고운 바탕' },
-  { value: 'noto-sans-kr', label: 'Noto Sans KR', labelKo: 'Noto Sans KR' },
-  { value: 'pretendard', label: 'Pretendard', labelKo: 'Pretendard' },
-  { value: 'inter', label: 'Inter', labelKo: 'Inter' },
-]
+import { ProfileTab } from './account/ProfileTab'
+import { PasswordTab } from './account/PasswordTab'
+import { TwoFactorTab } from './account/TwoFactorTab'
+import { LanguageFontTab } from './account/LanguageFontTab'
 
 interface AccountSettingsProps {
   onClose: () => void
@@ -56,7 +51,7 @@ export default function AccountSettings({ onClose, onLogout }: AccountSettingsPr
   const [totpCode, setTotpCode] = useState('')
   const [setting2FA, setSetting2FA] = useState(false)
   const [showBackupCodes, setShowBackupCodes] = useState(false)
-  const [disableForm, setDisableForm] = useState({
+  const [disableForm, setDisableForm] = useState<Disable2FARequest>({
     password: '',
     totp_code: ''
   })
@@ -67,7 +62,7 @@ export default function AccountSettings({ onClose, onLogout }: AccountSettingsPr
   const [changingFont, setChangingFont] = useState(false)
 
   // Username change state
-  const [usernameForm, setUsernameForm] = useState({
+  const [usernameForm, setUsernameForm] = useState<ChangeUsernameRequest>({
     current_password: '',
     new_username: ''
   })
@@ -255,46 +250,24 @@ export default function AccountSettings({ onClose, onLogout }: AccountSettingsPr
 
         {/* Tabs */}
         <div className="flex border-b border-gray-200 dark:border-gray-700">
-          <button
-            onClick={() => { setActiveTab('info'); setError(''); setSuccess(''); }}
-            className={`px-6 py-3 font-medium ${
-              activeTab === 'info'
-                ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
-                : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-            }`}
-          >
-            {t('account.tabs.info')}
-          </button>
-          <button
-            onClick={() => { setActiveTab('password'); setError(''); setSuccess(''); }}
-            className={`px-6 py-3 font-medium ${
-              activeTab === 'password'
-                ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
-                : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-            }`}
-          >
-            {t('account.tabs.password')}
-          </button>
-          <button
-            onClick={() => { setActiveTab('2fa'); setError(''); setSuccess(''); }}
-            className={`px-6 py-3 font-medium ${
-              activeTab === '2fa'
-                ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
-                : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-            }`}
-          >
-            {t('account.tabs.twoFactor')}
-          </button>
-          <button
-            onClick={() => { setActiveTab('api-tokens'); setError(''); setSuccess(''); }}
-            className={`px-6 py-3 font-medium ${
-              activeTab === 'api-tokens'
-                ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
-                : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-            }`}
-          >
-            {t('account.tabs.apiTokens')}
-          </button>
+          {([
+            ['info', t('account.tabs.info')],
+            ['password', t('account.tabs.password')],
+            ['2fa', t('account.tabs.twoFactor')],
+            ['api-tokens', t('account.tabs.apiTokens')],
+          ] as [Tab, string][]).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => { setActiveTab(key); setError(''); setSuccess(''); }}
+              className={`px-6 py-3 font-medium ${
+                activeTab === key
+                  ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
         {/* Content */}
@@ -312,304 +285,57 @@ export default function AccountSettings({ onClose, onLogout }: AccountSettingsPr
 
           {/* Account Info Tab */}
           {activeTab === 'info' && accountInfo && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-gray-100 dark:bg-gray-700/50 p-4 rounded">
-                  <p className="text-gray-500 dark:text-gray-400 text-sm">{t('account.info.username')}</p>
-                  {!showUsernameForm ? (
-                    <div className="flex items-center justify-between">
-                      <p className="text-gray-900 dark:text-white font-medium">{accountInfo.username}</p>
-                      <button
-                        onClick={() => {
-                          setShowUsernameForm(true)
-                          setUsernameForm({ ...usernameForm, new_username: accountInfo.username })
-                        }}
-                        className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-sm"
-                      >
-                        {t('common:buttons.edit')}
-                      </button>
-                    </div>
-                  ) : (
-                    <form onSubmit={handleUsernameChange} className="mt-2 space-y-2">
-                      <input
-                        type="text"
-                        value={usernameForm.new_username}
-                        onChange={(e) => setUsernameForm({ ...usernameForm, new_username: e.target.value })}
-                        className="w-full px-3 py-1.5 bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded text-gray-900 dark:text-white text-sm focus:border-blue-500 focus:outline-none"
-                        placeholder={t('account.username.newUsername')}
-                        minLength={3}
-                        required
-                      />
-                      <input
-                        type="password"
-                        value={usernameForm.current_password}
-                        onChange={(e) => setUsernameForm({ ...usernameForm, current_password: e.target.value })}
-                        className="w-full px-3 py-1.5 bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded text-gray-900 dark:text-white text-sm focus:border-blue-500 focus:outline-none"
-                        placeholder={t('account.username.currentPassword')}
-                        required
-                      />
-                      <div className="flex gap-2">
-                        <button
-                          type="submit"
-                          disabled={changingUsername}
-                          className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded disabled:opacity-50"
-                        >
-                          {changingUsername ? t('common:buttons.saving') : t('common:buttons.save')}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowUsernameForm(false)
-                            setUsernameForm({ current_password: '', new_username: '' })
-                          }}
-                          className="px-3 py-1 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-700 dark:text-white text-sm rounded"
-                        >
-                          {t('common:buttons.cancel')}
-                        </button>
-                      </div>
-                    </form>
-                  )}
-                </div>
-                <div className="bg-gray-100 dark:bg-gray-700/50 p-4 rounded">
-                  <p className="text-gray-500 dark:text-gray-400 text-sm">{t('account.info.role')}</p>
-                  <p className="text-gray-900 dark:text-white font-medium capitalize">{accountInfo.role}</p>
-                </div>
-                <div className="bg-gray-100 dark:bg-gray-700/50 p-4 rounded">
-                  <p className="text-gray-500 dark:text-gray-400 text-sm">{t('account.info.twoFactorStatus')}</p>
-                  <p className={`font-medium ${accountInfo.totp_enabled ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'}`}>
-                    {accountInfo.totp_enabled ? t('common:status.enabled') : t('common:status.disabled')}
-                  </p>
-                </div>
-                <div className="bg-gray-100 dark:bg-gray-700/50 p-4 rounded">
-                  <p className="text-gray-500 dark:text-gray-400 text-sm">{t('account.info.lastLogin')}</p>
-                  <p className="text-gray-900 dark:text-white font-medium text-sm">{formatDate(accountInfo.last_login_at)}</p>
-                </div>
-                <div className="bg-gray-100 dark:bg-gray-700/50 p-4 rounded">
-                  <p className="text-gray-500 dark:text-gray-400 text-sm">{t('account.info.lastLoginIP')}</p>
-                  <p className="text-gray-900 dark:text-white font-medium">{accountInfo.last_login_ip || t('account.info.na')}</p>
-                </div>
-                <div className="bg-gray-100 dark:bg-gray-700/50 p-4 rounded">
-                  <p className="text-gray-500 dark:text-gray-400 text-sm">{t('navigation:account.language')}</p>
-                  <select
-                    value={currentLanguage}
-                    onChange={(e) => changeLanguage(e.target.value as 'ko' | 'en')}
-                    className="mt-1 w-full px-3 py-1.5 bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded text-gray-900 dark:text-white text-sm focus:border-blue-500 focus:outline-none"
-                  >
-                    {supportedLanguages.map((lang) => (
-                      <option key={lang} value={lang}>
-                        {languageNames[lang]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="bg-gray-100 dark:bg-gray-700/50 p-4 rounded">
-                  <p className="text-gray-500 dark:text-gray-400 text-sm">{t('account.info.fontFamily', '폰트')}</p>
-                  <select
-                    value={currentFontFamily}
-                    onChange={(e) => handleFontFamilyChange(e.target.value)}
-                    disabled={changingFont}
-                    className="mt-1 w-full px-3 py-1.5 bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded text-gray-900 dark:text-white text-sm focus:border-blue-500 focus:outline-none disabled:opacity-50"
-                  >
-                    {FONT_OPTIONS.map((font) => (
-                      <option key={font.value} value={font.value}>
-                        {currentLanguage === 'ko' ? font.labelKo : font.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                <button
-                  onClick={onLogout}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded"
-                >
-                  {t('navigation:account.logout')}
-                </button>
-              </div>
-            </div>
+            <ProfileTab
+              accountInfo={accountInfo}
+              formatDate={formatDate}
+              showUsernameForm={showUsernameForm}
+              setShowUsernameForm={setShowUsernameForm}
+              usernameForm={usernameForm}
+              setUsernameForm={setUsernameForm}
+              changingUsername={changingUsername}
+              onUsernameChange={handleUsernameChange}
+              onLogout={onLogout}
+            >
+              <LanguageFontTab
+                currentLanguage={currentLanguage}
+                supportedLanguages={supportedLanguages}
+                languageNames={languageNames}
+                changeLanguage={changeLanguage}
+                currentFontFamily={currentFontFamily}
+                changingFont={changingFont}
+                onFontFamilyChange={handleFontFamilyChange}
+              />
+            </ProfileTab>
           )}
 
           {/* Password Tab */}
           {activeTab === 'password' && (
-            <form onSubmit={handlePasswordChange} className="space-y-4">
-              <div>
-                <label className="block text-gray-500 dark:text-gray-400 text-sm mb-1">{t('account.password.currentPassword')}</label>
-                <input
-                  type="password"
-                  value={passwordForm.current_password}
-                  onChange={(e) => setPasswordForm({ ...passwordForm, current_password: e.target.value })}
-                  className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-white focus:border-blue-500 focus:outline-none"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-gray-500 dark:text-gray-400 text-sm mb-1">{t('account.password.newPassword')}</label>
-                <input
-                  type="password"
-                  value={passwordForm.new_password}
-                  onChange={(e) => setPasswordForm({ ...passwordForm, new_password: e.target.value })}
-                  className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-white focus:border-blue-500 focus:outline-none"
-                  minLength={8}
-                  required
-                />
-                <p className="text-gray-500 text-xs mt-1">{t('account.password.minLength')}</p>
-              </div>
-              <div>
-                <label className="block text-gray-500 dark:text-gray-400 text-sm mb-1">{t('account.password.confirmPassword')}</label>
-                <input
-                  type="password"
-                  value={passwordForm.new_password_confirm}
-                  onChange={(e) => setPasswordForm({ ...passwordForm, new_password_confirm: e.target.value })}
-                  className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-white focus:border-blue-500 focus:outline-none"
-                  required
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={changingPassword}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded disabled:opacity-50"
-              >
-                {changingPassword ? t('account.password.changing') : t('account.password.submit')}
-              </button>
-            </form>
+            <PasswordTab
+              passwordForm={passwordForm}
+              setPasswordForm={setPasswordForm}
+              changingPassword={changingPassword}
+              onSubmit={handlePasswordChange}
+            />
           )}
 
           {/* 2FA Tab */}
           {activeTab === '2fa' && accountInfo && (
-            <div className="space-y-6">
-              {!accountInfo.totp_enabled ? (
-                <>
-                  {!setup2FAData ? (
-                    <div className="text-center">
-                      <p className="text-gray-500 dark:text-gray-400 mb-4">
-                        {t('account.twoFactor.description')}
-                      </p>
-                      <button
-                        onClick={handleSetup2FA}
-                        disabled={setting2FA}
-                        className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded disabled:opacity-50"
-                      >
-                        {setting2FA ? t('account.twoFactor.settingUp') : t('account.twoFactor.enable')}
-                      </button>
-                    </div>
-                  ) : !showBackupCodes ? (
-                    <div className="space-y-4">
-                      <div className="text-center">
-                        <p className="text-gray-500 dark:text-gray-400 mb-4">
-                          {t('account.twoFactor.scanQR')}
-                        </p>
-                        <div className="inline-block bg-white p-4 rounded">
-                          <img
-                            src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(setup2FAData.qr_code_url)}`}
-                            alt="2FA QR Code"
-                            className="w-48 h-48"
-                          />
-                        </div>
-                      </div>
-                      <div className="bg-gray-100 dark:bg-gray-700/50 p-4 rounded">
-                        <p className="text-gray-500 dark:text-gray-400 text-sm mb-2">{t('account.twoFactor.manualEntry')}</p>
-                        <code className="text-blue-600 dark:text-blue-400 text-sm break-all">{setup2FAData.secret}</code>
-                      </div>
-                      <form onSubmit={handleEnable2FA} className="space-y-4">
-                        <div>
-                          <label className="block text-gray-500 dark:text-gray-400 text-sm mb-1">
-                            {t('account.twoFactor.enterCode')}
-                          </label>
-                          <input
-                            type="text"
-                            value={totpCode}
-                            onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                            className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-white text-center text-2xl tracking-widest focus:border-blue-500 focus:outline-none"
-                            placeholder="000000"
-                            maxLength={6}
-                            required
-                          />
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            type="submit"
-                            disabled={setting2FA || totpCode.length !== 6}
-                            className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded disabled:opacity-50"
-                          >
-                            {setting2FA ? t('account.twoFactor.verifying') : t('account.twoFactor.verifyEnable')}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => { setSetup2FAData(null); setTotpCode(''); }}
-                            className="px-4 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-700 dark:text-white rounded"
-                          >
-                            {t('common:buttons.cancel')}
-                          </button>
-                        </div>
-                      </form>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <div className="bg-yellow-500/20 border border-yellow-500 p-4 rounded">
-                        <h3 className="text-yellow-600 dark:text-yellow-400 font-bold mb-2">{t('account.twoFactor.backupCodes.title')}</h3>
-                        <p className="text-yellow-600 dark:text-yellow-300 text-sm mb-4">
-                          {t('account.twoFactor.backupCodes.description')}
-                        </p>
-                        <div className="grid grid-cols-2 gap-2">
-                          {setup2FAData.backup_codes.map((code, i) => (
-                            <code key={i} className="bg-gray-200 dark:bg-gray-800 px-3 py-1 rounded text-gray-900 dark:text-white font-mono text-center">
-                              {code}
-                            </code>
-                          ))}
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => { setSetup2FAData(null); setShowBackupCodes(false); setTotpCode(''); }}
-                        className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded"
-                      >
-                        {t('account.twoFactor.done')}
-                      </button>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="space-y-4">
-                  <div className="bg-green-500/20 border border-green-500 p-4 rounded">
-                    <p className="text-green-600 dark:text-green-400" dangerouslySetInnerHTML={{ __html: t('account.twoFactor.enabled') }} />
-                  </div>
-                  <form onSubmit={handleDisable2FA} className="space-y-4">
-                    <p className="text-gray-500 dark:text-gray-400">
-                      {t('account.twoFactor.disablePrompt')}
-                    </p>
-                    <div>
-                      <label className="block text-gray-500 dark:text-gray-400 text-sm mb-1">{t('login.password')}</label>
-                      <input
-                        type="password"
-                        value={disableForm.password}
-                        onChange={(e) => setDisableForm({ ...disableForm, password: e.target.value })}
-                        className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-white focus:border-blue-500 focus:outline-none"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-gray-500 dark:text-gray-400 text-sm mb-1">TOTP Code</label>
-                      <input
-                        type="text"
-                        value={disableForm.totp_code}
-                        onChange={(e) => setDisableForm({ ...disableForm, totp_code: e.target.value.replace(/\D/g, '').slice(0, 6) })}
-                        className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-white text-center text-xl tracking-widest focus:border-blue-500 focus:outline-none"
-                        placeholder="000000"
-                        maxLength={6}
-                        required
-                      />
-                    </div>
-                    <button
-                      type="submit"
-                      disabled={disabling2FA}
-                      className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded disabled:opacity-50"
-                    >
-                      {disabling2FA ? t('account.twoFactor.disabling') : t('account.twoFactor.disable')}
-                    </button>
-                  </form>
-                </div>
-              )}
-            </div>
+            <TwoFactorTab
+              accountInfo={accountInfo}
+              setup2FAData={setup2FAData}
+              setSetup2FAData={setSetup2FAData}
+              totpCode={totpCode}
+              setTotpCode={setTotpCode}
+              setting2FA={setting2FA}
+              showBackupCodes={showBackupCodes}
+              setShowBackupCodes={setShowBackupCodes}
+              disableForm={disableForm}
+              setDisableForm={setDisableForm}
+              disabling2FA={disabling2FA}
+              onSetup2FA={handleSetup2FA}
+              onEnable2FA={handleEnable2FA}
+              onDisable2FA={handleDisable2FA}
+            />
           )}
 
           {/* API Tokens Tab */}
