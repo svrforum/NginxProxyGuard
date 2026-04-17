@@ -1,6 +1,7 @@
 # NginxProxyGuard - Architecture Specification
 
-> **Version**: 2.7.6 | **Last Updated**: 2026-04-06
+> **Version**: See api/internal/config/constants.go AppVersion (single source of truth)
+> **Last Updated**: 2026-04-17
 > 이 문서는 Claude Code가 개발 시 참조하는 프로젝트 아키텍처 명세서입니다.
 > 새 기능 추가, 버그 수정, 리팩토링 시 이 문서를 기준으로 작업합니다.
 
@@ -97,13 +98,13 @@ api/
 │   │   ├── database.go             # DB 풀 (25 open, 5 idle, 5min lifetime)
 │   │   ├── migration.go            # 마이그레이션 실행기
 │   │   └── migrations/             # SQL 파일 (001_init.sql + 보조)
-│   ├── handler/                    # 26 핸들러 파일
+│   ├── handler/                    # 37 핸들러 파일
 │   ├── middleware/                  # auth.go, api_token.go, rate_limit.go
-│   ├── model/                      # 23 모델 파일
-│   ├── nginx/                      # 7 파일: config 생성 엔진
+│   ├── model/                      # 25 모델 파일
+│   ├── nginx/                      # 10 파일: config 생성 엔진
 │   ├── repository/                 # 30 레포지토리 파일
 │   ├── scheduler/                  # 5 스케줄러 파일
-│   ├── service/                    # 20 서비스 파일
+│   ├── service/                    # 28 서비스 파일
 │   │   ├── proxy_host_config.go        # 호스트별 설정 데이터 조합
 │   │   ├── proxy_host_config_utils.go  # URI 병합, IP 필터링 유틸리티
 │   │   ├── proxy_host_sync.go          # 전체 동기화, 재생성, 자동 복구
@@ -118,16 +119,16 @@ api/
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  Handler Layer (26 files)                                │ ← 요청 파싱, 응답, 에러 분류
+│  Handler Layer (37 files)                                │ ← 요청 파싱, 응답, 에러 분류
 │  Echo Context → Bind → Service call → classifyError     │
 ├─────────────────────────────────────────────────────────┤
-│  Service Layer (20 files)                                │ ← 비즈니스 로직, 다중 repo 조합
+│  Service Layer (28 files)                                │ ← 비즈니스 로직, 다중 repo 조합
 │  Data Aggregation → Config Generation → Test → Reload   │
 ├─────────────────────────────────────────────────────────┤
 │  Repository Layer (30 files)                             │ ← SQL, pq.Array, sql.Null*
 │  DB + Optional Redis cache via SetCache()               │
 ├─────────────────────────────────────────────────────────┤
-│  Nginx Manager (7 files)                                 │ ← 템플릿 렌더링, atomic write
+│  Nginx Manager (10 files)                                │ ← 템플릿 렌더링, atomic write
 │  globalNginxMutex → writeFileAtomic → nginx -t → reload │
 ├─────────────────────────────────────────────────────────┤
 │  Database (TimescaleDB) + Cache (Valkey)                 │
@@ -372,7 +373,7 @@ Protected: APITokenAuth → AuthMiddleware → Handler
 ### 2.11 Key Constants
 
 ```go
-const AppVersion = "2.7.4"
+const AppVersion = "2.9.1"  // See api/internal/config/constants.go — single source of truth
 
 // Timeouts
 HTTPClientTimeout       = 30s
@@ -457,6 +458,11 @@ ui/src/
 │   ├── log-viewer/                 # 로그 뷰어 (badges, charts, filters, modals)
 │   ├── exploit-rules/              # 익스플로잇 규칙
 │   └── ...                         # 50+ top-level 컴포넌트
+├── pages/                          # 라우트 단위 탭 호스트 컨테이너
+│   ├── CertificatesPage.tsx        # /certificates/* 라우트 그룹
+│   ├── LogsPage.tsx                # /logs/* 라우트 그룹
+│   ├── SettingsPage.tsx            # /settings/* 라우트 그룹
+│   └── WAFPage.tsx                 # /waf/* 라우트 그룹
 ├── hooks/
 │   ├── useDarkMode.ts              # 다크모드 (localStorage 'theme')
 │   └── useEscapeKey.ts             # ESC 키 이벤트
@@ -465,6 +471,8 @@ ui/src/
     ├── hooks/useLanguage.ts        # 언어 전환 훅
     └── locales/{ko,en}/            # 각 16개 JSON
 ```
+
+> **pages/ vs components/ 경계:** `pages/`는 라우트별 탭 호스트 컨테이너 (CertificatesPage, LogsPage, SettingsPage, WAFPage). 재사용 단위는 `components/`에 위치.
 
 ### 3.2 Auth State Machine
 
@@ -652,8 +660,6 @@ nginx/
 │   ├── crs-global.conf          # CRS 글로벌 로드 (http 블록에서 1회, 성능 최적화)
 │   ├── modsec-base.conf        # 기본 설정 (body limits, audit, PCRE)
 │   ├── custom-rules.conf       # 커스텀 규칙 (health check, WebSocket, HTTP/3)
-│   ├── main.conf               # (레거시) ModSecurity blocking 모드
-│   ├── detection-only.conf     # (레거시) ModSecurity detection 모드
 │   └── host_{id}.conf          # API 생성: per-host WAF 튜닝 (paranoia, threshold, exclusions, mode)
 ├── geoip/
 │   └── geoip-active.conf       # symlink → enabled or disabled
