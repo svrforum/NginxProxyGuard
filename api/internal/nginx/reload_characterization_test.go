@@ -79,17 +79,71 @@ func TestTestAndReloadNginx_ReloadFails(t *testing.T) {
 	}
 }
 
-func TestTestAndReloadNginx_TransientDockerError_CurrentBehavior(t *testing.T) {
-	// Pre-retry behavior: transient docker errors are NOT retried and propagate as-is.
-	// Phase 1 will change this test (rename + retry expectation).
+// TestTestAndReloadNginxWithRetry_TransientRecovery — one transient failure then success.
+func TestTestAndReloadNginxWithRetry_TransientRecovery(t *testing.T) {
 	transient := errors.New("docker: connection refused")
-	cli := &fakeNginxCLI{testErrs: []error{transient}}
+	cli := &fakeNginxCLI{testErrs: []error{transient, nil}}
 	m := newFakeManager(cli)
-	err := m.testAndReloadNginx(context.Background())
+	if err := m.testAndReloadNginxWithRetry(context.Background()); err != nil {
+		t.Fatalf("expected recovery, got error: %v", err)
+	}
+	if cli.testCalls != 2 {
+		t.Errorf("test calls = %d, want 2 (one retry)", cli.testCalls)
+	}
+	if cli.reloadCalls != 1 {
+		t.Errorf("reload calls = %d, want 1 (reached reload after retry)", cli.reloadCalls)
+	}
+}
+
+// TestTestAndReloadNginxWithRetry_TransientExhausted — all attempts transient, retries exhausted.
+func TestTestAndReloadNginxWithRetry_TransientExhausted(t *testing.T) {
+	transient := errors.New("i/o timeout")
+	cli := &fakeNginxCLI{testErrs: []error{transient, transient, transient}}
+	m := newFakeManager(cli)
+	err := m.testAndReloadNginxWithRetry(context.Background())
 	if err == nil {
-		t.Fatal("expected error, got nil")
+		t.Fatal("expected error after exhausted retries")
+	}
+	// config.ReloadMaxRetries = 2, so 3 total attempts.
+	if cli.testCalls != 3 {
+		t.Errorf("test calls = %d, want 3", cli.testCalls)
+	}
+}
+
+// TestTestAndReloadNginxWithRetry_NonTransientImmediate — syntax errors do not retry.
+func TestTestAndReloadNginxWithRetry_NonTransientImmediate(t *testing.T) {
+	syntaxErr := errors.New("nginx: [emerg] unknown directive \"foo\"")
+	cli := &fakeNginxCLI{testErrs: []error{syntaxErr, nil, nil}}
+	m := newFakeManager(cli)
+	err := m.testAndReloadNginxWithRetry(context.Background())
+	if err == nil {
+		t.Fatal("expected error on non-transient failure")
 	}
 	if cli.testCalls != 1 {
-		t.Errorf("test calls = %d, want 1 (no retry in v2.10)", cli.testCalls)
+		t.Errorf("test calls = %d, want 1 (no retry on non-transient)", cli.testCalls)
+	}
+}
+
+// TestIsTransientReloadError — verify classification of common errors.
+func TestIsTransientReloadError(t *testing.T) {
+	cases := []struct {
+		err       error
+		transient bool
+	}{
+		{nil, false},
+		{errors.New("docker: connection refused"), true},
+		{errors.New("docker: cannot connect to the Docker daemon"), true},
+		{errors.New("i/o timeout"), true},
+		{errors.New("resource temporarily unavailable"), true},
+		{errors.New("context deadline exceeded"), true},
+		{errors.New("nginx: [emerg] unknown directive"), false},
+		{errors.New("nginx: [emerg] invalid number of arguments"), false},
+		{errors.New("permission denied"), false},
+	}
+	for _, c := range cases {
+		got := isTransientReloadError(c.err)
+		if got != c.transient {
+			t.Errorf("isTransientReloadError(%v) = %v, want %v", c.err, got, c.transient)
+		}
 	}
 }
