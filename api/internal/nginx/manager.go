@@ -676,9 +676,10 @@ func (m *Manager) ReloadNginx(ctx context.Context) error {
 }
 
 // TestAndReload tests and reloads nginx with a single lock acquisition.
+// Uses retry with exponential backoff for transient errors.
 func (m *Manager) TestAndReload(ctx context.Context) error {
 	return m.executeWithLock(ctx, func() error {
-		return m.testAndReloadNginx(ctx)
+		return m.testAndReloadNginxWithRetry(ctx)
 	})
 }
 
@@ -702,8 +703,8 @@ func (m *Manager) GenerateHostWAFConfigAndReload(ctx context.Context, host *mode
 			return fmt.Errorf("failed to generate WAF config: %w", err)
 		}
 
-		// 3. Test and reload nginx
-		if err := m.testAndReloadNginx(ctx); err != nil {
+		// 3. Test and reload nginx (with retry for transient errors)
+		if err := m.testAndReloadNginxWithRetry(ctx); err != nil {
 			// Rollback: restore previous WAF config
 			log.Printf("[WARN] Nginx test failed after WAF config update for host %s, rolling back", host.ID)
 			if wafConfigExists && len(wafConfigBackup) > 0 {
@@ -714,6 +715,11 @@ func (m *Manager) GenerateHostWAFConfigAndReload(ctx context.Context, host *mode
 				if removeErr := os.Remove(wafConfigFile); removeErr != nil && !os.IsNotExist(removeErr) {
 					log.Printf("[ERROR] Failed to remove invalid WAF config for host %s: %v", host.ID, removeErr)
 				}
+			}
+			// Re-reload with restored WAF config so nginx is on last-known-good state
+			if reloadErr := m.testAndReloadNginx(ctx); reloadErr != nil {
+				log.Printf("[ERROR] Rollback reload failed for host %s WAF (config restored but nginx may need manual intervention): %v",
+					host.ID, reloadErr)
 			}
 			return err
 		}
