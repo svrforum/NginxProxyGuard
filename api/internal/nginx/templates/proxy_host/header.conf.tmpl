@@ -1,0 +1,11 @@
+# nginx-guard generated config
+# Proxy Host ID: {{.Host.ID}}
+# Domain(s): {{join .Host.DomainNames ", "}}
+# WAF: {{if .Host.WAFEnabled}}{{.Host.WAFMode}}{{else}}disabled{{end}}
+# HTTP/3: {{if .Host.SSLHTTP3}}enabled{{else}}disabled{{end}}
+# Access List: {{if .AccessList}}{{.AccessList.Name}}{{else}}none{{end}}
+# Geo Restriction: {{if .GeoRestriction}}{{.GeoRestriction.Mode}} ({{len .GeoRestriction.Countries}} countries){{else}}none{{end}}
+# Rate Limit: {{if .RateLimit}}{{if .RateLimit.Enabled}}{{.RateLimit.RequestsPerSecond}}r/s{{else}}disabled{{end}}{{else}}none{{end}}
+# Upstream: {{if and .Upstream .Upstream.Servers}}{{.Upstream.Name}} ({{upstreamScheme .Upstream}}, {{.Upstream.LoadBalance}}){{else}}none{{end}}
+# Generated at: {{now}}
+

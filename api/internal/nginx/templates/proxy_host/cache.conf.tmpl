@@ -1,0 +1,423 @@
+        return 403;
+    }
+    # Block suspicious request methods
+    if ($request_method !~ ^(GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS)$) {
+        set $block_reason_var "exploit_block";
+        set $exploit_rule_var "METHOD-FALLBACK-001";
+        return 405;
+    }
+{{end}}
+{{end}}
+
+{{if or .BannedIPs .UseFilterSubscription}}
+    # Banned IPs check (1 = manual ban, 2 = filter subscription)
+    if ($banned_ip_{{sanitizeID .Host.ID}} = 1) {
+        set $block_reason_var "banned_ip";
+        return 403;
+    }
+    if ($banned_ip_{{sanitizeID .Host.ID}} = 2) {
+        set $block_reason_var "filter_subscription";
+        return 403;
+    }
+{{end}}
+
+{{if .BlockedCloudIPRanges}}
+    # Blocked Cloud Provider IPs check
+    # Skip for ACME challenge and challenge page (prevents redirect loops)
+    # Priority Allow IPs bypass cloud provider blocking
+    set $is_priority_allow_cloud $skip_security_for_acme;
+{{if and .GeoRestriction (len .GeoRestriction.AllowedIPs)}}
+{{range .GeoRestriction.AllowedIPs}}
+{{if isCIDR .}}
+    if ($remote_addr ~ "{{cidrToNginxPattern .}}") {
+        set $is_priority_allow_cloud 1;
+    }
+{{else}}
+    if ($remote_addr = "{{.}}") {
+        set $is_priority_allow_cloud 1;
+    }
+{{end}}
+{{end}}
+{{end}}
+{{if .CloudProviderAllowSearchBots}}{{if .SearchEnginesList}}
+    # Allow search engine bots to bypass cloud provider blocking
+    if ($is_search_bot = 1) {
+        set $is_priority_allow_cloud 1;
+    }
+{{end}}{{end}}
+    set $cloud_block_check_{{sanitizeID .Host.ID}} "${blocked_cloud_{{sanitizeID .Host.ID}}}${is_priority_allow_cloud}";
+{{if .CloudProviderChallengeMode}}
+    # Challenge mode - redirect to challenge page instead of blocking (skip for priority IPs, search bots, and ACME/challenge paths)
+    if ($cloud_block_check_{{sanitizeID .Host.ID}} = "10") {
+        set $block_reason_var "cloud_provider_challenge";
+        return 418; # Use 418 as internal marker for cloud challenge redirect
+    }
+    error_page 418 = @cloud_challenge;
+{{else}}
+    # Block mode (skip for priority IPs, search bots, and ACME/challenge paths)
+    if ($cloud_block_check_{{sanitizeID .Host.ID}} = "10") {
+        set $block_reason_var "cloud_provider_block";
+        return 403;
+    }
+{{end}}
+{{end}}
+
+{{if .BotFilter}}{{if .BotFilter.Enabled}}
+    # Bot Filter - uses error_page 403 for custom error page
+    # Priority Allow IPs bypass all bot filtering
+    # Also bypass for ACME challenge
+    set $priority_allow $skip_security_for_acme;
+{{if and .GeoRestriction (len .GeoRestriction.AllowedIPs)}}
+{{range .GeoRestriction.AllowedIPs}}
+{{if isCIDR .}}
+    if ($remote_addr ~ "{{cidrToNginxPattern .}}") {
+        set $priority_allow 1;
+    }
+{{else}}
+    if ($remote_addr = "{{.}}") {
+        set $priority_allow 1;
+    }
+{{end}}
+{{end}}
+{{end}}
+{{if .BotFilter.AllowSearchEngines}}{{if .SearchEnginesList}}
+    # Allow search engine bots to bypass bot filter
+    if ($is_search_bot = 1) {
+        set $priority_allow 1;
+    }
+{{end}}{{end}}
+{{if $.GlobalTrustedIPs}}
+    # Global trusted IPs bypass bot filter
+    if ($trusted_ip_{{sanitizeID $.Host.ID}} = 1) {
+        set $priority_allow 1;
+    }
+{{end}}
+{{if .BotFilter.CustomAllowedAgents}}
+    # Custom allowed agents bypass all bot filtering
+    if ($http_user_agent ~* ({{toRegexPattern .BotFilter.CustomAllowedAgents}})) {
+        set $priority_allow 1;
+    }
+{{end}}
+{{if .BotFilter.BlockBadBots}}{{if .BadBotsList}}
+    set $block_bad_bot 0;
+    if ($http_user_agent ~* ({{toRegexPattern .BadBotsList}})) {
+        set $block_bad_bot 1;
+    }
+    # Block only if not in priority allow list
+    set $bad_bot_check "${priority_allow}${block_bad_bot}";
+    if ($bad_bot_check = "01") {
+        set $block_reason_var "bot_filter";
+        set $bot_category_var "bad_bot";
+        return 403;
+    }
+{{end}}{{end}}
+{{if .BotFilter.BlockAIBots}}{{if .AIBotsList}}
+    set $block_ai_bot 0;
+    if ($http_user_agent ~* ({{toRegexPattern .AIBotsList}})) {
+        set $block_ai_bot 1;
+    }
+    # Block only if not in priority allow list
+    set $ai_bot_check "${priority_allow}${block_ai_bot}";
+    if ($ai_bot_check = "01") {
+        set $block_reason_var "bot_filter";
+        set $bot_category_var "ai_bot";
+        return 403;
+    }
+{{end}}{{end}}
+{{if .BotFilter.BlockSuspiciousClients}}{{if .SuspiciousClientsList}}
+    set $block_suspicious 0;
+    if ($http_user_agent ~* ({{toRegexPattern .SuspiciousClientsList}})) {
+        set $block_suspicious 1;
+    }
+    # Block only if not in priority allow list
+    set $suspicious_check "${priority_allow}${block_suspicious}";
+    if ($suspicious_check = "01") {
+        set $block_reason_var "bot_filter";
+        set $bot_category_var "suspicious";
+        return 403;
+    }
+{{end}}{{end}}
+{{if .BotFilter.CustomBlockedAgents}}
+    set $block_custom 0;
+    if ($http_user_agent ~* ({{toRegexPattern .BotFilter.CustomBlockedAgents}})) {
+        set $block_custom 1;
+    }
+    # Block only if not in priority allow list
+    set $custom_check "${priority_allow}${block_custom}";
+    if ($custom_check = "01") {
+        set $block_reason_var "bot_filter";
+        set $bot_category_var "custom";
+        return 403;
+    }
+{{end}}
+{{end}}{{end}}
+
+{{if .UseFilterSubscription}}
+    # Filter Subscription User-Agent Blocking (shared map block)
+{{if and .BotFilter .BotFilter.Enabled}}
+    set $filter_ua_check "${priority_allow}${filter_sub_ua_blocked}";
+{{else}}
+    set $filter_ua_check "${skip_security_for_acme}${filter_sub_ua_blocked}";
+{{end}}
+    if ($filter_ua_check = "01") {
+        set $block_reason_var "filter_subscription";
+        return 403;
+    }
+{{end}}
+
+{{if .RateLimit}}{{if .RateLimit.Enabled}}
+    # Rate Limiting
+    limit_req zone=rate_{{sanitizeID .Host.ID}} burst={{.RateLimit.BurstSize}} nodelay;
+    limit_req_status {{.RateLimit.LimitResponse}};
+    error_page {{.RateLimit.LimitResponse}} = @rate_limited;
+{{end}}{{end}}
+
+{{if .URIBlock}}{{if .URIBlock.Enabled}}
+    # URI Path Blocking
+{{range .URIBlock.Rules}}{{if .Enabled}}
+    # Block: {{.Description}}
+    {{uriLocationDirective .MatchType .Pattern}} {
+{{if hasURIBlockExceptionIPs $.URIBlock}}
+        # Check exception IPs
+        set $uri_block_exception 0;
+{{if $.URIBlock.AllowPrivateIPs}}
+        # Allow private IPs (10.x, 172.16-31.x, 192.168.x)
+        if ($remote_addr ~ "^(10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|192\.168\.)") {
+            set $uri_block_exception 1;
+        }
+{{end}}
+{{range $.URIBlock.ExceptionIPs}}
+{{if isCIDR .}}
+        if ($remote_addr ~ "{{cidrToNginxPattern .}}") {
+            set $uri_block_exception 1;
+        }
+{{else}}
+        if ($remote_addr = "{{.}}") {
+            set $uri_block_exception 1;
+        }
+{{end}}
+{{end}}
+        if ($uri_block_exception = 0) {
+            set $block_reason_var "uri_block";
+            return 403;
+        }
+        # Pass through to upstream if exception matched
+        {{if and $.Upstream $.Upstream.Servers}}proxy_pass {{upstreamScheme $.Upstream}}://{{$.Upstream.Name}};{{if eq (upstreamScheme $.Upstream) "https"}}
+        proxy_ssl_server_name on;
+        proxy_ssl_name $host;
+        proxy_ssl_verify off;{{end}}{{else}}proxy_pass {{$.Host.ForwardScheme}}://{{$.Host.ForwardHost}}:{{$.Host.ForwardPort}};{{end}}
+        include /etc/nginx/includes/proxy_params.conf;
+{{else}}
+        set $block_reason_var "uri_block";
+        return 403;
+{{end}}
+    }
+{{end}}{{end}}
+{{end}}{{end}}
+
+{{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}
+    # Challenge validation endpoint (internal)
+    location = /_challenge/validate {
+        internal;
+        proxy_pass http://{{apiHost}}/api/v1/challenge/validate;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Proxy-Host-ID "{{.Host.ID}}";
+        proxy_set_header X-Challenge-Token $cookie_ng_challenge;
+        proxy_set_header X-Geo-Blocked $geo_blocked;
+        # Fast timeout - fail fast if API is down
+        proxy_connect_timeout 2s;
+        proxy_read_timeout 5s;
+    }
+
+    # API error fallback - allow traffic through when API is down
+    location @api_fallback {
+        # API is down - allow request to proceed (graceful degradation)
+        access_log /etc/nginx/logs/access_raw.log main buffer=64k flush=5s;
+        {{if and .Upstream .Upstream.Servers}}proxy_pass {{upstreamScheme .Upstream}}://{{.Upstream.Name}};{{if eq (upstreamScheme .Upstream) "https"}}
+        proxy_ssl_server_name on;
+        proxy_ssl_name $host;
+        proxy_ssl_verify off;{{end}}{{else}}proxy_pass {{.Host.ForwardScheme}}://{{.Host.ForwardHost}}:{{.Host.ForwardPort}};{{end}}
+        include /etc/nginx/includes/proxy_params.conf;
+    }
+{{end}}{{end}}
+
+{{if or (and .GeoRestriction .GeoRestriction.ChallengeMode) .CloudProviderChallengeMode}}
+    # Challenge API - Bypass all security and proxy to API service
+    # Generated for both GeoRestriction ChallengeMode and CloudProvider ChallengeMode
+    location /api/v1/challenge/ {
+        # Disable WAF for challenge parameters (return URL triggers SQLi/RFI rules)
+        modsecurity off;
+
+        proxy_pass http://{{apiHost}}/api/v1/challenge/;
+        proxy_pass_request_body on;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        # Use $remote_addr directly to prevent X-Forwarded-For header spoofing
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+{{end}}
+
+{{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}{{if .HasCustomLocationRoot}}
+    # Server-level challenge redirect for custom location / configurations.
+    # When AdvancedConfig contains a custom "location / { ... }", the default
+    # location / block (with auth_request challenge validation) is not generated.
+    # This ensures geo-blocked visitors without a challenge cookie are still
+    # redirected to the CAPTCHA page regardless of custom location config.
+    set $need_challenge 0;
+    if ($geo_blocked = 1) {
+        set $need_challenge 1;
+    }
+    if ($cookie_ng_challenge != "") {
+        set $need_challenge 0;
+    }
+    # Skip challenge API paths to prevent redirect loops
+    if ($request_uri ~ "^/api/v1/challenge/") {
+        set $need_challenge 0;
+    }
+    if ($request_uri ~ "^/.well-known/acme-challenge/") {
+        set $need_challenge 0;
+    }
+{{if .GeoRestriction.AllowSearchBots}}
+    if ($is_search_bot = 1) {
+        set $need_challenge 0;
+    }
+{{end}}
+    if ($need_challenge = 1) {
+        return 302 /api/v1/challenge/page?host={{.Host.ID}}&reason=geo_restriction&return=$scheme://$host$request_uri;
+    }
+{{end}}{{end}}{{end}}
+
+{{if not .HasCustomLocationRoot}}
+    location / {
+{{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}
+        # Check challenge token for geo-blocked users (skip for search bots)
+        set $challenge_check 0;
+        if ($geo_blocked = 1) {
+            set $challenge_check 1;
+        }
+{{if .GeoRestriction.AllowSearchBots}}
+        # Search bots bypass challenge completely
+        if ($is_search_bot = 1) {
+            set $challenge_check 0;
+        }
+{{end}}
+        set $challenge_check_final $challenge_check;
+        if ($cookie_ng_challenge = "") {
+            set $challenge_check_final "${challenge_check}1";
+        }
+        if ($challenge_check_final = 11) {
+            # No token, redirect to challenge page
+            return 302 /api/v1/challenge/page?host={{.Host.ID}}&reason=geo_restriction&return=$scheme://$host$request_uri;
+        }
+        # Validate existing token for geo-blocked users
+        # Note: API returns 200 for search bots, so they won't be redirected
+        auth_request /_challenge/validate;
+        error_page 401 = @challenge_redirect;
+        error_page 500 502 503 504 = @api_fallback;
+{{end}}{{end}}
+        {{if and .Upstream .Upstream.Servers}}proxy_pass {{upstreamScheme .Upstream}}://{{.Upstream.Name}};{{if eq (upstreamScheme .Upstream) "https"}}
+        proxy_ssl_server_name on;
+        proxy_ssl_name $host;
+        proxy_ssl_verify off;{{end}}{{else}}proxy_pass {{.Host.ForwardScheme}}://{{.Host.ForwardHost}}:{{.Host.ForwardPort}};{{end}}
+        include /etc/nginx/includes/proxy_params.conf;
+        {{if .GlobalSettings}}
+        # Proxy settings (Host-level overrides Global)
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_connect_timeout")}}{{if gt .Host.ProxyConnectTimeout 0}}proxy_connect_timeout {{.Host.ProxyConnectTimeout}}s;{{else if gt .GlobalSettings.ProxyConnectTimeout 0}}proxy_connect_timeout {{.GlobalSettings.ProxyConnectTimeout}}s;{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_send_timeout")}}{{if .Host.AllowWebsocketUpgrade}}proxy_send_timeout 86400s;{{else if gt .Host.ProxySendTimeout 0}}proxy_send_timeout {{.Host.ProxySendTimeout}}s;{{else if gt .GlobalSettings.ProxySendTimeout 0}}proxy_send_timeout {{.GlobalSettings.ProxySendTimeout}}s;{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_read_timeout")}}{{if .Host.AllowWebsocketUpgrade}}proxy_read_timeout 86400s;{{else if gt .Host.ProxyReadTimeout 0}}proxy_read_timeout {{.Host.ProxyReadTimeout}}s;{{else if gt .GlobalSettings.ProxyReadTimeout 0}}proxy_read_timeout {{.GlobalSettings.ProxyReadTimeout}}s;{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "client_body_timeout")}}{{if gt .GlobalSettings.ClientBodyTimeout 0}}client_body_timeout {{.GlobalSettings.ClientBodyTimeout}}s;{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "send_timeout")}}{{if gt .GlobalSettings.SendTimeout 0}}send_timeout {{.GlobalSettings.SendTimeout}}s;{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "client_max_body_size")}}{{if .Host.ClientMaxBodySize}}client_max_body_size {{.Host.ClientMaxBodySize}};{{else if .GlobalSettings.ClientMaxBodySize}}client_max_body_size {{.GlobalSettings.ClientMaxBodySize}};{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_buffering")}}{{if .Host.ProxyBuffering}}proxy_buffering {{.Host.ProxyBuffering}};{{else if .GlobalSettings.ProxyBuffering}}proxy_buffering {{.GlobalSettings.ProxyBuffering}};{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_request_buffering")}}{{if .Host.ProxyRequestBuffering}}proxy_request_buffering {{.Host.ProxyRequestBuffering}};{{else if .GlobalSettings.ProxyRequestBuffering}}proxy_request_buffering {{.GlobalSettings.ProxyRequestBuffering}};{{end}}{{end}}
+        {{if and .Host.WAFEnabled (or (eq .Host.ProxyRequestBuffering "off") (and (eq .Host.ProxyRequestBuffering "") (eq .GlobalSettings.ProxyRequestBuffering "off")))}}
+        # Disable ModSecurity request body inspection for large file upload support
+        # WAF still protects headers, URL patterns, and response inspection
+        modsecurity_rules 'SecRequestBodyAccess Off';
+        {{end}}
+        # Proxy buffer settings (from Global Settings)
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_buffer_size")}}{{if .GlobalSettings.ProxyBufferSize}}proxy_buffer_size {{.GlobalSettings.ProxyBufferSize}};{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_buffers")}}{{if .GlobalSettings.ProxyBuffers}}proxy_buffers {{.GlobalSettings.ProxyBuffers}};{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_busy_buffers_size")}}{{if .GlobalSettings.ProxyBusyBuffersSize}}proxy_busy_buffers_size {{.GlobalSettings.ProxyBusyBuffersSize}};{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_max_temp_file_size")}}{{if .Host.ProxyMaxTempFileSize}}proxy_max_temp_file_size {{.Host.ProxyMaxTempFileSize}};{{else if .GlobalSettings.ProxyMaxTempFileSize}}proxy_max_temp_file_size {{.GlobalSettings.ProxyMaxTempFileSize}};{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "proxy_temp_file_write_size")}}{{if .GlobalSettings.ProxyTempFileWriteSize}}proxy_temp_file_write_size {{.GlobalSettings.ProxyTempFileWriteSize}};{{end}}{{end}}
+        # Bandwidth limiting (from Global Settings)
+        {{if not (hasDirective .AdvancedConfigDirectives "limit_rate")}}{{if gt .GlobalSettings.LimitRate 0}}limit_rate {{.GlobalSettings.LimitRate}};{{end}}{{end}}
+        {{if not (hasDirective .AdvancedConfigDirectives "limit_rate_after")}}{{if .GlobalSettings.LimitRateAfter}}limit_rate_after {{.GlobalSettings.LimitRateAfter}};{{end}}{{end}}
+        {{end}}
+        {{if .Host.AllowWebsocketUpgrade}}
+        # WebSocket support (proxy_http_version already set in proxy_params.conf)
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        {{end}}
+        {{if .Host.SSLHTTP3}}
+        # HTTP/3 Alt-Svc header (1 hour cache for faster fallback on connection issues)
+        add_header Alt-Svc 'h3=":{{$.HTTPSPort}}"; ma=3600' always;
+        {{else}}
+        # Clear Alt-Svc cache when HTTP/3 is disabled (helps Safari recover faster)
+        add_header Alt-Svc 'clear' always;
+        {{end}}
+        {{if .Host.CacheEnabled}}
+        # Caching
+        {{if .Host.CacheStaticOnly}}
+        # Static assets only - bypass cache for API and dynamic content
+        set $cache_bypass 1;
+        if ($request_uri ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot|webp|avif|mp4|webm|pdf)$) {
+            set $cache_bypass 0;
+        }
+        proxy_no_cache $cache_bypass;
+        proxy_cache_bypass $cache_bypass $http_pragma $http_authorization;
+        {{else}}
+        # All content except API paths
+        set $cache_bypass 0;
+        if ($request_uri ~* ^/api/) {
+            set $cache_bypass 1;
+        }
+        proxy_no_cache $cache_bypass;
+        proxy_cache_bypass $cache_bypass $http_pragma $http_authorization;
+        {{end}}
+        proxy_cache proxy_cache;
+        proxy_cache_key $scheme$host$request_uri;
+        proxy_cache_valid 200 301 302 {{if .Host.CacheTTL}}{{.Host.CacheTTL}}{{else}}1h{{end}};
+        proxy_cache_use_stale error timeout http_500 http_502 http_503 http_504;
+        add_header X-Cache-Status $upstream_cache_status always;
+        {{end}}
+        {{if .SecurityHeaders}}{{if .SecurityHeaders.Enabled}}
+        # Security Headers (in location block to ensure they are applied)
+        {{if .SecurityHeaders.HSTSEnabled}}
+        add_header Strict-Transport-Security "max-age={{.SecurityHeaders.HSTSMaxAge}}{{if .SecurityHeaders.HSTSIncludeSubdomains}}; includeSubDomains{{end}}{{if .SecurityHeaders.HSTSPreload}}; preload{{end}}" always;
+        {{end}}
+        {{if .SecurityHeaders.XFrameOptions}}
+        add_header X-Frame-Options "{{.SecurityHeaders.XFrameOptions}}" always;
+        {{end}}
+        {{if .SecurityHeaders.XContentTypeOptions}}
+        add_header X-Content-Type-Options "nosniff" always;
+        {{end}}
+        {{if .SecurityHeaders.XXSSProtection}}
+        add_header X-XSS-Protection "1; mode=block" always;
+        {{end}}
+        {{if .SecurityHeaders.ReferrerPolicy}}
+        add_header Referrer-Policy "{{.SecurityHeaders.ReferrerPolicy}}" always;
+        {{end}}
+        {{if .SecurityHeaders.ContentSecurityPolicy}}
+        add_header Content-Security-Policy "{{.SecurityHeaders.ContentSecurityPolicy}}" always;
+        {{end}}
+        {{if .SecurityHeaders.PermissionsPolicy}}
+        add_header Permissions-Policy "{{.SecurityHeaders.PermissionsPolicy}}" always;
+        {{end}}
+        {{end}}{{end}}
+{{if .AdvancedConfigLocationLevel}}{{if not .AdvancedConfigHasLocation}}
+        # Custom configuration
+        {{.AdvancedConfigLocationLevel}}
+{{end}}{{end}}
+    }
+
+{{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}
+    location @challenge_redirect {
+        return 302 /api/v1/challenge/page?host={{.Host.ID}}&reason=geo_restriction&return=$scheme://$host$request_uri;
+    }
+{{end}}{{end}}
+{{end}}

@@ -1,0 +1,415 @@
+{{if .Host.SSLEnabled}}
+server {
+    listen {{.HTTPSPort}} ssl;
+{{if .EnableIPv6}}    listen [::]:{{.HTTPSPort}} ssl;
+{{end}}{{if .Host.SSLHTTP2}}
+    # HTTP/2 over TCP (new directive style)
+    http2 on;
+{{end}}
+{{if .Host.SSLHTTP3}}
+    # HTTP/3 over QUIC (UDP)
+    listen {{.HTTPSPort}} quic;
+{{if .EnableIPv6}}    listen [::]:{{.HTTPSPort}} quic;
+{{end}}{{end}}
+    server_name {{join .Host.DomainNames " "}};
+
+    # Initialize tracking variables
+    set $block_reason_var "-";
+    set $bot_category_var "-";
+    set $geo_blocked 0;
+    set $is_search_bot 0;
+
+    # NPM-compatible variables for custom config
+    set $forward_scheme {{.Host.ForwardScheme}};
+    set $server "{{.Host.ForwardHost}}";
+    set $port {{.Host.ForwardPort}};
+
+    # Resolver for dynamic proxy_pass with variables
+    resolver {{dnsResolver}} valid=30s;
+
+{{if .SearchEnginesList}}
+    # Search bot detection (set once, used by GeoIP, CloudProvider, BotFilter)
+    if ($http_user_agent ~* ({{toRegexPattern .SearchEnginesList}})) {
+        set $is_search_bot 1;
+    }
+{{end}}
+
+    {{if .GlobalSettings}}{{if .GlobalSettings.OpenFileCacheEnabled}}
+    # Open File Cache (from Global Settings)
+    open_file_cache max={{if .GlobalSettings.OpenFileCacheMax}}{{.GlobalSettings.OpenFileCacheMax}}{{else}}10000{{end}} inactive={{if .GlobalSettings.OpenFileCacheInactive}}{{.GlobalSettings.OpenFileCacheInactive}}{{else}}60s{{end}};
+    open_file_cache_valid {{if .GlobalSettings.OpenFileCacheValid}}{{.GlobalSettings.OpenFileCacheValid}}{{else}}30s{{end}};
+    open_file_cache_min_uses {{if .GlobalSettings.OpenFileCacheMinUses}}{{.GlobalSettings.OpenFileCacheMinUses}}{{else}}2{{end}};
+    open_file_cache_errors {{if .GlobalSettings.OpenFileCacheErrors}}on{{else}}off{{end}};
+    {{end}}{{end}}
+
+    # Skip security checks for ACME HTTP-01 Challenge (not typically used on HTTPS, but for consistency)
+    set $skip_security_for_acme 0;
+    if ($request_uri ~ "^/.well-known/acme-challenge/") {
+        set $skip_security_for_acme 1;
+    }
+    # Also skip for challenge page to prevent redirect loops
+    if ($request_uri ~ "^/api/v1/challenge/") {
+        set $skip_security_for_acme 1;
+    }
+
+    # SSL configuration
+    ssl_certificate /etc/nginx/certs/{{certPath .Host}}/fullchain.pem;
+    ssl_certificate_key /etc/nginx/certs/{{certPath .Host}}/privkey.pem;
+    ssl_protocols {{if .GlobalSettings}}{{if .GlobalSettings.SSLProtocols}}{{.GlobalSettings.SSLProtocols}}{{else}}TLSv1.2 TLSv1.3{{end}}{{else}}TLSv1.2 TLSv1.3{{end}};
+    ssl_prefer_server_ciphers {{if .GlobalSettings}}{{if .GlobalSettings.SSLPreferServerCiphers}}on{{else}}off{{end}}{{else}}off{{end}};
+    ssl_ciphers {{if .GlobalSettings}}{{if .GlobalSettings.SSLCiphers}}{{.GlobalSettings.SSLCiphers}}{{else}}ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305{{end}}{{else}}ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305{{end}};
+    ssl_ecdh_curve {{if .GlobalSettings}}{{if .GlobalSettings.SSLECDHCurve}}{{.GlobalSettings.SSLECDHCurve}}{{else}}X25519MLKEM768:X25519:secp256r1:secp384r1{{end}}{{else}}X25519MLKEM768:X25519:secp256r1:secp384r1{{end}};
+{{if .Host.SSLHTTP3}}
+    # HTTP/3 settings
+    ssl_early_data on;
+{{end}}
+
+    # Custom error pages for upstream errors
+    error_page 502 /error_502.html;
+    error_page 503 /error_503.html;
+    error_page 504 /error_504.html;
+    location = /error_502.html { internal; root /etc/nginx/html; try_files /502.html =502; }
+    location = /error_503.html { internal; root /etc/nginx/html; try_files /503.html =503; }
+    location = /error_504.html { internal; root /etc/nginx/html; try_files /504.html =504; }
+
+    # Custom error page for security blocks (WAF, block_exploits, geo restriction, bot filter, etc.)
+    error_page 403 @blocked;
+    location @blocked {
+        root /etc/nginx/html;
+        default_type text/html;
+        try_files /403.html =403;
+    }
+
+{{if .GeoRestriction}}{{if .GeoRestriction.Enabled}}{{if not .GeoRestriction.ChallengeMode}}
+    # Geo Restriction ({{.GeoRestriction.Mode}}) - Direct Block Mode (processed BEFORE WAF for performance){{if .GeoRestriction.AllowPrivateIPs}} - Private IPs Allowed{{end}}{{if .GeoRestriction.AllowSearchBots}} - Search Bots Allowed{{end}}
+{{if len .GeoRestriction.AllowedIPs}}
+    # Priority Allow IPs/CIDRs - bypass geo restriction if matched
+    set $geo_allowed_ip 0;
+{{range .GeoRestriction.AllowedIPs}}
+{{if isCIDR .}}
+    if ($remote_addr ~ "{{cidrToNginxPattern .}}") {
+        set $geo_allowed_ip 1;
+    }
+{{else}}
+    if ($remote_addr = "{{.}}") {
+        set $geo_allowed_ip 1;
+    }
+{{end}}
+{{end}}
+    # Apply geo restriction only if not in allowed IPs
+    set $geo_block_check "";
+{{if eq .GeoRestriction.Mode "whitelist"}}
+    if ($geoip2_country_code !~ "^({{join .GeoRestriction.Countries "|"}}{{if .GeoRestriction.AllowPrivateIPs}}|--{{end}})$") {
+        set $geo_block_check "Y";
+        set $block_reason_var "geo_block";
+    }
+{{else}}
+    if ($geoip2_country_code ~ "^({{join .GeoRestriction.Countries "|"}})$") {
+        set $geo_block_check "Y";
+        set $block_reason_var "geo_block";
+    }
+{{if .GeoRestriction.AllowPrivateIPs}}
+    # Allow private IPs (geo code "--")
+    if ($geoip2_country_code = "--") {
+        set $geo_block_check "";
+    }
+{{end}}
+{{end}}
+{{if .GeoRestriction.AllowSearchBots}}
+    # Allow search engine bots - bypass geo restriction
+    if ($is_search_bot = 1) {
+        set $geo_block_check "";
+        set $block_reason_var "-";
+    }
+{{end}}
+    # Combine checks: block only if geo_allowed_ip=0 AND geo_block_check=Y AND not ACME challenge
+    set $geo_final_block "${geo_allowed_ip}${geo_block_check}${skip_security_for_acme}";
+    if ($geo_final_block = "0Y0") {
+        return 403;
+    }
+{{else}}
+{{if .GeoRestriction.AllowSearchBots}}
+    # Allow search engine bots - bypass geo restriction
+    set $geo_block_check "";
+{{if eq .GeoRestriction.Mode "whitelist"}}
+    if ($geoip2_country_code !~ "^({{join .GeoRestriction.Countries "|"}}{{if .GeoRestriction.AllowPrivateIPs}}|--{{end}})$") {
+        set $geo_block_check "Y";
+        set $block_reason_var "geo_block";
+    }
+{{else}}
+    if ($geoip2_country_code ~ "^({{join .GeoRestriction.Countries "|"}})$") {
+        set $geo_block_check "Y";
+        set $block_reason_var "geo_block";
+    }
+{{if .GeoRestriction.AllowPrivateIPs}}
+    # Allow private IPs (geo code "--")
+    if ($geoip2_country_code = "--") {
+        set $geo_block_check "";
+    }
+{{end}}
+{{end}}
+    # Allow search bots
+    if ($is_search_bot = 1) {
+        set $geo_block_check "";
+        set $block_reason_var "-";
+    }
+    # Skip geo block for ACME challenge
+    set $geo_block_final "${geo_block_check}${skip_security_for_acme}";
+    if ($geo_block_final = "Y0") {
+        return 403;
+    }
+{{else}}
+{{if eq .GeoRestriction.Mode "whitelist"}}
+    # Check geo restriction (skip for ACME challenge)
+    set $geo_direct_block "";
+    if ($geoip2_country_code !~ "^({{join .GeoRestriction.Countries "|"}}{{if .GeoRestriction.AllowPrivateIPs}}|--{{end}})$") {
+        set $geo_direct_block "Y";
+        set $block_reason_var "geo_block";
+    }
+    set $geo_direct_final "${geo_direct_block}${skip_security_for_acme}";
+    if ($geo_direct_final = "Y0") {
+        return 403;
+    }
+{{else}}
+    # Check geo restriction (skip for ACME challenge)
+    set $geo_direct_block "";
+    if ($geoip2_country_code ~ "^({{join .GeoRestriction.Countries "|"}})$") {
+        set $geo_direct_block "Y";
+        set $block_reason_var "geo_block";
+    }
+{{if .GeoRestriction.AllowPrivateIPs}}
+    # Allow private IPs (geo code "--") - skip block
+    if ($geoip2_country_code = "--") {
+        set $geo_direct_block "";
+        set $block_reason_var "-";
+    }
+{{end}}
+    set $geo_direct_final "${geo_direct_block}${skip_security_for_acme}";
+    if ($geo_direct_final = "Y0") {
+        return 403;
+    }
+{{end}}
+{{end}}
+{{end}}
+{{end}}{{end}}{{end}}
+
+{{if .Host.WAFEnabled}}
+    # WAF (ModSecurity) - {{.Host.WAFMode}} mode
+    # CRS rules are loaded globally; per-host tuning is applied via rules_file
+    more_set_input_headers "Host: $host";
+    modsecurity on;
+    modsecurity_rules_file /etc/nginx/modsec/{{wafConfig .Host}};
+{{else}}
+    # WAF disabled for this host (override global modsecurity on)
+    modsecurity off;
+{{end}}
+
+{{if .GeoRestriction}}{{if .GeoRestriction.Enabled}}{{if .GeoRestriction.ChallengeMode}}
+    # Geo Restriction ({{.GeoRestriction.Mode}}) - Challenge Mode (processed AFTER WAF){{if .GeoRestriction.AllowPrivateIPs}} - Private IPs Allowed{{end}}{{if .GeoRestriction.AllowSearchBots}} - Search Bots Allowed{{end}}
+    # Challenge mode: show CAPTCHA instead of blocking
+    set $geo_blocked 0;
+{{if eq .GeoRestriction.Mode "whitelist"}}
+    if ($geoip2_country_code !~ "^({{join .GeoRestriction.Countries "|"}}{{if .GeoRestriction.AllowPrivateIPs}}|--{{end}})$") {
+        set $geo_blocked 1;
+        set $block_reason_var "geo_block";
+    }
+{{else}}
+    if ($geoip2_country_code ~ "^({{join .GeoRestriction.Countries "|"}})$") {
+        set $geo_blocked 1;
+        set $block_reason_var "geo_block";
+    }
+{{if .GeoRestriction.AllowPrivateIPs}}
+    # Allow private IPs (geo code "--")
+    if ($geoip2_country_code = "--") {
+        set $geo_blocked 0;
+    }
+{{end}}
+{{end}}
+{{if len .GeoRestriction.AllowedIPs}}
+    # Priority Allow IPs/CIDRs - bypass geo restriction if matched
+{{range .GeoRestriction.AllowedIPs}}
+{{if isCIDR .}}
+    if ($remote_addr ~ "{{cidrToNginxPattern .}}") {
+        set $geo_blocked 0;
+        set $block_reason_var "-";
+    }
+{{else}}
+    if ($remote_addr = "{{.}}") {
+        set $geo_blocked 0;
+        set $block_reason_var "-";
+    }
+{{end}}
+{{end}}
+{{end}}
+{{if .GeoRestriction.AllowSearchBots}}
+    # Allow search engine bots - bypass geo challenge
+    if ($is_search_bot = 1) {
+        set $geo_blocked 0;
+        set $block_reason_var "-";
+    }
+{{end}}
+{{if $.GlobalTrustedIPs}}
+    # Global trusted IPs - bypass geo restriction
+    if ($trusted_ip_{{sanitizeID $.Host.ID}} = 1) {
+        set $geo_blocked 0;
+        set $block_reason_var "-";
+    }
+{{end}}
+{{end}}{{end}}{{end}}
+
+{{if .AccessList}}{{if .AccessList.Items}}
+    # Access List: {{.AccessList.Name}}
+    # Note: Access list denials will have block_reason set to access_denied
+    set $block_reason_var "access_denied";
+{{if .AccessList.SatisfyAny}}    satisfy any;{{end}}
+{{range .AccessList.Items}}
+    {{.Directive}} {{.Address}};{{if .Description}} # {{.Description}}{{end}}
+{{end}}
+    deny all;
+{{end}}{{end}}
+
+{{if .Host.BlockExploits}}
+    # Block common exploits (database-managed rules)
+{{if hasExploitRules .ExploitBlockRules}}
+    # Query string rules (SQL injection, XSS, etc.) with URI exception handling
+{{if hasRulesOfType .ExploitBlockRules "query_string"}}
+    set $exploit_qs_block 0;
+    set $exploit_qs_rule "-";
+{{range filterRulesByPatternType .ExploitBlockRules "query_string"}}
+    # {{.Name}} ({{.Category}})
+    if ($query_string ~* "{{escapeNginxPattern .Pattern}}") {
+        set $exploit_qs_block 1;
+        set $exploit_qs_rule "{{.ID}}";
+    }
+{{end}}
+{{if hasMergedExceptions .GlobalBlockExploitsExceptions .Host.BlockExploitsExceptions}}
+    # URI exceptions - skip query string blocking for these paths
+{{range splitExceptions (mergeExceptions .GlobalBlockExploitsExceptions .Host.BlockExploitsExceptions)}}
+    if ($request_uri ~* "{{.}}") {
+        set $exploit_qs_block 0;
+    }
+{{end}}
+{{end}}
+    # Skip exploit blocking for ACME challenge and CAPTCHA challenge paths
+    if ($skip_security_for_acme = 1) {
+        set $exploit_qs_block 0;
+    }
+    if ($exploit_qs_block = 1) {
+        set $block_reason_var "exploit_block";
+        set $exploit_rule_var $exploit_qs_rule;
+        return 403;
+    }
+{{end}}
+
+    # Request URI rules with RFI exception handling
+{{if hasRulesOfType .ExploitBlockRules "request_uri"}}
+    set $rfi_block 0;
+    set $rfi_rule "-";
+{{range filterRulesByPatternType .ExploitBlockRules "request_uri"}}
+    # {{.Name}} ({{.Category}})
+    if ($request_uri ~* "{{escapeNginxPattern .Pattern}}") {
+        set $rfi_block 1;
+        set $rfi_rule "{{.ID}}";
+    }
+{{end}}
+{{if hasMergedExceptions .GlobalBlockExploitsExceptions .Host.BlockExploitsExceptions}}
+    # Dynamic exceptions from database (global + host-specific)
+{{range splitExceptions (mergeExceptions .GlobalBlockExploitsExceptions .Host.BlockExploitsExceptions)}}
+    if ($request_uri ~* "{{.}}") {
+        set $rfi_block 0;
+    }
+{{end}}
+{{end}}
+    # Skip exploit blocking for ACME challenge and CAPTCHA challenge paths
+    if ($skip_security_for_acme = 1) {
+        set $rfi_block 0;
+    }
+    if ($rfi_block = 1) {
+        set $block_reason_var "exploit_block";
+        set $exploit_rule_var $rfi_rule;
+        return 403;
+    }
+{{end}}
+
+    # User-agent rules (scanner/tool detection)
+{{if hasRulesOfType .ExploitBlockRules "user_agent"}}
+{{range filterRulesByPatternType .ExploitBlockRules "user_agent"}}
+    # {{.Name}} ({{.Category}})
+    if ($http_user_agent ~* "{{escapeNginxPattern .Pattern}}") {
+        set $block_reason_var "exploit_block";
+        set $exploit_rule_var "{{.ID}}";
+        set $bot_category_var "scanner";
+        return 403;
+    }
+{{end}}
+{{end}}
+
+    # HTTP method rules
+{{if hasRulesOfType .ExploitBlockRules "request_method"}}
+{{range filterRulesByPatternType .ExploitBlockRules "request_method"}}
+    # {{.Name}} ({{.Category}})
+    if ($request_method ~* "{{escapeNginxPattern .Pattern}}") {
+        set $block_reason_var "exploit_block";
+        set $exploit_rule_var "{{.ID}}";
+        return 405;
+    }
+{{end}}
+{{end}}
+{{else}}
+    # Fallback: No DB rules found, using hardcoded rules
+    # SQL injection attempts in query string
+    set $sqli_fallback_block 0;
+    if ($query_string ~* "union.*select") {
+        set $sqli_fallback_block 1;
+        set $exploit_rule_var "SQLI-FALLBACK-001";
+    }
+    if ($query_string ~* "(;|<|>|'|\"|\)|%0A|%0D|%22|%27|%3C|%3E|%00)") {
+        set $sqli_fallback_block 1;
+        set $exploit_rule_var "SQLI-FALLBACK-002";
+    }
+    # Skip exploit blocking for ACME challenge and CAPTCHA challenge paths
+    if ($skip_security_for_acme = 1) {
+        set $sqli_fallback_block 0;
+    }
+    if ($sqli_fallback_block = 1) {
+        set $block_reason_var "exploit_block";
+        return 403;
+    }
+    # File injection / path traversal (RFI)
+    set $rfi_block 0;
+    if ($query_string ~* "[a-zA-Z0-9_]=https?://") {
+        set $rfi_block 1;
+    }
+{{if hasMergedExceptions .GlobalBlockExploitsExceptions .Host.BlockExploitsExceptions}}
+{{range splitExceptions (mergeExceptions .GlobalBlockExploitsExceptions .Host.BlockExploitsExceptions)}}
+    if ($request_uri ~* "{{.}}") {
+        set $rfi_block 0;
+    }
+{{end}}
+{{end}}
+    # Skip exploit blocking for ACME challenge and CAPTCHA challenge paths
+    if ($skip_security_for_acme = 1) {
+        set $rfi_block 0;
+    }
+    if ($rfi_block = 1) {
+        set $block_reason_var "exploit_block";
+        set $exploit_rule_var "RFI-FALLBACK-001";
+        return 403;
+    }
+    set $lfi_fallback_block 0;
+    if ($query_string ~* "\.\./") {
+        set $lfi_fallback_block 1;
+    }
+    if ($skip_security_for_acme = 1) {
+        set $lfi_fallback_block 0;
+    }
+    if ($lfi_fallback_block = 1) {
+        set $block_reason_var "exploit_block";
+        set $exploit_rule_var "LFI-FALLBACK-001";
+        return 403;
+    }
+    # Block exploit tools and scanners
+    if ($http_user_agent ~* (nikto|sqlmap|dirbuster|nmap|nessus|openvas|w3af|acunetix|havij|appscan|webscarab|webinspect)) {
+        set $block_reason_var "exploit_block";
+        set $exploit_rule_var "SCAN-FALLBACK-001";
+        set $bot_category_var "scanner";

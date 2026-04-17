@@ -1,0 +1,19 @@
+{{if and .Upstream .Upstream.Servers}}
+# Upstream definition for load balancing
+upstream {{.Upstream.Name}} {
+{{if eq .Upstream.LoadBalance "least_conn"}}
+    least_conn;
+{{else if eq .Upstream.LoadBalance "ip_hash"}}
+    ip_hash;
+{{else if eq .Upstream.LoadBalance "random"}}
+    random;
+{{end}}
+{{range .Upstream.Servers}}
+    server {{.Address}}:{{.Port}}{{if ne .Weight 1}} weight={{.Weight}}{{end}}{{if ne .MaxFails 0}} max_fails={{.MaxFails}}{{end}}{{if ne .FailTimeout 0}} fail_timeout={{.FailTimeout}}s{{end}}{{if .IsBackup}} backup{{end}}{{if .IsDown}} down{{end}};
+{{end}}
+{{if .Upstream.Keepalive}}
+    keepalive {{.Upstream.Keepalive}};
+{{end}}
+}
+{{end}}
+
