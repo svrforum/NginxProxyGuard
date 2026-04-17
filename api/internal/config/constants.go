@@ -106,6 +106,13 @@ const (
 	ReloadRetryBaseDelay = 500 * time.Millisecond // 500ms, 1s, 2s doubling
 )
 
+// Post-reload health verification — runs after a successful nginx reload.
+// Failure triggers the Phase 1 rollback mechanism.
+const (
+	WorkerReadyTimeout = 2 * time.Second
+	HealthProbeTimeout = 500 * time.Millisecond
+)
+
 // GeoIP constants
 const (
 	MinGeoIPDatabaseSize = 1000000 // 1MB minimum for valid GeoIP database

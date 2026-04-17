@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"os"
 
 	"nginx-proxy-guard/internal/config"
 	"nginx-proxy-guard/internal/database"
@@ -37,6 +38,14 @@ func NewContainer(cfg *config.Config) (*Container, error) {
 	redisCache := InitCache(cfg)
 
 	nginxManager := nginx.NewManager(cfg.NginxConfigPath, cfg.NginxCertsPath)
+
+	// Post-reload health probe (opt-out via NPG_HEALTH_PROBE=false)
+	probeDisabled := os.Getenv("NPG_HEALTH_PROBE") == "false"
+	nginxContainer := os.Getenv("NGINX_CONTAINER")
+	if nginxContainer == "" {
+		nginxContainer = "npg-proxy"
+	}
+	nginxManager.SetHealthProber(nginx.NewHealthProber(nginxContainer, probeDisabled))
 
 	repos := InitRepositories(db, redisCache)
 	svcs := InitServices(cfg, db, redisCache, nginxManager, repos)
