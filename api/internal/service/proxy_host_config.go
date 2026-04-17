@@ -9,7 +9,9 @@ import (
 	"nginx-proxy-guard/internal/nginx"
 )
 
-// getMergedWAFExclusions gets host-specific exclusions and merges with global exclusions
+// getMergedWAFExclusions gets host-specific exclusions and merges with global exclusions.
+// The pure merge logic lives in mergeWAFExclusions (see waf_merge.go) so it can be unit tested
+// without a database dependency.
 func (s *ProxyHostService) getMergedWAFExclusions(ctx context.Context, hostID string) ([]model.WAFRuleExclusion, error) {
 	// Get host-specific exclusions
 	hostExclusions, err := s.wafRepo.GetExclusionsByProxyHost(ctx, hostID)
@@ -23,33 +25,7 @@ func (s *ProxyHostService) getMergedWAFExclusions(ctx context.Context, hostID st
 		return nil, err
 	}
 
-	// Create a map of host exclusions to avoid duplicates
-	hostExclusionMap := make(map[int]bool)
-	for _, ex := range hostExclusions {
-		hostExclusionMap[ex.RuleID] = true
-	}
-
-	// Merge: start with host exclusions
-	merged := make([]model.WAFRuleExclusion, len(hostExclusions))
-	copy(merged, hostExclusions)
-
-	// Add global exclusions that are not already in host exclusions
-	for _, gex := range globalExclusions {
-		if !hostExclusionMap[gex.RuleID] {
-			merged = append(merged, model.WAFRuleExclusion{
-				ID:              gex.ID,
-				ProxyHostID:     "global",
-				RuleID:          gex.RuleID,
-				RuleCategory:    gex.RuleCategory,
-				RuleDescription: gex.RuleDescription,
-				Reason:          gex.Reason + " (global)",
-				DisabledBy:      gex.DisabledBy,
-				CreatedAt:       gex.CreatedAt,
-			})
-		}
-	}
-
-	return merged, nil
+	return mergeWAFExclusions(hostExclusions, globalExclusions), nil
 }
 
 // getAccessControlData fetches access list and geo restriction for a host
