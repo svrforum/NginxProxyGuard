@@ -8,6 +8,9 @@ import type { ProxyHostTestResult } from '../types/proxy-host'
 import { TestResultModal } from './proxy-host-list/TestResultModal'
 import { CloneModal } from './proxy-host-list/CloneModal'
 import { ProxyHostTable } from './proxy-host-list/ProxyHostTable'
+import { ProxyHostFilters, type SortBy, type SortOrder } from './proxy-host-list/ProxyHostFilters'
+import { ProxyHostBulkActions } from './proxy-host-list/ProxyHostBulkActions'
+import { ToggleConfirmDialog } from './proxy-host-list/ProxyHostRow'
 
 interface ProxyHostListProps {
   onEdit: (host: ProxyHost, tab?: 'basic' | 'ssl' | 'security' | 'performance' | 'advanced' | 'protection') => void
@@ -17,12 +20,6 @@ interface ProxyHostListProps {
 interface HealthStatus {
   [hostId: string]: 'checking' | 'online' | 'offline' | 'unknown'
 }
-
-
-type SortBy = 'name' | 'updated' | 'created'
-type SortOrder = 'asc' | 'desc'
-
-const PER_PAGE_OPTIONS = [10, 20, 50] as const
 
 export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
   const { t } = useTranslation('proxyHost')
@@ -282,6 +279,15 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
     setCurrentPage(1)
   }
 
+  // Handle sort change
+  const handleSortChange = (by: SortBy, order: SortOrder) => {
+    setSortBy(by)
+    setSortOrder(order)
+    setCurrentPage(1)
+    localStorage.setItem('proxyHostSortBy', by)
+    localStorage.setItem('proxyHostSortOrder', order)
+  }
+
   // Handle per page change
   const handlePerPageChange = (value: number) => {
     setPerPage(value)
@@ -311,66 +317,15 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
 
   return (
     <div>
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-white">{t('list.title')}</h2>
-
-        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-          {/* Search */}
-          <div className="relative flex-1 sm:flex-none">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              type="text"
-              value={searchInput}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              placeholder={t('list.search')}
-              className="w-full sm:w-48 pl-9 pr-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            />
-            {searchInput && (
-              <button
-                onClick={handleClearSearch}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-400"
-              >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            )}
-          </div>
-
-          {/* Sort */}
-          <select
-            value={`${sortBy}-${sortOrder}`}
-            onChange={(e) => {
-              const [by, order] = e.target.value.split('-') as [SortBy, SortOrder]
-              setSortBy(by)
-              setSortOrder(order)
-              setCurrentPage(1)
-              localStorage.setItem('proxyHostSortBy', by)
-              localStorage.setItem('proxyHostSortOrder', order)
-            }}
-            className="px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-          >
-            <option value="name-asc">{t('list.sort.nameAsc')}</option>
-            <option value="name-desc">{t('list.sort.nameDesc')}</option>
-            <option value="updated-desc">{t('list.sort.updatedDesc')}</option>
-            <option value="updated-asc">{t('list.sort.updatedAsc')}</option>
-            <option value="created-desc">{t('list.sort.createdDesc')}</option>
-            <option value="created-asc">{t('list.sort.createdAsc')}</option>
-          </select>
-
-          <button
-            onClick={onAdd}
-            className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            {t('list.addNew')}
-          </button>
-        </div>
-      </div>
+      <ProxyHostFilters
+        searchInput={searchInput}
+        onSearchChange={handleSearchChange}
+        onClearSearch={handleClearSearch}
+        sortBy={sortBy}
+        sortOrder={sortOrder}
+        onSortChange={handleSortChange}
+        onAdd={onAdd}
+      />
 
       {hosts.length === 0 ? (
         <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-8 text-center border border-dashed border-slate-200 dark:border-slate-700">
@@ -411,205 +366,71 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
           onFavorite={(id) => favoriteMutation.mutate(id)}
           togglePending={toggleMutation.isPending}
         />
-      )
-      }
-
-
-      {/* Pagination */}
-      {total > 0 && (
-        <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="text-sm text-slate-500 dark:text-slate-400">
-              {t('list.showing', {
-                from: (currentPage - 1) * perPage + 1,
-                to: Math.min(currentPage * perPage, total),
-                total
-              })}
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-slate-500 dark:text-slate-400">{t('list.perPage')}:</span>
-              <select
-                value={perPage}
-                onChange={(e) => handlePerPageChange(Number(e.target.value))}
-                className="px-2 py-1 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              >
-                {PER_PAGE_OPTIONS.map(option => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className="flex items-center gap-1">
-            {/* First Page */}
-            <button
-              onClick={() => setCurrentPage(1)}
-              disabled={currentPage === 1}
-              className="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-              title={t('list.pagination.first')}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
-              </svg>
-            </button>
-            {/* Previous Page */}
-            <button
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-              className="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-              title={t('list.pagination.previous')}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-
-            {/* Page Numbers */}
-            <div className="flex items-center gap-1 px-2">
-              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                let pageNum: number
-                if (totalPages <= 5) {
-                  pageNum = i + 1
-                } else if (currentPage <= 3) {
-                  pageNum = i + 1
-                } else if (currentPage >= totalPages - 2) {
-                  pageNum = totalPages - 4 + i
-                } else {
-                  pageNum = currentPage - 2 + i
-                }
-                return (
-                  <button
-                    key={pageNum}
-                    onClick={() => setCurrentPage(pageNum)}
-                    className={`min-w-[32px] h-8 px-2 text-sm font-medium rounded-lg transition-colors ${
-                      currentPage === pageNum
-                        ? 'bg-primary-600 text-white'
-                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    {pageNum}
-                  </button>
-                )
-              })}
-            </div>
-
-            {/* Next Page */}
-            <button
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-              className="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-              title={t('list.pagination.next')}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-            {/* Last Page */}
-            <button
-              onClick={() => setCurrentPage(totalPages)}
-              disabled={currentPage === totalPages}
-              className="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-              title={t('list.pagination.last')}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
-        </div>
       )}
 
+      <ProxyHostBulkActions
+        currentPage={currentPage}
+        totalPages={totalPages}
+        total={total}
+        perPage={perPage}
+        onPageChange={setCurrentPage}
+        onPerPageChange={handlePerPageChange}
+      />
+
       {/* Test Result Modal */}
-      {
-        testingHost && (
-          <TestResultModal
-            host={testingHost}
-            result={testResult}
-            isLoading={isTestLoading}
-            error={testError}
-            onClose={() => {
-              setTestingHost(null)
-              setTestResult(null)
-              setTestError(null)
-            }}
-            onRetest={handleRetest}
-          />
-        )
-      }
+      {testingHost && (
+        <TestResultModal
+          host={testingHost}
+          result={testResult}
+          isLoading={isTestLoading}
+          error={testError}
+          onClose={() => {
+            setTestingHost(null)
+            setTestResult(null)
+            setTestError(null)
+          }}
+          onRetest={handleRetest}
+        />
+      )}
 
       {/* Toggle Confirmation Modal */}
-      {
-        toggleConfirmHost && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
-                  {toggleConfirmHost.enabled ? t('actions.disableConfirmTitle') : t('actions.enableConfirmTitle')}
-                </h3>
-              </div>
-              <div className="px-6 py-4">
-                <p className="text-slate-600 dark:text-slate-400">
-                  {toggleConfirmHost.enabled
-                    ? t('actions.disableConfirmMessage', { domain: toggleConfirmHost.domain_names[0] })
-                    : t('actions.enableConfirmMessage', { domain: toggleConfirmHost.domain_names[0] })}
-                </p>
-              </div>
-              <div className="px-6 py-4 bg-slate-50 dark:bg-slate-900 flex justify-end gap-3">
-                <button
-                  onClick={() => setToggleConfirmHost(null)}
-                  className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                >
-                  {t('common:buttons.cancel')}
-                </button>
-                <button
-                  onClick={confirmToggle}
-                  disabled={toggleMutation.isPending}
-                  className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ${toggleConfirmHost.enabled
-                    ? 'bg-red-600 hover:bg-red-700'
-                    : 'bg-green-600 hover:bg-green-700'
-                    } disabled:opacity-50`}
-                >
-                  {toggleMutation.isPending
-                    ? t('common:status.processing')
-                    : toggleConfirmHost.enabled
-                      ? t('actions.disable')
-                      : t('actions.enable')}
-                </button>
-              </div>
-            </div>
-          </div>
-        )
-      }
+      {toggleConfirmHost && (
+        <ToggleConfirmDialog
+          host={toggleConfirmHost}
+          isPending={toggleMutation.isPending}
+          onConfirm={confirmToggle}
+          onCancel={() => setToggleConfirmHost(null)}
+        />
+      )}
 
       {/* Clone Modal */}
-      {
-        cloningHost && (
-          <CloneModal
-            host={cloningHost}
-            isPending={cloneMutation.isPending}
-            isError={cloneMutation.isError}
-            error={cloneMutation.error as Error | null}
-            onClone={(params) => {
-              cloneMutation.mutate({
-                id: cloningHost.id,
-                domainNames: params.domainNames,
-                certificateId: params.certificateId,
-                certProvider: params.certProvider,
-                dnsProviderId: params.dnsProviderId,
-                forwardScheme: params.forwardScheme,
-                forwardHost: params.forwardHost,
-                forwardPort: params.forwardPort,
-                isCreatingCert: params.isCreatingCert,
-              })
-            }}
-            onClose={() => resetCloneState()}
-            certCreating={cloneCertCreating}
-            certProgress={cloneCertProgress}
-            certElapsedTime={cloneCertElapsedTime}
-            certError={cloneCertError}
-            certSuccess={cloneCertSuccess}
-          />
-        )
-      }
-    </div >
+      {cloningHost && (
+        <CloneModal
+          host={cloningHost}
+          isPending={cloneMutation.isPending}
+          isError={cloneMutation.isError}
+          error={cloneMutation.error as Error | null}
+          onClone={(params) => {
+            cloneMutation.mutate({
+              id: cloningHost.id,
+              domainNames: params.domainNames,
+              certificateId: params.certificateId,
+              certProvider: params.certProvider,
+              dnsProviderId: params.dnsProviderId,
+              forwardScheme: params.forwardScheme,
+              forwardHost: params.forwardHost,
+              forwardPort: params.forwardPort,
+              isCreatingCert: params.isCreatingCert,
+            })
+          }}
+          onClose={() => resetCloneState()}
+          certCreating={cloneCertCreating}
+          certProgress={cloneCertProgress}
+          certElapsedTime={cloneCertElapsedTime}
+          certError={cloneCertError}
+          certSuccess={cloneCertSuccess}
+        />
+      )}
+    </div>
   )
 }
