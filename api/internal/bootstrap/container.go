@@ -50,7 +50,11 @@ func NewContainer(cfg *config.Config) (*Container, error) {
 	if nginxContainer == "" {
 		nginxContainer = "npg-proxy"
 	}
-	nginxManager.SetHealthProber(nginx.NewHealthProber(nginxContainer, probeDisabled))
+	nginxHTTPPort := os.Getenv("NGINX_HTTP_PORT")
+	if nginxHTTPPort == "" {
+		nginxHTTPPort = "80"
+	}
+	nginxManager.SetHealthProber(nginx.NewHealthProber(nginxContainer, nginxHTTPPort, probeDisabled))
 
 	repos := InitRepositories(db, redisCache)
 	svcs := InitServices(cfg, db, redisCache, nginxManager, repos)

@@ -31,17 +31,25 @@ func (e *dockerHealthExecutor) Exec(ctx context.Context, args ...string) (string
 }
 
 // HealthProber verifies nginx is serving traffic after a reload by checking
-// (1) worker processes exist and (2) the /health endpoint responds 200.
+// (1) worker processes exist and (2) nginx accepts TCP connections on its HTTP port.
 type HealthProber struct {
 	exec     healthExecutor
+	httpPort string
 	disabled bool
 }
 
-// NewHealthProber returns a prober targeting containerName. If disabled is true,
-// Verify always returns nil (opt-out via env var handled by caller).
-func NewHealthProber(containerName string, disabled bool) *HealthProber {
+// NewHealthProber returns a prober targeting containerName probing on httpPort.
+// If httpPort is empty, defaults to "80" (the standard nginx HTTP port in
+// production). Custom ports (test environments using NGINX_HTTP_PORT, alt deployments)
+// must be provided explicitly.
+// If disabled is true, Verify always returns nil (opt-out via env var).
+func NewHealthProber(containerName, httpPort string, disabled bool) *HealthProber {
+	if httpPort == "" {
+		httpPort = "80"
+	}
 	return &HealthProber{
 		exec:     &dockerHealthExecutor{containerName: containerName},
+		httpPort: httpPort,
 		disabled: disabled,
 	}
 }
@@ -108,14 +116,28 @@ func (p *HealthProber) countWorkers(ctx context.Context) (int, error) {
 	return n, nil
 }
 
-// probeHTTP runs `curl -sf --max-time X http://127.0.0.1:<httpPort>/health` inside the container.
-// Returns nil on 2xx; any non-2xx or network issue is an error.
+// probeHTTP checks that nginx is accepting TCP connections on port 80.
+// Any HTTP response (2xx / 3xx / 4xx / 5xx) counts as "nginx is serving traffic".
+// Only genuine connection failures (curl exit 7/28) or a total inability to reach
+// the socket are treated as probe failures — we deliberately avoid coupling the
+// probe to a specific application endpoint (/health may be gated, renamed, or
+// absent in custom deployments).
 func (p *HealthProber) probeHTTP(ctx context.Context, timeout time.Duration) error {
 	seconds := timeout.Seconds()
-	cmd := fmt.Sprintf("curl -sf --max-time %.2f http://127.0.0.1:80/health", seconds)
-	_, err := p.exec.Exec(ctx, "sh", "-c", cmd)
+	port := p.httpPort
+	if port == "" {
+		port = "80"
+	}
+	// -s silent, -o discard body, -w emit http code, --max-time cap, no -f
+	// so that 4xx/5xx responses still yield exit 0 (nginx is up, just returned
+	// an error page — that's sufficient evidence of liveness).
+	cmd := fmt.Sprintf(
+		"curl -s -o /dev/null -w '%%{http_code}' --max-time %.2f http://127.0.0.1:%s/ || exit $?",
+		seconds, port,
+	)
+	out, err := p.exec.Exec(ctx, "sh", "-c", cmd)
 	if err != nil {
-		return fmt.Errorf("/health did not return 2xx: %w", err)
+		return fmt.Errorf("nginx did not accept connection on :%s: %w (output: %s)", port, err, strings.TrimSpace(out))
 	}
 	return nil
 }
