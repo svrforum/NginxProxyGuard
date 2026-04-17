@@ -141,7 +141,7 @@ api/
 config.Load()
   → database.New() + cache.NewRedisClient()
     → nginx.NewManager()
-      → 29 Repositories 생성 (db 주입)
+      → 30 Repositories 생성 (db 주입)
         → Cache 주입 (proxyHostRepo, globalSettingsRepo, systemSettingsRepo, exploitBlockRuleRepo)
           → Services 생성 (repos + nginxManager 주입)
             → Cross-service Callback 연결
