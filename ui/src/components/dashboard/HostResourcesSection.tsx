@@ -316,7 +316,7 @@ export default function HostResourcesSection({ systemHealth }: {
                         contentStyle={tooltipStyle}
                         labelStyle={{ color: '#9CA3AF', fontSize: 11 }}
                         itemStyle={{ color: '#F3F4F6', fontSize: 12 }}
-                        formatter={(value: number) => [`${value.toFixed(1)}%`, 'CPU']}
+                        formatter={(value) => [`${(Number(value) || 0).toFixed(1)}%`, 'CPU']}
                       />
                       <Area type="monotone" dataKey="cpu" stroke="#3B82F6" strokeWidth={2} fill="url(#cpuGradient)" />
                     </AreaChart>
@@ -350,7 +350,7 @@ export default function HostResourcesSection({ systemHealth }: {
                         contentStyle={tooltipStyle}
                         labelStyle={{ color: '#9CA3AF', fontSize: 11 }}
                         itemStyle={{ color: '#F3F4F6', fontSize: 12 }}
-                        formatter={(value: number) => [`${value.toFixed(1)}%`, t('hostResources.memory')]}
+                        formatter={(value) => [`${(Number(value) || 0).toFixed(1)}%`, t('hostResources.memory')]}
                       />
                       <Area type="monotone" dataKey="memory" stroke="#A855F7" strokeWidth={2} fill="url(#memoryGradient)" />
                     </AreaChart>
@@ -384,7 +384,7 @@ export default function HostResourcesSection({ systemHealth }: {
                         contentStyle={tooltipStyle}
                         labelStyle={{ color: '#9CA3AF', fontSize: 11 }}
                         itemStyle={{ color: '#F3F4F6', fontSize: 12 }}
-                        formatter={(value: number) => [`${value.toFixed(1)}%`, t('hostResources.disk')]}
+                        formatter={(value) => [`${(Number(value) || 0).toFixed(1)}%`, t('hostResources.disk')]}
                       />
                       <Area type="monotone" dataKey="disk" stroke="#F97316" strokeWidth={2} fill="url(#diskGradient)" />
                     </AreaChart>
@@ -442,8 +442,9 @@ export default function HostResourcesSection({ systemHealth }: {
                         contentStyle={tooltipStyle}
                         labelStyle={{ color: '#9CA3AF', fontSize: 11 }}
                         itemStyle={{ color: '#F3F4F6', fontSize: 12 }}
-                        formatter={(value: number, name: string) => {
-                          const formatted = value >= 1024 ? `${(value / 1024).toFixed(2)} MB/s` : `${value.toFixed(2)} KB/s`;
+                        formatter={(value, name) => {
+                          const v = Number(value) || 0;
+                          const formatted = v >= 1024 ? `${(v / 1024).toFixed(2)} MB/s` : `${v.toFixed(2)} KB/s`;
                           return [formatted, name === 'networkIn' ? t('hostResources.networkIn') : t('hostResources.networkOut')];
                         }}
                       />
