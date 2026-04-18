@@ -2,7 +2,7 @@ module nginx-proxy-guard
 
 go 1.22.0
 
-toolchain go1.22.12
+toolchain go1.25.0
 
 require (
 	github.com/go-acme/lego/v4 v4.20.4
