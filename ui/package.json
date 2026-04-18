@@ -19,7 +19,7 @@
     "react-datepicker": "^8.10.0",
     "react-dom": "^18.3.1",
     "react-i18next": "^16.4.0",
-    "react-router-dom": "^7.9.6",
+    "react-router-dom": "^7.14.1",
     "react-simple-maps": "^3.0.0",
     "recharts": "^3.5.1",
     "topojson-client": "^3.1.0"
