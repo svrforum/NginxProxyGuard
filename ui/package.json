@@ -10,7 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@tanstack/react-query": "^5.60.0",
+    "@tanstack/react-query": "^5.99.0",
     "@types/topojson-client": "^3.1.5",
     "date-fns": "^4.1.0",
     "i18next": "^25.7.1",
