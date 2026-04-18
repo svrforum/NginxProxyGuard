@@ -17,7 +17,7 @@ interface LogToolbarProps {
   autoRefresh: boolean;
   setAutoRefresh: (v: boolean) => void;
   countdownRef: React.MutableRefObject<number>;
-  countdownElRef: React.RefObject<HTMLSpanElement>;
+  countdownElRef: React.RefObject<HTMLSpanElement | null>;
   handleManualRefresh: () => void;
   logsFetching: boolean;
   lastRefreshLocaleTime: string;
