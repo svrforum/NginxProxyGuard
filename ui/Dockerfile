@@ -4,13 +4,13 @@ FROM node:24-alpine AS builder
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
+COPY package*.json .npmrc ./
 
 # Install dependencies
 RUN npm install
 
 # Copy source (only needed files)
-COPY index.html vite.config.ts tsconfig*.json tailwind.config.js postcss.config.js ./
+COPY index.html vite.config.ts tsconfig*.json ./
 COPY public/ ./public/
 COPY src/ ./src/
 
