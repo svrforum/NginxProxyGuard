@@ -32,7 +32,7 @@ services:
 
   # Valkey (Redis-compatible) for caching (only starts with --profile infra)
   valkey:
-    image: valkey/valkey:8-alpine
+    image: valkey/valkey:9-alpine
     container_name: npg-valkey
     restart: unless-stopped
     profiles: ["infra"]
