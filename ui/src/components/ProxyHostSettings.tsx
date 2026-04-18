@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { ProxyHost } from '../types/proxy-host'
 import RateLimitSettings from './proxy-host-settings/RateLimitSettings'
@@ -18,7 +18,7 @@ export function ProxyHostSettings({ host, onClose }: ProxyHostSettingsProps) {
   const [activeTab, setActiveTab] = useState<TabType>('rate-limit')
   const queryClient = useQueryClient()
 
-  const tabs: { id: TabType; label: string; icon: JSX.Element }[] = [
+  const tabs: { id: TabType; label: string; icon: React.JSX.Element }[] = [
     {
       id: 'rate-limit',
       label: 'Rate Limit',

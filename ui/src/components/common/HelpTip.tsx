@@ -20,7 +20,7 @@ export function HelpTip({ contentKey, content, ns = 'proxyHost', className = '' 
     const tooltipRef = useRef<HTMLDivElement>(null)
     const buttonRef = useRef<HTMLButtonElement>(null)
     // Timer for hover interactions
-    const timerRef = useRef<ReturnType<typeof setTimeout>>()
+    const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
     // Close on click outside
     useEffect(() => {
