@@ -140,7 +140,7 @@ export default function GlobeVisualization({ data, isLoading }: GlobeVisualizati
   const [lastMouse, setLastMouse] = useState({ x: 0, y: 0 });
   const [hoveredCountry, setHoveredCountry] = useState<GeoData | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-  const animationRef = useRef<number>();
+  const animationRef = useRef<number | undefined>(undefined);
 
   // Process data with coordinates
   const processedData = data.map(item => ({
