@@ -28,7 +28,10 @@ test.describe('Access Logs', () => {
 
   test('should have log filter options', async ({ page }) => {
     await page.goto(ROUTES.logsAccess);
-    await page.waitForLoadState('domcontentloaded');
+    await page.waitForLoadState('networkidle');
+
+    // Wait for React to render the log toolbar (Filters button lives in LogToolbar.tsx)
+    await page.locator('button').filter({ hasText: /filter/i }).first().waitFor({ state: 'visible' });
 
     // Should have filter/search capabilities
     const hasFilters = await page.locator('input[type="search"], select, button').filter({
@@ -36,7 +39,7 @@ test.describe('Access Logs', () => {
     }).count() > 0;
 
     // Filter section might be collapsed or in a panel
-    expect(hasFilters || await page.locator('text=/filter/i').count() > 0).toBeTruthy();
+    expect(hasFilters || (await page.locator('text=/filter/i').count()) > 0).toBeTruthy();
   });
 
   test('should navigate between log sub-tabs', async ({ page }) => {
