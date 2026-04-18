@@ -4,7 +4,7 @@
 
 **Goal:** Upgrade the entire stack (frontend, backend, infra) to current stable versions across two minor releases — v2.12.0 (low-risk bundle) and v2.13.0 (major breaking changes) — while maintaining Node.js on LTS and guaranteeing stable operation via Playwright E2E at every step.
 
-**Architecture:** Risk-based 2-phase execution. Phase 1 packages low-risk patch/minor/security updates into a single branch, committed in logical chunks for bisect. Phase 2 groups mature-major upgrades on a separate branch, one breaking change per commit, with full E2E regression after each. Each phase culminates in a single tagged release (v-tag pushed → GitHub Actions multi-arch build).
+**Architecture:** Risk-based 2-phase execution. Phase 1 packages low-risk patch/minor/security updates into a single branch, committed in logical chunks for bisect. Phase 2 groups mature-major upgrades on a separate branch, one breaking change per commit. Per-task gate is a Docker build only; the full Playwright E2E regression runs once at the end of each phase immediately before tagging. Each phase culminates in a single tagged release (v-tag pushed → GitHub Actions multi-arch build).
 
 **Tech Stack:** Go 1.25, Echo v4.15, Nginx 1.30, ModSecurity 3.0.14, OWASP CRS 4.25, Valkey 9, TimescaleDB 17 (pg17), Alpine 3.23, Node 22 LTS, React 19, Vite 7, TailwindCSS 4, TypeScript 5.9, Playwright (E2E), Docker Compose.
 
@@ -16,21 +16,37 @@
 
 ### Why no new tests are written
 
-This plan performs **pure version upgrades** — no new feature code, no behavior change. The existing Playwright regression suite at `test/e2e/specs/` is the acceptance test for every task. Classical Red-Green-Refactor TDD does not apply. Each task follows: **make change → rebuild → run E2E → commit**.
+This plan performs **pure version upgrades** — no new feature code, no behavior change. The existing Playwright regression suite at `test/e2e/specs/` is the acceptance test, run once at the pre-release gate of each phase. Classical Red-Green-Refactor TDD does not apply. Each task follows: **make change → rebuild (Docker build) → commit**.
 
 ### Host lacks Go and Node.js — all builds run in Docker
 
 Per `CLAUDE.md`: "호스트에 Go/Node.js 미설치. 반드시 Docker로 빌드!" Every dependency-manifest modification uses a one-shot Docker container to refresh lockfiles (`go.sum`, `package-lock.json`) so they stay in sync with manifests.
 
-### Standard verification block
+### Verification strategy — build-only per task, full E2E only before each release
 
-Every upgrade task ends with this block (referred to as **"Run standard verification"**):
+E2E runs are slow (~10 min each) and dependency bumps have a high likelihood of passing. Running E2E after every single bump in a 26-task plan adds 4+ hours of mostly-redundant time. Instead:
+
+- **Per-task gate: "Build check block"** — just `docker compose build`. Catches type errors, missing deps, compile failures immediately. Used by Tasks 2–14 and 17–24.
+- **Pre-release gate: "Full E2E block"** — complete Playwright regression suite. Used only by Task 15 (before v2.12.0 tag) and Task 25 (before v2.13.0 tag).
+- **If E2E fails at pre-release:** inspect recent commits in the branch and bisect to identify the offending bump. Fix or revert that specific commit, then rerun E2E.
+
+#### Build check block (per task, referred to as **"Run build check"**)
 
 ```bash
-# 1. Build dev images
+sudo docker compose -f docker-compose.dev.yml build api ui nginx
+```
+
+**Expected result:** exits 0.
+
+**If failure:** fix within the same commit (don't add a follow-up commit). If the root cause cannot be fixed without pinning an older version, stop and surface to the user.
+
+#### Full E2E block (pre-release only, referred to as **"Run full E2E"**)
+
+```bash
+# 1. Build dev images (already done per task, but re-run for final integration)
 sudo docker compose -f docker-compose.dev.yml build api ui nginx
 
-# 2. Rebuild E2E test environment with new images
+# 2. Rebuild E2E test environment with the final image set
 sudo docker compose -f docker-compose.e2e-test.yml build --no-cache
 sudo docker compose -f docker-compose.e2e-test.yml up -d
 
@@ -38,9 +54,7 @@ sudo docker compose -f docker-compose.e2e-test.yml up -d
 cd test/e2e && npx playwright test
 ```
 
-**Expected result:** `docker compose build` exits 0; Playwright reports "X passed" with zero failures.
-
-**If failure:** Fix within the **same commit** (don't add a follow-up commit). If the root cause is the dependency upgrade itself and cannot be fixed without pinning an older version, stop the task and surface to the user.
+**Expected result:** Playwright reports "X passed" with zero failures.
 
 ### Commit style (CLAUDE.md enforced)
 
@@ -127,7 +141,7 @@ FROM golang:1.25-alpine AS builder
 sudo docker run --rm -v "$(pwd)/api":/app -w /app golang:1.25-alpine sh -c 'go mod tidy'
 ```
 
-- [ ] **Step 4: Run standard verification**
+- [ ] **Step 4: Run build check**
 
 - [ ] **Step 5: Commit**
 
@@ -157,7 +171,7 @@ grep 'labstack/echo/v4' api/go.mod
 ```
 Expected: `github.com/labstack/echo/v4 v4.15.0`
 
-- [ ] **Step 3: Run standard verification**
+- [ ] **Step 3: Run build check**
 
 - [ ] **Step 4: Commit**
 
@@ -189,7 +203,7 @@ git diff api/go.mod
 ```
 Confirm only patch-level bumps. If any minor version bumped, reset that specific dep via `go get pkg@prev-minor-version`.
 
-- [ ] **Step 3: Run standard verification**
+- [ ] **Step 3: Run build check**
 
 - [ ] **Step 4: Commit**
 
@@ -225,9 +239,9 @@ With:
 ARG NGINX_VERSION=1.30.0
 ```
 
-- [ ] **Step 2: Run standard verification**
+- [ ] **Step 2: Run build check**
 
-Nginx rebuild is slow (~5–10 min) because it compiles from source. The E2E environment's `npg-proxy` image must be rebuilt fresh — that's what `--no-cache` in the standard block handles.
+Nginx rebuild is slow (~5–10 min) because it compiles from source. The Docker layer cache will reuse earlier steps if only the `NGINX_VERSION` ARG changes. At the pre-release E2E gate (Task 15), `--no-cache` ensures the `npg-proxy` image is rebuilt fresh.
 
 - [ ] **Step 3: Commit**
 
@@ -263,7 +277,7 @@ With:
 ARG OWASP_CRS_VERSION=4.25.0
 ```
 
-- [ ] **Step 2: Run standard verification**
+- [ ] **Step 2: Run build check**
 
 Pay extra attention to:
 - `test/e2e/specs/security/waf.spec.ts`
@@ -307,7 +321,7 @@ sudo docker run --rm -v "$(pwd)/ui":/app -w /app node:22-alpine sh -c \
 ```
 Expected: exit 0, no type errors.
 
-- [ ] **Step 4: Run standard verification**
+- [ ] **Step 4: Run build check**
 
 - [ ] **Step 5: Commit**
 
@@ -337,7 +351,7 @@ grep '"vite"' ui/package.json
 ```
 Expected: `"vite": "^6.x.x"` — must NOT jump to 7.x (that's Phase 2).
 
-- [ ] **Step 3: Run standard verification**
+- [ ] **Step 3: Run build check**
 
 - [ ] **Step 4: Commit**
 
@@ -360,7 +374,7 @@ sudo docker run --rm -v "$(pwd)/ui":/app -w /app node:22-alpine sh -c \
   'npm install @tanstack/react-query@^5.99'
 ```
 
-- [ ] **Step 2: Run standard verification**
+- [ ] **Step 2: Run build check**
 
 - [ ] **Step 3: Commit**
 
@@ -383,7 +397,7 @@ sudo docker run --rm -v "$(pwd)/ui":/app -w /app node:22-alpine sh -c \
   'npm install react-router-dom@^7.14'
 ```
 
-- [ ] **Step 2: Run standard verification**
+- [ ] **Step 2: Run build check**
 
 Router traversal is tested across `test/e2e/specs/` — Dashboard, ProxyHost list navigation, Settings pages all exercise client-side routing.
 
@@ -408,7 +422,7 @@ sudo docker run --rm -v "$(pwd)/ui":/app -w /app node:22-alpine sh -c \
   'npm install recharts@^3.8'
 ```
 
-- [ ] **Step 2: Run standard verification**
+- [ ] **Step 2: Run build check**
 
 Charts render on the Dashboard (`Dashboard.tsx`). Any E2E specs that screenshot/assert dashboard content will exercise recharts.
 
@@ -440,7 +454,7 @@ grep '"i18next"' ui/package.json
 ```
 Expected: `"i18next": "^25.x.x"` — must NOT jump to 26.x (Phase 2).
 
-- [ ] **Step 3: Run standard verification**
+- [ ] **Step 3: Run build check**
 
 - [ ] **Step 4: Commit**
 
@@ -472,7 +486,7 @@ git diff ui/package.json
 ```
 Confirm all changes are patch-level (e.g., `^4.3.3` → `^4.3.7`). If any bump to a minor, revert that single line manually.
 
-- [ ] **Step 3: Run standard verification**
+- [ ] **Step 3: Run build check**
 
 - [ ] **Step 4: Commit**
 
@@ -530,9 +544,11 @@ git commit -m "release: v2.12.0"
 
 **Files:** (none — verification only)
 
-- [ ] **Step 1: Run standard verification once more**
+- [ ] **Step 1: Run full E2E**
 
-All prior tasks verified in isolation. Rerun to confirm the full accumulated diff still passes.
+This is the single pre-release gate for v2.12.0. All Phase 1 upgrade commits are now integrated — verify the full Playwright suite passes before tagging.
+
+If the E2E fails, identify the offending commit via `git log --oneline` of the Phase 1 commits and bisect. Revert or fix that specific bump, then rerun.
 
 - [ ] **Step 2: Verify version endpoint**
 
@@ -628,9 +644,9 @@ With:
 image: valkey/valkey:9-alpine
 ```
 
-- [ ] **Step 2: Run standard verification**
+- [ ] **Step 2: Run build check**
 
-If E2E setup shows Valkey startup issues (likely RDB format incompatibility), wipe the volume:
+At the pre-release E2E gate (Task 25), if Valkey startup fails due to RDB format incompatibility, wipe the volume:
 
 ```bash
 sudo docker compose -f docker-compose.e2e-test.yml down -v
@@ -721,7 +737,7 @@ Confirm:
 - `@tailwind` directives replaced with `@import "tailwindcss"`
 - Custom `primary` color scale preserved (in either `tailwind.config.js` or inline `@theme` in CSS)
 
-- [ ] **Step 7: Run standard verification**
+- [ ] **Step 7: Run build check**
 
 **Extra scrutiny** for this task: Tailwind v4 renames or changes defaults for some utilities (e.g., `shadow-sm` → `shadow-xs`, `rounded-md` default radius). E2E may still pass visually, but any screenshot assertions in `test/e2e/specs/` would catch regressions. After E2E passes, manually browse the dev UI (`sudo docker compose -f docker-compose.dev.yml up -d && open https://localhost`) to confirm dark mode, dashboard cards, buttons render as before.
 
@@ -757,7 +773,7 @@ sudo docker run --rm -v "$(pwd)/ui":/app -w /app node:22-alpine sh -c \
 
 If stderr contains warnings about deprecated config options, update `ui/vite.config.ts` accordingly. Common Vite 7 changes: default `target` raised to `baseline-widely-available`, removal of legacy CommonJS optimizer flags.
 
-- [ ] **Step 3: Run standard verification**
+- [ ] **Step 3: Run build check**
 
 - [ ] **Step 4: Commit**
 
@@ -790,7 +806,7 @@ sudo docker run --rm -v "$(pwd)/ui":/app -w /app node:22-alpine sh -c \
 
 If lint errors are reported, fix the code. If lint configuration errors are reported (e.g., rule removed/renamed), update `ui/eslint.config.js`.
 
-- [ ] **Step 3: Run standard verification**
+- [ ] **Step 3: Run build check**
 
 Build must still pass — lint is not part of the Docker build by default, but E2E covers runtime behavior.
 
@@ -835,7 +851,7 @@ sudo docker run --rm -v "$(pwd)/ui":/app -w /app node:22-alpine sh -c \
 
 Expected: zero type errors. If any type errors appear from React 19's stricter JSX namespace (`JSX.Element` removed in favor of `React.JSX.Element`), fix the affected files inline.
 
-- [ ] **Step 4: Run standard verification**
+- [ ] **Step 4: Run build check**
 
 React 19 Strict Mode double-invokes effects on mount in dev; E2E runs against the built (prod) bundle so this should not manifest, but watch for console errors in the browser devtools during manual smoke.
 
@@ -884,7 +900,7 @@ sudo docker run --rm -v "$(pwd)/ui":/app -w /app node:22-alpine sh -c \
 
 If type errors appear in `ui/src/i18n/index.ts` because init option shape changed, fix that file. Likely-stable props: `fallbackLng`, `defaultNS`, `resources`, `interpolation`, `detection`.
 
-- [ ] **Step 3: Run standard verification**
+- [ ] **Step 3: Run build check**
 
 - [ ] **Step 4: Manual i18n smoke**
 
@@ -987,7 +1003,9 @@ git commit -m "release: v2.13.0"
 
 **Files:** (none — verification only)
 
-- [ ] **Step 1: Run standard verification on accumulated Phase 2 diff**
+- [ ] **Step 1: Run full E2E on accumulated Phase 2 diff**
+
+This is the single pre-release gate for v2.13.0. If the E2E fails, identify the offending Phase 2 commit via `git log --oneline` and bisect. Revert or fix that specific upgrade, then rerun.
 
 - [ ] **Step 2: Verify version endpoint returns 2.13.0**
 
