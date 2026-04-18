@@ -61,7 +61,7 @@
 | Service | Container | Port | Image | Network |
 |---------|-----------|------|-------|---------|
 | db | npg-db | 5432 (내부) | timescale/timescaledb:latest-pg17 | bridge |
-| valkey | npg-valkey | 6379 (내부) | valkey/valkey:8-alpine | bridge |
+| valkey | npg-valkey | 6379 (내부) | valkey/valkey:9-alpine | bridge |
 | api | npg-api | 127.0.0.1:9080→8080 | svrforum/nginxproxyguard-api | bridge |
 | ui | npg-ui | 81→443 | svrforum/nginxproxyguard-ui | bridge |
 | nginx | npg-proxy | 80, 443 | svrforum/nginxproxyguard-nginx | **host** |
