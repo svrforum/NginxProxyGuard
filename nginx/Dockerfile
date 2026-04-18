@@ -5,7 +5,7 @@
 # - nginx: 1.30.0 (stable with HTTP/3 QUIC support)
 # - ModSecurity: 3.0.14
 # - ModSecurity-nginx: 1.0.4
-# - OWASP CRS: 4.20.0
+# - OWASP CRS: 4.25.0
 #
 # References:
 # - https://nginx.org/en/docs/quic.html
@@ -16,7 +16,7 @@
 ARG NGINX_VERSION=1.30.0
 ARG MODSECURITY_VERSION=3.0.14
 ARG MODSECURITY_NGINX_VERSION=1.0.4
-ARG OWASP_CRS_VERSION=4.21.0
+ARG OWASP_CRS_VERSION=4.25.0
 
 # =============================================================================
 # Stage 1: Build Stage
