@@ -13,7 +13,7 @@
     "@tanstack/react-query": "^5.99.0",
     "@types/topojson-client": "^3.1.5",
     "date-fns": "^4.1.0",
-    "i18next": "^25.7.1",
+    "i18next": "^25.10.10",
     "i18next-browser-languagedetector": "^8.2.0",
     "react": "^18.3.1",
     "react-datepicker": "^8.10.0",
