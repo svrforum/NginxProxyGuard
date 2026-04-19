@@ -66,3 +66,7 @@ test/playwright-report/
 test/test-results/
 test/e2e/node_modules/
 test/e2e/.auth/
+
+# Playwright artefacts produced when running from the repo root
+.playwright-mcp/
+/test-results/
