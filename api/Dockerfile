@@ -6,7 +6,9 @@ WORKDIR /app
 # Install dependencies
 RUN apk add --no-cache gcc musl-dev
 
-# Copy go mod files first for caching
+# Copy go mod files first for caching — `go mod download` runs on its own
+# layer so subsequent source-only changes don't re-pull the whole module
+# graph (~80 deps, ~500 MB).
 COPY go.mod go.sum ./
 RUN go mod download
 
@@ -15,8 +17,11 @@ COPY cmd/ ./cmd/
 COPY internal/ ./internal/
 COPY pkg/ ./pkg/
 
-# Download any new dependencies and build
-RUN go mod tidy && CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o server ./cmd/server
+# Build. Intentionally NOT running `go mod tidy` here — tidy mutates go.sum
+# from the source tree, which busts the mod-download cache layer on every
+# code change. If go.mod/go.sum drift from the source, the build fails loud
+# (which is what we want in CI) instead of silently rewriting committed deps.
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o server ./cmd/server
 
 # Runtime stage
 FROM alpine:3.23
