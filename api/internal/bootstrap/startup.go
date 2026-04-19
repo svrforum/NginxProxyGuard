@@ -35,6 +35,19 @@ func runStartup(ctx context.Context, c *Container) error {
 
 	directIPAction := loadGlobalSettingsForStartup(ctx, c)
 
+	// Regenerate main nginx.conf from global settings so operator-edited
+	// values (brotli, timeouts, custom_http/stream_config, …) actually
+	// reach nginx (issue #121). We do this before syncing host configs so
+	// the very first reload after boot is already on the DB-driven file.
+	log.Println("[Startup] Regenerating main nginx.conf from global settings...")
+	if settings, err := c.Repositories.GlobalSettings.Get(ctx); err != nil {
+		log.Printf("[Startup] Warning: failed to load global settings for nginx.conf: %v", err)
+	} else if err := c.Nginx.GenerateMainNginxConfig(ctx, settings); err != nil {
+		log.Printf("[Startup] Warning: failed to regenerate nginx.conf: %v", err)
+	} else {
+		log.Println("[Startup] nginx.conf regenerated successfully")
+	}
+
 	// Generate shared filter subscription config files BEFORE syncing host configs.
 	log.Println("[Startup] Generating shared filter subscription configs...")
 	{

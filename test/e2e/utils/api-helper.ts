@@ -1292,6 +1292,12 @@ export interface GlobalSettingsData {
   proxy_buffering?: string;
   proxy_request_buffering?: string;
   global_trusted_ips?: string;
+
+  // nginx.conf generation (issue #121)
+  brotli_enabled?: boolean;
+  custom_http_config?: string;
+  custom_stream_config?: string;
+  direct_ip_access_action?: string;
 }
 
 export interface SystemSettingsData {
