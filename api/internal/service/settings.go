@@ -83,6 +83,21 @@ func (s *SettingsService) UpdateGlobalSettings(ctx context.Context, req *model.U
 		return nil, fmt.Errorf("failed to update global settings: %w", err)
 	}
 
+	// Regenerate main nginx.conf from the freshly-saved settings so http/stream
+	// block directives (brotli, keepalive, custom_http_config, custom_stream_config,
+	// limit_conn/req zones, …) actually reach nginx (issue #121). Without this
+	// the UI was silently writing to DB with no effect on live nginx.
+	//
+	// GenerateMainNginxConfig itself rolls the file back to the last-known-good
+	// copy on `nginx -t` failure, but we also surface the error so the user
+	// learns their input was rejected (otherwise they see "200 OK" and wonder
+	// why nothing changed). The DB retains the saved value; the operator can
+	// reopen the form and fix it.
+	if err := s.nginxManager.GenerateMainNginxConfig(ctx, settings); err != nil {
+		log.Printf("[SettingsService] nginx.conf regeneration rejected: %v", err)
+		return settings, fmt.Errorf("settings saved but nginx rejected the new config: %w", err)
+	}
+
 	// Regenerate default server config if direct IP access action changed
 	if req.DirectIPAccessAction != nil {
 		if err := s.nginxManager.GenerateDefaultServerConfig(ctx, settings.DirectIPAccessAction); err != nil {
@@ -129,6 +144,11 @@ func (s *SettingsService) ResetGlobalSettings(ctx context.Context) (*model.Globa
 	settings, err := s.settingsRepo.Reset(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to reset global settings: %w", err)
+	}
+
+	// Regenerate main nginx.conf so the reset defaults actually hit nginx.
+	if err := s.nginxManager.GenerateMainNginxConfig(ctx, settings); err != nil {
+		log.Printf("[SettingsService] Warning: failed to regenerate nginx.conf after reset: %v", err)
 	}
 
 	// Regenerate all proxy host configs to apply default global settings

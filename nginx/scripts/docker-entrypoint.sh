@@ -245,23 +245,25 @@ update_static_html() {
 }
 update_static_html
 
-# Main nginx.conf is a project-owned template (user customisations go in conf.d/*.conf).
-# On upgrades the consolidated volume may hold an older copy, so refresh it from the image
-# when the default is newer — otherwise log-format / module changes shipped in a release
-# never reach running deployments.
-update_main_nginx_conf() {
+# Main nginx.conf is owned by the API — it is regenerated from the
+# global_settings table on every startup and on every Global Settings save
+# (issue #121). The image ships a conservative baseline so nginx can come up
+# on the very first boot (before the API has ever run); on subsequent boots
+# the API-generated file already exists and must be preserved so operator
+# customisations stick.
+ensure_main_nginx_conf() {
     local default_conf="$NGINX_DEFAULT/nginx.conf"
     local current_conf="$NGINX_DIR/nginx.conf"
     if [ ! -f "$default_conf" ]; then
         return
     fi
-    if [ ! -f "$current_conf" ] || ! cmp -s "$default_conf" "$current_conf"; then
-        echo "[Entrypoint] Updating main nginx.conf from image defaults..."
+    if [ ! -f "$current_conf" ]; then
+        echo "[Entrypoint] Seeding nginx.conf from image default (first boot)"
         cp -f "$default_conf" "$current_conf"
         chmod 644 "$current_conf"
     fi
 }
-update_main_nginx_conf
+ensure_main_nginx_conf
 
 # Always update ModSecurity configs from defaults (for security fixes and CRS global loading)
 update_modsec_configs() {

@@ -668,7 +668,7 @@ t('common:buttons.save')  // cross-namespace
 
 ```
 nginx/
-├── nginx.conf                  # 메인 (worker, epoll, modules, SSL, gzip, brotli)
+├── nginx.conf                  # API 생성: global_settings 기반 (worker, events, http, stream)
 ├── conf.d/
 │   ├── {domain}.conf           # API 생성: proxy host configs
 │   ├── banned_ips.conf         # API 생성: IP ban list
@@ -686,18 +686,15 @@ nginx/
 └── owasp-crs/                  # OWASP CRS 4.21.0 rules
 ```
 
-**Key nginx.conf Settings:**
-- `worker_processes auto`, `worker_rlimit_nofile 65535`
-- Dynamic modules: modsecurity, brotli, headers_more, geoip2
-- **ModSecurity global**: `modsecurity on; modsecurity_rules_file crs-global.conf;` at http level (CRS loaded once)
-- Per-host WAF: `modsecurity_rules_file host_{id}.conf` (tuning only) or `modsecurity off;` (disabled)
-- Real IP: trusted RFC 1918 ranges, `X-Forwarded-For` header
-- SSL: TLSv1.2 + TLSv1.3, ECDHE ciphers, OCSP stapling
-- HTTP/3: `ssl_early_data on`, `quic_retry on`
-- Gzip level 6 + Brotli level 6
-- Proxy cache: 100m keys zone, 10g max, 60m inactive
-- Access log format: `main`에 `ua="$upstream_addr" us="$upstream_status"` 포함 (Issue #109) — 로드밸런싱된 백엔드 중 실제 응답 서버 추적용. 재시도 발생 시 두 필드 모두 콤마 구분 목록
-- Entrypoint에서 이미지 defaults의 `nginx.conf`를 볼륨에 덮어씀 — 사용자 커스텀은 `conf.d/*.conf`에만 저장되므로 `nginx.conf` 자체는 프로젝트 소유 템플릿 취급 (로그 포맷/모듈 변경이 기존 배포에 전파되도록 함)
+**nginx.conf 생성 (`api/internal/nginx/main_config.go`):**
+- **출처**: `global_settings` 테이블 전체 (worker/events/http/stream 블록의 모든 튜너블) — issue #121
+- **호출 지점**: `bootstrap/startup.go` 기동 시 + `service/settings.go` `UpdateGlobalSettings`/`ResetGlobalSettings`
+- **쓰기**: `writeFileAtomic` → `nginx -t` → `nginx -s reload` (로드 실패 시 이전 파일로 롤백)
+- **이미지 defaults**: `nginx/nginx.conf`는 신규 볼륨 최초 기동 시에만 시드로 사용 (entrypoint `ensure_main_nginx_conf`). 이후 API가 DB에서 재생성하여 덮어씀
+- **고정 섹션**(템플릿 상수로 항상 출력): `load_module`, `set_real_ip_from`, `include geoip-active.conf`, `proxy_cache_path`, `log_format main/json_combined`, `modsecurity on;`+`crs-global.conf`, `include conf.d/*.conf`
+- **DB 연동 섹션**: worker_processes/connections/rlimit_nofile, events(use/multi_accept), keepalive, client_* buffers/timeouts, proxy_* buffers/timeouts, gzip, brotli, ssl_*, resolver, open_file_cache, limit_conn/req zones, reset_timedout_connection, limit_rate, access_log on/off, error_log level, **custom_http_config**, **custom_stream_config**(top-level `stream{}`)
+- Per-host WAF: `modsecurity_rules_file host_{id}.conf` (튜닝 전용) 또는 `modsecurity off;` (비활성)
+- Access log format: `main`에 `ua="$upstream_addr" us="$upstream_status"` 포함 (Issue #109) — 로드밸런싱된 백엔드 중 실제 응답 서버 추적. 재시도 발생 시 두 필드 모두 콤마 구분 목록
 
 ### 4.3 Docker Build
 
