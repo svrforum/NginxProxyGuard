@@ -2699,9 +2699,14 @@ CREATE INDEX IF NOT EXISTS idx_global_waf_policy_history_rule_id ON public.globa
 CREATE INDEX IF NOT EXISTS idx_global_waf_rule_exclusions_rule_id ON public.global_waf_rule_exclusions USING btree (rule_id);
 CREATE INDEX IF NOT EXISTS idx_host_exploit_exclusions_host ON public.host_exploit_rule_exclusions USING btree (proxy_host_id);
 CREATE INDEX IF NOT EXISTS idx_host_exploit_exclusions_rule ON public.host_exploit_rule_exclusions USING btree (rule_id);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_global_exploit_rule_exclusions_rule_uri
+-- Rename legacy uq_* to idx_*_unique to match project convention (v2.13.2)
+ALTER INDEX IF EXISTS uq_global_exploit_rule_exclusions_rule_uri
+    RENAME TO idx_global_exploit_exclusions_rule_uri_unique;
+ALTER INDEX IF EXISTS uq_host_exploit_rule_exclusions_host_rule_uri
+    RENAME TO idx_host_exploit_exclusions_host_rule_uri_unique;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_global_exploit_exclusions_rule_uri_unique
     ON public.global_exploit_rule_exclusions (rule_id, COALESCE(uri_pattern, ''));
-CREATE UNIQUE INDEX IF NOT EXISTS uq_host_exploit_rule_exclusions_host_rule_uri
+CREATE UNIQUE INDEX IF NOT EXISTS idx_host_exploit_exclusions_host_rule_uri_unique
     ON public.host_exploit_rule_exclusions (proxy_host_id, rule_id, COALESCE(uri_pattern, ''));
 CREATE INDEX IF NOT EXISTS idx_ip_ban_history_created_at ON public.ip_ban_history USING btree (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_ip_ban_history_event_type ON public.ip_ban_history USING btree (event_type);
@@ -3624,7 +3629,12 @@ ALTER TABLE public.global_exploit_rule_exclusions
 ALTER TABLE public.host_exploit_rule_exclusions
     DROP CONSTRAINT IF EXISTS host_exploit_rule_exclusions_proxy_host_id_rule_id_key;
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_global_exploit_rule_exclusions_rule_uri
+-- Rename legacy uq_* to idx_*_unique to match project convention (v2.13.2)
+ALTER INDEX IF EXISTS uq_global_exploit_rule_exclusions_rule_uri
+    RENAME TO idx_global_exploit_exclusions_rule_uri_unique;
+ALTER INDEX IF EXISTS uq_host_exploit_rule_exclusions_host_rule_uri
+    RENAME TO idx_host_exploit_exclusions_host_rule_uri_unique;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_global_exploit_exclusions_rule_uri_unique
     ON public.global_exploit_rule_exclusions (rule_id, COALESCE(uri_pattern, ''));
-CREATE UNIQUE INDEX IF NOT EXISTS uq_host_exploit_rule_exclusions_host_rule_uri
+CREATE UNIQUE INDEX IF NOT EXISTS idx_host_exploit_exclusions_host_rule_uri_unique
     ON public.host_exploit_rule_exclusions (proxy_host_id, rule_id, COALESCE(uri_pattern, ''));
