@@ -109,9 +109,14 @@ func (db *DB) RunMigrations() error {
 		ALTER TABLE public.host_exploit_rule_exclusions
 			DROP CONSTRAINT IF EXISTS host_exploit_rule_exclusions_proxy_host_id_rule_id_key;
 
-		CREATE UNIQUE INDEX IF NOT EXISTS uq_global_exploit_rule_exclusions_rule_uri
+		-- Rename legacy uq_* to idx_*_unique to match project convention (v2.13.2)
+		ALTER INDEX IF EXISTS uq_global_exploit_rule_exclusions_rule_uri
+			RENAME TO idx_global_exploit_exclusions_rule_uri_unique;
+		ALTER INDEX IF EXISTS uq_host_exploit_rule_exclusions_host_rule_uri
+			RENAME TO idx_host_exploit_exclusions_host_rule_uri_unique;
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_global_exploit_exclusions_rule_uri_unique
 			ON public.global_exploit_rule_exclusions (rule_id, COALESCE(uri_pattern, ''));
-		CREATE UNIQUE INDEX IF NOT EXISTS uq_host_exploit_rule_exclusions_host_rule_uri
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_host_exploit_exclusions_host_rule_uri_unique
 			ON public.host_exploit_rule_exclusions (proxy_host_id, rule_id, COALESCE(uri_pattern, ''));
 
 		-- Default exploit block rules (seed if not exists)
