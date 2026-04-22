@@ -98,6 +98,22 @@ func (db *DB) RunMigrations() error {
 		-- and BEFORE the one-shot UPDATE further down (which writes to it).
 		ALTER TABLE public.exploit_block_rules ADD COLUMN IF NOT EXISTS auto_disabled_at timestamp with time zone;
 
+		-- v2.13.2 (issue #123): URI-scoped per-rule exploit exclusions.
+		-- NULL uri_pattern = rule fully excluded (legacy behavior);
+		-- non-NULL = rule excluded only when $request_uri matches the regex.
+		ALTER TABLE public.host_exploit_rule_exclusions ADD COLUMN IF NOT EXISTS uri_pattern text;
+		ALTER TABLE public.global_exploit_rule_exclusions ADD COLUMN IF NOT EXISTS uri_pattern text;
+
+		ALTER TABLE public.global_exploit_rule_exclusions
+			DROP CONSTRAINT IF EXISTS global_exploit_rule_exclusions_rule_id_key;
+		ALTER TABLE public.host_exploit_rule_exclusions
+			DROP CONSTRAINT IF EXISTS host_exploit_rule_exclusions_proxy_host_id_rule_id_key;
+
+		CREATE UNIQUE INDEX IF NOT EXISTS uq_global_exploit_rule_exclusions_rule_uri
+			ON public.global_exploit_rule_exclusions (rule_id, COALESCE(uri_pattern, ''));
+		CREATE UNIQUE INDEX IF NOT EXISTS uq_host_exploit_rule_exclusions_host_rule_uri
+			ON public.host_exploit_rule_exclusions (proxy_host_id, rule_id, COALESCE(uri_pattern, ''));
+
 		-- Default exploit block rules (seed if not exists)
 		-- The three rules with auto_disabled_at=now() (SQL Commands, SQL Keywords, XSS Special Characters)
 		-- ship disabled because their simple keyword patterns produce false positives on legitimate
@@ -365,6 +381,17 @@ func (db *DB) RunMigrations() error {
 			// seeded/one-shot UPDATE logic there is a no-op rather than a hard fail.
 			desc: "exploit_block_rules.auto_disabled_at",
 			sql:  `ALTER TABLE public.exploit_block_rules ADD COLUMN IF NOT EXISTS auto_disabled_at timestamp with time zone`,
+		},
+		{
+			// Issue #123 — URI-scoped per-rule exploit exclusions (v2.13.2+).
+			// Defense-in-depth: ensure the column lands even if upgradeSQL aborts
+			// earlier. Handlers/repositories depend on this column being present.
+			desc: "host_exploit_rule_exclusions.uri_pattern",
+			sql:  `ALTER TABLE public.host_exploit_rule_exclusions ADD COLUMN IF NOT EXISTS uri_pattern text`,
+		},
+		{
+			desc: "global_exploit_rule_exclusions.uri_pattern",
+			sql:  `ALTER TABLE public.global_exploit_rule_exclusions ADD COLUMN IF NOT EXISTS uri_pattern text`,
 		},
 		{
 			// Rebuild logs_unified so it exposes the new columns. The view UNIONs `logs`
