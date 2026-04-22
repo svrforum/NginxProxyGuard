@@ -553,6 +553,7 @@ CREATE TABLE IF NOT EXISTS public.geoip_update_history (
 CREATE TABLE IF NOT EXISTS public.global_exploit_rule_exclusions (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     rule_id uuid NOT NULL,
+    uri_pattern text,
     reason text,
     disabled_by character varying(100),
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP
@@ -679,6 +680,7 @@ CREATE TABLE IF NOT EXISTS public.host_exploit_rule_exclusions (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     proxy_host_id uuid NOT NULL,
     rule_id uuid NOT NULL,
+    uri_pattern text,
     reason text,
     disabled_by character varying(100),
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP
@@ -2517,8 +2519,6 @@ ALTER TABLE ONLY public.geoip_update_history
     ADD CONSTRAINT geoip_update_history_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.global_exploit_rule_exclusions
     ADD CONSTRAINT global_exploit_rule_exclusions_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY public.global_exploit_rule_exclusions
-    ADD CONSTRAINT global_exploit_rule_exclusions_rule_id_key UNIQUE (rule_id);
 ALTER TABLE ONLY public.global_settings
     ADD CONSTRAINT global_settings_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.global_uri_blocks
@@ -2531,8 +2531,6 @@ ALTER TABLE ONLY public.global_waf_rule_exclusions
     ADD CONSTRAINT global_waf_rule_exclusions_rule_id_key UNIQUE (rule_id);
 ALTER TABLE ONLY public.host_exploit_rule_exclusions
     ADD CONSTRAINT host_exploit_rule_exclusions_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY public.host_exploit_rule_exclusions
-    ADD CONSTRAINT host_exploit_rule_exclusions_proxy_host_id_rule_id_key UNIQUE (proxy_host_id, rule_id);
 ALTER TABLE ONLY public.ip_ban_history
     ADD CONSTRAINT ip_ban_history_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.log_settings
@@ -2701,6 +2699,10 @@ CREATE INDEX IF NOT EXISTS idx_global_waf_policy_history_rule_id ON public.globa
 CREATE INDEX IF NOT EXISTS idx_global_waf_rule_exclusions_rule_id ON public.global_waf_rule_exclusions USING btree (rule_id);
 CREATE INDEX IF NOT EXISTS idx_host_exploit_exclusions_host ON public.host_exploit_rule_exclusions USING btree (proxy_host_id);
 CREATE INDEX IF NOT EXISTS idx_host_exploit_exclusions_rule ON public.host_exploit_rule_exclusions USING btree (rule_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_global_exploit_rule_exclusions_rule_uri
+    ON public.global_exploit_rule_exclusions (rule_id, COALESCE(uri_pattern, ''));
+CREATE UNIQUE INDEX IF NOT EXISTS uq_host_exploit_rule_exclusions_host_rule_uri
+    ON public.host_exploit_rule_exclusions (proxy_host_id, rule_id, COALESCE(uri_pattern, ''));
 CREATE INDEX IF NOT EXISTS idx_ip_ban_history_created_at ON public.ip_ban_history USING btree (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_ip_ban_history_event_type ON public.ip_ban_history USING btree (event_type);
 CREATE INDEX IF NOT EXISTS idx_ip_ban_history_ip ON public.ip_ban_history USING btree (ip_address);
@@ -3610,3 +3612,19 @@ ALTER TABLE global_settings ADD COLUMN IF NOT EXISTS enable_ipv6 BOOLEAN NOT NUL
 -- One-shot UPDATE in migration.go uses this column to avoid clobbering
 -- admins who have consciously re-enabled the three overly-broad default rules.
 ALTER TABLE public.exploit_block_rules ADD COLUMN IF NOT EXISTS auto_disabled_at timestamp with time zone;
+
+-- v2.13.2 (issue #123): URI-scoped per-rule exploit exclusions
+ALTER TABLE public.host_exploit_rule_exclusions ADD COLUMN IF NOT EXISTS uri_pattern text;
+ALTER TABLE public.global_exploit_rule_exclusions ADD COLUMN IF NOT EXISTS uri_pattern text;
+
+-- Drop legacy single-column UNIQUE constraints and replace with composite indexes
+-- that include uri_pattern (so a rule can have multiple URI-scoped exclusions).
+ALTER TABLE public.global_exploit_rule_exclusions
+    DROP CONSTRAINT IF EXISTS global_exploit_rule_exclusions_rule_id_key;
+ALTER TABLE public.host_exploit_rule_exclusions
+    DROP CONSTRAINT IF EXISTS host_exploit_rule_exclusions_proxy_host_id_rule_id_key;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_global_exploit_rule_exclusions_rule_uri
+    ON public.global_exploit_rule_exclusions (rule_id, COALESCE(uri_pattern, ''));
+CREATE UNIQUE INDEX IF NOT EXISTS uq_host_exploit_rule_exclusions_host_rule_uri
+    ON public.host_exploit_rule_exclusions (proxy_host_id, rule_id, COALESCE(uri_pattern, ''));
