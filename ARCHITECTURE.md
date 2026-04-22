@@ -803,7 +803,7 @@ Tag push (v*) → detect changes (SHA256 per component)
 | `security_headers` | 보안 헤더 | HSTS, X-Frame-Options, CSP, etc. |
 | `uri_blocks` / `global_uri_blocks` | URI 차단 | rules (JSONB), exception_ips |
 | `waf_rule_exclusions` / `global_waf_rule_exclusions` | WAF 규칙 제외 | rule_id |
-| `exploit_block_rules` | 익스플로잇 차단 | pattern, pattern_type, category |
+| `exploit_block_rules` | 익스플로잇 차단 | pattern, pattern_type, category, enabled, is_system, auto_disabled_at |
 | `challenge_configs` | CAPTCHA 설정 | challenge_type, site_key, secret_key |
 | `cloud_providers` | 클라우드 IP 차단 | slug, ip_ranges[], ip_ranges_url |
 | `waf_rule_change_events` | WAF 규칙 변경 감사 이력 | proxy_host_id, rule_id, action, created_at |
@@ -814,6 +814,18 @@ Tag push (v*) → detect changes (SHA256 per component)
 | `filter_subscription_host_exclusions` | 호스트별 구독 제외 | subscription_id, proxy_host_id |
 | `filter_subscription_entry_exclusions` | 구독 항목별 제외 | subscription_id, value, created_at |
 | `login_attempts` | 로그인 시도 추적 (잠금) | ip_address, username, success, attempted_at |
+
+#### exploit_block_rules 시스템 규칙 기본값
+
+일부 시드 규칙은 탐지력 대비 오탐 비율이 높아 `enabled=false`로 배포한다. `auto_disabled_at` 컬럼은 npg 마이그레이션이 해당 row에 개입했음을 기록하는 멱등성 마커다. 기존 사용자 업그레이드 시 아래 규칙을 자동 비활성화하며 동일 컬럼에 `now()`를 기록하고, 이후 사용자가 UI에서 재활성화하면 해당 값이 유지되어 다음 업그레이드는 건드리지 않는다.
+
+| Rule ID | Name | Category | 비활성화 이유 |
+|---------|------|----------|--------------|
+| `a5cb921c-…` | SQL Commands | sql_injection | `;`, `\|`, `>`, `<`, `@` 등 평범한 URL 문자 다수 매치 |
+| `41d1f7bf-…` | SQL Keywords | sql_injection | `update`, `select` 등 일반 검색어 매치 (issue #123) |
+| `aa90285b-…` | XSS Special Characters | xss | 따옴표, 세미콜론 등 정상 파라미터 매치 |
+
+관리 경로: `/waf/exploit-rules`. ModSecurity + OWASP CRS가 이들 공격 벡터를 더 정교하게 탐지한다.
 
 ### 5.4 Auth/Settings Tables
 
