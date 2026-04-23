@@ -62,268 +62,463 @@ func (db *DB) RunMigrations() error {
 		log.Println("Schema already initialized, running upgrades only...")
 	}
 
-	// Always run upgrade statements for existing installations
-	upgradeSQL := `
-		-- Enum upgrades (safe to run multiple times)
-		ALTER TYPE public.block_reason ADD VALUE IF NOT EXISTS 'cloud_provider_challenge';
-		ALTER TYPE public.block_reason ADD VALUE IF NOT EXISTS 'cloud_provider_block';
-		ALTER TYPE public.block_reason ADD VALUE IF NOT EXISTS 'uri_block';
-		ALTER TYPE public.block_reason ADD VALUE IF NOT EXISTS 'access_denied';
-		ALTER TYPE public.block_reason ADD VALUE IF NOT EXISTS 'filter_subscription';
-
-		-- Column upgrades
-		ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS cache_static_only boolean DEFAULT true NOT NULL;
-		ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS cache_ttl character varying(20) DEFAULT '7d' NOT NULL;
-		ALTER TABLE public.geo_restrictions ADD COLUMN IF NOT EXISTS allow_search_bots_cloud_providers boolean DEFAULT false;
-		ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS is_favorite boolean DEFAULT false NOT NULL;
-
-		-- Host-level proxy settings (v1.3.4+)
-		ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS proxy_connect_timeout integer DEFAULT 0;
-		ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS proxy_send_timeout integer DEFAULT 0;
-		ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS proxy_read_timeout integer DEFAULT 0;
-		ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS proxy_buffering character varying(10) DEFAULT '';
-		ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS proxy_request_buffering character varying(10) DEFAULT '';
-		ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS client_max_body_size character varying(20) DEFAULT '';
-		ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS proxy_max_temp_file_size character varying(20) DEFAULT '';
-
-		-- Global settings: proxy buffering columns (v2.4.0+)
-		ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS proxy_buffering character varying(10) DEFAULT '';
-		ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS proxy_request_buffering character varying(10) DEFAULT '';
-
-		-- Global settings: ssl_ecdh_curve for ML-KEM/post-quantum TLS support (v2.5.0+)
-		ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS ssl_ecdh_curve character varying(255) DEFAULT 'X25519MLKEM768:X25519:secp256r1:secp384r1' NOT NULL;
-
-		-- v2.13.2 (issue #123): Exploit rule auto-disable marker column.
-		-- Must be added BEFORE the seed INSERT below (which references the column)
-		-- and BEFORE the one-shot UPDATE further down (which writes to it).
-		ALTER TABLE public.exploit_block_rules ADD COLUMN IF NOT EXISTS auto_disabled_at timestamp with time zone;
-
-		-- v2.13.2 (issue #123): URI-scoped per-rule exploit exclusions.
-		-- NULL uri_pattern = rule fully excluded (legacy behavior);
-		-- non-NULL = rule excluded only when $request_uri matches the regex.
-		ALTER TABLE public.host_exploit_rule_exclusions ADD COLUMN IF NOT EXISTS uri_pattern text;
-		ALTER TABLE public.global_exploit_rule_exclusions ADD COLUMN IF NOT EXISTS uri_pattern text;
-
-		ALTER TABLE public.global_exploit_rule_exclusions
-			DROP CONSTRAINT IF EXISTS global_exploit_rule_exclusions_rule_id_key;
-		ALTER TABLE public.host_exploit_rule_exclusions
-			DROP CONSTRAINT IF EXISTS host_exploit_rule_exclusions_proxy_host_id_rule_id_key;
-
-		-- Rename legacy uq_* to idx_*_unique to match project convention (v2.13.2)
-		ALTER INDEX IF EXISTS uq_global_exploit_rule_exclusions_rule_uri
-			RENAME TO idx_global_exploit_exclusions_rule_uri_unique;
-		ALTER INDEX IF EXISTS uq_host_exploit_rule_exclusions_host_rule_uri
-			RENAME TO idx_host_exploit_exclusions_host_rule_uri_unique;
-		CREATE UNIQUE INDEX IF NOT EXISTS idx_global_exploit_exclusions_rule_uri_unique
-			ON public.global_exploit_rule_exclusions (rule_id, COALESCE(uri_pattern, ''));
-		CREATE UNIQUE INDEX IF NOT EXISTS idx_host_exploit_exclusions_host_rule_uri_unique
-			ON public.host_exploit_rule_exclusions (proxy_host_id, rule_id, COALESCE(uri_pattern, ''));
-
-		-- Default exploit block rules (seed if not exists)
-		-- The three rules with auto_disabled_at=now() (SQL Commands, SQL Keywords, XSS Special Characters)
-		-- ship disabled because their simple keyword patterns produce false positives on legitimate
-		-- search/CMS query strings. auto_disabled_at is pre-set on fresh install so the one-shot
-		-- upgrade UPDATE (below) will not clobber an admin's conscious choice to re-enable. (Issue #123)
-		INSERT INTO public.exploit_block_rules (id, category, name, pattern, pattern_type, description, severity, enabled, is_system, sort_order, auto_disabled_at) VALUES
-		('4243721e-8f8d-4a2b-8496-0be62d50163f', 'sql_injection', 'SQL Union Select', E'(\\"|''|` + "`" + `)(.*)(union)(.*)(select)(\\"|''|` + "`" + `)' , 'query_string', 'Blocks SQL UNION SELECT injection attempts', 'critical', true, true, 1, NULL),
-		('a5cb921c-2c10-475b-8753-a56e2af1e5ba', 'sql_injection', 'SQL Commands', E'(;|\\||` + "`" + `|>|<|\\^|@)', 'query_string', 'Blocks SQL command characters (semicolon, pipe, backtick, redirects) (disabled by default: matches common URL characters like @, <, >; high false-positive rate)', 'warning', false, true, 2, now()),
-		('41d1f7bf-9179-44cb-b41a-1685ce88d965', 'sql_injection', 'SQL Keywords', E'\\b(select|insert|update|delete|drop|truncate|alter|create|exec)\\b', 'query_string', 'Blocks common SQL keywords in query strings (disabled by default: matches plain English words like ''update''/''select'' in search queries; ModSecurity/CRS handles SQL injection detection more precisely)', 'warning', false, true, 3, now()),
-		('b890779f-757c-4461-a64a-dce59fb469e3', 'xss', 'Script Tags', '<script', 'query_string', 'Blocks script tag injection', 'critical', true, true, 10, NULL),
-		('27ed45b1-e030-4212-bc34-edc7e13a9695', 'xss', 'Event Handlers', 'on(click|load|error|mouseover|focus|blur|change|submit)=', 'query_string', 'Blocks JavaScript event handler injection', 'critical', true, true, 11, NULL),
-		('aa90285b-2986-46f9-80e6-99946327cd24', 'xss', 'Special Characters', '(;|<|>|"|%0A|%0D|%22|%3C|%3E|%00)', 'query_string', 'Blocks XSS special characters (semicolon, angle brackets, encoded newlines/quotes/null) (disabled by default: matches common characters in legitimate URL parameters like quotes; CRS provides more precise XSS detection)', 'warning', false, true, 12, now()),
-		('23b31cc1-0e43-49af-b9c9-4093fd0cbcdc', 'rfi', 'URL Parameter Injection', '[a-zA-Z0-9_]=https?://', 'query_string', 'Blocks URL values in query parameters (RFI)', 'critical', true, true, 20, NULL),
-		('7db3e194-8731-40c1-afaa-b7555c017a3f', 'rfi', 'Path Traversal Sequences', E'[a-zA-Z0-9_]=(\\.\\./)+', 'query_string', 'Blocks path traversal in parameters', 'critical', true, true, 21, NULL),
-		('650c5e4a-c373-4d99-9cac-9e86b55bcb33', 'rfi', 'Directory Traversal', E'\\.\\./', 'query_string', 'Blocks directory traversal patterns', 'warning', true, true, 22, NULL),
-		('f055a131-0596-419f-944a-cb7fa40f5c59', 'scanner', 'Nikto Scanner', 'nikto', 'user_agent', 'Blocks Nikto vulnerability scanner', 'critical', true, true, 30, NULL),
-		('f13159ab-0e9a-45ea-aa4b-03fde63bb3e6', 'scanner', 'SQLMap Tool', 'sqlmap', 'user_agent', 'Blocks SQLMap SQL injection tool', 'critical', true, true, 31, NULL),
-		('a9baaa39-ccd9-4f8a-82c0-e7d85f02cc2f', 'scanner', 'DirBuster', 'dirbuster', 'user_agent', 'Blocks DirBuster directory scanner', 'critical', true, true, 32, NULL),
-		('8208101f-eb91-4b86-8396-f295cd16d04b', 'scanner', 'Nmap Scanner', 'nmap', 'user_agent', 'Blocks Nmap network scanner', 'warning', true, true, 33, NULL),
-		('7efe59af-2d2a-405e-bbe8-951757e72ef4', 'scanner', 'Nessus Scanner', 'nessus', 'user_agent', 'Blocks Nessus vulnerability scanner', 'warning', true, true, 34, NULL),
-		('9a5f6bcb-ceec-47f1-9f8c-dadb815711fa', 'scanner', 'OpenVAS Scanner', 'openvas', 'user_agent', 'Blocks OpenVAS security scanner', 'warning', true, true, 35, NULL),
-		('ab3b4e85-08fd-49fe-b76d-3dc5cdf5a248', 'scanner', 'W3AF Scanner', 'w3af', 'user_agent', 'Blocks W3AF web scanner', 'warning', true, true, 36, NULL),
-		('eb60d9dd-1d53-4a42-b571-cef1d1314d4d', 'scanner', 'Acunetix Scanner', 'acunetix', 'user_agent', 'Blocks Acunetix web scanner', 'warning', true, true, 37, NULL),
-		('86fddcd3-30ca-43d3-bd46-34875e018395', 'scanner', 'Havij Tool', 'havij', 'user_agent', 'Blocks Havij SQL injection tool', 'critical', true, true, 38, NULL),
-		('bd7eeece-8f91-41a6-b06c-1ad69900512d', 'scanner', 'AppScan', 'appscan', 'user_agent', 'Blocks IBM AppScan', 'warning', true, true, 39, NULL),
-		('6ee9b160-9472-4584-9c83-8de7b955a4b5', 'scanner', 'WebScarab', 'webscarab', 'user_agent', 'Blocks WebScarab proxy', 'warning', true, true, 40, NULL),
-		('e78e2ef1-d710-409b-8a44-a03db3999b19', 'scanner', 'WebInspect', 'webinspect', 'user_agent', 'Blocks HP WebInspect', 'warning', true, true, 41, NULL),
-		('8ec83a35-dea8-4f51-9185-37035f0a4501', 'http_method', 'Dangerous Methods', '^(TRACE|TRACK|DEBUG|CONNECT)$', 'request_method', 'Blocks dangerous HTTP methods', 'warning', true, true, 50, NULL)
-		ON CONFLICT (id) DO NOTHING;
-
-		-- NOTE: the v2.13.2 one-shot auto-disable for overly-broad system rules
-		-- (Issue #123) intentionally lives OUTSIDE this upgradeSQL block — see the
-		-- ApplyExploitRulesAutoDisable(db) call below. Placing it here was a bug in
-		-- v2.13.2: if any earlier statement in upgradeSQL fails (e.g. a stale
-		-- TimescaleDB chunk causes a pq chunk-not-found error), PostgreSQL aborts the
-		-- implicit transaction and every subsequent statement — including the DO $$
-		-- block — silently skips, leaving the three overly-broad rules enabled on
-		-- exactly the installations that needed the fix. v2.13.3 moves the helper
-		-- to its own db.Exec so it runs regardless of upgradeSQL outcome.
-
-		-- Performance indexes for logs_partitioned (v2.4.0+)
-		CREATE INDEX IF NOT EXISTS idx_logs_part_block_reason_ts ON logs_partitioned (block_reason, timestamp DESC) WHERE block_reason != 'none';
-		CREATE INDEX IF NOT EXISTS idx_logs_part_client_ip ON logs_partitioned (client_ip);
-		CREATE INDEX IF NOT EXISTS idx_logs_part_created_at ON logs_partitioned (created_at DESC);
-		CREATE INDEX IF NOT EXISTS idx_logs_part_status_code ON logs_partitioned (status_code) WHERE status_code IS NOT NULL;
-
-		-- proxy_hosts config status tracking (v2.3.5+)
-		ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS config_status character varying(20) DEFAULT 'ok' NOT NULL;
-		ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS config_error text;
-
-		-- Add foreign key constraint for proxy_hosts.access_list_id (v1.3.31+)
-		-- First clean up any orphaned references, then add FK with ON DELETE SET NULL
-		DO $$
-		BEGIN
-			-- Clean up orphaned access_list_id references
-			UPDATE public.proxy_hosts
-			SET access_list_id = NULL
-			WHERE access_list_id IS NOT NULL
-			  AND access_list_id NOT IN (SELECT id FROM public.access_lists);
-
-			-- Add FK constraint if not exists
-			IF NOT EXISTS (
-				SELECT 1 FROM pg_constraint WHERE conname = 'proxy_hosts_access_list_id_fkey'
-			) THEN
-				ALTER TABLE public.proxy_hosts
-				ADD CONSTRAINT proxy_hosts_access_list_id_fkey
-				FOREIGN KEY (access_list_id) REFERENCES public.access_lists(id) ON DELETE SET NULL;
-			END IF;
-		END $$;
-
-		-- Filter subscription tables (v2.7.0+)
-		CREATE TABLE IF NOT EXISTS public.filter_subscriptions (
-			id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
-			name text NOT NULL,
-			description text,
-			url text NOT NULL UNIQUE,
-			format character varying(20) NOT NULL DEFAULT 'npg-json',
-			type character varying(20) NOT NULL,
-			enabled boolean DEFAULT true,
-			refresh_type character varying(20) NOT NULL DEFAULT 'interval',
-			refresh_value character varying(50) NOT NULL DEFAULT '24h',
-			last_fetched_at timestamp with time zone,
-			last_success_at timestamp with time zone,
-			last_error text,
-			entry_count integer DEFAULT 0,
-			created_at timestamp with time zone DEFAULT now(),
-			updated_at timestamp with time zone DEFAULT now()
-		);
-
-		CREATE TABLE IF NOT EXISTS public.filter_subscription_entries (
-			id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
-			subscription_id uuid NOT NULL REFERENCES public.filter_subscriptions(id) ON DELETE CASCADE,
-			value text NOT NULL,
-			reason text,
-			created_at timestamp with time zone DEFAULT now(),
-			UNIQUE(subscription_id, value)
-		);
-
-		CREATE INDEX IF NOT EXISTS idx_fse_subscription ON public.filter_subscription_entries(subscription_id);
-		CREATE INDEX IF NOT EXISTS idx_fse_value ON public.filter_subscription_entries(value);
-
-		CREATE TABLE IF NOT EXISTS public.filter_subscription_host_exclusions (
-			id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
-			subscription_id uuid NOT NULL REFERENCES public.filter_subscriptions(id) ON DELETE CASCADE,
-			proxy_host_id uuid NOT NULL REFERENCES public.proxy_hosts(id) ON DELETE CASCADE,
-			created_at timestamp with time zone DEFAULT now(),
-			UNIQUE(subscription_id, proxy_host_id)
-		);
-
-		CREATE INDEX IF NOT EXISTS idx_fshe_proxy_host ON public.filter_subscription_host_exclusions(proxy_host_id);
-
-		-- Filter subscription entry exclusions (v2.8.0+)
-		CREATE TABLE IF NOT EXISTS public.filter_subscription_entry_exclusions (
-			id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
-			subscription_id uuid NOT NULL REFERENCES public.filter_subscriptions(id) ON DELETE CASCADE,
-			value text NOT NULL,
-			created_at timestamp with time zone DEFAULT now(),
-			UNIQUE(subscription_id, value)
-		);
-
-		CREATE INDEX IF NOT EXISTS idx_fsee_subscription ON public.filter_subscription_entry_exclusions(subscription_id);
-
-		ALTER TABLE public.filter_subscriptions ADD COLUMN IF NOT EXISTS exclude_private_ips boolean DEFAULT false;
-
-		-- Global trusted IPs for bypassing all security features (v2.7.3+)
-		ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS global_trusted_ips text DEFAULT '';
-
-		-- DB Performance: composite indexes for logs_partitioned (v2.8.0+)
-		CREATE INDEX IF NOT EXISTS idx_logs_part_host_ts ON logs_partitioned (host, timestamp DESC);
-		CREATE INDEX IF NOT EXISTS idx_logs_part_status_ts ON logs_partitioned (status_code, timestamp DESC) WHERE status_code IS NOT NULL;
-		CREATE INDEX IF NOT EXISTS idx_logs_part_proxy_host_ts ON logs_partitioned (proxy_host_id, timestamp DESC) WHERE proxy_host_id IS NOT NULL;
-		CREATE INDEX IF NOT EXISTS idx_logs_part_geo_ts ON logs_partitioned (geo_country_code, timestamp DESC) WHERE geo_country_code IS NOT NULL AND geo_country_code != '';
-		CREATE INDEX IF NOT EXISTS idx_logs_part_type_created ON logs_partitioned (log_type, created_at DESC);
-
-		-- Performance indexes for log queries (GitHub Issue #96)
-		CREATE INDEX IF NOT EXISTS idx_logs_part_block_reason ON logs_partitioned (block_reason) WHERE block_reason != 'none';
-		CREATE INDEX IF NOT EXISTS idx_logs_part_status_created ON logs_partitioned (status_code, created_at);
-
-		-- Deduplicate dashboard_stats_hourly rows with NULL proxy_host_id (GitHub Issue #96)
-		-- Previous versions inserted duplicate rows per hour_bucket because NULL != NULL in UNIQUE constraints.
-		-- Keep the row with the highest total_requests for each hour_bucket, delete the rest.
-		DELETE FROM dashboard_stats_hourly a
-		USING dashboard_stats_hourly b
-		WHERE a.proxy_host_id IS NULL
-		  AND b.proxy_host_id IS NULL
-		  AND a.hour_bucket = b.hour_bucket
-		  AND a.id != b.id
-		  AND (a.total_requests < b.total_requests OR (a.total_requests = b.total_requests AND a.id < b.id));
-
-		-- Create a partial unique index for NULL proxy_host_id to prevent future duplicates.
-		-- The standard UNIQUE(proxy_host_id, hour_bucket) does not prevent duplicate NULLs.
-		CREATE UNIQUE INDEX IF NOT EXISTS idx_dashboard_stats_hourly_null_host_bucket
-			ON dashboard_stats_hourly (hour_bucket) WHERE proxy_host_id IS NULL;
-
-		-- v2.9.0: IPv6 toggle
-		ALTER TABLE global_settings ADD COLUMN IF NOT EXISTS enable_ipv6 BOOLEAN NOT NULL DEFAULT TRUE;
-	`
-	_, err = db.Exec(upgradeSQL)
-	if err != nil {
-		log.Printf("Warning: upgrade statements had errors (may be already applied): %v", err)
-	}
-
 	// ===========================================================================
-	// Independent upgrade statements — REQUIRED for any NEW column upgrade.
+	// Per-statement upgrade executions. Each entry runs in its own db.Exec so
+	// a failure (common: pq: chunk not found from orphaned TimescaleDB chunks in
+	// old dashboard_stats_hourly data) cannot abort the implicit transaction and
+	// silently skip subsequent statements.
+	//
+	// Historical context: prior to v2.13.4 this file had a large upgradeSQL raw-
+	// string sent as a single Exec. That cascade-abort bug caused Issues #105 and
+	// #123 fixes to silently skip on affected installs. v2.13.4 fully replaced
+	// upgradeSQL with this structured slice. Every new upgrade statement belongs
+	// here; NEVER reintroduce a multi-statement Exec.
 	// ===========================================================================
-	//
-	// The big upgradeSQL block above is sent to lib/pq as a single multi-statement
-	// Exec. On production databases where an earlier statement fails (e.g. the
-	// dashboard_stats_hourly DELETE hits `pq: chunk not found` from an orphaned
-	// TimescaleDB chunk), PostgreSQL aborts the implicit transaction and every
-	// subsequent statement in the same Exec is silently skipped. The error is
-	// swallowed by the `log.Printf("Warning: ...")` above and startup continues,
-	// but any ALTER TABLE sitting after the failing statement never ran.
-	//
-	// That exact bug kept `ui_error_page_language` (Issue #105) from being added
-	// on some v2.8.3 upgrades. To prevent a recurrence:
-	//
-	//   Any column upgrade that MUST land on existing installations should be
-	//   added to `independentAlters` below, NOT to the upgradeSQL block above.
-	//   Each entry runs in its own db.Exec, so one failure cannot cascade to
-	//   the next.
-	//
-	// The old upgradeSQL block is kept for historical/TimescaleDB statements we
-	// cannot easily split, but it is effectively frozen — do not add new column
-	// upgrades there.
-	independentAlters := []struct {
+	upgrades := []struct {
 		desc string
 		sql  string
 	}{
+		// -----------------------------------------------------------------------
+		// Enum upgrades (block_reason) — safe to run multiple times.
+		// ALTER TYPE ... ADD VALUE IF NOT EXISTS is non-transactional in PG,
+		// so these are grouped for readability; each is independently idempotent.
+		// -----------------------------------------------------------------------
 		{
-			// Issue #105 — Default language for public error pages (403, etc.)
+			desc: "block_reason enum: cloud_provider_challenge",
+			sql:  `ALTER TYPE public.block_reason ADD VALUE IF NOT EXISTS 'cloud_provider_challenge'`,
+		},
+		{
+			desc: "block_reason enum: cloud_provider_block",
+			sql:  `ALTER TYPE public.block_reason ADD VALUE IF NOT EXISTS 'cloud_provider_block'`,
+		},
+		{
+			desc: "block_reason enum: uri_block",
+			sql:  `ALTER TYPE public.block_reason ADD VALUE IF NOT EXISTS 'uri_block'`,
+		},
+		{
+			desc: "block_reason enum: access_denied",
+			sql:  `ALTER TYPE public.block_reason ADD VALUE IF NOT EXISTS 'access_denied'`,
+		},
+		{
+			desc: "block_reason enum: filter_subscription",
+			sql:  `ALTER TYPE public.block_reason ADD VALUE IF NOT EXISTS 'filter_subscription'`,
+		},
+
+		// -----------------------------------------------------------------------
+		// Column upgrades (early versions)
+		// -----------------------------------------------------------------------
+		{
+			desc: "proxy_hosts.cache_static_only",
+			sql:  `ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS cache_static_only boolean DEFAULT true NOT NULL`,
+		},
+		{
+			desc: "proxy_hosts.cache_ttl",
+			sql:  `ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS cache_ttl character varying(20) DEFAULT '7d' NOT NULL`,
+		},
+		{
+			desc: "geo_restrictions.allow_search_bots_cloud_providers",
+			sql:  `ALTER TABLE public.geo_restrictions ADD COLUMN IF NOT EXISTS allow_search_bots_cloud_providers boolean DEFAULT false`,
+		},
+		{
+			desc: "proxy_hosts.is_favorite",
+			sql:  `ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS is_favorite boolean DEFAULT false NOT NULL`,
+		},
+
+		// -----------------------------------------------------------------------
+		// Host-level proxy settings (v1.3.4+)
+		// -----------------------------------------------------------------------
+		{
+			desc: "v1.3.4: proxy_hosts.proxy_connect_timeout",
+			sql:  `ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS proxy_connect_timeout integer DEFAULT 0`,
+		},
+		{
+			desc: "v1.3.4: proxy_hosts.proxy_send_timeout",
+			sql:  `ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS proxy_send_timeout integer DEFAULT 0`,
+		},
+		{
+			desc: "v1.3.4: proxy_hosts.proxy_read_timeout",
+			sql:  `ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS proxy_read_timeout integer DEFAULT 0`,
+		},
+		{
+			desc: "v1.3.4: proxy_hosts.proxy_buffering",
+			sql:  `ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS proxy_buffering character varying(10) DEFAULT ''`,
+		},
+		{
+			desc: "v1.3.4: proxy_hosts.proxy_request_buffering",
+			sql:  `ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS proxy_request_buffering character varying(10) DEFAULT ''`,
+		},
+		{
+			desc: "v1.3.4: proxy_hosts.client_max_body_size",
+			sql:  `ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS client_max_body_size character varying(20) DEFAULT ''`,
+		},
+		{
+			desc: "v1.3.4: proxy_hosts.proxy_max_temp_file_size",
+			sql:  `ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS proxy_max_temp_file_size character varying(20) DEFAULT ''`,
+		},
+
+		// -----------------------------------------------------------------------
+		// Global settings: proxy buffering columns (v2.4.0+)
+		// -----------------------------------------------------------------------
+		{
+			desc: "v2.4.0: global_settings.proxy_buffering",
+			sql:  `ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS proxy_buffering character varying(10) DEFAULT ''`,
+		},
+		{
+			desc: "v2.4.0: global_settings.proxy_request_buffering",
+			sql:  `ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS proxy_request_buffering character varying(10) DEFAULT ''`,
+		},
+
+		// -----------------------------------------------------------------------
+		// Global settings: ssl_ecdh_curve for ML-KEM/post-quantum TLS (v2.5.0+)
+		// -----------------------------------------------------------------------
+		{
+			desc: "v2.5.0: global_settings.ssl_ecdh_curve",
+			sql:  `ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS ssl_ecdh_curve character varying(255) DEFAULT 'X25519MLKEM768:X25519:secp256r1:secp384r1' NOT NULL`,
+		},
+
+		// -----------------------------------------------------------------------
+		// v2.13.2 (Issue #123): Exploit rule auto-disable marker column.
+		// MUST be added BEFORE the seed INSERT below (which references the column)
+		// and BEFORE ApplyExploitRulesAutoDisable (which writes to it).
+		// -----------------------------------------------------------------------
+		{
+			desc: "v2.13.2: exploit_block_rules.auto_disabled_at",
+			sql:  `ALTER TABLE public.exploit_block_rules ADD COLUMN IF NOT EXISTS auto_disabled_at timestamp with time zone`,
+		},
+
+		// -----------------------------------------------------------------------
+		// v2.13.2 (Issue #123): URI-scoped per-rule exploit exclusions.
+		// NULL uri_pattern = rule fully excluded (legacy behavior);
+		// non-NULL = rule excluded only when $request_uri matches the regex.
+		// MUST land before the composite unique indexes below and before
+		// ApplyExploitRulesAutoDisable which references uri_pattern via COALESCE.
+		// -----------------------------------------------------------------------
+		{
+			desc: "v2.13.2: host_exploit_rule_exclusions.uri_pattern",
+			sql:  `ALTER TABLE public.host_exploit_rule_exclusions ADD COLUMN IF NOT EXISTS uri_pattern text`,
+		},
+		{
+			desc: "v2.13.2: global_exploit_rule_exclusions.uri_pattern",
+			sql:  `ALTER TABLE public.global_exploit_rule_exclusions ADD COLUMN IF NOT EXISTS uri_pattern text`,
+		},
+
+		// -----------------------------------------------------------------------
+		// v2.13.2: drop legacy single-column unique constraints in favor of the
+		// composite (rule_id, COALESCE(uri_pattern,'')) unique indexes below.
+		// -----------------------------------------------------------------------
+		{
+			desc: "v2.13.2: drop global_exploit_rule_exclusions_rule_id_key",
+			sql: `ALTER TABLE public.global_exploit_rule_exclusions
+				DROP CONSTRAINT IF EXISTS global_exploit_rule_exclusions_rule_id_key`,
+		},
+		{
+			desc: "v2.13.2: drop host_exploit_rule_exclusions_proxy_host_id_rule_id_key",
+			sql: `ALTER TABLE public.host_exploit_rule_exclusions
+				DROP CONSTRAINT IF EXISTS host_exploit_rule_exclusions_proxy_host_id_rule_id_key`,
+		},
+
+		// -----------------------------------------------------------------------
+		// v2.13.2: rename legacy uq_* indexes to idx_*_unique (project convention).
+		// -----------------------------------------------------------------------
+		{
+			desc: "v2.13.2: rename uq_global_exploit_rule_exclusions_rule_uri",
+			sql: `ALTER INDEX IF EXISTS uq_global_exploit_rule_exclusions_rule_uri
+				RENAME TO idx_global_exploit_exclusions_rule_uri_unique`,
+		},
+		{
+			desc: "v2.13.2: rename uq_host_exploit_rule_exclusions_host_rule_uri",
+			sql: `ALTER INDEX IF EXISTS uq_host_exploit_rule_exclusions_host_rule_uri
+				RENAME TO idx_host_exploit_exclusions_host_rule_uri_unique`,
+		},
+		{
+			desc: "v2.13.2: idx_global_exploit_exclusions_rule_uri_unique",
+			sql: `CREATE UNIQUE INDEX IF NOT EXISTS idx_global_exploit_exclusions_rule_uri_unique
+				ON public.global_exploit_rule_exclusions (rule_id, COALESCE(uri_pattern, ''))`,
+		},
+		{
+			desc: "v2.13.2: idx_host_exploit_exclusions_host_rule_uri_unique",
+			sql: `CREATE UNIQUE INDEX IF NOT EXISTS idx_host_exploit_exclusions_host_rule_uri_unique
+				ON public.host_exploit_rule_exclusions (proxy_host_id, rule_id, COALESCE(uri_pattern, ''))`,
+		},
+
+		// -----------------------------------------------------------------------
+		// Default exploit block rules (seed if not exists).
+		// The three rules with auto_disabled_at=now() (SQL Commands, SQL Keywords,
+		// XSS Special Characters) ship disabled because their simple keyword
+		// patterns produce false positives on legitimate search/CMS query strings.
+		// auto_disabled_at is pre-set on fresh install so ApplyExploitRulesAutoDisable
+		// (below) will not clobber an admin's conscious choice to re-enable.
+		// (Issue #123)
+		// -----------------------------------------------------------------------
+		{
+			desc: "seed: exploit_block_rules system defaults",
+			sql: `INSERT INTO public.exploit_block_rules (id, category, name, pattern, pattern_type, description, severity, enabled, is_system, sort_order, auto_disabled_at) VALUES
+			('4243721e-8f8d-4a2b-8496-0be62d50163f', 'sql_injection', 'SQL Union Select', E'(\\"|''|` + "`" + `)(.*)(union)(.*)(select)(\\"|''|` + "`" + `)' , 'query_string', 'Blocks SQL UNION SELECT injection attempts', 'critical', true, true, 1, NULL),
+			('a5cb921c-2c10-475b-8753-a56e2af1e5ba', 'sql_injection', 'SQL Commands', E'(;|\\||` + "`" + `|>|<|\\^|@)', 'query_string', 'Blocks SQL command characters (semicolon, pipe, backtick, redirects) (disabled by default: matches common URL characters like @, <, >; high false-positive rate)', 'warning', false, true, 2, now()),
+			('41d1f7bf-9179-44cb-b41a-1685ce88d965', 'sql_injection', 'SQL Keywords', E'\\b(select|insert|update|delete|drop|truncate|alter|create|exec)\\b', 'query_string', 'Blocks common SQL keywords in query strings (disabled by default: matches plain English words like ''update''/''select'' in search queries; ModSecurity/CRS handles SQL injection detection more precisely)', 'warning', false, true, 3, now()),
+			('b890779f-757c-4461-a64a-dce59fb469e3', 'xss', 'Script Tags', '<script', 'query_string', 'Blocks script tag injection', 'critical', true, true, 10, NULL),
+			('27ed45b1-e030-4212-bc34-edc7e13a9695', 'xss', 'Event Handlers', 'on(click|load|error|mouseover|focus|blur|change|submit)=', 'query_string', 'Blocks JavaScript event handler injection', 'critical', true, true, 11, NULL),
+			('aa90285b-2986-46f9-80e6-99946327cd24', 'xss', 'Special Characters', '(;|<|>|"|%0A|%0D|%22|%3C|%3E|%00)', 'query_string', 'Blocks XSS special characters (semicolon, angle brackets, encoded newlines/quotes/null) (disabled by default: matches common characters in legitimate URL parameters like quotes; CRS provides more precise XSS detection)', 'warning', false, true, 12, now()),
+			('23b31cc1-0e43-49af-b9c9-4093fd0cbcdc', 'rfi', 'URL Parameter Injection', '[a-zA-Z0-9_]=https?://', 'query_string', 'Blocks URL values in query parameters (RFI)', 'critical', true, true, 20, NULL),
+			('7db3e194-8731-40c1-afaa-b7555c017a3f', 'rfi', 'Path Traversal Sequences', E'[a-zA-Z0-9_]=(\\.\\./)+', 'query_string', 'Blocks path traversal in parameters', 'critical', true, true, 21, NULL),
+			('650c5e4a-c373-4d99-9cac-9e86b55bcb33', 'rfi', 'Directory Traversal', E'\\.\\./', 'query_string', 'Blocks directory traversal patterns', 'warning', true, true, 22, NULL),
+			('f055a131-0596-419f-944a-cb7fa40f5c59', 'scanner', 'Nikto Scanner', 'nikto', 'user_agent', 'Blocks Nikto vulnerability scanner', 'critical', true, true, 30, NULL),
+			('f13159ab-0e9a-45ea-aa4b-03fde63bb3e6', 'scanner', 'SQLMap Tool', 'sqlmap', 'user_agent', 'Blocks SQLMap SQL injection tool', 'critical', true, true, 31, NULL),
+			('a9baaa39-ccd9-4f8a-82c0-e7d85f02cc2f', 'scanner', 'DirBuster', 'dirbuster', 'user_agent', 'Blocks DirBuster directory scanner', 'critical', true, true, 32, NULL),
+			('8208101f-eb91-4b86-8396-f295cd16d04b', 'scanner', 'Nmap Scanner', 'nmap', 'user_agent', 'Blocks Nmap network scanner', 'warning', true, true, 33, NULL),
+			('7efe59af-2d2a-405e-bbe8-951757e72ef4', 'scanner', 'Nessus Scanner', 'nessus', 'user_agent', 'Blocks Nessus vulnerability scanner', 'warning', true, true, 34, NULL),
+			('9a5f6bcb-ceec-47f1-9f8c-dadb815711fa', 'scanner', 'OpenVAS Scanner', 'openvas', 'user_agent', 'Blocks OpenVAS security scanner', 'warning', true, true, 35, NULL),
+			('ab3b4e85-08fd-49fe-b76d-3dc5cdf5a248', 'scanner', 'W3AF Scanner', 'w3af', 'user_agent', 'Blocks W3AF web scanner', 'warning', true, true, 36, NULL),
+			('eb60d9dd-1d53-4a42-b571-cef1d1314d4d', 'scanner', 'Acunetix Scanner', 'acunetix', 'user_agent', 'Blocks Acunetix web scanner', 'warning', true, true, 37, NULL),
+			('86fddcd3-30ca-43d3-bd46-34875e018395', 'scanner', 'Havij Tool', 'havij', 'user_agent', 'Blocks Havij SQL injection tool', 'critical', true, true, 38, NULL),
+			('bd7eeece-8f91-41a6-b06c-1ad69900512d', 'scanner', 'AppScan', 'appscan', 'user_agent', 'Blocks IBM AppScan', 'warning', true, true, 39, NULL),
+			('6ee9b160-9472-4584-9c83-8de7b955a4b5', 'scanner', 'WebScarab', 'webscarab', 'user_agent', 'Blocks WebScarab proxy', 'warning', true, true, 40, NULL),
+			('e78e2ef1-d710-409b-8a44-a03db3999b19', 'scanner', 'WebInspect', 'webinspect', 'user_agent', 'Blocks HP WebInspect', 'warning', true, true, 41, NULL),
+			('8ec83a35-dea8-4f51-9185-37035f0a4501', 'http_method', 'Dangerous Methods', '^(TRACE|TRACK|DEBUG|CONNECT)$', 'request_method', 'Blocks dangerous HTTP methods', 'warning', true, true, 50, NULL)
+			ON CONFLICT (id) DO NOTHING`,
+		},
+
+		// -----------------------------------------------------------------------
+		// Performance indexes for logs_partitioned (v2.4.0+)
+		// -----------------------------------------------------------------------
+		{
+			desc: "v2.4.0: idx_logs_part_block_reason_ts",
+			sql:  `CREATE INDEX IF NOT EXISTS idx_logs_part_block_reason_ts ON logs_partitioned (block_reason, timestamp DESC) WHERE block_reason != 'none'`,
+		},
+		{
+			desc: "v2.4.0: idx_logs_part_client_ip",
+			sql:  `CREATE INDEX IF NOT EXISTS idx_logs_part_client_ip ON logs_partitioned (client_ip)`,
+		},
+		{
+			desc: "v2.4.0: idx_logs_part_created_at",
+			sql:  `CREATE INDEX IF NOT EXISTS idx_logs_part_created_at ON logs_partitioned (created_at DESC)`,
+		},
+		{
+			desc: "v2.4.0: idx_logs_part_status_code",
+			sql:  `CREATE INDEX IF NOT EXISTS idx_logs_part_status_code ON logs_partitioned (status_code) WHERE status_code IS NOT NULL`,
+		},
+
+		// -----------------------------------------------------------------------
+		// proxy_hosts config status tracking (v2.3.5+)
+		// -----------------------------------------------------------------------
+		{
+			desc: "v2.3.5: proxy_hosts.config_status",
+			sql:  `ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS config_status character varying(20) DEFAULT 'ok' NOT NULL`,
+		},
+		{
+			desc: "v2.3.5: proxy_hosts.config_error",
+			sql:  `ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS config_error text`,
+		},
+
+		// -----------------------------------------------------------------------
+		// v1.3.31+: foreign key constraint for proxy_hosts.access_list_id.
+		// First clean up any orphaned references, then add FK with ON DELETE SET NULL.
+		// -----------------------------------------------------------------------
+		{
+			desc: "v1.3.31: proxy_hosts_access_list_id_fkey",
+			sql: `DO $$
+			BEGIN
+				-- Clean up orphaned access_list_id references
+				UPDATE public.proxy_hosts
+				SET access_list_id = NULL
+				WHERE access_list_id IS NOT NULL
+				  AND access_list_id NOT IN (SELECT id FROM public.access_lists);
+
+				-- Add FK constraint if not exists
+				IF NOT EXISTS (
+					SELECT 1 FROM pg_constraint WHERE conname = 'proxy_hosts_access_list_id_fkey'
+				) THEN
+					ALTER TABLE public.proxy_hosts
+					ADD CONSTRAINT proxy_hosts_access_list_id_fkey
+					FOREIGN KEY (access_list_id) REFERENCES public.access_lists(id) ON DELETE SET NULL;
+				END IF;
+			END $$`,
+		},
+
+		// -----------------------------------------------------------------------
+		// Filter subscription tables (v2.7.0+)
+		// -----------------------------------------------------------------------
+		{
+			desc: "v2.7.0: CREATE TABLE filter_subscriptions",
+			sql: `CREATE TABLE IF NOT EXISTS public.filter_subscriptions (
+				id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+				name text NOT NULL,
+				description text,
+				url text NOT NULL UNIQUE,
+				format character varying(20) NOT NULL DEFAULT 'npg-json',
+				type character varying(20) NOT NULL,
+				enabled boolean DEFAULT true,
+				refresh_type character varying(20) NOT NULL DEFAULT 'interval',
+				refresh_value character varying(50) NOT NULL DEFAULT '24h',
+				last_fetched_at timestamp with time zone,
+				last_success_at timestamp with time zone,
+				last_error text,
+				entry_count integer DEFAULT 0,
+				created_at timestamp with time zone DEFAULT now(),
+				updated_at timestamp with time zone DEFAULT now()
+			)`,
+		},
+		{
+			desc: "v2.7.0: CREATE TABLE filter_subscription_entries",
+			sql: `CREATE TABLE IF NOT EXISTS public.filter_subscription_entries (
+				id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+				subscription_id uuid NOT NULL REFERENCES public.filter_subscriptions(id) ON DELETE CASCADE,
+				value text NOT NULL,
+				reason text,
+				created_at timestamp with time zone DEFAULT now(),
+				UNIQUE(subscription_id, value)
+			)`,
+		},
+		{
+			desc: "v2.7.0: idx_fse_subscription",
+			sql:  `CREATE INDEX IF NOT EXISTS idx_fse_subscription ON public.filter_subscription_entries(subscription_id)`,
+		},
+		{
+			desc: "v2.7.0: idx_fse_value",
+			sql:  `CREATE INDEX IF NOT EXISTS idx_fse_value ON public.filter_subscription_entries(value)`,
+		},
+		{
+			desc: "v2.7.0: CREATE TABLE filter_subscription_host_exclusions",
+			sql: `CREATE TABLE IF NOT EXISTS public.filter_subscription_host_exclusions (
+				id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+				subscription_id uuid NOT NULL REFERENCES public.filter_subscriptions(id) ON DELETE CASCADE,
+				proxy_host_id uuid NOT NULL REFERENCES public.proxy_hosts(id) ON DELETE CASCADE,
+				created_at timestamp with time zone DEFAULT now(),
+				UNIQUE(subscription_id, proxy_host_id)
+			)`,
+		},
+		{
+			desc: "v2.7.0: idx_fshe_proxy_host",
+			sql:  `CREATE INDEX IF NOT EXISTS idx_fshe_proxy_host ON public.filter_subscription_host_exclusions(proxy_host_id)`,
+		},
+
+		// -----------------------------------------------------------------------
+		// Filter subscription entry exclusions (v2.8.0+)
+		// -----------------------------------------------------------------------
+		{
+			desc: "v2.8.0: CREATE TABLE filter_subscription_entry_exclusions",
+			sql: `CREATE TABLE IF NOT EXISTS public.filter_subscription_entry_exclusions (
+				id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+				subscription_id uuid NOT NULL REFERENCES public.filter_subscriptions(id) ON DELETE CASCADE,
+				value text NOT NULL,
+				created_at timestamp with time zone DEFAULT now(),
+				UNIQUE(subscription_id, value)
+			)`,
+		},
+		{
+			desc: "v2.8.0: idx_fsee_subscription",
+			sql:  `CREATE INDEX IF NOT EXISTS idx_fsee_subscription ON public.filter_subscription_entry_exclusions(subscription_id)`,
+		},
+		{
+			desc: "v2.8.0: filter_subscriptions.exclude_private_ips",
+			sql:  `ALTER TABLE public.filter_subscriptions ADD COLUMN IF NOT EXISTS exclude_private_ips boolean DEFAULT false`,
+		},
+
+		// -----------------------------------------------------------------------
+		// Global trusted IPs for bypassing all security features (v2.7.3+)
+		// -----------------------------------------------------------------------
+		{
+			desc: "v2.7.3: system_settings.global_trusted_ips",
+			sql:  `ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS global_trusted_ips text DEFAULT ''`,
+		},
+
+		// -----------------------------------------------------------------------
+		// DB Performance: composite indexes for logs_partitioned (v2.8.0+)
+		// -----------------------------------------------------------------------
+		{
+			desc: "v2.8.0: idx_logs_part_host_ts",
+			sql:  `CREATE INDEX IF NOT EXISTS idx_logs_part_host_ts ON logs_partitioned (host, timestamp DESC)`,
+		},
+		{
+			desc: "v2.8.0: idx_logs_part_status_ts",
+			sql:  `CREATE INDEX IF NOT EXISTS idx_logs_part_status_ts ON logs_partitioned (status_code, timestamp DESC) WHERE status_code IS NOT NULL`,
+		},
+		{
+			desc: "v2.8.0: idx_logs_part_proxy_host_ts",
+			sql:  `CREATE INDEX IF NOT EXISTS idx_logs_part_proxy_host_ts ON logs_partitioned (proxy_host_id, timestamp DESC) WHERE proxy_host_id IS NOT NULL`,
+		},
+		{
+			desc: "v2.8.0: idx_logs_part_geo_ts",
+			sql:  `CREATE INDEX IF NOT EXISTS idx_logs_part_geo_ts ON logs_partitioned (geo_country_code, timestamp DESC) WHERE geo_country_code IS NOT NULL AND geo_country_code != ''`,
+		},
+		{
+			desc: "v2.8.0: idx_logs_part_type_created",
+			sql:  `CREATE INDEX IF NOT EXISTS idx_logs_part_type_created ON logs_partitioned (log_type, created_at DESC)`,
+		},
+
+		// -----------------------------------------------------------------------
+		// Performance indexes for log queries (GitHub Issue #96)
+		// -----------------------------------------------------------------------
+		{
+			desc: "Issue #96: idx_logs_part_block_reason",
+			sql:  `CREATE INDEX IF NOT EXISTS idx_logs_part_block_reason ON logs_partitioned (block_reason) WHERE block_reason != 'none'`,
+		},
+		{
+			desc: "Issue #96: idx_logs_part_status_created",
+			sql:  `CREATE INDEX IF NOT EXISTS idx_logs_part_status_created ON logs_partitioned (status_code, created_at)`,
+		},
+
+		// -----------------------------------------------------------------------
+		// Deduplicate dashboard_stats_hourly rows with NULL proxy_host_id (Issue #96).
+		// Previous versions inserted duplicate rows per hour_bucket because
+		// NULL != NULL in UNIQUE constraints. Keep the row with the highest
+		// total_requests for each hour_bucket, delete the rest.
+		//
+		// NOTE: This is the statement that historically triggered `pq: chunk not
+		// found` on installs with orphaned TimescaleDB chunks. With the refactor
+		// it now runs in its own Exec; a failure here logs a warning and no longer
+		// cascades into silently skipping every later statement.
+		// -----------------------------------------------------------------------
+		{
+			desc: "Issue #96: dedup dashboard_stats_hourly NULL proxy_host_id",
+			sql: `DELETE FROM dashboard_stats_hourly a
+			USING dashboard_stats_hourly b
+			WHERE a.proxy_host_id IS NULL
+			  AND b.proxy_host_id IS NULL
+			  AND a.hour_bucket = b.hour_bucket
+			  AND a.id != b.id
+			  AND (a.total_requests < b.total_requests OR (a.total_requests = b.total_requests AND a.id < b.id))`,
+		},
+		{
+			// Partial unique index for NULL proxy_host_id to prevent future duplicates.
+			// The standard UNIQUE(proxy_host_id, hour_bucket) does not prevent duplicate NULLs.
+			desc: "Issue #96: idx_dashboard_stats_hourly_null_host_bucket",
+			sql: `CREATE UNIQUE INDEX IF NOT EXISTS idx_dashboard_stats_hourly_null_host_bucket
+				ON dashboard_stats_hourly (hour_bucket) WHERE proxy_host_id IS NULL`,
+		},
+
+		// -----------------------------------------------------------------------
+		// v2.9.0: IPv6 toggle
+		// -----------------------------------------------------------------------
+		{
+			desc: "v2.9.0: global_settings.enable_ipv6",
+			sql:  `ALTER TABLE global_settings ADD COLUMN IF NOT EXISTS enable_ipv6 BOOLEAN NOT NULL DEFAULT TRUE`,
+		},
+
+		// -----------------------------------------------------------------------
+		// Issue #105 — Default language for public error pages (403, etc.)
+		// -----------------------------------------------------------------------
+		{
 			desc: "system_settings.ui_error_page_language",
 			sql:  `ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS ui_error_page_language character varying(10) DEFAULT 'auto'::character varying`,
 		},
+
+		// -----------------------------------------------------------------------
+		// Issue #108 — Allow HTTPS upstream backends in load-balanced proxy hosts
+		// -----------------------------------------------------------------------
 		{
-			// Issue #108 — Allow HTTPS upstream backends in load-balanced proxy hosts
 			desc: "upstreams.scheme",
 			sql:  `ALTER TABLE public.upstreams ADD COLUMN IF NOT EXISTS scheme character varying(10) DEFAULT 'http'::character varying NOT NULL`,
 		},
+
+		// -----------------------------------------------------------------------
+		// Issue #109 — Expose which load-balanced upstream served each request.
+		// text (not inet/smallint) because Nginx reports a comma-separated list on retries,
+		// e.g. "10.0.0.1:8080, 10.0.0.2:8080" / "502, 200".
+		// The legacy `logs` table may have been dropped by migrateLogsToPartitioned on
+		// installations that already switched to the partitioned table — guard accordingly.
+		// -----------------------------------------------------------------------
 		{
-			// Issue #109 — Expose which load-balanced upstream served each request.
-			// text (not inet/smallint) because Nginx reports a comma-separated list on retries,
-			// e.g. "10.0.0.1:8080, 10.0.0.2:8080" / "502, 200".
-			// The legacy `logs` table may have been dropped by migrateLogsToPartitioned on
-			// installations that already switched to the partitioned table — guard accordingly.
 			desc: "logs.upstream_addr",
 			sql: `DO $$ BEGIN
 				IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'logs') THEN
@@ -348,29 +543,33 @@ func (db *DB) RunMigrations() error {
 			desc: "logs_partitioned.upstream_status",
 			sql:  `ALTER TABLE public.logs_partitioned ADD COLUMN IF NOT EXISTS upstream_status text`,
 		},
+
+		// -----------------------------------------------------------------------
+		// Issue #123 — Defensive duplicates of the v2.13.2 columns. The upgrades
+		// above should have landed these already, but keep these as a belt-and-
+		// suspenders guarantee: handlers/repositories depend on the columns and
+		// IF NOT EXISTS makes this a no-op when the earlier entry succeeded.
+		// -----------------------------------------------------------------------
 		{
-			// Issue #123 — Exploit rule auto-disable marker (v2.13.2+).
-			// Independent of upgradeSQL so that even if upgradeSQL aborts on some
-			// pre-existing TimescaleDB weirdness, the column still lands and the
-			// seeded/one-shot UPDATE logic there is a no-op rather than a hard fail.
-			desc: "exploit_block_rules.auto_disabled_at",
+			desc: "exploit_block_rules.auto_disabled_at (defensive)",
 			sql:  `ALTER TABLE public.exploit_block_rules ADD COLUMN IF NOT EXISTS auto_disabled_at timestamp with time zone`,
 		},
 		{
-			// Issue #123 — URI-scoped per-rule exploit exclusions (v2.13.2+).
-			// Defense-in-depth: ensure the column lands even if upgradeSQL aborts
-			// earlier. Handlers/repositories depend on this column being present.
-			desc: "host_exploit_rule_exclusions.uri_pattern",
+			desc: "host_exploit_rule_exclusions.uri_pattern (defensive)",
 			sql:  `ALTER TABLE public.host_exploit_rule_exclusions ADD COLUMN IF NOT EXISTS uri_pattern text`,
 		},
 		{
-			desc: "global_exploit_rule_exclusions.uri_pattern",
+			desc: "global_exploit_rule_exclusions.uri_pattern (defensive)",
 			sql:  `ALTER TABLE public.global_exploit_rule_exclusions ADD COLUMN IF NOT EXISTS uri_pattern text`,
 		},
+
+		// -----------------------------------------------------------------------
+		// Rebuild logs_unified so it exposes the new columns. The view UNIONs
+		// `logs` (which may no longer exist post-migration) with `logs_partitioned`,
+		// so we build the SQL dynamically: skip the legacy branch when the table
+		// is gone.
+		// -----------------------------------------------------------------------
 		{
-			// Rebuild logs_unified so it exposes the new columns. The view UNIONs `logs`
-			// (which may no longer exist post-migration) with `logs_partitioned`, so we
-			// build the SQL dynamically: skip the legacy branch when the table is gone.
 			desc: "logs_unified view rebuild",
 			sql: `DO $$
 			DECLARE
@@ -407,9 +606,9 @@ func (db *DB) RunMigrations() error {
 			END $$`,
 		},
 	}
-	for _, a := range independentAlters {
+	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {
-			log.Printf("Warning: independent upgrade %s failed: %v", a.desc, err)
+			log.Printf("Warning: upgrade %q failed: %v", a.desc, err)
 		}
 	}
 
