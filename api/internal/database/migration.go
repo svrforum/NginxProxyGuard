@@ -149,46 +149,15 @@ func (db *DB) RunMigrations() error {
 		('8ec83a35-dea8-4f51-9185-37035f0a4501', 'http_method', 'Dangerous Methods', '^(TRACE|TRACK|DEBUG|CONNECT)$', 'request_method', 'Blocks dangerous HTTP methods', 'warning', true, true, 50, NULL)
 		ON CONFLICT (id) DO NOTHING;
 
-		-- One-shot auto-disable for overly-broad system rules (Issue #123, v2.13.2+).
-		-- Fires only when auto_disabled_at IS NULL AND enabled = true — so users who have
-		-- already re-enabled (or who upgraded from a post-fix version) are not touched.
-		-- is_system = true guards against matching a coincidentally same-UUID user rule.
-		DO $$
-		DECLARE
-			affected_count int := 0;
-		BEGIN
-			UPDATE public.exploit_block_rules
-			SET enabled = false,
-				auto_disabled_at = now()
-			WHERE id IN (
-				'a5cb921c-2c10-475b-8753-a56e2af1e5ba',
-				'41d1f7bf-9179-44cb-b41a-1685ce88d965',
-				'aa90285b-2986-46f9-80e6-99946327cd24'
-			)
-			AND is_system = true
-			AND enabled = true
-			AND auto_disabled_at IS NULL;
-
-			GET DIAGNOSTICS affected_count = ROW_COUNT;
-			IF affected_count > 0 THEN
-				INSERT INTO public.system_logs (source, level, message, details, component)
-				VALUES (
-					'internal',
-					'info',
-					format('Auto-disabled %s overly-broad exploit rule(s) to prevent false positives on search/CMS endpoints. Review and optionally re-enable at /waf/exploit-rules.', affected_count),
-					jsonb_build_object(
-						'rule_ids', ARRAY[
-							'a5cb921c-2c10-475b-8753-a56e2af1e5ba',
-							'41d1f7bf-9179-44cb-b41a-1685ce88d965',
-							'aa90285b-2986-46f9-80e6-99946327cd24'
-						],
-						'reason', 'github issue #123: simple keyword matching produces false positives on legitimate search queries',
-						'rollback_hint', 'set enabled=true in the UI; the migration will not touch these rows again once auto_disabled_at is set'
-					),
-					'exploit_rules_migration'
-				);
-			END IF;
-		END $$;
+		-- NOTE: the v2.13.2 one-shot auto-disable for overly-broad system rules
+		-- (Issue #123) intentionally lives OUTSIDE this upgradeSQL block — see the
+		-- ApplyExploitRulesAutoDisable(db) call below. Placing it here was a bug in
+		-- v2.13.2: if any earlier statement in upgradeSQL fails (e.g. a stale
+		-- TimescaleDB chunk causes a pq chunk-not-found error), PostgreSQL aborts the
+		-- implicit transaction and every subsequent statement — including the DO $$
+		-- block — silently skips, leaving the three overly-broad rules enabled on
+		-- exactly the installations that needed the fix. v2.13.3 moves the helper
+		-- to its own db.Exec so it runs regardless of upgradeSQL outcome.
 
 		-- Performance indexes for logs_partitioned (v2.4.0+)
 		CREATE INDEX IF NOT EXISTS idx_logs_part_block_reason_ts ON logs_partitioned (block_reason, timestamp DESC) WHERE block_reason != 'none';
@@ -442,6 +411,18 @@ func (db *DB) RunMigrations() error {
 		if _, err := db.Exec(a.sql); err != nil {
 			log.Printf("Warning: independent upgrade %s failed: %v", a.desc, err)
 		}
+	}
+
+	// v2.13.3: one-shot auto-disable for overly-broad system rules (Issue #123).
+	// Runs as an INDEPENDENT db.Exec so a prior failure in upgradeSQL (e.g. a
+	// stale TimescaleDB chunk error that aborts the implicit transaction) cannot
+	// silently skip the fix. v2.13.2 placed this DO block inside upgradeSQL and
+	// the implicit-transaction abort left the three rules enabled on affected
+	// installations. The helper is idempotent — it only updates rows where
+	// auto_disabled_at IS NULL AND enabled = true, so admins who have already
+	// re-enabled are not touched and repeat boots are no-ops.
+	if err := ApplyExploitRulesAutoDisable(db.DB); err != nil {
+		log.Printf("Warning: exploit rules auto-disable migration failed: %v", err)
 	}
 
 	// Run 006_fix_numeric_overflow migration for existing installations (Issue #29 fix)
