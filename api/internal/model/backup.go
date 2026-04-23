@@ -595,17 +595,19 @@ type GlobalWAFExclusionExport struct {
 
 // GlobalExploitExclusionExport represents global exploit rule exclusion for export
 type GlobalExploitExclusionExport struct {
-	RuleID     string `json:"rule_id"`
-	Reason     string `json:"reason,omitempty"`
-	DisabledBy string `json:"disabled_by,omitempty"`
+	RuleID     string  `json:"rule_id"`
+	URIPattern *string `json:"uri_pattern,omitempty"`
+	Reason     string  `json:"reason,omitempty"`
+	DisabledBy string  `json:"disabled_by,omitempty"`
 }
 
 // HostExploitExclusionExport represents host-level exploit rule exclusion for export
 type HostExploitExclusionExport struct {
-	ProxyHostID string `json:"proxy_host_id"`
-	RuleID      string `json:"rule_id"`
-	Reason      string `json:"reason,omitempty"`
-	DisabledBy  string `json:"disabled_by,omitempty"`
+	ProxyHostID string  `json:"proxy_host_id"`
+	RuleID      string  `json:"rule_id"`
+	URIPattern  *string `json:"uri_pattern,omitempty"`
+	Reason      string  `json:"reason,omitempty"`
+	DisabledBy  string  `json:"disabled_by,omitempty"`
 }
 
 // FilterSubscriptionExport represents a filter subscription for export

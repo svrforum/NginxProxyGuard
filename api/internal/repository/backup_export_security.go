@@ -305,8 +305,8 @@ func (r *BackupRepository) exportGlobalWAFExclusions(ctx context.Context) ([]mod
 
 func (r *BackupRepository) exportGlobalExploitExclusions(ctx context.Context) ([]model.GlobalExploitExclusionExport, error) {
 	query := `
-		SELECT rule_id, reason, disabled_by
-		FROM global_exploit_rule_exclusions ORDER BY rule_id
+		SELECT rule_id, uri_pattern, reason, disabled_by
+		FROM global_exploit_rule_exclusions ORDER BY rule_id, uri_pattern
 	`
 
 	rows, err := r.db.QueryContext(ctx, query)
@@ -318,13 +318,14 @@ func (r *BackupRepository) exportGlobalExploitExclusions(ctx context.Context) ([
 	var exports []model.GlobalExploitExclusionExport
 	for rows.Next() {
 		var ee model.GlobalExploitExclusionExport
-		var reason, disabledBy sql.NullString
+		var uriPattern, reason, disabledBy sql.NullString
 
-		err := rows.Scan(&ee.RuleID, &reason, &disabledBy)
+		err := rows.Scan(&ee.RuleID, &uriPattern, &reason, &disabledBy)
 		if err != nil {
 			return nil, err
 		}
 
+		ee.URIPattern = nullStringToPtr(uriPattern)
 		ee.Reason = reason.String
 		ee.DisabledBy = disabledBy.String
 		exports = append(exports, ee)
@@ -335,8 +336,8 @@ func (r *BackupRepository) exportGlobalExploitExclusions(ctx context.Context) ([
 
 func (r *BackupRepository) exportHostExploitExclusions(ctx context.Context) ([]model.HostExploitExclusionExport, error) {
 	query := `
-		SELECT proxy_host_id, rule_id, reason, disabled_by
-		FROM host_exploit_rule_exclusions ORDER BY proxy_host_id, rule_id
+		SELECT proxy_host_id, rule_id, uri_pattern, reason, disabled_by
+		FROM host_exploit_rule_exclusions ORDER BY proxy_host_id, rule_id, uri_pattern
 	`
 
 	rows, err := r.db.QueryContext(ctx, query)
@@ -348,13 +349,14 @@ func (r *BackupRepository) exportHostExploitExclusions(ctx context.Context) ([]m
 	var exports []model.HostExploitExclusionExport
 	for rows.Next() {
 		var he model.HostExploitExclusionExport
-		var reason, disabledBy sql.NullString
+		var uriPattern, reason, disabledBy sql.NullString
 
-		err := rows.Scan(&he.ProxyHostID, &he.RuleID, &reason, &disabledBy)
+		err := rows.Scan(&he.ProxyHostID, &he.RuleID, &uriPattern, &reason, &disabledBy)
 		if err != nil {
 			return nil, err
 		}
 
+		he.URIPattern = nullStringToPtr(uriPattern)
 		he.Reason = reason.String
 		he.DisabledBy = disabledBy.String
 		exports = append(exports, he)
