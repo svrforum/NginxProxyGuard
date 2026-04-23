@@ -171,23 +171,29 @@ func (r *BackupRepository) importGlobalWAFExclusion(ctx context.Context, tx *sql
 	return err
 }
 
+// importGlobalExploitExclusion imports a single global exploit rule exclusion.
+// Pre-v2.13.2 backups lack the uri_pattern field; ee.URIPattern will be nil,
+// which inserts NULL — preserving the legacy full-exclusion semantic.
 func (r *BackupRepository) importGlobalExploitExclusion(ctx context.Context, tx *sql.Tx, ee *model.GlobalExploitExclusionExport) error {
 	query := `
-		INSERT INTO global_exploit_rule_exclusions (rule_id, reason, disabled_by)
-		VALUES ($1, $2, $3)
-		ON CONFLICT (rule_id) DO NOTHING
+		INSERT INTO global_exploit_rule_exclusions (rule_id, uri_pattern, reason, disabled_by)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (rule_id, COALESCE(uri_pattern, '')) DO NOTHING
 	`
-	_, err := tx.ExecContext(ctx, query, ee.RuleID, ee.Reason, ee.DisabledBy)
+	_, err := tx.ExecContext(ctx, query, ee.RuleID, ee.URIPattern, ee.Reason, ee.DisabledBy)
 	return err
 }
 
+// importHostExploitExclusion imports a single host-level exploit rule exclusion.
+// Pre-v2.13.2 backups lack the uri_pattern field; he.URIPattern will be nil,
+// which inserts NULL — preserving the legacy full-exclusion semantic.
 func (r *BackupRepository) importHostExploitExclusion(ctx context.Context, tx *sql.Tx, he *model.HostExploitExclusionExport) error {
 	query := `
-		INSERT INTO host_exploit_rule_exclusions (proxy_host_id, rule_id, reason, disabled_by)
-		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (proxy_host_id, rule_id) DO NOTHING
+		INSERT INTO host_exploit_rule_exclusions (proxy_host_id, rule_id, uri_pattern, reason, disabled_by)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (proxy_host_id, rule_id, COALESCE(uri_pattern, '')) DO NOTHING
 	`
-	_, err := tx.ExecContext(ctx, query, he.ProxyHostID, he.RuleID, he.Reason, he.DisabledBy)
+	_, err := tx.ExecContext(ctx, query, he.ProxyHostID, he.RuleID, he.URIPattern, he.Reason, he.DisabledBy)
 	return err
 }
 
