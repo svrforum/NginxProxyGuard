@@ -93,31 +93,102 @@ func (db *DB) RunMigrations() error {
 		-- Global settings: ssl_ecdh_curve for ML-KEM/post-quantum TLS support (v2.5.0+)
 		ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS ssl_ecdh_curve character varying(255) DEFAULT 'X25519MLKEM768:X25519:secp256r1:secp384r1' NOT NULL;
 
+		-- v2.13.2 (issue #123): Exploit rule auto-disable marker column.
+		-- Must be added BEFORE the seed INSERT below (which references the column)
+		-- and BEFORE the one-shot UPDATE further down (which writes to it).
+		ALTER TABLE public.exploit_block_rules ADD COLUMN IF NOT EXISTS auto_disabled_at timestamp with time zone;
+
+		-- v2.13.2 (issue #123): URI-scoped per-rule exploit exclusions.
+		-- NULL uri_pattern = rule fully excluded (legacy behavior);
+		-- non-NULL = rule excluded only when $request_uri matches the regex.
+		ALTER TABLE public.host_exploit_rule_exclusions ADD COLUMN IF NOT EXISTS uri_pattern text;
+		ALTER TABLE public.global_exploit_rule_exclusions ADD COLUMN IF NOT EXISTS uri_pattern text;
+
+		ALTER TABLE public.global_exploit_rule_exclusions
+			DROP CONSTRAINT IF EXISTS global_exploit_rule_exclusions_rule_id_key;
+		ALTER TABLE public.host_exploit_rule_exclusions
+			DROP CONSTRAINT IF EXISTS host_exploit_rule_exclusions_proxy_host_id_rule_id_key;
+
+		-- Rename legacy uq_* to idx_*_unique to match project convention (v2.13.2)
+		ALTER INDEX IF EXISTS uq_global_exploit_rule_exclusions_rule_uri
+			RENAME TO idx_global_exploit_exclusions_rule_uri_unique;
+		ALTER INDEX IF EXISTS uq_host_exploit_rule_exclusions_host_rule_uri
+			RENAME TO idx_host_exploit_exclusions_host_rule_uri_unique;
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_global_exploit_exclusions_rule_uri_unique
+			ON public.global_exploit_rule_exclusions (rule_id, COALESCE(uri_pattern, ''));
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_host_exploit_exclusions_host_rule_uri_unique
+			ON public.host_exploit_rule_exclusions (proxy_host_id, rule_id, COALESCE(uri_pattern, ''));
+
 		-- Default exploit block rules (seed if not exists)
-		INSERT INTO public.exploit_block_rules (id, category, name, pattern, pattern_type, description, severity, enabled, is_system, sort_order) VALUES
-		('4243721e-8f8d-4a2b-8496-0be62d50163f', 'sql_injection', 'SQL Union Select', E'(\\"|''|` + "`" + `)(.*)(union)(.*)(select)(\\"|''|` + "`" + `)' , 'query_string', 'Blocks SQL UNION SELECT injection attempts', 'critical', true, true, 1),
-		('a5cb921c-2c10-475b-8753-a56e2af1e5ba', 'sql_injection', 'SQL Commands', E'(;|\\||` + "`" + `|>|<|\\^|@)', 'query_string', 'Blocks SQL command characters (semicolon, pipe, backtick, redirects)', 'warning', true, true, 2),
-		('41d1f7bf-9179-44cb-b41a-1685ce88d965', 'sql_injection', 'SQL Keywords', E'\\b(select|insert|update|delete|drop|truncate|alter|create|exec)\\b', 'query_string', 'Blocks common SQL keywords in query strings', 'warning', true, true, 3),
-		('b890779f-757c-4461-a64a-dce59fb469e3', 'xss', 'Script Tags', '<script', 'query_string', 'Blocks script tag injection', 'critical', true, true, 10),
-		('27ed45b1-e030-4212-bc34-edc7e13a9695', 'xss', 'Event Handlers', 'on(click|load|error|mouseover|focus|blur|change|submit)=', 'query_string', 'Blocks JavaScript event handler injection', 'critical', true, true, 11),
-		('aa90285b-2986-46f9-80e6-99946327cd24', 'xss', 'Special Characters', '(;|<|>|"|%0A|%0D|%22|%3C|%3E|%00)', 'query_string', 'Blocks XSS special characters (semicolon, angle brackets, encoded newlines/quotes/null)', 'warning', true, true, 12),
-		('23b31cc1-0e43-49af-b9c9-4093fd0cbcdc', 'rfi', 'URL Parameter Injection', '[a-zA-Z0-9_]=https?://', 'query_string', 'Blocks URL values in query parameters (RFI)', 'critical', true, true, 20),
-		('7db3e194-8731-40c1-afaa-b7555c017a3f', 'rfi', 'Path Traversal Sequences', E'[a-zA-Z0-9_]=(\\.\\./)+', 'query_string', 'Blocks path traversal in parameters', 'critical', true, true, 21),
-		('650c5e4a-c373-4d99-9cac-9e86b55bcb33', 'rfi', 'Directory Traversal', E'\\.\\./', 'query_string', 'Blocks directory traversal patterns', 'warning', true, true, 22),
-		('f055a131-0596-419f-944a-cb7fa40f5c59', 'scanner', 'Nikto Scanner', 'nikto', 'user_agent', 'Blocks Nikto vulnerability scanner', 'critical', true, true, 30),
-		('f13159ab-0e9a-45ea-aa4b-03fde63bb3e6', 'scanner', 'SQLMap Tool', 'sqlmap', 'user_agent', 'Blocks SQLMap SQL injection tool', 'critical', true, true, 31),
-		('a9baaa39-ccd9-4f8a-82c0-e7d85f02cc2f', 'scanner', 'DirBuster', 'dirbuster', 'user_agent', 'Blocks DirBuster directory scanner', 'critical', true, true, 32),
-		('8208101f-eb91-4b86-8396-f295cd16d04b', 'scanner', 'Nmap Scanner', 'nmap', 'user_agent', 'Blocks Nmap network scanner', 'warning', true, true, 33),
-		('7efe59af-2d2a-405e-bbe8-951757e72ef4', 'scanner', 'Nessus Scanner', 'nessus', 'user_agent', 'Blocks Nessus vulnerability scanner', 'warning', true, true, 34),
-		('9a5f6bcb-ceec-47f1-9f8c-dadb815711fa', 'scanner', 'OpenVAS Scanner', 'openvas', 'user_agent', 'Blocks OpenVAS security scanner', 'warning', true, true, 35),
-		('ab3b4e85-08fd-49fe-b76d-3dc5cdf5a248', 'scanner', 'W3AF Scanner', 'w3af', 'user_agent', 'Blocks W3AF web scanner', 'warning', true, true, 36),
-		('eb60d9dd-1d53-4a42-b571-cef1d1314d4d', 'scanner', 'Acunetix Scanner', 'acunetix', 'user_agent', 'Blocks Acunetix web scanner', 'warning', true, true, 37),
-		('86fddcd3-30ca-43d3-bd46-34875e018395', 'scanner', 'Havij Tool', 'havij', 'user_agent', 'Blocks Havij SQL injection tool', 'critical', true, true, 38),
-		('bd7eeece-8f91-41a6-b06c-1ad69900512d', 'scanner', 'AppScan', 'appscan', 'user_agent', 'Blocks IBM AppScan', 'warning', true, true, 39),
-		('6ee9b160-9472-4584-9c83-8de7b955a4b5', 'scanner', 'WebScarab', 'webscarab', 'user_agent', 'Blocks WebScarab proxy', 'warning', true, true, 40),
-		('e78e2ef1-d710-409b-8a44-a03db3999b19', 'scanner', 'WebInspect', 'webinspect', 'user_agent', 'Blocks HP WebInspect', 'warning', true, true, 41),
-		('8ec83a35-dea8-4f51-9185-37035f0a4501', 'http_method', 'Dangerous Methods', '^(TRACE|TRACK|DEBUG|CONNECT)$', 'request_method', 'Blocks dangerous HTTP methods', 'warning', true, true, 50)
+		-- The three rules with auto_disabled_at=now() (SQL Commands, SQL Keywords, XSS Special Characters)
+		-- ship disabled because their simple keyword patterns produce false positives on legitimate
+		-- search/CMS query strings. auto_disabled_at is pre-set on fresh install so the one-shot
+		-- upgrade UPDATE (below) will not clobber an admin's conscious choice to re-enable. (Issue #123)
+		INSERT INTO public.exploit_block_rules (id, category, name, pattern, pattern_type, description, severity, enabled, is_system, sort_order, auto_disabled_at) VALUES
+		('4243721e-8f8d-4a2b-8496-0be62d50163f', 'sql_injection', 'SQL Union Select', E'(\\"|''|` + "`" + `)(.*)(union)(.*)(select)(\\"|''|` + "`" + `)' , 'query_string', 'Blocks SQL UNION SELECT injection attempts', 'critical', true, true, 1, NULL),
+		('a5cb921c-2c10-475b-8753-a56e2af1e5ba', 'sql_injection', 'SQL Commands', E'(;|\\||` + "`" + `|>|<|\\^|@)', 'query_string', 'Blocks SQL command characters (semicolon, pipe, backtick, redirects) (disabled by default: matches common URL characters like @, <, >; high false-positive rate)', 'warning', false, true, 2, now()),
+		('41d1f7bf-9179-44cb-b41a-1685ce88d965', 'sql_injection', 'SQL Keywords', E'\\b(select|insert|update|delete|drop|truncate|alter|create|exec)\\b', 'query_string', 'Blocks common SQL keywords in query strings (disabled by default: matches plain English words like ''update''/''select'' in search queries; ModSecurity/CRS handles SQL injection detection more precisely)', 'warning', false, true, 3, now()),
+		('b890779f-757c-4461-a64a-dce59fb469e3', 'xss', 'Script Tags', '<script', 'query_string', 'Blocks script tag injection', 'critical', true, true, 10, NULL),
+		('27ed45b1-e030-4212-bc34-edc7e13a9695', 'xss', 'Event Handlers', 'on(click|load|error|mouseover|focus|blur|change|submit)=', 'query_string', 'Blocks JavaScript event handler injection', 'critical', true, true, 11, NULL),
+		('aa90285b-2986-46f9-80e6-99946327cd24', 'xss', 'Special Characters', '(;|<|>|"|%0A|%0D|%22|%3C|%3E|%00)', 'query_string', 'Blocks XSS special characters (semicolon, angle brackets, encoded newlines/quotes/null) (disabled by default: matches common characters in legitimate URL parameters like quotes; CRS provides more precise XSS detection)', 'warning', false, true, 12, now()),
+		('23b31cc1-0e43-49af-b9c9-4093fd0cbcdc', 'rfi', 'URL Parameter Injection', '[a-zA-Z0-9_]=https?://', 'query_string', 'Blocks URL values in query parameters (RFI)', 'critical', true, true, 20, NULL),
+		('7db3e194-8731-40c1-afaa-b7555c017a3f', 'rfi', 'Path Traversal Sequences', E'[a-zA-Z0-9_]=(\\.\\./)+', 'query_string', 'Blocks path traversal in parameters', 'critical', true, true, 21, NULL),
+		('650c5e4a-c373-4d99-9cac-9e86b55bcb33', 'rfi', 'Directory Traversal', E'\\.\\./', 'query_string', 'Blocks directory traversal patterns', 'warning', true, true, 22, NULL),
+		('f055a131-0596-419f-944a-cb7fa40f5c59', 'scanner', 'Nikto Scanner', 'nikto', 'user_agent', 'Blocks Nikto vulnerability scanner', 'critical', true, true, 30, NULL),
+		('f13159ab-0e9a-45ea-aa4b-03fde63bb3e6', 'scanner', 'SQLMap Tool', 'sqlmap', 'user_agent', 'Blocks SQLMap SQL injection tool', 'critical', true, true, 31, NULL),
+		('a9baaa39-ccd9-4f8a-82c0-e7d85f02cc2f', 'scanner', 'DirBuster', 'dirbuster', 'user_agent', 'Blocks DirBuster directory scanner', 'critical', true, true, 32, NULL),
+		('8208101f-eb91-4b86-8396-f295cd16d04b', 'scanner', 'Nmap Scanner', 'nmap', 'user_agent', 'Blocks Nmap network scanner', 'warning', true, true, 33, NULL),
+		('7efe59af-2d2a-405e-bbe8-951757e72ef4', 'scanner', 'Nessus Scanner', 'nessus', 'user_agent', 'Blocks Nessus vulnerability scanner', 'warning', true, true, 34, NULL),
+		('9a5f6bcb-ceec-47f1-9f8c-dadb815711fa', 'scanner', 'OpenVAS Scanner', 'openvas', 'user_agent', 'Blocks OpenVAS security scanner', 'warning', true, true, 35, NULL),
+		('ab3b4e85-08fd-49fe-b76d-3dc5cdf5a248', 'scanner', 'W3AF Scanner', 'w3af', 'user_agent', 'Blocks W3AF web scanner', 'warning', true, true, 36, NULL),
+		('eb60d9dd-1d53-4a42-b571-cef1d1314d4d', 'scanner', 'Acunetix Scanner', 'acunetix', 'user_agent', 'Blocks Acunetix web scanner', 'warning', true, true, 37, NULL),
+		('86fddcd3-30ca-43d3-bd46-34875e018395', 'scanner', 'Havij Tool', 'havij', 'user_agent', 'Blocks Havij SQL injection tool', 'critical', true, true, 38, NULL),
+		('bd7eeece-8f91-41a6-b06c-1ad69900512d', 'scanner', 'AppScan', 'appscan', 'user_agent', 'Blocks IBM AppScan', 'warning', true, true, 39, NULL),
+		('6ee9b160-9472-4584-9c83-8de7b955a4b5', 'scanner', 'WebScarab', 'webscarab', 'user_agent', 'Blocks WebScarab proxy', 'warning', true, true, 40, NULL),
+		('e78e2ef1-d710-409b-8a44-a03db3999b19', 'scanner', 'WebInspect', 'webinspect', 'user_agent', 'Blocks HP WebInspect', 'warning', true, true, 41, NULL),
+		('8ec83a35-dea8-4f51-9185-37035f0a4501', 'http_method', 'Dangerous Methods', '^(TRACE|TRACK|DEBUG|CONNECT)$', 'request_method', 'Blocks dangerous HTTP methods', 'warning', true, true, 50, NULL)
 		ON CONFLICT (id) DO NOTHING;
+
+		-- One-shot auto-disable for overly-broad system rules (Issue #123, v2.13.2+).
+		-- Fires only when auto_disabled_at IS NULL AND enabled = true — so users who have
+		-- already re-enabled (or who upgraded from a post-fix version) are not touched.
+		-- is_system = true guards against matching a coincidentally same-UUID user rule.
+		DO $$
+		DECLARE
+			affected_count int := 0;
+		BEGIN
+			UPDATE public.exploit_block_rules
+			SET enabled = false,
+				auto_disabled_at = now()
+			WHERE id IN (
+				'a5cb921c-2c10-475b-8753-a56e2af1e5ba',
+				'41d1f7bf-9179-44cb-b41a-1685ce88d965',
+				'aa90285b-2986-46f9-80e6-99946327cd24'
+			)
+			AND is_system = true
+			AND enabled = true
+			AND auto_disabled_at IS NULL;
+
+			GET DIAGNOSTICS affected_count = ROW_COUNT;
+			IF affected_count > 0 THEN
+				INSERT INTO public.system_logs (source, level, message, details, component)
+				VALUES (
+					'internal',
+					'info',
+					format('Auto-disabled %s overly-broad exploit rule(s) to prevent false positives on search/CMS endpoints. Review and optionally re-enable at /waf/exploit-rules.', affected_count),
+					jsonb_build_object(
+						'rule_ids', ARRAY[
+							'a5cb921c-2c10-475b-8753-a56e2af1e5ba',
+							'41d1f7bf-9179-44cb-b41a-1685ce88d965',
+							'aa90285b-2986-46f9-80e6-99946327cd24'
+						],
+						'reason', 'github issue #123: simple keyword matching produces false positives on legitimate search queries',
+						'rollback_hint', 'set enabled=true in the UI; the migration will not touch these rows again once auto_disabled_at is set'
+					),
+					'exploit_rules_migration'
+				);
+			END IF;
+		END $$;
 
 		-- Performance indexes for logs_partitioned (v2.4.0+)
 		CREATE INDEX IF NOT EXISTS idx_logs_part_block_reason_ts ON logs_partitioned (block_reason, timestamp DESC) WHERE block_reason != 'none';
@@ -307,6 +378,25 @@ func (db *DB) RunMigrations() error {
 		{
 			desc: "logs_partitioned.upstream_status",
 			sql:  `ALTER TABLE public.logs_partitioned ADD COLUMN IF NOT EXISTS upstream_status text`,
+		},
+		{
+			// Issue #123 — Exploit rule auto-disable marker (v2.13.2+).
+			// Independent of upgradeSQL so that even if upgradeSQL aborts on some
+			// pre-existing TimescaleDB weirdness, the column still lands and the
+			// seeded/one-shot UPDATE logic there is a no-op rather than a hard fail.
+			desc: "exploit_block_rules.auto_disabled_at",
+			sql:  `ALTER TABLE public.exploit_block_rules ADD COLUMN IF NOT EXISTS auto_disabled_at timestamp with time zone`,
+		},
+		{
+			// Issue #123 — URI-scoped per-rule exploit exclusions (v2.13.2+).
+			// Defense-in-depth: ensure the column lands even if upgradeSQL aborts
+			// earlier. Handlers/repositories depend on this column being present.
+			desc: "host_exploit_rule_exclusions.uri_pattern",
+			sql:  `ALTER TABLE public.host_exploit_rule_exclusions ADD COLUMN IF NOT EXISTS uri_pattern text`,
+		},
+		{
+			desc: "global_exploit_rule_exclusions.uri_pattern",
+			sql:  `ALTER TABLE public.global_exploit_rule_exclusions ADD COLUMN IF NOT EXISTS uri_pattern text`,
 		},
 		{
 			// Rebuild logs_unified so it exposes the new columns. The view UNIONs `logs`
@@ -1394,4 +1484,63 @@ func (db *DB) runTrgmIndexMigration() error {
 
 	log.Printf("[Migration] %s completed successfully!", migVersion)
 	return nil
+}
+
+// ExploitRulesAutoDisableSQL is the one-shot UPDATE + system_logs entry used by
+// RunMigrations (embedded inside upgradeSQL) and by integration tests that need
+// to exercise the migration independently. It is safe to run repeatedly:
+// - ADD COLUMN IF NOT EXISTS is a no-op after the first run.
+// - The UPDATE filters on auto_disabled_at IS NULL, so it only touches rows the
+//   migration has not yet marked. Admins who have re-enabled the rules keep
+//   their choice.
+// See GitHub Issue #123.
+const ExploitRulesAutoDisableSQL = `
+ALTER TABLE public.exploit_block_rules ADD COLUMN IF NOT EXISTS auto_disabled_at timestamp with time zone;
+
+DO $$
+DECLARE
+    affected_count int := 0;
+BEGIN
+    UPDATE public.exploit_block_rules
+    SET enabled = false,
+        auto_disabled_at = now()
+    WHERE id IN (
+        'a5cb921c-2c10-475b-8753-a56e2af1e5ba',
+        '41d1f7bf-9179-44cb-b41a-1685ce88d965',
+        'aa90285b-2986-46f9-80e6-99946327cd24'
+    )
+    AND is_system = true
+    AND enabled = true
+    AND auto_disabled_at IS NULL;
+
+    GET DIAGNOSTICS affected_count = ROW_COUNT;
+    IF affected_count > 0 THEN
+        INSERT INTO public.system_logs (source, level, message, details, component)
+        VALUES (
+            'internal',
+            'info',
+            format('Auto-disabled %s overly-broad exploit rule(s) to prevent false positives on search/CMS endpoints. Review and optionally re-enable at /waf/exploit-rules.', affected_count),
+            jsonb_build_object(
+                'rule_ids', ARRAY[
+                    'a5cb921c-2c10-475b-8753-a56e2af1e5ba',
+                    '41d1f7bf-9179-44cb-b41a-1685ce88d965',
+                    'aa90285b-2986-46f9-80e6-99946327cd24'
+                ],
+                'reason', 'github issue #123: simple keyword matching produces false positives on legitimate search queries',
+                'rollback_hint', 'set enabled=true in the UI; the migration will not touch these rows again once auto_disabled_at is set'
+            ),
+            'exploit_rules_migration'
+        );
+    END IF;
+END $$;
+`
+
+// ApplyExploitRulesAutoDisable runs the one-shot auto-disable migration against
+// an already-open database handle. Used by integration tests to re-exercise the
+// migration after mutating the table. Production startup uses the equivalent
+// SQL embedded inside RunMigrations() upgradeSQL. Both share the exact string
+// intent documented in ExploitRulesAutoDisableSQL.
+func ApplyExploitRulesAutoDisable(db *sql.DB) error {
+	_, err := db.Exec(ExploitRulesAutoDisableSQL)
+	return err
 }

@@ -69,7 +69,7 @@ type ProxyHostConfigData struct {
 	CloudProviderAllowSearchBots  bool                  // If true, allow search engine bots to bypass cloud provider blocking
 	URIBlock                      *model.URIBlock       // URI path blocking settings
 	GlobalBlockExploitsExceptions string                // Global newline-separated list of exploit exceptions from system settings
-	ExploitBlockRules             []model.ExploitBlockRule // Dynamic exploit blocking rules from database
+	ExploitBlockRules             []model.ExploitBlockRuleForRender // Dynamic exploit blocking rules + URI exclusions (service layer populates)
 	UseFilterSubscription         bool                    // If true, include shared filter subscription configs (IPs + UAs)
 	HasCustomLocationRoot         bool                  // True if AdvancedConfig contains a location / block
 	AdvancedConfigHasLocation     bool                  // True if AdvancedConfig contains any location directive

@@ -181,8 +181,8 @@ func GetTemplateFuncMap(apiHost string) template.FuncMap {
 			}
 			return false
 		},
-		"filterRulesByPatternType": func(rules []model.ExploitBlockRule, patternType string) []model.ExploitBlockRule {
-			var filtered []model.ExploitBlockRule
+		"filterRulesByPatternType": func(rules []model.ExploitBlockRuleForRender, patternType string) []model.ExploitBlockRuleForRender {
+			var filtered []model.ExploitBlockRuleForRender
 			for _, rule := range rules {
 				if rule.PatternType == patternType {
 					filtered = append(filtered, rule)
@@ -190,10 +190,10 @@ func GetTemplateFuncMap(apiHost string) template.FuncMap {
 			}
 			return filtered
 		},
-		"hasExploitRules": func(rules []model.ExploitBlockRule) bool {
+		"hasExploitRules": func(rules []model.ExploitBlockRuleForRender) bool {
 			return len(rules) > 0
 		},
-		"hasRulesOfType": func(rules []model.ExploitBlockRule, patternType string) bool {
+		"hasRulesOfType": func(rules []model.ExploitBlockRuleForRender, patternType string) bool {
 			for _, rule := range rules {
 				if rule.PatternType == patternType {
 					return true
@@ -255,7 +255,7 @@ func GetSimpleTemplateFuncMap() template.FuncMap {
 				return len(val)
 			case []model.WAFRuleExclusion:
 				return len(val)
-			case []model.ExploitBlockRule:
+			case []model.ExploitBlockRuleForRender:
 				return len(val)
 			default:
 				return 0

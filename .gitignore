@@ -70,3 +70,6 @@ test/e2e/.auth/
 # Playwright artefacts produced when running from the repo root
 .playwright-mcp/
 /test-results/
+
+# Local git worktrees (Claude Code subagent-driven development)
+.worktrees/
