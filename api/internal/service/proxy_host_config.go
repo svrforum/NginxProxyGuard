@@ -355,11 +355,27 @@ func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.Pr
 		data.BannedIPs = filterBannedByTrustedIPs(data.BannedIPs, data.GlobalTrustedIPs)
 	}
 
-	// Fetch exploit block rules from database when block_exploits is enabled
+	// Fetch exploit block rules + their URI-scoped exclusions when block_exploits is enabled.
+	// The template renderer needs both: rules are what may trigger 403s, URI exclusions
+	// are per-rule regex patterns that allow bypassing specific rules on specific paths.
 	if host.BlockExploits && s.exploitBlockRuleRepo != nil {
 		rules, err := s.exploitBlockRuleRepo.GetEnabledForHost(ctx, host.ID)
 		if err == nil {
-			data.ExploitBlockRules = rules
+			uriExclusions, exErr := s.exploitBlockRuleRepo.GetURIExclusionsForHost(ctx, host.ID)
+			if exErr != nil {
+				// Graceful degradation: proceed with no URI-scoped exclusions rather than
+				// failing the whole config regeneration.
+				uriExclusions = map[string][]string{}
+			}
+			rendered := make([]model.ExploitBlockRuleForRender, 0, len(rules))
+			for _, r := range rules {
+				rendered = append(rendered, model.ExploitBlockRuleForRender{
+					ExploitBlockRule: r,
+					URIExclusions:    uriExclusions[r.ID],
+					IDSanitized:      strings.ReplaceAll(r.ID, "-", "_"),
+				})
+			}
+			data.ExploitBlockRules = rendered
 		}
 	}
 
