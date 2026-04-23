@@ -206,6 +206,16 @@ func (db *DB) RunMigrations() error {
 		// v2.13.2: drop legacy single-column unique constraints in favor of the
 		// composite (rule_id, COALESCE(uri_pattern,'')) unique indexes below.
 		// -----------------------------------------------------------------------
+		// ---------------------------------------------------------------------
+		// v2.13.2: replace single-column UNIQUE constraints with composite
+		// expression indexes to allow multiple URI-scoped exclusions per rule.
+		//
+		// Order matters: DROP CONSTRAINT runs before CREATE UNIQUE INDEX within
+		// the same upgrades loop but across separate db.Exec calls. On a running
+		// server there's a brief window with no uniqueness between the two — OK
+		// here because migrations run at boot before e.Start() accepts traffic.
+		// DO NOT reorder.
+		// ---------------------------------------------------------------------
 		{
 			desc: "v2.13.2: drop global_exploit_rule_exclusions_rule_id_key",
 			sql: `ALTER TABLE public.global_exploit_rule_exclusions
