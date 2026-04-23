@@ -262,12 +262,27 @@ server {
 {{if hasRulesOfType .ExploitBlockRules "query_string"}}
     set $exploit_qs_block 0;
     set $exploit_qs_rule "-";
-{{range filterRulesByPatternType .ExploitBlockRules "query_string"}}
-    # {{.Name}} ({{.Category}})
-    if ($query_string ~* "{{escapeNginxPattern .Pattern}}") {
+{{range $rule := filterRulesByPatternType .ExploitBlockRules "query_string"}}
+    # {{$rule.Name}} ({{$rule.Category}})
+{{- if $rule.URIExclusions}}
+    # URI-scoped exclusions — rule bypasses the check on matching paths
+    set $exploit_skip_{{$rule.IDSanitized}} "0";
+{{- range $uri := $rule.URIExclusions}}
+    if ($request_uri ~* "{{escapeNginxPattern $uri}}") { set $exploit_skip_{{$rule.IDSanitized}} "1"; }
+{{- end}}
+    set $exploit_match_{{$rule.IDSanitized}} "0";
+    if ($query_string ~* "{{escapeNginxPattern $rule.Pattern}}") { set $exploit_match_{{$rule.IDSanitized}} "1"; }
+    set $exploit_combined_{{$rule.IDSanitized}} "$exploit_skip_{{$rule.IDSanitized}}$exploit_match_{{$rule.IDSanitized}}";
+    if ($exploit_combined_{{$rule.IDSanitized}} = "01") {
         set $exploit_qs_block 1;
-        set $exploit_qs_rule "{{.ID}}";
+        set $exploit_qs_rule "{{$rule.ID}}";
     }
+{{- else}}
+    if ($query_string ~* "{{escapeNginxPattern $rule.Pattern}}") {
+        set $exploit_qs_block 1;
+        set $exploit_qs_rule "{{$rule.ID}}";
+    }
+{{- end}}
 {{end}}
 {{if hasMergedExceptions .GlobalBlockExploitsExceptions .Host.BlockExploitsExceptions}}
     # URI exceptions - skip query string blocking for these paths
@@ -292,12 +307,27 @@ server {
 {{if hasRulesOfType .ExploitBlockRules "request_uri"}}
     set $rfi_block 0;
     set $rfi_rule "-";
-{{range filterRulesByPatternType .ExploitBlockRules "request_uri"}}
-    # {{.Name}} ({{.Category}})
-    if ($request_uri ~* "{{escapeNginxPattern .Pattern}}") {
+{{range $rule := filterRulesByPatternType .ExploitBlockRules "request_uri"}}
+    # {{$rule.Name}} ({{$rule.Category}})
+{{- if $rule.URIExclusions}}
+    # URI-scoped exclusions — rule bypasses the check on matching paths
+    set $rfi_skip_{{$rule.IDSanitized}} "0";
+{{- range $uri := $rule.URIExclusions}}
+    if ($request_uri ~* "{{escapeNginxPattern $uri}}") { set $rfi_skip_{{$rule.IDSanitized}} "1"; }
+{{- end}}
+    set $rfi_match_{{$rule.IDSanitized}} "0";
+    if ($request_uri ~* "{{escapeNginxPattern $rule.Pattern}}") { set $rfi_match_{{$rule.IDSanitized}} "1"; }
+    set $rfi_combined_{{$rule.IDSanitized}} "$rfi_skip_{{$rule.IDSanitized}}$rfi_match_{{$rule.IDSanitized}}";
+    if ($rfi_combined_{{$rule.IDSanitized}} = "01") {
         set $rfi_block 1;
-        set $rfi_rule "{{.ID}}";
+        set $rfi_rule "{{$rule.ID}}";
     }
+{{- else}}
+    if ($request_uri ~* "{{escapeNginxPattern $rule.Pattern}}") {
+        set $rfi_block 1;
+        set $rfi_rule "{{$rule.ID}}";
+    }
+{{- end}}
 {{end}}
 {{if hasMergedExceptions .GlobalBlockExploitsExceptions .Host.BlockExploitsExceptions}}
     # Dynamic exceptions from database (global + host-specific)
