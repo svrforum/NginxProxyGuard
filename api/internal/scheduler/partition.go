@@ -79,6 +79,27 @@ func (s *PartitionScheduler) Stop() {
 	close(s.stopCh)
 }
 
+// isLogsHypertable reports whether logs_partitioned has been converted to a
+// TimescaleDB hypertable (see migration.go:migrateToTimescaleDB). When true,
+// chunks are auto-managed by Timescale and native PostgreSQL partition
+// operations (CREATE TABLE ... PARTITION OF, ANALYZE per-partition) are
+// invalid for this table. Returns false when the timescaledb_information view
+// is unavailable so installs without the extension fall through to the
+// legacy native-partitioning code path.
+func (s *PartitionScheduler) isLogsHypertable(ctx context.Context) bool {
+	var isHT bool
+	err := s.db.QueryRowContext(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM timescaledb_information.hypertables
+			WHERE hypertable_name = 'logs_partitioned'
+		)
+	`).Scan(&isHT)
+	if err != nil {
+		return false
+	}
+	return isHT
+}
+
 func (s *PartitionScheduler) run() {
 	s.createPartitions()
 	s.enforceRetention()
@@ -113,6 +134,12 @@ func (s *PartitionScheduler) cleanupDashboardStats() {
 func (s *PartitionScheduler) analyzeOldPartitions() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
+
+	// TimescaleDB auto-analyzes its chunks; the native `logs_p%` partitions
+	// targeted below do not exist on hypertable installs.
+	if s.isLogsHypertable(ctx) {
+		return
+	}
 
 	// Run ANALYZE on old partitions so the query planner has accurate statistics.
 	// This improves query performance on partitioned tables after bulk inserts/deletes.
@@ -157,6 +184,16 @@ func (s *PartitionScheduler) analyzeOldPartitions() {
 func (s *PartitionScheduler) createPartitions() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
+
+	// Skip native partition operations when logs_partitioned has been migrated
+	// to a TimescaleDB hypertable. CREATE TABLE ... PARTITION OF on a hypertable
+	// raises `"logs_partitioned" is not partitioned`, which previously surfaced
+	// as a daily error log at midnight on every upgraded install.
+	if s.isLogsHypertable(ctx) {
+		log.Println("[PartitionScheduler] logs_partitioned is a TimescaleDB hypertable; skipping native partition creation (chunks are auto-managed)")
+		s.logPartitionStats(ctx)
+		return
+	}
 
 	// Create partitions for current month and next 2 months
 	now := time.Now().UTC()
