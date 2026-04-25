@@ -677,6 +677,30 @@ END $$`,
 				EXECUTE view_sql;
 			END $$`,
 		},
+
+		// -----------------------------------------------------------------------
+		// v2.13.7: Dotenv file access rule — seeds the path-based (request_uri)
+		// rule that blocks /.env, /.env.local, /.env.production, etc. on every
+		// proxy host that has block_exploits enabled. Fresh installs already
+		// receive the row via the initial seed in 001_init.sql; this entry
+		// backfills the same row for installs that were provisioned before
+		// v2.13.7. ON CONFLICT DO NOTHING preserves admin edits if the rule
+		// has already been customised.
+		// -----------------------------------------------------------------------
+		{
+			desc: "v2.13.7: seed ENV-001 (Dotenv File Access) rule",
+			sql: `INSERT INTO public.exploit_block_rules
+				(id, category, name, pattern, pattern_type, description, severity, enabled, is_system, sort_order, auto_disabled_at)
+				VALUES (
+					'c1e7f001-0000-4000-8000-000000000001',
+					'rfi',
+					'Dotenv File Access',
+					E'/\\.env(\\.|$|/)',
+					'request_uri',
+					'Blocks access to .env config files (.env, .env.local, .env.production, ...)',
+					'critical', true, true, 23, NULL
+				) ON CONFLICT (id) DO NOTHING`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {
