@@ -10,6 +10,25 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Tailwind v3 → v4 compatibility shim:
+   v4 changed `border` default color to currentColor and removed
+   `cursor: pointer` from <button>. Restore v3 behavior so existing
+   markup keeps the same appearance. */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
 @theme {
   --color-primary-50: #eff6ff;
   --color-primary-100: #dbeafe;
