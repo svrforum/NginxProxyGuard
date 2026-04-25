@@ -79,6 +79,68 @@ func (db *DB) RunMigrations() error {
 		sql  string
 	}{
 		// -----------------------------------------------------------------------
+		// Detach orphan chunk children. On installs that survived earlier
+		// migration glitches (notably the v2.7.x → v2.8.x partitioned-table →
+		// TimescaleDB hypertable conversion), pg_inherits can list child chunk
+		// tables that no longer have an entry in _timescaledb_catalog.chunk.
+		// Postgres' planner enumerates pg_inherits children, TimescaleDB's
+		// hooks then look them up in catalog, and the missing entry surfaces
+		// as `pq: chunk not found` on every query/DELETE that touches the
+		// parent hypertable (logs_partitioned, system_logs, audit_logs, ...).
+		//
+		// This step is idempotent: ALTER TABLE ... NO INHERIT removes only the
+		// inheritance link; the physical orphan tables and their data are
+		// preserved as standalone tables for the operator to inspect/drop. It
+		// MUST run before any later upgrade that touches a hypertable
+		// (CREATE INDEX on logs_partitioned below would otherwise abort).
+		// Wrapped in a TimescaleDB-availability guard so installs without the
+		// extension skip cleanly.
+		// -----------------------------------------------------------------------
+		{
+			desc: "Detach orphan chunk inheritance entries (TimescaleDB catalog drift)",
+			sql: `DO $$
+DECLARE
+    has_timescaledb BOOLEAN;
+    orphan RECORD;
+    detached_count INT := 0;
+BEGIN
+    SELECT EXISTS(
+        SELECT 1 FROM pg_extension WHERE extname = 'timescaledb'
+    ) INTO has_timescaledb;
+    IF NOT has_timescaledb THEN
+        RETURN;
+    END IF;
+
+    FOR orphan IN
+        SELECT
+            i.inhrelid::regclass AS child,
+            i.inhparent::regclass AS parent
+        FROM pg_inherits i
+        JOIN pg_class child_c ON child_c.oid = i.inhrelid
+        JOIN pg_namespace child_n ON child_n.oid = child_c.relnamespace
+        JOIN _timescaledb_catalog.hypertable h
+          ON format('%I.%I', h.schema_name, h.table_name)::regclass = i.inhparent
+        WHERE NOT EXISTS (
+            SELECT 1 FROM _timescaledb_catalog.chunk ch
+            WHERE ch.schema_name = child_n.nspname
+              AND ch.table_name  = child_c.relname
+        )
+    LOOP
+        BEGIN
+            EXECUTE format('ALTER TABLE %s NO INHERIT %s', orphan.child, orphan.parent);
+            detached_count := detached_count + 1;
+        EXCEPTION WHEN OTHERS THEN
+            RAISE NOTICE '[Migration] Could not detach orphan %: %', orphan.child, SQLERRM;
+        END;
+    END LOOP;
+
+    IF detached_count > 0 THEN
+        RAISE NOTICE '[Migration] Detached % orphan chunk inheritance entries', detached_count;
+    END IF;
+END $$`,
+		},
+
+		// -----------------------------------------------------------------------
 		// Enum upgrades (block_reason) — safe to run multiple times.
 		// ALTER TYPE ... ADD VALUE IF NOT EXISTS is non-transactional in PG,
 		// so these are grouped for readability; each is independently idempotent.
