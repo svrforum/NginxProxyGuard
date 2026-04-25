@@ -284,6 +284,24 @@ update_modsec_configs() {
 }
 update_modsec_configs
 
+# Always update app-managed nginx includes from defaults.
+# These files (block_exploits.conf, proxy_params.conf) are shipped by NPG,
+# their rule IDs (FILE-001, VCS-001, ENV-001, ...) are referenced from the
+# application, and they must pick up security-rule updates on upgrade. User
+# customisation belongs in the Global Nginx Conf / per-host Advanced Config,
+# not in these files.
+update_managed_includes() {
+    if [ ! -d "$NGINX_DEFAULT/includes" ]; then
+        return
+    fi
+    echo "[Entrypoint] Updating nginx includes from defaults..."
+    cp -f "$NGINX_DEFAULT/includes/"*.conf "$NGINX_DIR/includes/" 2>/dev/null || true
+    chown nginx:nginx "$NGINX_DIR/includes/"*.conf 2>/dev/null || true
+    chmod 644 "$NGINX_DIR/includes/"*.conf 2>/dev/null || true
+    echo "[Entrypoint] Nginx includes updated"
+}
+update_managed_includes
+
 # Run GeoIP update if script exists and license key is provided
 if [ -x /scripts/geoip-update.sh ]; then
     echo "[Entrypoint] Running GeoIP database update..."
