@@ -181,7 +181,7 @@ function AppContent({ user, onLogout }: AppContentProps) {
             onClick={() => navigate('/dashboard')}
           >
             <img
-              src="/shield.svg"
+              src="/favicon.ico"
               alt="NPG Logo"
               className="w-8 h-8 lg:w-10 lg:h-10 rounded-lg flex-shrink-0"
             />
@@ -406,7 +406,7 @@ function AppContent({ user, onLogout }: AppContentProps) {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-slate-500 dark:text-slate-400">
             <div className="flex items-center gap-2">
-              <img src="/shield.svg" alt="NPG Logo" className="w-5 h-5 rounded" />
+              <img src="/favicon.ico" alt="NPG Logo" className="w-5 h-5 rounded" />
               <span className="font-semibold text-slate-700 dark:text-gray-300">Nginx Proxy Guard</span>
               <span className="text-slate-400">v{health.data?.version || '0.0.0'}</span>
             </div>
