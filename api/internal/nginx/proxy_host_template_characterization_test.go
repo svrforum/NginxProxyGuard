@@ -207,6 +207,25 @@ func fixtureUpstreamLB() ProxyHostConfigData {
 	}
 }
 
+// 7) https_force_custom_location: SSL+ForceHTTPS with user-supplied
+// `location / { ... }` in AdvancedConfig. This pins the issue #129 fix —
+// the HTTP→HTTPS redirect must happen at server-block level so the user's
+// location does not shadow it, and ACME / NPG challenge paths must be
+// excluded from the redirect.
+func fixtureHTTPSForceCustomLocation() ProxyHostConfigData {
+	host := baseHost("00000000-0000-0000-0000-000000000007", "192.168.1.70", true)
+	host.DomainNames = []string{"custom.example.com"}
+	host.SSLEnabled = true
+	host.SSLForceHTTPS = true
+	certID := "00000000-0000-0000-0000-00000000cert"
+	host.CertificateID = &certID
+	host.AdvancedConfig = "location / {\n    proxy_pass http://192.168.1.70:8080;\n}\n"
+	return ProxyHostConfigData{
+		Host:           host,
+		GlobalSettings: baseGlobalSettings(),
+	}
+}
+
 // ---- Tests ------------------------------------------------------------------
 
 func TestProxyHostTemplate_Characterization(t *testing.T) {
@@ -313,4 +332,73 @@ func itoa(n int) string {
 		buf[i] = '-'
 	}
 	return string(buf[i:])
+}
+
+// TestForceHTTPSCustomLocationRedirects pins issue #129: when SSLForceHTTPS
+// is on and the user supplies their own `location /`, the HTTP→HTTPS
+// redirect must still fire and ACME/NPG-challenge paths must be excluded.
+//
+// This is an assertion test (not a golden compare) because the bug is about
+// specific directives appearing/missing, and a golden file would obscure the
+// signal with noise from unrelated parts of the config.
+func TestForceHTTPSCustomLocationRedirects(t *testing.T) {
+	var buf bytes.Buffer
+	if err := renderProxyHostConfig(context.Background(), &buf, fixtureHTTPSForceCustomLocation()); err != nil {
+		t.Fatalf("render failed: %v", err)
+	}
+	out := buf.String()
+
+	// Split on the HTTPS server block so we only look at the HTTP server.
+	// The first `server {` … first `}` (top-level) covers the HTTP server.
+	httpServer := extractFirstServerBlock(t, out)
+
+	// Server-level if with ACME + NPG challenge bypass must be present.
+	if !strings.Contains(httpServer, `if ($request_uri !~ "^/\.well-known/acme-challenge/|^/api/v1/challenge/")`) {
+		t.Errorf("HTTP server is missing the server-level bypass `if`; got:\n%s", httpServer)
+	}
+
+	// Redirect must be present.
+	if !strings.Contains(httpServer, "return 301 https://$host$request_uri;") {
+		t.Errorf("HTTP server is missing the 301 redirect; got:\n%s", httpServer)
+	}
+
+	// The OLD pattern — auto-generated `location / { return 301 ... }` —
+	// must NOT appear; only the user's `location /` should be present in
+	// the HTTP server (rendered via the standard advanced-config inject).
+	if strings.Contains(httpServer, "location / {\n        return 301") {
+		t.Errorf("HTTP server still contains the old auto-generated location/return block; should be replaced by server-level if. Got:\n%s", httpServer)
+	}
+
+	// User's location block (proxy_pass) is rendered into HTTP server too —
+	// dead code at runtime (server-level return short-circuits non-bypass
+	// requests) but expected as part of the AdvancedConfig server-level inject.
+	if !strings.Contains(httpServer, "proxy_pass http://192.168.1.70:8080") {
+		t.Errorf("HTTP server is missing user's proxy_pass directive; got:\n%s", httpServer)
+	}
+}
+
+// extractFirstServerBlock returns the substring covering the FIRST top-level
+// `server { … }` block in the config (which is the HTTP server in our
+// template). Uses brace counting because nginx server bodies contain nested
+// `{}` (location blocks, if-blocks).
+func extractFirstServerBlock(t *testing.T, full string) string {
+	t.Helper()
+	start := strings.Index(full, "server {")
+	if start < 0 {
+		t.Fatalf("no `server {` block found in rendered config")
+	}
+	depth := 0
+	for i := start; i < len(full); i++ {
+		switch full[i] {
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return full[start : i+1]
+			}
+		}
+	}
+	t.Fatalf("unterminated server block starting at offset %d", start)
+	return ""
 }
