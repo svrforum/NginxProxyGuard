@@ -235,6 +235,7 @@ func TestProxyHostTemplate_Characterization(t *testing.T) {
 	}{
 		{name: "http_only", data: fixtureHTTPOnly()},
 		{name: "https_force", data: fixtureHTTPSForce()},
+		{name: "https_force_custom_location", data: fixtureHTTPSForceCustomLocation()},
 		{name: "waf_blocking", data: fixtureWAFBlocking()},
 		{name: "cache_enabled", data: fixtureCacheEnabled()},
 		{name: "advanced_config_conflict", data: fixtureAdvancedConfigConflict()},
