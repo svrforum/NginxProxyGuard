@@ -377,6 +377,49 @@ func TestForceHTTPSCustomLocationRedirects(t *testing.T) {
 	}
 }
 
+// TestForceHTTPSACMEBypass guards against silent regression of
+// Let's Encrypt HTTP-01 cert renewal. The server-level redirect MUST
+// exclude `^/.well-known/acme-challenge/` from being redirected to HTTPS,
+// otherwise the ACME server cannot fetch the validation file over HTTP and
+// renewal silently fails.
+func TestForceHTTPSACMEBypass(t *testing.T) {
+	// Use the no-custom-location fixture too, so we cover both paths.
+	cases := []struct {
+		name string
+		data ProxyHostConfigData
+	}{
+		{name: "without_custom_location", data: fixtureHTTPSForce()},
+		{name: "with_custom_location", data: fixtureHTTPSForceCustomLocation()},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			if err := renderProxyHostConfig(context.Background(), &buf, tc.data); err != nil {
+				t.Fatalf("render failed: %v", err)
+			}
+			httpServer := extractFirstServerBlock(t, buf.String())
+
+			// The bypass regex must contain BOTH ACME and NPG challenge prefixes.
+			needles := []string{
+				`^/\.well-known/acme-challenge/`,
+				`^/api/v1/challenge/`,
+			}
+			for _, n := range needles {
+				if !strings.Contains(httpServer, n) {
+					t.Errorf("HTTP server is missing bypass needle %q; got:\n%s", n, httpServer)
+				}
+			}
+
+			// Sanity: the if must use negative match (`!~`) so non-matching
+			// URIs trigger the redirect and matching ones fall through.
+			if !strings.Contains(httpServer, `if ($request_uri !~`) {
+				t.Errorf("HTTP server is missing `if ($request_uri !~ ...)` bypass; got:\n%s", httpServer)
+			}
+		})
+	}
+}
+
 // extractFirstServerBlock returns the substring covering the FIRST top-level
 // `server { … }` block in the config (which is the HTTP server in our
 // template). Uses brace counting because nginx server bodies contain nested
