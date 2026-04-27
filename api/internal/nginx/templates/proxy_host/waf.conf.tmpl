@@ -1,15 +1,11 @@
 {{if .Host.SSLEnabled}}
     # Redirect HTTP to HTTPS
     {{if .Host.SSLForceHTTPS}}
-{{if not .HasCustomLocationRoot}}
-    location / {
+    # Server-level redirect — survives any user-defined location block.
+    # Bypass: ACME HTTP-01 (cert renewal) + NPG challenge page (geo restriction).
+    if ($request_uri !~ "^/\.well-known/acme-challenge/|^/api/v1/challenge/") {
         return 301 https://$host$request_uri;
     }
-{{end}}
-{{if .AdvancedConfigLocationLevel}}{{if not .AdvancedConfigHasLocation}}
-    # Advanced configuration (ForceHTTPS redirect server)
-    {{.AdvancedConfigLocationLevel}}
-{{end}}{{end}}
     {{else}}
 {{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}{{if .HasCustomLocationRoot}}
     # Server-level challenge redirect for custom location / (HTTP server, SSL no ForceHTTPS)
