@@ -69,7 +69,14 @@ func (c *LogCollector) parseAccessLog(line string) (*model.CreateLogRequest, err
 		var botCategory string
 		var exploitRule string
 
-		if brMatches := blockReasonRegex.FindStringSubmatch(line); brMatches != nil {
+		// Treat block="-" / block="" as "nginx did not tag this request" and leave
+		// blockReason at its zero value (""). The collector's status-based fallback
+		// (log_collector.go: 429→rate_limit, 403+UA→bot_filter) checks for "" and
+		// would otherwise stay dead code: ParseBlockReason("-") returns
+		// BlockReasonNone ("none"), which makes that fallback condition false.
+		// Issue #130 surfaced this for global rate-limit blocks; the same gap also
+		// silently disabled the bot-filter user-agent fallback.
+		if brMatches := blockReasonRegex.FindStringSubmatch(line); brMatches != nil && brMatches[1] != "-" && brMatches[1] != "" {
 			reason := model.ParseBlockReason(brMatches[1])
 			// Only set access_denied if the request was actually denied (403)
 			// This prevents false positives when Access List is configured but request is allowed
