@@ -252,16 +252,38 @@ http {
     modsecurity on;
     modsecurity_rules_file /etc/nginx/modsec/crs-global.conf;
 
-{{if .LimitConnEnabled}}    # ==========================================================================
+{{if and .GlobalTrustedIPs (or .LimitConnEnabled .LimitReqEnabled)}}    # ==========================================================================
+    # Global trusted IPs — bypass http-level limit_conn / limit_req zones.
+    # Same pattern as per-host rate_limit.conf.tmpl: empty key = no counting.
+    # Sourced from system_settings.global_trusted_ips.
+    # ==========================================================================
+    geo $global_trusted_ip {
+        default 0;
+{{range .GlobalTrustedIPs}}        {{.}} 1;
+{{end}}    }
+{{end}}{{if .LimitConnEnabled}}    # ==========================================================================
     # Global connection limit (DDoS protection)
     # ==========================================================================
-    limit_conn_zone $binary_remote_addr zone=global_conn_limit:{{.LimitConnZoneSize}};
-    limit_conn global_conn_limit {{.LimitConnPerIP}};
+{{if .GlobalTrustedIPs}}    map $global_trusted_ip $global_conn_key {
+        1       "";
+        default $binary_remote_addr;
+    }
+    limit_conn_zone $global_conn_key zone=global_conn_limit:{{.LimitConnZoneSize}};
+{{else}}    limit_conn_zone $binary_remote_addr zone=global_conn_limit:{{.LimitConnZoneSize}};
+{{end}}    limit_conn global_conn_limit {{.LimitConnPerIP}};
 {{end}}{{if .LimitReqEnabled}}    # ==========================================================================
     # Global request rate limit (DDoS protection)
+    # 429 (not default 503) so the existing log_collector status→reason fallback
+    # tags blocked requests as block_reason=rate_limit in the access log.
     # ==========================================================================
-    limit_req_zone $binary_remote_addr zone=global_req_limit:{{.LimitReqZoneSize}} rate={{.LimitReqRate}}r/s;
-    limit_req zone=global_req_limit burst={{.LimitReqBurst}} nodelay;
+{{if .GlobalTrustedIPs}}    map $global_trusted_ip $global_req_key {
+        1       "";
+        default $binary_remote_addr;
+    }
+    limit_req_zone $global_req_key zone=global_req_limit:{{.LimitReqZoneSize}} rate={{.LimitReqRate}}r/s;
+{{else}}    limit_req_zone $binary_remote_addr zone=global_req_limit:{{.LimitReqZoneSize}} rate={{.LimitReqRate}}r/s;
+{{end}}    limit_req zone=global_req_limit burst={{.LimitReqBurst}} nodelay;
+    limit_req_status 429;
 {{end}}{{if ne .CustomHTTPConfig ""}}
     # ==========================================================================
     # Custom HTTP config (from Global Settings → Advanced)
@@ -370,6 +392,11 @@ type MainConfigData struct {
 	LimitReqRate     int
 	LimitReqBurst    int
 
+	// GlobalTrustedIPs are IP/CIDR entries from system_settings.global_trusted_ips
+	// that should bypass http-level limit_conn / limit_req. Empty when none are
+	// configured; the template only emits the geo+map blocks when this is set.
+	GlobalTrustedIPs []string
+
 	CustomHTTPConfig   string
 	CustomStreamConfig string
 }
@@ -384,7 +411,12 @@ var validErrorLogLevels = map[string]bool{
 // buildMainConfigData translates a GlobalSettings row into template inputs,
 // applying fallbacks for fields where a zero value would produce an invalid
 // nginx directive (e.g. empty ssl_protocols, 0 worker_connections).
-func buildMainConfigData(s *model.GlobalSettings) MainConfigData {
+//
+// trustedIPs come from system_settings.global_trusted_ips (already parsed into
+// individual entries) and are wired into the http-level limit_conn / limit_req
+// zones so whitelisted IPs bypass DDoS limits the same way they bypass per-host
+// rate limits and bot/WAF checks. Pass nil when no whitelist applies.
+func buildMainConfigData(s *model.GlobalSettings, trustedIPs []string) MainConfigData {
 	d := MainConfigData{
 		WorkerConnections:        s.WorkerConnections,
 		MultiAccept:              s.MultiAccept,
@@ -457,6 +489,7 @@ func buildMainConfigData(s *model.GlobalSettings) MainConfigData {
 		LimitReqBurst:            s.LimitReqBurst,
 		CustomHTTPConfig:         strings.TrimSpace(s.CustomHTTPConfig),
 		CustomStreamConfig:       strings.TrimSpace(s.CustomStreamConfig),
+		GlobalTrustedIPs:         trustedIPs,
 	}
 	if s.WorkerProcesses <= 0 {
 		d.WorkerProcessesStr = "auto"
@@ -478,8 +511,14 @@ func buildMainConfigData(s *model.GlobalSettings) MainConfigData {
 // On test failure it restores the previous nginx.conf so a bad save can
 // never leave the container unable to reload or restart.
 //
-// Call from startup and from SettingsService.UpdateGlobalSettings.
-func (m *Manager) GenerateMainNginxConfig(ctx context.Context, s *model.GlobalSettings) error {
+// trustedIPs are sourced from system_settings.global_trusted_ips (parsed into
+// individual IP/CIDR entries by the caller). Pass nil when no whitelist
+// applies. They flow into the http-level limit_conn / limit_req zones so
+// whitelisted IPs bypass DDoS limits — same trust contract as per-host limits.
+//
+// Call from startup and from SettingsService.UpdateGlobalSettings, and also
+// from SystemSettingsHandler when global_trusted_ips changes.
+func (m *Manager) GenerateMainNginxConfig(ctx context.Context, s *model.GlobalSettings, trustedIPs []string) error {
 	if s == nil {
 		return fmt.Errorf("global settings are nil")
 	}
@@ -490,7 +529,7 @@ func (m *Manager) GenerateMainNginxConfig(ctx context.Context, s *model.GlobalSe
 	}
 
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, buildMainConfigData(s)); err != nil {
+	if err := tmpl.Execute(&buf, buildMainConfigData(s, trustedIPs)); err != nil {
 		return fmt.Errorf("execute main nginx template: %w", err)
 	}
 

@@ -334,18 +334,7 @@ func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.Pr
 				data.GlobalBlockExploitsExceptions = settings.GlobalBlockExploitsExceptions
 			}
 			// Parse global trusted IPs for nginx ban bypass (with strict validation)
-			if settings.GlobalTrustedIPs != "" {
-				for _, line := range strings.Split(settings.GlobalTrustedIPs, "\n") {
-					entry := strings.TrimSpace(line)
-					if entry == "" || strings.HasPrefix(entry, "#") {
-						continue
-					}
-					// Validate: must be a valid IP or CIDR (prevents nginx config injection)
-					if isValidIPOrCIDR(entry) {
-						data.GlobalTrustedIPs = append(data.GlobalTrustedIPs, entry)
-					}
-				}
-			}
+			data.GlobalTrustedIPs = ParseGlobalTrustedIPs(settings.GlobalTrustedIPs)
 		}
 	}
 

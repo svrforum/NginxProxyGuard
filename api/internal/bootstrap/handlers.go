@@ -67,6 +67,7 @@ func InitHandlers(
 	h.Auth = handler.NewAuthHandler(svcs.Auth, svcs.Audit)
 	h.SystemSettings = handler.NewSystemSettingsHandler(
 		repos.SystemSettings,
+		repos.GlobalSettings,
 		repos.GeoIPHistory,
 		nginxManager,
 		svcs.Audit,

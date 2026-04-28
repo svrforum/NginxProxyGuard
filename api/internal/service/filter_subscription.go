@@ -653,6 +653,31 @@ func isValidIPOrCIDR(s string) bool {
 	return net.ParseIP(s) != nil
 }
 
+// ParseGlobalTrustedIPs splits the newline-separated trusted-IP blob from
+// system_settings.global_trusted_ips into individual entries, dropping blanks
+// and `#` comments and rejecting anything that isn't a valid IP/CIDR.
+//
+// Centralized so the same parsed list flows into both per-host configs (via
+// proxy_host_config.go) and the http-level limit_conn / limit_req zones in
+// nginx.conf (via main_config.go) — preventing the per-host vs. global
+// inconsistency that prompted issue #130.
+func ParseGlobalTrustedIPs(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	var out []string
+	for _, line := range strings.Split(raw, "\n") {
+		entry := strings.TrimSpace(line)
+		if entry == "" || strings.HasPrefix(entry, "#") {
+			continue
+		}
+		if isValidIPOrCIDR(entry) {
+			out = append(out, entry)
+		}
+	}
+	return out
+}
+
 // isPrivateURL checks if a URL points to a private/internal address
 func isPrivateURL(rawURL string) bool {
 	parsed, err := url.Parse(rawURL)

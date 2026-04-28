@@ -28,6 +28,7 @@ const (
 
 type SystemSettingsHandler struct {
 	repo                 *repository.SystemSettingsRepository
+	globalSettingsRepo   *repository.GlobalSettingsRepository
 	historyRepo          *repository.GeoIPHistoryRepository
 	nginxManager         *nginx.Manager
 	audit                *service.AuditService
@@ -39,6 +40,7 @@ type SystemSettingsHandler struct {
 
 func NewSystemSettingsHandler(
 	repo *repository.SystemSettingsRepository,
+	globalSettingsRepo *repository.GlobalSettingsRepository,
 	historyRepo *repository.GeoIPHistoryRepository,
 	nginxManager *nginx.Manager,
 	audit *service.AuditService,
@@ -49,6 +51,7 @@ func NewSystemSettingsHandler(
 ) *SystemSettingsHandler {
 	h := &SystemSettingsHandler{
 		repo:                 repo,
+		globalSettingsRepo:   globalSettingsRepo,
 		historyRepo:          historyRepo,
 		nginxManager:         nginxManager,
 		audit:                audit,
@@ -140,13 +143,38 @@ func (h *SystemSettingsHandler) UpdateSystemSettings(c echo.Context) error {
 		}
 	}
 
-	// Regenerate all nginx configs when global trusted IPs change
-	if req.GlobalTrustedIPs != nil && h.proxyHostService != nil {
-		go func() {
-			if err := h.proxyHostService.SyncAllConfigs(context.Background()); err != nil {
-				log.Printf("[SystemSettings] Warning: failed to sync nginx configs after trusted IPs change: %v", err)
-			}
-		}()
+	// Regenerate all nginx configs when global trusted IPs change.
+	// Two paths:
+	//   1. Per-host configs (geo $trusted_ip_<id>) — handled by SyncAllConfigs.
+	//   2. nginx.conf http-level limit_conn / limit_req zones — must be
+	//      regenerated explicitly (issue #130: trusted IPs were only honored
+	//      per-host, so global rate limits ignored the whitelist).
+	if req.GlobalTrustedIPs != nil {
+		trustedIPs := service.ParseGlobalTrustedIPs(settings.GlobalTrustedIPs)
+		if h.globalSettingsRepo != nil && h.nginxManager != nil {
+			go func() {
+				bgCtx := context.Background()
+				gs, err := h.globalSettingsRepo.Get(bgCtx)
+				if err != nil {
+					log.Printf("[SystemSettings] Warning: failed to load global settings for nginx.conf regen: %v", err)
+					return
+				}
+				if err := h.nginxManager.GenerateMainNginxConfig(bgCtx, gs, trustedIPs); err != nil {
+					log.Printf("[SystemSettings] Warning: failed to regenerate nginx.conf after trusted IPs change: %v", err)
+					return
+				}
+				if err := h.nginxManager.ReloadNginx(bgCtx); err != nil {
+					log.Printf("[SystemSettings] Warning: failed to reload nginx after trusted IPs change: %v", err)
+				}
+			}()
+		}
+		if h.proxyHostService != nil {
+			go func() {
+				if err := h.proxyHostService.SyncAllConfigs(context.Background()); err != nil {
+					log.Printf("[SystemSettings] Warning: failed to sync nginx configs after trusted IPs change: %v", err)
+				}
+			}()
+		}
 	}
 
 	// Generate default server config if direct IP access action changed
