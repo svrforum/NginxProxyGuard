@@ -112,6 +112,7 @@ func InitServices(
 
 	svcs.Settings = service.NewSettingsService(
 		repos.GlobalSettings,
+		repos.SystemSettings,
 		repos.Dashboard,
 		repos.Backup,
 		repos.ProxyHost,

@@ -42,10 +42,18 @@ func runStartup(ctx context.Context, c *Container) error {
 	log.Println("[Startup] Regenerating main nginx.conf from global settings...")
 	if settings, err := c.Repositories.GlobalSettings.Get(ctx); err != nil {
 		log.Printf("[Startup] Warning: failed to load global settings for nginx.conf: %v", err)
-	} else if err := c.Nginx.GenerateMainNginxConfig(ctx, settings); err != nil {
-		log.Printf("[Startup] Warning: failed to regenerate nginx.conf: %v", err)
 	} else {
-		log.Println("[Startup] nginx.conf regenerated successfully")
+		// Pull global trusted IPs so the http-level limit_conn / limit_req
+		// zones honor the same whitelist the per-host configs already use.
+		var trustedIPs []string
+		if sys, err := c.Repositories.SystemSettings.Get(ctx); err == nil && sys != nil {
+			trustedIPs = service.ParseGlobalTrustedIPs(sys.GlobalTrustedIPs)
+		}
+		if err := c.Nginx.GenerateMainNginxConfig(ctx, settings, trustedIPs); err != nil {
+			log.Printf("[Startup] Warning: failed to regenerate nginx.conf: %v", err)
+		} else {
+			log.Println("[Startup] nginx.conf regenerated successfully")
+		}
 	}
 
 	// Generate shared filter subscription config files BEFORE syncing host configs.

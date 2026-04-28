@@ -22,7 +22,7 @@ func renderOnly(t *testing.T, s *model.GlobalSettings) string {
 	if err := os.MkdirAll(m.configPath, 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := m.GenerateMainNginxConfig(context.Background(), s); err != nil {
+	if err := m.GenerateMainNginxConfig(context.Background(), s, nil); err != nil {
 		t.Fatalf("GenerateMainNginxConfig: %v", err)
 	}
 	b, err := os.ReadFile(filepath.Join(dir, "nginx.conf"))
@@ -208,7 +208,7 @@ func TestMainConfig_RollsBackOnNginxTestFailure(t *testing.T) {
 
 	m := &Manager{configPath: confDir, cli: &fakeFailingCLI{}}
 
-	err := m.GenerateMainNginxConfig(context.Background(), baselineSettings())
+	err := m.GenerateMainNginxConfig(context.Background(), baselineSettings(), nil)
 	if err == nil {
 		t.Fatal("expected GenerateMainNginxConfig to return an error when nginx -t fails")
 	}
@@ -240,5 +240,58 @@ func TestMainConfig_LimitReqZoneConditional(t *testing.T) {
 	out := renderOnly(t, s)
 	if !strings.Contains(out, "zone=global_req_limit:10m rate=50r/s") {
 		t.Errorf("expected limit_req_zone with configured values; got:\n%s", out)
+	}
+	// Issue #130: returning 429 (instead of nginx default 503) lets the
+	// log_collector status-fallback tag the request as block_reason=rate_limit.
+	if !strings.Contains(out, "limit_req_status 429;") {
+		t.Errorf("expected limit_req_status 429 so blocks get tagged in access log; got:\n%s", out)
+	}
+}
+
+// Issue #130: when system_settings.global_trusted_ips contains entries, the
+// http-level limit_conn / limit_req zones must use a key that resolves to ""
+// for whitelisted IPs (the same empty-key bypass per-host rate_limit uses),
+// AND the geo block defining $global_trusted_ip must be emitted exactly once.
+func TestMainConfig_GlobalTrustedIPsBypassRateLimit(t *testing.T) {
+	s := baselineSettings()
+	s.LimitReqEnabled = true
+	s.LimitReqZoneSize = "10m"
+	s.LimitReqRate = 50
+	s.LimitReqBurst = 100
+	s.LimitConnEnabled = true
+	s.LimitConnZoneSize = "10m"
+	s.LimitConnPerIP = 20
+
+	m := &Manager{}
+	dir := t.TempDir()
+	m.configPath = filepath.Join(dir, "conf.d")
+	if err := os.MkdirAll(m.configPath, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	trusted := []string{"192.168.0.0/16", "10.0.0.5"}
+	if err := m.GenerateMainNginxConfig(context.Background(), s, trusted); err != nil {
+		t.Fatalf("GenerateMainNginxConfig: %v", err)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "nginx.conf"))
+	if err != nil {
+		t.Fatalf("read generated nginx.conf: %v", err)
+	}
+	out := string(b)
+
+	if strings.Count(out, "geo $global_trusted_ip") != 1 {
+		t.Errorf("expected exactly one `geo $global_trusted_ip` block; got:\n%s", out)
+	}
+	for _, want := range []string{"192.168.0.0/16", "10.0.0.5"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("expected trusted IP %q in geo block; got:\n%s", want, out)
+		}
+	}
+	// Both the conn zone and the req zone must consume the empty-key map var,
+	// not $binary_remote_addr directly — otherwise trusted IPs still get counted.
+	if !strings.Contains(out, "limit_conn_zone $global_conn_key") {
+		t.Errorf("expected limit_conn_zone keyed off $global_conn_key when trusted IPs set; got:\n%s", out)
+	}
+	if !strings.Contains(out, "limit_req_zone $global_req_key") {
+		t.Errorf("expected limit_req_zone keyed off $global_req_key when trusted IPs set; got:\n%s", out)
 	}
 }

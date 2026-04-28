@@ -23,22 +23,24 @@ import (
 
 // SettingsService handles business logic for global settings, dashboard, and backups.
 type SettingsService struct {
-	settingsRepo     *repository.GlobalSettingsRepository
-	dashboardRepo    *repository.DashboardRepository
-	backupRepo       *repository.BackupRepository
-	proxyHostRepo    *repository.ProxyHostRepository
-	redirectHostRepo *repository.RedirectHostRepository
-	certificateRepo  *repository.CertificateRepository
-	wafRepo          *repository.WAFRepository
-	nginxManager     *nginx.Manager
-	proxyHostService *ProxyHostService
-	dockerStats      *DockerStatsService
-	redisCache       *cache.RedisClient
-	backupPath       string
+	settingsRepo       *repository.GlobalSettingsRepository
+	systemSettingsRepo *repository.SystemSettingsRepository
+	dashboardRepo      *repository.DashboardRepository
+	backupRepo         *repository.BackupRepository
+	proxyHostRepo      *repository.ProxyHostRepository
+	redirectHostRepo   *repository.RedirectHostRepository
+	certificateRepo    *repository.CertificateRepository
+	wafRepo            *repository.WAFRepository
+	nginxManager       *nginx.Manager
+	proxyHostService   *ProxyHostService
+	dockerStats        *DockerStatsService
+	redisCache         *cache.RedisClient
+	backupPath         string
 }
 
 func NewSettingsService(
 	settingsRepo *repository.GlobalSettingsRepository,
+	systemSettingsRepo *repository.SystemSettingsRepository,
 	dashboardRepo *repository.DashboardRepository,
 	backupRepo *repository.BackupRepository,
 	proxyHostRepo *repository.ProxyHostRepository,
@@ -52,19 +54,38 @@ func NewSettingsService(
 	backupPath string,
 ) *SettingsService {
 	return &SettingsService{
-		settingsRepo:     settingsRepo,
-		dashboardRepo:    dashboardRepo,
-		backupRepo:       backupRepo,
-		proxyHostRepo:    proxyHostRepo,
-		redirectHostRepo: redirectHostRepo,
-		certificateRepo:  certificateRepo,
-		wafRepo:          wafRepo,
-		nginxManager:     nginxManager,
-		proxyHostService: proxyHostService,
-		dockerStats:      dockerStats,
-		redisCache:       redisCache,
-		backupPath:       backupPath,
+		settingsRepo:       settingsRepo,
+		systemSettingsRepo: systemSettingsRepo,
+		dashboardRepo:      dashboardRepo,
+		backupRepo:         backupRepo,
+		proxyHostRepo:      proxyHostRepo,
+		redirectHostRepo:   redirectHostRepo,
+		certificateRepo:    certificateRepo,
+		wafRepo:            wafRepo,
+		nginxManager:       nginxManager,
+		proxyHostService:   proxyHostService,
+		dockerStats:        dockerStats,
+		redisCache:         redisCache,
+		backupPath:         backupPath,
 	}
+}
+
+// loadGlobalTrustedIPs reads system_settings.global_trusted_ips and returns the
+// parsed list. Errors are logged and treated as "no whitelist" so a transient
+// DB hiccup doesn't fail an otherwise-valid global settings save.
+func (s *SettingsService) loadGlobalTrustedIPs(ctx context.Context) []string {
+	if s.systemSettingsRepo == nil {
+		return nil
+	}
+	sys, err := s.systemSettingsRepo.Get(ctx)
+	if err != nil {
+		log.Printf("[SettingsService] failed to load system settings for trusted IPs: %v", err)
+		return nil
+	}
+	if sys == nil {
+		return nil
+	}
+	return ParseGlobalTrustedIPs(sys.GlobalTrustedIPs)
 }
 
 // ---- Global Settings ----
@@ -93,7 +114,7 @@ func (s *SettingsService) UpdateGlobalSettings(ctx context.Context, req *model.U
 	// learns their input was rejected (otherwise they see "200 OK" and wonder
 	// why nothing changed). The DB retains the saved value; the operator can
 	// reopen the form and fix it.
-	if err := s.nginxManager.GenerateMainNginxConfig(ctx, settings); err != nil {
+	if err := s.nginxManager.GenerateMainNginxConfig(ctx, settings, s.loadGlobalTrustedIPs(ctx)); err != nil {
 		log.Printf("[SettingsService] nginx.conf regeneration rejected: %v", err)
 		return settings, fmt.Errorf("settings saved but nginx rejected the new config: %w", err)
 	}
@@ -147,7 +168,7 @@ func (s *SettingsService) ResetGlobalSettings(ctx context.Context) (*model.Globa
 	}
 
 	// Regenerate main nginx.conf so the reset defaults actually hit nginx.
-	if err := s.nginxManager.GenerateMainNginxConfig(ctx, settings); err != nil {
+	if err := s.nginxManager.GenerateMainNginxConfig(ctx, settings, s.loadGlobalTrustedIPs(ctx)); err != nil {
 		log.Printf("[SettingsService] Warning: failed to regenerate nginx.conf after reset: %v", err)
 	}
 
