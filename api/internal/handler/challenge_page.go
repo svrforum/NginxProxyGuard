@@ -217,7 +217,8 @@ func generateChallengePageHTML(data map[string]interface{}) string {
         //   2. Admin-configured global default (if not 'auto')
         //   3. Browser language, with English fallback for unsupported locales
         function detectLang() {
-            const saved = localStorage.getItem('npg_lang');
+            // UI Settings writes 'npg_language'; legacy 'npg_lang' kept for back-compat
+            const saved = localStorage.getItem('npg_language') || localStorage.getItem('npg_lang');
             if (saved && i18n[saved]) return saved;
             if (i18n[adminDefaultLang]) return adminDefaultLang;
             const browserLang = navigator.language.split('-')[0];
@@ -228,7 +229,7 @@ func generateChallengePageHTML(data map[string]interface{}) string {
 
         function setLang(lang) {
             currentLang = lang;
-            localStorage.setItem('npg_lang', lang);
+            localStorage.setItem('npg_language', lang);
             document.documentElement.lang = lang;
             updateTexts();
             document.querySelectorAll('.lang-switch button').forEach(btn => btn.classList.remove('active'));

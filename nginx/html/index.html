@@ -258,7 +258,8 @@
         };
 
         function detectLang() {
-            const saved = localStorage.getItem('npg_lang');
+            // UI Settings writes 'npg_language'; legacy 'npg_lang' kept for back-compat
+            const saved = localStorage.getItem('npg_language') || localStorage.getItem('npg_lang');
             if (saved && i18n[saved]) return saved;
             const browserLang = navigator.language.split('-')[0];
             return i18n[browserLang] ? browserLang : 'en';
@@ -268,7 +269,7 @@
 
         function setLang(lang) {
             currentLang = lang;
-            localStorage.setItem('npg_lang', lang);
+            localStorage.setItem('npg_language', lang);
             updateTexts();
             document.querySelectorAll('.lang-switch button').forEach(btn => btn.classList.remove('active'));
             document.getElementById('lang-' + lang).classList.add('active');

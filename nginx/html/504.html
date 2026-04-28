@@ -138,10 +138,11 @@
             document.body.className = lang === 'en' ? 'en' : '';
             document.getElementById('btn-ko').className = 'lang-btn' + (lang === 'ko' ? ' active' : '');
             document.getElementById('btn-en').className = 'lang-btn' + (lang === 'en' ? ' active' : '');
-            localStorage.setItem('npg_lang', lang);
+            localStorage.setItem('npg_language', lang);
         }
         // Load saved language preference or detect from browser
-        const savedLang = localStorage.getItem('npg_lang');
+        // UI Settings writes 'npg_language'; legacy 'npg_lang' kept for back-compat
+        const savedLang = localStorage.getItem('npg_language') || localStorage.getItem('npg_lang');
         if (savedLang) {
             setLang(savedLang);
         } else {
