@@ -38,21 +38,42 @@ jobs:
       - name: Check component changes
         id: changes
         run: |
+          # Compare files in HEAD against the previous release tag. The old
+          # source-hash + manifest-annotation approach was unreliable —
+          # `docker buildx imagetools create --annotation index:...` did not
+          # propagate the revision annotation to the pushed manifest list on
+          # Docker Hub, so REMOTE_HASH always fell back to "none" and every
+          # release rebuilt every component (including the 5-9 min nginx
+          # ModSecurity build). Git diff between tags is deterministic, has no
+          # registry round-trip, and matches developer intuition.
+          #
+          # HEAD^ is the parent of the release commit so `git describe`
+          # returns the prior tag, not the current one. fetch-depth: 0 above
+          # guarantees the tag is reachable.
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          if [ -z "$PREV_TAG" ]; then
+            echo "ℹ️ No previous tag found - treating all components as changed (first release)"
+            echo "api=true" >> $GITHUB_OUTPUT
+            echo "ui=true" >> $GITHUB_OUTPUT
+            echo "nginx=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "📦 Comparing $PREV_TAG..HEAD"
+          CHANGED_FILES=$(git diff --name-only "${PREV_TAG}..HEAD")
+          echo "Changed files:"
+          echo "$CHANGED_FILES" | sed 's/^/  /'
+
           check_changes() {
             local component=$1
             local dir=$2
-
-            SOURCE_HASH=$(find ./$dir -type f -exec sha256sum {} \; | sort | sha256sum | cut -d' ' -f1)
-            REMOTE_HASH=$(docker manifest inspect ${{ env.IMAGE_PREFIX }}-$component:latest 2>/dev/null | \
-              jq -r '.annotations["org.opencontainers.image.revision"]' 2>/dev/null || echo "none")
-
-            if [ "$SOURCE_HASH" = "$REMOTE_HASH" ]; then
-              echo "$component=false" >> $GITHUB_OUTPUT
-              echo "⏭️ $component: No changes"
-            else
+            if echo "$CHANGED_FILES" | grep -q "^${dir}/"; then
               echo "$component=true" >> $GITHUB_OUTPUT
-              echo "${component}_hash=$SOURCE_HASH" >> $GITHUB_OUTPUT
-              echo "✅ $component: Changes detected"
+              echo "✅ $component: changes since $PREV_TAG"
+            else
+              echo "$component=false" >> $GITHUB_OUTPUT
+              echo "⏭️ $component: unchanged since $PREV_TAG"
             fi
           }
 
@@ -333,22 +354,27 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Calculate hashes
-        id: hashes
-        run: |
-          echo "api_hash=$(find ./api -type f -exec sha256sum {} \; | sort | sha256sum | cut -d' ' -f1)" >> $GITHUB_OUTPUT
-          echo "ui_hash=$(find ./ui -type f -exec sha256sum {} \; | sort | sha256sum | cut -d' ' -f1)" >> $GITHUB_OUTPUT
-          echo "nginx_hash=$(find ./nginx -type f -exec sha256sum {} \; | sort | sha256sum | cut -d' ' -f1)" >> $GITHUB_OUTPUT
-
+      # For changed components: assemble the multi-arch manifest from the
+      # per-arch test images and publish under :VERSION + :latest.
+      # For unchanged components: copy the existing :latest manifest to
+      # :VERSION so consumers (and the GitHub Release page's pull commands)
+      # can always reference an explicit version, regardless of which
+      # components were rebuilt.
       - name: Create API manifests
         if: needs.detect.outputs.api_changed == 'true'
         run: |
           docker buildx imagetools create \
             --tag ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }} \
             --tag ${{ env.IMAGE_PREFIX }}-api:latest \
-            --annotation "index:org.opencontainers.image.revision=${{ steps.hashes.outputs.api_hash }}" \
             ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}-test-amd64 \
             ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}-test-arm64
+
+      - name: Retag API (unchanged)
+        if: needs.detect.outputs.api_changed != 'true'
+        run: |
+          docker buildx imagetools create \
+            --tag ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }} \
+            ${{ env.IMAGE_PREFIX }}-api:latest
 
       - name: Create UI manifests
         if: needs.detect.outputs.ui_changed == 'true'
@@ -356,9 +382,15 @@ jobs:
           docker buildx imagetools create \
             --tag ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }} \
             --tag ${{ env.IMAGE_PREFIX }}-ui:latest \
-            --annotation "index:org.opencontainers.image.revision=${{ steps.hashes.outputs.ui_hash }}" \
             ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}-test-amd64 \
             ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}-test-arm64
+
+      - name: Retag UI (unchanged)
+        if: needs.detect.outputs.ui_changed != 'true'
+        run: |
+          docker buildx imagetools create \
+            --tag ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }} \
+            ${{ env.IMAGE_PREFIX }}-ui:latest
 
       - name: Create Nginx manifests
         if: needs.detect.outputs.nginx_changed == 'true'
@@ -366,9 +398,15 @@ jobs:
           docker buildx imagetools create \
             --tag ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }} \
             --tag ${{ env.IMAGE_PREFIX }}-nginx:latest \
-            --annotation "index:org.opencontainers.image.revision=${{ steps.hashes.outputs.nginx_hash }}" \
             ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}-test-amd64 \
             ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }}-test-arm64
+
+      - name: Retag Nginx (unchanged)
+        if: needs.detect.outputs.nginx_changed != 'true'
+        run: |
+          docker buildx imagetools create \
+            --tag ${{ env.IMAGE_PREFIX }}-nginx:${{ needs.detect.outputs.version }} \
+            ${{ env.IMAGE_PREFIX }}-nginx:latest
 
       - name: Summary
         run: |
