@@ -175,7 +175,7 @@
             document.getElementById('btn-en').className = 'lang-btn' + (lang === 'en' ? ' active' : '');
         }
         function setLang(lang) {
-            localStorage.setItem('npg_lang', lang);
+            localStorage.setItem('npg_language', lang);
             applyLang(lang);
         }
         function detectBrowserLang() {
@@ -183,10 +183,10 @@
             return browserLang === 'ko' ? 'ko' : 'en';
         }
         // Initial lang resolution (before API):
-        // 1) Prefer the user's saved click
+        // 1) Prefer the user's saved click — UI Settings writes 'npg_language'; legacy 'npg_lang' kept for back-compat
         // 2) Else follow browser language
         // This avoids the Korean flash for non-Korean visitors with no saved preference.
-        var savedLang = localStorage.getItem('npg_lang');
+        var savedLang = localStorage.getItem('npg_language') || localStorage.getItem('npg_lang');
         var initialLang = (savedLang === 'ko' || savedLang === 'en') ? savedLang : detectBrowserLang();
         applyLang(initialLang);
 
