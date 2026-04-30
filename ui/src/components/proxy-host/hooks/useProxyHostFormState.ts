@@ -135,10 +135,13 @@ export function useProxyHostFormState(host: ProxyHost | null | undefined) {
     enabled: !!isGeoIPAvailable,
   })
 
+  // Always load geo restriction record when editing — Priority Allow IPs
+  // are stored here and must rehydrate on reopen even when the GeoIP DB is
+  // not active. (Country selection UI still gates on isGeoIPAvailable.)
   const { data: existingGeoRestriction } = useQuery({
     queryKey: ['geoRestriction', host?.id],
     queryFn: () => getGeoRestriction(host!.id).catch(() => null),
-    enabled: !!host?.id && !!isGeoIPAvailable,
+    enabled: !!host?.id,
   })
 
   const { data: existingCloudProviderSettings } = useQuery({
