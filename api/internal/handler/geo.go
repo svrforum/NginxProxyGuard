@@ -201,9 +201,11 @@ func (h *GeoHandler) getHostConfigData(ctx context.Context, host *model.ProxyHos
 	}
 
 	// Fetch geo restriction if exists
+	// Load when Enabled OR when Priority Allow IPs are present, so that
+	// IP-only configurations still take effect (WAF/cloud/bot bypass).
 	if h.geoRepo != nil {
 		geo, err := h.geoRepo.GetByProxyHostID(ctx, host.ID)
-		if err == nil && geo != nil && geo.Enabled {
+		if err == nil && geo != nil && (geo.Enabled || len(geo.AllowedIPs) > 0) {
 			data.GeoRestriction = geo
 		}
 	}
