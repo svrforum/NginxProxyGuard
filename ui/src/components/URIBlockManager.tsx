@@ -119,8 +119,16 @@ export function URIBlockManager() {
     ? blocks
     : blocks.filter(b => b.domain_names[0] === hostFilter)
 
-  // Count total rules
-  const totalRules = blocks.reduce((acc, b) => acc + b.rules.filter(r => r.enabled).length, 0)
+  // Count total rules — include global rules (when enabled) so the stat
+  // reflects everything actually being enforced, not just per-host rules.
+  const globalRulesCount = effectiveGlobalEnabled
+    ? effectiveGlobalRules.filter((r) => r.enabled).length
+    : 0
+  const perHostRulesCount = blocks.reduce(
+    (acc, b) => acc + b.rules.filter((r) => r.enabled).length,
+    0,
+  )
+  const totalRules = globalRulesCount + perHostRulesCount
   const totalHosts = blocks.length
 
   // Get hosts without URI blocks
