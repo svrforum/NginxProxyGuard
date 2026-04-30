@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import type { Log } from '../../../types/log';
 import type { URIMatchType } from '../../../types/security';
 import { formatBytes } from '../utils';
-import { StatusCodeBadge, MethodBadge } from '../badges';
+import { StatusCodeBadge, MethodBadge, BlockReasonBadge } from '../badges';
 
 // IP Ban Form
 interface BanIPFormProps {
@@ -293,6 +293,68 @@ export function DisableRuleForm({
   );
 }
 
+// Highlights why the request was blocked. Surfaces specifics (rule id, exploit
+// rule, bot category) so triaging false positives doesn't require digging
+// through the raw log line.
+const BOT_CATEGORY_KEY: Record<string, string> = {
+  bad_bot: 'badBot',
+  ai_bot: 'aiBot',
+  suspicious: 'suspicious',
+  search_engine: 'searchEngine',
+};
+
+function BlockReasonSummary({ log }: { log: Log }) {
+  const { t } = useTranslation('logs');
+  if (!log.block_reason || log.block_reason === 'none') return null;
+
+  const ruleId = log.rule_id ? String(log.rule_id) : null;
+
+  return (
+    <div className="mb-4 p-3 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-lg">
+      <div className="flex items-center gap-2 mb-2">
+        <label className="text-xs font-medium text-rose-700 dark:text-rose-400 uppercase">
+          {t('detail.blockReason', { defaultValue: '차단 원인' })}
+        </label>
+        <BlockReasonBadge reason={log.block_reason} category={log.bot_category} />
+      </div>
+      <div className="grid grid-cols-2 gap-3 text-sm">
+        {log.block_reason === 'waf' && ruleId && (
+          <div>
+            <span className="text-xs text-slate-500 dark:text-slate-400">{t('detail.ruleId')}</span>
+            <p className="text-slate-900 dark:text-white font-mono">{ruleId}</p>
+          </div>
+        )}
+        {log.attack_type && (
+          <div>
+            <span className="text-xs text-slate-500 dark:text-slate-400">{t('detail.attackType')}</span>
+            <p className="text-slate-900 dark:text-white">{log.attack_type}</p>
+          </div>
+        )}
+        {log.block_reason === 'exploit_block' && log.exploit_rule && log.exploit_rule !== '-' && (
+          <div className="col-span-2">
+            <span className="text-xs text-slate-500 dark:text-slate-400">{t('detail.exploitRule', { defaultValue: 'Exploit 규칙' })}</span>
+            <p className="text-slate-900 dark:text-white font-mono break-all">{log.exploit_rule}</p>
+          </div>
+        )}
+        {log.block_reason === 'bot_filter' && log.bot_category && (
+          <div>
+            <span className="text-xs text-slate-500 dark:text-slate-400">{t('detail.botCategory', { defaultValue: '봇 분류' })}</span>
+            <p className="text-slate-900 dark:text-white">
+              {t(`bots.${BOT_CATEGORY_KEY[log.bot_category] ?? log.bot_category}`, { defaultValue: log.bot_category })}
+            </p>
+          </div>
+        )}
+        {log.block_reason === 'uri_block' && log.request_uri && (
+          <div className="col-span-2">
+            <span className="text-xs text-slate-500 dark:text-slate-400">{t('detail.matchedURI', { defaultValue: '매칭된 URI' })}</span>
+            <p className="text-slate-900 dark:text-white font-mono break-all">{log.request_uri}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // Access-log specific body
 export function AccessLogBody({ log }: { log: Log }) {
   const { t } = useTranslation('logs');
@@ -304,6 +366,7 @@ export function AccessLogBody({ log }: { log: Log }) {
 
   return (
     <>
+      <BlockReasonSummary log={log} />
       <div className="grid grid-cols-2 gap-4 mb-4">
         <div>
           <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">{t('detail.method')}</label>

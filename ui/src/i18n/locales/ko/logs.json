@@ -227,7 +227,11 @@
     "severity": "심각도",
     "ruleMessage": "정책 메시지",
     "attackType": "공격 유형",
-    "rawLog": "원본 로그"
+    "rawLog": "원본 로그",
+    "blockReason": "차단 원인",
+    "exploitRule": "Exploit 규칙",
+    "botCategory": "봇 분류",
+    "matchedURI": "매칭된 URI"
   },
   "disableRule": {
     "button": "이 정책 비활성화",

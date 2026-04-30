@@ -225,7 +225,11 @@
     "severity": "Severity",
     "ruleMessage": "Rule Message",
     "attackType": "Attack Type",
-    "rawLog": "Raw Log"
+    "rawLog": "Raw Log",
+    "blockReason": "Block Reason",
+    "exploitRule": "Exploit Rule",
+    "botCategory": "Bot Category",
+    "matchedURI": "Matched URI"
   },
   "disableRule": {
     "button": "Disable This Policy",
