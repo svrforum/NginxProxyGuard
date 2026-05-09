@@ -15,6 +15,13 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "reset-password":
+			os.Exit(runResetPasswordCommand(os.Args[2:]))
+		}
+	}
+
 	cfg := config.Load()
 
 	c, err := bootstrap.NewContainer(cfg)
