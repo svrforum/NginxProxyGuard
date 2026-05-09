@@ -164,6 +164,32 @@ docker compose pull
 docker compose up -d
 ```
 
+### Reset Admin Password
+
+Lost your admin password (or 2FA device)? If you have shell access to the host, recover from the CLI without touching the database directly:
+
+```bash
+# Auto-target the sole admin and print a freshly generated random password
+docker compose exec api ./server reset-password
+
+# Pick a specific user
+docker compose exec api ./server reset-password --username alice
+
+# Set a known password instead of the auto-generated one (≥ 8 chars, ≤ 72 bytes)
+docker compose exec api ./server reset-password --username alice --password 'S3cure-Pwd!'
+
+# Also wipe the user's TOTP secret and disable 2FA
+docker compose exec api ./server reset-password --clear-2fa
+```
+
+Each successful reset:
+- writes a fresh bcrypt `password_hash`
+- clears the user's failed `login_attempts` (lifts any stale per-IP lockout)
+- invalidates every active `auth_session` for that user — they (and any holder of a stolen token) must sign in again
+- records a `Password reset via CLI` entry in `system_logs` (`source=audit`)
+
+Sign in with the printed password and change it immediately from **Account Settings** in the UI.
+
 ### Upgrading to v2.7.0
 
 All versions are fully backward compatible. No manual migration needed — database schema upgrades are applied automatically on startup.

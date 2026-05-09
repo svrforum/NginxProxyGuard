@@ -164,6 +164,32 @@ docker compose pull
 docker compose up -d
 ```
 
+### 관리자 비밀번호 초기화
+
+비밀번호나 2FA 디바이스를 분실했을 때, 호스트 쉘 접근이 가능하다면 DB를 직접 건드리지 않고 CLI로 복구할 수 있습니다.
+
+```bash
+# admin 사용자가 한 명이면 자동으로 그 계정에 임의 비밀번호를 발급
+docker compose exec api ./server reset-password
+
+# 특정 사용자 지정
+docker compose exec api ./server reset-password --username alice
+
+# 임의 생성 대신 직접 비밀번호 지정 (8자 이상, 72바이트 이하)
+docker compose exec api ./server reset-password --username alice --password 'S3cure-Pwd!'
+
+# TOTP secret까지 같이 초기화하고 2FA 비활성화
+docker compose exec api ./server reset-password --clear-2fa
+```
+
+성공 시 적용되는 사항:
+- 새 bcrypt `password_hash` 기록
+- 해당 사용자의 실패 `login_attempts` 정리 (IP 락아웃 회피)
+- 해당 사용자의 모든 활성 `auth_session` 무효화 — 정상 사용자도, 토큰을 탈취한 누군가도 새 비밀번호로 다시 로그인해야 함
+- `system_logs`에 `Password reset via CLI` 감사 항목 기록 (`source=audit`)
+
+출력된 비밀번호로 로그인한 뒤, **계정 설정**에서 즉시 본인이 원하는 비밀번호로 다시 변경하세요.
+
 ### v2.7.0 업그레이드 안내
 
 모든 버전은 완전히 하위 호환됩니다. 수동 마이그레이션 없이 시작 시 데이터베이스 스키마가 자동으로 업그레이드됩니다.
