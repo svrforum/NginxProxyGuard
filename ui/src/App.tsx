@@ -424,6 +424,18 @@ function AppContent({ user, onLogout }: AppContentProps) {
               </a>
               <span className="text-slate-300 dark:text-slate-600">|</span>
               <a
+                href="https://www.buymeacoffee.com/svrforum"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-amber-600 dark:hover:text-amber-400 transition-colors flex items-center gap-1"
+              >
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                  <path fillRule="evenodd" clipRule="evenodd" d="M2.25 6.75A2.25 2.25 0 014.5 4.5h12a2.25 2.25 0 012.25 2.25v.75h.375a3.375 3.375 0 110 6.75H18.75v.75a2.25 2.25 0 01-2.25 2.25h-12a2.25 2.25 0 01-2.25-2.25V6.75zm16.5 5.25v-3h.375a1.875 1.875 0 010 3.75H18.75v-.75zM3.75 19.5a.75.75 0 01.75-.75h13.5a.75.75 0 010 1.5h-13.5a.75.75 0 01-.75-.75z" />
+                </svg>
+                {t('footer.sponsor')}
+              </a>
+              <span className="text-slate-300 dark:text-slate-600">|</span>
+              <a
                 href="https://nginxproxyguard.com/en/docs/introduction"
                 target="_blank"
                 rel="noopener noreferrer"
