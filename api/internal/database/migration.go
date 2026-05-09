@@ -922,7 +922,11 @@ func (db *DB) migrateLogsToPartitioned() {
 	}
 }
 
-// migrateToTimescaleDB migrates existing partitioned logs to TimescaleDB hypertable
+// migrateToTimescaleDB converts logs_partitioned (PostgreSQL native PARTITION BY
+// RANGE table created by 001_init.sql) into a TimescaleDB hypertable. Runs once
+// per install: marked complete in schema_migrations as 'timescaledb_hypertable'.
+// Applies to both fresh installs and existing installations that pre-date the
+// hypertable conversion — fresh installs simply migrate zero rows.
 func (db *DB) migrateToTimescaleDB() {
 	// Wait a bit for other migrations to complete
 	time.Sleep(5 * time.Second)
@@ -990,6 +994,8 @@ func (db *DB) migrateToTimescaleDB() {
 			body_bytes_sent bigint,
 			request_time double precision,
 			upstream_response_time double precision,
+			upstream_addr text,
+			upstream_status text,
 			http_referer text,
 			http_user_agent text,
 			http_x_forwarded_for text,
@@ -1063,7 +1069,8 @@ func (db *DB) migrateToTimescaleDB() {
 				INSERT INTO logs_hypertable (
 					id, log_type, timestamp, host, client_ip, request_method, request_uri,
 					request_protocol, status_code, body_bytes_sent, request_time,
-					upstream_response_time, http_referer, http_user_agent, http_x_forwarded_for,
+					upstream_response_time, upstream_addr, upstream_status,
+					http_referer, http_user_agent, http_x_forwarded_for,
 					severity, error_message, rule_id, rule_message, rule_severity, rule_data,
 					attack_type, action_taken, proxy_host_id, raw_log, created_at,
 					geo_country, geo_country_code, geo_city, geo_asn, geo_org,
@@ -1072,7 +1079,8 @@ func (db *DB) migrateToTimescaleDB() {
 				SELECT
 					id, log_type, timestamp, host, client_ip, request_method, request_uri,
 					request_protocol, status_code, body_bytes_sent, request_time,
-					upstream_response_time, http_referer, http_user_agent, http_x_forwarded_for,
+					upstream_response_time, upstream_addr, upstream_status,
+					http_referer, http_user_agent, http_x_forwarded_for,
 					severity, error_message, rule_id, rule_message, rule_severity, rule_data,
 					attack_type, action_taken, proxy_host_id, raw_log, created_at,
 					geo_country, geo_country_code, geo_city, geo_asn, geo_org,
@@ -1087,7 +1095,8 @@ func (db *DB) migrateToTimescaleDB() {
 				INSERT INTO logs_hypertable (
 					id, log_type, timestamp, host, client_ip, request_method, request_uri,
 					request_protocol, status_code, body_bytes_sent, request_time,
-					upstream_response_time, http_referer, http_user_agent, http_x_forwarded_for,
+					upstream_response_time, upstream_addr, upstream_status,
+					http_referer, http_user_agent, http_x_forwarded_for,
 					severity, error_message, rule_id, rule_message, rule_severity, rule_data,
 					attack_type, action_taken, proxy_host_id, raw_log, created_at,
 					geo_country, geo_country_code, geo_city, geo_asn, geo_org,
@@ -1096,7 +1105,8 @@ func (db *DB) migrateToTimescaleDB() {
 				SELECT
 					id, log_type, timestamp, host, client_ip, request_method, request_uri,
 					request_protocol, status_code, body_bytes_sent, request_time,
-					upstream_response_time, http_referer, http_user_agent, http_x_forwarded_for,
+					upstream_response_time, upstream_addr, upstream_status,
+					http_referer, http_user_agent, http_x_forwarded_for,
 					severity, error_message, rule_id, rule_message, rule_severity, rule_data,
 					attack_type, action_taken, proxy_host_id, raw_log, created_at,
 					geo_country, geo_country_code, geo_city, geo_asn, geo_org,
@@ -1182,8 +1192,23 @@ func (db *DB) migrateToTimescaleDB() {
 	// Set up compression
 	db.setupTimescaleDBCompression()
 
-	// Clean up backup table after successful migration (optional - keep for safety)
-	log.Println("[TimescaleDB] Backup table 'logs_partitioned_backup' kept for safety. Drop manually when verified.")
+	// Clean up backup table. On fresh installs the source carried no rows, so
+	// the backup has nothing worth keeping. Critically, its leftover indexes
+	// (idx_logs_part_*) live in the same schema namespace as the new
+	// logs_partitioned, which causes upgradeSQL's `CREATE INDEX IF NOT EXISTS`
+	// statements to silently skip on subsequent boots (the index name already
+	// exists, just on the wrong table). Dropping the empty backup frees those
+	// names so the supporting indexes get created on the live hypertable.
+	// On installs with real data, keep the backup so operators can verify the
+	// migration before dropping it manually.
+	if totalMigrated == 0 {
+		log.Println("[TimescaleDB] Source table was empty, dropping logs_partitioned_backup")
+		if _, err := db.Exec(`DROP TABLE IF EXISTS public.logs_partitioned_backup CASCADE`); err != nil {
+			log.Printf("[TimescaleDB] Warning: failed to drop empty backup: %v", err)
+		}
+	} else {
+		log.Println("[TimescaleDB] Backup table 'logs_partitioned_backup' kept for safety. Drop manually when verified.")
+	}
 }
 
 // migrateLogTablesToHypertables migrates system_logs, challenge_logs, audit_logs to hypertables
