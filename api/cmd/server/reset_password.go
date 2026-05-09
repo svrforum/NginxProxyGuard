@@ -17,10 +17,17 @@ import (
 	"nginx-proxy-guard/internal/database"
 )
 
+const (
+	resetPasswordMinLen      = 8
+	resetPasswordMaxBytes    = 72 // bcrypt input limit; longer inputs are silently truncated
+	resetPasswordRandomChars = 16
+)
+
 // runResetPasswordCommand handles `./server reset-password [flags]`.
 // It connects directly to the database (no migrations, no scheduler boot),
-// updates the chosen user's password_hash, optionally clears 2FA and stale
-// failed-login attempts, and prints the new password to stdout.
+// updates the chosen user's password_hash, optionally clears 2FA, always
+// clears stale failed-login attempts, and invalidates every existing
+// auth_session for the target user.
 //
 // Operator UX: invocation is only meaningful inside the api container, where
 // DATABASE_URL is set by docker-compose. Any other auth state is left intact.
@@ -38,12 +45,35 @@ func runResetPasswordCommand(args []string) int {
 		fmt.Fprintln(os.Stderr, "Resets a user's password from the CLI. Run inside the api container:")
 		fmt.Fprintln(os.Stderr, "  docker compose exec api ./server reset-password --username admin")
 		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "Side effects on success:")
+		fmt.Fprintln(os.Stderr, "  - bcrypts and writes the new password_hash")
+		fmt.Fprintln(os.Stderr, "  - clears failed login_attempts for the target username")
+		fmt.Fprintln(os.Stderr, "  - invalidates every active auth_session for the target user")
+		fmt.Fprintln(os.Stderr, "  - records an entry in system_logs (source=audit)")
+		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "Flags:")
 		fs.PrintDefaults()
 	}
 
 	if err := fs.Parse(args); err != nil {
 		return 2
+	}
+
+	// Distinguish "--password not given" from "--password ''" so we can reject
+	// the empty form explicitly instead of silently hashing it.
+	passwordExplicit := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "password" {
+			passwordExplicit = true
+		}
+	})
+
+	cleanUsername := strings.TrimSpace(*username)
+
+	newPassword, err := resolvePassword(*password, passwordExplicit)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[reset-password] %v\n", err)
+		return 1
 	}
 
 	cfg := config.Load()
@@ -54,19 +84,10 @@ func runResetPasswordCommand(args []string) int {
 	}
 	defer db.Close()
 
-	user, err := selectTargetUser(db, *username)
+	user, err := selectTargetUser(db, cleanUsername)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[reset-password] %v\n", err)
 		return 1
-	}
-
-	newPassword := *password
-	if newPassword == "" {
-		newPassword, err = generatePassword(16)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "[reset-password] failed to generate password: %v\n", err)
-			return 1
-		}
 	}
 
 	hashed, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
@@ -75,12 +96,13 @@ func runResetPasswordCommand(args []string) int {
 		return 1
 	}
 
-	if err := applyReset(db, user.id, string(hashed), *clear2FA, user.username); err != nil {
+	result, err := applyReset(db, user, string(hashed), *clear2FA)
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "[reset-password] update failed: %v\n", err)
 		return 1
 	}
 
-	printResult(user.username, user.role, newPassword, *clear2FA)
+	printResult(user.username, user.role, newPassword, *clear2FA, result.sessionsInvalidated)
 	return 0
 }
 
@@ -88,6 +110,31 @@ type cliUser struct {
 	id       string
 	username string
 	role     string
+}
+
+type resetResult struct {
+	sessionsInvalidated int64
+}
+
+// resolvePassword returns either the operator-supplied password (after
+// validation) or a freshly generated random password.
+func resolvePassword(raw string, explicit bool) (string, error) {
+	if !explicit {
+		return generatePassword(resetPasswordRandomChars)
+	}
+	if raw == "" {
+		return "", errors.New("--password cannot be empty (omit the flag to auto-generate a random password)")
+	}
+	// bcrypt silently truncates inputs longer than 72 bytes; reject upfront so
+	// the operator never gets surprised by a password that "works" but only the
+	// first 72 bytes actually do.
+	if len(raw) > resetPasswordMaxBytes {
+		return "", fmt.Errorf("--password is %d bytes; bcrypt only honours the first %d", len(raw), resetPasswordMaxBytes)
+	}
+	if len([]rune(raw)) < resetPasswordMinLen {
+		return "", fmt.Errorf("--password must be at least %d characters", resetPasswordMinLen)
+	}
+	return raw, nil
 }
 
 func selectTargetUser(db *database.DB, requested string) (*cliUser, error) {
@@ -128,18 +175,18 @@ func selectTargetUser(db *database.DB, requested string) (*cliUser, error) {
 		return &admins[0], nil
 	default:
 		var b strings.Builder
-		b.WriteString("multiple admin users — pass --username to choose one:\n")
+		b.WriteString("multiple admin users — pass --username to choose one:")
 		for _, u := range admins {
-			fmt.Fprintf(&b, "  - %s\n", u.username)
+			fmt.Fprintf(&b, "\n  - %s", u.username)
 		}
 		return nil, errors.New(b.String())
 	}
 }
 
-func applyReset(db *database.DB, userID, passwordHash string, clear2FA bool, username string) error {
+func applyReset(db *database.DB, user *cliUser, passwordHash string, clear2FA bool) (*resetResult, error) {
 	tx, err := db.Begin()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer tx.Rollback()
 
@@ -152,41 +199,56 @@ func applyReset(db *database.DB, userID, passwordHash string, clear2FA bool, use
 			    totp_verified_at = NULL,
 			    backup_codes = NULL,
 			    updated_at = NOW()
-			WHERE id = $2`, passwordHash, userID)
+			WHERE id = $2`, passwordHash, user.id)
 	} else {
 		_, err = tx.Exec(`
 			UPDATE users
 			SET password_hash = $1,
 			    updated_at = NOW()
-			WHERE id = $2`, passwordHash, userID)
+			WHERE id = $2`, passwordHash, user.id)
 	}
 	if err != nil {
-		return fmt.Errorf("update users: %w", err)
+		return nil, fmt.Errorf("update users: %w", err)
 	}
 
-	// Clear failed login attempts so the user is not locked out by prior failures.
-	if _, err := tx.Exec(`DELETE FROM login_attempts WHERE username = $1 AND success = false`, username); err != nil {
-		return fmt.Errorf("clear login_attempts: %w", err)
+	// Clear failed login attempts so a stale per-IP lockout cannot block the
+	// recovery login.
+	if _, err := tx.Exec(`DELETE FROM login_attempts WHERE username = $1 AND success = false`, user.username); err != nil {
+		return nil, fmt.Errorf("clear login_attempts: %w", err)
 	}
+
+	// Invalidate every active session for this user. Resetting credentials is
+	// a strong "current auth state is suspect" signal, so we drop all existing
+	// session tokens — the operator (and any compromised holder) must re-auth
+	// with the new password.
+	sessionsRes, err := tx.Exec(`DELETE FROM auth_sessions WHERE user_id = $1`, user.id)
+	if err != nil {
+		return nil, fmt.Errorf("invalidate sessions: %w", err)
+	}
+	sessionsCount, _ := sessionsRes.RowsAffected()
 
 	// Audit trail.
 	details := map[string]interface{}{
-		"username":    username,
-		"cleared_2fa": clear2FA,
+		"username":             user.username,
+		"cleared_2fa":          clear2FA,
+		"sessions_invalidated": sessionsCount,
 	}
 	detailsJSON, _ := json.Marshal(details)
 	if _, err := tx.Exec(`
 		INSERT INTO system_logs (source, level, message, details, component)
 		VALUES ('audit', 'warn', 'Password reset via CLI', $1::jsonb, 'reset-password')
 	`, detailsJSON); err != nil {
-		return fmt.Errorf("audit log: %w", err)
+		return nil, fmt.Errorf("audit log: %w", err)
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return &resetResult{sessionsInvalidated: sessionsCount}, nil
 }
 
 // generatePassword returns a cryptographically random password of n characters
-// drawn from a URL-safe alphabet that avoids visually ambiguous glyphs (0/O, 1/l/I).
+// drawn from an alphabet that excludes visually ambiguous glyphs (0/O, 1/l/I).
 func generatePassword(n int) (string, error) {
 	const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
 	out := make([]byte, n)
@@ -201,7 +263,7 @@ func generatePassword(n int) (string, error) {
 	return string(out), nil
 }
 
-func printResult(username, role, password string, cleared2FA bool) {
+func printResult(username, role, password string, cleared2FA bool, sessionsInvalidated int64) {
 	bar := strings.Repeat("=", 60)
 	fmt.Println()
 	fmt.Println(bar)
@@ -213,6 +275,7 @@ func printResult(username, role, password string, cleared2FA bool) {
 	} else {
 		fmt.Println("  2FA      : kept (use --clear-2fa to also reset)")
 	}
+	fmt.Printf("  Sessions : %d active session(s) invalidated\n", sessionsInvalidated)
 	fmt.Println(bar)
 	fmt.Println()
 	fmt.Println("Save this password now. It will not be shown again.")
