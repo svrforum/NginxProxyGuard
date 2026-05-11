@@ -441,7 +441,15 @@ jobs:
           EXISTING=$(gh release view "$TAG_NAME" --json body --jq '.body' 2>/dev/null || echo "")
 
           # 2. Annotated tag 메시지 확인
-          TAG_MSG=$(git tag -l --format='%(contents)' "$TAG_NAME" | tail -n +2 | sed '/^$/d')
+          # `git tag -l --format='%(contents)'` returns the underlying commit
+          # message for lightweight tags, which leaks the release commit body
+          # into release notes. Only read tag contents when the tag object is
+          # actually an annotated tag.
+          if [ "$(git cat-file -t "$TAG_NAME" 2>/dev/null)" = "tag" ]; then
+            TAG_MSG=$(git tag -l --format='%(contents)' "$TAG_NAME" | tail -n +2 | sed '/^$/d')
+          else
+            TAG_MSG=""
+          fi
 
           # 3. 이전 태그부터 현재까지 커밋 로그로 자동 생성
           PREV_TAG_FOR_LOG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
