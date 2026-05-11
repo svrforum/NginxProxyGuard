@@ -338,7 +338,7 @@ jobs:
   create-manifests:
     name: 📦 Create Final Manifests
     needs: [detect, test-host]
-    if: needs.test-host.result == 'success'
+    if: always() && needs.test-host.result == 'success'
     runs-on: ubuntu-latest
 
     steps:
@@ -419,6 +419,7 @@ jobs:
   release:
     name: 📦 Create Release
     needs: [detect, create-manifests]
+    if: always() && needs.create-manifests.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
