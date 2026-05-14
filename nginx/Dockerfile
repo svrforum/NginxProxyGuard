@@ -13,10 +13,10 @@
 # - https://github.com/owasp-modsecurity/ModSecurity-nginx
 # - https://github.com/coreruleset/coreruleset
 
-ARG NGINX_VERSION=1.30.0
+ARG NGINX_VERSION=1.30.1
 ARG MODSECURITY_VERSION=3.0.14
 ARG MODSECURITY_NGINX_VERSION=1.0.4
-ARG OWASP_CRS_VERSION=4.25.0
+ARG OWASP_CRS_VERSION=4.26.0
 
 # =============================================================================
 # Stage 1: Build Stage
