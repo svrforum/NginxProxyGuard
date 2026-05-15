@@ -3,18 +3,57 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"log"
 	"time"
 
 	"github.com/lib/pq"
 	"nginx-proxy-guard/internal/model"
+	"nginx-proxy-guard/pkg/cache"
 )
 
 type RateLimitRepository struct {
-	db *sql.DB
+	db    *sql.DB
+	cache *cache.RedisClient
 }
 
 func NewRateLimitRepository(db *sql.DB) *RateLimitRepository {
 	return &RateLimitRepository{db: db}
+}
+
+// SetCache wires Valkey caching for active-ban hot paths called during
+// nginx config generation. See GetActiveBansForHost / GetActiveGlobalBans.
+func (r *RateLimitRepository) SetCache(c *cache.RedisClient) {
+	r.cache = c
+}
+
+// activeBansTTL is the cache TTL for active banned-IP lookups used during
+// config generation. Kept short so newly-added bans propagate quickly on
+// the next host sync; writes also invalidate explicitly via invalidateBans.
+const activeBansTTL = 60 * time.Second
+
+// activeBansLimit caps the in-memory result set per host / globally. Matches
+// the previous hardcoded 1000 used in proxy_host_config.go but raises it
+// modestly for headroom; truly pathological ban counts are still bounded.
+const activeBansLimit = 5000
+
+func (r *RateLimitRepository) bansCacheKeyHost(hostID string) string {
+	return "banned_ips:active:host:" + hostID
+}
+
+func (r *RateLimitRepository) bansCacheKeyGlobal() string {
+	return "banned_ips:active:global"
+}
+
+func (r *RateLimitRepository) invalidateBans(ctx context.Context, proxyHostID *string) {
+	if r.cache == nil {
+		return
+	}
+	// Always invalidate global — a host-scoped ban write could shadow a
+	// global one (or vice versa) and a config-gen run consumes both.
+	_ = r.cache.Delete(ctx, r.bansCacheKeyGlobal())
+	if proxyHostID != nil {
+		_ = r.cache.Delete(ctx, r.bansCacheKeyHost(*proxyHostID))
+	}
 }
 
 // RateLimit operations
@@ -349,6 +388,118 @@ func (r *RateLimitRepository) ListHostBannedIPs(ctx context.Context, page, perPa
 	}, nil
 }
 
+// GetActiveBansForHost returns up to activeBansLimit active bans scoped to
+// the given proxy host. Used during nginx config generation; cached in
+// Valkey with activeBansTTL. Invalidated on Ban/Unban/CleanExpiredBans.
+func (r *RateLimitRepository) GetActiveBansForHost(ctx context.Context, proxyHostID string) ([]model.BannedIP, error) {
+	key := r.bansCacheKeyHost(proxyHostID)
+	if r.cache != nil {
+		var cached []model.BannedIP
+		if err := r.cache.Get(ctx, key, &cached); err == nil {
+			return cached, nil
+		}
+	}
+
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, proxy_host_id, ip_address, reason, fail_count, banned_at,
+		       expires_at, is_permanent, COALESCE(is_auto_banned, false), created_at
+		FROM banned_ips
+		WHERE proxy_host_id = $1 AND (is_permanent = TRUE OR expires_at > NOW())
+		ORDER BY banned_at DESC
+		LIMIT $2
+	`, proxyHostID, activeBansLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	bans := make([]model.BannedIP, 0, 32)
+	for rows.Next() {
+		var b model.BannedIP
+		var phID sql.NullString
+		var reason sql.NullString
+		var expiresAt sql.NullTime
+		if err := rows.Scan(&b.ID, &phID, &b.IPAddress, &reason, &b.FailCount,
+			&b.BannedAt, &expiresAt, &b.IsPermanent, &b.IsAutoBanned, &b.CreatedAt); err != nil {
+			return nil, err
+		}
+		if phID.Valid {
+			b.ProxyHostID = &phID.String
+		}
+		b.Reason = reason.String
+		if expiresAt.Valid {
+			b.ExpiresAt = &expiresAt.Time
+		}
+		bans = append(bans, b)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if r.cache != nil {
+		if err := r.cache.Set(ctx, key, bans, activeBansTTL); err != nil {
+			log.Printf("[Cache] Failed to cache host bans for %s: %v", proxyHostID, err)
+		}
+	}
+	return bans, nil
+}
+
+// GetActiveGlobalBans returns up to activeBansLimit globally-scoped active
+// bans (proxy_host_id IS NULL). During SyncAllConfigs this would otherwise
+// run identically for every host — caching saves N-1 DB round-trips.
+func (r *RateLimitRepository) GetActiveGlobalBans(ctx context.Context) ([]model.BannedIP, error) {
+	key := r.bansCacheKeyGlobal()
+	if r.cache != nil {
+		var cached []model.BannedIP
+		if err := r.cache.Get(ctx, key, &cached); err == nil {
+			return cached, nil
+		}
+	}
+
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, proxy_host_id, ip_address, reason, fail_count, banned_at,
+		       expires_at, is_permanent, COALESCE(is_auto_banned, false), created_at
+		FROM banned_ips
+		WHERE proxy_host_id IS NULL AND (is_permanent = TRUE OR expires_at > NOW())
+		ORDER BY banned_at DESC
+		LIMIT $1
+	`, activeBansLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	bans := make([]model.BannedIP, 0, 32)
+	for rows.Next() {
+		var b model.BannedIP
+		var phID sql.NullString
+		var reason sql.NullString
+		var expiresAt sql.NullTime
+		if err := rows.Scan(&b.ID, &phID, &b.IPAddress, &reason, &b.FailCount,
+			&b.BannedAt, &expiresAt, &b.IsPermanent, &b.IsAutoBanned, &b.CreatedAt); err != nil {
+			return nil, err
+		}
+		if phID.Valid {
+			b.ProxyHostID = &phID.String
+		}
+		b.Reason = reason.String
+		if expiresAt.Valid {
+			b.ExpiresAt = &expiresAt.Time
+		}
+		bans = append(bans, b)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if r.cache != nil {
+		if err := r.cache.Set(ctx, key, bans, activeBansTTL); err != nil {
+			log.Printf("[Cache] Failed to cache global bans: %v", err)
+		}
+	}
+	return bans, nil
+}
+
 func (r *RateLimitRepository) BanIP(ctx context.Context, proxyHostID *string, ip, reason string, banTime int) (*model.BannedIP, error) {
 	var expiresAt *time.Time
 	isPermanent := banTime == 0
@@ -391,6 +542,7 @@ func (r *RateLimitRepository) BanIP(ctx context.Context, proxyHostID *string, ip
 		b.ExpiresAt = &expiresAtOut.Time
 	}
 
+	r.invalidateBans(ctx, proxyHostID)
 	return &b, nil
 }
 
@@ -427,13 +579,33 @@ func (r *RateLimitRepository) GetBannedIPByID(ctx context.Context, id string) (*
 }
 
 func (r *RateLimitRepository) UnbanIP(ctx context.Context, id string) error {
-	_, err := r.db.ExecContext(ctx, "DELETE FROM banned_ips WHERE id = $1", id)
-	return err
+	// DELETE ... RETURNING lets us discover which host's cache to invalidate
+	// without a separate SELECT round-trip.
+	var phID sql.NullString
+	err := r.db.QueryRowContext(ctx, "DELETE FROM banned_ips WHERE id = $1 RETURNING proxy_host_id", id).Scan(&phID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil
+		}
+		return err
+	}
+	var phPtr *string
+	if phID.Valid {
+		phPtr = &phID.String
+	}
+	r.invalidateBans(ctx, phPtr)
+	return nil
 }
 
 func (r *RateLimitRepository) UnbanIPByAddress(ctx context.Context, ip string) error {
 	_, err := r.db.ExecContext(ctx, "DELETE FROM banned_ips WHERE ip_address = $1", ip)
-	return err
+	if err != nil {
+		return err
+	}
+	// Bulk delete spans hosts; invalidate global. Per-host caches stale
+	// within activeBansTTL — acceptable for this admin-rare path.
+	r.invalidateBans(ctx, nil)
+	return nil
 }
 
 func (r *RateLimitRepository) CleanExpiredBans(ctx context.Context) (int64, error) {
@@ -441,6 +613,7 @@ func (r *RateLimitRepository) CleanExpiredBans(ctx context.Context) (int64, erro
 	if err != nil {
 		return 0, err
 	}
+	r.invalidateBans(ctx, nil)
 	return result.RowsAffected()
 }
 

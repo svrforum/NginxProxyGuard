@@ -3639,3 +3639,25 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_global_exploit_exclusions_rule_uri_unique
     ON public.global_exploit_rule_exclusions (rule_id, COALESCE(uri_pattern, ''));
 CREATE UNIQUE INDEX IF NOT EXISTS idx_host_exploit_exclusions_host_rule_uri_unique
     ON public.host_exploit_rule_exclusions (proxy_host_id, rule_id, COALESCE(uri_pattern, ''));
+
+-- v2.13.17: Backfill proxy_host_id indexes on per-host config tables.
+-- UNIQUE(proxy_host_id) constraints exist but cannot serve plain lookups
+-- + ORDER BY (planner falls back to seq scan at scale). Nginx config gen
+-- pulls 7+ such tables per host; these indexes shave 10-50x off cold paths
+-- on installs with hundreds of proxy hosts. Actual execution lives in
+-- migration.go upgrades slice; this block documents canonical state for
+-- fresh installs and future schema readers.
+CREATE INDEX IF NOT EXISTS idx_banned_ips_host_banned_at
+    ON public.banned_ips USING btree (proxy_host_id, banned_at DESC);
+CREATE INDEX IF NOT EXISTS idx_bot_filters_proxy_host
+    ON public.bot_filters USING btree (proxy_host_id);
+CREATE INDEX IF NOT EXISTS idx_rate_limits_proxy_host
+    ON public.rate_limits USING btree (proxy_host_id);
+CREATE INDEX IF NOT EXISTS idx_security_headers_proxy_host
+    ON public.security_headers USING btree (proxy_host_id);
+CREATE INDEX IF NOT EXISTS idx_challenge_configs_proxy_host
+    ON public.challenge_configs USING btree (proxy_host_id);
+CREATE INDEX IF NOT EXISTS idx_upstreams_proxy_host
+    ON public.upstreams USING btree (proxy_host_id);
+CREATE INDEX IF NOT EXISTS idx_fail2ban_configs_proxy_host
+    ON public.fail2ban_configs USING btree (proxy_host_id);

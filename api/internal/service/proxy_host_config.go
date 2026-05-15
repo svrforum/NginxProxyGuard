@@ -161,21 +161,20 @@ func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.Pr
 		}()
 	}
 
-	// Fetch banned IPs for this host (including global bans with no proxy_host_id)
+	// Fetch banned IPs for this host (including global bans with no proxy_host_id).
+	// Uses cached active-ban accessors: global bans in particular are identical
+	// across all hosts and would otherwise cause N redundant queries during
+	// SyncAllConfigs. Cache invalidation is wired into Ban/Unban methods.
 	if s.rateLimitRepo != nil {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			var bannedIPs []model.BannedIP
-			// Get host-specific bans
-			bannedResp, err := s.rateLimitRepo.ListBannedIPs(ctx, &host.ID, 1, 1000)
-			if err == nil && bannedResp != nil {
-				bannedIPs = bannedResp.Data
+			if hostBans, err := s.rateLimitRepo.GetActiveBansForHost(ctx, host.ID); err == nil {
+				bannedIPs = hostBans
 			}
-			// Also get global bans (proxy_host_id IS NULL)
-			globalBannedResp, err := s.rateLimitRepo.ListGlobalBannedIPs(ctx, 1, 1000)
-			if err == nil && globalBannedResp != nil {
-				bannedIPs = append(bannedIPs, globalBannedResp.Data...)
+			if globalBans, err := s.rateLimitRepo.GetActiveGlobalBans(ctx); err == nil {
+				bannedIPs = append(bannedIPs, globalBans...)
 			}
 			// Deduplicate by IP address (same IP can exist in both host-specific and global bans)
 			if len(bannedIPs) > 0 {

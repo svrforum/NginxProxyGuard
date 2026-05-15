@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"log"
+	"time"
 
 	"nginx-proxy-guard/internal/config"
 	"nginx-proxy-guard/internal/database"
@@ -180,9 +181,24 @@ func wireServiceCallbacks(svcs *Services, repos *Repositories) {
 	svcs.ProxyHost.SetFilterSubscriptionRepo(repos.FilterSubscription)
 
 	// Certificate: regenerate proxy-host configs after a cert is ready.
-	svcs.Certificate.SetCertificateReadyCallback(func(ctx context.Context, certificateID string) error {
-		log.Printf("Certificate %s is ready, regenerating nginx configs for affected proxy hosts", certificateID)
-		return svcs.ProxyHost.RegenerateConfigsForCertificate(ctx, certificateID)
+	//
+	// Decouples cert issuance from nginx config regeneration: the callback
+	// fires from CertificateService's background goroutine, which is
+	// inappropriate for holding globalNginxMutex while RegenerateConfigsForCertificate
+	// iterates affected hosts (large batches during RenewalScheduler would
+	// otherwise starve user API mutex acquisitions). Each regen run runs in
+	// its own goroutine with a bounded timeout; if it overruns, the next
+	// host edit will pick up the new cert anyway.
+	svcs.Certificate.SetCertificateReadyCallback(func(_ context.Context, certificateID string) error {
+		go func(certID string) {
+			runCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			defer cancel()
+			log.Printf("Certificate %s is ready, regenerating nginx configs for affected proxy hosts", certID)
+			if err := svcs.ProxyHost.RegenerateConfigsForCertificate(runCtx, certID); err != nil {
+				log.Printf("Failed to regenerate configs for certificate %s: %v", certID, err)
+			}
+		}(certificateID)
+		return nil
 	})
 
 	// Challenge: resolve system-settings lazily.

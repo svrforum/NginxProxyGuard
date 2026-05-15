@@ -79,6 +79,7 @@ func InitRepositories(db *database.DB, redisCache *cache.RedisClient) *Repositor
 		repos.GlobalSettings.SetCache(redisCache)
 		repos.SystemSettings.SetCache(redisCache)
 		repos.ExploitBlockRule.SetCache(redisCache)
+		repos.RateLimit.SetCache(redisCache)
 		log.Println("Valkey cache wired to repositories")
 	}
 
