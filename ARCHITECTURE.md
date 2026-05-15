@@ -28,11 +28,11 @@
 
 | Layer | Technology | Version |
 |-------|------------|---------|
-| Proxy | Nginx + ModSecurity v3 + OWASP CRS | 1.28.0 / 3.0.14 / 4.21.0 |
-| Backend | Go (Echo v4) | 1.24 / v4.12.0 |
-| Frontend | React + TypeScript + Vite + TailwindCSS | 18.3 / 5.6 / 6.0 / 3.4 |
+| Proxy | Nginx + ModSecurity v3 + OWASP CRS | 1.30.1 / 3.0.15 / 4.26.0 |
+| Backend | Go (Echo v4) | 1.26 / v4.15.2 |
+| Frontend | React + TypeScript + Vite + TailwindCSS | 19.2 / 6.0 / 8.0 (Rolldown) / 4.3 |
 | Database | TimescaleDB (PostgreSQL 17) | 17-pg17 |
-| Cache | Valkey (Redis-compatible) | 8-alpine |
+| Cache | Valkey (Redis-compatible) | 9-alpine |
 
 ### 1.2 Data Flow
 
@@ -444,7 +444,7 @@ MaxPageSize             = 100
 
 ```
 ui/src/
-├── main.tsx                        # React 18 root + QueryClient + Suspense
+├── main.tsx                        # React 19 root + QueryClient + Suspense
 ├── App.tsx                         # Auth 상태머신 + Router + Routes
 ├── api/                            # API 클라이언트 (16개 모듈)
 │   ├── client.ts                   # apiGet/Post/Put/Delete + ApiError
@@ -683,7 +683,7 @@ nginx/
 │   └── host_{id}.conf          # API 생성: per-host WAF 튜닝 (paranoia, threshold, exclusions, mode)
 ├── geoip/
 │   └── geoip-active.conf       # symlink → enabled or disabled
-└── owasp-crs/                  # OWASP CRS 4.21.0 rules
+└── owasp-crs/                  # OWASP CRS 4.26.0 rules
 ```
 
 **nginx.conf 생성 (`api/internal/nginx/main_config.go`):**
@@ -699,7 +699,7 @@ nginx/
 ### 4.3 Docker Build
 
 **Nginx (multi-stage):**
-- Stage 1: Alpine 3.23 → compile ModSecurity 3.0.14 + Nginx 1.28.0 + modules (brotli, headers_more, geoip2)
+- Stage 1: Alpine 3.23 → compile ModSecurity 3.0.15 + Nginx 1.30.1 + modules (brotli, headers_more, geoip2)
 - Stage 2: Alpine 3.23 + runtime libs + geoipupdate + logrotate
 - Entrypoint: volume init → GeoIP update → log config → nginx -t → nginx start
 
@@ -1134,7 +1134,7 @@ Custom Upload:
 
 ### 8.3 WAF (ModSecurity)
 
-- **Engine:** ModSecurity v3 + OWASP CRS 4.21
+- **Engine:** ModSecurity v3 + OWASP CRS 4.26
 - **Global CRS loading:** CRS rules loaded once at `http {}` level via `crs-global.conf` (성능 최적화: 호스트 수 무관하게 nginx -t < 1초)
 - **Modes:** blocking (403) / detection (log only)
 - **Paranoia:** 1-4 levels, anomaly threshold 1-100
@@ -1253,7 +1253,7 @@ Restore (2-phase):
 ### 9.1 Defense in Depth
 
 ```
-Layer 1: Nginx ModSecurity WAF (OWASP CRS 4.21)
+Layer 1: Nginx ModSecurity WAF (OWASP CRS 4.26)
 Layer 2: IP Blocking (banned_ips, cloud provider, GeoIP)
 Layer 3: Rate Limiting (nginx limit_req + application fail2ban)
 Layer 4: Bot Filtering (user-agent matching)
