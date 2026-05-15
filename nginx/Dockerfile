@@ -14,7 +14,7 @@
 # - https://github.com/coreruleset/coreruleset
 
 ARG NGINX_VERSION=1.30.1
-ARG MODSECURITY_VERSION=3.0.14
+ARG MODSECURITY_VERSION=3.0.15
 ARG MODSECURITY_NGINX_VERSION=1.0.4
 ARG OWASP_CRS_VERSION=4.26.0
 
@@ -65,8 +65,11 @@ RUN echo "Building ModSecurity ${MODSECURITY_VERSION}..." \
     && git clone --depth 1 --branch v${MODSECURITY_VERSION} \
         https://github.com/owasp-modsecurity/ModSecurity.git \
     && cd ModSecurity \
-    && git submodule init \
-    && git submodule update \
+    # 3.0.15 added Mbed TLS as a submodule. `git submodule update` alone (no
+    # --init) skips submodules registered after the clone, and depth-1 clones
+    # also need explicit --recursive to pull nested deps. Use one combined
+    # invocation that handles both new and nested submodules, shallowly.
+    && git submodule update --init --recursive --depth 1 \
     && ./build.sh \
     && CXXFLAGS="-include cstdint" ./configure \
         --with-yajl \
