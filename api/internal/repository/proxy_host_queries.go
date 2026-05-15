@@ -156,29 +156,40 @@ func (r *ProxyHostRepository) List(ctx context.Context, page, perPage int, searc
 // CheckDomainExists checks if any of the given domains already exist in another proxy host
 // excludeID can be empty string for create operations, or the host ID for update operations
 func (r *ProxyHostRepository) CheckDomainExists(ctx context.Context, domains []string, excludeID string) ([]string, error) {
+	if len(domains) == 0 {
+		return nil, nil
+	}
+
+	// Single query: unnest stored domain_names, intersect with input set in one pass.
+	// Was: N round-trips (one SELECT per domain). Now: one SELECT.
+	query := `
+		SELECT DISTINCT d
+		FROM proxy_hosts, UNNEST(domain_names) AS d
+		WHERE d = ANY($1::text[])
+	`
+	args := []interface{}{pq.Array(domains)}
+
+	if excludeID != "" {
+		query += ` AND id != $2`
+		args = append(args, excludeID)
+	}
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check domain existence: %w", err)
+	}
+	defer rows.Close()
+
 	var existingDomains []string
-
-	for _, domain := range domains {
-		query := `
-			SELECT domain_names FROM proxy_hosts
-			WHERE $1 = ANY(domain_names)
-		`
-		args := []interface{}{domain}
-
-		if excludeID != "" {
-			query += ` AND id != $2`
-			args = append(args, excludeID)
+	for rows.Next() {
+		var d string
+		if err := rows.Scan(&d); err != nil {
+			return nil, fmt.Errorf("failed to scan existing domain: %w", err)
 		}
-
-		var domainNames []string
-		err := r.db.QueryRowContext(ctx, query, args...).Scan(pq.Array(&domainNames))
-		if err == sql.ErrNoRows {
-			continue
-		}
-		if err != nil {
-			return nil, fmt.Errorf("failed to check domain existence: %w", err)
-		}
-		existingDomains = append(existingDomains, domain)
+		existingDomains = append(existingDomains, d)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate domain check rows: %w", err)
 	}
 
 	return existingDomains, nil
