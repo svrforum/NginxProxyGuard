@@ -135,21 +135,47 @@
     </div>
 
     <script>
-        function setLang(lang) {
+        function applyLang(lang) {
+            document.documentElement.lang = lang;
             document.body.className = lang === 'en' ? 'en' : '';
             document.getElementById('btn-ko').className = 'lang-btn' + (lang === 'ko' ? ' active' : '');
             document.getElementById('btn-en').className = 'lang-btn' + (lang === 'en' ? ' active' : '');
+        }
+        function setLang(lang) {
             localStorage.setItem('npg_language', lang);
+            applyLang(lang);
         }
-        // Load saved language preference or detect from browser
-        // UI Settings writes 'npg_language'; legacy 'npg_lang' kept for back-compat
-        const savedLang = localStorage.getItem('npg_language') || localStorage.getItem('npg_lang');
-        if (savedLang) {
-            setLang(savedLang);
-        } else {
-            const browserLang = navigator.language.split('-')[0];
-            if (browserLang === 'ko') setLang('ko');
+        function detectBrowserLang() {
+            var browserLang = (navigator.language || 'en').split('-')[0];
+            return browserLang === 'ko' ? 'ko' : 'en';
         }
+        // Initial lang resolution (before API):
+        // 1) Prefer the user's saved click — UI Settings writes 'npg_language'; legacy 'npg_lang' kept for back-compat
+        // 2) Else follow browser language (default EN for non-Korean visitors)
+        // This avoids the Korean flash for non-Korean visitors with no saved preference.
+        var savedLang = localStorage.getItem('npg_language') || localStorage.getItem('npg_lang');
+        var initialLang = (savedLang === 'ko' || savedLang === 'en') ? savedLang : detectBrowserLang();
+        applyLang(initialLang);
+
+        // Load admin-configured default error page language. Only applies when
+        // the visitor has no saved preference; 'auto' (or missing) keeps the
+        // browser-detected lang.
+        async function loadDefaultLanguage() {
+            try {
+                const res = await fetch('/api/v1/public/ui-settings');
+                if (!res.ok) return;
+                const data = await res.json();
+                if (savedLang !== 'ko' && savedLang !== 'en') {
+                    var adminDefault = data.error_page_language;
+                    if (adminDefault === 'ko' || adminDefault === 'en') {
+                        applyLang(adminDefault);
+                    }
+                }
+            } catch (e) {
+                // API unavailable — keep the browser-detected lang already applied.
+            }
+        }
+        loadDefaultLanguage();
     </script>
 </body>
 </html>
