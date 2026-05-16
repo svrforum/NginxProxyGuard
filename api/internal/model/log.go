@@ -225,15 +225,21 @@ type LogFilter struct {
 	// Sorting
 	SortBy    *string `json:"sort_by,omitempty"`    // timestamp, body_bytes_sent, request_time, status_code
 	SortOrder *string `json:"sort_order,omitempty"` // asc, desc (default: desc)
+
+	// Cursor for keyset pagination. Opaque base64 token returned in
+	// LogListResponse.NextCursor. Only honoured for the default
+	// (timestamp DESC) sort — custom sort orders fall back to OFFSET.
+	Cursor *string `json:"cursor,omitempty"`
 }
 
 type LogListResponse struct {
-	Data       []Log `json:"data"`
-	Total      int   `json:"total"`
-	Page       int   `json:"page"`
-	PerPage    int   `json:"per_page"`
-	TotalPages int   `json:"total_pages"`
-	HasMore    bool  `json:"has_more"`
+	Data       []Log   `json:"data"`
+	Total      int     `json:"total"`
+	Page       int     `json:"page"`
+	PerPage    int     `json:"per_page"`
+	TotalPages int     `json:"total_pages"`
+	HasMore    bool    `json:"has_more"`
+	NextCursor *string `json:"next_cursor,omitempty"`
 }
 
 type LogStats struct {

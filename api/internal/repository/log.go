@@ -3,6 +3,8 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -13,6 +15,38 @@ import (
 	"nginx-proxy-guard/internal/model"
 	"nginx-proxy-guard/pkg/cache"
 )
+
+// logCursor encodes the (timestamp, id) of the last row from a previous page
+// so the next page can be served via WHERE (timestamp, id) < ($1, $2) instead
+// of OFFSET N. Round-trips through base64-encoded JSON so it stays opaque to
+// clients (they shouldn't construct or interpret it).
+type logCursor struct {
+	Timestamp time.Time `json:"t"`
+	ID        string    `json:"i"`
+}
+
+func encodeLogCursor(c logCursor) (string, error) {
+	b, err := json.Marshal(c)
+	if err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+func decodeLogCursor(s string) (logCursor, error) {
+	var c logCursor
+	b, err := base64.RawURLEncoding.DecodeString(s)
+	if err != nil {
+		return c, fmt.Errorf("invalid cursor encoding: %w", err)
+	}
+	if err := json.Unmarshal(b, &c); err != nil {
+		return c, fmt.Errorf("invalid cursor payload: %w", err)
+	}
+	if c.ID == "" || c.Timestamp.IsZero() {
+		return c, fmt.Errorf("cursor missing fields")
+	}
+	return c, nil
+}
 
 type LogRepository struct {
 	db    *database.DB
@@ -255,7 +289,16 @@ func (r *LogRepository) CreateBatch(ctx context.Context, logs []model.CreateLogR
 	return nil
 }
 
-func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page, perPage int) ([]model.Log, int, error) {
+// ListResult bundles paginated logs with both legacy total/page metadata and
+// the keyset cursor for the next page. NextCursor is empty when there are no
+// further rows or when the request used a custom (non-default) sort order.
+type ListResult struct {
+	Logs       []model.Log
+	Total      int
+	NextCursor string
+}
+
+func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page, perPage int) (*ListResult, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -266,6 +309,20 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 		perPage = 1000
 	}
 	offset := (page - 1) * perPage
+
+	// Cursor mode is only safe for the default sort. Custom SortBy still
+	// uses OFFSET because the cursor encodes (timestamp, id) — switching
+	// the sort key mid-stream would silently return the wrong rows.
+	useCursor := false
+	var cursor logCursor
+	if filter != nil && filter.Cursor != nil && *filter.Cursor != "" && (filter.SortBy == nil || *filter.SortBy == "" || *filter.SortBy == "timestamp") {
+		c, err := decodeLogCursor(*filter.Cursor)
+		if err == nil {
+			cursor = c
+			useCursor = true
+		}
+		// Bad cursor falls through to OFFSET mode — better than 500.
+	}
 
 	// Build WHERE clause using shared builder
 	conditions := []string{}
@@ -531,8 +588,11 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 		whereClause = "WHERE " + strings.Join(conditions, " AND ")
 	}
 
-	// Build ORDER BY clause
-	orderBy := "timestamp DESC" // default
+	// Build ORDER BY clause. Default sort gains `, id DESC` as a stable
+	// tiebreaker so keyset pagination doesn't skip or duplicate rows when
+	// two logs share the same millisecond timestamp.
+	orderBy := "timestamp DESC, id DESC"
+	customSort := false
 	if filter != nil && filter.SortBy != nil && *filter.SortBy != "" {
 		allowedSortFields := map[string]bool{
 			"timestamp":       true,
@@ -547,13 +607,38 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 			if filter.SortOrder != nil && (*filter.SortOrder == "asc" || *filter.SortOrder == "ASC") {
 				sortOrder = "ASC"
 			}
-			orderBy = fmt.Sprintf("%s %s", *filter.SortBy, sortOrder)
+			if *filter.SortBy == "timestamp" {
+				orderBy = fmt.Sprintf("timestamp %s, id %s", sortOrder, sortOrder)
+			} else {
+				orderBy = fmt.Sprintf("%s %s", *filter.SortBy, sortOrder)
+				customSort = true
+			}
 		}
+	}
+	if customSort {
+		// Custom sort can't safely keyset on (timestamp, id).
+		useCursor = false
+	}
+
+	// Cursor predicate: keep before the LIMIT clause but after the sort.
+	// Row-comparison lets the planner use an index on (timestamp, id) and
+	// keeps the keyset semantics atomic vs. concurrent inserts.
+	if useCursor {
+		conditions = append(conditions, fmt.Sprintf("(timestamp, id) < ($%d, $%d::uuid)", argIndex, argIndex+1))
+		args = append(args, cursor.Timestamp, cursor.ID)
+		argIndex += 2
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
 	}
 
 	// Fetch perPage+1 rows to determine hasMore without COUNT(*)
 	// Select only columns needed for list view to reduce IO (~60% less data)
 	fetchLimit := perPage + 1
+	// Keyset mode skips OFFSET entirely — the predicate already restricts
+	// the result set, so offset=0 is correct.
+	effectiveOffset := offset
+	if useCursor {
+		effectiveOffset = 0
+	}
 	query := fmt.Sprintf(`
 		SELECT id, log_type, timestamp, host, client_ip,
 			geo_country, geo_country_code, geo_org,
@@ -571,11 +656,11 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 		LIMIT $%d OFFSET $%d
 	`, whereClause, orderBy, argIndex, argIndex+1)
 
-	args = append(args, fetchLimit, offset)
+	args = append(args, fetchLimit, effectiveOffset)
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, 0, fmt.Errorf("failed to list logs: %w", err)
+		return nil, fmt.Errorf("failed to list logs: %w", err)
 	}
 	defer rows.Close()
 
@@ -607,7 +692,7 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 			&log.CreatedAt,
 		)
 		if err != nil {
-			return nil, 0, fmt.Errorf("failed to scan log: %w", err)
+			return nil, fmt.Errorf("failed to scan log: %w", err)
 		}
 
 		if host.Valid {
@@ -696,5 +781,19 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 		total++
 	}
 
-	return logs, total, nil
+	// Mint the next-page cursor only when there's something to fetch next.
+	// Custom sorts skip this (cursor encodes timestamp+id, not the custom
+	// column) so the client falls back to OFFSET on the next request.
+	var nextCursor string
+	if hasMore && !customSort && len(logs) > 0 {
+		last := logs[len(logs)-1]
+		if !last.Timestamp.IsZero() && last.ID != "" {
+			tok, err := encodeLogCursor(logCursor{Timestamp: last.Timestamp, ID: last.ID})
+			if err == nil {
+				nextCursor = tok
+			}
+		}
+	}
+
+	return &ListResult{Logs: logs, Total: total, NextCursor: nextCursor}, nil
 }

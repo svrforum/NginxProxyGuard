@@ -199,11 +199,17 @@ func (h *LogHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	filter := parseLogFilter(r.URL.Query())
 
-	logs, total, err := h.logRepo.List(ctx, filter, page, perPage)
+	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
+		filter.Cursor = &cursor
+	}
+
+	result, err := h.logRepo.List(ctx, filter, page, perPage)
 	if err != nil {
 		httpJSONErrorWithDetails(w, "Failed to list logs", http.StatusInternalServerError, err.Error())
 		return
 	}
+	logs := result.Logs
+	total := result.Total
 
 	// Enrich logs with ban status (DB batch lookup for accuracy)
 	if h.rateLimitRepo != nil && len(logs) > 0 {
@@ -248,6 +254,9 @@ func (h *LogHandler) List(w http.ResponseWriter, r *http.Request) {
 		PerPage:    perPage,
 		TotalPages: totalPages,
 		HasMore:    hasMore,
+	}
+	if result.NextCursor != "" {
+		response.NextCursor = &result.NextCursor
 	}
 
 	w.Header().Set("Content-Type", "application/json")

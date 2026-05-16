@@ -86,7 +86,8 @@ function buildFilterParams(filter: LogFilter, params: URLSearchParams): void {
 export async function fetchLogs(
   page = 1,
   perPage = 50,
-  filter?: LogFilter
+  filter?: LogFilter,
+  cursor?: string,
 ): Promise<LogListResponse> {
   const params = new URLSearchParams({
     page: page.toString(),
@@ -95,6 +96,9 @@ export async function fetchLogs(
 
   if (filter) {
     buildFilterParams(filter, params);
+  }
+  if (cursor) {
+    params.set('cursor', cursor);
   }
 
   const res = await fetch(`${API_BASE}/logs?${params}`, {
