@@ -27,6 +27,7 @@ const (
 	BlockReasonCloudProviderChallenge BlockReason = "cloud_provider_challenge"
 	BlockReasonCloudProviderBlock     BlockReason = "cloud_provider_block"
 	BlockReasonAccessDenied           BlockReason = "access_denied"
+	BlockReasonFilterSubscription     BlockReason = "filter_subscription"
 )
 
 // validBlockReasons contains all valid block reason values
@@ -42,6 +43,7 @@ var validBlockReasons = map[string]BlockReason{
 	"cloud_provider_challenge": BlockReasonCloudProviderChallenge,
 	"cloud_provider_block":     BlockReasonCloudProviderBlock,
 	"access_denied":            BlockReasonAccessDenied,
+	"filter_subscription":      BlockReasonFilterSubscription,
 }
 
 // ParseBlockReason validates and converts a string to BlockReason.
