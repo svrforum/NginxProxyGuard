@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react'
+import { useCallback, useState, useEffect, lazy, Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BrowserRouter, Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -119,17 +119,21 @@ function AppContent({ user, onLogout }: AppContentProps) {
     setSyncResult(null)
   }
 
-  const handleEdit = (host: ProxyHost, tab?: 'basic' | 'ssl' | 'security' | 'performance' | 'advanced' | 'protection') => {
+  // Memoized so ProxyHostList's memoized rows don't re-render on every App
+  // state change. Without useCallback, both handlers were redeclared on every
+  // render (auth status refresh, dark-mode toggle, modal toggle, etc.) and
+  // invalidated React.memo for all ~200 ProxyHostRow children.
+  const handleEdit = useCallback((host: ProxyHost, tab?: 'basic' | 'ssl' | 'security' | 'performance' | 'advanced' | 'protection') => {
     setEditingHost(host)
     setInitialFormTab(tab || 'basic')
     setShowForm(true)
-  }
+  }, [])
 
-  const handleAdd = () => {
+  const handleAdd = useCallback(() => {
     setEditingHost(null)
     setInitialFormTab('basic')
     setShowForm(true)
-  }
+  }, [])
 
   const handleCloseForm = () => {
     setShowForm(false)

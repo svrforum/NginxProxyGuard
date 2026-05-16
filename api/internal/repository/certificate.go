@@ -40,7 +40,9 @@ func (r *CertificateRepository) invalidateCert(ctx context.Context, id string) {
 	if r.cache == nil {
 		return
 	}
-	_ = r.cache.Delete(ctx, r.cacheKey(id))
+	if err := r.cache.Delete(ctx, r.cacheKey(id)); err != nil {
+		log.Printf("[Cache] certificate invalidate failed for %s: %v", id, err)
+	}
 }
 
 func (r *CertificateRepository) Create(ctx context.Context, cert *model.Certificate) (*model.Certificate, error) {
@@ -347,11 +349,25 @@ func (r *CertificateRepository) List(ctx context.Context, page, perPage int, sea
 }
 
 func (r *CertificateRepository) DeleteByErrorStatus(ctx context.Context) (int64, error) {
-	result, err := r.db.ExecContext(ctx, `DELETE FROM certificates WHERE status = 'error'`)
+	// RETURNING id gives us the rows actually deleted so we can drop each one's
+	// per-id cache entry. Skipping invalidation would let GetByID return a
+	// deleted cert for up to 60s after this admin-triggered cleanup runs.
+	rows, err := r.db.QueryContext(ctx, `DELETE FROM certificates WHERE status = 'error' RETURNING id`)
 	if err != nil {
 		return 0, fmt.Errorf("failed to delete error certificates: %w", err)
 	}
-	return result.RowsAffected()
+	defer rows.Close()
+
+	var deleted int64
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return deleted, fmt.Errorf("failed to scan deleted cert id: %w", err)
+		}
+		r.invalidateCert(ctx, id)
+		deleted++
+	}
+	return deleted, rows.Err()
 }
 
 func (r *CertificateRepository) ListByStatus(ctx context.Context, status string) ([]model.Certificate, error) {

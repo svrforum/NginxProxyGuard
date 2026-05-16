@@ -29,7 +29,6 @@ export function LogViewer({ logType, defaultBlockReason }: LogViewerProps) {
   const {
     page,
     perPage,
-    setPerPage,
     filter,
     searchInput,
     setSearchInput,
@@ -49,6 +48,7 @@ export function LogViewer({ logType, defaultBlockReason }: LogViewerProps) {
     goToNextPage,
     goToPrevPage,
     goToFirstPage,
+    changePerPage,
     queryClient,
   } = useLogQuery({ logType, defaultBlockReason });
 
@@ -97,7 +97,7 @@ export function LogViewer({ logType, defaultBlockReason }: LogViewerProps) {
         filter={filter}
         page={page}
         perPage={perPage}
-        setPerPage={setPerPage}
+        changePerPage={changePerPage}
         goToNextPage={goToNextPage}
         goToPrevPage={goToPrevPage}
         goToFirstPage={goToFirstPage}

@@ -45,6 +45,13 @@ func decodeLogCursor(s string) (logCursor, error) {
 	if c.ID == "" || c.Timestamp.IsZero() {
 		return c, fmt.Errorf("cursor missing fields")
 	}
+	// Reject far-future timestamps. Without this, `(timestamp, id) < ($ts, $id)`
+	// would match every existing row and the "cursor" silently becomes "give me
+	// everything", defeating pagination. Allow a small clock-skew margin so a
+	// freshly-issued cursor isn't rejected by a marginally-behind client clock.
+	if c.Timestamp.After(time.Now().Add(time.Minute)) {
+		return c, fmt.Errorf("cursor timestamp in future")
+	}
 	return c, nil
 }
 
@@ -289,9 +296,16 @@ func (r *LogRepository) CreateBatch(ctx context.Context, logs []model.CreateLogR
 	return nil
 }
 
-// ListResult bundles paginated logs with both legacy total/page metadata and
-// the keyset cursor for the next page. NextCursor is empty when there are no
-// further rows or when the request used a custom (non-default) sort order.
+// ListResult bundles paginated logs with the keyset cursor for the next page.
+//
+// Total is NOT a true row count — it's a synthetic value (offset + len(Logs),
+// +1 when hasMore) so callers can detect "more rows exist" without paying for
+// COUNT(*). Treat it as a one-bit "are there more pages?" signal, not as an
+// accurate row total.
+//
+// NextCursor is empty when there are no further rows or when the request used
+// a custom (non-default) sort order (the encoded cursor only carries
+// timestamp+id; switching sort key would silently return the wrong rows).
 type ListResult struct {
 	Logs       []model.Log
 	Total      int
@@ -320,8 +334,12 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 		if err == nil {
 			cursor = c
 			useCursor = true
+		} else {
+			// Bad cursor falls through to OFFSET mode — better than 500.
+			// Log so support can diagnose user reports of "skipped logs after
+			// clicking Next" (which is what a silently-mismatched cursor causes).
+			log.Printf("[LogRepository] cursor decode failed (page=%d): %v", page, err)
 		}
-		// Bad cursor falls through to OFFSET mode — better than 500.
 	}
 
 	// Build WHERE clause using shared builder
@@ -791,6 +809,11 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 			tok, err := encodeLogCursor(logCursor{Timestamp: last.Timestamp, ID: last.ID})
 			if err == nil {
 				nextCursor = tok
+			} else {
+				// json.Marshal of {time.Time, string} should never fail in
+				// practice — log so a future struct change can't silently
+				// disable cursor pagination.
+				log.Printf("[LogRepository] cursor encode failed: %v", err)
 			}
 		}
 	}

@@ -40,14 +40,18 @@ func (r *FilterSubscriptionRepository) entriesCacheKey(filterType string) string
 }
 
 // invalidateEntriesCache drops cached IP/CIDR lists so the next reader rebuilds
-// from the authoritative DB rows. Cheap because the cache keys are well-known.
+// from the authoritative DB rows. A silent failure here would let SyncAllConfigs
+// keep using stale subscription data for up to filterEntriesTTL — log so an
+// operator can correlate "duplicate IP in geo block" reports with cache hiccups.
 func (r *FilterSubscriptionRepository) invalidateEntriesCache(ctx context.Context) {
 	if r.cache == nil {
 		return
 	}
-	_ = r.cache.Delete(ctx, r.entriesCacheKey("ip"))
-	_ = r.cache.Delete(ctx, r.entriesCacheKey("cidr"))
-	_ = r.cache.Delete(ctx, r.entriesCacheKey("user_agent"))
+	for _, t := range [...]string{"ip", "cidr", "user_agent"} {
+		if err := r.cache.Delete(ctx, r.entriesCacheKey(t)); err != nil {
+			log.Printf("[Cache] filter_sub invalidate failed for %s: %v", t, err)
+		}
+	}
 }
 
 // List returns a paginated list of filter subscriptions

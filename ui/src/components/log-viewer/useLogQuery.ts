@@ -216,6 +216,16 @@ export function useLogQuery({ logType, defaultBlockReason }: UseLogQueryArgs) {
     setCursor(undefined);
   }, []);
 
+  // perPage changes invalidate any in-flight cursor: the cursor encodes the
+  // tail of the previous page at the OLD perPage, so reusing it with a NEW
+  // perPage produces a confusing row jump (page 3 of 100/page starting from
+  // the last row of the old 50/page page 3). Reset to first page on change.
+  const changePerPage = useCallback((n: number) => {
+    setPerPage(n);
+    setPage(1);
+    setCursor(undefined);
+  }, []);
+
   return {
     // state
     page,
@@ -243,6 +253,7 @@ export function useLogQuery({ logType, defaultBlockReason }: UseLogQueryArgs) {
     goToNextPage,
     goToPrevPage,
     goToFirstPage,
+    changePerPage,
     queryClient,
   };
 }

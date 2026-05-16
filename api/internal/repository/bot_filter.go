@@ -35,7 +35,9 @@ func (r *BotFilterRepository) invalidateHost(ctx context.Context, proxyHostID st
 	if r.cache == nil {
 		return
 	}
-	_ = r.cache.Delete(ctx, r.cacheKey(proxyHostID))
+	if err := r.cache.Delete(ctx, r.cacheKey(proxyHostID)); err != nil {
+		log.Printf("[Cache] bot_filter invalidate failed for host %s: %v", proxyHostID, err)
+	}
 }
 
 func (r *BotFilterRepository) GetByProxyHostID(ctx context.Context, proxyHostID string) (*model.BotFilter, error) {

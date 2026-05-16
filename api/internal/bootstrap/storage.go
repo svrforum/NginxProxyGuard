@@ -9,6 +9,10 @@ import (
 )
 
 // InitDB initializes the database connection pool and runs migrations.
+// Pool sizing is applied BEFORE RunMigrations so the migration's background
+// goroutines (each acquiring a connection) start under the operator's final
+// pool limits instead of the New() defaults. Otherwise an operator who set
+// NPG_DB_MAX_OPEN smaller than 80 would briefly run with the larger default.
 func InitDB(cfg *config.Config) (*database.DB, error) {
 	db, err := database.New(cfg.DatabaseURL)
 	if err != nil {

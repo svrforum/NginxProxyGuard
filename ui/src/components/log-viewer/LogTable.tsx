@@ -11,7 +11,7 @@ interface LogTableProps {
   filter: LogFilter;
   page: number;
   perPage: number;
-  setPerPage: (n: number) => void;
+  changePerPage: (n: number) => void;
   goToNextPage: () => void;
   goToPrevPage: () => void;
   goToFirstPage: () => void;
@@ -27,7 +27,7 @@ export function LogTable({
   filter,
   page,
   perPage,
-  setPerPage,
+  changePerPage,
   goToNextPage,
   goToPrevPage,
   goToFirstPage,
@@ -226,10 +226,7 @@ export function LogTable({
               </label>
               <select
                 value={perPage}
-                onChange={(e) => {
-                  setPerPage(parseInt(e.target.value));
-                  goToFirstPage();
-                }}
+                onChange={(e) => changePerPage(parseInt(e.target.value))}
                 className="px-2 py-1 border border-slate-300 dark:border-slate-600 rounded text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500"
               >
                 {PAGE_SIZE_OPTIONS.map((size) => (
@@ -265,7 +262,10 @@ export function LogTable({
             </span>
             <button
               onClick={goToNextPage}
-              disabled={!logsQuery.data.has_more}
+              // Disable while fetching so a rapid double-click can't push
+              // `page` ahead twice while `cursor` still points at the prior
+              // tail — the second request would return the same chunk twice.
+              disabled={!logsQuery.data.has_more || logsQuery.isFetching}
               className="px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
             >
               {t('pagination.next')}
