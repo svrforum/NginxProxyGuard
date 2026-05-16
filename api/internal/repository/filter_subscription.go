@@ -4,19 +4,50 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"math"
+	"time"
 
 	"nginx-proxy-guard/internal/model"
+	"nginx-proxy-guard/pkg/cache"
 )
 
 // FilterSubscriptionRepository handles filter subscription database operations
 type FilterSubscriptionRepository struct {
-	db *sql.DB
+	db    *sql.DB
+	cache *cache.RedisClient
 }
 
 // NewFilterSubscriptionRepository creates a new filter subscription repository
 func NewFilterSubscriptionRepository(db *sql.DB) *FilterSubscriptionRepository {
 	return &FilterSubscriptionRepository{db: db}
+}
+
+// SetCache wires Valkey caching for hot lookups during nginx config generation.
+// During SyncAllConfigs every host calls GetAllEnabledEntriesByType for both
+// "ip" and "cidr" — caching collapses those N round-trips into one.
+func (r *FilterSubscriptionRepository) SetCache(c *cache.RedisClient) {
+	r.cache = c
+}
+
+// filterEntriesTTL bounds staleness of the per-type cached entry list.
+// Filter subscription refreshes are scheduled on a separate cadence; the TTL
+// only needs to keep one SyncAllConfigs cycle hot.
+const filterEntriesTTL = 60 * time.Second
+
+func (r *FilterSubscriptionRepository) entriesCacheKey(filterType string) string {
+	return "filter_sub:entries:" + filterType
+}
+
+// invalidateEntriesCache drops cached IP/CIDR lists so the next reader rebuilds
+// from the authoritative DB rows. Cheap because the cache keys are well-known.
+func (r *FilterSubscriptionRepository) invalidateEntriesCache(ctx context.Context) {
+	if r.cache == nil {
+		return
+	}
+	_ = r.cache.Delete(ctx, r.entriesCacheKey("ip"))
+	_ = r.cache.Delete(ctx, r.entriesCacheKey("cidr"))
+	_ = r.cache.Delete(ctx, r.entriesCacheKey("user_agent"))
 }
 
 // List returns a paginated list of filter subscriptions
@@ -137,6 +168,7 @@ func (r *FilterSubscriptionRepository) Create(ctx context.Context, sub *model.Fi
 	if err != nil {
 		return nil, fmt.Errorf("failed to create filter subscription: %w", err)
 	}
+	r.invalidateEntriesCache(ctx)
 	return sub, nil
 }
 
@@ -198,6 +230,7 @@ func (r *FilterSubscriptionRepository) Update(ctx context.Context, id string, re
 	if err != nil {
 		return nil, fmt.Errorf("failed to update filter subscription: %w", err)
 	}
+	r.invalidateEntriesCache(ctx)
 	return &sub, nil
 }
 
@@ -211,6 +244,7 @@ func (r *FilterSubscriptionRepository) Delete(ctx context.Context, id string) er
 	if rows == 0 {
 		return fmt.Errorf("filter subscription not found")
 	}
+	r.invalidateEntriesCache(ctx)
 	return nil
 }
 
@@ -280,7 +314,11 @@ func (r *FilterSubscriptionRepository) ReplaceEntries(ctx context.Context, subsc
 		}
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	r.invalidateEntriesCache(ctx)
+	return nil
 }
 
 // GetEntries returns all entries for a subscription
@@ -449,8 +487,19 @@ func (r *FilterSubscriptionRepository) GetSubscribedURLs(ctx context.Context) (m
 }
 
 // GetAllEnabledEntriesByType returns all entries from enabled subscriptions of the given type.
-// This is used for generating shared filter subscription config files.
+// This is used for generating shared filter subscription config files and for
+// deduplicating manual banned IPs against subscription IPs during per-host
+// config generation. Results are cached so SyncAllConfigs (which calls this
+// once per host) collapses to a single DB round-trip per type.
 func (r *FilterSubscriptionRepository) GetAllEnabledEntriesByType(ctx context.Context, filterType string) ([]string, error) {
+	key := r.entriesCacheKey(filterType)
+	if r.cache != nil {
+		var cached []string
+		if err := r.cache.Get(ctx, key, &cached); err == nil {
+			return cached, nil
+		}
+	}
+
 	query := `
 		SELECT DISTINCT e.value
 		FROM filter_subscription_entries e
@@ -467,7 +516,7 @@ func (r *FilterSubscriptionRepository) GetAllEnabledEntriesByType(ctx context.Co
 	}
 	defer rows.Close()
 
-	var values []string
+	values := make([]string, 0, 256)
 	for rows.Next() {
 		var v string
 		if err := rows.Scan(&v); err != nil {
@@ -475,7 +524,16 @@ func (r *FilterSubscriptionRepository) GetAllEnabledEntriesByType(ctx context.Co
 		}
 		values = append(values, v)
 	}
-	return values, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if r.cache != nil {
+		if err := r.cache.Set(ctx, key, values, filterEntriesTTL); err != nil {
+			log.Printf("[Cache] Failed to cache filter sub entries (%s): %v", filterType, err)
+		}
+	}
+	return values, nil
 }
 
 // CountExclusionsForHost returns the number of subscriptions that exclude a given host
@@ -531,6 +589,7 @@ func (r *FilterSubscriptionRepository) AddEntryExclusion(ctx context.Context, su
 	if err != nil {
 		return fmt.Errorf("failed to add entry exclusion: %w", err)
 	}
+	r.invalidateEntriesCache(ctx)
 	return nil
 }
 
@@ -543,6 +602,7 @@ func (r *FilterSubscriptionRepository) RemoveEntryExclusion(ctx context.Context,
 	if err != nil {
 		return fmt.Errorf("failed to remove entry exclusion: %w", err)
 	}
+	r.invalidateEntriesCache(ctx)
 	return nil
 }
 
