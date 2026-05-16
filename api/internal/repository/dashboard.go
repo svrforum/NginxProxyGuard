@@ -60,7 +60,9 @@ func (r *DashboardRepository) GetSummary(ctx context.Context) (*model.DashboardS
 	// The dashboard_stats_hourly table only tracks waf/rate/bot counts,
 	// but block_reason includes many more types (geo_block, uri_block, banned_ip,
 	// exploit_block, access_denied, cloud_provider_*, filter_subscription).
-	// Uses idx_logs_part_block_reason partial index for efficient lookup.
+	// log_type = 'access' is the only type that carries block_reason in practice;
+	// adding it lets the planner use idx_logs_part_block_reason_created which is
+	// partitioned by created_at (matches the partition key for partition pruning).
 	row = r.db.QueryRowContext(ctx, `
 		SELECT
 			COUNT(*),
@@ -70,6 +72,7 @@ func (r *DashboardRepository) GetSummary(ctx context.Context) (*model.DashboardS
 			COUNT(*) FILTER (WHERE block_reason = 'bot_filter')
 		FROM logs_partitioned
 		WHERE created_at >= $1
+		  AND log_type = 'access'
 		  AND block_reason != 'none'
 	`, last24h)
 	if err := row.Scan(&summary.BlockedRequests24h, &summary.BlockedUniqueIPs24h,

@@ -29,9 +29,10 @@ func New(databaseURL string) (*DB, error) {
 		return nil, fmt.Errorf("failed to open database connection: %w", err)
 	}
 
-	// Configure connection pool
-	db.SetMaxOpenConns(40)
-	db.SetMaxIdleConns(10)
+	// Default pool sizing. Bootstrap can override via SetPool() with values
+	// from NPG_DB_MAX_OPEN / NPG_DB_MAX_IDLE env vars.
+	db.SetMaxOpenConns(80)
+	db.SetMaxIdleConns(20)
 	db.SetConnMaxLifetime(5 * time.Minute)
 
 	// Test the connection
@@ -41,6 +42,22 @@ func New(databaseURL string) (*DB, error) {
 
 	bgCtx, bgCancel := context.WithCancel(context.Background())
 	return &DB{DB: db, bgCtx: bgCtx, bgCancel: bgCancel}, nil
+}
+
+// SetPool overrides the default connection pool sizing. Idle is clamped to
+// ≤ maxOpen so the pool config is internally consistent regardless of env input.
+func (db *DB) SetPool(maxOpen, maxIdle int) {
+	if maxOpen <= 0 {
+		return
+	}
+	if maxIdle <= 0 {
+		maxIdle = maxOpen / 4
+	}
+	if maxIdle > maxOpen {
+		maxIdle = maxOpen
+	}
+	db.SetMaxOpenConns(maxOpen)
+	db.SetMaxIdleConns(maxIdle)
 }
 
 // BackgroundContext returns a context that is cancelled when the DB is

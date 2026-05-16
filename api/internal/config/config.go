@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strconv"
 
 	"github.com/joho/godotenv"
 )
@@ -19,6 +20,8 @@ type Config struct {
 	ACMEStaging     bool
 	LogCollection   bool
 	BackupPath      string
+	DBMaxOpenConns  int
+	DBMaxIdleConns  int
 }
 
 func Load() *Config {
@@ -38,12 +41,23 @@ func Load() *Config {
 		ACMEStaging:     getEnv("ACME_STAGING", "true") == "true",
 		LogCollection:   getEnv("LOG_COLLECTION", "true") == "true",
 		BackupPath:      getEnv("BACKUP_PATH", "/data/backups"),
+		DBMaxOpenConns:  getEnvInt("NPG_DB_MAX_OPEN", 80),
+		DBMaxIdleConns:  getEnvInt("NPG_DB_MAX_IDLE", 20),
 	}
 }
 
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
+	}
+	return defaultValue
+}
+
+func getEnvInt(key string, defaultValue int) int {
+	if value := os.Getenv(key); value != "" {
+		if n, err := strconv.Atoi(value); err == nil && n > 0 {
+			return n
+		}
 	}
 	return defaultValue
 }

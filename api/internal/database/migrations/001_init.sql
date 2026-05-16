@@ -3607,6 +3607,14 @@ CREATE INDEX IF NOT EXISTS idx_logs_part_type_created ON logs_partitioned (log_t
 CREATE INDEX IF NOT EXISTS idx_logs_part_block_reason ON logs_partitioned (block_reason) WHERE block_reason != 'none';
 CREATE INDEX IF NOT EXISTS idx_logs_part_status_created ON logs_partitioned (status_code, created_at);
 
+-- v2.13.18: Dashboard "blocked requests" — composite index bounded by created_at
+-- (the partition key) so the dashboard summary query can prune partitions and
+-- avoid scanning the full block_reason history. log_type='access' narrows the
+-- partial index to the only log type that carries block_reason in practice.
+CREATE INDEX IF NOT EXISTS idx_logs_part_block_reason_created
+    ON logs_partitioned (created_at DESC, block_reason)
+    WHERE block_reason != 'none' AND log_type = 'access';
+
 -- Partial unique index to prevent duplicate NULL proxy_host_id rows per hour_bucket (GitHub Issue #96)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_dashboard_stats_hourly_null_host_bucket
     ON dashboard_stats_hourly (hour_bucket) WHERE proxy_host_id IS NULL;

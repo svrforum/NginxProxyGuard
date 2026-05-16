@@ -3,23 +3,56 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"log"
 	"time"
 
 	"github.com/lib/pq"
 
 	"nginx-proxy-guard/internal/database"
 	"nginx-proxy-guard/internal/model"
+	"nginx-proxy-guard/pkg/cache"
 )
 
 type GeoRepository struct {
-	db *database.DB
+	db    *database.DB
+	cache *cache.RedisClient
 }
 
 func NewGeoRepository(db *database.DB) *GeoRepository {
 	return &GeoRepository{db: db}
 }
 
+// SetCache wires Valkey caching for GetByProxyHostID, the hot lookup during
+// nginx config generation. Per-host TTL invalidation runs on every write.
+func (r *GeoRepository) SetCache(c *cache.RedisClient) {
+	r.cache = c
+}
+
+const geoCacheTTL = 60 * time.Second
+
+func (r *GeoRepository) cacheKey(proxyHostID string) string {
+	return "geo:host:" + proxyHostID
+}
+
+func (r *GeoRepository) invalidateHost(ctx context.Context, proxyHostID string) {
+	if r.cache == nil {
+		return
+	}
+	_ = r.cache.Delete(ctx, r.cacheKey(proxyHostID))
+}
+
 func (r *GeoRepository) GetByProxyHostID(ctx context.Context, proxyHostID string) (*model.GeoRestriction, error) {
+	key := r.cacheKey(proxyHostID)
+	if r.cache != nil {
+		var cached model.GeoRestriction
+		if err := r.cache.Get(ctx, key, &cached); err == nil {
+			if cached.ID == "" {
+				return nil, nil
+			}
+			return &cached, nil
+		}
+	}
+
 	var geo model.GeoRestriction
 	var countries pq.StringArray
 	var allowedIPs pq.StringArray
@@ -37,6 +70,11 @@ func (r *GeoRepository) GetByProxyHostID(ctx context.Context, proxyHostID string
 		&challengeMode, &allowPrivateIPs, &allowSearchBots, &geo.CreatedAt, &geo.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
+		if r.cache != nil {
+			// Cache the "no restriction" miss so the next host without geo
+			// rules during SyncAllConfigs doesn't re-hit the DB.
+			_ = r.cache.Set(ctx, key, model.GeoRestriction{}, geoCacheTTL)
+		}
 		return nil, nil
 	}
 	if err != nil {
@@ -48,6 +86,12 @@ func (r *GeoRepository) GetByProxyHostID(ctx context.Context, proxyHostID string
 	geo.ChallengeMode = challengeMode.Bool
 	geo.AllowPrivateIPs = allowPrivateIPs.Bool
 	geo.AllowSearchBots = allowSearchBots.Bool
+
+	if r.cache != nil {
+		if err := r.cache.Set(ctx, key, geo, geoCacheTTL); err != nil {
+			log.Printf("[Cache] Failed to cache geo restriction for host %s: %v", proxyHostID, err)
+		}
+	}
 	return &geo, nil
 }
 
@@ -96,6 +140,7 @@ func (r *GeoRepository) Upsert(ctx context.Context, proxyHostID string, req *mod
 		return nil, err
 	}
 
+	r.invalidateHost(ctx, proxyHostID)
 	return r.GetByProxyHostID(ctx, proxyHostID)
 }
 
@@ -140,10 +185,15 @@ func (r *GeoRepository) Update(ctx context.Context, proxyHostID string, req *mod
 		return nil, err
 	}
 
+	r.invalidateHost(ctx, proxyHostID)
 	return r.GetByProxyHostID(ctx, proxyHostID)
 }
 
 func (r *GeoRepository) Delete(ctx context.Context, proxyHostID string) error {
 	_, err := r.db.ExecContext(ctx, `DELETE FROM geo_restrictions WHERE proxy_host_id = $1`, proxyHostID)
-	return err
+	if err != nil {
+		return err
+	}
+	r.invalidateHost(ctx, proxyHostID)
+	return nil
 }

@@ -738,6 +738,21 @@ END $$`,
 			desc: "v2.13.17: btree index fail2ban_configs(proxy_host_id)",
 			sql:  `CREATE INDEX IF NOT EXISTS idx_fail2ban_configs_proxy_host ON public.fail2ban_configs USING btree (proxy_host_id)`,
 		},
+
+		// -----------------------------------------------------------------------
+		// v2.13.18: Dashboard "blocked requests" partial composite index.
+		// idx_logs_part_block_reason (single-column) exists but the dashboard
+		// query also bounds by created_at >= NOW() - 24h. Without created_at
+		// in the index, the planner reads every block_reason != 'none' row in
+		// history and filters post-scan. log_type='access' narrows the index
+		// to the only log type that carries block_reason in practice.
+		// -----------------------------------------------------------------------
+		{
+			desc: "v2.13.18: idx_logs_part_block_reason_created",
+			sql: `CREATE INDEX IF NOT EXISTS idx_logs_part_block_reason_created
+				ON logs_partitioned (created_at DESC, block_reason)
+				WHERE block_reason != 'none' AND log_type = 'access'`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

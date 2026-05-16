@@ -14,7 +14,8 @@ func InitDB(cfg *config.Config) (*database.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Println("Connected to database")
+	db.SetPool(cfg.DBMaxOpenConns, cfg.DBMaxIdleConns)
+	log.Printf("Connected to database (pool: max_open=%d max_idle=%d)", cfg.DBMaxOpenConns, cfg.DBMaxIdleConns)
 
 	if err := db.RunMigrations(); err != nil {
 		db.Close()

@@ -4,20 +4,43 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
 	"github.com/lib/pq"
 	"nginx-proxy-guard/internal/database"
 	"nginx-proxy-guard/internal/model"
+	"nginx-proxy-guard/pkg/cache"
 )
 
 type CertificateRepository struct {
-	db *database.DB
+	db    *database.DB
+	cache *cache.RedisClient
 }
 
 func NewCertificateRepository(db *database.DB) *CertificateRepository {
 	return &CertificateRepository{db: db}
+}
+
+// SetCache wires Valkey caching for GetByID, the hot-path lookup during
+// nginx config generation. SyncAllConfigs calls GetByID once per host that
+// has a certificate attached; the cache collapses repeat lookups.
+func (r *CertificateRepository) SetCache(c *cache.RedisClient) {
+	r.cache = c
+}
+
+const certCacheTTL = 60 * time.Second
+
+func (r *CertificateRepository) cacheKey(id string) string {
+	return "certificate:id:" + id
+}
+
+func (r *CertificateRepository) invalidateCert(ctx context.Context, id string) {
+	if r.cache == nil {
+		return
+	}
+	_ = r.cache.Delete(ctx, r.cacheKey(id))
 }
 
 func (r *CertificateRepository) Create(ctx context.Context, cert *model.Certificate) (*model.Certificate, error) {
@@ -91,6 +114,14 @@ func (r *CertificateRepository) Create(ctx context.Context, cert *model.Certific
 }
 
 func (r *CertificateRepository) GetByID(ctx context.Context, id string) (*model.Certificate, error) {
+	key := r.cacheKey(id)
+	if r.cache != nil {
+		var cached model.Certificate
+		if err := r.cache.Get(ctx, key, &cached); err == nil {
+			return &cached, nil
+		}
+	}
+
 	query := `
 		SELECT c.id, c.domain_names, c.dns_provider_id, c.status, c.provider, c.auto_renew,
 			c.expires_at, c.issued_at, c.renewal_attempted_at, c.error_message,
@@ -170,6 +201,11 @@ func (r *CertificateRepository) GetByID(ctx context.Context, id string) (*model.
 		}
 	}
 
+	if r.cache != nil {
+		if err := r.cache.Set(ctx, key, cert, certCacheTTL); err != nil {
+			log.Printf("[Cache] Failed to cache certificate %s: %v", id, err)
+		}
+	}
 	return cert, nil
 }
 
@@ -406,6 +442,7 @@ func (r *CertificateRepository) Update(ctx context.Context, cert *model.Certific
 		return fmt.Errorf("failed to update certificate: %w", err)
 	}
 
+	r.invalidateCert(ctx, cert.ID)
 	return nil
 }
 
@@ -418,6 +455,7 @@ func (r *CertificateRepository) ClearError(ctx context.Context, id string) error
 	if rowsAffected == 0 {
 		return fmt.Errorf("certificate not found")
 	}
+	r.invalidateCert(ctx, id)
 	return nil
 }
 
@@ -432,6 +470,7 @@ func (r *CertificateRepository) Delete(ctx context.Context, id string) error {
 		return model.ErrNotFound
 	}
 
+	r.invalidateCert(ctx, id)
 	return nil
 }
 
