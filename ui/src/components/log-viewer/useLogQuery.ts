@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { fetchLogs, fetchLogStats, fetchLogSettings } from '../../api/logs';
 import type { LogFilter, LogType, BlockReason } from '../../types/log';
 import { useDebounce, getDefaultDateRange } from './utils';
+import { usePageVisibility } from '../../hooks/usePageVisibility';
 
 export const AUTO_REFRESH_INTERVAL = 15000;
 
@@ -35,6 +36,10 @@ export function useLogQuery({ logType, defaultBlockReason }: UseLogQueryArgs) {
     return initialFilter;
   });
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const isVisible = usePageVisibility();
+  // Pause polling on hidden tabs. React Query keeps the cache warm so the
+  // user sees fresh data on return; the next refetch fires automatically.
+  const shouldPoll = autoRefresh && isVisible;
   const countdownRef = useRef(AUTO_REFRESH_INTERVAL / 1000);
   const countdownElRef = useRef<HTMLSpanElement>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
@@ -100,13 +105,13 @@ export function useLogQuery({ logType, defaultBlockReason }: UseLogQueryArgs) {
   const logsQuery = useQuery({
     queryKey: ['logs', page, perPage, filterKey],
     queryFn: () => fetchLogs(page, perPage, effectiveFilter),
-    refetchInterval: autoRefresh ? AUTO_REFRESH_INTERVAL : false,
+    refetchInterval: shouldPoll ? AUTO_REFRESH_INTERVAL : false,
   });
 
   const statsQuery = useQuery({
     queryKey: ['log-stats', filterKey],
     queryFn: () => fetchLogStats(effectiveFilter),
-    refetchInterval: autoRefresh ? 60000 : false,
+    refetchInterval: shouldPoll ? 60000 : false,
   });
 
   const settingsQuery = useQuery({

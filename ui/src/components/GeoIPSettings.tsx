@@ -11,10 +11,12 @@ import {
   type GeoIPUpdateHistory,
 } from '../api/settings';
 import type { SystemSettings, UpdateSystemSettingsRequest } from '../types/settings';
+import { usePageVisibility } from '../hooks/usePageVisibility';
 
 export default function GeoIPSettings() {
   const { t, i18n } = useTranslation('settings');
   const queryClient = useQueryClient();
+  const isVisible = usePageVisibility();
   const [editedSettings, setEditedSettings] = useState<UpdateSystemSettingsRequest>({});
   const [showLicenseKey, setShowLicenseKey] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -29,10 +31,14 @@ export default function GeoIPSettings() {
     queryFn: getGeoIPStatus,
   });
 
+  // GeoIP history is admin-rare data — only updates when an update runs.
+  // Drop background polling to 5min on visible tabs (was 60s) and pause
+  // entirely when the tab is hidden. The Update button triggers an explicit
+  // refetch so admins still see fresh status after manual actions.
   const { data: historyData, refetch: refetchHistory } = useQuery({
     queryKey: ['geoipHistory'],
     queryFn: () => getGeoIPHistory(1, 10),
-    refetchInterval: 60000, // Refresh every 30 seconds
+    refetchInterval: isVisible ? 5 * 60 * 1000 : false,
   });
 
   const updateMutation = useMutation({

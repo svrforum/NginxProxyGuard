@@ -9,10 +9,12 @@ import {
   type ChallengeConfigRequest,
 } from '../api/challenge';
 import { HelpTip } from './common/HelpTip';
+import { usePageVisibility } from '../hooks/usePageVisibility';
 
 export default function ChallengeSettings() {
   const { t } = useTranslation('settings');
   const queryClient = useQueryClient();
+  const isVisible = usePageVisibility();
   const [editedConfig, setEditedConfig] = useState<ChallengeConfigRequest>({});
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -21,10 +23,12 @@ export default function ChallengeSettings() {
     queryFn: getGlobalChallengeConfig,
   });
 
+  // Challenge stats are eventually-consistent counters — 5min cadence is
+  // plenty for an admin screen. Pause entirely when the tab is hidden.
   const { data: stats } = useQuery({
     queryKey: ['challengeStats'],
     queryFn: () => getChallengeStats(),
-    refetchInterval: 60000, // Refresh every 60 seconds
+    refetchInterval: isVisible ? 5 * 60 * 1000 : false,
   });
 
   const updateMutation = useMutation({

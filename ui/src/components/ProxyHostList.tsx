@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useCallback, useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { fetchProxyHosts, deleteProxyHost, testProxyHost, updateProxyHost, testProxyHostConfig, cloneProxyHost, toggleProxyHostFavorite } from '../api/proxy-hosts'
@@ -140,9 +140,9 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
     },
   })
 
-  const handleToggle = (host: ProxyHost) => {
+  const handleToggle = useCallback((host: ProxyHost) => {
     setToggleConfirmHost(host)
-  }
+  }, [])
 
   const confirmToggle = () => {
     if (toggleConfirmHost) {
@@ -150,6 +150,19 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
       setToggleConfirmHost(null)
     }
   }
+
+  const checkHealth = useCallback(async (hostId: string) => {
+    setHealthStatus((prev) => ({ ...prev, [hostId]: 'checking' }))
+    try {
+      const result = await testProxyHost(hostId)
+      setHealthStatus((prev) => ({
+        ...prev,
+        [hostId]: result.status === 'ok' ? 'online' : 'offline',
+      }))
+    } catch {
+      setHealthStatus((prev) => ({ ...prev, [hostId]: 'offline' }))
+    }
+  }, [])
 
   // Check health status for all hosts on load
   useEffect(() => {
@@ -162,24 +175,11 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.data])
 
-  const checkHealth = async (hostId: string) => {
-    setHealthStatus((prev) => ({ ...prev, [hostId]: 'checking' }))
-    try {
-      const result = await testProxyHost(hostId)
-      setHealthStatus((prev) => ({
-        ...prev,
-        [hostId]: result.status === 'ok' ? 'online' : 'offline',
-      }))
-    } catch {
-      setHealthStatus((prev) => ({ ...prev, [hostId]: 'offline' }))
-    }
-  }
-
-  const handleDelete = async (id: string) => {
+  const handleDelete = useCallback(async (id: string) => {
     if (confirm(t('actions.deleteConfirm'))) {
       deleteMutation.mutate(id)
     }
-  }
+  }, [deleteMutation, t])
 
   // Certificate polling function for clone modal
   const waitForCloneCertificate = async (hostId: string, maxWaitTime = 120000): Promise<boolean> => {
@@ -239,11 +239,11 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
     setCloneCertSuccess(false)
   }
 
-  const handleClone = (host: ProxyHost) => {
+  const handleClone = useCallback((host: ProxyHost) => {
     setCloningHost(host)
-  }
+  }, [])
 
-  const handleTestConfig = async (host: ProxyHost) => {
+  const handleTestConfig = useCallback(async (host: ProxyHost) => {
     setTestingHost(host)
     setTestResult(null)
     setTestError(null)
@@ -257,7 +257,11 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
     } finally {
       setIsTestLoading(false)
     }
-  }
+  }, [])
+
+  const handleFavorite = useCallback((id: string) => {
+    favoriteMutation.mutate(id)
+  }, [favoriteMutation])
 
   const handleRetest = async () => {
     if (!testingHost) return
@@ -363,7 +367,7 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
           onClone={handleClone}
           onTestConfig={handleTestConfig}
           onCheckHealth={checkHealth}
-          onFavorite={(id) => favoriteMutation.mutate(id)}
+          onFavorite={handleFavorite}
           togglePending={toggleMutation.isPending}
         />
       )}
