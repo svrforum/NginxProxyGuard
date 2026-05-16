@@ -11,8 +11,10 @@ interface LogTableProps {
   filter: LogFilter;
   page: number;
   perPage: number;
-  setPage: (p: number | ((p: number) => number)) => void;
   setPerPage: (n: number) => void;
+  goToNextPage: () => void;
+  goToPrevPage: () => void;
+  goToFirstPage: () => void;
   visibleColumns: Set<AccessColumnKey>;
   onFilterChange: (f: LogFilter) => void;
   onRowSelect: (log: Log) => void;
@@ -25,8 +27,10 @@ export function LogTable({
   filter,
   page,
   perPage,
-  setPage,
   setPerPage,
+  goToNextPage,
+  goToPrevPage,
+  goToFirstPage,
   visibleColumns,
   onFilterChange,
   onRowSelect,
@@ -224,7 +228,7 @@ export function LogTable({
                 value={perPage}
                 onChange={(e) => {
                   setPerPage(parseInt(e.target.value));
-                  setPage(1);
+                  goToFirstPage();
                 }}
                 className="px-2 py-1 border border-slate-300 dark:border-slate-600 rounded text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500"
               >
@@ -238,7 +242,7 @@ export function LogTable({
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setPage(1)}
+              onClick={goToFirstPage}
               disabled={page === 1}
               className="px-2 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
               title={t('pagination.first')}
@@ -246,7 +250,7 @@ export function LogTable({
               «
             </button>
             <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              onClick={goToPrevPage}
               disabled={page === 1}
               className="px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
             >
@@ -260,7 +264,7 @@ export function LogTable({
               {logsQuery.data.has_more && '+'}
             </span>
             <button
-              onClick={() => setPage((p) => p + 1)}
+              onClick={goToNextPage}
               disabled={!logsQuery.data.has_more}
               className="px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
             >

@@ -145,6 +145,7 @@ export interface LogListResponse {
   per_page: number;
   total_pages: number;
   has_more?: boolean;
+  next_cursor?: string;
 }
 
 export interface LogStats {
