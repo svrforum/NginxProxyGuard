@@ -87,5 +87,11 @@ func InitRepositories(db *database.DB, redisCache *cache.RedisClient) *Repositor
 		log.Println("Valkey cache wired to repositories")
 	}
 
+	// CloudProvider writes to geo_restrictions directly (blocked_cloud_providers
+	// column). Wire it to the geo repo so those writes invalidate the per-host
+	// geo cache — otherwise geo.Update's read-modify-write would clobber the
+	// cloud-provider settings after a 60s cache window.
+	repos.CloudProvider.SetGeoRepo(repos.Geo)
+
 	return repos
 }

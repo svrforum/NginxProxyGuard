@@ -3669,3 +3669,15 @@ CREATE INDEX IF NOT EXISTS idx_upstreams_proxy_host
     ON public.upstreams USING btree (proxy_host_id);
 CREATE INDEX IF NOT EXISTS idx_fail2ban_configs_proxy_host
     ON public.fail2ban_configs USING btree (proxy_host_id);
+
+-- v2.13.18: Dashboard "blocked requests" composite index. Backfilled here for
+-- consistency with the v2.13.17 backfill block above; the canonical CREATE is
+-- earlier in this file (idx_logs_part_block_reason section), and the actual
+-- execution against existing installs lives in migration.go upgrades slice.
+-- The composite (created_at DESC, block_reason) lets the dashboard summary
+-- query prune partitions by created_at — the partitioned table's partition
+-- key — instead of falling back to a seq scan across every block_reason !=
+-- 'none' row in history.
+CREATE INDEX IF NOT EXISTS idx_logs_part_block_reason_created
+    ON logs_partitioned (created_at DESC, block_reason)
+    WHERE block_reason != 'none' AND log_type = 'access';

@@ -12,11 +12,27 @@ import (
 )
 
 type CloudProviderRepository struct {
-	db *sql.DB
+	db      *sql.DB
+	geoRepo *GeoRepository
 }
 
 func NewCloudProviderRepository(db *sql.DB) *CloudProviderRepository {
 	return &CloudProviderRepository{db: db}
+}
+
+// SetGeoRepo wires the geo repository so cloud-provider writes that touch
+// `geo_restrictions` (SetBlockedCloudProviders, SetCloudProviderBlockingSettings)
+// can invalidate the per-host geo cache. Without this the cache stays stale
+// for up to 60s and `geo.Update`'s read-modify-write loop can clobber the
+// cloud_provider columns we just wrote.
+func (r *CloudProviderRepository) SetGeoRepo(g *GeoRepository) {
+	r.geoRepo = g
+}
+
+func (r *CloudProviderRepository) invalidateGeoHost(ctx context.Context, proxyHostID string) {
+	if r.geoRepo != nil {
+		r.geoRepo.InvalidateHost(ctx, proxyHostID)
+	}
 }
 
 // List returns all cloud providers
@@ -366,6 +382,7 @@ func (r *CloudProviderRepository) SetBlockedCloudProviders(ctx context.Context, 
 		return fmt.Errorf("failed to set blocked cloud providers: %w", err)
 	}
 
+	r.invalidateGeoHost(ctx, proxyHostID)
 	return nil
 }
 
@@ -401,6 +418,7 @@ func (r *CloudProviderRepository) SetCloudProviderBlockingSettings(ctx context.C
 		return fmt.Errorf("failed to set cloud provider blocking settings: %w", err)
 	}
 
+	r.invalidateGeoHost(ctx, proxyHostID)
 	return nil
 }
 

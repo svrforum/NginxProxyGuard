@@ -38,7 +38,51 @@ func (r *GeoRepository) invalidateHost(ctx context.Context, proxyHostID string) 
 	if r.cache == nil {
 		return
 	}
-	_ = r.cache.Delete(ctx, r.cacheKey(proxyHostID))
+	if err := r.cache.Delete(ctx, r.cacheKey(proxyHostID)); err != nil {
+		log.Printf("[Cache] geo invalidate failed for host %s: %v", proxyHostID, err)
+	}
+}
+
+// InvalidateHost is the exported form used by sibling repositories that
+// write to the geo_restrictions table directly (e.g. CloudProviderRepository
+// updating blocked_cloud_providers). Without this cross-repo invalidation a
+// per-host geo cache entry would stay stale until TTL.
+func (r *GeoRepository) InvalidateHost(ctx context.Context, proxyHostID string) {
+	r.invalidateHost(ctx, proxyHostID)
+}
+
+// fetchByProxyHostID is the uncached SQL path. GetByProxyHostID layers caching
+// on top; Update() uses this directly so its read-modify-write sequence never
+// merges a stale row back over a concurrent write from another repository.
+func (r *GeoRepository) fetchByProxyHostID(ctx context.Context, proxyHostID string) (*model.GeoRestriction, error) {
+	var geo model.GeoRestriction
+	var countries pq.StringArray
+	var allowedIPs pq.StringArray
+	var challengeMode sql.NullBool
+	var allowPrivateIPs sql.NullBool
+	var allowSearchBots sql.NullBool
+
+	err := r.db.QueryRowContext(ctx, `
+		SELECT id, proxy_host_id, mode, countries, COALESCE(allowed_ips, '{}'), enabled,
+		       COALESCE(challenge_mode, false), COALESCE(allow_private_ips, true),
+		       COALESCE(allow_search_bots, false), created_at, updated_at
+		FROM geo_restrictions WHERE proxy_host_id = $1
+	`, proxyHostID).Scan(
+		&geo.ID, &geo.ProxyHostID, &geo.Mode, &countries, &allowedIPs, &geo.Enabled,
+		&challengeMode, &allowPrivateIPs, &allowSearchBots, &geo.CreatedAt, &geo.UpdatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	geo.Countries = []string(countries)
+	geo.AllowedIPs = []string(allowedIPs)
+	geo.ChallengeMode = challengeMode.Bool
+	geo.AllowPrivateIPs = allowPrivateIPs.Bool
+	geo.AllowSearchBots = allowSearchBots.Bool
+	return &geo, nil
 }
 
 func (r *GeoRepository) GetByProxyHostID(ctx context.Context, proxyHostID string) (*model.GeoRestriction, error) {
@@ -145,7 +189,12 @@ func (r *GeoRepository) Upsert(ctx context.Context, proxyHostID string, req *mod
 }
 
 func (r *GeoRepository) Update(ctx context.Context, proxyHostID string, req *model.UpdateGeoRestrictionRequest) (*model.GeoRestriction, error) {
-	existing, err := r.GetByProxyHostID(ctx, proxyHostID)
+	// Use the uncached SQL read here. This is read-modify-write — pulling a
+	// stale cached row would silently revert columns written by sibling
+	// repositories (e.g. CloudProviderRepository.SetBlockedCloudProviders)
+	// because the merge below writes the full row back. Cost is one extra
+	// SQL round-trip per geo restriction save; this path is admin-rare.
+	existing, err := r.fetchByProxyHostID(ctx, proxyHostID)
 	if err != nil {
 		return nil, err
 	}
