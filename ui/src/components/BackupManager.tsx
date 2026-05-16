@@ -15,6 +15,7 @@ import type { Backup, CreateBackupRequest, UpdateSystemSettingsRequest } from '.
 import { BackupStatsCards, BackupList, BackupProgressModal } from './backup/BackupList';
 import { CreateBackupModal, UploadRestoreModal } from './backup/BackupActions';
 import { BackupScheduleCard } from './backup/BackupScheduleCard';
+import { usePageVisibility } from '../hooks/usePageVisibility';
 
 export default function BackupManager() {
   const { t } = useTranslation('settings');
@@ -33,10 +34,23 @@ export default function BackupManager() {
   const [editedSettings, setEditedSettings] = useState<UpdateSystemSettingsRequest>({});
   const [settingsSaveMessage, setSettingsSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Poll the backup list only while a backup is actively running (status
+  // 'pending' or 'in_progress'). Idle admin sessions used to refetch every
+  // 60s for data that never changes — most backup lifecycles last seconds.
+  // hasRunningBackup is computed from the same response on each poll, so
+  // polling stops automatically once the backup finishes.
+  const isVisible = usePageVisibility();
   const { data: backups, isLoading } = useQuery({
     queryKey: ['backups'],
     queryFn: () => listBackups(1, 50),
-    refetchInterval: 60000, // Refresh to check backup status
+    refetchInterval: (query) => {
+      if (!isVisible) return false;
+      const list = query.state.data?.data;
+      const running = !!list?.some(
+        (b: Backup) => b.status === 'pending' || b.status === 'in_progress'
+      );
+      return running ? 5000 : false;
+    },
   });
 
   const { data: stats } = useQuery({
