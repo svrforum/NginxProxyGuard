@@ -2,45 +2,13 @@ import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
 import LanguageDetector from 'i18next-browser-languagedetector'
 
-// Korean translations
+// Eagerly loaded namespaces — always required for the chrome (sidebar,
+// top bar, login redirects). Everything else is fetched on first use so
+// the initial bundle drops from ~32 JSON imports to 4.
 import koCommon from './locales/ko/common.json'
 import koNavigation from './locales/ko/navigation.json'
-import koAuth from './locales/ko/auth.json'
-import koDashboard from './locales/ko/dashboard.json'
-import koAccessControl from './locales/ko/accessControl.json'
-import koProxyHost from './locales/ko/proxyHost.json'
-import koSettings from './locales/ko/settings.json'
-import koWaf from './locales/ko/waf.json'
-import koLogs from './locales/ko/logs.json'
-import koCertificates from './locales/ko/certificates.json'
-import koErrors from './locales/ko/errors.json'
-import koRedirectHost from './locales/ko/redirectHost.json'
-import koExploitExceptions from './locales/ko/exploitExceptions.json'
-import koExploitRules from './locales/ko/exploitRules.json'
-import koFail2ban from './locales/ko/fail2ban.json'
-import koExploitLogs from './locales/ko/exploitLogs.json'
-import koFilterSubscription from './locales/ko/filterSubscription.json'
-
-
-// English translations
 import enCommon from './locales/en/common.json'
 import enNavigation from './locales/en/navigation.json'
-import enAuth from './locales/en/auth.json'
-import enDashboard from './locales/en/dashboard.json'
-import enAccessControl from './locales/en/accessControl.json'
-import enProxyHost from './locales/en/proxyHost.json'
-import enSettings from './locales/en/settings.json'
-import enWaf from './locales/en/waf.json'
-import enLogs from './locales/en/logs.json'
-import enCertificates from './locales/en/certificates.json'
-import enErrors from './locales/en/errors.json'
-import enRedirectHost from './locales/en/redirectHost.json'
-import enExploitExceptions from './locales/en/exploitExceptions.json'
-import enExploitRules from './locales/en/exploitRules.json'
-import enFail2ban from './locales/en/fail2ban.json'
-import enExploitLogs from './locales/en/exploitLogs.json'
-import enFilterSubscription from './locales/en/filterSubscription.json'
-
 
 export const STORAGE_KEY = 'npg_language'
 export const SUPPORTED_LANGUAGES = ['ko', 'en'] as const
@@ -51,74 +19,87 @@ export const LANGUAGE_NAMES: Record<SupportedLanguage, string> = {
   en: 'English',
 }
 
+const EAGER_NAMESPACES = ['common', 'navigation'] as const
+
+// Every namespace that can be lazily loaded after first render. Kept as a
+// literal array so the dynamic-import switch below has a closed set to
+// match against (Vite's dynamic-import analysis works best with literal
+// templates and reachable case branches).
+const LAZY_NAMESPACES = [
+  'auth',
+  'dashboard',
+  'accessControl',
+  'proxyHost',
+  'settings',
+  'waf',
+  'logs',
+  'certificates',
+  'errors',
+  'redirectHost',
+  'exploitExceptions',
+  'exploitRules',
+  'fail2ban',
+  'exploitLogs',
+  'filterSubscription',
+] as const
+
+export const ALL_NAMESPACES = [...EAGER_NAMESPACES, ...LAZY_NAMESPACES]
+
+// Resources seeded at init() time — only the eager namespaces. Lazy
+// namespaces arrive later via addResourceBundle from the backend below.
 export const resources = {
   ko: {
     common: koCommon,
     navigation: koNavigation,
-    auth: koAuth,
-    dashboard: koDashboard,
-    accessControl: koAccessControl,
-    proxyHost: koProxyHost,
-    settings: koSettings,
-    waf: koWaf,
-    logs: koLogs,
-    certificates: koCertificates,
-    errors: koErrors,
-    redirectHost: koRedirectHost,
-    exploitExceptions: koExploitExceptions,
-    exploitRules: koExploitRules,
-    fail2ban: koFail2ban,
-    exploitLogs: koExploitLogs,
-    filterSubscription: koFilterSubscription,
   },
   en: {
     common: enCommon,
     navigation: enNavigation,
-    auth: enAuth,
-    dashboard: enDashboard,
-    accessControl: enAccessControl,
-    proxyHost: enProxyHost,
-    settings: enSettings,
-    waf: enWaf,
-    logs: enLogs,
-    certificates: enCertificates,
-    errors: enErrors,
-    redirectHost: enRedirectHost,
-    exploitExceptions: enExploitExceptions,
-    exploitRules: enExploitRules,
-    fail2ban: enFail2ban,
-    exploitLogs: enExploitLogs,
-    filterSubscription: enFilterSubscription,
+  },
+}
+
+// loadLocaleNamespace dynamically imports a single JSON file. The two
+// language switches let Vite resolve the import targets statically and
+// emit one chunk per JSON, keeping each lazy load below ~64KB.
+async function loadLocaleNamespace(lng: string, ns: string): Promise<Record<string, unknown>> {
+  if (lng === 'ko') {
+    return (await import(`./locales/ko/${ns}.json`)).default
+  }
+  if (lng === 'en') {
+    return (await import(`./locales/en/${ns}.json`)).default
+  }
+  throw new Error(`unsupported locale: ${lng}`)
+}
+
+// Minimal i18next backend plugin. The `read` callback signature matches
+// what i18next.services.backendConnector expects so loadNamespaces() and
+// the automatic useTranslation trigger both work.
+const dynamicBackend = {
+  type: 'backend' as const,
+  init: () => {},
+  read(
+    lng: string,
+    ns: string,
+    callback: (err: unknown, data?: Record<string, unknown>) => void,
+  ) {
+    loadLocaleNamespace(lng, ns).then(
+      (data) => callback(null, data),
+      (err) => callback(err),
+    )
   },
 }
 
 i18n
+  .use(dynamicBackend)
   .use(LanguageDetector)
   .use(initReactI18next)
   .init({
     resources,
+    partialBundledLanguages: true,
     fallbackLng: 'ko',
     supportedLngs: SUPPORTED_LANGUAGES,
     defaultNS: 'common',
-    ns: [
-      'common',
-      'navigation',
-      'auth',
-      'dashboard',
-      'accessControl',
-      'proxyHost',
-      'settings',
-      'waf',
-      'logs',
-      'certificates',
-      'errors',
-      'redirectHost',
-      'exploitExceptions',
-      'exploitRules',
-      'fail2ban',
-      'exploitLogs',
-      'filterSubscription',
-    ],
+    ns: EAGER_NAMESPACES as unknown as string[],
     interpolation: {
       escapeValue: false, // React already escapes
     },
@@ -126,6 +107,12 @@ i18n
       order: ['localStorage', 'navigator'],
       lookupLocalStorage: STORAGE_KEY,
       caches: ['localStorage'],
+    },
+    react: {
+      // Avoid suspending the entire app for a single namespace miss. The
+      // backend still loads asynchronously, but useTranslation returns the
+      // key as a placeholder until the namespace resolves and re-renders.
+      useSuspense: false,
     },
   })
 
