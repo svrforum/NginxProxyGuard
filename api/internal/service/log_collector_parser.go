@@ -232,6 +232,26 @@ func (c *LogCollector) parseErrorLog(line string) (*model.CreateLogRequest, erro
 	}, nil
 }
 
+// modsecHTTPVersion accepts both the numeric form (ModSecurity 3.0.14 and
+// earlier emitted `"http_version": 1.1`) and the string form (3.0.15+ emits
+// `"http_version": "1.1"`). Without this, 3.0.15 audit JSON fails to
+// unmarshal and every WAF event is silently dropped (#139, regression first
+// shipped in v2.13.16 with ModSecurity bump c342ea8).
+type modsecHTTPVersion string
+
+func (v *modsecHTTPVersion) UnmarshalJSON(data []byte) error {
+	s := string(data)
+	if s == "" || s == "null" {
+		return nil
+	}
+	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
+		*v = modsecHTTPVersion(s[1 : len(s)-1])
+		return nil
+	}
+	*v = modsecHTTPVersion(s)
+	return nil
+}
+
 // ModSecAuditLog represents ModSecurity audit log in JSON format
 type ModSecAuditLog struct {
 	Transaction struct {
@@ -244,7 +264,7 @@ type ModSecAuditLog struct {
 		Request       struct {
 			Method      string            `json:"method"`
 			URI         string            `json:"uri"`
-			HTTPVersion float64           `json:"http_version"`
+			HTTPVersion modsecHTTPVersion `json:"http_version"`
 			Headers     map[string]string `json:"headers"`
 		} `json:"request"`
 		Response struct {
@@ -427,7 +447,7 @@ func (c *LogCollector) parseModSecLog(line string) (*model.CreateLogRequest, err
 		ClientIP:        tx.ClientIP,
 		RequestMethod:   tx.Request.Method,
 		RequestURI:      tx.Request.URI,
-		RequestProtocol: fmt.Sprintf("HTTP/%.1f", tx.Request.HTTPVersion),
+		RequestProtocol: "HTTP/" + string(tx.Request.HTTPVersion),
 		StatusCode:      tx.Response.HTTPCode,
 		RuleID:          ruleID,
 		RuleMessage:     ruleMessage,
