@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -97,5 +98,97 @@ func TestParseAccessLog_RateLimitFallbackIgnores503(t *testing.T) {
 	// Sanity: the line really does say block="-" (the parser must not invent a value).
 	if !strings.Contains(line, `block="-"`) {
 		t.Fatal("test line lost the block=\"-\" field; this test is now meaningless")
+	}
+}
+
+// Issue #139: ModSecurity 3.0.15 (shipped in v2.13.16 via c342ea8) changed
+// request.http_version in audit JSON from a number (1.1) to a string ("1.1").
+// The Go struct used float64, so every audit line silently failed
+// json.Unmarshal and every WAF event was dropped before reaching the DB.
+//
+// These tests pin both the legacy number form and the new string form so a
+// future ModSec bump can't silently break log ingestion again.
+
+const modsecAuditTemplate3015 = `{"transaction":{"client_ip":"203.0.113.10","time_stamp":"Mon May 18 10:00:00 2026","server_id":"abc","client_port":52352,"host_ip":"192.168.1.1","host_port":443,"unique_id":"x","request":{"method":"GET","http_version":"1.1","uri":"/?q=union+select","headers":{"Host":"example.com","User-Agent":"curl/8"}},"response":{"http_code":403,"headers":{}},"producer":{"modsecurity":"ModSecurity v3.0.15 (Linux)","connector":"ModSecurity-nginx v1.0.4","secrules_engine":"Enabled"},"messages":[{"message":"SQL Injection Attack","details":{"match":"matched","reference":"r","ruleId":"942100","file":"f","lineNumber":"1","data":"d","severity":"2","ver":"OWASP_CRS/4.21.0","rev":"","tags":["attack-sqli","application-multi"],"maturity":"0","accuracy":"0"}}]}}`
+
+const modsecAuditTemplate3014 = `{"transaction":{"client_ip":"203.0.113.10","time_stamp":"Mon May 18 10:00:00 2026","server_id":"abc","client_port":52352,"host_ip":"192.168.1.1","host_port":443,"unique_id":"x","request":{"method":"GET","http_version":1.1,"uri":"/?q=union+select","headers":{"Host":"example.com","User-Agent":"curl/8"}},"response":{"http_code":403,"headers":{}},"producer":{"modsecurity":"ModSecurity v3.0.14 (Linux)","connector":"ModSecurity-nginx v1.0.4","secrules_engine":"Enabled"},"messages":[{"message":"SQL Injection Attack","details":{"match":"matched","reference":"r","ruleId":"942100","file":"f","lineNumber":"1","data":"d","severity":"2","ver":"OWASP_CRS/4.21.0","rev":"","tags":["attack-sqli","application-multi"],"maturity":"0","accuracy":"0"}}]}}`
+
+// Sanity: both fixtures decode into the same Go struct without error. This is
+// the load-bearing assertion — if either fails, audit lines from that ModSec
+// version land in the bit bucket.
+func TestModSecAuditLog_AcceptsBothNumberAndStringHTTPVersion(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		json string
+		want string // expected stored value after unmarshal
+	}{
+		{"3.0.14 numeric form", modsecAuditTemplate3014, "1.1"},
+		{"3.0.15 string form", modsecAuditTemplate3015, "1.1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var got ModSecAuditLog
+			if err := json.Unmarshal([]byte(tc.json), &got); err != nil {
+				t.Fatalf("ModSec %s audit JSON failed to unmarshal: %v\n"+
+					"This is the exact failure mode of #139 — a parser regression "+
+					"silently drops every WAF event from this ModSec version.", tc.name, err)
+			}
+			if string(got.Transaction.Request.HTTPVersion) != tc.want {
+				t.Errorf("HTTPVersion: got %q, want %q", got.Transaction.Request.HTTPVersion, tc.want)
+			}
+		})
+	}
+}
+
+// Full parser path: both fixtures must produce a usable CreateLogRequest with
+// the same RequestProtocol rendering. This locks the end-to-end behavior, not
+// just the JSON shape.
+func TestParseModSecLog_EndToEnd_BothFormats(t *testing.T) {
+	c := &LogCollector{}
+	for _, tc := range []struct {
+		name string
+		line string
+	}{
+		{"3.0.14", modsecAuditTemplate3014},
+		{"3.0.15", modsecAuditTemplate3015},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req, err := c.parseModSecLog(tc.line)
+			if err != nil {
+				t.Fatalf("parseModSecLog returned error for %s: %v", tc.name, err)
+			}
+			if req.LogType != model.LogTypeModSec {
+				t.Errorf("LogType: got %q, want %q", req.LogType, model.LogTypeModSec)
+			}
+			if req.RuleID != 942100 {
+				t.Errorf("RuleID: got %d, want 942100", req.RuleID)
+			}
+			if req.AttackType != "sqli" {
+				t.Errorf("AttackType: got %q, want %q", req.AttackType, "sqli")
+			}
+			if req.RequestProtocol != "HTTP/1.1" {
+				t.Errorf("RequestProtocol: got %q, want %q (must match v2.13.13 output for both forms)",
+					req.RequestProtocol, "HTTP/1.1")
+			}
+			if req.ActionTaken != "blocked" {
+				t.Errorf("ActionTaken: got %q, want %q (HTTP 403 in blocking mode)", req.ActionTaken, "blocked")
+			}
+			if req.BlockReason != model.BlockReasonWAF {
+				t.Errorf("BlockReason: got %q, want %q", req.BlockReason, model.BlockReasonWAF)
+			}
+		})
+	}
+}
+
+// Null/missing http_version must not crash the parser. ModSec emits this field
+// today, but a future bump that drops it (or sends null) should produce a
+// degraded log row rather than a silent ingestion outage.
+func TestModSecAuditLog_NullHTTPVersionIsTolerated(t *testing.T) {
+	line := strings.Replace(modsecAuditTemplate3015, `"http_version":"1.1"`, `"http_version":null`, 1)
+	var got ModSecAuditLog
+	if err := json.Unmarshal([]byte(line), &got); err != nil {
+		t.Fatalf("null http_version must not fail unmarshal: %v", err)
+	}
+	if got.Transaction.Request.HTTPVersion != "" {
+		t.Errorf("null should leave HTTPVersion empty, got %q", got.Transaction.Request.HTTPVersion)
 	}
 }
