@@ -605,7 +605,14 @@ func (c *LogCollector) streamAccessLogs(ctx context.Context) {
 			} else {
 				// Skip non-WAF logs silently (e.g., bot filter blocks)
 				if !strings.Contains(err.Error(), "no WAF rules triggered") {
-					log.Printf("[ERROR] Failed to parse ModSec log: %v", err)
+					// Include a snippet of the failing line so a future audit-format
+					// change (e.g. #139's http_version type flip) can be diagnosed
+					// from logs alone, without having to reproduce the JSON.
+					snippet := line
+					if len(snippet) > 200 {
+						snippet = snippet[:200] + "..."
+					}
+					log.Printf("[ERROR] Failed to parse ModSec log: %v | line=%s", err, snippet)
 				}
 			}
 			return
