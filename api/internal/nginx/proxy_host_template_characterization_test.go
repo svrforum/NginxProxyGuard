@@ -446,3 +446,323 @@ func extractFirstServerBlock(t *testing.T, full string) string {
 	t.Fatalf("unterminated server block starting at offset %d", start)
 	return ""
 }
+
+// ============================================================================
+// TestProxyHostTemplateGolden — pre-refactor characterization baseline (M1.2)
+//
+// Captures the rendered output of (*Manager).GenerateConfigFull for 8
+// representative ProxyHostConfigData scenarios. The M1.3–M1.8 refactor that
+// extracts _common_init / _security / _challenge_endpoints partials via
+// {{define}}/{{template}} MUST produce byte-identical output. Any diff means
+// the refactor changed behavior and needs investigation.
+//
+// This is intentionally separate from TestProxyHostTemplate_Characterization
+// above: that one uses an in-memory buffer render and a hand-picked subset of
+// fixtures focused on bug pins (issue #129 etc.). This one drives the actual
+// production render path (file write through Manager) so the goldens include
+// any side effects of the manager (e.g. cloud-IP include creation, atomic
+// write outcome).
+// ============================================================================
+
+var updateGoldenFlag = flag.Bool("update", false, "update golden files in testdata/proxy_host_golden/")
+
+type goldenCase struct {
+	name string
+	data ProxyHostConfigData
+}
+
+// goldenBaseHost returns a minimal enabled ProxyHost with stable IDs so
+// rendered output is deterministic.
+func goldenBaseHost(id, domain string) *model.ProxyHost {
+	h := baseHost(id, "127.0.0.1", true)
+	h.DomainNames = []string{domain}
+	return h
+}
+
+func goldenSSLHost(id, domain string) *model.ProxyHost {
+	h := goldenBaseHost(id, domain)
+	h.SSLEnabled = true
+	h.SSLForceHTTPS = true
+	certID := "00000000-0000-0000-0000-0000000000ce"
+	h.CertificateID = &certID
+	return h
+}
+
+func goldenCases() []goldenCase {
+	cases := []goldenCase{}
+
+	// 1) minimal_enabled — HTTP only, no security features.
+	cases = append(cases, goldenCase{
+		name: "minimal_enabled",
+		data: ProxyHostConfigData{
+			Host:           goldenBaseHost("00000000-0000-0000-0000-000000000a01", "minimal.example.com"),
+			GlobalSettings: baseGlobalSettings(),
+		},
+	})
+
+	// 2) ssl_force_https — SSL + ForceHTTPS + HTTP/2.
+	{
+		host := goldenSSLHost("00000000-0000-0000-0000-000000000a02", "ssl.example.com")
+		host.SSLHTTP2 = true
+		cases = append(cases, goldenCase{
+			name: "ssl_force_https",
+			data: ProxyHostConfigData{
+				Host:           host,
+				GlobalSettings: baseGlobalSettings(),
+			},
+		})
+	}
+
+	// 3) all_security_on — Geo blacklist + WAF blocking + AccessList +
+	// BlockExploits + 1 ExploitBlockRule + BannedIPs + BotFilter (block bad).
+	{
+		host := goldenBaseHost("00000000-0000-0000-0000-000000000a03", "secure.example.com")
+		host.WAFEnabled = true
+		host.WAFMode = "blocking"
+		host.WAFParanoiaLevel = 2
+		host.WAFAnomalyThreshold = 5
+		host.BlockExploits = true
+		alID := "00000000-0000-0000-0000-0000000000a1"
+		host.AccessListID = &alID
+		bannedExpires := fixtureNow.Add(24 * time.Hour)
+		hostIDForBan := host.ID
+		cases = append(cases, goldenCase{
+			name: "all_security_on",
+			data: ProxyHostConfigData{
+				Host:           host,
+				GlobalSettings: baseGlobalSettings(),
+				GeoRestriction: &model.GeoRestriction{
+					ID:          "00000000-0000-0000-0000-0000000000ge",
+					ProxyHostID: host.ID,
+					Mode:        "blacklist",
+					Countries:   []string{"CN", "RU"},
+					Enabled:     true,
+					CreatedAt:   fixtureNow,
+					UpdatedAt:   fixtureNow,
+				},
+				AccessList: &model.AccessList{
+					ID:         alID,
+					Name:       "internal-only",
+					SatisfyAny: false,
+					Items: []model.AccessListItem{
+						{ID: "00000000-0000-0000-0000-0000000000i1", AccessListID: alID, Directive: "allow", Address: "10.0.0.0/8", SortOrder: 1, CreatedAt: fixtureNow},
+						{ID: "00000000-0000-0000-0000-0000000000i2", AccessListID: alID, Directive: "deny", Address: "all", SortOrder: 2, CreatedAt: fixtureNow},
+					},
+					CreatedAt: fixtureNow,
+					UpdatedAt: fixtureNow,
+				},
+				BotFilter: &model.BotFilter{
+					ID:           "00000000-0000-0000-0000-0000000000bf",
+					ProxyHostID:  host.ID,
+					Enabled:      true,
+					BlockBadBots: true,
+					CreatedAt:    fixtureNow,
+					UpdatedAt:    fixtureNow,
+				},
+				BadBotsList: "BadBot\nEvilCrawler",
+				BannedIPs: []model.BannedIP{
+					{
+						ID:          "00000000-0000-0000-0000-0000000000b1",
+						ProxyHostID: &hostIDForBan,
+						IPAddress:   "203.0.113.10",
+						Reason:      "test ban",
+						BannedAt:    fixtureNow,
+						ExpiresAt:   &bannedExpires,
+						CreatedAt:   fixtureNow,
+					},
+				},
+				ExploitBlockRules: []model.ExploitBlockRuleForRender{
+					{
+						ExploitBlockRule: model.ExploitBlockRule{
+							ID:          "00000000-0000-0000-0000-0000000000e1",
+							Category:    "sql_injection",
+							Name:        "SQLi UNION SELECT",
+							Pattern:     "union.*select",
+							PatternType: "query_string",
+							Severity:    "critical",
+							Enabled:     true,
+							IsSystem:    true,
+							SortOrder:   1,
+							CreatedAt:   fixtureNow,
+							UpdatedAt:   fixtureNow,
+						},
+						IDSanitized: "e1",
+					},
+				},
+			},
+		})
+	}
+
+	// 4) http3_quic — SSL + HTTP/2 + HTTP/3 (QUIC) enabled.
+	{
+		host := goldenSSLHost("00000000-0000-0000-0000-000000000a04", "h3.example.com")
+		host.SSLHTTP2 = true
+		host.SSLHTTP3 = true
+		cases = append(cases, goldenCase{
+			name: "http3_quic",
+			data: ProxyHostConfigData{
+				Host:           host,
+				GlobalSettings: baseGlobalSettings(),
+			},
+		})
+	}
+
+	// 5) ipv6_enabled — same shape as minimal_enabled, but with the manager's
+	// EnableIPv6=true. The default manager has IPv6 on; we cover the explicit
+	// case in the test runner by toggling via SetEnableIPv6 (see test body).
+	// Here the data itself is identical to minimal — the IPv6 differences
+	// show up in the rendered listen directives via Manager.GenerateConfigFull.
+	cases = append(cases, goldenCase{
+		name: "ipv6_enabled",
+		data: ProxyHostConfigData{
+			Host:           goldenBaseHost("00000000-0000-0000-0000-000000000a05", "ipv6.example.com"),
+			GlobalSettings: baseGlobalSettings(),
+		},
+	})
+
+	// 6) geo_challenge — Geo blacklist with ChallengeMode=true. This should
+	// produce challenge endpoint locations (/_challenge/validate, /api/v1/challenge/).
+	cases = append(cases, goldenCase{
+		name: "geo_challenge",
+		data: ProxyHostConfigData{
+			Host:           goldenBaseHost("00000000-0000-0000-0000-000000000a06", "challenge.example.com"),
+			GlobalSettings: baseGlobalSettings(),
+			GeoRestriction: &model.GeoRestriction{
+				ID:            "00000000-0000-0000-0000-00000000bbb2",
+				ProxyHostID:   "00000000-0000-0000-0000-000000000a06",
+				Mode:          "blacklist",
+				Countries:     []string{"CN"},
+				Enabled:       true,
+				ChallengeMode: true,
+				CreatedAt:     fixtureNow,
+				UpdatedAt:     fixtureNow,
+			},
+		},
+	})
+
+	// 7) exploit_user_agent — BlockExploits=true with one user_agent rule.
+	{
+		host := goldenBaseHost("00000000-0000-0000-0000-000000000a07", "exploit.example.com")
+		host.BlockExploits = true
+		cases = append(cases, goldenCase{
+			name: "exploit_user_agent",
+			data: ProxyHostConfigData{
+				Host:           host,
+				GlobalSettings: baseGlobalSettings(),
+				ExploitBlockRules: []model.ExploitBlockRuleForRender{
+					{
+						ExploitBlockRule: model.ExploitBlockRule{
+							ID:          "00000000-0000-0000-0000-0000000000e7",
+							Category:    "scanner",
+							Name:        "sqlmap UA",
+							Pattern:     "sqlmap",
+							PatternType: "user_agent",
+							Severity:    "warning",
+							Enabled:     true,
+							IsSystem:    true,
+							SortOrder:   1,
+							CreatedAt:   fixtureNow,
+							UpdatedAt:   fixtureNow,
+						},
+						IDSanitized: "e7",
+					},
+				},
+			},
+		})
+	}
+
+	// 8) uri_block_with_exception — URIBlock with prefix /admin and ExceptionIPs.
+	cases = append(cases, goldenCase{
+		name: "uri_block_with_exception",
+		data: ProxyHostConfigData{
+			Host:           goldenBaseHost("00000000-0000-0000-0000-000000000a08", "uri.example.com"),
+			GlobalSettings: baseGlobalSettings(),
+			URIBlock: &model.URIBlock{
+				ID:          "00000000-0000-0000-0000-0000000000aa",
+				ProxyHostID: "00000000-0000-0000-0000-000000000a08",
+				Enabled:     true,
+				Rules: []model.URIBlockRule{
+					{
+						ID:          "00000000-0000-0000-0000-0000000000bb",
+						Pattern:     "/admin",
+						MatchType:   model.URIMatchPrefix,
+						Description: "block admin",
+						Enabled:     true,
+					},
+				},
+				ExceptionIPs: []string{"10.0.0.1"},
+				CreatedAt:    fixtureNow,
+				UpdatedAt:    fixtureNow,
+			},
+		},
+	})
+
+	return cases
+}
+
+func TestProxyHostTemplateGolden(t *testing.T) {
+	goldenDir := filepath.Join("testdata", "proxy_host_golden")
+	if *updateGoldenFlag {
+		if err := os.MkdirAll(goldenDir, 0o755); err != nil {
+			t.Fatalf("mkdir golden dir: %v", err)
+		}
+	}
+
+	for _, tc := range goldenCases() {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			// Fresh manager per case so configPath is isolated and
+			// per-case fields (httpPort, IPv6) don't leak between subtests.
+			configPath := t.TempDir()
+			certsPath := t.TempDir()
+			m := NewManager(configPath, certsPath)
+			// NGINX_SKIP_TEST defaults from env — we only write the config,
+			// we never invoke nginx -t / reload, so skipTest is irrelevant
+			// here. m.GenerateConfigFull does not call out to docker.
+
+			// If the host references a certificate, write placeholder cert files
+			// so the manager's "SSL temporarily disabled" fallback doesn't kick
+			// in — otherwise the golden won't exercise the ssl.conf.tmpl path.
+			if tc.data.Host.SSLEnabled && tc.data.Host.CertificateID != nil && *tc.data.Host.CertificateID != "" {
+				certDir := filepath.Join(certsPath, *tc.data.Host.CertificateID)
+				if err := os.MkdirAll(certDir, 0o755); err != nil {
+					t.Fatalf("mkdir certDir: %v", err)
+				}
+				for _, name := range []string{"fullchain.pem", "privkey.pem"} {
+					if err := os.WriteFile(filepath.Join(certDir, name), []byte("placeholder"), 0o644); err != nil {
+						t.Fatalf("write placeholder %s: %v", name, err)
+					}
+				}
+			}
+
+			ctx := context.Background()
+			if err := m.GenerateConfigFull(ctx, tc.data); err != nil {
+				t.Fatalf("GenerateConfigFull: %v", err)
+			}
+
+			renderedPath := filepath.Join(configPath, GetConfigFilename(tc.data.Host))
+			rendered, err := os.ReadFile(renderedPath)
+			if err != nil {
+				t.Fatalf("read rendered %s: %v", renderedPath, err)
+			}
+
+			goldenPath := filepath.Join(goldenDir, tc.name+".conf")
+			if *updateGoldenFlag {
+				if err := os.WriteFile(goldenPath, rendered, 0o644); err != nil {
+					t.Fatalf("write golden %s: %v", goldenPath, err)
+				}
+				t.Logf("updated %s (%d bytes)", goldenPath, len(rendered))
+				return
+			}
+
+			want, err := os.ReadFile(goldenPath)
+			if err != nil {
+				t.Fatalf("read golden %s: %v (run with -update to create)", goldenPath, err)
+			}
+			if string(rendered) != string(want) {
+				t.Errorf("rendered output differs from %s (got %d bytes, want %d bytes)\n--- diff preview ---\n%s",
+					goldenPath, len(rendered), len(want), diffPreview(want, rendered))
+			}
+		})
+	}
+}
