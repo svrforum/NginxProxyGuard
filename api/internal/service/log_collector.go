@@ -11,12 +11,25 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"nginx-proxy-guard/internal/model"
 	"nginx-proxy-guard/internal/repository"
 	"nginx-proxy-guard/pkg/cache"
 )
+
+// streamIdleThreshold is how long the access log stream may be silent before
+// the watchdog assumes the underlying `docker logs --follow` RPC is stuck and
+// restarts it. Production incident (2026-05-19) showed a stream can silently
+// stall for days while the docker CLI subprocess remains alive — see
+// streamLogsWithWatchdog. 5min is generous: even the quietest production hosts
+// see crawler/bot traffic well within that window.
+const streamIdleThreshold = 5 * time.Minute
+
+// streamWatchdogInterval is how often the watchdog checks the last-line
+// timestamp. 30s gives ~10 checks per threshold window, low overhead.
+const streamWatchdogInterval = 30 * time.Second
 
 const (
 	// MaxRequestTime is the maximum valid request time in seconds (24 hours)
@@ -719,12 +732,53 @@ func (c *LogCollector) streamLogs(ctx context.Context, logType string, handler f
 			scanner = stderr
 		}
 
+		// Watchdog: detect silently stalled `docker logs --follow` streams.
+		// Only enabled for "access" because error streams legitimately stay
+		// silent for long periods on healthy hosts and would false-positive.
+		var lastLineUnix atomic.Int64
+		lastLineUnix.Store(time.Now().Unix())
+		watchdogDone := make(chan struct{})
+		watchdogStop := make(chan struct{})
+		if logType == "access" {
+			go func() {
+				defer close(watchdogDone)
+				t := time.NewTicker(streamWatchdogInterval)
+				defer t.Stop()
+				for {
+					select {
+					case <-watchdogStop:
+						return
+					case <-ctx.Done():
+						return
+					case <-t.C:
+						idle := time.Since(time.Unix(lastLineUnix.Load(), 0))
+						if idle > streamIdleThreshold {
+							log.Printf("[LogCollector] %s stream idle for %v, restarting docker logs", logType, idle.Round(time.Second))
+							if cmd.Process != nil {
+								_ = cmd.Process.Kill()
+							}
+							return
+						}
+					}
+				}
+			}()
+		} else {
+			close(watchdogDone)
+		}
+
 		for scanner.Scan() {
 			line := scanner.Text()
 			if line != "" {
+				if logType == "access" {
+					lastLineUnix.Store(time.Now().Unix())
+				}
 				handler(line)
 			}
 		}
+
+		// Stop watchdog before Wait so it can't race with subprocess exit.
+		close(watchdogStop)
+		<-watchdogDone
 
 		// Check for scanner errors (e.g., buffer overflow)
 		if err := scanner.Err(); err != nil {
