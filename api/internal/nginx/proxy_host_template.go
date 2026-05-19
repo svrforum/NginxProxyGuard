@@ -19,11 +19,18 @@ var proxyHostTemplatesFS embed.FS
 
 // proxyHostTemplateSectionOrder defines the concatenation order of the
 // section files. Changing this order will change the rendered config.
+//
+// Files prefixed with an underscore (e.g. _security.conf.tmpl) hold
+// named partials (`{{define "_security"}}...{{end}}`) shared by both the
+// HTTP server block (base.conf.tmpl) and the HTTPS server block
+// (ssl.conf.tmpl + cache.conf.tmpl). Partials must appear before any
+// caller in this slice and are invoked via `{{template "_security" .}}`.
 var proxyHostTemplateSectionOrder = []string{
 	"header.conf.tmpl",
 	"rate_limit.conf.tmpl",
 	"access_list.conf.tmpl",
 	"upstream.conf.tmpl",
+	"_security.conf.tmpl",
 	"base.conf.tmpl",
 	"waf.conf.tmpl",
 	"ssl.conf.tmpl",
