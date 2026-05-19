@@ -117,12 +117,18 @@ setup_geoip_config() {
 
     # Check if valid GeoIP databases exist
     if [ -f "$GEOIP_DIR/GeoLite2-Country.mmdb" ] && [ -f "$GEOIP_DIR/GeoLite2-ASN.mmdb" ]; then
-        # Additional check: file size should be reasonable (> 1MB for Country DB)
-        local country_size=$(stat -c%s "$GEOIP_DIR/GeoLite2-Country.mmdb" 2>/dev/null || echo "0")
-        local asn_size=$(stat -c%s "$GEOIP_DIR/GeoLite2-ASN.mmdb" 2>/dev/null || echo "0")
-        # Valid GeoIP databases are at least 1MB
-        if [ "$country_size" -gt 1000000 ] && [ "$asn_size" -gt 1000000 ]; then
+        # E2E test override: bypass size check for small synthetic fixtures
+        # (MaxMind test mmdbs are ~18KB; production GeoLite2 is ~3MB+)
+        if [ "${NGINX_GEOIP_SKIP_SIZE_CHECK:-}" = "true" ]; then
             geoip_enabled=true
+        else
+            # Additional check: file size should be reasonable (> 1MB for Country DB)
+            local country_size=$(stat -c%s "$GEOIP_DIR/GeoLite2-Country.mmdb" 2>/dev/null || echo "0")
+            local asn_size=$(stat -c%s "$GEOIP_DIR/GeoLite2-ASN.mmdb" 2>/dev/null || echo "0")
+            # Valid GeoIP databases are at least 1MB
+            if [ "$country_size" -gt 1000000 ] && [ "$asn_size" -gt 1000000 ]; then
+                geoip_enabled=true
+            fi
         fi
     fi
 
