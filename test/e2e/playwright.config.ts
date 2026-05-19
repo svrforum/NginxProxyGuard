@@ -9,6 +9,10 @@ export default defineConfig({
   // Test directory
   testDir: './specs',
 
+  // Preflight checks: npg-test-proxy reachable + geoip fixture present.
+  // Fails the entire run with actionable messages if either is missing.
+  globalSetup: require.resolve('./global-setup.ts'),
+
   // Run tests in files in parallel (disabled on CI for stability)
   fullyParallel: process.env.CI ? false : true,
 
