@@ -73,3 +73,4 @@ test/e2e/.auth/
 
 # Local git worktrees (Claude Code subagent-driven development)
 .worktrees/
+docs/superpowers/plans/2026-05-18-stability-hardening-M0-notes.md
