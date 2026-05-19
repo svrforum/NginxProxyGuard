@@ -2,6 +2,10 @@ package service
 
 import (
 	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -190,5 +194,190 @@ func TestModSecAuditLog_NullHTTPVersionIsTolerated(t *testing.T) {
 	}
 	if got.Transaction.Request.HTTPVersion != "" {
 		t.Errorf("null should leave HTTPVersion empty, got %q", got.Transaction.Request.HTTPVersion)
+	}
+}
+
+// TestModSecParser_FixtureSchema asserts the captured ModSec audit fixture is
+// parseable by the production parser AND that its schema matches the committed
+// lockfile. Both halves are essential:
+//
+//   - Parser robustness: every entry that ModSec considers a WAF event must
+//     parse without error and populate the fields downstream callers depend on
+//     (rule_id, unique_id, client_ip, request.uri). A ModSec version that
+//     changes a field type from number→string (#139 incident) fails this
+//     check. Entries with zero messages are skipped — that path returns
+//     "no WAF rules triggered, skipping" by design (bot/ratelimit/etc.).
+//
+//   - Schema parity: the lockfile captures every key the audit JSON contains
+//     at fixture-time. If a future fixture (re-captured via
+//     scripts/capture-modsec-audit.sh) introduces a new field or alters a
+//     type, this test fails — forcing the reviewer to explicitly accept the
+//     schema change (commit new lockfile + sample) AND consider whether the
+//     parser needs updating to consume the new field.
+//
+// Test depends on:
+//
+//	testdata/modsec_audit_v<ver>.json — captured audit entries
+//	testdata/modsec_audit_schema.json — lockfile produced by extract-schema.jq
+//
+// To add a new ModSec version: re-run scripts/capture-modsec-audit.sh, commit
+// the new fixture file + updated schema lockfile, and add the version to the
+// `versions` slice below.
+func TestModSecParser_FixtureSchema(t *testing.T) {
+	versions := []string{"3.0.15"} // add future versions here
+	for _, v := range versions {
+		v := v
+		t.Run("v"+v, func(t *testing.T) {
+			fixturePath := filepath.Join("testdata", fmt.Sprintf("modsec_audit_v%s.json", v))
+			schemaPath := filepath.Join("testdata", "modsec_audit_schema.json")
+
+			fixtureBytes, err := os.ReadFile(fixturePath)
+			if err != nil {
+				t.Fatalf("read fixture %s: %v", fixturePath, err)
+			}
+
+			var entries []map[string]any
+			if err := json.Unmarshal(fixtureBytes, &entries); err != nil {
+				t.Fatalf("unmarshal fixture as []map[string]any: %v", err)
+			}
+			if len(entries) == 0 {
+				t.Fatal("fixture should contain at least one entry")
+			}
+
+			c := &LogCollector{}
+
+			// Direction 1: every WAF-event entry parses cleanly + key fields
+			// populated. Entries whose messages array is empty are skipped on
+			// purpose — the parser returns an error for them by design
+			// ("no WAF rules triggered"), they represent non-WAF blocks the
+			// access-log path handles.
+			parsedCount := 0
+			skippedNoMessages := 0
+			for i, raw := range entries {
+				rawBytes, mErr := json.Marshal(raw)
+				if mErr != nil {
+					t.Fatalf("remarshal entry %d: %v", i, mErr)
+				}
+
+				// Probe: is this an empty-messages entry the parser is
+				// expected to skip? If so, assert the skip path matches the
+				// documented contract and move on.
+				var probe ModSecAuditLog
+				if uErr := json.Unmarshal(rawBytes, &probe); uErr != nil {
+					t.Fatalf("entry %d: ModSecAuditLog unmarshal: %v\n"+
+						"This is the exact failure mode of #139 — a parser regression "+
+						"silently drops every WAF event from this ModSec version.", i, uErr)
+				}
+				if len(probe.Transaction.Messages) == 0 {
+					skippedNoMessages++
+					if _, pErr := c.parseModSecLog(string(rawBytes)); pErr == nil {
+						t.Errorf("entry %d: messages=[] should return the "+
+							"'no WAF rules triggered, skipping' error so the "+
+							"collector falls back to access-log handling; "+
+							"got nil error", i)
+					}
+					continue
+				}
+
+				req, pErr := c.parseModSecLog(string(rawBytes))
+				if pErr != nil {
+					t.Errorf("entry %d: parser must accept fixture: %v", i, pErr)
+					continue
+				}
+				if req == nil {
+					t.Errorf("entry %d: parser returned nil request without error", i)
+					continue
+				}
+
+				if probe.Transaction.UniqueID == "" {
+					t.Errorf("entry %d: fixture transaction.unique_id is empty (bad fixture)", i)
+				}
+				if req.ClientIP == "" {
+					t.Errorf("entry %d: ClientIP empty after parse", i)
+				}
+				if req.RequestURI == "" {
+					t.Errorf("entry %d: RequestURI empty after parse", i)
+				}
+				if req.RuleID == 0 {
+					// At least one message had a numeric ruleId per the
+					// fixture inspection; if this fails the parser is dropping it.
+					t.Errorf("entry %d: RuleID 0 despite messages present "+
+						"(first ruleId in fixture: %q)", i, probe.Transaction.Messages[0].Details.RuleID)
+				}
+				if req.LogType != model.LogTypeModSec {
+					t.Errorf("entry %d: LogType=%q, want %q", i, req.LogType, model.LogTypeModSec)
+				}
+				parsedCount++
+			}
+
+			if parsedCount == 0 {
+				t.Fatalf("no WAF-event entries parsed (skipped=%d, total=%d) — "+
+					"fixture is missing the entries this test exists to pin",
+					skippedNoMessages, len(entries))
+			}
+			t.Logf("parsed %d WAF entries cleanly, skipped %d empty-messages entries (total %d)",
+				parsedCount, skippedNoMessages, len(entries))
+
+			// Direction 2: fixture schema matches lockfile. Mirrors
+			// scripts/extract-schema.jq applied to entries[0] (the jq script
+			// uses only the first entry — keep this consistent).
+			extracted := extractSchemaFromAny(entries[0])
+
+			lockedBytes, err := os.ReadFile(schemaPath)
+			if err != nil {
+				t.Fatalf("read lockfile %s: %v", schemaPath, err)
+			}
+			var locked any
+			if err := json.Unmarshal(lockedBytes, &locked); err != nil {
+				t.Fatalf("unmarshal lockfile: %v", err)
+			}
+
+			if !reflect.DeepEqual(extracted, locked) {
+				// Render both as pretty JSON for a human-friendly diff.
+				// encoding/json already sorts map[string]any keys
+				// alphabetically, so both sides serialize deterministically.
+				extractedJSON, _ := json.MarshalIndent(extracted, "", "  ")
+				lockedJSON, _ := json.MarshalIndent(locked, "", "  ")
+				t.Errorf("Fixture schema diverged from lockfile (%s).\n"+
+					"If the change is intentional (ModSec version bump, captured new fields), run:\n"+
+					"  ./scripts/capture-modsec-audit.sh\n"+
+					"review the diff, update parser if needed, then commit the new fixture + lockfile.\n"+
+					"\n--- locked ---\n%s\n\n--- extracted ---\n%s",
+					schemaPath, string(lockedJSON), string(extractedJSON))
+			}
+		})
+	}
+}
+
+// extractSchemaFromAny mirrors scripts/extract-schema.jq: replace each leaf
+// with its JSON type name; recurse into objects; for arrays recurse into the
+// first element only (homogeneous-array assumption — same caveat the jq
+// script calls out). Sentinel "empty" preserves the empty-array signal.
+//
+// Map iteration order doesn't matter for equality because reflect.DeepEqual
+// compares maps by key. We don't need to sort keys.
+func extractSchemaFromAny(v any) any {
+	switch x := v.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(x))
+		for k, val := range x {
+			out[k] = extractSchemaFromAny(val)
+		}
+		return out
+	case []any:
+		if len(x) == 0 {
+			return []any{"empty"}
+		}
+		return []any{extractSchemaFromAny(x[0])}
+	case string:
+		return "string"
+	case bool:
+		return "boolean"
+	case float64, int, int64, json.Number:
+		return "number"
+	case nil:
+		return "null"
+	default:
+		return fmt.Sprintf("unknown:%T", v)
 	}
 }
