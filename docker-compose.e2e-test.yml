@@ -146,8 +146,16 @@ services:
     environment:
       NGINX_HTTP_PORT: "18080"
       NGINX_HTTPS_PORT: "18443"
+      # E2E uses the tiny synthetic MaxMind GeoLite2 test mmdb (~18KB).
+      # Bypass entrypoint's >1MB validity check so the geoip2 module loads
+      # against the test fixture instead of falling back to placeholder maps.
+      NGINX_GEOIP_SKIP_SIZE_CHECK: "true"
     volumes:
       - e2e_test_nginx_conf:/etc/nginx:rw
+      # Synthetic GeoLite2 mmdb for block_reason E2E geo cases (Apache 2.0).
+      # See test/e2e/fixtures/geoip-test.LICENSE.md.
+      - ./test/e2e/fixtures/geoip-test.mmdb:/etc/nginx/geoip/GeoLite2-Country.mmdb:ro
+      - ./test/e2e/fixtures/geoip-test.mmdb:/etc/nginx/geoip/GeoLite2-ASN.mmdb:ro
     depends_on:
       api:
         condition: service_healthy
