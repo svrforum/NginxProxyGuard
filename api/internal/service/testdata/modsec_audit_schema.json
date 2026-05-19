@@ -1,0 +1,70 @@
+{
+  "transaction": {
+    "client_ip": "string",
+    "client_port": "number",
+    "host_ip": "string",
+    "host_port": "number",
+    "is_interrupted": "boolean",
+    "messages": [
+      {
+        "details": {
+          "accuracy": "string",
+          "data": "string",
+          "file": "string",
+          "lineNumber": "string",
+          "match": "string",
+          "maturity": "string",
+          "reference": "string",
+          "rev": "string",
+          "ruleId": "string",
+          "severity": "string",
+          "tags": [
+            "string"
+          ],
+          "ver": "string"
+        },
+        "message": "string"
+      }
+    ],
+    "producer": {
+      "components": [
+        "string"
+      ],
+      "connector": "string",
+      "modsecurity": "string",
+      "secrules_engine": "string"
+    },
+    "request": {
+      "headers": {
+        "Accept": "string",
+        "Host": "string",
+        "User-Agent": "string"
+      },
+      "hostname": "string",
+      "http_version": "string",
+      "method": "string",
+      "uri": "string"
+    },
+    "response": {
+      "body": "string",
+      "headers": {
+        "Connection": "string",
+        "Content-Length": "string",
+        "Content-Type": "string",
+        "Date": "string",
+        "ETag": "string",
+        "Last-Modified": "string",
+        "Referrer-Policy": "string",
+        "Server": "string",
+        "Vary": "string",
+        "X-Content-Type-Options": "string",
+        "X-Frame-Options": "string",
+        "X-XSS-Protection": "string"
+      },
+      "http_code": "number"
+    },
+    "server_id": "string",
+    "time_stamp": "string",
+    "unique_id": "string"
+  }
+}
