@@ -22,6 +22,9 @@ export class APIHelper {
   private createdRedirectHostIds: string[] = [];
   private createdDnsProviderIds: string[] = [];
   private createdAccessListIds: string[] = [];
+  // Block-reason regression spec creates these — track for cleanup so a failing
+  // test never leaves a stale ban that poisons a later test's expected_block_reason.
+  private bannedIpIds: string[] = [];
 
   constructor(request: APIRequestContext) {
     this.request = request;
@@ -1106,6 +1109,267 @@ export class APIHelper {
       return result.logs || [];
     }, 'getAuditLogs');
   }
+
+  // ==================== Block-Reason Regression Helpers ====================
+  //
+  // The block_reason E2E spec needs to flip individual security features on a
+  // per-host basis and then verify the resulting log row carries the right
+  // reason. Each helper below maps a single feature to its actual API endpoint
+  // (verified against api/internal/bootstrap/routes.go, NOT guessed) and uses
+  // the smallest viable request body the handler accepts.
+  //
+  // Anything that creates a globally-scoped resource (banned IP, custom exploit
+  // rule) is tracked so the per-spec teardown can roll it back — leaking a ban
+  // would poison every subsequent test that uses the same IP.
+
+  /**
+   * Generic logs query used by pollForLog. Returns the rows array from
+   * /api/v1/logs (paginated response shape: { data, total, page, per_page, ... }).
+   *
+   * IMPORTANT: filtering by `host` (domain) is more reliable than by
+   * `proxy_host_id` for tests that just created a fresh host. The
+   * log_collector's domain→host-id cache (`getHostIDByDomain`) refreshes only
+   * every 60s, so freshly-created hosts may have proxy_host_id=NULL in their
+   * rows for the first minute. The `host` field is set directly from the
+   * nginx log line, so it's always populated.
+   */
+  async getLogs(params: {
+    host_id?: string;
+    host?: string;
+    limit?: number;
+    block_reason?: string;
+  }): Promise<LogRow[]> {
+    const qs = new URLSearchParams();
+    if (params.host_id) qs.set('proxy_host_id', params.host_id);
+    if (params.host) qs.set('host', params.host);
+    if (params.limit) qs.set('per_page', params.limit.toString());
+    if (params.block_reason) qs.set('block_reason', params.block_reason);
+    qs.set('sort_by', 'timestamp');
+    qs.set('sort_order', 'desc');
+    const response = await this.request.get(`${API_ENDPOINTS.logs}?${qs.toString()}`, {
+      headers: this.getHeaders(),
+    });
+    if (!response.ok()) {
+      throw new Error(`Failed to get logs: ${response.status()}`);
+    }
+    const result = await response.json();
+    return result.data ?? [];
+  }
+
+  /**
+   * POST /api/v1/proxy-hosts/:id/geo  →  GeoHandler.SetForProxyHost.
+   * Body: { mode: "whitelist"|"blacklist", countries: [...], challenge_mode?, enabled? }.
+   */
+  async setGeoRestriction(
+    hostId: string,
+    opts: {
+      mode: 'whitelist' | 'blacklist';
+      countries: string[];
+      challengeMode?: boolean;
+      allowPrivateIPs?: boolean;
+      allowSearchBots?: boolean;
+      enabled?: boolean;
+    }
+  ): Promise<void> {
+    const body: Record<string, unknown> = {
+      mode: opts.mode,
+      countries: opts.countries,
+      enabled: opts.enabled ?? true,
+    };
+    if (opts.challengeMode !== undefined) body.challenge_mode = opts.challengeMode;
+    // Defaults that protect us from the e2e test machine accidentally bypassing
+    // geo restriction via its own private IP — we *want* the restriction to fire.
+    body.allow_private_ips = opts.allowPrivateIPs ?? false;
+    body.allow_search_bots = opts.allowSearchBots ?? false;
+
+    const response = await this.request.post(`${API_ENDPOINTS.proxyHosts}/${hostId}/geo`, {
+      headers: this.getHeaders(),
+      data: body,
+    });
+    if (!response.ok()) {
+      const err = await response.text();
+      throw new Error(`setGeoRestriction failed: ${response.status()} ${err}`);
+    }
+  }
+
+  /**
+   * Two-step: create access list, then assign it to the host via PUT /proxy-hosts/:id.
+   * AccessListHandler.Create accepts { name, items: [{ directive, address, sort_order }] }.
+   */
+  async setAccessList(
+    hostId: string,
+    items: Array<{ directive: 'allow' | 'deny'; address: string }>
+  ): Promise<string> {
+    const list = await this.createAccessList({
+      name: `acl-blockreason-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      items: items.map((it, i) => ({ directive: it.directive, address: it.address, sort_order: i })),
+    });
+    await this.updateProxyHost(hostId, { access_list_id: list.id } as Partial<CreateProxyHostData>);
+    return list.id;
+  }
+
+  /**
+   * POST /api/v1/banned-ips → SecurityHandler.BanIP. Body: { ip_address, proxy_host_id?, reason?, ban_time? }.
+   * Tracks the returned ID so teardown can unban — otherwise a stale ban survives across tests.
+   */
+  async setBannedIPs(hostId: string, ips: string[]): Promise<string[]> {
+    const ids: string[] = [];
+    for (const ip of ips) {
+      const response = await this.request.post(API_ENDPOINTS.wafBannedIps, {
+        headers: this.getHeaders(),
+        data: {
+          ip_address: ip,
+          proxy_host_id: hostId,
+          reason: 'e2e block_reason regression',
+          ban_time: 60,
+        },
+      });
+      if (!response.ok()) {
+        const err = await response.text();
+        throw new Error(`setBannedIPs(${ip}) failed: ${response.status()} ${err}`);
+      }
+      const body = await response.json();
+      if (body.id) {
+        ids.push(body.id);
+        this.bannedIpIds.push(body.id);
+      }
+    }
+    return ids;
+  }
+
+  /**
+   * Enable the host's `block_exploits` flag. The exploit detection rules come
+   * from two sources:
+   *   1. Custom rules in the `exploit_block_rules` table (POST /api/v1/exploit-rules).
+   *   2. A hardcoded fallback set inside _security.conf.tmpl, which fires whenever
+   *      `block_exploits=true` and no DB rules exist for the matching pattern_type
+   *      (SQLI-FALLBACK-001, RFI-FALLBACK-001, SCAN-FALLBACK-001, METHOD-FALLBACK-001).
+   *
+   * The custom-rule endpoint currently returns 500 due to a pq prepared-statement
+   * type-inference bug (`pq: inconsistent types deduced for parameter $1` — see
+   * api/internal/repository/exploit_block_rule.go:Create where `$1` is reused in
+   * both VALUES and a COALESCE subquery). Until that is fixed, the spec uses
+   * the fallback patterns, which still exercise the block_reason="exploit_block"
+   * code path in the template + log_collector.
+   */
+  async enableBlockExploits(hostId: string): Promise<void> {
+    await this.updateProxyHost(hostId, { block_exploits: true } as Partial<CreateProxyHostData>);
+  }
+
+  /**
+   * PUT /api/v1/proxy-hosts/:proxyHostId/bot-filter → SecurityHandler.UpsertBotFilter.
+   * Body: { enabled, block_bad_bots?, block_ai_bots?, block_suspicious_clients?, custom_blocked_agents?, ... }.
+   */
+  async setBotFilter(
+    hostId: string,
+    opts: {
+      blockBadBots?: boolean;
+      blockAiBots?: boolean;
+      blockSuspiciousClients?: boolean;
+      allowSearchEngines?: boolean;
+      customBlockedAgents?: string;
+      customAllowedAgents?: string;
+    }
+  ): Promise<void> {
+    const body: Record<string, unknown> = {
+      enabled: true,
+      // Default both off; the caller flips the one its test cares about. This
+      // keeps each case's expected bot_category unambiguous.
+      block_bad_bots: opts.blockBadBots ?? false,
+      block_ai_bots: opts.blockAiBots ?? false,
+      block_suspicious_clients: opts.blockSuspiciousClients ?? false,
+      allow_search_engines: opts.allowSearchEngines ?? false,
+    };
+    if (opts.customBlockedAgents !== undefined) body.custom_blocked_agents = opts.customBlockedAgents;
+    if (opts.customAllowedAgents !== undefined) body.custom_allowed_agents = opts.customAllowedAgents;
+
+    const response = await this.request.put(`${API_ENDPOINTS.proxyHosts}/${hostId}/bot-filter`, {
+      headers: this.getHeaders(),
+      data: body,
+    });
+    if (!response.ok()) {
+      const err = await response.text();
+      throw new Error(`setBotFilter failed: ${response.status()} ${err}`);
+    }
+  }
+
+  /**
+   * PUT /api/v1/proxy-hosts/:proxyHostId/uri-block → SecurityHandler.UpsertURIBlock.
+   */
+  async setURIBlock(
+    hostId: string,
+    pattern: string,
+    matchType: 'exact' | 'prefix' | 'regex' = 'prefix'
+  ): Promise<void> {
+    const body = {
+      enabled: true,
+      rules: [
+        {
+          pattern,
+          match_type: matchType,
+          description: 'e2e block_reason regression',
+          enabled: true,
+        },
+      ],
+    };
+    const response = await this.request.put(`${API_ENDPOINTS.proxyHosts}/${hostId}/uri-block`, {
+      headers: this.getHeaders(),
+      data: body,
+    });
+    if (!response.ok()) {
+      const err = await response.text();
+      throw new Error(`setURIBlock failed: ${response.status()} ${err}`);
+    }
+  }
+
+  /**
+   * Flip waf_enabled on the proxy host (block_reason="waf" rows). Caller can
+   * override mode/paranoia for ModSecurity testing variants.
+   */
+  async enableWAF(
+    hostId: string,
+    opts?: { mode?: 'detection' | 'blocking'; paranoiaLevel?: number; anomalyThreshold?: number }
+  ): Promise<void> {
+    const update: Record<string, unknown> = {
+      waf_enabled: true,
+      waf_mode: opts?.mode ?? 'blocking',
+    };
+    if (opts?.paranoiaLevel !== undefined) update.waf_paranoia_level = opts.paranoiaLevel;
+    if (opts?.anomalyThreshold !== undefined) update.waf_anomaly_threshold = opts.anomalyThreshold;
+    await this.updateProxyHost(hostId, update as Partial<CreateProxyHostData>);
+  }
+
+  /**
+   * Roll back banned IPs created during the spec. Host-scoped state (geo,
+   * access list, bot filter, URI block, block_exploits) is removed implicitly
+   * when the host itself is deleted by cleanupTestHosts().
+   */
+  async cleanupBlockReasonState(): Promise<void> {
+    for (const id of this.bannedIpIds) {
+      try { await this.unbanIp(id); } catch { /* already gone */ }
+    }
+    this.bannedIpIds = [];
+  }
+}
+
+// Shape of a row returned by /api/v1/logs — kept loose so the spec can assert
+// on optional fields (bot_category, exploit_rule, geo_country_code) without
+// failing on rows where the field is genuinely absent.
+export interface LogRow {
+  id: string;
+  log_type?: string;
+  timestamp?: string;
+  host?: string;
+  client_ip?: string;
+  geo_country_code?: string;
+  request_method?: string;
+  request_uri?: string;
+  status_code?: number;
+  http_user_agent?: string;
+  block_reason?: string;
+  bot_category?: string;
+  exploit_rule?: string;
+  [key: string]: unknown;
 }
 
 // Type definitions
