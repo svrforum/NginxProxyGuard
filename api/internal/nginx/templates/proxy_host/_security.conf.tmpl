@@ -295,6 +295,17 @@
 
     # HTTP method rules
 {{if hasRulesOfType .ExploitBlockRules "request_method"}}
+    # nginx core short-circuits TRACE requests with 405 BEFORE the rewrite
+    # phase runs, so the `if` blocks below never fire for TRACE and the access
+    # log loses the block_reason. Route 405 responses through a named location
+    # so the variable is set during the LOG phase regardless of which path
+    # produced the 405.
+    error_page 405 = @blocked_method;
+    location @blocked_method {
+        internal;
+        set $block_reason_var "exploit_block";
+        return 405;
+    }
 {{range filterRulesByPatternType .ExploitBlockRules "request_method"}}
     # {{.Name}} ({{.Category}})
     if ($request_method ~* "{{escapeNginxPattern .Pattern}}") {
@@ -365,6 +376,14 @@
         return 403;
     }
     # Block suspicious request methods
+    # nginx core short-circuits TRACE before rewrite phase; route 405 through
+    # a named location so block_reason lands in the access log either way.
+    error_page 405 = @blocked_method;
+    location @blocked_method {
+        internal;
+        set $block_reason_var "exploit_block";
+        return 405;
+    }
     if ($request_method !~ ^(GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS)$) {
         set $block_reason_var "exploit_block";
         set $exploit_rule_var "METHOD-FALLBACK-001";

@@ -265,21 +265,33 @@ test.describe('block_reason regression — security layer to log pipeline', () =
     expect(row.bot_category).toBe('scanner');
   });
 
-  // Case 8 is intentionally skipped: it documents a real bug we found while
-  // building this spec. nginx config DOES set $block_reason_var="exploit_block"
-  // + $exploit_rule_var inside the server-scope `if ($request_method ~* "^(TRACE|TRACK|DEBUG|CONNECT)$")`
-  // block, but the access log line emitted on `return 405` writes `block="-"` /
-  // `exploit_rule="-"` — i.e. the variable values DO NOT propagate to the log
-  // format. The same template that works correctly for query_string/request_uri
-  // /user_agent rules (cases 5-7 above) fails specifically for request_method
-  // rules because the `return 405` fires before nginx enters a location, and
-  // the log_format reads the variables AFTER the location phase.
-  //
-  // This is exactly the regression class M3.5-M3.7 is designed to catch.
-  // Filed as a follow-up — until the template is fixed, the case is skipped
-  // so the suite stays green; once fixed, remove the .skip and re-run.
-  // eslint-disable-next-line playwright/no-skipped-test
-  test.skip('case 8: exploit_block fires on TRACE method (KNOWN BUG: block_reason missing from log on server-scope return 405)', () => {});
+  test('case 8: exploit_block fires on TRACE method (seeded Dangerous Methods rule)', async () => {
+    const host = await createIsolatedHost(api, 'exp-trace');
+    await api.enableBlockExploits(host.id);
+    await waitForReload();
+
+    const res = triggerRequest({
+      host: host.domain_names[0],
+      path: '/case8',
+      method: 'TRACE',
+    });
+    expect(res.status).toBe(405);
+
+    // nginx core short-circuits TRACE with 405 BEFORE the rewrite phase, so
+    // the `if ($request_method ~* ...)` block in _security.conf.tmpl never
+    // fires for TRACE — meaning $exploit_rule_var is NOT attributed to a
+    // specific rule. The fix routes 405 through `error_page 405 =
+    // @blocked_method`, where $block_reason_var is unconditionally set to
+    // "exploit_block". So we assert block_reason here but accept that the
+    // rule ID is "-" (unknown) for TRACE specifically; sibling methods like
+    // TRACK/DEBUG/CONNECT do fire the if-block and DO carry the rule ID.
+    const row = await pollForLog(api, {
+      host: host.domain_names[0],
+      expectedBlockReason: 'exploit_block',
+      uriContains: '/case8',
+    });
+    expect(row.status_code).toBe(405);
+  });
 
   test('case 9: banned_ip blocks request and records block_reason=banned_ip', async () => {
     const host = await createIsolatedHost(api, 'banned');
