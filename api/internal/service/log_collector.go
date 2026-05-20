@@ -4,14 +4,17 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"math"
 	"net"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"nginx-proxy-guard/internal/model"
@@ -22,14 +25,26 @@ import (
 // streamIdleThreshold is how long the access log stream may be silent before
 // the watchdog assumes the underlying `docker logs --follow` RPC is stuck and
 // restarts it. Production incident (2026-05-19) showed a stream can silently
-// stall for days while the docker CLI subprocess remains alive — see
-// streamLogsWithWatchdog. 5min is generous: even the quietest production hosts
-// see crawler/bot traffic well within that window.
+// stall for days while the docker CLI subprocess remains alive.
+// 5min is generous: even the quietest production hosts see crawler/bot
+// traffic well within that window.
 const streamIdleThreshold = 5 * time.Minute
 
 // streamWatchdogInterval is how often the watchdog checks the last-line
 // timestamp. 30s gives ~10 checks per threshold window, low overhead.
 const streamWatchdogInterval = 30 * time.Second
+
+// streamMaxAge is the hard cap on a single `docker logs --follow` subprocess
+// lifetime. Forces a reconnect regardless of activity. v2.14.1's idle-only
+// watchdog failed to fire in a production incident (2026-05-20, 11h stall);
+// this acts as belt-and-suspenders so a stuck stream cannot exceed 1 hour
+// even if the idle detection path is somehow defeated.
+const streamMaxAge = 1 * time.Hour
+
+// streamHeartbeatTicks controls how often the watchdog logs a heartbeat
+// (every N watchdog ticks). With 30s ticks * 10 = every 5 min — visible
+// proof the watchdog goroutine is alive, cheap to diagnose next time.
+const streamHeartbeatTicks = 10
 
 const (
 	// MaxRequestTime is the maximum valid request time in seconds (24 hours)
@@ -142,15 +157,14 @@ type LogCollector struct {
 	botMatcher     *BotMatcher
 	redisCache     *cache.RedisClient
 	nginxContainer string
+	accessLogPath  string // Path to nginx access_raw.log (file-tail source)
 	batchSize      int
 	flushInterval  time.Duration
 	buffer         []model.CreateLogRequest
 	bufferMu       sync.Mutex
 	flushMu        sync.Mutex // 동시 flush 방지
 	stopCh         chan struct{}
-	lastAccessPos  int64 // Track position in access log
-	lastErrorPos   int64 // Track position in error log
-	useRedisBuffer bool  // Whether to use Redis for log buffering
+	useRedisBuffer bool // Whether to use Redis for log buffering
 
 	// Domain to host ID cache for Fail2ban
 	domainCacheMu    sync.RWMutex
@@ -165,7 +179,7 @@ type LogCollector struct {
 	trustedIPsTime   time.Time
 }
 
-func NewLogCollector(logRepo *repository.LogRepository, nginxContainer string, geoIP *GeoIPService, redisCache *cache.RedisClient) *LogCollector {
+func NewLogCollector(logRepo *repository.LogRepository, nginxContainer string, accessLogPath string, geoIP *GeoIPService, redisCache *cache.RedisClient) *LogCollector {
 	// Use Redis buffer if available and ready
 	useRedis := redisCache != nil && redisCache.IsReady()
 
@@ -175,6 +189,7 @@ func NewLogCollector(logRepo *repository.LogRepository, nginxContainer string, g
 		botMatcher:     NewBotMatcher(),
 		redisCache:     redisCache,
 		nginxContainer: nginxContainer,
+		accessLogPath:  accessLogPath,
 		batchSize:      500,
 		flushInterval:  1 * time.Second,
 		buffer:         make([]model.CreateLogRequest, 0, 500),
@@ -343,8 +358,12 @@ func (c *LogCollector) Start(ctx context.Context) {
 	// Start periodic flush
 	go c.flushLoop(ctx)
 
-	// Start log streaming
-	go c.streamAccessLogs(ctx)
+	// Start log streaming:
+	//   - access logs: tail nginx file directly (immune to docker logs RPC stalls)
+	//   - ModSec JSON: still via docker logs --follow stdout, with watchdog
+	//   - error logs: docker logs --follow stderr
+	go c.streamFileAccessLogs(ctx)
+	go c.streamModSecLogs(ctx)
 	go c.streamErrorLogs(ctx)
 
 	log.Println("Log collector started")
@@ -601,70 +620,202 @@ func (c *LogCollector) addLogToMemoryBuffer(logReq model.CreateLogRequest) {
 	}
 }
 
-func (c *LogCollector) streamAccessLogs(ctx context.Context) {
+// handleAccessLine processes a single nginx access log line.
+// Shared by streamFileAccessLogs (file-tail source) and any other access log path.
+func (c *LogCollector) handleAccessLine(ctx context.Context, line string) {
+	logReq, err := c.parseAccessLog(line)
+	if err != nil {
+		return
+	}
+
+	// Block reason is now extracted from nginx log format directly in parseAccessLog().
+	// Only use fallback pattern matching if nginx didn't provide block_reason.
+	if logReq.BlockReason == "" {
+		if logReq.StatusCode == 403 && logReq.HTTPUserAgent != "" {
+			if category, matched := c.botMatcher.MatchBot(logReq.HTTPUserAgent); matched {
+				logReq.BlockReason = model.BlockReasonBotFilter
+				logReq.BotCategory = category
+			}
+		}
+		if logReq.StatusCode == 429 {
+			logReq.BlockReason = model.BlockReasonRateLimit
+		}
+	}
+
+	if logReq.Host != "" {
+		if hostID := c.getHostIDByDomain(ctx, logReq.Host); hostID != "" {
+			logReq.ProxyHostID = hostID
+		}
+	}
+
+	// Notify Fail2ban service for error responses (4xx, 5xx).
+	// Skip for globally trusted IPs.
+	if c.fail2ban != nil && logReq.ClientIP != "" && logReq.StatusCode >= 400 && logReq.ProxyHostID != "" && !c.isTrustedIP(ctx, logReq.ClientIP) {
+		c.fail2ban.RecordFailedRequest(ctx, logReq.ProxyHostID, logReq.ClientIP, logReq.StatusCode, logReq.RequestURI)
+	}
+
+	c.addLog(*logReq)
+}
+
+// handleModSecLine processes a single ModSec audit JSON line.
+func (c *LogCollector) handleModSecLine(ctx context.Context, line string) {
+	log.Printf("[DEBUG] Detected ModSec JSON log (len=%d)", len(line))
+	logReq, err := c.parseModSecLog(line)
+	if err != nil {
+		if !strings.Contains(err.Error(), "no WAF rules triggered") {
+			snippet := line
+			if len(snippet) > 200 {
+				snippet = snippet[:200] + "..."
+			}
+			log.Printf("[ERROR] Failed to parse ModSec log: %v | line=%s", err, snippet)
+		}
+		return
+	}
+	log.Printf("[DEBUG] Successfully parsed ModSec log: rule=%d, type=%s", logReq.RuleID, logReq.AttackType)
+	c.addLog(*logReq)
+
+	// Notify WAF auto-ban service (only for blocked requests, not logged/detection mode).
+	// Skip for globally trusted IPs.
+	if c.wafAutoBan != nil && logReq.ClientIP != "" && logReq.ActionTaken == "blocked" && !c.isTrustedIP(ctx, logReq.ClientIP) {
+		c.wafAutoBan.RecordWAFEvent(ctx, logReq.ClientIP, logReq.Host, logReq.RuleID, logReq.RuleMessage)
+	}
+}
+
+// streamModSecLogs reads ModSec JSON audit lines from nginx stdout via
+// `docker logs --follow`. Regular access log lines coming through the same
+// stream are silently dropped — they are now captured from the file by
+// streamFileAccessLogs, which is immune to dockerd RPC stalls.
+func (c *LogCollector) streamModSecLogs(ctx context.Context) {
 	c.streamLogs(ctx, "access", func(line string) {
-		// Check if this is a ModSecurity JSON log (starts with {"transaction")
 		if strings.HasPrefix(strings.TrimSpace(line), "{\"transaction\"") {
-			log.Printf("[DEBUG] Detected ModSec JSON log (len=%d)", len(line))
-			if logReq, err := c.parseModSecLog(line); err == nil {
-				log.Printf("[DEBUG] Successfully parsed ModSec log: rule=%d, type=%s", logReq.RuleID, logReq.AttackType)
-				c.addLog(*logReq)
-
-				// Notify WAF auto-ban service (only for blocked requests, not logged/detection mode)
-				// Skip for globally trusted IPs
-				if c.wafAutoBan != nil && logReq.ClientIP != "" && logReq.ActionTaken == "blocked" && !c.isTrustedIP(ctx, logReq.ClientIP) {
-					c.wafAutoBan.RecordWAFEvent(ctx, logReq.ClientIP, logReq.Host, logReq.RuleID, logReq.RuleMessage)
-				}
-			} else {
-				// Skip non-WAF logs silently (e.g., bot filter blocks)
-				if !strings.Contains(err.Error(), "no WAF rules triggered") {
-					// Include a snippet of the failing line so a future audit-format
-					// change (e.g. #139's http_version type flip) can be diagnosed
-					// from logs alone, without having to reproduce the JSON.
-					snippet := line
-					if len(snippet) > 200 {
-						snippet = snippet[:200] + "..."
-					}
-					log.Printf("[ERROR] Failed to parse ModSec log: %v | line=%s", err, snippet)
-				}
-			}
-			return
+			c.handleModSecLine(ctx, line)
 		}
-		// Regular access log
-		if logReq, err := c.parseAccessLog(line); err == nil {
-			// Block reason is now extracted from nginx log format directly in parseAccessLog()
-			// Only use fallback pattern matching if nginx didn't provide block_reason
-			if logReq.BlockReason == "" {
-				// Fallback: Detect bot filter blocks using pattern matching (for older logs)
-				if logReq.StatusCode == 403 && logReq.HTTPUserAgent != "" {
-					if category, matched := c.botMatcher.MatchBot(logReq.HTTPUserAgent); matched {
-						logReq.BlockReason = model.BlockReasonBotFilter
-						logReq.BotCategory = category
-					}
-				}
-				// Fallback: Detect rate limit blocks (429 status)
-				if logReq.StatusCode == 429 {
-					logReq.BlockReason = model.BlockReasonRateLimit
-				}
-			}
-
-			// 모든 access 로그에 ProxyHostID 할당 (캐시된 맵 조회, 성능 영향 미미)
-			if logReq.Host != "" {
-				hostID := c.getHostIDByDomain(ctx, logReq.Host)
-				if hostID != "" {
-					logReq.ProxyHostID = hostID
-				}
-			}
-
-			// Notify Fail2ban service for error responses (4xx, 5xx)
-			// Skip for globally trusted IPs
-			if c.fail2ban != nil && logReq.ClientIP != "" && logReq.StatusCode >= 400 && logReq.ProxyHostID != "" && !c.isTrustedIP(ctx, logReq.ClientIP) {
-				c.fail2ban.RecordFailedRequest(ctx, logReq.ProxyHostID, logReq.ClientIP, logReq.StatusCode, logReq.RequestURI)
-			}
-
-			c.addLog(*logReq)
-		}
+		// else: regular access log — handled by streamFileAccessLogs.
 	})
+}
+
+// streamFileAccessLogs tails the nginx access_raw.log file directly, bypassing
+// docker logs --follow. Background: the dockerd `docker logs` streaming RPC
+// can silently stall (production incidents 2026-05-19 and 2026-05-20), and
+// scanner.Scan() blocks indefinitely without surfacing an error. A file-based
+// tail has a well-understood failure mode (file gone, rotation, truncate) and
+// avoids the dockerd dependency entirely for the high-volume access path.
+//
+// nginx writes access logs to both /dev/stdout (consumed by docker logs) and
+// /etc/nginx/logs/access_raw.log (this function's source). Both files share
+// the same `main` format. Rotation is handled by logrotate daily (file is
+// renamed to access_raw.log-YYYYMMDD.gz and a new access_raw.log is created).
+func (c *LogCollector) streamFileAccessLogs(ctx context.Context) {
+	if c.accessLogPath == "" {
+		log.Printf("[LogCollector] file-tail disabled: accessLogPath is empty")
+		return
+	}
+	log.Printf("[LogCollector] starting file-tail of %s", c.accessLogPath)
+
+	var (
+		file   *os.File
+		reader *bufio.Reader
+		curIno uint64
+	)
+	defer func() {
+		if file != nil {
+			_ = file.Close()
+		}
+	}()
+
+	// inodeOf returns the inode of a path, or 0 on error.
+	inodeOf := func(path string) uint64 {
+		st, err := os.Stat(path)
+		if err != nil {
+			return 0
+		}
+		sys, ok := st.Sys().(*syscall.Stat_t)
+		if !ok {
+			return 0
+		}
+		return sys.Ino
+	}
+
+	// openTail opens the file. seekToEnd=true is used on first open to skip
+	// historical lines (already captured before this run). On rotation we
+	// reopen the new file from the beginning to avoid losing any lines.
+	openTail := func(seekToEnd bool) error {
+		if file != nil {
+			_ = file.Close()
+			file = nil
+		}
+		f, err := os.Open(c.accessLogPath)
+		if err != nil {
+			return err
+		}
+		if seekToEnd {
+			if _, err := f.Seek(0, io.SeekEnd); err != nil {
+				_ = f.Close()
+				return err
+			}
+		}
+		file = f
+		reader = bufio.NewReaderSize(f, 64*1024)
+		curIno = inodeOf(c.accessLogPath)
+		return nil
+	}
+
+	// First open: skip historical content.
+	for file == nil {
+		if err := openTail(true); err != nil {
+			log.Printf("[LogCollector] file-tail open failed: %v (retry in 5s)", err)
+			select {
+			case <-ctx.Done():
+				return
+			case <-c.stopCh:
+				return
+			case <-time.After(5 * time.Second):
+			}
+		}
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-c.stopCh:
+			return
+		default:
+		}
+
+		line, err := reader.ReadString('\n')
+		if err == nil {
+			c.handleAccessLine(ctx, strings.TrimRight(line, "\n"))
+			continue
+		}
+		if err != io.EOF {
+			log.Printf("[LogCollector] file-tail read error: %v (reopening)", err)
+			if err := openTail(false); err != nil {
+				time.Sleep(1 * time.Second)
+			}
+			continue
+		}
+
+		// EOF: either no new data yet, or the file was rotated. Detect rotation
+		// by comparing inode. Bare file-gone is also possible mid-rotation.
+		newIno := inodeOf(c.accessLogPath)
+		if newIno == 0 {
+			// File temporarily missing (logrotate window). Brief wait and retry.
+			time.Sleep(200 * time.Millisecond)
+			continue
+		}
+		if newIno != curIno {
+			// Rotation: open the new file from the beginning.
+			log.Printf("[LogCollector] file-tail detected rotation (inode %d -> %d)", curIno, newIno)
+			if err := openTail(false); err != nil {
+				log.Printf("[LogCollector] file-tail reopen after rotation failed: %v", err)
+				time.Sleep(1 * time.Second)
+			}
+			continue
+		}
+		// Same file, no new data. Short poll.
+		time.Sleep(200 * time.Millisecond)
+	}
 }
 
 func (c *LogCollector) streamErrorLogs(ctx context.Context) {
@@ -733,6 +884,8 @@ func (c *LogCollector) streamLogs(ctx context.Context, logType string, handler f
 		}
 
 		// Watchdog: detect silently stalled `docker logs --follow` streams.
+		// Two independent triggers — idle threshold + hard max-age — plus a
+		// periodic heartbeat log so the goroutine's liveness is verifiable.
 		// Only enabled for "access" because error streams legitimately stay
 		// silent for long periods on healthy hosts and would false-positive.
 		var lastLineUnix atomic.Int64
@@ -740,18 +893,33 @@ func (c *LogCollector) streamLogs(ctx context.Context, logType string, handler f
 		watchdogDone := make(chan struct{})
 		watchdogStop := make(chan struct{})
 		if logType == "access" {
+			cmdStartedAt := time.Now()
+			log.Printf("[LogCollector] %s watchdog started (idle=%v max=%v)", logType, streamIdleThreshold, streamMaxAge)
 			go func() {
 				defer close(watchdogDone)
 				t := time.NewTicker(streamWatchdogInterval)
 				defer t.Stop()
+				maxAge := time.NewTimer(streamMaxAge)
+				defer maxAge.Stop()
+				ticks := 0
 				for {
 					select {
 					case <-watchdogStop:
 						return
 					case <-ctx.Done():
 						return
+					case <-maxAge.C:
+						log.Printf("[LogCollector] %s stream age %v reached max %v, forcing reconnect", logType, time.Since(cmdStartedAt).Round(time.Second), streamMaxAge)
+						if cmd.Process != nil {
+							_ = cmd.Process.Kill()
+						}
+						return
 					case <-t.C:
+						ticks++
 						idle := time.Since(time.Unix(lastLineUnix.Load(), 0))
+						if ticks%streamHeartbeatTicks == 0 {
+							log.Printf("[LogCollector] %s watchdog heartbeat: idle=%v age=%v", logType, idle.Round(time.Second), time.Since(cmdStartedAt).Round(time.Second))
+						}
 						if idle > streamIdleThreshold {
 							log.Printf("[LogCollector] %s stream idle for %v, restarting docker logs", logType, idle.Round(time.Second))
 							if cmd.Process != nil {

@@ -141,6 +141,7 @@ func InitServices(
 		svcs.LogCollector = service.NewLogCollector(
 			repos.Log,
 			cfg.NginxContainer,
+			resolveAccessLogPath(),
 			svcs.GeoIP,
 			redisCache,
 		)

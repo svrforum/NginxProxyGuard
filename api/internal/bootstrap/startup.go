@@ -18,11 +18,14 @@ func resolveNginxStatusURL() string {
 }
 
 // resolveAccessLogPath reads NGINX_ACCESS_LOG with a stable default.
+// Default targets the buffered file written by every proxy_host config —
+// /var/log/nginx/access.log is a symlink to /dev/stdout and has no readable
+// content for the file-tail consumer.
 func resolveAccessLogPath() string {
 	if v := os.Getenv("NGINX_ACCESS_LOG"); v != "" {
 		return v
 	}
-	return "/var/log/nginx/access.log"
+	return "/etc/nginx/logs/access_raw.log"
 }
 
 // runStartup performs startup-time side effects: ensure include files,
