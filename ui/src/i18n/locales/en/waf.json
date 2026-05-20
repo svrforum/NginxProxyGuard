@@ -208,7 +208,8 @@
     },
     "confirm": {
       "unban": "Are you sure you want to unban {{ip}}?",
-      "bulkUnban": "Unban {{count}} selected IPs?"
+      "bulkUnban": "Unban {{count}} selected IPs?",
+      "unbanAll": "Unban all {{count}} IPs in the current filter? This cannot be undone."
     },
     "modal": {
       "title": "Add IP Ban",
@@ -294,7 +295,10 @@
       "unban": "Unban selected",
       "unbanning": "Unbanning...",
       "selectAll": "Select all",
-      "clear": "Clear selection"
+      "clear": "Clear selection",
+      "unbanAll": "Unban all ({{count}})",
+      "unbanAllProgress": "Unbanning {{done}}/{{total}}...",
+      "unbanAllHint": "Unbans every IP matching the current filter"
     }
   },
   "hostList": {
