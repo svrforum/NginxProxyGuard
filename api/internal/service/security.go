@@ -507,6 +507,63 @@ func (s *SecurityService) UnbanIP(ctx context.Context, id string, userID *string
 	return nil
 }
 
+// UnbanIPs unbans a batch of IPs by ID in a single transaction. Returns the
+// number of rows actually deleted (IDs no longer present are silently skipped).
+// Records one history event per IP, removes each from Redis cache, then
+// regenerates nginx configs ONCE — avoiding N regenerations that the
+// per-IP loop would cause.
+func (s *SecurityService) UnbanIPs(ctx context.Context, ids []string, userID *string, userEmail string) (int64, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+
+	// Pre-fetch IP/host info for cache removal and history records.
+	// Done BEFORE delete so we have the data we need.
+	records, err := s.rateLimitRepo.GetBannedIPsByIDs(ctx, ids)
+	if err != nil {
+		return 0, fmt.Errorf("failed to fetch banned IPs: %w", err)
+	}
+
+	deleted, err := s.rateLimitRepo.UnbanIPsByIDs(ctx, ids)
+	if err != nil {
+		return 0, fmt.Errorf("failed to unban IPs: %w", err)
+	}
+
+	// Remove each IP from Redis cache (per-host or global) and record history.
+	for _, b := range records {
+		if s.redisCache != nil {
+			hostID := ""
+			if b.ProxyHostID != nil {
+				hostID = *b.ProxyHostID
+			}
+			if err := s.redisCache.RemoveBannedIP(ctx, b.IPAddress, hostID); err != nil {
+				log.Printf("[SecurityService] Failed to remove banned IP from cache (bulk): %v", err)
+			}
+		}
+
+		if s.historyRepo != nil {
+			historyEvent := &model.IPBanHistory{
+				EventType:   model.BanEventTypeUnban,
+				IPAddress:   b.IPAddress,
+				ProxyHostID: b.ProxyHostID,
+				Reason:      "Bulk unban",
+				Source:      model.BanSourceManual,
+				IsAuto:      false,
+				UserID:      userID,
+				UserEmail:   userEmail,
+			}
+			if err := s.historyRepo.RecordBanEvent(ctx, historyEvent); err != nil {
+				log.Printf("[SecurityService] Failed to record bulk unban history: %v", err)
+			}
+		}
+	}
+
+	// Single nginx config regeneration covers all hosts affected by the bulk.
+	go s.regenerateAllConfigsForBan()
+
+	return deleted, nil
+}
+
 func (s *SecurityService) UnbanIPByAddress(ctx context.Context, ip string, userID *string, userEmail string) error {
 	// Record unban history before deleting
 	if s.historyRepo != nil {

@@ -207,7 +207,8 @@
       "processing": "Processing..."
     },
     "confirm": {
-      "unban": "Are you sure you want to unban {{ip}}?"
+      "unban": "Are you sure you want to unban {{ip}}?",
+      "bulkUnban": "Unban {{count}} selected IPs?"
     },
     "modal": {
       "title": "Add IP Ban",
@@ -287,6 +288,13 @@
     "pagination": {
       "prev": "Previous",
       "next": "Next"
+    },
+    "bulk": {
+      "selected": "{{count}} selected",
+      "unban": "Unban selected",
+      "unbanning": "Unbanning...",
+      "selectAll": "Select all",
+      "clear": "Clear selection"
     }
   },
   "hostList": {

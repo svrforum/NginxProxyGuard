@@ -976,6 +976,7 @@ system_log_level: 'debug','info','warn','error','fatal'
 |--------|------|-------------|
 | GET/POST | `/api/v1/banned-ips` | IP 차단 목록/추가 |
 | DELETE | `/api/v1/banned-ips/:id` | IP 차단 해제 |
+| POST | `/api/v1/banned-ips/bulk-unban` | IP 차단 일괄 해제 (최대 100건/요청) |
 | GET | `/api/v1/banned-ips/history(/stats/ip/:ip)` | 차단 이력 |
 | GET/PUT | `/api/v1/global-uri-block` | 글로벌 URI 차단 |
 | POST/DELETE | `/api/v1/global-uri-block/rules(/:ruleId)` | 글로벌 URI 규칙 |

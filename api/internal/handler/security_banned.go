@@ -4,8 +4,10 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
+	"nginx-proxy-guard/internal/config"
 	"nginx-proxy-guard/internal/service"
 )
 
@@ -105,6 +107,47 @@ func (h *SecurityHandler) UnbanIP(c echo.Context) error {
 	h.audit.LogIPUnbanned(auditCtx, id)
 
 	return c.NoContent(http.StatusNoContent)
+}
+
+// UnbanIPsBulk unbans multiple banned IPs in a single request.
+// Body: {"ids": ["uuid", ...]} — max MaxFilterArraySize entries.
+func (h *SecurityHandler) UnbanIPsBulk(c echo.Context) error {
+	var req struct {
+		IDs []string `json:"ids"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return badRequestError(c, "Invalid request body")
+	}
+	if len(req.IDs) == 0 {
+		return badRequestError(c, "ids must contain at least one entry")
+	}
+	if len(req.IDs) > config.MaxFilterArraySize {
+		return badRequestError(c, "ids exceeds maximum batch size")
+	}
+	for _, id := range req.IDs {
+		if _, err := uuid.Parse(id); err != nil {
+			return badRequestError(c, "ids contains invalid UUID: "+id)
+		}
+	}
+
+	var userID *string
+	var userEmail string
+	if uid, ok := c.Get("user_id").(string); ok && uid != "" {
+		userID = &uid
+	}
+	if email, ok := c.Get("username").(string); ok {
+		userEmail = email
+	}
+
+	deleted, err := h.securityService.UnbanIPs(c.Request().Context(), req.IDs, userID, userEmail)
+	if err != nil {
+		return databaseError(c, "bulk unban IPs", err)
+	}
+
+	auditCtx := service.ContextWithAudit(c.Request().Context(), c)
+	_ = h.audit.LogIPsBulkUnbanned(auditCtx, deleted)
+
+	return c.JSON(http.StatusOK, map[string]int64{"deleted": deleted})
 }
 
 func (h *SecurityHandler) UnbanIPByAddress(c echo.Context) error {
