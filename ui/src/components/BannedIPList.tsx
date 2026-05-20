@@ -8,6 +8,7 @@ import { IPLogsModal } from './banned-ip/IPLogsModal'
 import { BanHistoryTab } from './banned-ip/BanHistoryTab'
 import { BulkActionBar } from './banned-ip/BulkActionBar'
 import { AddBanModal } from './banned-ip/AddBanModal'
+import { useUnbanAll } from './banned-ip/useUnbanAll'
 
 function formatDate(dateStr: string, locale?: string): string {
   return new Date(dateStr).toLocaleString(locale || 'ko-KR')
@@ -169,6 +170,22 @@ export function BannedIPList() {
     if (confirm(t('bannedIp.confirm.bulkUnban', { count: ids.length }))) {
       bulkUnbanMutation.mutate(ids)
     }
+  }
+
+  const { progress: unbanAllProgress, run: runUnbanAll } = useUnbanAll({
+    activeTab,
+    hostFilter,
+    typeFilter,
+    total: data?.total || 0,
+    getReasonCategory,
+    onAfter: () => setSelectedIds(new Set()),
+  })
+
+  const handleUnbanAll = () => {
+    const total = data?.total || 0
+    if (total === 0 || unbanAllProgress) return
+    if (!confirm(t('bannedIp.confirm.unbanAll', { count: total }))) return
+    runUnbanAll()
   }
 
   const banMutation = useMutation({
@@ -369,11 +386,24 @@ export function BannedIPList() {
             </select>
           </div>
 
-          {/* Results count */}
-          <div className="flex items-end">
+          {/* Results count + unban all in current filter */}
+          <div className="flex items-end justify-between gap-3 md:col-span-2 lg:col-span-1">
             <span className="text-sm text-slate-500 dark:text-slate-400 pb-2">
               {t('bannedIp.filter.showing', { defaultValue: '표시: {{count}}건', count: filteredBannedIPs.length })}
             </span>
+            {(data?.total || 0) > 0 && (
+              <button
+                type="button"
+                onClick={handleUnbanAll}
+                disabled={!!unbanAllProgress}
+                className="text-sm px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+                title={t('bannedIp.bulk.unbanAllHint', { defaultValue: '현재 필터에 매칭되는 모든 IP를 해제합니다' })}
+              >
+                {unbanAllProgress
+                  ? t('bannedIp.bulk.unbanAllProgress', { done: unbanAllProgress.done, total: unbanAllProgress.total, defaultValue: '{{done}}/{{total}} 해제 중...' })
+                  : t('bannedIp.bulk.unbanAll', { count: data?.total || 0, defaultValue: '전체 해제 ({{count}}건)' })}
+              </button>
+            )}
           </div>
         </div>
       </div>

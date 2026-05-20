@@ -208,7 +208,8 @@
     },
     "confirm": {
       "unban": "{{ip}}의 차단을 해제하시겠습니까?",
-      "bulkUnban": "선택한 {{count}}개 IP의 차단을 해제하시겠습니까?"
+      "bulkUnban": "선택한 {{count}}개 IP의 차단을 해제하시겠습니까?",
+      "unbanAll": "현재 필터의 차단 {{count}}건을 모두 해제하시겠습니까? 되돌릴 수 없습니다."
     },
     "modal": {
       "title": "IP 차단 추가",
@@ -294,7 +295,10 @@
       "unban": "선택 차단 해제",
       "unbanning": "해제 중...",
       "selectAll": "모두 선택",
-      "clear": "선택 해제"
+      "clear": "선택 해제",
+      "unbanAll": "전체 해제 ({{count}}건)",
+      "unbanAllProgress": "{{done}}/{{total}} 해제 중...",
+      "unbanAllHint": "현재 필터에 매칭되는 모든 IP를 해제합니다"
     }
   },
   "hostList": {
