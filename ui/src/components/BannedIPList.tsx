@@ -2,11 +2,12 @@ import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { HelpTip } from './common/HelpTip'
-import { fetchBannedIPs, fetchProxyHostsForBan, unbanIP, banIP } from '../api/banned-ips'
+import { fetchBannedIPs, fetchProxyHostsForBan, unbanIP, unbanIPsBulk, banIP } from '../api/banned-ips'
 import type { BannedIP } from '../api/banned-ips'
 import { IPLogsModal } from './banned-ip/IPLogsModal'
 import { BanHistoryTab } from './banned-ip/BanHistoryTab'
+import { BulkActionBar } from './banned-ip/BulkActionBar'
+import { AddBanModal } from './banned-ip/AddBanModal'
 
 function formatDate(dateStr: string, locale?: string): string {
   return new Date(dateStr).toLocaleString(locale || 'ko-KR')
@@ -82,6 +83,7 @@ export function BannedIPList() {
   const [selectedIP, setSelectedIP] = useState<BannedIP | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [newBan, setNewBan] = useState({ ip_address: '', reason: '', ban_time: 3600, proxy_host_id: '' })
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   // Tab state - global first, then per-host, then history
   const [activeTab, setActiveTab] = useState<'global' | 'hosts' | 'history'>('global')
@@ -135,6 +137,39 @@ export function BannedIPList() {
       queryClient.invalidateQueries({ queryKey: ['banned-ips'] })
     },
   })
+
+  const bulkUnbanMutation = useMutation({
+    mutationFn: unbanIPsBulk,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['banned-ips'] })
+      setSelectedIds(new Set())
+    },
+  })
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const handleToggleAll = () => {
+    if (selectedIds.size === filteredBannedIPs.length && filteredBannedIPs.length > 0) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(filteredBannedIPs.map(b => b.id)))
+    }
+  }
+
+  const handleBulkUnban = () => {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    if (confirm(t('bannedIp.confirm.bulkUnban', { count: ids.length }))) {
+      bulkUnbanMutation.mutate(ids)
+    }
+  }
 
   const banMutation = useMutation({
     mutationFn: banIP,
@@ -363,10 +398,26 @@ export function BannedIPList() {
           <p>{t('bannedIp.noBans')}</p>
         </div>
       ) : (
+        <div className="space-y-3">
+          <BulkActionBar
+            selectedCount={selectedIds.size}
+            isPending={bulkUnbanMutation.isPending}
+            onClear={() => setSelectedIds(new Set())}
+            onUnban={handleBulkUnban}
+          />
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden overflow-x-auto">
           <table className="w-full">
             <thead className="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700">
               <tr>
+                <th className="px-4 py-3 w-10">
+                  <input
+                    type="checkbox"
+                    checked={filteredBannedIPs.length > 0 && selectedIds.size === filteredBannedIPs.length}
+                    onChange={handleToggleAll}
+                    aria-label={t('bannedIp.bulk.selectAll', { defaultValue: '모두 선택' })}
+                    className="w-4 h-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                  />
+                </th>
                 <th className="text-left px-4 py-3 text-sm font-medium text-slate-600 dark:text-slate-300">{t('bannedIp.table.ip')}</th>
                 <th className="text-left px-4 py-3 text-sm font-medium text-slate-600 dark:text-slate-300">{t('bannedIp.table.host', { defaultValue: '호스트' })}</th>
                 <th className="text-left px-4 py-3 text-sm font-medium text-slate-600 dark:text-slate-300">{t('bannedIp.table.reason')}</th>
@@ -383,6 +434,15 @@ export function BannedIPList() {
 
                 return (
                   <tr key={ban.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                    <td className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(ban.id)}
+                        onChange={() => handleToggleSelect(ban.id)}
+                        aria-label={ban.ip_address}
+                        className="w-4 h-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                      />
+                    </td>
                     <td className="px-4 py-3">
                       <button
                         onClick={() => setSelectedIP(ban)}
@@ -451,6 +511,7 @@ export function BannedIPList() {
             </tbody>
           </table>
         </div>
+        </div>
       )}
 
       {/* Pagination */}
@@ -485,109 +546,15 @@ export function BannedIPList() {
 
       {/* Add Ban Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md border border-slate-200 dark:border-slate-700">
-            <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">{t('bannedIp.modal.title')}</h3>
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <form onSubmit={handleBan} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-2">
-                  {t('bannedIp.modal.ipLabel')}
-                  <HelpTip contentKey="help.bannedIp.ip" ns="waf" />
-                </label>
-                <input
-                  type="text"
-                  value={newBan.ip_address}
-                  onChange={(e) => setNewBan((prev) => ({ ...prev, ip_address: e.target.value }))}
-                  placeholder={t('bannedIp.modal.ipPlaceholder')}
-                  className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 font-mono bg-white dark:bg-slate-700 dark:text-white"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  {t('bannedIp.modal.hostLabel', { defaultValue: '적용 호스트' })}
-                </label>
-                <select
-                  value={newBan.proxy_host_id}
-                  onChange={(e) => setNewBan((prev) => ({ ...prev, proxy_host_id: e.target.value }))}
-                  className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 bg-white dark:bg-slate-700 dark:text-white"
-                >
-                  <option value="">{t('bannedIp.modal.globalBan', { defaultValue: '전역 차단 (모든 호스트)' })}</option>
-                  {proxyHosts.map(host => (
-                    <option key={host.id} value={host.id}>{host.domain_names[0]}</option>
-                  ))}
-                </select>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  {t('bannedIp.modal.hostHint', { defaultValue: '전역 차단은 모든 프록시 호스트에 적용됩니다.' })}
-                </p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-2">
-                  {t('bannedIp.modal.reasonLabel')}
-                  <HelpTip contentKey="help.bannedIp.reason" ns="waf" />
-                </label>
-                <input
-                  type="text"
-                  value={newBan.reason}
-                  onChange={(e) => setNewBan((prev) => ({ ...prev, reason: e.target.value }))}
-                  placeholder={t('bannedIp.modal.reasonPlaceholder')}
-                  className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 bg-white dark:bg-slate-700 dark:text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-2">
-                  {t('bannedIp.modal.durationLabel')}
-                  <HelpTip contentKey="help.bannedIp.duration" ns="waf" />
-                </label>
-                <select
-                  value={newBan.ban_time}
-                  onChange={(e) => setNewBan((prev) => ({ ...prev, ban_time: parseInt(e.target.value) }))}
-                  className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 bg-white dark:bg-slate-700 dark:text-white"
-                >
-                  <option value={300}>{t('bannedIp.modal.durations.5m')}</option>
-                  <option value={600}>{t('bannedIp.modal.durations.10m')}</option>
-                  <option value={1800}>{t('bannedIp.modal.durations.30m')}</option>
-                  <option value={3600}>{t('bannedIp.modal.durations.1h')}</option>
-                  <option value={86400}>{t('bannedIp.modal.durations.24h')}</option>
-                  <option value={604800}>{t('bannedIp.modal.durations.7d')}</option>
-                  <option value={2592000}>{t('bannedIp.modal.durations.30d')}</option>
-                  <option value={0}>{t('bannedIp.modal.durations.permanent')}</option>
-                </select>
-              </div>
-              {banMutation.isError && (
-                <div className="p-3 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-400">
-                  {t('bannedIp.messages.saveFailed', { defaultValue: '차단에 실패했습니다.' })}
-                </div>
-              )}
-              <div className="flex justify-end gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"
-                >
-                  {t('bannedIp.actions.cancel')}
-                </button>
-                <button
-                  type="submit"
-                  disabled={banMutation.isPending}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-red-400"
-                >
-                  {banMutation.isPending ? t('bannedIp.actions.processing') : t('bannedIp.actions.ban')}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <AddBanModal
+          newBan={newBan}
+          proxyHosts={proxyHosts}
+          isError={banMutation.isError}
+          isPending={banMutation.isPending}
+          onChange={setNewBan}
+          onClose={() => setShowAddModal(false)}
+          onSubmit={handleBan}
+        />
       )}
     </div>
   )

@@ -597,6 +597,61 @@ func (r *RateLimitRepository) UnbanIP(ctx context.Context, id string) error {
 	return nil
 }
 
+// GetBannedIPsByIDs returns banned IPs by ID in a single query. Used by
+// bulk-unban to pre-fetch IP/host info for cache invalidation and history
+// records. Missing IDs are silently omitted from the result.
+func (r *RateLimitRepository) GetBannedIPsByIDs(ctx context.Context, ids []string) ([]model.BannedIP, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	query := `
+		SELECT id, proxy_host_id, ip_address, reason, fail_count, banned_at, expires_at, is_permanent, created_at
+		FROM banned_ips WHERE id = ANY($1::uuid[])
+	`
+	rows, err := r.db.QueryContext(ctx, query, pq.Array(ids))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []model.BannedIP
+	for rows.Next() {
+		var b model.BannedIP
+		var phID sql.NullString
+		var reason sql.NullString
+		var expiresAt sql.NullTime
+		if err := rows.Scan(&b.ID, &phID, &b.IPAddress, &reason, &b.FailCount, &b.BannedAt, &expiresAt, &b.IsPermanent, &b.CreatedAt); err != nil {
+			return nil, err
+		}
+		if phID.Valid {
+			b.ProxyHostID = &phID.String
+		}
+		b.Reason = reason.String
+		if expiresAt.Valid {
+			b.ExpiresAt = &expiresAt.Time
+		}
+		out = append(out, b)
+	}
+	return out, rows.Err()
+}
+
+// UnbanIPsByIDs deletes multiple banned IPs in a single statement. Returns
+// the number of rows actually removed; IDs that no longer exist are silently
+// ignored. Cache is invalidated globally because the deleted bans may span
+// multiple proxy hosts.
+func (r *RateLimitRepository) UnbanIPsByIDs(ctx context.Context, ids []string) (int64, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	result, err := r.db.ExecContext(ctx, "DELETE FROM banned_ips WHERE id = ANY($1::uuid[])", pq.Array(ids))
+	if err != nil {
+		return 0, err
+	}
+	n, _ := result.RowsAffected()
+	r.invalidateBans(ctx, nil)
+	return n, nil
+}
+
 func (r *RateLimitRepository) UnbanIPByAddress(ctx context.Context, ip string) error {
 	_, err := r.db.ExecContext(ctx, "DELETE FROM banned_ips WHERE ip_address = $1", ip)
 	if err != nil {

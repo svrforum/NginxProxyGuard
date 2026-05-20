@@ -207,7 +207,8 @@
       "processing": "처리 중..."
     },
     "confirm": {
-      "unban": "{{ip}}의 차단을 해제하시겠습니까?"
+      "unban": "{{ip}}의 차단을 해제하시겠습니까?",
+      "bulkUnban": "선택한 {{count}}개 IP의 차단을 해제하시겠습니까?"
     },
     "modal": {
       "title": "IP 차단 추가",
@@ -287,6 +288,13 @@
     "pagination": {
       "prev": "이전",
       "next": "다음"
+    },
+    "bulk": {
+      "selected": "{{count}}개 선택됨",
+      "unban": "선택 차단 해제",
+      "unbanning": "해제 중...",
+      "selectAll": "모두 선택",
+      "clear": "선택 해제"
     }
   },
   "hostList": {

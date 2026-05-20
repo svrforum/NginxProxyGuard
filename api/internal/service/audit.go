@@ -466,6 +466,13 @@ func (s *AuditService) LogIPUnbanned(ctx context.Context, ipAddress string) erro
 	return s.logEntry(ctx, "ip_unbanned", "banned_ip", "", ipAddress, nil)
 }
 
+// LogIPsBulkUnbanned logs a bulk unban action with the count of IPs removed.
+func (s *AuditService) LogIPsBulkUnbanned(ctx context.Context, count int64) error {
+	return s.logEntry(ctx, "ip_bulk_unbanned", "banned_ip", "", "", map[string]interface{}{
+		"count": count,
+	})
+}
+
 // LogFilterSubscriptionCreated logs filter subscription creation
 func (s *AuditService) LogFilterSubscriptionCreated(ctx context.Context, name, url string) error {
 	return s.logEntry(ctx, "filter_subscription_created", "filter_subscription", "", name, map[string]interface{}{

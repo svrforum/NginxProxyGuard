@@ -67,6 +67,10 @@ export async function unbanIP(id: string): Promise<void> {
   return apiDelete(`${API_BASE}/banned-ips/${id}`)
 }
 
+export async function unbanIPsBulk(ids: string[]): Promise<{ deleted: number }> {
+  return apiPost<{ deleted: number }>(`${API_BASE}/banned-ips/bulk-unban`, { ids })
+}
+
 export async function banIP(data: {
   ip_address: string
   reason?: string
