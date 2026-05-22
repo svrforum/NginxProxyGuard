@@ -650,6 +650,7 @@
     "hostRequired": "Forward host is required",
     "portRequired": "Port is required",
     "portRange": "Port must be between 1 and 65535",
+    "streamListenHostInvalid": "Listen host must be empty, *, or a local IP address. Put upstream hostnames in Forward Host.",
     "certificateRequired": "Select a certificate to use SSL",
     "certSelectionRequired": "Please select a certificate or switch to \"Create New\"",
     "addDomainsBeforeCert": "Add domains first to create certificate"

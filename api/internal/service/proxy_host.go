@@ -108,6 +108,11 @@ func normalizeCreateProxyHostRequest(req *model.CreateProxyHostRequest) error {
 	req.ProxyType = model.NormalizeProxyType(req.ProxyType)
 	if req.ProxyType == model.ProxyTypeStream {
 		req.StreamProtocol = model.NormalizeStreamProtocol(req.StreamProtocol)
+		streamListenHost, err := normalizeStreamListenHost(req.StreamListenHost)
+		if err != nil {
+			return err
+		}
+		req.StreamListenHost = streamListenHost
 		req.ForwardScheme = req.StreamProtocol
 		req.SSLEnabled = false
 		req.SSLForceHTTPS = false
@@ -144,6 +149,13 @@ func normalizeCreateProxyHostRequest(req *model.CreateProxyHostRequest) error {
 		req.ForwardPort = 80
 	}
 	return nil
+}
+
+func normalizeStreamListenHost(host string) (string, error) {
+	if !model.ValidateStreamListenHost(host) {
+		return "", fmt.Errorf("invalid stream_listen_host %q: use an empty value, '*', or a local IP address; upstream hostnames belong in forward_host", strings.TrimSpace(host))
+	}
+	return model.NormalizeStreamListenHost(host), nil
 }
 
 func applyUpdateCandidate(existing *model.ProxyHost, req *model.UpdateProxyHostRequest) model.ProxyHost {
@@ -201,6 +213,12 @@ func normalizeUpdateProxyHostRequest(existing *model.ProxyHost, req *model.Updat
 		candidate.StreamProtocol = model.NormalizeStreamProtocol(candidate.StreamProtocol)
 		streamProtocol := candidate.StreamProtocol
 		req.StreamProtocol = &streamProtocol
+		streamListenHost, err := normalizeStreamListenHost(candidate.StreamListenHost)
+		if err != nil {
+			return nil, err
+		}
+		candidate.StreamListenHost = streamListenHost
+		req.StreamListenHost = &streamListenHost
 		req.ForwardScheme = streamProtocol
 
 		falseValue := false

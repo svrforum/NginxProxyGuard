@@ -3,6 +3,7 @@ package model
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"regexp"
 	"strings"
 	"time"
@@ -30,6 +31,27 @@ func NormalizeStreamProtocol(protocol string) string {
 		return StreamProtocolUDP
 	}
 	return StreamProtocolTCP
+}
+
+func NormalizeStreamListenHost(host string) string {
+	host = strings.TrimSpace(host)
+	if host == "" || host == "*" || host == "0.0.0.0" || host == "::" {
+		return ""
+	}
+	ipText := strings.TrimPrefix(strings.TrimSuffix(host, "]"), "[")
+	if ip := net.ParseIP(ipText); ip != nil {
+		return ip.String()
+	}
+	return host
+}
+
+func ValidateStreamListenHost(host string) bool {
+	host = strings.TrimSpace(host)
+	if host == "" || host == "*" || host == "0.0.0.0" || host == "::" {
+		return true
+	}
+	ipText := strings.TrimPrefix(strings.TrimSuffix(host, "]"), "[")
+	return net.ParseIP(ipText) != nil
 }
 
 // Dangerous nginx directives that should not be allowed in advanced config

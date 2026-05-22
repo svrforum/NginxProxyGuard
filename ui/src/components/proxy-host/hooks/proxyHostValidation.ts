@@ -1,6 +1,18 @@
 import type { CreateProxyHostRequest } from '../../../types/proxy-host'
 import type { FormErrors } from '../types'
 
+const ipv4AddressPattern =
+  /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/
+const ipv6AddressPattern = /^\[?[0-9a-fA-F:]+\]?$/
+
+function isValidStreamListenHost(host: string | undefined): boolean {
+  const value = (host || '').trim()
+  if (!value || value === '*' || value === '0.0.0.0' || value === '::') {
+    return true
+  }
+  return ipv4AddressPattern.test(value) || (value.includes(':') && ipv6AddressPattern.test(value))
+}
+
 /**
  * Arguments required to validate a proxy host form.
  */
@@ -45,6 +57,10 @@ export function validateProxyHostForm({
   }
 
   if (formData.proxy_type === 'stream') {
+    if (!isValidStreamListenHost(formData.stream_listen_host)) {
+      newErrors.stream_listen_host = t('validation.streamListenHostInvalid')
+    }
+
     const listenPort = Number(formData.stream_listen_port || 0)
     if (!listenPort || listenPort < 1 || listenPort > 65535) {
       newErrors.stream_listen_port = t('validation.portRange')

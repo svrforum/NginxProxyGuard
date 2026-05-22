@@ -82,6 +82,39 @@ func TestGenerateConfigFull_StreamTCPHostWritesStreamConfig(t *testing.T) {
 	}
 }
 
+func TestGenerateConfigFull_StreamHostRejectsHostnameListenAddress(t *testing.T) {
+	dir := t.TempDir()
+	confDir := filepath.Join(dir, "conf.d")
+	streamDir := filepath.Join(dir, "stream.d")
+	if err := os.MkdirAll(confDir, 0755); err != nil {
+		t.Fatalf("mkdir conf.d: %v", err)
+	}
+
+	m := &Manager{
+		configPath:       confDir,
+		streamConfigPath: streamDir,
+	}
+	host := &model.ProxyHost{
+		ID:               "00000000-0000-0000-0000-000000000203",
+		ProxyType:        "stream",
+		DomainNames:      []string{"mc.hancy.kr"},
+		ForwardHost:      "hancy-macmini",
+		ForwardPort:      25565,
+		Enabled:          true,
+		StreamListenHost: "hancy-macmini",
+		StreamListenPort: 25656,
+		StreamProtocol:   "tcp",
+	}
+
+	err := m.GenerateConfigFull(context.Background(), ProxyHostConfigData{Host: host})
+	if err == nil {
+		t.Fatal("expected stream listen host validation error, got nil")
+	}
+	if !strings.Contains(err.Error(), "stream_listen_host") {
+		t.Fatalf("expected stream_listen_host error, got %q", err.Error())
+	}
+}
+
 func TestGenerateConfigFull_StreamUDPHostWritesUDPListen(t *testing.T) {
 	dir := t.TempDir()
 	confDir := filepath.Join(dir, "conf.d")

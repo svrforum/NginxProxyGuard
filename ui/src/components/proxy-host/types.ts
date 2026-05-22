@@ -37,6 +37,7 @@ export interface FormErrors {
   domain_names?: string
   forward_host?: string
   forward_port?: string
+  stream_listen_host?: string
   stream_listen_port?: string
   certificate_id?: string
   [key: string]: string | undefined
