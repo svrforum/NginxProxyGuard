@@ -76,22 +76,22 @@ func NewProxyHostService(
 	nginx NginxManager,
 ) *ProxyHostService {
 	return &ProxyHostService{
-		repo:                   repo,
-		wafRepo:                wafRepo,
-		accessListRepo:         accessListRepo,
-		geoRepo:                geoRepo,
-		rateLimitRepo:          rateLimitRepo,
-		securityHeadersRepo:    securityHeadersRepo,
-		botFilterRepo:          botFilterRepo,
-		upstreamRepo:           upstreamRepo,
-		systemSettingsRepo:     systemSettingsRepo,
-		cloudProviderRepo:      cloudProviderRepo,
-		globalSettingsRepo:     globalSettingsRepo,
-		uriBlockRepo:           uriBlockRepo,
-		exploitBlockRuleRepo:   exploitBlockRuleRepo,
-		certRepo:               certRepo,
-		systemLogRepo:          systemLogRepo,
-		nginx:                  nginx,
+		repo:                 repo,
+		wafRepo:              wafRepo,
+		accessListRepo:       accessListRepo,
+		geoRepo:              geoRepo,
+		rateLimitRepo:        rateLimitRepo,
+		securityHeadersRepo:  securityHeadersRepo,
+		botFilterRepo:        botFilterRepo,
+		upstreamRepo:         upstreamRepo,
+		systemSettingsRepo:   systemSettingsRepo,
+		cloudProviderRepo:    cloudProviderRepo,
+		globalSettingsRepo:   globalSettingsRepo,
+		uriBlockRepo:         uriBlockRepo,
+		exploitBlockRuleRepo: exploitBlockRuleRepo,
+		certRepo:             certRepo,
+		systemLogRepo:        systemLogRepo,
+		nginx:                nginx,
 	}
 }
 
@@ -104,13 +104,233 @@ func (s *ProxyHostService) SetFilterSubscriptionRepo(repo *repository.FilterSubs
 	s.filterSubscriptionRepo = repo
 }
 
-func (s *ProxyHostService) Create(ctx context.Context, req *model.CreateProxyHostRequest) (*model.ProxyHost, error) {
-	// Set defaults
+func normalizeCreateProxyHostRequest(req *model.CreateProxyHostRequest) error {
+	req.ProxyType = model.NormalizeProxyType(req.ProxyType)
+	if req.ProxyType == model.ProxyTypeStream {
+		req.StreamProtocol = model.NormalizeStreamProtocol(req.StreamProtocol)
+		req.ForwardScheme = req.StreamProtocol
+		req.SSLEnabled = false
+		req.SSLForceHTTPS = false
+		req.SSLHTTP2 = false
+		req.SSLHTTP3 = false
+		req.CertificateID = nil
+		req.AllowWebsocketUpgrade = false
+		req.CacheEnabled = false
+		req.BlockExploits = false
+		req.WAFEnabled = false
+		req.AccessListID = nil
+		if req.StreamProtocol == model.StreamProtocolUDP {
+			req.StreamSSLPreread = false
+			req.StreamAcceptProxyProtocol = false
+			req.StreamSendProxyProtocol = false
+		}
+		if req.StreamListenPort < 1 || req.StreamListenPort > 65535 {
+			return fmt.Errorf("stream_listen_port is required and must be between 1 and 65535")
+		}
+		if req.ForwardPort < 1 || req.ForwardPort > 65535 {
+			return fmt.Errorf("forward_port is required and must be between 1 and 65535")
+		}
+		if req.StreamProxyConnectTimeout < 0 || req.StreamProxyTimeout < 0 {
+			return fmt.Errorf("stream timeouts must be zero or positive")
+		}
+		return nil
+	}
+
+	req.ProxyType = model.ProxyTypeHTTP
 	if req.ForwardScheme == "" {
 		req.ForwardScheme = "http"
 	}
 	if req.ForwardPort == 0 {
 		req.ForwardPort = 80
+	}
+	return nil
+}
+
+func applyUpdateCandidate(existing *model.ProxyHost, req *model.UpdateProxyHostRequest) model.ProxyHost {
+	candidate := *existing
+	if req.ProxyType != "" {
+		candidate.ProxyType = req.ProxyType
+	}
+	if len(req.DomainNames) > 0 {
+		candidate.DomainNames = req.DomainNames
+	}
+	if req.ForwardScheme != "" {
+		candidate.ForwardScheme = req.ForwardScheme
+	}
+	if req.ForwardHost != "" {
+		candidate.ForwardHost = req.ForwardHost
+	}
+	if req.ForwardPort > 0 {
+		candidate.ForwardPort = req.ForwardPort
+	}
+	if req.StreamListenHost != nil {
+		candidate.StreamListenHost = *req.StreamListenHost
+	}
+	if req.StreamListenPort != nil {
+		candidate.StreamListenPort = *req.StreamListenPort
+	}
+	if req.StreamProtocol != nil {
+		candidate.StreamProtocol = *req.StreamProtocol
+	}
+	if req.StreamSSLPreread != nil {
+		candidate.StreamSSLPreread = *req.StreamSSLPreread
+	}
+	if req.StreamAcceptProxyProtocol != nil {
+		candidate.StreamAcceptProxyProtocol = *req.StreamAcceptProxyProtocol
+	}
+	if req.StreamSendProxyProtocol != nil {
+		candidate.StreamSendProxyProtocol = *req.StreamSendProxyProtocol
+	}
+	if req.StreamProxyConnectTimeout != nil {
+		candidate.StreamProxyConnectTimeout = *req.StreamProxyConnectTimeout
+	}
+	if req.StreamProxyTimeout != nil {
+		candidate.StreamProxyTimeout = *req.StreamProxyTimeout
+	}
+	return candidate
+}
+
+func normalizeUpdateProxyHostRequest(existing *model.ProxyHost, req *model.UpdateProxyHostRequest) (*model.ProxyHost, error) {
+	candidate := applyUpdateCandidate(existing, req)
+	candidate.ProxyType = model.NormalizeProxyType(candidate.ProxyType)
+	if req.ProxyType != "" {
+		req.ProxyType = candidate.ProxyType
+	}
+
+	if candidate.ProxyType == model.ProxyTypeStream {
+		candidate.StreamProtocol = model.NormalizeStreamProtocol(candidate.StreamProtocol)
+		streamProtocol := candidate.StreamProtocol
+		req.StreamProtocol = &streamProtocol
+		req.ForwardScheme = streamProtocol
+
+		falseValue := false
+		req.SSLEnabled = &falseValue
+		req.SSLForceHTTPS = &falseValue
+		req.SSLHTTP2 = &falseValue
+		req.SSLHTTP3 = &falseValue
+		req.CertificateID = stringPtr("")
+		req.AllowWebsocketUpgrade = &falseValue
+		req.CacheEnabled = &falseValue
+		req.BlockExploits = &falseValue
+		req.WAFEnabled = &falseValue
+		req.AccessListID = stringPtr("")
+
+		if candidate.StreamProtocol == model.StreamProtocolUDP {
+			req.StreamSSLPreread = &falseValue
+			req.StreamAcceptProxyProtocol = &falseValue
+			req.StreamSendProxyProtocol = &falseValue
+			candidate.StreamSSLPreread = false
+			candidate.StreamAcceptProxyProtocol = false
+			candidate.StreamSendProxyProtocol = false
+		}
+		if candidate.StreamListenPort < 1 || candidate.StreamListenPort > 65535 {
+			return nil, fmt.Errorf("stream_listen_port is required and must be between 1 and 65535")
+		}
+		if candidate.ForwardPort < 1 || candidate.ForwardPort > 65535 {
+			return nil, fmt.Errorf("forward_port is required and must be between 1 and 65535")
+		}
+		if candidate.StreamProxyConnectTimeout < 0 || candidate.StreamProxyTimeout < 0 {
+			return nil, fmt.Errorf("stream timeouts must be zero or positive")
+		}
+	}
+
+	return &candidate, nil
+}
+
+func stringPtr(value string) *string {
+	return &value
+}
+
+func (s *ProxyHostService) prepareUpdateProxyHostRequest(ctx context.Context, id string, req *model.UpdateProxyHostRequest) (string, *model.ProxyHost, error) {
+	existingHost, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to get proxy host: %w", err)
+	}
+	if existingHost == nil {
+		return "", nil, nil
+	}
+
+	oldConfigFilename := nginx.GetConfigFilename(existingHost)
+
+	if len(req.DomainNames) > 0 {
+		var validDomains []string
+		for _, d := range req.DomainNames {
+			d = strings.TrimSpace(d)
+			if d != "" {
+				validDomains = append(validDomains, d)
+			}
+		}
+		if len(validDomains) == 0 {
+			return "", nil, fmt.Errorf("at least one valid domain name is required")
+		}
+		req.DomainNames = validDomains
+	}
+
+	if req.AdvancedConfig != nil {
+		if err := model.ValidateAdvancedConfig(*req.AdvancedConfig); err != nil {
+			return "", nil, fmt.Errorf("invalid advanced config: %w", err)
+		}
+	}
+
+	candidate, err := normalizeUpdateProxyHostRequest(existingHost, req)
+	if err != nil {
+		return "", nil, err
+	}
+
+	if candidate.ProxyType == model.ProxyTypeStream {
+		conflicts, err := s.repo.CheckStreamListenConflicts(ctx, candidate.DomainNames, candidate.StreamListenHost, candidate.StreamListenPort, candidate.StreamProtocol, candidate.StreamSSLPreread, id)
+		if err != nil {
+			return "", nil, err
+		}
+		if len(conflicts) > 0 {
+			return "", nil, fmt.Errorf("stream listener conflict: %v", conflicts)
+		}
+		return oldConfigFilename, candidate, nil
+	}
+
+	// Validate SSL settings: ssl_force_https requires ssl_enabled
+	if req.SSLForceHTTPS != nil && req.SSLEnabled != nil {
+		if *req.SSLForceHTTPS && !*req.SSLEnabled {
+			*req.SSLForceHTTPS = false
+		}
+	}
+
+	if len(req.DomainNames) > 0 {
+		existingDomains, err := s.repo.CheckDomainExists(ctx, req.DomainNames, id)
+		if err != nil {
+			return "", nil, fmt.Errorf("failed to check domain existence: %w", err)
+		}
+		if len(existingDomains) > 0 {
+			return "", nil, fmt.Errorf("domain(s) already exist: %v", existingDomains)
+		}
+	}
+
+	if req.CertificateID != nil && *req.CertificateID != "" && s.certRepo != nil {
+		cert, err := s.certRepo.GetByID(ctx, *req.CertificateID)
+		if err != nil {
+			return "", nil, fmt.Errorf("failed to validate certificate_id: %w", err)
+		}
+		if cert == nil {
+			return "", nil, fmt.Errorf("certificate not found: %s", *req.CertificateID)
+		}
+	}
+
+	if req.AccessListID != nil && *req.AccessListID != "" && s.accessListRepo != nil {
+		al, err := s.accessListRepo.GetByID(ctx, *req.AccessListID)
+		if err != nil {
+			return "", nil, fmt.Errorf("failed to validate access_list_id: %w", err)
+		}
+		if al == nil {
+			return "", nil, fmt.Errorf("access list not found: %s", *req.AccessListID)
+		}
+	}
+
+	return oldConfigFilename, candidate, nil
+}
+
+func (s *ProxyHostService) Create(ctx context.Context, req *model.CreateProxyHostRequest) (*model.ProxyHost, error) {
+	if err := normalizeCreateProxyHostRequest(req); err != nil {
+		return nil, err
 	}
 
 	// Filter out empty domain names
@@ -126,44 +346,54 @@ func (s *ProxyHostService) Create(ctx context.Context, req *model.CreateProxyHos
 	}
 	req.DomainNames = validDomains
 
-	// Validate SSL settings: ssl_force_https requires ssl_enabled
-	if req.SSLForceHTTPS && !req.SSLEnabled {
-		req.SSLForceHTTPS = false // Auto-correct invalid state
-	}
-
 	// Validate advanced config for security
 	if err := model.ValidateAdvancedConfig(req.AdvancedConfig); err != nil {
 		return nil, fmt.Errorf("invalid advanced config: %w", err)
 	}
 
-	// Check for duplicate domains
-	existingDomains, err := s.repo.CheckDomainExists(ctx, req.DomainNames, "")
-	if err != nil {
-		return nil, fmt.Errorf("failed to check domain existence: %w", err)
-	}
-	if len(existingDomains) > 0 {
-		return nil, fmt.Errorf("domain(s) already exist: %v", existingDomains)
-	}
-
-	// Validate certificate_id exists if provided
-	if req.CertificateID != nil && *req.CertificateID != "" && s.certRepo != nil {
-		cert, err := s.certRepo.GetByID(ctx, *req.CertificateID)
+	if req.ProxyType == model.ProxyTypeStream {
+		conflicts, err := s.repo.CheckStreamListenConflicts(ctx, req.DomainNames, req.StreamListenHost, req.StreamListenPort, req.StreamProtocol, req.StreamSSLPreread, "")
 		if err != nil {
-			return nil, fmt.Errorf("failed to validate certificate_id: %w", err)
+			return nil, err
 		}
-		if cert == nil {
-			return nil, fmt.Errorf("certificate not found: %s", *req.CertificateID)
+		if len(conflicts) > 0 {
+			return nil, fmt.Errorf("stream listener conflict: %v", conflicts)
 		}
-	}
+	} else {
+		// Validate SSL settings: ssl_force_https requires ssl_enabled
+		if req.SSLForceHTTPS && !req.SSLEnabled {
+			req.SSLForceHTTPS = false // Auto-correct invalid state
+		}
 
-	// Validate access_list_id exists if provided
-	if req.AccessListID != nil && *req.AccessListID != "" && s.accessListRepo != nil {
-		al, err := s.accessListRepo.GetByID(ctx, *req.AccessListID)
+		// Check for duplicate domains
+		existingDomains, err := s.repo.CheckDomainExists(ctx, req.DomainNames, "")
 		if err != nil {
-			return nil, fmt.Errorf("failed to validate access_list_id: %w", err)
+			return nil, fmt.Errorf("failed to check domain existence: %w", err)
 		}
-		if al == nil {
-			return nil, fmt.Errorf("access list not found: %s", *req.AccessListID)
+		if len(existingDomains) > 0 {
+			return nil, fmt.Errorf("domain(s) already exist: %v", existingDomains)
+		}
+
+		// Validate certificate_id exists if provided
+		if req.CertificateID != nil && *req.CertificateID != "" && s.certRepo != nil {
+			cert, err := s.certRepo.GetByID(ctx, *req.CertificateID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to validate certificate_id: %w", err)
+			}
+			if cert == nil {
+				return nil, fmt.Errorf("certificate not found: %s", *req.CertificateID)
+			}
+		}
+
+		// Validate access_list_id exists if provided
+		if req.AccessListID != nil && *req.AccessListID != "" && s.accessListRepo != nil {
+			al, err := s.accessListRepo.GetByID(ctx, *req.AccessListID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to validate access_list_id: %w", err)
+			}
+			if al == nil {
+				return nil, fmt.Errorf("access list not found: %s", *req.AccessListID)
+			}
 		}
 	}
 
@@ -179,7 +409,7 @@ func (s *ProxyHostService) Create(ctx context.Context, req *model.CreateProxyHos
 
 		// Get WAF exclusions if WAF is enabled
 		var wafExclusions []model.WAFRuleExclusion
-		if host.WAFEnabled {
+		if host.WAFEnabled && !host.IsStream() {
 			wafExclusions, err = s.getMergedWAFExclusions(ctx, host.ID)
 			if err != nil {
 				// Rollback: Delete DB record since config generation won't proceed
@@ -239,70 +469,9 @@ func (s *ProxyHostService) UpdateWithoutReload(ctx context.Context, id string, r
 
 	// If req is nil, we just want to regenerate config for the existing host
 	if req != nil {
-		// Validate SSL settings: ssl_force_https requires ssl_enabled
-		if req.SSLForceHTTPS != nil && req.SSLEnabled != nil {
-			if *req.SSLForceHTTPS && !*req.SSLEnabled {
-				*req.SSLForceHTTPS = false
-			}
-		}
-
-		// Validate advanced config for security if provided
-		if req.AdvancedConfig != nil {
-			if err := model.ValidateAdvancedConfig(*req.AdvancedConfig); err != nil {
-				return nil, fmt.Errorf("invalid advanced config: %w", err)
-			}
-		}
-
-		// Check for duplicate domains if domain_names is being updated
-		if len(req.DomainNames) > 0 {
-			var validDomains []string
-			for _, d := range req.DomainNames {
-				d = strings.TrimSpace(d)
-				if d != "" {
-					validDomains = append(validDomains, d)
-				}
-			}
-			if len(validDomains) == 0 {
-				return nil, fmt.Errorf("at least one valid domain name is required")
-			}
-			req.DomainNames = validDomains
-
-			// Get existing host to save old config filename before update
-			// This is needed because config filename is based on the first domain name
-			existingHost, getErr := s.repo.GetByID(ctx, id)
-			if getErr == nil && existingHost != nil {
-				oldConfigFilename = nginx.GetConfigFilename(existingHost)
-			}
-
-			existingDomains, err := s.repo.CheckDomainExists(ctx, req.DomainNames, id)
-			if err != nil {
-				return nil, fmt.Errorf("failed to check domain existence: %w", err)
-			}
-			if len(existingDomains) > 0 {
-				return nil, fmt.Errorf("domain(s) already exist: %v", existingDomains)
-			}
-		}
-
-		// Validate certificate_id exists if provided
-		if req.CertificateID != nil && *req.CertificateID != "" && s.certRepo != nil {
-			cert, err := s.certRepo.GetByID(ctx, *req.CertificateID)
-			if err != nil {
-				return nil, fmt.Errorf("failed to validate certificate_id: %w", err)
-			}
-			if cert == nil {
-				return nil, fmt.Errorf("certificate not found: %s", *req.CertificateID)
-			}
-		}
-
-		// Validate access_list_id exists if provided
-		if req.AccessListID != nil && *req.AccessListID != "" && s.accessListRepo != nil {
-			al, err := s.accessListRepo.GetByID(ctx, *req.AccessListID)
-			if err != nil {
-				return nil, fmt.Errorf("failed to validate access_list_id: %w", err)
-			}
-			if al == nil {
-				return nil, fmt.Errorf("access list not found: %s", *req.AccessListID)
-			}
+		oldConfigFilename, _, err = s.prepareUpdateProxyHostRequest(ctx, id, req)
+		if err != nil {
+			return nil, err
 		}
 
 		host, err = s.repo.Update(ctx, id, req)
@@ -331,7 +500,7 @@ func (s *ProxyHostService) UpdateWithoutReload(ctx context.Context, id string, r
 		}
 
 		// Generate or remove WAF config based on WAF enabled status
-		if host.WAFEnabled {
+		if host.WAFEnabled && !host.IsStream() {
 			mergedExclusions, err := s.getMergedWAFExclusions(ctx, id)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get WAF exclusions: %w", err)
@@ -391,77 +560,15 @@ func (s *ProxyHostService) Update(ctx context.Context, id string, req *model.Upd
 
 	// If req is nil, we just want to regenerate config for the existing host
 	if req != nil {
-		// Validate SSL settings: ssl_force_https requires ssl_enabled
-		if req.SSLForceHTTPS != nil && req.SSLEnabled != nil {
-			if *req.SSLForceHTTPS && !*req.SSLEnabled {
-				*req.SSLForceHTTPS = false // Auto-correct invalid state
-			}
+		oldConfigFilename, _, err = s.prepareUpdateProxyHostRequest(ctx, id, req)
+		if err != nil {
+			return nil, err
 		}
 
-		// Validate advanced config for security if provided
-		if req.AdvancedConfig != nil {
-			if err := model.ValidateAdvancedConfig(*req.AdvancedConfig); err != nil {
-				return nil, fmt.Errorf("invalid advanced config: %w", err)
-			}
+		host, err = s.repo.Update(ctx, id, req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to update proxy host: %w", err)
 		}
-
-		// Check for duplicate domains if domain_names is being updated
-		if len(req.DomainNames) > 0 {
-			// Filter out empty domain names
-			var validDomains []string
-			for _, d := range req.DomainNames {
-				d = strings.TrimSpace(d)
-				if d != "" {
-					validDomains = append(validDomains, d)
-				}
-			}
-			if len(validDomains) == 0 {
-				return nil, fmt.Errorf("at least one valid domain name is required")
-			}
-			req.DomainNames = validDomains
-
-			// Get existing host to save old config filename before update
-			// This is needed because config filename is based on the first domain name
-			existingHost, getErr := s.repo.GetByID(ctx, id)
-			if getErr == nil && existingHost != nil {
-				oldConfigFilename = nginx.GetConfigFilename(existingHost)
-			}
-
-			existingDomains, err := s.repo.CheckDomainExists(ctx, req.DomainNames, id)
-			if err != nil {
-				return nil, fmt.Errorf("failed to check domain existence: %w", err)
-			}
-			if len(existingDomains) > 0 {
-				return nil, fmt.Errorf("domain(s) already exist: %v", existingDomains)
-			}
-		}
-
-		// Validate certificate_id exists if provided
-		if req.CertificateID != nil && *req.CertificateID != "" && s.certRepo != nil {
-			cert, err := s.certRepo.GetByID(ctx, *req.CertificateID)
-			if err != nil {
-				return nil, fmt.Errorf("failed to validate certificate_id: %w", err)
-			}
-			if cert == nil {
-				return nil, fmt.Errorf("certificate not found: %s", *req.CertificateID)
-			}
-		}
-
-		// Validate access_list_id exists if provided
-		if req.AccessListID != nil && *req.AccessListID != "" && s.accessListRepo != nil {
-			al, err := s.accessListRepo.GetByID(ctx, *req.AccessListID)
-			if err != nil {
-				return nil, fmt.Errorf("failed to validate access_list_id: %w", err)
-			}
-			if al == nil {
-				return nil, fmt.Errorf("access list not found: %s", *req.AccessListID)
-			}
-		}
-
-	    host, err = s.repo.Update(ctx, id, req)
-	    if err != nil {
-		    return nil, fmt.Errorf("failed to update proxy host: %w", err)
-	    }
 	} else {
 		// Just fetch the host
 		host, err = s.repo.GetByID(ctx, id)
@@ -481,7 +588,7 @@ func (s *ProxyHostService) Update(ctx context.Context, id string, req *model.Upd
 
 		// Get WAF exclusions if WAF is enabled
 		var wafExclusions []model.WAFRuleExclusion
-		if host.WAFEnabled {
+		if host.WAFEnabled && !host.IsStream() {
 			wafExclusions, err = s.getMergedWAFExclusions(ctx, id)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get WAF exclusions: %w", err)
@@ -544,70 +651,9 @@ func (s *ProxyHostService) UpdateDBOnly(ctx context.Context, id string, req *mod
 		return s.repo.GetByID(ctx, id)
 	}
 
-	// Validate SSL settings
-	if req.SSLForceHTTPS != nil && req.SSLEnabled != nil {
-		if *req.SSLForceHTTPS && !*req.SSLEnabled {
-			*req.SSLForceHTTPS = false
-		}
-	}
-
-	// Validate advanced config
-	if req.AdvancedConfig != nil {
-		if err := model.ValidateAdvancedConfig(*req.AdvancedConfig); err != nil {
-			return nil, fmt.Errorf("invalid advanced config: %w", err)
-		}
-	}
-
-	var oldConfigFilename string
-
-	// Check for duplicate domains
-	if len(req.DomainNames) > 0 {
-		var validDomains []string
-		for _, d := range req.DomainNames {
-			d = strings.TrimSpace(d)
-			if d != "" {
-				validDomains = append(validDomains, d)
-			}
-		}
-		if len(validDomains) == 0 {
-			return nil, fmt.Errorf("at least one valid domain name is required")
-		}
-		req.DomainNames = validDomains
-
-		existingHost, getErr := s.repo.GetByID(ctx, id)
-		if getErr == nil && existingHost != nil {
-			oldConfigFilename = nginx.GetConfigFilename(existingHost)
-		}
-
-		existingDomains, err := s.repo.CheckDomainExists(ctx, req.DomainNames, id)
-		if err != nil {
-			return nil, fmt.Errorf("failed to check domain existence: %w", err)
-		}
-		if len(existingDomains) > 0 {
-			return nil, fmt.Errorf("domain(s) already exist: %v", existingDomains)
-		}
-	}
-
-	// Validate certificate_id
-	if req.CertificateID != nil && *req.CertificateID != "" && s.certRepo != nil {
-		cert, err := s.certRepo.GetByID(ctx, *req.CertificateID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to validate certificate_id: %w", err)
-		}
-		if cert == nil {
-			return nil, fmt.Errorf("certificate not found: %s", *req.CertificateID)
-		}
-	}
-
-	// Validate access_list_id
-	if req.AccessListID != nil && *req.AccessListID != "" && s.accessListRepo != nil {
-		al, err := s.accessListRepo.GetByID(ctx, *req.AccessListID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to validate access_list_id: %w", err)
-		}
-		if al == nil {
-			return nil, fmt.Errorf("access list not found: %s", *req.AccessListID)
-		}
+	oldConfigFilename, _, err := s.prepareUpdateProxyHostRequest(ctx, id, req)
+	if err != nil {
+		return nil, err
 	}
 
 	host, err := s.repo.Update(ctx, id, req)
@@ -650,7 +696,7 @@ func (s *ProxyHostService) Delete(ctx context.Context, id string) error {
 	var wafExclusions []model.WAFRuleExclusion
 	if host.Enabled {
 		configData = s.getHostConfigData(ctx, host)
-		if host.WAFEnabled {
+		if host.WAFEnabled && !host.IsStream() {
 			wafExclusions, _ = s.getMergedWAFExclusions(ctx, host.ID)
 		}
 	}

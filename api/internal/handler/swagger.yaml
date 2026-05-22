@@ -2170,17 +2170,44 @@ components:
         id:
           type: string
           format: uuid
+        proxy_type:
+          type: string
+          enum: [http, stream]
+          default: http
         domain_names:
           type: array
           items:
             type: string
         forward_scheme:
           type: string
-          enum: [http, https]
+          enum: [http, https, tcp, udp]
         forward_host:
           type: string
         forward_port:
           type: integer
+        stream_listen_host:
+          type: string
+          description: Optional listen address for stream proxy hosts
+        stream_listen_port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+          description: Listen port for stream proxy hosts
+        stream_protocol:
+          type: string
+          enum: [tcp, udp]
+        stream_ssl_preread:
+          type: boolean
+        stream_accept_proxy_protocol:
+          type: boolean
+        stream_send_proxy_protocol:
+          type: boolean
+        stream_proxy_connect_timeout:
+          type: integer
+          description: Stream upstream connect timeout in seconds
+        stream_proxy_timeout:
+          type: integer
+          description: Stream session proxy timeout in seconds
         enabled:
           type: boolean
         ssl_enabled:
@@ -2217,6 +2244,10 @@ components:
       type: object
       required: [domain_names, forward_host, forward_port]
       properties:
+        proxy_type:
+          type: string
+          enum: [http, stream]
+          default: http
         domain_names:
           type: array
           items:
@@ -2224,7 +2255,7 @@ components:
           minItems: 1
         forward_scheme:
           type: string
-          enum: [http, https]
+          enum: [http, https, tcp, udp]
           default: http
         forward_host:
           type: string
@@ -2232,6 +2263,33 @@ components:
           type: integer
           minimum: 1
           maximum: 65535
+        stream_listen_host:
+          type: string
+          description: Optional listen address for stream proxy hosts
+        stream_listen_port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+          description: Required when proxy_type is stream
+        stream_protocol:
+          type: string
+          enum: [tcp, udp]
+          default: tcp
+        stream_ssl_preread:
+          type: boolean
+          default: false
+        stream_accept_proxy_protocol:
+          type: boolean
+          default: false
+        stream_send_proxy_protocol:
+          type: boolean
+          default: false
+        stream_proxy_connect_timeout:
+          type: integer
+          default: 0
+        stream_proxy_timeout:
+          type: integer
+          default: 0
         enabled:
           type: boolean
           default: true
@@ -2248,15 +2306,38 @@ components:
     UpdateProxyHost:
       type: object
       properties:
+        proxy_type:
+          type: string
+          enum: [http, stream]
         domain_names:
           type: array
           items:
             type: string
         forward_scheme:
           type: string
+          enum: [http, https, tcp, udp]
         forward_host:
           type: string
         forward_port:
+          type: integer
+        stream_listen_host:
+          type: string
+        stream_listen_port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+        stream_protocol:
+          type: string
+          enum: [tcp, udp]
+        stream_ssl_preread:
+          type: boolean
+        stream_accept_proxy_protocol:
+          type: boolean
+        stream_send_proxy_protocol:
+          type: boolean
+        stream_proxy_connect_timeout:
+          type: integer
+        stream_proxy_timeout:
           type: integer
         enabled:
           type: boolean

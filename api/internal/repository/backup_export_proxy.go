@@ -11,7 +11,15 @@ import (
 
 func (r *BackupRepository) exportProxyHosts(ctx context.Context) ([]model.ProxyHostExport, error) {
 	query := `
-		SELECT id, domain_names, forward_scheme, forward_host, forward_port,
+		SELECT id, COALESCE(proxy_type, 'http') as proxy_type, domain_names, forward_scheme, forward_host, forward_port,
+		       COALESCE(stream_listen_host, '') as stream_listen_host,
+		       COALESCE(stream_listen_port, 0) as stream_listen_port,
+		       COALESCE(stream_protocol, 'tcp') as stream_protocol,
+		       COALESCE(stream_ssl_preread, false) as stream_ssl_preread,
+		       COALESCE(stream_accept_proxy_protocol, false) as stream_accept_proxy_protocol,
+		       COALESCE(stream_send_proxy_protocol, false) as stream_send_proxy_protocol,
+		       COALESCE(stream_proxy_connect_timeout, 0) as stream_proxy_connect_timeout,
+		       COALESCE(stream_proxy_timeout, 0) as stream_proxy_timeout,
 		       ssl_enabled, ssl_force_https, ssl_http2, COALESCE(ssl_http3, false) as ssl_http3, certificate_id,
 		       allow_websocket_upgrade, cache_enabled,
 		       COALESCE(cache_static_only, true) as cache_static_only,
@@ -50,7 +58,10 @@ func (r *BackupRepository) exportProxyHosts(ctx context.Context) ([]model.ProxyH
 		var advancedConfig sql.NullString
 
 		err := rows.Scan(
-			&ph.ID, pq.Array(&ph.DomainNames), &ph.ForwardScheme, &ph.ForwardHost, &ph.ForwardPort,
+			&ph.ID, &ph.ProxyType, pq.Array(&ph.DomainNames), &ph.ForwardScheme, &ph.ForwardHost, &ph.ForwardPort,
+			&ph.StreamListenHost, &ph.StreamListenPort, &ph.StreamProtocol, &ph.StreamSSLPreread,
+			&ph.StreamAcceptProxyProtocol, &ph.StreamSendProxyProtocol,
+			&ph.StreamProxyConnectTimeout, &ph.StreamProxyTimeout,
 			&ph.SSLEnabled, &ph.SSLForceHTTPS, &ph.SSLHTTP2, &ph.SSLHTTP3, &certID,
 			&ph.AllowWebsocketUpgrade, &ph.CacheEnabled, &ph.CacheStaticOnly, &ph.CacheTTL,
 			&ph.BlockExploits, &ph.BlockExploitsExceptions,

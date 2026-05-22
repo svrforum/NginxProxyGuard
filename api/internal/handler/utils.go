@@ -39,6 +39,10 @@ var SupportedLanguages = []string{LanguageKorean, LanguageEnglish}
 // domainRegex validates domain name format (RFC 1035)
 var domainRegex = regexp.MustCompile(`^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$`)
 
+// streamNameRegex accepts DNS-like SNI names plus simple service labels used
+// for raw TCP/UDP listeners where no SNI routing is enabled.
+var streamNameRegex = regexp.MustCompile(`^[a-zA-Z0-9*_.-]+$`)
+
 // ParsePaginationParams extracts and validates pagination parameters from request
 func ParsePaginationParams(c echo.Context) (page, perPage int) {
 	page, _ = strconv.Atoi(c.QueryParam("page"))
@@ -101,6 +105,14 @@ func ValidateDomainName(domain string) bool {
 		domain = domain[2:]
 	}
 	return domainRegex.MatchString(domain)
+}
+
+func ValidateStreamName(name string) bool {
+	name = strings.TrimSpace(name)
+	if len(name) == 0 || len(name) > MaxDomainLength {
+		return false
+	}
+	return streamNameRegex.MatchString(name)
 }
 
 // ValidateHostnameOrIP validates that a string is either a valid hostname or IP address
