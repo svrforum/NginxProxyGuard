@@ -61,6 +61,9 @@ Protect against DDoS and brute-force attacks with configurable rate limits per I
 ### 🔀 Load Balancing & Upstream
 Multiple backend servers with round-robin, least connections, IP hash, or weighted distribution. Health checks included.
 
+### 🔌 TCP/UDP Stream Proxying
+Manage Nginx `stream` reverse proxies from the same UI. Supports TCP and UDP listeners, optional SNI preread routing, PROXY protocol in/out, stream timeouts, config testing, and backup/restore.
+
 ### 🔐 Security Headers
 HSTS, X-Frame-Options, X-Content-Type-Options, X-XSS-Protection, Referrer-Policy, and Content-Security-Policy.
 
@@ -108,7 +111,7 @@ Actionable error guides for proxy host configuration failures. Clickable error b
 
 | Technology | Purpose |
 |------------|---------|
-| **Nginx 1.28** | High-performance reverse proxy core with HTTP/3 & QUIC support |
+| **Nginx 1.28** | High-performance HTTP and stream reverse proxy core with HTTP/3 & QUIC support |
 | **TimescaleDB** | PostgreSQL with time-series optimization for log compression |
 | **Valkey 8** | Redis-compatible high-speed caching and session management |
 | **Go 1.24** | Backend API with efficient resource management and concurrency |
