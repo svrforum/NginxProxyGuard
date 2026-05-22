@@ -132,7 +132,7 @@ func formatHostPort(host string, port int) string {
 }
 
 func formatListenAddress(host string, port int) string {
-	host = strings.TrimSpace(host)
+	host = model.NormalizeStreamListenHost(host)
 	if host == "" || host == "*" {
 		return strconv.Itoa(port)
 	}

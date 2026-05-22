@@ -39,7 +39,7 @@ func TestCreateProxyHostValidation(t *testing.T) {
 			},
 			expectedErr: "at least one valid domain name is required",
 		},
-	    // Add more validation test cases here as the service logic expands
+		// Add more validation test cases here as the service logic expands
 	}
 
 	for _, tt := range tests {
@@ -53,6 +53,45 @@ func TestCreateProxyHostValidation(t *testing.T) {
 				t.Errorf("expected error containing %q, got %q", tt.expectedErr, err.Error())
 			}
 		})
+	}
+}
+
+func TestNormalizeCreateStreamProxyHostRequestRejectsHostnameListenHost(t *testing.T) {
+	req := &model.CreateProxyHostRequest{
+		ProxyType:        "stream",
+		DomainNames:      []string{"mc.hancy.kr"},
+		ForwardHost:      "hancy-macmini",
+		ForwardPort:      25565,
+		StreamListenHost: "hancy-macmini",
+		StreamListenPort: 25656,
+		StreamProtocol:   "tcp",
+	}
+
+	err := normalizeCreateProxyHostRequest(req)
+	if err == nil {
+		t.Fatal("expected stream listen host validation error, got nil")
+	}
+	if !strings.Contains(err.Error(), "stream_listen_host") {
+		t.Fatalf("expected stream_listen_host error, got %q", err.Error())
+	}
+}
+
+func TestNormalizeCreateStreamProxyHostRequestNormalizesWildcardListenHost(t *testing.T) {
+	req := &model.CreateProxyHostRequest{
+		ProxyType:        "stream",
+		DomainNames:      []string{"mc.hancy.kr"},
+		ForwardHost:      "hancy-macmini",
+		ForwardPort:      25565,
+		StreamListenHost: "0.0.0.0",
+		StreamListenPort: 25656,
+		StreamProtocol:   "tcp",
+	}
+
+	if err := normalizeCreateProxyHostRequest(req); err != nil {
+		t.Fatalf("normalizeCreateProxyHostRequest: %v", err)
+	}
+	if req.StreamListenHost != "" {
+		t.Fatalf("expected wildcard listen host to normalize to empty string, got %q", req.StreamListenHost)
 	}
 }
 

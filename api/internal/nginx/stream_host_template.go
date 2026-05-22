@@ -50,10 +50,14 @@ func (m *Manager) GenerateStreamConfig(ctx context.Context, data ProxyHostConfig
 	if data.Host.ForwardHost == "" || data.Host.ForwardPort <= 0 {
 		return fmt.Errorf("stream upstream host and port are required")
 	}
+	if !model.ValidateStreamListenHost(data.Host.StreamListenHost) {
+		return fmt.Errorf("invalid stream_listen_host %q: use an empty value, '*', or a local IP address; upstream hostnames belong in forward_host", data.Host.StreamListenHost)
+	}
+	streamListenHost := model.NormalizeStreamListenHost(data.Host.StreamListenHost)
 
 	funcMap := GetTemplateFuncMap("")
 	funcMap["streamListen"] = func(host *model.ProxyHost) string {
-		return formatListenAddress(host.StreamListenHost, host.StreamListenPort)
+		return formatListenAddress(streamListenHost, host.StreamListenPort)
 	}
 	funcMap["streamBackend"] = formatHostPort
 	funcMap["streamProtocol"] = func(host *model.ProxyHost) string {
