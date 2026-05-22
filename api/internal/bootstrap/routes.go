@@ -19,6 +19,7 @@ import (
 	"nginx-proxy-guard/internal/config"
 	"nginx-proxy-guard/internal/handler"
 	authMiddleware "nginx-proxy-guard/internal/middleware"
+	"nginx-proxy-guard/internal/service"
 )
 
 // RegisterMiddleware configures CORS, security headers, rate limiting,
@@ -546,6 +547,27 @@ func registerTestRoutes(v1 *echo.Group, c *Container) {
 			return ec.JSON(http.StatusNotFound, map[string]string{
 				"status": "error",
 				"error":  "Proxy host not found",
+			})
+		}
+
+		if host.IsStream() {
+			result, err := service.NewProxyHostTester().TestUpstream(ec.Request().Context(), host)
+			if err != nil {
+				return ec.JSON(http.StatusInternalServerError, map[string]string{
+					"status": "error",
+					"error":  err.Error(),
+				})
+			}
+			status := config.StatusOK
+			if !result.Success {
+				status = config.StatusError
+			}
+			return ec.JSON(http.StatusOK, map[string]interface{}{
+				"status":           status,
+				"host":             host,
+				"upstream":         result.Domain,
+				"response_time_ms": result.ResponseTime,
+				"error":            result.Error,
 			})
 		}
 

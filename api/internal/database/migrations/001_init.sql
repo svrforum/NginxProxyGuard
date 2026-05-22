@@ -1870,10 +1870,19 @@ UNION ALL
    FROM public.logs_partitioned;
 CREATE TABLE IF NOT EXISTS public.proxy_hosts (
     id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    proxy_type character varying(20) DEFAULT 'http'::character varying NOT NULL,
     domain_names text[] NOT NULL,
     forward_scheme character varying(10) DEFAULT 'http'::character varying NOT NULL,
     forward_host character varying(255) NOT NULL,
     forward_port integer DEFAULT 80 NOT NULL,
+    stream_listen_host character varying(255) DEFAULT ''::character varying,
+    stream_listen_port integer DEFAULT 0,
+    stream_protocol character varying(10) DEFAULT 'tcp'::character varying,
+    stream_ssl_preread boolean DEFAULT false NOT NULL,
+    stream_accept_proxy_protocol boolean DEFAULT false NOT NULL,
+    stream_send_proxy_protocol boolean DEFAULT false NOT NULL,
+    stream_proxy_connect_timeout integer DEFAULT 0,
+    stream_proxy_timeout integer DEFAULT 0,
     ssl_enabled boolean DEFAULT false NOT NULL,
     ssl_force_https boolean DEFAULT false NOT NULL,
     ssl_http2 boolean DEFAULT true NOT NULL,
@@ -1914,10 +1923,15 @@ CREATE TABLE IF NOT EXISTS public.proxy_hosts (
     CONSTRAINT chk_waf_paranoia_level CHECK (((waf_paranoia_level >= 1) AND (waf_paranoia_level <= 4)))
 );
 COMMENT ON TABLE public.proxy_hosts IS 'Stores reverse proxy host configurations';
+COMMENT ON COLUMN public.proxy_hosts.proxy_type IS 'Proxy mode: http for HTTP/HTTPS reverse proxy, stream for TCP/UDP stream proxy';
 COMMENT ON COLUMN public.proxy_hosts.domain_names IS 'Array of domain names that this proxy responds to';
 COMMENT ON COLUMN public.proxy_hosts.forward_scheme IS 'Protocol to use when forwarding (http/https)';
 COMMENT ON COLUMN public.proxy_hosts.forward_host IS 'Target host to forward requests to';
 COMMENT ON COLUMN public.proxy_hosts.forward_port IS 'Target port to forward requests to';
+COMMENT ON COLUMN public.proxy_hosts.stream_listen_host IS 'Optional local address for TCP/UDP stream listener';
+COMMENT ON COLUMN public.proxy_hosts.stream_listen_port IS 'Local port for TCP/UDP stream listener';
+COMMENT ON COLUMN public.proxy_hosts.stream_protocol IS 'Stream transport protocol: tcp or udp';
+COMMENT ON COLUMN public.proxy_hosts.stream_ssl_preread IS 'Enable TLS ClientHello preread for SNI-aware TCP stream routing';
 COMMENT ON COLUMN public.proxy_hosts.custom_locations IS 'JSON array of custom location blocks';
 COMMENT ON COLUMN public.proxy_hosts.advanced_config IS 'Raw nginx config to append to server block';
 COMMENT ON COLUMN public.proxy_hosts.ssl_http3 IS 'Enable HTTP/3 (QUIC) support for this proxy host';

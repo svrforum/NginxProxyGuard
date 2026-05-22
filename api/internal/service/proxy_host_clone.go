@@ -64,11 +64,20 @@ func (s *ProxyHostService) Clone(ctx context.Context, sourceID string, req *mode
 		createNewCert = false                // Don't create new cert if existing one is specified
 	}
 	// If no certificate specified and not creating new cert, SSL remains disabled
+	if source.IsStream() {
+		certificateID = nil
+		sslEnabled = false
+		sslForceHTTPS = false
+		createNewCert = false
+	}
 
 	// Use provided forward settings or copy from source
 	forwardScheme := source.ForwardScheme
 	forwardHost := source.ForwardHost
 	forwardPort := source.ForwardPort
+	streamListenHost := source.StreamListenHost
+	streamListenPort := source.StreamListenPort
+	streamProtocol := source.StreamProtocol
 
 	if req.ForwardScheme != "" {
 		forwardScheme = req.ForwardScheme
@@ -79,38 +88,59 @@ func (s *ProxyHostService) Clone(ctx context.Context, sourceID string, req *mode
 	if req.ForwardPort > 0 {
 		forwardPort = req.ForwardPort
 	}
+	if source.IsStream() {
+		if req.StreamListenHost != "" {
+			streamListenHost = req.StreamListenHost
+		}
+		if req.StreamListenPort > 0 {
+			streamListenPort = req.StreamListenPort
+		}
+		if req.StreamProtocol != "" {
+			streamProtocol = req.StreamProtocol
+			forwardScheme = req.StreamProtocol
+		}
+	}
 
 	// Create the new proxy host with copied settings
 	createReq := &model.CreateProxyHostRequest{
-		DomainNames:             validDomains,
-		ForwardScheme:           forwardScheme,
-		ForwardHost:             forwardHost,
-		ForwardPort:             forwardPort,
-		SSLEnabled:              sslEnabled,
-		SSLForceHTTPS:           sslForceHTTPS,
-		SSLHTTP2:                source.SSLHTTP2,
-		SSLHTTP3:                source.SSLHTTP3,
-		CertificateID:           certificateID,
-		AllowWebsocketUpgrade:   source.AllowWebsocketUpgrade,
-		CacheEnabled:            source.CacheEnabled,
-		CacheStaticOnly:         source.CacheStaticOnly,
-		CacheTTL:                source.CacheTTL,
-		BlockExploits:           source.BlockExploits,
-		BlockExploitsExceptions: source.BlockExploitsExceptions,
-		WAFEnabled:              source.WAFEnabled,
-		WAFMode:                 source.WAFMode,
-		WAFParanoiaLevel:        source.WAFParanoiaLevel,
-		WAFAnomalyThreshold:     source.WAFAnomalyThreshold,
-		AccessListID:            source.AccessListID,
-		AdvancedConfig:          source.AdvancedConfig,
-		ProxyConnectTimeout:     source.ProxyConnectTimeout,
-		ProxySendTimeout:        source.ProxySendTimeout,
-		ProxyReadTimeout:        source.ProxyReadTimeout,
-		ProxyBuffering:          source.ProxyBuffering,
-		ProxyRequestBuffering:   source.ProxyRequestBuffering,
-		ClientMaxBodySize:       source.ClientMaxBodySize,
-		ProxyMaxTempFileSize:    source.ProxyMaxTempFileSize,
-		Enabled:                 source.Enabled,
+		ProxyType:                 source.ProxyType,
+		DomainNames:               validDomains,
+		ForwardScheme:             forwardScheme,
+		ForwardHost:               forwardHost,
+		ForwardPort:               forwardPort,
+		StreamListenHost:          streamListenHost,
+		StreamListenPort:          streamListenPort,
+		StreamProtocol:            streamProtocol,
+		StreamSSLPreread:          source.StreamSSLPreread,
+		StreamAcceptProxyProtocol: source.StreamAcceptProxyProtocol,
+		StreamSendProxyProtocol:   source.StreamSendProxyProtocol,
+		StreamProxyConnectTimeout: source.StreamProxyConnectTimeout,
+		StreamProxyTimeout:        source.StreamProxyTimeout,
+		SSLEnabled:                sslEnabled,
+		SSLForceHTTPS:             sslForceHTTPS,
+		SSLHTTP2:                  source.SSLHTTP2,
+		SSLHTTP3:                  source.SSLHTTP3,
+		CertificateID:             certificateID,
+		AllowWebsocketUpgrade:     source.AllowWebsocketUpgrade,
+		CacheEnabled:              source.CacheEnabled,
+		CacheStaticOnly:           source.CacheStaticOnly,
+		CacheTTL:                  source.CacheTTL,
+		BlockExploits:             source.BlockExploits,
+		BlockExploitsExceptions:   source.BlockExploitsExceptions,
+		WAFEnabled:                source.WAFEnabled,
+		WAFMode:                   source.WAFMode,
+		WAFParanoiaLevel:          source.WAFParanoiaLevel,
+		WAFAnomalyThreshold:       source.WAFAnomalyThreshold,
+		AccessListID:              source.AccessListID,
+		AdvancedConfig:            source.AdvancedConfig,
+		ProxyConnectTimeout:       source.ProxyConnectTimeout,
+		ProxySendTimeout:          source.ProxySendTimeout,
+		ProxyReadTimeout:          source.ProxyReadTimeout,
+		ProxyBuffering:            source.ProxyBuffering,
+		ProxyRequestBuffering:     source.ProxyRequestBuffering,
+		ClientMaxBodySize:         source.ClientMaxBodySize,
+		ProxyMaxTempFileSize:      source.ProxyMaxTempFileSize,
+		Enabled:                   source.Enabled,
 	}
 
 	// Create the new host

@@ -50,15 +50,26 @@ func (r *ProxyHostRepository) invalidateAllCache(ctx context.Context) {
 func (r *ProxyHostRepository) Create(ctx context.Context, req *model.CreateProxyHostRequest) (*model.ProxyHost, error) {
 	query := `
 		INSERT INTO proxy_hosts (
-			domain_names, forward_scheme, forward_host, forward_port,
+			proxy_type, domain_names, forward_scheme, forward_host, forward_port,
+			stream_listen_host, stream_listen_port, stream_protocol, stream_ssl_preread,
+			stream_accept_proxy_protocol, stream_send_proxy_protocol,
+			stream_proxy_connect_timeout, stream_proxy_timeout,
 			ssl_enabled, ssl_force_https, ssl_http2, ssl_http3, certificate_id,
 			allow_websocket_upgrade, cache_enabled, cache_static_only, cache_ttl,
 			block_exploits, block_exploits_exceptions,
 			waf_enabled, waf_mode, waf_paranoia_level, waf_anomaly_threshold,
 			advanced_config, proxy_connect_timeout, proxy_send_timeout, proxy_read_timeout,
 			proxy_buffering, proxy_request_buffering, client_max_body_size, proxy_max_temp_file_size, access_list_id, enabled
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)
-		RETURNING id, domain_names, forward_scheme, forward_host, forward_port,
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38)
+		RETURNING id, COALESCE(proxy_type, 'http') as proxy_type, domain_names, forward_scheme, forward_host, forward_port,
+			COALESCE(stream_listen_host, '') as stream_listen_host,
+			COALESCE(stream_listen_port, 0) as stream_listen_port,
+			COALESCE(stream_protocol, 'tcp') as stream_protocol,
+			COALESCE(stream_ssl_preread, false) as stream_ssl_preread,
+			COALESCE(stream_accept_proxy_protocol, false) as stream_accept_proxy_protocol,
+			COALESCE(stream_send_proxy_protocol, false) as stream_send_proxy_protocol,
+			COALESCE(stream_proxy_connect_timeout, 0) as stream_proxy_connect_timeout,
+			COALESCE(stream_proxy_timeout, 0) as stream_proxy_timeout,
 			ssl_enabled, ssl_force_https, ssl_http2, ssl_http3, certificate_id,
 			allow_websocket_upgrade, cache_enabled, cache_static_only, cache_ttl,
 			block_exploits, block_exploits_exceptions,
@@ -115,10 +126,19 @@ func (r *ProxyHostRepository) Create(ctx context.Context, req *model.CreateProxy
 	}
 
 	err := r.db.QueryRowContext(ctx, query,
+		req.ProxyType,
 		pq.Array(req.DomainNames),
 		req.ForwardScheme,
 		req.ForwardHost,
 		req.ForwardPort,
+		req.StreamListenHost,
+		req.StreamListenPort,
+		req.StreamProtocol,
+		req.StreamSSLPreread,
+		req.StreamAcceptProxyProtocol,
+		req.StreamSendProxyProtocol,
+		req.StreamProxyConnectTimeout,
+		req.StreamProxyTimeout,
 		req.SSLEnabled,
 		req.SSLForceHTTPS,
 		req.SSLHTTP2,
@@ -146,10 +166,19 @@ func (r *ProxyHostRepository) Create(ctx context.Context, req *model.CreateProxy
 		req.Enabled,
 	).Scan(
 		&host.ID,
+		&host.ProxyType,
 		&host.DomainNames,
 		&host.ForwardScheme,
 		&host.ForwardHost,
 		&host.ForwardPort,
+		&host.StreamListenHost,
+		&host.StreamListenPort,
+		&host.StreamProtocol,
+		&host.StreamSSLPreread,
+		&host.StreamAcceptProxyProtocol,
+		&host.StreamSendProxyProtocol,
+		&host.StreamProxyConnectTimeout,
+		&host.StreamProxyTimeout,
 		&host.SSLEnabled,
 		&host.SSLForceHTTPS,
 		&host.SSLHTTP2,
@@ -216,7 +245,15 @@ func (r *ProxyHostRepository) GetByID(ctx context.Context, id string) (*model.Pr
 		}
 	}
 	query := `
-		SELECT id, domain_names, forward_scheme, forward_host, forward_port,
+		SELECT id, COALESCE(proxy_type, 'http') as proxy_type, domain_names, forward_scheme, forward_host, forward_port,
+			COALESCE(stream_listen_host, '') as stream_listen_host,
+			COALESCE(stream_listen_port, 0) as stream_listen_port,
+			COALESCE(stream_protocol, 'tcp') as stream_protocol,
+			COALESCE(stream_ssl_preread, false) as stream_ssl_preread,
+			COALESCE(stream_accept_proxy_protocol, false) as stream_accept_proxy_protocol,
+			COALESCE(stream_send_proxy_protocol, false) as stream_send_proxy_protocol,
+			COALESCE(stream_proxy_connect_timeout, 0) as stream_proxy_connect_timeout,
+			COALESCE(stream_proxy_timeout, 0) as stream_proxy_timeout,
 			ssl_enabled, ssl_force_https, ssl_http2, ssl_http3, certificate_id,
 			allow_websocket_upgrade, cache_enabled,
 			COALESCE(cache_static_only, true) as cache_static_only,
@@ -242,10 +279,19 @@ func (r *ProxyHostRepository) GetByID(ctx context.Context, id string) (*model.Pr
 
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
 		&host.ID,
+		&host.ProxyType,
 		&host.DomainNames,
 		&host.ForwardScheme,
 		&host.ForwardHost,
 		&host.ForwardPort,
+		&host.StreamListenHost,
+		&host.StreamListenPort,
+		&host.StreamProtocol,
+		&host.StreamSSLPreread,
+		&host.StreamAcceptProxyProtocol,
+		&host.StreamSendProxyProtocol,
+		&host.StreamProxyConnectTimeout,
+		&host.StreamProxyTimeout,
 		&host.SSLEnabled,
 		&host.SSLForceHTTPS,
 		&host.SSLHTTP2,
@@ -317,6 +363,9 @@ func (r *ProxyHostRepository) Update(ctx context.Context, id string, req *model.
 	}
 
 	// Apply updates
+	if req.ProxyType != "" {
+		existing.ProxyType = req.ProxyType
+	}
 	if len(req.DomainNames) > 0 {
 		existing.DomainNames = req.DomainNames
 	}
@@ -328,6 +377,30 @@ func (r *ProxyHostRepository) Update(ctx context.Context, id string, req *model.
 	}
 	if req.ForwardPort > 0 {
 		existing.ForwardPort = req.ForwardPort
+	}
+	if req.StreamListenHost != nil {
+		existing.StreamListenHost = *req.StreamListenHost
+	}
+	if req.StreamListenPort != nil {
+		existing.StreamListenPort = *req.StreamListenPort
+	}
+	if req.StreamProtocol != nil {
+		existing.StreamProtocol = *req.StreamProtocol
+	}
+	if req.StreamSSLPreread != nil {
+		existing.StreamSSLPreread = *req.StreamSSLPreread
+	}
+	if req.StreamAcceptProxyProtocol != nil {
+		existing.StreamAcceptProxyProtocol = *req.StreamAcceptProxyProtocol
+	}
+	if req.StreamSendProxyProtocol != nil {
+		existing.StreamSendProxyProtocol = *req.StreamSendProxyProtocol
+	}
+	if req.StreamProxyConnectTimeout != nil {
+		existing.StreamProxyConnectTimeout = *req.StreamProxyConnectTimeout
+	}
+	if req.StreamProxyTimeout != nil {
+		existing.StreamProxyTimeout = *req.StreamProxyTimeout
 	}
 	if req.SSLEnabled != nil {
 		existing.SSLEnabled = *req.SSLEnabled
@@ -415,36 +488,45 @@ func (r *ProxyHostRepository) Update(ctx context.Context, id string, req *model.
 
 	query := `
 		UPDATE proxy_hosts SET
-			domain_names = $1,
-			forward_scheme = $2,
-			forward_host = $3,
-			forward_port = $4,
-			ssl_enabled = $5,
-			ssl_force_https = $6,
-			ssl_http2 = $7,
-			ssl_http3 = $8,
-			certificate_id = $9,
-			allow_websocket_upgrade = $10,
-			cache_enabled = $11,
-			cache_static_only = $12,
-			cache_ttl = $13,
-			block_exploits = $14,
-			block_exploits_exceptions = $15,
-			waf_enabled = $16,
-			waf_mode = $17,
-			waf_paranoia_level = $18,
-			waf_anomaly_threshold = $19,
-			advanced_config = $20,
-			proxy_connect_timeout = $21,
-			proxy_send_timeout = $22,
-			proxy_read_timeout = $23,
-			proxy_buffering = $24,
-			proxy_request_buffering = $25,
-			client_max_body_size = $26,
-			proxy_max_temp_file_size = $27,
-			enabled = $28,
-			access_list_id = $29
-		WHERE id = $30
+			proxy_type = $1,
+			domain_names = $2,
+			forward_scheme = $3,
+			forward_host = $4,
+			forward_port = $5,
+			stream_listen_host = $6,
+			stream_listen_port = $7,
+			stream_protocol = $8,
+			stream_ssl_preread = $9,
+			stream_accept_proxy_protocol = $10,
+			stream_send_proxy_protocol = $11,
+			stream_proxy_connect_timeout = $12,
+			stream_proxy_timeout = $13,
+			ssl_enabled = $14,
+			ssl_force_https = $15,
+			ssl_http2 = $16,
+			ssl_http3 = $17,
+			certificate_id = $18,
+			allow_websocket_upgrade = $19,
+			cache_enabled = $20,
+			cache_static_only = $21,
+			cache_ttl = $22,
+			block_exploits = $23,
+			block_exploits_exceptions = $24,
+			waf_enabled = $25,
+			waf_mode = $26,
+			waf_paranoia_level = $27,
+			waf_anomaly_threshold = $28,
+			advanced_config = $29,
+			proxy_connect_timeout = $30,
+			proxy_send_timeout = $31,
+			proxy_read_timeout = $32,
+			proxy_buffering = $33,
+			proxy_request_buffering = $34,
+			client_max_body_size = $35,
+			proxy_max_temp_file_size = $36,
+			enabled = $37,
+			access_list_id = $38
+		WHERE id = $39
 		RETURNING updated_at
 	`
 
@@ -461,10 +543,19 @@ func (r *ProxyHostRepository) Update(ctx context.Context, id string, req *model.
 	}
 
 	err = r.db.QueryRowContext(ctx, query,
+		existing.ProxyType,
 		pq.Array(existing.DomainNames),
 		existing.ForwardScheme,
 		existing.ForwardHost,
 		existing.ForwardPort,
+		existing.StreamListenHost,
+		existing.StreamListenPort,
+		existing.StreamProtocol,
+		existing.StreamSSLPreread,
+		existing.StreamAcceptProxyProtocol,
+		existing.StreamSendProxyProtocol,
+		existing.StreamProxyConnectTimeout,
+		existing.StreamProxyTimeout,
 		existing.SSLEnabled,
 		existing.SSLForceHTTPS,
 		existing.SSLHTTP2,
@@ -537,7 +628,15 @@ func (r *ProxyHostRepository) GetByDomain(ctx context.Context, domain string) (*
 	}
 
 	query := `
-		SELECT id, domain_names, forward_scheme, forward_host, forward_port,
+		SELECT id, COALESCE(proxy_type, 'http') as proxy_type, domain_names, forward_scheme, forward_host, forward_port,
+			COALESCE(stream_listen_host, '') as stream_listen_host,
+			COALESCE(stream_listen_port, 0) as stream_listen_port,
+			COALESCE(stream_protocol, 'tcp') as stream_protocol,
+			COALESCE(stream_ssl_preread, false) as stream_ssl_preread,
+			COALESCE(stream_accept_proxy_protocol, false) as stream_accept_proxy_protocol,
+			COALESCE(stream_send_proxy_protocol, false) as stream_send_proxy_protocol,
+			COALESCE(stream_proxy_connect_timeout, 0) as stream_proxy_connect_timeout,
+			COALESCE(stream_proxy_timeout, 0) as stream_proxy_timeout,
 			ssl_enabled, ssl_force_https, ssl_http2, ssl_http3, certificate_id,
 			allow_websocket_upgrade, cache_enabled,
 			COALESCE(cache_static_only, true) as cache_static_only,
@@ -564,10 +663,19 @@ func (r *ProxyHostRepository) GetByDomain(ctx context.Context, domain string) (*
 
 	err := r.db.QueryRowContext(ctx, query, domain).Scan(
 		&host.ID,
+		&host.ProxyType,
 		&host.DomainNames,
 		&host.ForwardScheme,
 		&host.ForwardHost,
 		&host.ForwardPort,
+		&host.StreamListenHost,
+		&host.StreamListenPort,
+		&host.StreamProtocol,
+		&host.StreamSSLPreread,
+		&host.StreamAcceptProxyProtocol,
+		&host.StreamSendProxyProtocol,
+		&host.StreamProxyConnectTimeout,
+		&host.StreamProxyTimeout,
 		&host.SSLEnabled,
 		&host.SSLForceHTTPS,
 		&host.SSLHTTP2,
@@ -620,4 +728,3 @@ func (r *ProxyHostRepository) GetByDomain(ctx context.Context, domain string) (*
 
 	return &host, nil
 }
-

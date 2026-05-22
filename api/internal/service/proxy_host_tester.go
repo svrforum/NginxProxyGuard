@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,15 +15,15 @@ import (
 )
 
 type ProxyHostTester struct {
-	proxyHost string // nginx-guard-proxy hostname
-	proxyHTTP int    // HTTP port (80)
-	proxyHTTPS int   // HTTPS port (443)
+	proxyHost  string // nginx-guard-proxy hostname
+	proxyHTTP  int    // HTTP port (80)
+	proxyHTTPS int    // HTTPS port (443)
 }
 
 func NewProxyHostTester() *ProxyHostTester {
 	proxyHost := os.Getenv("NGINX_PROXY_HOST")
 	if proxyHost == "" {
-		proxyHost = "nginx" // Docker service name
+		proxyHost = "host.docker.internal" // nginx runs in host network mode
 	}
 
 	return &ProxyHostTester{
@@ -33,6 +34,10 @@ func NewProxyHostTester() *ProxyHostTester {
 }
 
 func (t *ProxyHostTester) TestHost(ctx context.Context, host *model.ProxyHost, targetURL string) (*model.ProxyHostTestResult, error) {
+	if host.IsStream() {
+		return t.testStreamProxy(ctx, host, targetURL), nil
+	}
+
 	domain := host.DomainNames[0]
 	result := &model.ProxyHostTestResult{
 		Domain:   domain,
@@ -67,7 +72,7 @@ func (t *ProxyHostTester) TestHost(ctx context.Context, host *model.ProxyHost, t
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true, // Allow self-signed certs for testing
+			InsecureSkipVerify: true,   // Allow self-signed certs for testing
 			ServerName:         domain, // SNI for correct certificate selection
 		},
 		ForceAttemptHTTP2: true,
@@ -143,6 +148,10 @@ func (t *ProxyHostTester) TestHost(ctx context.Context, host *model.ProxyHost, t
 
 // TestUpstream tests connectivity to the upstream server directly
 func (t *ProxyHostTester) TestUpstream(ctx context.Context, host *model.ProxyHost) (*model.ProxyHostTestResult, error) {
+	if host.IsStream() {
+		return t.testStreamUpstream(ctx, host), nil
+	}
+
 	result := &model.ProxyHostTestResult{
 		Domain:   fmt.Sprintf("%s:%d", host.ForwardHost, host.ForwardPort),
 		TestedAt: time.Now(),
@@ -192,6 +201,133 @@ func (t *ProxyHostTester) TestUpstream(ctx context.Context, host *model.ProxyHos
 	result.Success = resp.StatusCode >= 200 && resp.StatusCode < 500
 
 	return result, nil
+}
+
+func (t *ProxyHostTester) testStreamProxy(ctx context.Context, host *model.ProxyHost, targetURL string) *model.ProxyHostTestResult {
+	protocol := model.NormalizeStreamProtocol(host.StreamProtocol)
+	targetAddress, err := t.streamProxyAddress(host, targetURL)
+	result := &model.ProxyHostTestResult{
+		Domain:   streamDisplayName(host, targetAddress),
+		TestedAt: time.Now(),
+		Stream: &model.StreamTestResult{
+			Protocol:         protocol,
+			TargetAddress:    targetAddress,
+			UpstreamAddress:  net.JoinHostPort(host.ForwardHost, strconv.Itoa(host.ForwardPort)),
+			SSLPreread:       host.StreamSSLPreread,
+			ProxyProtocolIn:  host.StreamAcceptProxyProtocol,
+			ProxyProtocolOut: host.StreamSendProxyProtocol,
+		},
+	}
+	if err != nil {
+		result.Error = err.Error()
+		return result
+	}
+
+	responseTime, err := dialStream(ctx, protocol, targetAddress, 10*time.Second)
+	result.ResponseTime = responseTime
+	if err != nil {
+		result.Error = streamDialError("Stream listener", targetAddress, err)
+		return result
+	}
+
+	result.Success = true
+	return result
+}
+
+func (t *ProxyHostTester) testStreamUpstream(ctx context.Context, host *model.ProxyHost) *model.ProxyHostTestResult {
+	protocol := model.NormalizeStreamProtocol(host.StreamProtocol)
+	address := net.JoinHostPort(host.ForwardHost, strconv.Itoa(host.ForwardPort))
+	result := &model.ProxyHostTestResult{
+		Domain:   address,
+		TestedAt: time.Now(),
+		Stream: &model.StreamTestResult{
+			Protocol:        protocol,
+			TargetAddress:   address,
+			UpstreamAddress: address,
+			SSLPreread:      host.StreamSSLPreread,
+		},
+	}
+
+	responseTime, err := dialStream(ctx, protocol, address, 5*time.Second)
+	result.ResponseTime = responseTime
+	if err != nil {
+		result.Error = streamDialError("Stream upstream", address, err)
+		return result
+	}
+
+	result.Success = true
+	return result
+}
+
+func (t *ProxyHostTester) streamProxyAddress(host *model.ProxyHost, targetURL string) (string, error) {
+	if strings.TrimSpace(targetURL) != "" {
+		return parseStreamAddress(targetURL)
+	}
+
+	listenHost := strings.TrimSpace(host.StreamListenHost)
+	if listenHost == "" || listenHost == "0.0.0.0" || listenHost == "::" || listenHost == "*" {
+		listenHost = t.proxyHost
+	}
+	if host.StreamListenPort < 1 || host.StreamListenPort > 65535 {
+		return "", fmt.Errorf("stream listen port is not configured")
+	}
+	return net.JoinHostPort(listenHost, strconv.Itoa(host.StreamListenPort)), nil
+}
+
+func parseStreamAddress(raw string) (string, error) {
+	address := strings.TrimSpace(raw)
+	if address == "" {
+		return "", fmt.Errorf("stream target address is required")
+	}
+	if strings.Contains(address, "://") {
+		parts := strings.SplitN(address, "://", 2)
+		address = parts[1]
+		if slash := strings.Index(address, "/"); slash >= 0 {
+			address = address[:slash]
+		}
+	}
+	if _, _, err := net.SplitHostPort(address); err != nil {
+		return "", fmt.Errorf("stream target must be host:port: %w", err)
+	}
+	return address, nil
+}
+
+func dialStream(ctx context.Context, protocol, address string, timeout time.Duration) (int64, error) {
+	network := model.NormalizeStreamProtocol(protocol)
+	dialCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	startTime := time.Now()
+	conn, err := (&net.Dialer{Timeout: timeout}).DialContext(dialCtx, network, address)
+	responseTime := time.Since(startTime).Milliseconds()
+	if err != nil {
+		return responseTime, err
+	}
+	_ = conn.Close()
+	return responseTime, nil
+}
+
+func streamDisplayName(host *model.ProxyHost, fallback string) string {
+	for _, name := range host.DomainNames {
+		if strings.TrimSpace(name) != "" {
+			return name
+		}
+	}
+	return fallback
+}
+
+func streamDialError(label, address string, err error) string {
+	errText := err.Error()
+	if strings.Contains(errText, "connection refused") {
+		return fmt.Sprintf("%s refused connection at %s. Check the listener, target service, and firewall.", label, address)
+	}
+	if strings.Contains(errText, "no such host") {
+		return fmt.Sprintf("Cannot resolve stream address '%s'. Check DNS or listen host settings.", address)
+	}
+	if strings.Contains(errText, "i/o timeout") || strings.Contains(errText, "deadline exceeded") {
+		return fmt.Sprintf("%s timed out at %s.", label, address)
+	}
+	return fmt.Sprintf("%s test failed for %s: %v", label, address, err)
 }
 
 func (t *ProxyHostTester) testSSL(host *model.ProxyHost, resp *http.Response, testURL string) *model.SSLTestResult {
