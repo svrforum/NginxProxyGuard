@@ -44,7 +44,7 @@ func (s *ProxyHostService) RegenerateConfigsForCertificate(ctx context.Context, 
 		}
 
 		// Generate WAF config if WAF is enabled (includes global + host exclusions)
-		if host.WAFEnabled {
+		if host.WAFEnabled && !host.IsStream() {
 			mergedExclusions, err := s.getMergedWAFExclusions(ctx, host.ID)
 			if err != nil {
 				return fmt.Errorf("failed to get WAF exclusions for host %s: %w", host.ID, err)
@@ -136,7 +136,7 @@ func (s *ProxyHostService) SyncAllConfigsWithDetails(ctx context.Context) (*Sync
 		}
 
 		// Generate WAF config if WAF is enabled (includes global + host exclusions)
-		if host.WAFEnabled {
+		if host.WAFEnabled && !host.IsStream() {
 			mergedExclusions, err := s.getMergedWAFExclusions(ctx, host.ID)
 			if err != nil {
 				hostResult.Success = false
@@ -208,9 +208,9 @@ func (s *ProxyHostService) updateConfigStatuses(ctx context.Context, result *Syn
 				})
 				_ = s.systemLogRepo.Create(ctx, &repository.SystemLog{
 					Source:    repository.SourceInternal,
-					Level:    repository.LevelWarn,
-					Message:  fmt.Sprintf("Proxy host config error: %s (%s)", strings.Join(h.DomainNames, ", "), h.Error),
-					Details:  details,
+					Level:     repository.LevelWarn,
+					Message:   fmt.Sprintf("Proxy host config error: %s (%s)", strings.Join(h.DomainNames, ", "), h.Error),
+					Details:   details,
 					Component: "proxy_host_sync",
 				})
 			}
@@ -252,7 +252,7 @@ func (s *ProxyHostService) RegenerateConfigsForCloudProviders(ctx context.Contex
 		}
 
 		// Generate WAF config if WAF is enabled (includes global + host exclusions)
-		if host.WAFEnabled {
+		if host.WAFEnabled && !host.IsStream() {
 			mergedExclusions, err := s.getMergedWAFExclusions(ctx, hostID)
 			if err != nil {
 				return fmt.Errorf("failed to get WAF exclusions for host %s: %w", hostID, err)
@@ -288,7 +288,7 @@ func (s *ProxyHostService) RegenerateConfigsForExploitRules(ctx context.Context)
 
 	var hostsToUpdate []*model.ProxyHost
 	for i := range hosts {
-		if hosts[i].BlockExploits {
+		if hosts[i].BlockExploits && !hosts[i].IsStream() {
 			hostsToUpdate = append(hostsToUpdate, &hosts[i])
 		}
 	}
@@ -307,7 +307,7 @@ func (s *ProxyHostService) RegenerateConfigsForExploitRules(ctx context.Context)
 		}
 
 		// Also regenerate WAF config if enabled
-		if host.WAFEnabled {
+		if host.WAFEnabled && !host.IsStream() {
 			mergedExclusions, err := s.getMergedWAFExclusions(ctx, host.ID)
 			if err != nil {
 				return fmt.Errorf("failed to get WAF exclusions for host %s: %w", host.ID, err)
@@ -369,7 +369,7 @@ func (s *ProxyHostService) RegenerateConfigForHost(ctx context.Context, hostID s
 
 	// Get WAF exclusions if WAF is enabled
 	var wafExclusions []model.WAFRuleExclusion
-	if host.WAFEnabled {
+	if host.WAFEnabled && !host.IsStream() {
 		wafExclusions, err = s.getMergedWAFExclusions(ctx, hostID)
 		if err != nil {
 			return fmt.Errorf("failed to get WAF exclusions for host %s: %w", hostID, err)

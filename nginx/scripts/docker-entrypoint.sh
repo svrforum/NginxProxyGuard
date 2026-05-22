@@ -30,6 +30,7 @@ initialize_nginx_volume() {
 
         # Create required subdirectories that might be missing
         mkdir -p "$NGINX_DIR/conf.d"
+        mkdir -p "$NGINX_DIR/stream.d"
         mkdir -p "$NGINX_DIR/certs"
         mkdir -p "$NGINX_DIR/geoip"
         mkdir -p "$NGINX_DIR/modsec"
@@ -39,7 +40,7 @@ initialize_nginx_volume() {
         mkdir -p "$NGINX_DIR/logs"
 
         # Set permissions
-        chown -R nginx:nginx "$NGINX_DIR/conf.d" "$NGINX_DIR/certs" "$NGINX_DIR/geoip" "$NGINX_DIR/modsec" "$NGINX_DIR/logs" 2>/dev/null || true
+        chown -R nginx:nginx "$NGINX_DIR/conf.d" "$NGINX_DIR/stream.d" "$NGINX_DIR/certs" "$NGINX_DIR/geoip" "$NGINX_DIR/modsec" "$NGINX_DIR/logs" 2>/dev/null || true
 
         echo "[Entrypoint] Nginx volume initialized successfully"
     else
@@ -238,6 +239,8 @@ LOGROTATE
 
 # Initialize nginx volume if empty (when mounted as consolidated volume)
 initialize_nginx_volume
+mkdir -p "$NGINX_DIR/stream.d"
+chown nginx:nginx "$NGINX_DIR/stream.d" 2>/dev/null || true
 
 # Always update static HTML files from default (for new features like font support)
 update_static_html() {

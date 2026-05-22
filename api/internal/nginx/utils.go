@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"nginx-proxy-guard/internal/model"
@@ -83,6 +84,9 @@ func sanitizeFilename(domain string) string {
 
 // GetConfigFilename returns the config filename for a proxy host
 func GetConfigFilename(host *model.ProxyHost) string {
+	if host != nil && host.IsStream() {
+		return GetStreamConfigFilename(host)
+	}
 	if len(host.DomainNames) == 0 {
 		return fmt.Sprintf("proxy_host_%s.conf", host.ID)
 	}
@@ -92,6 +96,47 @@ func GetConfigFilename(host *model.ProxyHost) string {
 		return fmt.Sprintf("proxy_host_%s.conf", host.ID)
 	}
 	return fmt.Sprintf("proxy_host_%s.conf", safeName)
+}
+
+// GetStreamConfigFilename returns the config filename for a stream proxy host.
+func GetStreamConfigFilename(host *model.ProxyHost) string {
+	port := host.StreamListenPort
+	if port <= 0 {
+		port = host.ForwardPort
+	}
+	if len(host.DomainNames) == 0 {
+		if port > 0 {
+			return fmt.Sprintf("stream_host_%s_%d.conf", host.ID, port)
+		}
+		return fmt.Sprintf("stream_host_%s.conf", host.ID)
+	}
+	safeName := sanitizeFilename(host.DomainNames[0])
+	if safeName == "" {
+		safeName = host.ID
+	}
+	if port > 0 {
+		return fmt.Sprintf("stream_host_%s_%d.conf", safeName, port)
+	}
+	return fmt.Sprintf("stream_host_%s.conf", safeName)
+}
+
+func formatHostPort(host string, port int) string {
+	host = strings.TrimSpace(host)
+	if strings.HasPrefix(host, "unix:") {
+		return host
+	}
+	if ip := net.ParseIP(host); ip != nil && strings.Contains(host, ":") {
+		return "[" + host + "]:" + strconv.Itoa(port)
+	}
+	return host + ":" + strconv.Itoa(port)
+}
+
+func formatListenAddress(host string, port int) string {
+	host = strings.TrimSpace(host)
+	if host == "" || host == "*" {
+		return strconv.Itoa(port)
+	}
+	return formatHostPort(host, port)
 }
 
 // GetRedirectConfigFilename returns the config filename for a redirect host
