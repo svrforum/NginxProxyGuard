@@ -217,6 +217,7 @@ RUN addgroup -g 101 -S nginx \
     && adduser -S -D -H -u 101 -h /var/cache/nginx -s /sbin/nologin -G nginx -g nginx nginx \
     && mkdir -p \
         /etc/nginx/conf.d \
+        /etc/nginx/stream.d \
         /etc/nginx/certs \
         /etc/nginx/includes \
         /etc/nginx/modsec \
@@ -281,7 +282,7 @@ COPY scripts/ /scripts/
 RUN chmod +x /scripts/*.sh
 
 # Set permissions
-RUN chown -R nginx:nginx /etc/nginx/conf.d /etc/nginx/certs /etc/nginx/modsec /etc/nginx/html /etc/nginx/geoip \
+RUN chown -R nginx:nginx /etc/nginx/conf.d /etc/nginx/stream.d /etc/nginx/certs /etc/nginx/modsec /etc/nginx/html /etc/nginx/geoip \
     && chmod -R 644 /etc/nginx/html/*.html
 
 # Backup default nginx configuration for volume initialization

@@ -23,16 +23,19 @@ var globalNginxMutex sync.Mutex
 
 // Manager handles nginx configuration generation and operations
 type Manager struct {
-	configPath     string
-	certsPath      string
-	modsecPath     string // Path to ModSecurity config directory
-	nginxContainer string // Docker container name for nginx
-	skipTest       bool   // Skip nginx test/reload (for development)
-	httpPort       string // HTTP listen port (default: 80)
-	httpsPort      string // HTTPS listen port (default: 443)
-	apiURL         string // API URL for nginx to reach API (default: http://127.0.0.1:9080)
-	dnsResolver    string // DNS resolver for nginx (default: 127.0.0.53 8.8.8.8)
-	enableIPv6     bool   // Enable IPv6 listen directives (default: true)
+	configPath       string
+	streamConfigPath string
+	certsPath        string
+	modsecPath       string // Path to ModSecurity config directory
+	nginxContainer   string // Docker container name for nginx
+	skipTest         bool   // Skip nginx test/reload (for development)
+	httpPort         string // HTTP listen port (default: 80)
+	httpsPort        string // HTTPS listen port (default: 443)
+	apiURL           string // API URL for nginx to reach API (default: http://127.0.0.1:9080)
+	dnsResolver      string // DNS resolver for nginx (default: 127.0.0.53 8.8.8.8)
+	enableIPv6       bool   // Enable IPv6 listen directives (default: true)
+	streamAccessLog  bool
+	streamErrorLog   bool
 
 	cli nginxCLI // extracted for testability (Phase 0)
 
@@ -77,19 +80,29 @@ func NewManager(configPath, certsPath string) *Manager {
 	}
 
 	m := &Manager{
-		configPath:     configPath,
-		certsPath:      certsPath,
-		modsecPath:     modsecPath,
-		nginxContainer: nginxContainer,
-		skipTest:       skipTest,
-		httpPort:       httpPort,
-		httpsPort:      httpsPort,
-		apiURL:         apiURL,
-		dnsResolver:    dnsResolver,
-		enableIPv6:     true,
+		configPath:       configPath,
+		streamConfigPath: filepath.Join(filepath.Dir(configPath), "stream.d"),
+		certsPath:        certsPath,
+		modsecPath:       modsecPath,
+		nginxContainer:   nginxContainer,
+		skipTest:         skipTest,
+		httpPort:         httpPort,
+		httpsPort:        httpsPort,
+		apiURL:           apiURL,
+		dnsResolver:      dnsResolver,
+		enableIPv6:       true,
+		streamAccessLog:  true,
+		streamErrorLog:   true,
 	}
 	m.cli = newDockerNginxCLI(nginxContainer)
 	return m
+}
+
+func (m *Manager) getStreamConfigPath() string {
+	if m.streamConfigPath != "" {
+		return m.streamConfigPath
+	}
+	return filepath.Join(filepath.Dir(m.configPath), "stream.d")
 }
 
 // GetHTTPPort returns the HTTP listen port
@@ -430,6 +443,9 @@ func (m *Manager) GenerateConfigFull(ctx context.Context, data ProxyHostConfigDa
 
 	// Note: WAF config is generated separately by the service layer
 	// to properly include any rule exclusions
+	if data.Host != nil && data.Host.IsStream() {
+		return m.GenerateStreamConfig(ctx, data)
+	}
 
 	// Set listen ports from manager config
 	data.HTTPPort = m.httpPort
@@ -529,7 +545,7 @@ func (m *Manager) GenerateConfigFull(ctx context.Context, data ProxyHostConfigDa
 	}
 
 	configFile := filepath.Join(m.configPath, GetConfigFilename(data.Host))
-	
+
 	// Use atomic write to prevent nginx from reading partial config
 	if err := m.writeFileAtomic(configFile, buf.Bytes(), 0644); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
@@ -557,31 +573,31 @@ func parseAdvancedConfigDirectives(advancedConfig string) map[string]bool {
 //	https://nginx.org/en/docs/http/ngx_http_core_module.html
 var serverOnlyDirectives = map[string]bool{
 	// SSL/TLS directives (server context only)
-	"ssl_stapling":            true,
-	"ssl_stapling_verify":     true,
-	"ssl_trusted_certificate": true,
-	"ssl_certificate":         true,
-	"ssl_certificate_key":     true,
-	"ssl_protocols":           true,
-	"ssl_ciphers":             true,
+	"ssl_stapling":              true,
+	"ssl_stapling_verify":       true,
+	"ssl_trusted_certificate":   true,
+	"ssl_certificate":           true,
+	"ssl_certificate_key":       true,
+	"ssl_protocols":             true,
+	"ssl_ciphers":               true,
 	"ssl_prefer_server_ciphers": true,
-	"ssl_session_cache":       true,
-	"ssl_session_timeout":     true,
-	"ssl_session_tickets":     true,
-	"ssl_session_ticket_key":  true,
-	"ssl_dhparam":             true,
-	"ssl_ecdh_curve":          true,
-	"ssl_client_certificate":  true,
-	"ssl_verify_client":       true,
-	"ssl_verify_depth":        true,
-	"ssl_password_file":       true,
-	"ssl_crl":                 true,
-	"ssl_ocsp":                true,
-	"ssl_ocsp_cache":          true,
-	"ssl_ocsp_responder":      true,
-	"ssl_early_data":          true,
-	"ssl_conf_command":        true,
-	"ssl_reject_handshake":    true,
+	"ssl_session_cache":         true,
+	"ssl_session_timeout":       true,
+	"ssl_session_tickets":       true,
+	"ssl_session_ticket_key":    true,
+	"ssl_dhparam":               true,
+	"ssl_ecdh_curve":            true,
+	"ssl_client_certificate":    true,
+	"ssl_verify_client":         true,
+	"ssl_verify_depth":          true,
+	"ssl_password_file":         true,
+	"ssl_crl":                   true,
+	"ssl_ocsp":                  true,
+	"ssl_ocsp_cache":            true,
+	"ssl_ocsp_responder":        true,
+	"ssl_early_data":            true,
+	"ssl_conf_command":          true,
+	"ssl_reject_handshake":      true,
 	// Server-level core directives
 	"listen":      true,
 	"server_name": true,
@@ -632,6 +648,17 @@ func splitAdvancedConfigByContext(advancedConfig string) (serverPart, locationPa
 }
 
 func (m *Manager) RemoveConfig(ctx context.Context, host *model.ProxyHost) error {
+	if host != nil && host.IsStream() {
+		configFile := filepath.Join(m.getStreamConfigPath(), GetStreamConfigFilename(host))
+		if _, err := os.Stat(configFile); os.IsNotExist(err) {
+			return nil
+		}
+		if err := os.Remove(configFile); err != nil {
+			return fmt.Errorf("failed to remove stream config file: %w", err)
+		}
+		return nil
+	}
+
 	configFile := filepath.Join(m.configPath, GetConfigFilename(host))
 
 	// Check if file exists before removing
@@ -666,7 +693,11 @@ func (m *Manager) RemoveConfigByFilename(ctx context.Context, filename string) e
 
 	// Check if file exists before removing
 	if _, err := os.Stat(configFile); os.IsNotExist(err) {
-		return nil // File doesn't exist, nothing to do
+		streamConfigFile := filepath.Join(m.getStreamConfigPath(), filename)
+		if _, streamErr := os.Stat(streamConfigFile); os.IsNotExist(streamErr) {
+			return nil // File doesn't exist, nothing to do
+		}
+		configFile = streamConfigFile
 	}
 
 	if err := os.Remove(configFile); err != nil {
@@ -749,6 +780,11 @@ func (m *Manager) GenerateAllConfigs(ctx context.Context, hosts []model.ProxyHos
 	if err != nil {
 		return fmt.Errorf("failed to list config files: %w", err)
 	}
+	streamFiles, err := filepath.Glob(filepath.Join(m.getStreamConfigPath(), "stream_host_*.conf"))
+	if err != nil {
+		return fmt.Errorf("failed to list stream config files: %w", err)
+	}
+	files = append(files, streamFiles...)
 
 	for _, f := range files {
 		if err := os.Remove(f); err != nil {
