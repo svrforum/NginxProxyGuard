@@ -83,9 +83,32 @@
       "advanced": "Advanced"
     },
     "basic": {
+      "proxyMode": "Proxy Mode",
+      "httpMode": "HTTP / HTTPS",
+      "httpModeDescription": "Virtual host reverse proxy",
+      "streamMode": "TCP / UDP Stream",
+      "streamModeDescription": "Layer 4 reverse proxy",
       "domainNames": "Domain Names",
       "domainPlaceholder": "example.com",
       "addDomain": "Add Domain",
+      "streamNames": "Stream Names",
+      "streamNamePlaceholder": "service.example.com or stream label",
+      "addStreamName": "Add Stream Name",
+      "streamListener": "Stream Listener",
+      "streamProtocol": "Protocol",
+      "streamListenHost": "Listen Host",
+      "streamListenPort": "Listen Port",
+      "streamSslPreread": "SSL Preread",
+      "streamSslPrereadDescription": "Read TLS SNI without terminating TLS",
+      "streamAcceptProxyProtocol": "Accept PROXY",
+      "streamAcceptProxyProtocolDescription": "Expect PROXY protocol from clients",
+      "streamSendProxyProtocol": "Send PROXY",
+      "streamSendProxyProtocolDescription": "Send PROXY protocol to upstream",
+      "streamConnectTimeout": "Connect Timeout (sec)",
+      "streamProxyTimeout": "Proxy Timeout (sec)",
+      "streamUpstream": "Stream Upstream",
+      "backendHost": "Backend Host",
+      "backendPort": "Backend Port",
       "forwardHost": "Forward Host",
       "forwardHostPlaceholder": "192.168.1.100 or container_name",
       "forwardPort": "Forward Port",
@@ -573,6 +596,10 @@
       "quic": "UDP-based, 0-RTT Connection",
       "altSvc": "Alt-Svc Header",
       "altSvcDesc": "This header advertises HTTP/3 support to compatible browsers"
+    },
+    "stream": {
+      "listener": "Listener",
+      "upstream": "Upstream"
     },
     "cache": {
       "status": "Cache Status",

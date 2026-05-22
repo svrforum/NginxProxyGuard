@@ -96,9 +96,12 @@ export interface CloneProxyHostRequest {
   certificate_id?: string      // If provided, use this existing certificate
   cert_provider?: string       // 'letsencrypt' or 'selfsigned' - create new certificate
   dns_provider_id?: string     // DNS provider ID for Let's Encrypt DNS challenge
-  forward_scheme?: string      // http or https
+  forward_scheme?: string      // http/https or tcp/udp for stream
   forward_host?: string
   forward_port?: number
+  stream_listen_host?: string
+  stream_listen_port?: number
+  stream_protocol?: string
 }
 
 export async function toggleProxyHostFavorite(id: string): Promise<ProxyHost> {

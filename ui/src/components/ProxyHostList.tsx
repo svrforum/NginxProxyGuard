@@ -5,6 +5,7 @@ import { fetchProxyHosts, deleteProxyHost, testProxyHost, updateProxyHost, testP
 import { getCertificate } from '../api/certificates'
 import type { ProxyHost } from '../types/proxy-host'
 import type { ProxyHostTestResult } from '../types/proxy-host'
+import type { TabType } from './proxy-host/types'
 import { TestResultModal } from './proxy-host-list/TestResultModal'
 import { CloneModal } from './proxy-host-list/CloneModal'
 import { ProxyHostTable } from './proxy-host-list/ProxyHostTable'
@@ -13,7 +14,7 @@ import { ProxyHostBulkActions } from './proxy-host-list/ProxyHostBulkActions'
 import { ToggleConfirmDialog } from './proxy-host-list/ProxyHostRow'
 
 interface ProxyHostListProps {
-  onEdit: (host: ProxyHost, tab?: 'basic' | 'ssl' | 'security' | 'performance' | 'advanced' | 'protection') => void
+  onEdit: (host: ProxyHost, tab?: TabType) => void
   onAdd: () => void
 }
 
@@ -92,7 +93,7 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
   })
 
   const cloneMutation = useMutation({
-    mutationFn: ({ id, domainNames, certificateId, certProvider, dnsProviderId, forwardScheme, forwardHost, forwardPort, isCreatingCert }: {
+    mutationFn: (params: {
       id: string
       domainNames: string[]
       certificateId?: string
@@ -101,17 +102,23 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
       forwardScheme: string
       forwardHost: string
       forwardPort: number
+      streamListenHost?: string
+      streamListenPort?: number
+      streamProtocol?: string
       isCreatingCert: boolean
     }) =>
-      cloneProxyHost(id, {
-        domain_names: domainNames,
-        certificate_id: certificateId,
-        cert_provider: certProvider,
-        dns_provider_id: dnsProviderId,
-        forward_scheme: forwardScheme,
-        forward_host: forwardHost,
-        forward_port: forwardPort,
-      }).then(result => ({ ...result, isCreatingCert })),
+      cloneProxyHost(params.id, {
+        domain_names: params.domainNames,
+        certificate_id: params.certificateId,
+        cert_provider: params.certProvider,
+        dns_provider_id: params.dnsProviderId,
+        forward_scheme: params.forwardScheme,
+        forward_host: params.forwardHost,
+        forward_port: params.forwardPort,
+        stream_listen_host: params.streamListenHost,
+        stream_listen_port: params.streamListenPort,
+        stream_protocol: params.streamProtocol,
+      }).then(result => ({ ...result, isCreatingCert: params.isCreatingCert })),
     onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ['proxy-hosts'] })
       queryClient.invalidateQueries({ queryKey: ['certificates'] })
@@ -424,6 +431,9 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
               forwardScheme: params.forwardScheme,
               forwardHost: params.forwardHost,
               forwardPort: params.forwardPort,
+              streamListenHost: params.streamListenHost,
+              streamListenPort: params.streamListenPort,
+              streamProtocol: params.streamProtocol,
               isCreatingCert: params.isCreatingCert,
             })
           }}

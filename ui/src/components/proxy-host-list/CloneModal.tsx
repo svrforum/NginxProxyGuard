@@ -18,6 +18,9 @@ interface CloneModalProps {
     forwardScheme: string
     forwardHost: string
     forwardPort: number
+    streamListenHost?: string
+    streamListenPort?: number
+    streamProtocol?: string
     isCreatingCert: boolean
   }) => void
   onClose: () => void
@@ -48,9 +51,12 @@ export function CloneModal({
   const [cloneCertificateId, setCloneCertificateId] = useState<string>(host.certificate_id || '')
   const [cloneCertProvider, setCloneCertProvider] = useState<'letsencrypt' | 'selfsigned'>('letsencrypt')
   const [cloneDnsProviderId, setCloneDnsProviderId] = useState<string>('')
-  const [cloneForwardScheme, setCloneForwardScheme] = useState<'http' | 'https'>(host.forward_scheme as 'http' | 'https')
+  const isStream = host.proxy_type === 'stream'
+  const [cloneForwardScheme, setCloneForwardScheme] = useState<string>(isStream ? (host.stream_protocol || 'tcp') : host.forward_scheme)
   const [cloneForwardHost, setCloneForwardHost] = useState(host.forward_host)
   const [cloneForwardPort, setCloneForwardPort] = useState(String(host.forward_port))
+  const [cloneStreamListenHost, setCloneStreamListenHost] = useState(host.stream_listen_host || '')
+  const [cloneStreamListenPort, setCloneStreamListenPort] = useState(String(host.stream_listen_port || ''))
 
   const { data: certificatesData } = useQuery({
     queryKey: ['certificates-for-clone'],
@@ -72,9 +78,11 @@ export function CloneModal({
     let certificateId: string | undefined
     let certProvider: string | undefined
     let dnsProviderId: string | undefined
-    const isCreatingCert = cloneCertMode === 'create'
+    const isCreatingCert = !isStream && cloneCertMode === 'create'
 
-    if (cloneCertMode === 'select') {
+    if (isStream) {
+      certificateId = undefined
+    } else if (cloneCertMode === 'select') {
       certificateId = cloneCertificateId || undefined
     } else {
       certProvider = cloneCertProvider
@@ -91,6 +99,9 @@ export function CloneModal({
       forwardScheme: cloneForwardScheme,
       forwardHost: cloneForwardHost,
       forwardPort: isNaN(forwardPort) ? host.forward_port : forwardPort,
+      streamListenHost: isStream ? cloneStreamListenHost : undefined,
+      streamListenPort: isStream ? parseInt(cloneStreamListenPort, 10) || host.stream_listen_port : undefined,
+      streamProtocol: isStream ? cloneForwardScheme : undefined,
       isCreatingCert,
     })
   }
@@ -129,11 +140,20 @@ export function CloneModal({
               </label>
               <select
                 value={cloneForwardScheme}
-                onChange={(e) => setCloneForwardScheme(e.target.value as 'http' | 'https')}
+                onChange={(e) => setCloneForwardScheme(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               >
-                <option value="http">http</option>
-                <option value="https">https</option>
+                {isStream ? (
+                  <>
+                    <option value="tcp">tcp</option>
+                    <option value="udp">udp</option>
+                  </>
+                ) : (
+                  <>
+                    <option value="http">http</option>
+                    <option value="https">https</option>
+                  </>
+                )}
               </select>
             </div>
             <div className="col-span-2">
@@ -161,8 +181,36 @@ export function CloneModal({
               />
             </div>
           </div>
+          {isStream && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  {t('form.basic.streamListenHost')}
+                </label>
+                <input
+                  type="text"
+                  value={cloneStreamListenHost}
+                  onChange={(e) => setCloneStreamListenHost(e.target.value)}
+                  placeholder="0.0.0.0"
+                  className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  {t('form.basic.streamListenPort')}
+                </label>
+                <input
+                  type="number"
+                  value={cloneStreamListenPort}
+                  onChange={(e) => setCloneStreamListenPort(e.target.value)}
+                  placeholder={String(host.stream_listen_port || '')}
+                  className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+          )}
           {/* SSL Certificate Section */}
-          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4">
+          {!isStream && <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4">
             <div className="flex items-center justify-between mb-3">
               <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
                 {t('actions.cloneCertificate')}
@@ -302,7 +350,7 @@ export function CloneModal({
                 </div>
               </div>
             )}
-          </div>
+          </div>}
           {isError && !certCreating && (
             <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-400">
               {error?.message || t('actions.cloneError')}

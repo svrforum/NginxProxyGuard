@@ -44,7 +44,14 @@ export function validateProxyHostForm({
     newErrors.forward_port = t('validation.portRange')
   }
 
-  if (formData.ssl_enabled && certMode === 'select' && !formData.certificate_id) {
+  if (formData.proxy_type === 'stream') {
+    const listenPort = Number(formData.stream_listen_port || 0)
+    if (!listenPort || listenPort < 1 || listenPort > 65535) {
+      newErrors.stream_listen_port = t('validation.portRange')
+    }
+  }
+
+  if (formData.proxy_type !== 'stream' && formData.ssl_enabled && certMode === 'select' && !formData.certificate_id) {
     newErrors.certificate_id = t('validation.certSelectionRequired')
   }
 
