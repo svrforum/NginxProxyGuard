@@ -25,10 +25,19 @@ export function useProxyHostFormState(host: ProxyHost | null | undefined) {
 
   // Form data state
   const [formData, setFormData] = useState<CreateProxyHostRequest>({
+    proxy_type: 'http',
     domain_names: [''],
     forward_scheme: 'http',
     forward_host: '',
     forward_port: 80,
+    stream_listen_host: '',
+    stream_listen_port: 0,
+    stream_protocol: 'tcp',
+    stream_ssl_preread: false,
+    stream_accept_proxy_protocol: false,
+    stream_send_proxy_protocol: false,
+    stream_proxy_connect_timeout: 0,
+    stream_proxy_timeout: 0,
     ssl_enabled: false,
     ssl_force_https: false,
     ssl_http2: true,
@@ -216,10 +225,19 @@ export function useProxyHostFormState(host: ProxyHost | null | undefined) {
   useEffect(() => {
     if (host) {
       setFormData({
+        proxy_type: host.proxy_type || 'http',
         domain_names: host.domain_names,
         forward_scheme: host.forward_scheme,
         forward_host: host.forward_host,
         forward_port: host.forward_port,
+        stream_listen_host: host.stream_listen_host || '',
+        stream_listen_port: host.stream_listen_port || 0,
+        stream_protocol: host.stream_protocol || 'tcp',
+        stream_ssl_preread: host.stream_ssl_preread || false,
+        stream_accept_proxy_protocol: host.stream_accept_proxy_protocol || false,
+        stream_send_proxy_protocol: host.stream_send_proxy_protocol || false,
+        stream_proxy_connect_timeout: host.stream_proxy_connect_timeout || 0,
+        stream_proxy_timeout: host.stream_proxy_timeout || 0,
         ssl_enabled: host.ssl_enabled,
         ssl_force_https: host.ssl_force_https,
         ssl_http2: host.ssl_http2,

@@ -58,6 +58,7 @@ export function useProxyHostSubmit({
   const queryClient = useQueryClient()
   const { t } = useTranslation('proxyHost')
   const isEditing = !!host
+  const isStreamMode = state.formData.proxy_type === 'stream'
 
   const [saveProgress, setSaveProgress] = useState<SaveProgressState>(INITIAL_PROGRESS)
 
@@ -92,14 +93,16 @@ export function useProxyHostSubmit({
       // Step 1: Additional settings
       setSaveProgress((prev) => ({ ...prev, currentStep: 1 }))
 
-      const savedAny = await extras.saveExtrasForCreate({
-        hostId: newHost.id,
-        botFilterData: state.botFilterData,
-        geoData: state.geoData,
-        blockedCloudProviders: state.blockedCloudProviders,
-        cloudProviderChallengeMode: state.cloudProviderChallengeMode,
-        cloudProviderAllowSearchBots: state.cloudProviderAllowSearchBots,
-      })
+      const savedAny = newHost.proxy_type === 'stream'
+        ? false
+        : await extras.saveExtrasForCreate({
+          hostId: newHost.id,
+          botFilterData: state.botFilterData,
+          geoData: state.geoData,
+          blockedCloudProviders: state.blockedCloudProviders,
+          cloudProviderChallengeMode: state.cloudProviderChallengeMode,
+          cloudProviderAllowSearchBots: state.cloudProviderAllowSearchBots,
+        })
 
       if (savedAny) {
         // Regenerate config for this specific host to apply additional settings
@@ -139,15 +142,17 @@ export function useProxyHostSubmit({
       // Step 1: Additional settings
       setSaveProgress((prev) => ({ ...prev, currentStep: 1 }))
 
-      await extras.saveExtrasForUpdate({
-        hostId: variables.id,
-        botFilterData: state.botFilterData,
-        geoData: state.geoData,
-        blockedCloudProviders: state.blockedCloudProviders,
-        cloudProviderChallengeMode: state.cloudProviderChallengeMode,
-        cloudProviderAllowSearchBots: state.cloudProviderAllowSearchBots,
-        existingGeoRestriction: state.existingGeoRestriction,
-      })
+      if (variables.data.proxy_type !== 'stream') {
+        await extras.saveExtrasForUpdate({
+          hostId: variables.id,
+          botFilterData: state.botFilterData,
+          geoData: state.geoData,
+          blockedCloudProviders: state.blockedCloudProviders,
+          cloudProviderChallengeMode: state.cloudProviderChallengeMode,
+          cloudProviderAllowSearchBots: state.cloudProviderAllowSearchBots,
+          existingGeoRestriction: state.existingGeoRestriction,
+        })
+      }
 
       // Single nginx config generation + test + reload (all settings applied at once)
       try {
@@ -198,7 +203,7 @@ export function useProxyHostSubmit({
     let certificateId = state.formData.certificate_id
 
     // Step 1: Create certificate if SSL + create mode
-    if (state.formData.ssl_enabled && state.certMode === 'create') {
+    if (!isStreamMode && state.formData.ssl_enabled && state.certMode === 'create') {
       if (domains.length === 0) {
         state.setErrors({ domain_names: t('validation.addDomainsBeforeCert') })
         setSaveProgress(INITIAL_PROGRESS)
@@ -220,11 +225,31 @@ export function useProxyHostSubmit({
     }
 
     // Step 2+: Fire the host mutation
-    const data = {
+    const data: CreateProxyHostRequest = {
       ...state.formData,
       domain_names: domains,
       forward_port: parseInt(state.portInput) || 80,
       certificate_id: certificateId,
+    }
+
+    if (data.proxy_type === 'stream') {
+      const protocol = data.stream_protocol || 'tcp'
+      data.forward_scheme = protocol
+      data.ssl_enabled = false
+      data.ssl_force_https = false
+      data.ssl_http2 = false
+      data.ssl_http3 = false
+      data.certificate_id = undefined
+      data.allow_websocket_upgrade = false
+      data.cache_enabled = false
+      data.block_exploits = false
+      data.waf_enabled = false
+      data.access_list_id = undefined
+      if (protocol === 'udp') {
+        data.stream_ssl_preread = false
+        data.stream_accept_proxy_protocol = false
+        data.stream_send_proxy_protocol = false
+      }
     }
 
     if (isEditing && host) {

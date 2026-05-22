@@ -1,9 +1,22 @@
+export type ProxyType = 'http' | 'stream'
+export type ForwardScheme = 'http' | 'https' | 'tcp' | 'udp'
+export type StreamProtocol = 'tcp' | 'udp'
+
 export interface ProxyHost {
   id: string
+  proxy_type: ProxyType
   domain_names: string[]
-  forward_scheme: 'http' | 'https'
+  forward_scheme: ForwardScheme
   forward_host: string
   forward_port: number
+  stream_listen_host?: string
+  stream_listen_port?: number
+  stream_protocol?: StreamProtocol
+  stream_ssl_preread?: boolean
+  stream_accept_proxy_protocol?: boolean
+  stream_send_proxy_protocol?: boolean
+  stream_proxy_connect_timeout?: number
+  stream_proxy_timeout?: number
   ssl_enabled: boolean
   ssl_force_https: boolean
   ssl_http2: boolean
@@ -40,10 +53,19 @@ export interface ProxyHost {
 }
 
 export interface CreateProxyHostRequest {
+  proxy_type?: ProxyType
   domain_names: string[]
-  forward_scheme: 'http' | 'https'
+  forward_scheme: ForwardScheme
   forward_host: string
   forward_port: number
+  stream_listen_host?: string
+  stream_listen_port?: number
+  stream_protocol?: StreamProtocol
+  stream_ssl_preread?: boolean
+  stream_accept_proxy_protocol?: boolean
+  stream_send_proxy_protocol?: boolean
+  stream_proxy_connect_timeout?: number
+  stream_proxy_timeout?: number
   ssl_enabled?: boolean
   ssl_force_https?: boolean
   ssl_http2?: boolean
@@ -73,10 +95,19 @@ export interface CreateProxyHostRequest {
 }
 
 export interface UpdateProxyHostRequest {
+  proxy_type?: ProxyType
   domain_names?: string[]
-  forward_scheme?: 'http' | 'https'
+  forward_scheme?: ForwardScheme
   forward_host?: string
   forward_port?: number
+  stream_listen_host?: string
+  stream_listen_port?: number
+  stream_protocol?: StreamProtocol
+  stream_ssl_preread?: boolean
+  stream_accept_proxy_protocol?: boolean
+  stream_send_proxy_protocol?: boolean
+  stream_proxy_connect_timeout?: number
+  stream_proxy_timeout?: number
   ssl_enabled?: boolean
   ssl_force_https?: boolean
   ssl_http2?: boolean
@@ -121,11 +152,22 @@ export interface ProxyHostTestResult {
   response_time_ms: number
   status_code?: number
   error?: string
+  stream?: StreamTestResult
   ssl?: SSLTestResult
   http?: HTTPTestResult
   cache?: CacheTestResult
   security?: SecurityTestResult
   headers?: Record<string, string>
+}
+
+export interface StreamTestResult {
+  protocol: StreamProtocol
+  target_address: string
+  upstream_address?: string
+  ssl_preread: boolean
+  proxy_protocol_in: boolean
+  proxy_protocol_out: boolean
+  remote_address_note?: string
 }
 
 export interface SSLTestResult {

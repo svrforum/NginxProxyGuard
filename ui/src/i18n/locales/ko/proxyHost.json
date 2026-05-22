@@ -83,9 +83,32 @@
       "advanced": "고급"
     },
     "basic": {
+      "proxyMode": "프록시 모드",
+      "httpMode": "HTTP / HTTPS",
+      "httpModeDescription": "가상 호스트 리버스 프록시",
+      "streamMode": "TCP / UDP Stream",
+      "streamModeDescription": "Layer 4 리버스 프록시",
       "domainNames": "도메인 이름",
       "domainPlaceholder": "example.com",
       "addDomain": "도메인 추가",
+      "streamNames": "Stream 이름",
+      "streamNamePlaceholder": "service.example.com 또는 stream 라벨",
+      "addStreamName": "Stream 이름 추가",
+      "streamListener": "Stream 리스너",
+      "streamProtocol": "프로토콜",
+      "streamListenHost": "리스닝 호스트",
+      "streamListenPort": "리스닝 포트",
+      "streamSslPreread": "SSL Preread",
+      "streamSslPrereadDescription": "TLS 종료 없이 SNI를 읽습니다",
+      "streamAcceptProxyProtocol": "PROXY 수신",
+      "streamAcceptProxyProtocolDescription": "클라이언트의 PROXY 프로토콜을 받습니다",
+      "streamSendProxyProtocol": "PROXY 전송",
+      "streamSendProxyProtocolDescription": "업스트림으로 PROXY 프로토콜을 전송합니다",
+      "streamConnectTimeout": "연결 타임아웃 (초)",
+      "streamProxyTimeout": "프록시 타임아웃 (초)",
+      "streamUpstream": "Stream 업스트림",
+      "backendHost": "백엔드 호스트",
+      "backendPort": "백엔드 포트",
       "forwardHost": "포워드 호스트",
       "forwardHostPlaceholder": "192.168.1.100 또는 container_name",
       "forwardPort": "포워드 포트",
@@ -571,6 +594,10 @@
       "quic": "UDP 기반, 0-RTT 연결",
       "altSvc": "Alt-Svc 헤더",
       "altSvcDesc": "이 헤더는 호환되는 브라우저에 HTTP/3 지원을 알립니다"
+    },
+    "stream": {
+      "listener": "리스너",
+      "upstream": "업스트림"
     },
     "cache": {
       "status": "캐시 상태",
