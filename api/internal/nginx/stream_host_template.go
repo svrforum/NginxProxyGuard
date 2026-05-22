@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"text/template"
 
 	"nginx-proxy-guard/internal/model"
@@ -30,7 +31,12 @@ server {
 {{end}}{{if streamAccessLog}}    access_log /var/log/nginx/stream_access.log stream_main;
 {{end}}{{if streamErrorLog}}    error_log /var/log/nginx/stream_error.log warn;
 {{end}}{{if .Host.StreamSSLPreread}}    ssl_preread on;
-{{end}}    proxy_pass {{if and .Upstream .Upstream.Servers}}{{streamUpstreamName .Host}}{{else}}{{streamBackend .Host.ForwardHost .Host.ForwardPort}}{{end}};
+{{end}}{{if and .Upstream .Upstream.Servers}}    proxy_pass {{streamUpstreamName .Host}};
+{{else}}    resolver {{streamResolver}} valid=30s;
+    resolver_timeout 5s;
+    set $stream_backend {{streamBackend .Host.ForwardHost .Host.ForwardPort}};
+    proxy_pass $stream_backend;
+{{end}}
 {{if .Host.AdvancedConfig}}
     # Advanced stream configuration
 {{.Host.AdvancedConfig}}
@@ -62,6 +68,13 @@ func (m *Manager) GenerateStreamConfig(ctx context.Context, data ProxyHostConfig
 	funcMap["streamBackend"] = formatHostPort
 	funcMap["streamProtocol"] = func(host *model.ProxyHost) string {
 		return model.NormalizeStreamProtocol(host.StreamProtocol)
+	}
+	funcMap["streamResolver"] = func() string {
+		resolver := strings.TrimSpace(m.dnsResolver)
+		if resolver == "" {
+			return "127.0.0.53 8.8.8.8"
+		}
+		return resolver
 	}
 	funcMap["streamUpstreamName"] = func(host *model.ProxyHost) string {
 		return "stream_upstream_" + sanitizeFilename(host.ID)

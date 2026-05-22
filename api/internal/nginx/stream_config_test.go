@@ -69,7 +69,8 @@ func TestGenerateConfigFull_StreamTCPHostWritesStreamConfig(t *testing.T) {
 		"server_name db.example.com;",
 		"proxy_connect_timeout 3s;",
 		"proxy_timeout 600s;",
-		"proxy_pass 10.0.0.20:5432;",
+		"set $stream_backend 10.0.0.20:5432;",
+		"proxy_pass $stream_backend;",
 		"ssl_preread on;",
 		"access_log /var/log/nginx/stream_access.log stream_main;",
 	} {
@@ -115,6 +116,54 @@ func TestGenerateConfigFull_StreamHostRejectsHostnameListenAddress(t *testing.T)
 	}
 }
 
+func TestGenerateConfigFull_StreamHostnameForwardHostDefersResolution(t *testing.T) {
+	dir := t.TempDir()
+	confDir := filepath.Join(dir, "conf.d")
+	streamDir := filepath.Join(dir, "stream.d")
+	if err := os.MkdirAll(confDir, 0755); err != nil {
+		t.Fatalf("mkdir conf.d: %v", err)
+	}
+
+	m := &Manager{
+		configPath:       confDir,
+		streamConfigPath: streamDir,
+		dnsResolver:      "127.0.0.53 8.8.8.8",
+	}
+	host := &model.ProxyHost{
+		ID:               "00000000-0000-0000-0000-000000000204",
+		ProxyType:        "stream",
+		DomainNames:      []string{"tggg.hancy.kr"},
+		ForwardHost:      "hancy-macmini",
+		ForwardPort:      25565,
+		Enabled:          true,
+		StreamListenPort: 25656,
+		StreamProtocol:   "tcp",
+	}
+
+	if err := m.GenerateConfigFull(context.Background(), ProxyHostConfigData{Host: host}); err != nil {
+		t.Fatalf("GenerateConfigFull: %v", err)
+	}
+
+	body, err := os.ReadFile(filepath.Join(streamDir, "stream_host_tggg_hancy_kr_25656.conf"))
+	if err != nil {
+		t.Fatalf("read stream config: %v", err)
+	}
+	out := string(body)
+	for _, want := range []string{
+		"resolver 127.0.0.53 8.8.8.8 valid=30s;",
+		"resolver_timeout 5s;",
+		"set $stream_backend hancy-macmini:25565;",
+		"proxy_pass $stream_backend;",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected %q in stream config; got:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "proxy_pass hancy-macmini:25565;") {
+		t.Fatalf("hostname direct stream backend should not be rendered as a literal proxy_pass; got:\n%s", out)
+	}
+}
+
 func TestGenerateConfigFull_StreamUDPHostWritesUDPListen(t *testing.T) {
 	dir := t.TempDir()
 	confDir := filepath.Join(dir, "conf.d")
@@ -154,7 +203,8 @@ func TestGenerateConfigFull_StreamUDPHostWritesUDPListen(t *testing.T) {
 	for _, want := range []string{
 		"listen 1053 udp reuseport;",
 		"proxy_timeout 20s;",
-		"proxy_pass 10.0.0.53:53;",
+		"set $stream_backend 10.0.0.53:53;",
+		"proxy_pass $stream_backend;",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("expected %q in stream config; got:\n%s", want, out)
