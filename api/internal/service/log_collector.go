@@ -46,6 +46,15 @@ const streamMaxAge = 1 * time.Hour
 // proof the watchdog goroutine is alive, cheap to diagnose next time.
 const streamHeartbeatTicks = 10
 
+// canonicalAccessLogPath is the path every shipped proxy_host config writes
+// to (via 00-raw-logging.conf + per-host access_log directives) and that the
+// shared npg_nginx_data volume exposes inside the npg-api container. Used
+// both as the code default and as the auto-fallback when a user's compose
+// still carries the pre-v2.14.2 NGINX_ACCESS_LOG=/var/log/nginx/access.log
+// value (a symlink to /dev/stdout that is not mounted into npg-api and so
+// silently produces zero ingestion after the docker-logs → file-tail switch).
+const canonicalAccessLogPath = "/etc/nginx/logs/access_raw.log"
+
 const (
 	// MaxRequestTime is the maximum valid request time in seconds (24 hours)
 	// Values exceeding this are likely erroneous and will be replaced with 0
@@ -694,6 +703,38 @@ func (c *LogCollector) streamModSecLogs(ctx context.Context) {
 	})
 }
 
+// resolveTailPath returns the path streamFileAccessLogs should actually tail.
+// It honors c.accessLogPath when usable and falls back to canonicalAccessLogPath
+// otherwise. Two known-bad inputs are auto-corrected:
+//
+//  1. A symlink whose target is under /dev/* (the pre-v2.14.2 default
+//     /var/log/nginx/access.log resolves to /dev/stdout; reading it returns
+//     immediate EOF and yields zero ingestion).
+//  2. A path that does not exist inside npg-api at all (the same legacy
+//     default refers to a file in npg-proxy that npg-api never mounts —
+//     os.Open returns ENOENT and the outer retry loop spins forever).
+//
+// Both cases were silently introduced for upgrading users by the v2.14.2
+// docker-logs → file-tail switch. The fallback is logged at WARN level so the
+// operator can fix their NGINX_ACCESS_LOG env at leisure without losing logs.
+func (c *LogCollector) resolveTailPath() string {
+	configured := c.accessLogPath
+
+	if target, err := os.Readlink(configured); err == nil && strings.HasPrefix(target, "/dev/") {
+		log.Printf("[LogCollector] WARN: NGINX_ACCESS_LOG %s is a symlink to %s (legacy stdout pipe); falling back to %s. Remove the env override or set it to the canonical path to silence this.", configured, target, canonicalAccessLogPath)
+		return canonicalAccessLogPath
+	}
+
+	if _, err := os.Stat(configured); os.IsNotExist(err) {
+		if _, err := os.Stat(canonicalAccessLogPath); err == nil {
+			log.Printf("[LogCollector] WARN: NGINX_ACCESS_LOG %s does not exist inside npg-api (likely a stale pre-v2.14.2 value); falling back to %s. Remove the env override or set it to the canonical path to silence this.", configured, canonicalAccessLogPath)
+			return canonicalAccessLogPath
+		}
+	}
+
+	return configured
+}
+
 // streamFileAccessLogs tails the nginx access_raw.log file directly, bypassing
 // docker logs --follow. Background: the dockerd `docker logs` streaming RPC
 // can silently stall (production incidents 2026-05-19 and 2026-05-20), and
@@ -710,7 +751,14 @@ func (c *LogCollector) streamFileAccessLogs(ctx context.Context) {
 		log.Printf("[LogCollector] file-tail disabled: accessLogPath is empty")
 		return
 	}
-	log.Printf("[LogCollector] starting file-tail of %s", c.accessLogPath)
+	// Resolve once at startup so a stale pre-v2.14.2 NGINX_ACCESS_LOG env in
+	// the user's docker-compose.yml (e.g. /var/log/nginx/access.log, a stdout
+	// symlink that is not even mounted into npg-api) auto-falls back to the
+	// canonical file written by every proxy_host config. Without this, users
+	// upgrading from <=2.14.1 without touching their compose see zero access
+	// log ingestion forever — a silent breaking change introduced in 2.14.2.
+	tailPath := c.resolveTailPath()
+	log.Printf("[LogCollector] starting file-tail of %s", tailPath)
 
 	var (
 		file   *os.File
@@ -744,7 +792,7 @@ func (c *LogCollector) streamFileAccessLogs(ctx context.Context) {
 			_ = file.Close()
 			file = nil
 		}
-		f, err := os.Open(c.accessLogPath)
+		f, err := os.Open(tailPath)
 		if err != nil {
 			return err
 		}
@@ -756,7 +804,7 @@ func (c *LogCollector) streamFileAccessLogs(ctx context.Context) {
 		}
 		file = f
 		reader = bufio.NewReaderSize(f, 64*1024)
-		curIno = inodeOf(c.accessLogPath)
+		curIno = inodeOf(tailPath)
 		return nil
 	}
 
@@ -798,7 +846,7 @@ func (c *LogCollector) streamFileAccessLogs(ctx context.Context) {
 
 		// EOF: either no new data yet, or the file was rotated. Detect rotation
 		// by comparing inode. Bare file-gone is also possible mid-rotation.
-		newIno := inodeOf(c.accessLogPath)
+		newIno := inodeOf(tailPath)
 		if newIno == 0 {
 			// File temporarily missing (logrotate window). Brief wait and retry.
 			time.Sleep(200 * time.Millisecond)
