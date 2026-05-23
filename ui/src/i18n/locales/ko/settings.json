@@ -964,6 +964,14 @@
       },
       "customConfigPlaceholder": "# 추가 nginx http 설정을 여기에 입력하세요",
       "customStreamConfigPlaceholder": "# 추가 nginx stream 설정을 여기에 입력하세요"
+    },
+    "preset": {
+      "applyPerformance": "권장 설정 적용",
+      "applying": "적용 중...",
+      "tooltipPerformance": "nginx 권장 튜닝값(worker_connections 8192, keepalive 30s/1000req 등)으로 일괄 적용",
+      "confirmPerformance": "Performance 권장 설정을 적용하시겠습니까? 현재 값이 모두 권장값으로 덮어쓰여지며, nginx가 즉시 reload됩니다.",
+      "applied": "권장 설정이 적용되었습니다.",
+      "failed": "권장 설정 적용 실패"
     }
   },
   "apiTokens": {

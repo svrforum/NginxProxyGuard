@@ -230,6 +230,14 @@ http {
     # HTTP/3 (QUIC)
     ssl_early_data on;
     quic_retry on;
+    # quic_gso enables UDP segmentation offload (Linux 4.18+); on older kernels
+    # nginx silently disables it so it's safe to leave on. Improves HTTP/3
+    # throughput by batching outgoing UDP packets.
+    quic_gso on;
+    # Bound the number of concurrent connection IDs nginx tracks per QUIC
+    # connection. Default is 2; raising to 4 gives more room for connection
+    # migration (e.g. mobile network handover) without unbounded growth.
+    quic_active_connection_id_limit 4;
 
     # ==========================================================================
     # HTTP/3 Host header fix for ModSecurity

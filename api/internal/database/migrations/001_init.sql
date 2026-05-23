@@ -562,15 +562,15 @@ COMMENT ON TABLE public.global_exploit_rule_exclusions IS 'Global rule exclusion
 CREATE TABLE IF NOT EXISTS public.global_settings (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     worker_processes integer DEFAULT 0 NOT NULL,
-    worker_connections integer DEFAULT 1024 NOT NULL,
+    worker_connections integer DEFAULT 8192 NOT NULL,
     worker_rlimit_nofile integer,
     multi_accept boolean DEFAULT true NOT NULL,
     use_epoll boolean DEFAULT true NOT NULL,
     sendfile boolean DEFAULT true NOT NULL,
     tcp_nopush boolean DEFAULT true NOT NULL,
     tcp_nodelay boolean DEFAULT true NOT NULL,
-    keepalive_timeout integer DEFAULT 65 NOT NULL,
-    keepalive_requests integer DEFAULT 100 NOT NULL,
+    keepalive_timeout integer DEFAULT 30 NOT NULL,
+    keepalive_requests integer DEFAULT 1000 NOT NULL,
     types_hash_max_size integer DEFAULT 2048 NOT NULL,
     server_tokens boolean DEFAULT false NOT NULL,
     client_body_buffer_size character varying(20) DEFAULT '16k'::character varying NOT NULL,
@@ -3681,3 +3681,14 @@ CREATE INDEX IF NOT EXISTS idx_fail2ban_configs_proxy_host
 CREATE INDEX IF NOT EXISTS idx_logs_part_block_reason_created
     ON logs_partitioned (created_at DESC, block_reason)
     WHERE block_reason != 'none' AND log_type = 'access';
+
+-- v2.17.0: Align global_settings DEFAULTs with the "performance" preset
+-- shipped in code. The original DEFAULTs (worker_connections 1024,
+-- keepalive_timeout 65, keepalive_requests 100) were conservative values
+-- that pre-dated the explicit preset system; existing rows are NOT updated
+-- so an operator's deliberate customization is preserved. Only new
+-- installs and rows created after this migration pick up the new defaults.
+-- Canonical execution lives in migration.go upgrades slice.
+ALTER TABLE public.global_settings ALTER COLUMN worker_connections SET DEFAULT 8192;
+ALTER TABLE public.global_settings ALTER COLUMN keepalive_timeout SET DEFAULT 30;
+ALTER TABLE public.global_settings ALTER COLUMN keepalive_requests SET DEFAULT 1000;

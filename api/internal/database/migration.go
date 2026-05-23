@@ -753,6 +753,28 @@ END $$`,
 				ON logs_partitioned (created_at DESC, block_reason)
 				WHERE block_reason != 'none' AND log_type = 'access'`,
 		},
+		// -----------------------------------------------------------------------
+		// v2.17.0: Align global_settings DEFAULT values with the "performance"
+		// preset shipped in model.GlobalSettingsPresets["performance"]. The
+		// original DEFAULTs (worker_connections 1024, keepalive_timeout 65,
+		// keepalive_requests 100) pre-dated the explicit preset system and were
+		// inconsistent with the preset values an operator would apply via the
+		// UI. Existing rows are intentionally NOT updated — an operator may have
+		// deliberately customized these values; only column DEFAULTs change so
+		// fresh installs and any future INSERT pick up the new baseline.
+		// -----------------------------------------------------------------------
+		{
+			desc: "v2.17.0: global_settings.worker_connections DEFAULT 1024 -> 8192",
+			sql:  `ALTER TABLE public.global_settings ALTER COLUMN worker_connections SET DEFAULT 8192`,
+		},
+		{
+			desc: "v2.17.0: global_settings.keepalive_timeout DEFAULT 65 -> 30",
+			sql:  `ALTER TABLE public.global_settings ALTER COLUMN keepalive_timeout SET DEFAULT 30`,
+		},
+		{
+			desc: "v2.17.0: global_settings.keepalive_requests DEFAULT 100 -> 1000",
+			sql:  `ALTER TABLE public.global_settings ALTER COLUMN keepalive_requests SET DEFAULT 1000`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

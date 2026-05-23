@@ -5,6 +5,7 @@ import {
   getGlobalSettings,
   updateGlobalSettings,
   resetGlobalSettings,
+  applySettingsPreset,
 } from '../api/settings';
 import type { GlobalSettings as GlobalSettingsType } from '../types/settings';
 import type { TabType } from './global-settings/types';
@@ -49,6 +50,28 @@ export default function GlobalSettings() {
       queryClient.invalidateQueries({ queryKey: ['globalSettings'] });
     },
   });
+
+  const presetMutation = useMutation({
+    mutationFn: applySettingsPreset,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['globalSettings'] });
+      setEditedSettings({});
+      setSaveMessage({ type: 'success', text: t('global.preset.applied', { defaultValue: '권장 설정이 적용되었습니다.' }) });
+      setTimeout(() => setSaveMessage(null), 3000);
+    },
+    onError: (error: Error) => {
+      setSaveMessage({ type: 'error', text: `${t('global.preset.failed', { defaultValue: '권장 설정 적용 실패' })}: ${error.message}` });
+      setTimeout(() => setSaveMessage(null), 5000);
+    },
+  });
+
+  const handleApplyPerformancePreset = () => {
+    if (confirm(t('global.preset.confirmPerformance', {
+      defaultValue: 'Performance 권장 설정을 적용하시겠습니까? 현재 값이 모두 권장값으로 덮어쓰여지며, nginx가 즉시 reload됩니다.',
+    }))) {
+      presetMutation.mutate('performance');
+    }
+  };
 
   const handleChange = (key: keyof GlobalSettingsType, value: string | number | boolean) => {
     setEditedSettings((prev) => ({ ...prev, [key]: value }));
@@ -112,6 +135,16 @@ export default function GlobalSettings() {
           </p>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={handleApplyPerformancePreset}
+            disabled={presetMutation.isPending}
+            className="px-4 py-2 text-[13px] font-semibold bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg disabled:opacity-50 transition-colors"
+            title={t('global.preset.tooltipPerformance', { defaultValue: 'nginx 권장 튜닝값으로 일괄 적용' })}
+          >
+            {presetMutation.isPending
+              ? t('global.preset.applying', { defaultValue: '적용 중...' })
+              : t('global.preset.applyPerformance', { defaultValue: '권장 설정 적용' })}
+          </button>
           <button
             onClick={() => resetMutation.mutate()}
             disabled={resetMutation.isPending}
