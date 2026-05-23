@@ -26,7 +26,13 @@ upstream {{streamUpstreamName .Host}} {
 server {
     listen {{streamListen .Host}}{{if eq (streamProtocol .Host) "udp"}} udp reuseport{{end}}{{if .Host.StreamAcceptProxyProtocol}} proxy_protocol{{end}};
 {{if and .Host.StreamSSLPreread .Host.DomainNames}}    server_name {{join .Host.DomainNames " "}};
-{{end}}{{if .Host.StreamProxyConnectTimeout}}    proxy_connect_timeout {{.Host.StreamProxyConnectTimeout}}s;
+{{end}}    # IP-based security (L3/L4 only — stream module supports allow/deny
+    # via ngx_stream_access_module). banned_ips.conf is shared with HTTP hosts
+    # so a banned IP is blocked across both protocols. Glob is used instead of
+    # a fixed filename so nginx does not fail on fresh installs where the file
+    # has not been generated yet (an empty glob is silently ignored).
+    include /etc/nginx/includes/banned_ips*.conf;
+{{if .Host.StreamProxyConnectTimeout}}    proxy_connect_timeout {{.Host.StreamProxyConnectTimeout}}s;
 {{end}}{{if .Host.StreamProxyTimeout}}    proxy_timeout {{.Host.StreamProxyTimeout}}s;
 {{end}}{{if .Host.StreamSendProxyProtocol}}    proxy_protocol on;
 {{end}}{{if streamAccessLog}}    access_log /var/log/nginx/stream_access.log stream_main;

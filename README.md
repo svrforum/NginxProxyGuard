@@ -62,7 +62,15 @@ Protect against DDoS and brute-force attacks with configurable rate limits per I
 Multiple backend servers with round-robin, least connections, IP hash, or weighted distribution. Health checks included.
 
 ### 🔌 TCP/UDP Stream Proxying
-Manage Nginx `stream` reverse proxies from the same UI. Supports TCP and UDP listeners, optional SNI preread routing, PROXY protocol in/out, stream timeouts, config testing, and backup/restore.
+Manage Nginx `stream` reverse proxies from the same UI. Supports TCP and UDP listeners, optional SNI preread routing (TCP only), PROXY protocol in/out, stream timeouts, config testing, and backup/restore. Banned IPs are auto-applied to stream listeners.
+
+**Stream security scope** — `stream` operates at L4 (TCP/UDP), so HTTP-layer protections do **not** apply: ModSecurity (WAF), exploit blocking, bot filter, URI blocking, rate limit, and access lists are HTTP-only. IP-based controls (banned IPs) work at L4 and are auto-injected. fail2ban and GeoIP for stream listeners are tracked as follow-ups.
+
+> Stream traffic is logged to `/var/log/nginx/stream_access.log` (and `stream_error.log`) inside the nginx container. LogCollector ingestion of stream traffic into the NPG dashboard is tracked as a follow-up; for now use `docker logs npg-proxy` or read the file directly.
+
+> `worker_connections` is shared between HTTP and stream listeners. Large numbers of long-lived stream sessions can pressure HTTP capacity — increase `worker_connections` (Settings → Global → "Apply recommended preset" raises it to 8192) if you run heavy stream workloads.
+
+> `CustomStreamConfig` (Advanced tab) accepts raw nginx `stream` directives and can bind arbitrary ports on any interface. Treat it as an admin-only capability.
 
 ### 🔐 Security Headers
 HSTS, X-Frame-Options, X-Content-Type-Options, X-XSS-Protection, Referrer-Policy, and Content-Security-Policy.

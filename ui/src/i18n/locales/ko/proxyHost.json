@@ -88,6 +88,8 @@
       "httpModeDescription": "가상 호스트 리버스 프록시",
       "streamMode": "TCP / UDP Stream",
       "streamModeDescription": "Layer 4 리버스 프록시",
+      "streamSecurityNoticeTitle": "Stream 모드 보안 안내",
+      "streamSecurityNoticeBody": "TCP/UDP stream 호스트는 HTTP 프로토콜이 없어 ModSecurity(WAF), exploit 차단, bot filter, URI 차단, rate limit, access list는 적용되지 않습니다. IP 기반 보안(banned IPs)은 stream에 자동 적용됩니다.",
       "domainNames": "도메인 이름",
       "domainPlaceholder": "example.com",
       "addDomain": "도메인 추가",
