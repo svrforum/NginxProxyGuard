@@ -551,6 +551,8 @@
       "saving": "Saving...",
       "enable": "Enable Raw Log Saving",
       "enableDesc": "If enabled, nginx logs will be saved to files.",
+      "alwaysOnLabel": "Raw Log Storage Always Enabled",
+      "alwaysOnDescription": "Since v2.17.1, LogCollector reads /etc/nginx/logs/access_raw.log directly, so raw log storage is always enabled. You can still adjust retention / rotation / compression below.",
       "maxSize": "Max File Size (MB)",
       "maxSizeDesc": "Rotates when size exceeds this limit.",
       "rotateCount": "Rotation Keep Count",

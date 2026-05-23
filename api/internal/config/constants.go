@@ -3,7 +3,7 @@ package config
 import "time"
 
 // Application version
-const AppVersion = "2.17.1"
+const AppVersion = "2.17.2"
 
 // Health status constants
 const (

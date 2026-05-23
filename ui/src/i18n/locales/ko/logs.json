@@ -553,6 +553,8 @@
       "saving": "저장 중...",
       "enable": "원본 로그 저장 활성화",
       "enableDesc": "활성화하면 nginx 로그가 파일로도 저장됩니다.",
+      "alwaysOnLabel": "Raw 로그 저장 항상 활성화",
+      "alwaysOnDescription": "v2.17.1 부터 LogCollector가 /etc/nginx/logs/access_raw.log를 직접 읽기 때문에 raw 로그 저장은 항상 활성화됩니다. 보관 기간 / 회전 / 압축은 아래에서 조정할 수 있습니다.",
       "maxSize": "최대 파일 크기 (MB)",
       "maxSizeDesc": "이 크기를 초과하면 로테이션됩니다.",
       "rotateCount": "보관할 로테이션 파일 수",
