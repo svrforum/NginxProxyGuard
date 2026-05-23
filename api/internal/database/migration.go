@@ -218,39 +218,39 @@ END $$`,
 			sql:  `ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS proxy_max_temp_file_size character varying(20) DEFAULT ''`,
 		},
 		{
-			desc: "v2.16.0: proxy_hosts.proxy_type",
+			desc: "v2.18.0: proxy_hosts.proxy_type",
 			sql:  `ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS proxy_type character varying(20) DEFAULT 'http' NOT NULL`,
 		},
 		{
-			desc: "v2.16.0: proxy_hosts.stream_listen_host",
+			desc: "v2.18.0: proxy_hosts.stream_listen_host",
 			sql:  `ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS stream_listen_host character varying(255) DEFAULT ''`,
 		},
 		{
-			desc: "v2.16.0: proxy_hosts.stream_listen_port",
+			desc: "v2.18.0: proxy_hosts.stream_listen_port",
 			sql:  `ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS stream_listen_port integer DEFAULT 0`,
 		},
 		{
-			desc: "v2.16.0: proxy_hosts.stream_protocol",
+			desc: "v2.18.0: proxy_hosts.stream_protocol",
 			sql:  `ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS stream_protocol character varying(10) DEFAULT 'tcp'`,
 		},
 		{
-			desc: "v2.16.0: proxy_hosts.stream_ssl_preread",
+			desc: "v2.18.0: proxy_hosts.stream_ssl_preread",
 			sql:  `ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS stream_ssl_preread boolean DEFAULT false NOT NULL`,
 		},
 		{
-			desc: "v2.16.0: proxy_hosts.stream_accept_proxy_protocol",
+			desc: "v2.18.0: proxy_hosts.stream_accept_proxy_protocol",
 			sql:  `ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS stream_accept_proxy_protocol boolean DEFAULT false NOT NULL`,
 		},
 		{
-			desc: "v2.16.0: proxy_hosts.stream_send_proxy_protocol",
+			desc: "v2.18.0: proxy_hosts.stream_send_proxy_protocol",
 			sql:  `ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS stream_send_proxy_protocol boolean DEFAULT false NOT NULL`,
 		},
 		{
-			desc: "v2.16.0: proxy_hosts.stream_proxy_connect_timeout",
+			desc: "v2.18.0: proxy_hosts.stream_proxy_connect_timeout",
 			sql:  `ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS stream_proxy_connect_timeout integer DEFAULT 0`,
 		},
 		{
-			desc: "v2.16.0: proxy_hosts.stream_proxy_timeout",
+			desc: "v2.18.0: proxy_hosts.stream_proxy_timeout",
 			sql:  `ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS stream_proxy_timeout integer DEFAULT 0`,
 		},
 
@@ -828,6 +828,21 @@ END $$`,
 		{
 			desc: "v2.17.1: system_settings.raw_log_enabled DEFAULT true (mandatory since v2.17.1)",
 			sql:  `ALTER TABLE public.system_settings ALTER COLUMN raw_log_enabled SET DEFAULT true`,
+		},
+
+		// -----------------------------------------------------------------------
+		// v2.18.0: Stream proxy listener uniqueness. Two enabled stream hosts
+		// must not share (listen_host, listen_port, protocol) — otherwise nginx
+		// rejects the generated config on reload. Service-layer check still
+		// runs first for nicer error messaging; the partial unique index is
+		// the source of truth that survives TOCTOU under concurrent creates
+		// and direct DB writes.
+		// -----------------------------------------------------------------------
+		{
+			desc: "v2.18.0: proxy_hosts stream listener partial unique index",
+			sql: `CREATE UNIQUE INDEX IF NOT EXISTS idx_proxy_hosts_stream_listener_unique
+				ON public.proxy_hosts (stream_listen_host, stream_listen_port, stream_protocol)
+				WHERE proxy_type = 'stream' AND enabled = true AND stream_listen_port > 0`,
 		},
 	}
 	for _, a := range upgrades {

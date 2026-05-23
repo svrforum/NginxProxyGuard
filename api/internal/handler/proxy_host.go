@@ -80,7 +80,7 @@ func (h *ProxyHostHandler) Create(c echo.Context) error {
 	if err != nil {
 		errMsg := err.Error()
 		// Handle specific error cases with appropriate HTTP status codes
-		if strings.Contains(errMsg, "already exist") {
+		if strings.Contains(errMsg, "already exist") || strings.Contains(errMsg, "listener conflict") {
 			return conflictError(c, errMsg)
 		}
 		if strings.Contains(errMsg, "invalid") || strings.Contains(errMsg, "required") {
@@ -181,7 +181,7 @@ func (h *ProxyHostHandler) Update(c echo.Context) error {
 	if err != nil {
 		errMsg := err.Error()
 		// Handle specific error cases with appropriate HTTP status codes
-		if strings.Contains(errMsg, "already exist") {
+		if strings.Contains(errMsg, "already exist") || strings.Contains(errMsg, "listener conflict") {
 			return conflictError(c, errMsg)
 		}
 		if strings.Contains(errMsg, "invalid") || strings.Contains(errMsg, "required") {
@@ -353,7 +353,7 @@ func (h *ProxyHostHandler) Clone(c echo.Context) error {
 	host, err := h.service.Clone(c.Request().Context(), id, &req)
 	if err != nil {
 		errMsg := err.Error()
-		if strings.Contains(errMsg, "already exist") {
+		if strings.Contains(errMsg, "already exist") || strings.Contains(errMsg, "listener conflict") {
 			return conflictError(c, errMsg)
 		}
 		if strings.Contains(errMsg, "not found") {

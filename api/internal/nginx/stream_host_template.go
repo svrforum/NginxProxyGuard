@@ -59,6 +59,14 @@ func (m *Manager) GenerateStreamConfig(ctx context.Context, data ProxyHostConfig
 	if !model.ValidateStreamListenHost(data.Host.StreamListenHost) {
 		return fmt.Errorf("invalid stream_listen_host %q: use an empty value, '*', or a local IP address; upstream hostnames belong in forward_host", data.Host.StreamListenHost)
 	}
+	// ssl_preread is a TCP-only directive in nginx's ngx_stream_ssl_preread_module.
+	// Using it inside a UDP server block causes nginx to reject the config at load
+	// time, which would then trigger a rollback on every reload until the user
+	// fixes it via UI. Catch it at config generation so the API returns a clean
+	// error instead of letting nginx -t fail.
+	if data.Host.StreamSSLPreread && strings.EqualFold(model.NormalizeStreamProtocol(data.Host.StreamProtocol), "udp") {
+		return fmt.Errorf("invalid stream config: ssl_preread is not supported for UDP stream hosts (TCP only)")
+	}
 	streamListenHost := model.NormalizeStreamListenHost(data.Host.StreamListenHost)
 
 	funcMap := GetTemplateFuncMap("")
