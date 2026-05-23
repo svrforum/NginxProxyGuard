@@ -206,29 +206,30 @@ func (s *SettingsService) ApplySettingsPreset(ctx context.Context, preset string
 	}
 
 	req := &model.UpdateGlobalSettingsRequest{
-		WorkerProcesses:       &presetConfig.WorkerProcesses,
-		WorkerConnections:     &presetConfig.WorkerConnections,
-		MultiAccept:           &presetConfig.MultiAccept,
-		Sendfile:              &presetConfig.Sendfile,
-		TCPNopush:             &presetConfig.TCPNopush,
-		TCPNodelay:            &presetConfig.TCPNodelay,
-		KeepaliveTimeout:      &presetConfig.KeepaliveTimeout,
-		KeepaliveRequests:     &presetConfig.KeepaliveRequests,
-		ServerTokens:          &presetConfig.ServerTokens,
-		GzipEnabled:           &presetConfig.GzipEnabled,
-		GzipCompLevel:         &presetConfig.GzipCompLevel,
-		BrotliEnabled:         &presetConfig.BrotliEnabled,
-		BrotliCompLevel:       &presetConfig.BrotliCompLevel,
-		SSLProtocols:          presetConfig.SSLProtocols,
+		WorkerProcesses:        &presetConfig.WorkerProcesses,
+		WorkerConnections:      &presetConfig.WorkerConnections,
+		MultiAccept:            &presetConfig.MultiAccept,
+		Sendfile:               &presetConfig.Sendfile,
+		TCPNopush:              &presetConfig.TCPNopush,
+		TCPNodelay:             &presetConfig.TCPNodelay,
+		KeepaliveTimeout:       &presetConfig.KeepaliveTimeout,
+		KeepaliveRequests:      &presetConfig.KeepaliveRequests,
+		ServerTokens:           &presetConfig.ServerTokens,
+		GzipEnabled:            &presetConfig.GzipEnabled,
+		GzipCompLevel:          &presetConfig.GzipCompLevel,
+		BrotliEnabled:          &presetConfig.BrotliEnabled,
+		BrotliCompLevel:        &presetConfig.BrotliCompLevel,
+		SSLProtocols:           presetConfig.SSLProtocols,
 		SSLPreferServerCiphers: &presetConfig.SSLPreferServerCiphers,
-		SSLECDHCurve:          presetConfig.SSLECDHCurve,
+		SSLECDHCurve:           presetConfig.SSLECDHCurve,
 	}
 
-	settings, err := s.settingsRepo.Update(ctx, req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to apply settings preset: %w", err)
-	}
-	return settings, nil
+	// Route through UpdateGlobalSettings so the preset triggers the same
+	// nginx.conf regen + proxy host re-render + reload pipeline as a manual
+	// edit. Previously ApplySettingsPreset wrote to DB only and left nginx
+	// running with the old config — the UI said "nginx will reload" but the
+	// reload never happened.
+	return s.UpdateGlobalSettings(ctx, req)
 }
 
 // ---- Dashboard ----

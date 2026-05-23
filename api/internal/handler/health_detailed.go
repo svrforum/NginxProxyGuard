@@ -24,6 +24,7 @@ type HealthDetailedHandler struct {
 	logCollect  *service.LogCollector
 	redis       *cache.RedisClient
 	proxyRepo   *repository.ProxyHostRepository
+	settingsRepo *repository.GlobalSettingsRepository
 }
 
 func NewHealthDetailedHandler(
@@ -31,13 +32,15 @@ func NewHealthDetailedHandler(
 	logCollect *service.LogCollector,
 	redis *cache.RedisClient,
 	proxyRepo *repository.ProxyHostRepository,
+	settingsRepo *repository.GlobalSettingsRepository,
 ) *HealthDetailedHandler {
 	return &HealthDetailedHandler{
-		startedAt:  time.Now(),
-		repo:       repo,
-		logCollect: logCollect,
-		redis:      redis,
-		proxyRepo:  proxyRepo,
+		startedAt:    time.Now(),
+		repo:         repo,
+		logCollect:   logCollect,
+		redis:        redis,
+		proxyRepo:    proxyRepo,
+		settingsRepo: settingsRepo,
 	}
 }
 
@@ -48,6 +51,22 @@ type detailedHealthResponse struct {
 	Cache         *detailedCacheInfo          `json:"cache"`
 	LogCollector  *detailedLogCollectorInfo   `json:"log_collector"`
 	Nginx         *detailedNginxInfo          `json:"nginx"`
+	NginxTuning   *detailedNginxTuningInfo    `json:"nginx_tuning,omitempty"`
+}
+
+// detailedNginxTuningInfo exposes the subset of global_settings that an
+// operator most commonly checks when diagnosing performance issues. Lets
+// `/api/v1/health/detailed` answer "are my nginx tuning values the default
+// or has someone customized them?" without psql access.
+type detailedNginxTuningInfo struct {
+	WorkerConnections    int  `json:"worker_connections"`
+	KeepaliveTimeout     int  `json:"keepalive_timeout"`
+	KeepaliveRequests    int  `json:"keepalive_requests"`
+	OpenFileCacheEnabled bool `json:"open_file_cache_enabled"`
+	OpenFileCacheMax     int  `json:"open_file_cache_max"`
+	GzipEnabled          bool `json:"gzip_enabled"`
+	BrotliEnabled        bool `json:"brotli_enabled"`
+	SSLEarlyData         bool `json:"ssl_early_data_inferred"` // inferred from preset, not directly stored
 }
 
 type detailedDatabaseInfo struct {
@@ -89,8 +108,29 @@ func (h *HealthDetailedHandler) GetDetailed(c echo.Context) error {
 		Cache:         h.cacheInfo(ctx),
 		LogCollector:  h.logInfo(),
 		Nginx:         h.nginxInfo(ctx),
+		NginxTuning:   h.tuningInfo(ctx),
 	}
 	return c.JSON(http.StatusOK, resp)
+}
+
+func (h *HealthDetailedHandler) tuningInfo(ctx context.Context) *detailedNginxTuningInfo {
+	if h.settingsRepo == nil {
+		return nil
+	}
+	s, err := h.settingsRepo.Get(ctx)
+	if err != nil || s == nil {
+		return nil
+	}
+	return &detailedNginxTuningInfo{
+		WorkerConnections:    s.WorkerConnections,
+		KeepaliveTimeout:     s.KeepaliveTimeout,
+		KeepaliveRequests:    s.KeepaliveRequests,
+		OpenFileCacheEnabled: s.OpenFileCacheEnabled,
+		OpenFileCacheMax:     s.OpenFileCacheMax,
+		GzipEnabled:          s.GzipEnabled,
+		BrotliEnabled:        s.BrotliEnabled,
+		SSLEarlyData:         true, // nginx.conf hardcodes ssl_early_data on
+	}
 }
 
 func (h *HealthDetailedHandler) dbInfo(ctx context.Context) *detailedDatabaseInfo {

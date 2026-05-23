@@ -960,6 +960,14 @@
       },
       "customConfigPlaceholder": "# Enter additional nginx http configuration here",
       "customStreamConfigPlaceholder": "# Enter additional nginx stream configuration here"
+    },
+    "preset": {
+      "applyPerformance": "Apply recommended",
+      "applying": "Applying...",
+      "tooltipPerformance": "Apply recommended nginx tuning values (worker_connections 8192, keepalive 30s/1000req, etc.)",
+      "confirmPerformance": "Apply Performance preset? All current values will be overwritten with recommended defaults and nginx will reload immediately.",
+      "applied": "Performance preset applied.",
+      "failed": "Failed to apply preset"
     }
   },
   "apiTokens": {
