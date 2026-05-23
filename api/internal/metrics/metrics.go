@@ -87,6 +87,44 @@ var (
 		Name: "nginx_last_reload_timestamp_seconds",
 		Help: "Unix timestamp of the last successful nginx reload.",
 	})
+
+	// LogCollector instruments
+
+	// LogCollectorFallbackTotal counts startup fallbacks where the configured
+	// NGINX_ACCESS_LOG path is unusable (ENOENT or /dev/* symlink) and
+	// resolveTailPath redirects to the canonical /etc/nginx/logs/access_raw.log.
+	// A non-zero value identifies upgrades that kept the legacy compose env.
+	LogCollectorFallbackTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "npg_log_collector_fallback_total",
+		Help: "Total times resolveTailPath fell back from the configured NGINX_ACCESS_LOG to the canonical path.",
+	})
+
+	// LogCollectorFlushedTotal counts log entries inserted to DB by log_type.
+	LogCollectorFlushedTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "npg_log_collector_flushed_total",
+		Help: "Total log entries flushed to the DB by log_type.",
+	}, []string{"log_type"})
+
+	// LogCollectorParseErrorsTotal counts lines that failed to parse, by source.
+	LogCollectorParseErrorsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "npg_log_collector_parse_errors_total",
+		Help: "Total log lines that failed to parse, by source.",
+	}, []string{"source"})
+
+	// LogCollectorBufferSize exposes the current pending entries in each
+	// buffer (redis / memory). Sampled at flush time.
+	LogCollectorBufferSize = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "npg_log_collector_buffer_size",
+		Help: "Number of log entries currently buffered.",
+	}, []string{"buffer"})
+
+	// LogCollectorWatchdogRestartTotal counts docker-logs subprocess restarts
+	// triggered by the watchdog. Reasons: "idle" (no data for streamIdleThreshold)
+	// or "max_age" (cmd lifetime exceeded streamMaxAge).
+	LogCollectorWatchdogRestartTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "npg_log_collector_watchdog_restart_total",
+		Help: "Total docker-logs subprocess restarts triggered by the watchdog.",
+	}, []string{"reason"})
 )
 
 // registerOnce guards Register so duplicate calls (tests, init-order quirks)
@@ -109,6 +147,11 @@ func Register() {
 			NginxHealthProbeDurationSeconds,
 			NginxConfigStatus,
 			NginxLastReloadTimestampSeconds,
+			LogCollectorFallbackTotal,
+			LogCollectorFlushedTotal,
+			LogCollectorParseErrorsTotal,
+			LogCollectorBufferSize,
+			LogCollectorWatchdogRestartTotal,
 		)
 	})
 }

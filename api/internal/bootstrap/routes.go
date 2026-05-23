@@ -171,6 +171,8 @@ func registerProtectedAuthRoutes(v1 *echo.Group, c *Container) {
 	protected.GET("/auth/font", c.Handlers.Auth.GetFontFamily)
 	protected.PUT("/auth/font", c.Handlers.Auth.SetFontFamily)
 
+	protected.GET("/health/detailed", c.Handlers.HealthDetailed.GetDetailed)
+
 	protected.GET("/status", func(ec echo.Context) error {
 		dbStatus := config.StatusOK
 		if err := c.DB.Health(); err != nil {
