@@ -260,8 +260,21 @@ func (t *ProxyHostTester) testStreamUpstream(ctx context.Context, host *model.Pr
 }
 
 func (t *ProxyHostTester) streamProxyAddress(host *model.ProxyHost, targetURL string) (string, error) {
+	// SSRF guard: targetURL is an authenticated-user-supplied value. Without
+	// restriction it lets an operator probe arbitrary host:port reachable from
+	// the API container (internal DB on 5432, Valkey on 6379, other services
+	// on the docker network). Only allow override when the parsed address
+	// resolves to the host's own configured listener — the test is meant to
+	// verify the listener works, not to be a generic port scanner.
 	if strings.TrimSpace(targetURL) != "" {
-		return parseStreamAddress(targetURL)
+		parsed, err := parseStreamAddress(targetURL)
+		if err != nil {
+			return "", err
+		}
+		if err := t.assertStreamTargetAllowed(host, parsed); err != nil {
+			return "", err
+		}
+		return parsed, nil
 	}
 
 	listenHost := strings.TrimSpace(host.StreamListenHost)
@@ -272,6 +285,39 @@ func (t *ProxyHostTester) streamProxyAddress(host *model.ProxyHost, targetURL st
 		return "", fmt.Errorf("stream listen port is not configured")
 	}
 	return net.JoinHostPort(listenHost, strconv.Itoa(host.StreamListenPort)), nil
+}
+
+// assertStreamTargetAllowed restricts the user-supplied target to the host's
+// own listener (port must match, host must be empty/wildcard or match the
+// configured StreamListenHost / NPG's external proxy host). This is the
+// SSRF mitigation referenced in v2.18.0 PR #143 review.
+func (t *ProxyHostTester) assertStreamTargetAllowed(host *model.ProxyHost, parsed string) error {
+	parsedHost, parsedPort, err := net.SplitHostPort(parsed)
+	if err != nil {
+		return fmt.Errorf("stream target must be host:port: %w", err)
+	}
+	if port, perr := strconv.Atoi(parsedPort); perr != nil || port != host.StreamListenPort {
+		return fmt.Errorf("stream target port %s is not allowed: must match host listener port %d", parsedPort, host.StreamListenPort)
+	}
+	listen := strings.TrimSpace(host.StreamListenHost)
+	allowed := map[string]struct{}{
+		"":          {},
+		"*":         {},
+		"0.0.0.0":   {},
+		"::":        {},
+		"127.0.0.1": {},
+		"localhost": {},
+	}
+	if listen != "" {
+		allowed[listen] = struct{}{}
+	}
+	if strings.TrimSpace(t.proxyHost) != "" {
+		allowed[t.proxyHost] = struct{}{}
+	}
+	if _, ok := allowed[parsedHost]; !ok {
+		return fmt.Errorf("stream target host %q is not allowed: must match host's configured listener or the proxy host", parsedHost)
+	}
+	return nil
 }
 
 func parseStreamAddress(raw string) (string, error) {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"text/template"
@@ -104,7 +105,15 @@ func (m *Manager) GenerateStreamConfig(ctx context.Context, data ProxyHostConfig
 		return fmt.Errorf("failed to execute stream template: %w", err)
 	}
 
-	configFile := filepath.Join(m.getStreamConfigPath(), GetStreamConfigFilename(data.Host))
+	streamDir := m.getStreamConfigPath()
+	// Defensive MkdirAll: SyncAllConfigs path (existing-install upgrade) may
+	// reach GenerateStreamConfig before GenerateMainNginxConfig has ensured
+	// stream.d/ exists. writeFileAtomic would otherwise fail with ENOENT
+	// because the temp file's target directory is missing. This is idempotent.
+	if err := os.MkdirAll(streamDir, 0755); err != nil {
+		return fmt.Errorf("failed to create stream config directory: %w", err)
+	}
+	configFile := filepath.Join(streamDir, GetStreamConfigFilename(data.Host))
 	if err := m.writeFileAtomic(configFile, buf.Bytes(), 0644); err != nil {
 		return fmt.Errorf("failed to write stream config file: %w", err)
 	}
