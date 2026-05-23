@@ -88,6 +88,8 @@
       "httpModeDescription": "Virtual host reverse proxy",
       "streamMode": "TCP / UDP Stream",
       "streamModeDescription": "Layer 4 reverse proxy",
+      "streamSecurityNoticeTitle": "Stream Mode Security Notice",
+      "streamSecurityNoticeBody": "TCP/UDP stream hosts have no HTTP protocol, so ModSecurity (WAF), exploit blocking, bot filter, URI blocking, rate limit, and access lists do not apply. IP-based security (banned IPs) is automatically applied to stream.",
       "domainNames": "Domain Names",
       "domainPlaceholder": "example.com",
       "addDomain": "Add Domain",
