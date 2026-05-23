@@ -38,6 +38,7 @@ type Repositories struct {
 	GeoIPHistory       *repository.GeoIPHistoryRepository
 	ExploitBlockRule   *repository.ExploitBlockRuleRepository
 	FilterSubscription *repository.FilterSubscriptionRepository
+	HealthDetailed     *repository.HealthDetailedRepository
 }
 
 // InitRepositories instantiates every repository and, if a cache is
@@ -71,6 +72,7 @@ func InitRepositories(db *database.DB, redisCache *cache.RedisClient) *Repositor
 		GeoIPHistory:       repository.NewGeoIPHistoryRepository(db.DB),
 		ExploitBlockRule:   repository.NewExploitBlockRuleRepository(db.DB),
 		FilterSubscription: repository.NewFilterSubscriptionRepository(db.DB),
+		HealthDetailed:     repository.NewHealthDetailedRepository(db.DB),
 	}
 
 	if redisCache != nil {

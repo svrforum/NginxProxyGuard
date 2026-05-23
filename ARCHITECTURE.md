@@ -887,6 +887,7 @@ system_log_level: 'debug','info','warn','error','fatal'
 | Method | Path | Handler |
 |--------|------|---------|
 | GET | `/health` | Health check (db + cache) |
+| GET | `/metrics` | Prometheus metrics (incl. log_collector counters) |
 | POST | `/api/v1/auth/login` | AuthHandler.Login |
 | POST | `/api/v1/auth/logout` | AuthHandler.Logout |
 | GET | `/api/v1/auth/status` | AuthHandler.GetStatus |
@@ -1011,6 +1012,7 @@ system_log_level: 'debug','info','warn','error','fatal'
 |--------|------|-------------|
 | GET | `/api/v1/dashboard` | 대시보드 요약 |
 | GET | `/api/v1/dashboard/health(/history)` | 시스템 헬스 |
+| GET | `/api/v1/health/detailed` | 진단용 상세 health (DB compression, LogCollector fallback 등) |
 | GET | `/api/v1/dashboard/stats/hourly` | 시간별 통계 |
 | GET | `/api/v1/dashboard/containers` | Docker 상태 |
 | GET | `/api/v1/docker/containers` | Docker 컨테이너 목록 |

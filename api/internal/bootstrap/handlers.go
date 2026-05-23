@@ -30,6 +30,7 @@ type Handlers struct {
 	FilterSubscription *handler.FilterSubscriptionHandler
 	Swagger            *handler.SwaggerHandler
 	Metrics            *handler.MetricsHandler
+	HealthDetailed     *handler.HealthDetailedHandler
 }
 
 // InitHandlers constructs every HTTP handler with the previously built
@@ -83,6 +84,7 @@ func InitHandlers(
 	h.FilterSubscription = handler.NewFilterSubscriptionHandler(svcs.FilterSubscription, svcs.Audit)
 	h.Swagger = handler.NewSwaggerHandler()
 	h.Metrics = handler.NewMetricsHandler()
+	h.HealthDetailed = handler.NewHealthDetailedHandler(repos.HealthDetailed, svcs.LogCollector, redisCache, repos.ProxyHost)
 
 	return h
 }

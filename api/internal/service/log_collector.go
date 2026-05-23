@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"nginx-proxy-guard/internal/metrics"
 	"nginx-proxy-guard/internal/model"
 	"nginx-proxy-guard/internal/repository"
 	"nginx-proxy-guard/pkg/cache"
@@ -173,7 +174,9 @@ type LogCollector struct {
 	bufferMu       sync.Mutex
 	flushMu        sync.Mutex // 동시 flush 방지
 	stopCh         chan struct{}
-	useRedisBuffer bool // Whether to use Redis for log buffering
+	useRedisBuffer bool         // Whether to use Redis for log buffering
+	lastFlushAt    atomic.Int64 // unix seconds of the last successful flush, for /health/detailed
+	actualTailPath atomic.Value // string, the resolved file-tail source (post-fallback)
 
 	// Domain to host ID cache for Fail2ban
 	domainCacheMu    sync.RWMutex
@@ -421,6 +424,9 @@ func (c *LogCollector) flushInner(ctx context.Context) {
 		} else if len(redisLogs) > 0 {
 			logs = append(logs, redisLogs...)
 		}
+		if size, err := c.redisCache.GetLogBufferSize(ctx); err == nil {
+			metrics.LogCollectorBufferSize.WithLabelValues("redis").Set(float64(size))
+		}
 	}
 
 	// Also flush memory buffer
@@ -429,7 +435,9 @@ func (c *LogCollector) flushInner(ctx context.Context) {
 		logs = append(logs, c.buffer...)
 		c.buffer = make([]model.CreateLogRequest, 0, c.batchSize)
 	}
+	memSize := len(c.buffer)
 	c.bufferMu.Unlock()
+	metrics.LogCollectorBufferSize.WithLabelValues("memory").Set(float64(memSize))
 
 	if len(logs) == 0 {
 		return
@@ -439,6 +447,21 @@ func (c *LogCollector) flushInner(ctx context.Context) {
 		log.Printf("[LogCollector] Failed to batch insert %d logs: %v", len(logs), err)
 	} else {
 		log.Printf("[LogCollector] Flushed %d logs to database", len(logs))
+		c.recordFlushedByType(logs)
+		c.lastFlushAt.Store(time.Now().Unix())
+	}
+}
+
+// recordFlushedByType bumps the per-type Prometheus counter after a successful
+// batch insert. Kept separate from flushInner so the counting loop doesn't
+// distract from the flush control flow.
+func (c *LogCollector) recordFlushedByType(logs []model.CreateLogRequest) {
+	byType := make(map[model.LogType]int, 3)
+	for _, l := range logs {
+		byType[l.LogType]++
+	}
+	for t, n := range byType {
+		metrics.LogCollectorFlushedTotal.WithLabelValues(string(t)).Add(float64(n))
 	}
 }
 
@@ -634,6 +657,7 @@ func (c *LogCollector) addLogToMemoryBuffer(logReq model.CreateLogRequest) {
 func (c *LogCollector) handleAccessLine(ctx context.Context, line string) {
 	logReq, err := c.parseAccessLog(line)
 	if err != nil {
+		metrics.LogCollectorParseErrorsTotal.WithLabelValues("file").Inc()
 		return
 	}
 
@@ -672,6 +696,7 @@ func (c *LogCollector) handleModSecLine(ctx context.Context, line string) {
 	logReq, err := c.parseModSecLog(line)
 	if err != nil {
 		if !strings.Contains(err.Error(), "no WAF rules triggered") {
+			metrics.LogCollectorParseErrorsTotal.WithLabelValues("modsec").Inc()
 			snippet := line
 			if len(snippet) > 200 {
 				snippet = snippet[:200] + "..."
@@ -722,12 +747,14 @@ func (c *LogCollector) resolveTailPath() string {
 
 	if target, err := os.Readlink(configured); err == nil && strings.HasPrefix(target, "/dev/") {
 		log.Printf("[LogCollector] WARN: NGINX_ACCESS_LOG %s is a symlink to %s (legacy stdout pipe); falling back to %s. Remove the env override or set it to the canonical path to silence this.", configured, target, canonicalAccessLogPath)
+		metrics.LogCollectorFallbackTotal.Inc()
 		return canonicalAccessLogPath
 	}
 
 	if _, err := os.Stat(configured); os.IsNotExist(err) {
 		if _, err := os.Stat(canonicalAccessLogPath); err == nil {
 			log.Printf("[LogCollector] WARN: NGINX_ACCESS_LOG %s does not exist inside npg-api (likely a stale pre-v2.14.2 value); falling back to %s. Remove the env override or set it to the canonical path to silence this.", configured, canonicalAccessLogPath)
+			metrics.LogCollectorFallbackTotal.Inc()
 			return canonicalAccessLogPath
 		}
 	}
@@ -758,6 +785,7 @@ func (c *LogCollector) streamFileAccessLogs(ctx context.Context) {
 	// upgrading from <=2.14.1 without touching their compose see zero access
 	// log ingestion forever — a silent breaking change introduced in 2.14.2.
 	tailPath := c.resolveTailPath()
+	c.actualTailPath.Store(tailPath)
 	log.Printf("[LogCollector] starting file-tail of %s", tailPath)
 
 	var (
@@ -958,6 +986,7 @@ func (c *LogCollector) streamLogs(ctx context.Context, logType string, handler f
 						return
 					case <-maxAge.C:
 						log.Printf("[LogCollector] %s stream age %v reached max %v, forcing reconnect", logType, time.Since(cmdStartedAt).Round(time.Second), streamMaxAge)
+						metrics.LogCollectorWatchdogRestartTotal.WithLabelValues("max_age").Inc()
 						if cmd.Process != nil {
 							_ = cmd.Process.Kill()
 						}
@@ -970,6 +999,7 @@ func (c *LogCollector) streamLogs(ctx context.Context, logType string, handler f
 						}
 						if idle > streamIdleThreshold {
 							log.Printf("[LogCollector] %s stream idle for %v, restarting docker logs", logType, idle.Round(time.Second))
+							metrics.LogCollectorWatchdogRestartTotal.WithLabelValues("idle").Inc()
 							if cmd.Process != nil {
 								_ = cmd.Process.Kill()
 							}
@@ -1015,4 +1045,25 @@ func (c *LogCollector) IngestLog(ctx context.Context, req *model.CreateLogReques
 // Force flush for testing
 func (c *LogCollector) Flush(ctx context.Context) {
 	c.flush(ctx)
+}
+
+// AccessLogPathConfigured returns the path that NGINX_ACCESS_LOG resolved to
+// at startup (before any fallback). Used by /api/v1/health/detailed.
+func (c *LogCollector) AccessLogPathConfigured() string {
+	return c.accessLogPath
+}
+
+// AccessLogPathActual returns the path the file-tail is actually reading
+// (post-fallback). Empty until streamFileAccessLogs has started.
+func (c *LogCollector) AccessLogPathActual() string {
+	if v, ok := c.actualTailPath.Load().(string); ok {
+		return v
+	}
+	return ""
+}
+
+// LastFlushUnix returns the unix timestamp (seconds) of the last successful
+// CreateBatch. Zero if no flush has happened yet.
+func (c *LogCollector) LastFlushUnix() int64 {
+	return c.lastFlushAt.Load()
 }
