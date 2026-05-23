@@ -2182,7 +2182,7 @@ CREATE TABLE IF NOT EXISTS public.system_settings (
     error_log_retention_days integer DEFAULT 30 NOT NULL,
     system_log_retention_days integer DEFAULT 30 NOT NULL,
     audit_log_retention_days integer DEFAULT 1095 NOT NULL,
-    raw_log_enabled boolean DEFAULT false NOT NULL,
+    raw_log_enabled boolean DEFAULT true NOT NULL,
     raw_log_retention_days integer DEFAULT 7 NOT NULL,
     raw_log_max_size_mb integer DEFAULT 100 NOT NULL,
     raw_log_rotate_count integer DEFAULT 5 NOT NULL,
@@ -3692,3 +3692,12 @@ CREATE INDEX IF NOT EXISTS idx_logs_part_block_reason_created
 ALTER TABLE public.global_settings ALTER COLUMN worker_connections SET DEFAULT 8192;
 ALTER TABLE public.global_settings ALTER COLUMN keepalive_timeout SET DEFAULT 30;
 ALTER TABLE public.global_settings ALTER COLUMN keepalive_requests SET DEFAULT 1000;
+
+-- v2.17.1: Raw log storage is mandatory since LogCollector depends on
+-- /etc/nginx/logs/access_raw.log (file-tail switch in v2.14.2). Older
+-- installs may have raw_log_enabled=false; flip them all and lock the
+-- DEFAULT. Runtime guarantee in SystemSettingsHandler.EnsureRawLogEnabled
+-- prevents the value from going false again via the API. Canonical
+-- execution lives in migration.go upgrades slice.
+UPDATE public.system_settings SET raw_log_enabled = true WHERE raw_log_enabled = false;
+ALTER TABLE public.system_settings ALTER COLUMN raw_log_enabled SET DEFAULT true;

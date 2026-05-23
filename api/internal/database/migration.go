@@ -775,6 +775,24 @@ END $$`,
 			desc: "v2.17.0: global_settings.keepalive_requests DEFAULT 100 -> 1000",
 			sql:  `ALTER TABLE public.global_settings ALTER COLUMN keepalive_requests SET DEFAULT 1000`,
 		},
+		// -----------------------------------------------------------------------
+		// v2.17.1: Raw log storage is mandatory — LogCollector switched to
+		// file-tail in v2.14.2 and depends on /etc/nginx/logs/access_raw.log.
+		// Older installs with raw_log_enabled=false silently lost all access
+		// log ingestion (issue #145). Flip every existing row to true and lock
+		// the DEFAULT so future inserts can't regress. Boot-time fix in
+		// SystemSettingsHandler.EnsureRawLogEnabled is the runtime guarantee;
+		// these two statements make the DB state consistent with that runtime
+		// invariant so a manual psql UPDATE can't reintroduce the bug.
+		// -----------------------------------------------------------------------
+		{
+			desc: "v2.17.1: system_settings.raw_log_enabled force true on every row",
+			sql:  `UPDATE public.system_settings SET raw_log_enabled = true WHERE raw_log_enabled = false`,
+		},
+		{
+			desc: "v2.17.1: system_settings.raw_log_enabled DEFAULT true (mandatory since v2.17.1)",
+			sql:  `ALTER TABLE public.system_settings ALTER COLUMN raw_log_enabled SET DEFAULT true`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

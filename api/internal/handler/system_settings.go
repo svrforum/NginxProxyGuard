@@ -129,6 +129,17 @@ func (h *SystemSettingsHandler) UpdateSystemSettings(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 
+	// Raw log storage is mandatory since v2.17.1 — LogCollector depends on it
+	// for access log ingestion (issue #145 silent failure). Operators can still
+	// tune retention/rotation/compression sub-options, but the master toggle
+	// itself is force-enabled. We silently override rather than 400 so older
+	// clients sending {raw_log_enabled:false} don't break.
+	if req.RawLogEnabled != nil && !*req.RawLogEnabled {
+		log.Printf("[SystemSettings] Ignoring raw_log_enabled=false; raw log storage is mandatory since v2.17.1.")
+		t := true
+		req.RawLogEnabled = &t
+	}
+
 	settings, err := h.repo.Update(c.Request().Context(), &req)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -230,6 +241,29 @@ COMPRESS=%t
 	}
 
 	return nil
+}
+
+// EnsureRawLogEnabled is the v2.17.1 boot-time guarantee that raw log storage
+// is on. LogCollector switched to file-tail in v2.14.2 and depends on
+// /etc/nginx/logs/access_raw.log; if raw_log_enabled was off from an older
+// install the file is never created and access logs silently disappear
+// (issue #145). Called from bootstrap.startBackgroundServices before the
+// collector spins up.
+func (h *SystemSettingsHandler) EnsureRawLogEnabled(ctx context.Context) error {
+	settings, err := h.repo.Get(ctx)
+	if err != nil {
+		return fmt.Errorf("load system settings: %w", err)
+	}
+	if settings.RawLogEnabled {
+		return nil
+	}
+	log.Printf("[SystemSettings] Auto-enabling raw log storage (was off); required by LogCollector since v2.17.1.")
+	t := true
+	updated, err := h.repo.Update(ctx, &model.UpdateSystemSettingsRequest{RawLogEnabled: &t})
+	if err != nil {
+		return fmt.Errorf("update system settings: %w", err)
+	}
+	return h.applyRawLogSettings(updated)
 }
 
 // applyRawLogSettings creates/removes raw log files and nginx config immediately
