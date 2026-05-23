@@ -20,7 +20,6 @@ export function MaintenanceTab({
   const { t } = useTranslation('settings');
 
   // Trusted i18n translation content used with dangerouslySetInnerHTML (preserved from original code)
-  const rawLogsEnableDescription = t('system.maintenance.rawLogs.enable.description');
   const autoBackupScheduleHelp = t('system.maintenance.autoBackup.scheduleHelp');
 
   return (
@@ -314,23 +313,25 @@ export function MaintenanceTab({
           {t('system.maintenance.rawLogs.description')}
         </p>
 
-        <div className="py-3 px-4 bg-slate-50 dark:bg-slate-700/30 rounded-lg border border-slate-200 dark:border-slate-700 mb-5">
-          <label className="flex items-start gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={getValue('raw_log_enabled') ?? false}
-              onChange={(e) => handleChange('raw_log_enabled', e.target.checked)}
-              className="mt-0.5 w-5 h-5 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 focus:ring-offset-0 bg-white dark:bg-slate-700"
-            />
+        <div className="py-3 px-4 bg-emerald-50 dark:bg-emerald-900/10 rounded-lg border border-emerald-200 dark:border-emerald-900/30 mb-5">
+          <div className="flex items-start gap-3">
+            <svg className="w-5 h-5 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
             <div>
-              <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{t('system.maintenance.rawLogs.enable.label')}</span>
-              {/* Trusted i18n content */}
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1" dangerouslySetInnerHTML={{ __html: rawLogsEnableDescription }} />
+              <span className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
+                {t('system.maintenance.rawLogs.enable.alwaysOnLabel', { defaultValue: 'Raw 로그 저장 항상 활성화' })}
+              </span>
+              <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-1">
+                {t('system.maintenance.rawLogs.enable.alwaysOnDescription', {
+                  defaultValue: 'v2.17.1 부터 LogCollector가 /etc/nginx/logs/access_raw.log를 직접 읽기 때문에 raw 로그 저장은 항상 활성화됩니다. 보관 기간 / 회전 / 압축은 아래에서 조정할 수 있습니다.',
+                })}
+              </p>
             </div>
-          </label>
+          </div>
         </div>
 
-        {getValue('raw_log_enabled') && (
+        {true && (
           <div className="space-y-5 pl-2 border-l-2 border-blue-200 dark:border-blue-900/30 ml-2">
             {/* Log Rotation Settings */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">

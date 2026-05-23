@@ -122,6 +122,16 @@ func loadGlobalSettingsForStartup(ctx context.Context, c *Container) string {
 // collectors and schedulers begin emitting work.
 func startBackgroundServices(ctx context.Context, c *Container) {
 	if c.Services.LogCollector != nil {
+		// Boot-time guarantee for v2.14.2's file-tail dependency: raw log
+		// storage must be on or LogCollector finds an empty file forever
+		// (issue #145). Force-enable here before the collector starts so
+		// the WARN-and-keep-going path in LogCollector never fires for a
+		// recoverable cause.
+		if c.Handlers != nil && c.Handlers.SystemSettings != nil {
+			if err := c.Handlers.SystemSettings.EnsureRawLogEnabled(ctx); err != nil {
+				log.Printf("[Startup] Warning: failed to ensure raw log enabled: %v", err)
+			}
+		}
 		go c.Services.LogCollector.Start(ctx)
 	}
 	go c.Services.WAFAutoBan.Start(ctx)
