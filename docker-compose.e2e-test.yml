@@ -84,6 +84,8 @@ services:
       NGINX_HTTPS_PORT: "18443"
       API_HOST_PORT: "19080"
       API_HOST: "127.0.0.1:19080"
+      NPG_CANARY_INTERVAL: "5s"
+      NPG_CANARY_BOOT_DELAY: "3s"
     ports:
       - "19080:8080"
     depends_on:
