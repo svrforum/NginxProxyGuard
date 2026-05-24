@@ -122,9 +122,8 @@ func TestMainConfig_CustomHTTPConfigInjected(t *testing.T) {
 	}
 }
 
-// Issue #121: custom_stream_config must produce a top-level stream{} block.
-// When unset, no stream block is emitted (nginx with no stream content but
-// also no ngx_stream include would error out).
+// Issue #121: custom_stream_config must be injected into the managed top-level
+// stream{} block used by first-class TCP/UDP stream proxy hosts.
 func TestMainConfig_CustomStreamEmitsStreamBlock(t *testing.T) {
 	s := baselineSettings()
 	s.CustomStreamConfig = "server {\n    listen 5555;\n    proxy_pass 127.0.0.1:6666;\n}"
@@ -137,12 +136,15 @@ func TestMainConfig_CustomStreamEmitsStreamBlock(t *testing.T) {
 	}
 }
 
-func TestMainConfig_NoStreamBlockWhenEmpty(t *testing.T) {
+func TestMainConfig_ManagedStreamBlockWhenCustomStreamEmpty(t *testing.T) {
 	s := baselineSettings()
 	s.CustomStreamConfig = ""
 	out := renderOnly(t, s)
-	if strings.Contains(out, "\nstream {") {
-		t.Errorf("did not expect a stream{} block when custom_stream_config is empty; got:\n%s", out)
+	if !strings.Contains(out, "\nstream {") {
+		t.Errorf("expected managed stream{} block when custom_stream_config is empty; got:\n%s", out)
+	}
+	if !strings.Contains(out, "include /etc/nginx/stream.d/*.conf;") {
+		t.Errorf("expected managed stream include; got:\n%s", out)
 	}
 }
 

@@ -1870,10 +1870,19 @@ UNION ALL
    FROM public.logs_partitioned;
 CREATE TABLE IF NOT EXISTS public.proxy_hosts (
     id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    proxy_type character varying(20) DEFAULT 'http'::character varying NOT NULL,
     domain_names text[] NOT NULL,
     forward_scheme character varying(10) DEFAULT 'http'::character varying NOT NULL,
     forward_host character varying(255) NOT NULL,
     forward_port integer DEFAULT 80 NOT NULL,
+    stream_listen_host character varying(255) DEFAULT ''::character varying,
+    stream_listen_port integer DEFAULT 0,
+    stream_protocol character varying(10) DEFAULT 'tcp'::character varying,
+    stream_ssl_preread boolean DEFAULT false NOT NULL,
+    stream_accept_proxy_protocol boolean DEFAULT false NOT NULL,
+    stream_send_proxy_protocol boolean DEFAULT false NOT NULL,
+    stream_proxy_connect_timeout integer DEFAULT 0,
+    stream_proxy_timeout integer DEFAULT 0,
     ssl_enabled boolean DEFAULT false NOT NULL,
     ssl_force_https boolean DEFAULT false NOT NULL,
     ssl_http2 boolean DEFAULT true NOT NULL,
@@ -1914,10 +1923,15 @@ CREATE TABLE IF NOT EXISTS public.proxy_hosts (
     CONSTRAINT chk_waf_paranoia_level CHECK (((waf_paranoia_level >= 1) AND (waf_paranoia_level <= 4)))
 );
 COMMENT ON TABLE public.proxy_hosts IS 'Stores reverse proxy host configurations';
+COMMENT ON COLUMN public.proxy_hosts.proxy_type IS 'Proxy mode: http for HTTP/HTTPS reverse proxy, stream for TCP/UDP stream proxy';
 COMMENT ON COLUMN public.proxy_hosts.domain_names IS 'Array of domain names that this proxy responds to';
 COMMENT ON COLUMN public.proxy_hosts.forward_scheme IS 'Protocol to use when forwarding (http/https)';
 COMMENT ON COLUMN public.proxy_hosts.forward_host IS 'Target host to forward requests to';
 COMMENT ON COLUMN public.proxy_hosts.forward_port IS 'Target port to forward requests to';
+COMMENT ON COLUMN public.proxy_hosts.stream_listen_host IS 'Optional local address for TCP/UDP stream listener';
+COMMENT ON COLUMN public.proxy_hosts.stream_listen_port IS 'Local port for TCP/UDP stream listener';
+COMMENT ON COLUMN public.proxy_hosts.stream_protocol IS 'Stream transport protocol: tcp or udp';
+COMMENT ON COLUMN public.proxy_hosts.stream_ssl_preread IS 'Enable TLS ClientHello preread for SNI-aware TCP stream routing';
 COMMENT ON COLUMN public.proxy_hosts.custom_locations IS 'JSON array of custom location blocks';
 COMMENT ON COLUMN public.proxy_hosts.advanced_config IS 'Raw nginx config to append to server block';
 COMMENT ON COLUMN public.proxy_hosts.ssl_http3 IS 'Enable HTTP/3 (QUIC) support for this proxy host';
@@ -2777,6 +2791,13 @@ CREATE INDEX IF NOT EXISTS idx_system_logs_source_level_created ON public.system
 CREATE INDEX IF NOT EXISTS idx_system_settings_updated ON public.system_settings USING btree (updated_at);
 CREATE INDEX IF NOT EXISTS idx_upstream_servers_upstream ON public.upstream_servers USING btree (upstream_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_uri_blocks_proxy_host ON public.uri_blocks USING btree (proxy_host_id);
+-- Stream listener uniqueness: prevents two enabled stream hosts from binding
+-- the same (host, port, protocol) combination. Service-layer check still runs
+-- first, but this guards against TOCTOU under concurrent creates and against
+-- direct DB writes that bypass the API.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_proxy_hosts_stream_listener_unique
+    ON public.proxy_hosts (stream_listen_host, stream_listen_port, stream_protocol)
+    WHERE proxy_type = 'stream' AND enabled = true AND stream_listen_port > 0;
 CREATE INDEX IF NOT EXISTS idx_users_totp_enabled ON public.users USING btree (totp_enabled) WHERE (totp_enabled = true);
 CREATE INDEX IF NOT EXISTS idx_waf_policy_history_proxy_host ON public.waf_policy_history USING btree (proxy_host_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_waf_policy_history_rule ON public.waf_policy_history USING btree (rule_id);
@@ -3701,3 +3722,12 @@ ALTER TABLE public.global_settings ALTER COLUMN keepalive_requests SET DEFAULT 1
 -- execution lives in migration.go upgrades slice.
 UPDATE public.system_settings SET raw_log_enabled = true WHERE raw_log_enabled = false;
 ALTER TABLE public.system_settings ALTER COLUMN raw_log_enabled SET DEFAULT true;
+
+-- Stream proxy: enforce listener uniqueness at the DB level so two concurrent
+-- creates cannot both succeed when they target the same (host, port, protocol).
+-- The service layer's CheckStreamListenConflicts still runs first for nicer
+-- error messaging, but the index is the source of truth that survives TOCTOU
+-- and direct DB writes. Canonical execution lives in migration.go upgrades slice.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_proxy_hosts_stream_listener_unique
+    ON public.proxy_hosts (stream_listen_host, stream_listen_port, stream_protocol)
+    WHERE proxy_type = 'stream' AND enabled = true AND stream_listen_port > 0;

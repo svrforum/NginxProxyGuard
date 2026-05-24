@@ -10,7 +10,7 @@ import { UpstreamTabContent } from './tabs/UpstreamTab'
 import { SaveProgressModal } from './SaveProgressModal'
 import { CertificateLogModal } from '../CertificateLogModal'
 import type { TabType } from './types'
-import { useState, useEffect } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 
@@ -86,30 +86,44 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
     updateDomain,
   } = useProxyHostForm(host, onClose)
 
+  const isStream = formData.proxy_type === 'stream'
+
+  const tabs = useMemo(() => (
+    isStream
+      ? [
+        { id: 'basic' as TabType, label: t('form.tabs.basic'), icon: '🌐' },
+        { id: 'advanced' as TabType, label: t('form.tabs.advanced'), icon: '⚙️' },
+      ]
+      : [
+        { id: 'basic' as TabType, label: t('form.tabs.basic'), icon: '🌐' },
+        { id: 'ssl' as TabType, label: t('form.tabs.ssl'), icon: '🔒' },
+        { id: 'security' as TabType, label: t('form.tabs.security'), icon: '🛡️' },
+        { id: 'protection' as TabType, label: t('form.tabs.protection'), icon: '🚫' },
+        { id: 'performance' as TabType, label: t('form.tabs.performance'), icon: '⚡' },
+        ...(isEditing ? [{ id: 'upstream' as TabType, label: t('form.tabs.upstream'), icon: '⚖️' }] : []),
+        { id: 'advanced' as TabType, label: t('form.tabs.advanced'), icon: '⚙️' },
+      ]
+  ), [isEditing, isStream, t])
+
   // ESC to close (but not during save progress unless there's an error)
   useEscapeKey(onClose, !saveProgress.isOpen || (saveProgress.isOpen && !!saveProgress.error))
+
+  useEffect(() => {
+    if (!tabs.some(tab => tab.id === activeTab)) {
+      setActiveTab('basic')
+    }
+  }, [activeTab, tabs])
 
   // Auto-switch to tab with error on validation failure
   useEffect(() => {
     if (Object.keys(errors).length > 0) {
-      if (errors.domain_names || errors.forward_host || errors.forward_port) {
+      if (errors.domain_names || errors.forward_host || errors.forward_port || errors.stream_listen_port) {
         setActiveTab('basic')
-      } else if (errors.certificate_id) {
+      } else if (!isStream && errors.certificate_id) {
         setActiveTab('ssl')
       }
     }
-  }, [errors])
-
-  // Protection tab available for both new and existing hosts
-  const tabs = [
-    { id: 'basic' as TabType, label: t('form.tabs.basic'), icon: '🌐' },
-    { id: 'ssl' as TabType, label: t('form.tabs.ssl'), icon: '🔒' },
-    { id: 'security' as TabType, label: t('form.tabs.security'), icon: '🛡️' },
-    { id: 'protection' as TabType, label: t('form.tabs.protection'), icon: '🚫' },
-    { id: 'performance' as TabType, label: t('form.tabs.performance'), icon: '⚡' },
-    ...(isEditing ? [{ id: 'upstream' as TabType, label: t('form.tabs.upstream'), icon: '⚖️' }] : []),
-    { id: 'advanced' as TabType, label: t('form.tabs.advanced'), icon: '⚙️' },
-  ]
+  }, [errors, isStream])
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
@@ -243,7 +257,7 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
             )}
 
             {/* SSL Tab */}
-            {activeTab === 'ssl' && (
+              {activeTab === 'ssl' && !isStream && (
               <SSLTabContent
                 formData={formData}
                 setFormData={setFormData}
@@ -258,7 +272,7 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
             )}
 
             {/* Security Tab */}
-            {activeTab === 'security' && (
+              {activeTab === 'security' && !isStream && (
               <SecurityTabContent
                 hostId={host?.id}
                 formData={formData}
@@ -284,7 +298,7 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
             )}
 
             {/* Performance Tab */}
-            {activeTab === 'performance' && (
+              {activeTab === 'performance' && !isStream && (
               <PerformanceTabContent
                 formData={formData}
                 setFormData={setFormData}
@@ -292,7 +306,7 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
             )}
 
             {/* Upstream Tab */}
-            {activeTab === 'upstream' && isEditing && host && (
+              {activeTab === 'upstream' && !isStream && isEditing && host && (
               <UpstreamTabContent hostId={host.id} />
             )}
 
@@ -305,7 +319,7 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
             )}
 
             {/* Protection Tab */}
-            {activeTab === 'protection' && (
+              {activeTab === 'protection' && !isStream && (
               isEditing && host ? (
                 <ProtectionTabContent hostId={host.id} />
               ) : (

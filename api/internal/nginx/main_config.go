@@ -303,14 +303,20 @@ http {
     # direct-IP access policy.
     include /etc/nginx/conf.d/*.conf;
 }
-{{if ne .CustomStreamConfig ""}}
 # ==============================================================================
-# Stream block (from Global Settings → Advanced → custom_stream_config)
+# Stream block
 # ==============================================================================
 stream {
+    log_format stream_main '$remote_addr [$time_local] '
+                           '$protocol $status $bytes_sent $bytes_received '
+                           '$session_time "$upstream_addr" '
+                           '"$upstream_bytes_sent" "$upstream_bytes_received" '
+                           '"$upstream_connect_time"';
 {{.CustomStreamConfig}}
+    # Managed TCP/UDP stream proxy hosts
+    include /etc/nginx/stream.d/*.conf;
 }
-{{end}}`
+`
 
 // MainConfigData carries the rendered values for mainNginxConfigTemplate.
 // It is constructed from a *model.GlobalSettings; see buildMainConfigData.
@@ -542,7 +548,8 @@ func (m *Manager) GenerateMainNginxConfig(ctx context.Context, s *model.GlobalSe
 	}
 
 	// nginx.conf lives one directory up from conf.d/ (configPath).
-	target := filepath.Join(filepath.Dir(m.configPath), "nginx.conf")
+	nginxRoot := filepath.Dir(m.configPath)
+	target := filepath.Join(nginxRoot, "nginx.conf")
 
 	// Back up the existing file so a bad template render can be undone.
 	// On the very first boot no backup exists yet — that's fine; a template
@@ -557,6 +564,9 @@ func (m *Manager) GenerateMainNginxConfig(ctx context.Context, s *model.GlobalSe
 	// All nginx file ops share globalNginxMutex; other writers must not
 	// interleave a reload while we swap nginx.conf and validate it.
 	return m.executeWithLock(ctx, func() error {
+		if err := os.MkdirAll(filepath.Join(nginxRoot, "stream.d"), 0755); err != nil {
+			return fmt.Errorf("create stream.d: %w", err)
+		}
 		if err := m.writeFileAtomic(target, buf.Bytes(), 0644); err != nil {
 			return fmt.Errorf("write %s: %w", target, err)
 		}

@@ -58,13 +58,13 @@ type BackupListResponse struct {
 
 // BackupStats represents backup statistics
 type BackupStats struct {
-	TotalBackups       int       `json:"total_backups"`
-	TotalSize          int64     `json:"total_size"`
-	LastBackup         *time.Time `json:"last_backup,omitempty"`
-	LastSuccessful     *time.Time `json:"last_successful,omitempty"`
-	ScheduledEnabled   bool      `json:"scheduled_enabled"`
-	ScheduleInterval   string    `json:"schedule_interval,omitempty"`
-	RetentionDays      int       `json:"retention_days"`
+	TotalBackups     int        `json:"total_backups"`
+	TotalSize        int64      `json:"total_size"`
+	LastBackup       *time.Time `json:"last_backup,omitempty"`
+	LastSuccessful   *time.Time `json:"last_successful,omitempty"`
+	ScheduledEnabled bool       `json:"scheduled_enabled"`
+	ScheduleInterval string     `json:"schedule_interval,omitempty"`
+	RetentionDays    int        `json:"retention_days"`
 }
 
 // BackupContents represents the contents of a backup for preview
@@ -96,20 +96,20 @@ type TableInfo struct {
 
 // RestoreProgress represents the progress of a restore operation
 type RestoreProgress struct {
-	BackupID     string    `json:"backup_id"`
-	Status       string    `json:"status"` // in_progress, completed, failed
-	CurrentStep  string    `json:"current_step"`
-	TotalSteps   int       `json:"total_steps"`
-	CurrentStepN int       `json:"current_step_n"`
-	Progress     float64   `json:"progress"` // 0-100
-	StartedAt    time.Time `json:"started_at"`
+	BackupID     string     `json:"backup_id"`
+	Status       string     `json:"status"` // in_progress, completed, failed
+	CurrentStep  string     `json:"current_step"`
+	TotalSteps   int        `json:"total_steps"`
+	CurrentStepN int        `json:"current_step_n"`
+	Progress     float64    `json:"progress"` // 0-100
+	StartedAt    time.Time  `json:"started_at"`
 	CompletedAt  *time.Time `json:"completed_at,omitempty"`
-	ErrorMessage string    `json:"error_message,omitempty"`
+	ErrorMessage string     `json:"error_message,omitempty"`
 }
 
 // RestoreResult represents the detailed result of a restore operation (Issue #28 fix)
 type RestoreResult struct {
-	Status           string `json:"status"`             // "success", "partial", "failed"
+	Status           string `json:"status"` // "success", "partial", "failed"
 	Message          string `json:"message"`
 	IsPartialRestore bool   `json:"is_partial_restore"`
 
@@ -118,9 +118,9 @@ type RestoreResult struct {
 	DatabaseError    string `json:"database_error,omitempty"`
 
 	// Config regeneration results
-	ProxyHostsTotal     int      `json:"proxy_hosts_total"`
-	ProxyHostsSuccess   int      `json:"proxy_hosts_success"`
-	ProxyHostsFailed    []string `json:"proxy_hosts_failed,omitempty"`
+	ProxyHostsTotal   int      `json:"proxy_hosts_total"`
+	ProxyHostsSuccess int      `json:"proxy_hosts_success"`
+	ProxyHostsFailed  []string `json:"proxy_hosts_failed,omitempty"`
 
 	RedirectHostsTotal   int      `json:"redirect_hosts_total"`
 	RedirectHostsSuccess int      `json:"redirect_hosts_success"`
@@ -309,55 +309,64 @@ type GlobalSettingsExport struct {
 
 // ProxyHostData represents proxy host data for export
 type ProxyHostData struct {
-	ID                    string                 `json:"id"`
-	DomainNames           []string               `json:"domain_names"`
-	ForwardScheme         string                 `json:"forward_scheme"`
-	ForwardHost           string                 `json:"forward_host"`
-	ForwardPort           int                    `json:"forward_port"`
-	SSLEnabled            bool                   `json:"ssl_enabled"`
-	SSLForceHTTPS         bool                   `json:"ssl_force_https"`
-	SSLHTTP2              bool                   `json:"ssl_http2"`
-	SSLHTTP3              bool                   `json:"ssl_http3"`
-	CertificateID         string                 `json:"certificate_id,omitempty"`
-	AllowWebsocketUpgrade bool                   `json:"allow_websocket_upgrade"`
-	CacheEnabled          bool                   `json:"cache_enabled"`
-	CacheStaticOnly       bool                   `json:"cache_static_only"`
-	CacheTTL              string                 `json:"cache_ttl"`
-	BlockExploits         bool                   `json:"block_exploits"`
-	BlockExploitsExceptions string               `json:"block_exploits_exceptions,omitempty"`
-	CustomLocations       []interface{}          `json:"custom_locations,omitempty"`
-	AdvancedConfig        string                 `json:"advanced_config,omitempty"`
-	WAFEnabled            bool                   `json:"waf_enabled"`
-	WAFMode               string                 `json:"waf_mode,omitempty"`
-	WAFParanoiaLevel      int                    `json:"waf_paranoia_level"`
-	WAFAnomalyThreshold   int                    `json:"waf_anomaly_threshold"`
-	AccessListID          string                 `json:"access_list_id,omitempty"`
-	Enabled               bool                   `json:"enabled"`
-	IsFavorite            bool                   `json:"is_favorite"`
-	RateLimitEnabled      bool                   `json:"rate_limit_enabled"`
-	Fail2banEnabled       bool                   `json:"fail2ban_enabled"`
-	BotFilterEnabled      bool                   `json:"bot_filter_enabled"`
-	SecurityHeadersEnabled bool                  `json:"security_headers_enabled"`
-	ProxyConnectTimeout   int                    `json:"proxy_connect_timeout"`
-	ProxySendTimeout      int                    `json:"proxy_send_timeout"`
-	ProxyReadTimeout      int                    `json:"proxy_read_timeout"`
-	ProxyBuffering        string                 `json:"proxy_buffering,omitempty"`
-	ProxyRequestBuffering string                 `json:"proxy_request_buffering,omitempty"`
-	ClientMaxBodySize     string                 `json:"client_max_body_size,omitempty"`
-	ProxyMaxTempFileSize  string                 `json:"proxy_max_temp_file_size,omitempty"`
-	Meta                  map[string]interface{} `json:"meta,omitempty"`
+	ID                        string                 `json:"id"`
+	ProxyType                 string                 `json:"proxy_type,omitempty"`
+	DomainNames               []string               `json:"domain_names"`
+	ForwardScheme             string                 `json:"forward_scheme"`
+	ForwardHost               string                 `json:"forward_host"`
+	ForwardPort               int                    `json:"forward_port"`
+	StreamListenHost          string                 `json:"stream_listen_host,omitempty"`
+	StreamListenPort          int                    `json:"stream_listen_port,omitempty"`
+	StreamProtocol            string                 `json:"stream_protocol,omitempty"`
+	StreamSSLPreread          bool                   `json:"stream_ssl_preread,omitempty"`
+	StreamAcceptProxyProtocol bool                   `json:"stream_accept_proxy_protocol,omitempty"`
+	StreamSendProxyProtocol   bool                   `json:"stream_send_proxy_protocol,omitempty"`
+	StreamProxyConnectTimeout int                    `json:"stream_proxy_connect_timeout,omitempty"`
+	StreamProxyTimeout        int                    `json:"stream_proxy_timeout,omitempty"`
+	SSLEnabled                bool                   `json:"ssl_enabled"`
+	SSLForceHTTPS             bool                   `json:"ssl_force_https"`
+	SSLHTTP2                  bool                   `json:"ssl_http2"`
+	SSLHTTP3                  bool                   `json:"ssl_http3"`
+	CertificateID             string                 `json:"certificate_id,omitempty"`
+	AllowWebsocketUpgrade     bool                   `json:"allow_websocket_upgrade"`
+	CacheEnabled              bool                   `json:"cache_enabled"`
+	CacheStaticOnly           bool                   `json:"cache_static_only"`
+	CacheTTL                  string                 `json:"cache_ttl"`
+	BlockExploits             bool                   `json:"block_exploits"`
+	BlockExploitsExceptions   string                 `json:"block_exploits_exceptions,omitempty"`
+	CustomLocations           []interface{}          `json:"custom_locations,omitempty"`
+	AdvancedConfig            string                 `json:"advanced_config,omitempty"`
+	WAFEnabled                bool                   `json:"waf_enabled"`
+	WAFMode                   string                 `json:"waf_mode,omitempty"`
+	WAFParanoiaLevel          int                    `json:"waf_paranoia_level"`
+	WAFAnomalyThreshold       int                    `json:"waf_anomaly_threshold"`
+	AccessListID              string                 `json:"access_list_id,omitempty"`
+	Enabled                   bool                   `json:"enabled"`
+	IsFavorite                bool                   `json:"is_favorite"`
+	RateLimitEnabled          bool                   `json:"rate_limit_enabled"`
+	Fail2banEnabled           bool                   `json:"fail2ban_enabled"`
+	BotFilterEnabled          bool                   `json:"bot_filter_enabled"`
+	SecurityHeadersEnabled    bool                   `json:"security_headers_enabled"`
+	ProxyConnectTimeout       int                    `json:"proxy_connect_timeout"`
+	ProxySendTimeout          int                    `json:"proxy_send_timeout"`
+	ProxyReadTimeout          int                    `json:"proxy_read_timeout"`
+	ProxyBuffering            string                 `json:"proxy_buffering,omitempty"`
+	ProxyRequestBuffering     string                 `json:"proxy_request_buffering,omitempty"`
+	ClientMaxBodySize         string                 `json:"client_max_body_size,omitempty"`
+	ProxyMaxTempFileSize      string                 `json:"proxy_max_temp_file_size,omitempty"`
+	Meta                      map[string]interface{} `json:"meta,omitempty"`
 }
 
 // ProxyHostExport represents a proxy host with related configs for export
 type ProxyHostExport struct {
-	ProxyHost       ProxyHostData           `json:"proxy_host"`
-	RateLimit       *RateLimitExport        `json:"rate_limit,omitempty"`
-	Fail2ban        *Fail2banExport         `json:"fail2ban,omitempty"`
-	BotFilter       *BotFilterExport        `json:"bot_filter,omitempty"`
-	SecurityHeaders *SecurityHeadersExport  `json:"security_headers,omitempty"`
-	GeoRestriction  *GeoRestrictionExport   `json:"geo_restriction,omitempty"`
-	Upstream        *UpstreamExport         `json:"upstream,omitempty"`
-	ChallengeConfig *ChallengeConfigExport  `json:"challenge_config,omitempty"`
+	ProxyHost       ProxyHostData          `json:"proxy_host"`
+	RateLimit       *RateLimitExport       `json:"rate_limit,omitempty"`
+	Fail2ban        *Fail2banExport        `json:"fail2ban,omitempty"`
+	BotFilter       *BotFilterExport       `json:"bot_filter,omitempty"`
+	SecurityHeaders *SecurityHeadersExport `json:"security_headers,omitempty"`
+	GeoRestriction  *GeoRestrictionExport  `json:"geo_restriction,omitempty"`
+	Upstream        *UpstreamExport        `json:"upstream,omitempty"`
+	ChallengeConfig *ChallengeConfigExport `json:"challenge_config,omitempty"`
 }
 
 // RateLimitExport represents rate limit config for export
@@ -612,17 +621,17 @@ type HostExploitExclusionExport struct {
 
 // FilterSubscriptionExport represents a filter subscription for export
 type FilterSubscriptionExport struct {
-	Name              string                                 `json:"name"`
-	Description       string                                 `json:"description,omitempty"`
-	URL               string                                 `json:"url"`
-	Format            string                                 `json:"format"`
-	Type              string                                 `json:"type"`
-	Enabled           bool                                   `json:"enabled"`
-	ExcludePrivateIPs bool                                   `json:"exclude_private_ips"`
-	RefreshType       string                                 `json:"refresh_type"`
-	RefreshValue      string                                 `json:"refresh_value"`
-	Entries           []FilterSubscriptionEntryExport        `json:"entries,omitempty"`
-	Exclusions        []string                               `json:"exclusion_host_ids,omitempty"`
+	Name              string                                   `json:"name"`
+	Description       string                                   `json:"description,omitempty"`
+	URL               string                                   `json:"url"`
+	Format            string                                   `json:"format"`
+	Type              string                                   `json:"type"`
+	Enabled           bool                                     `json:"enabled"`
+	ExcludePrivateIPs bool                                     `json:"exclude_private_ips"`
+	RefreshType       string                                   `json:"refresh_type"`
+	RefreshValue      string                                   `json:"refresh_value"`
+	Entries           []FilterSubscriptionEntryExport          `json:"entries,omitempty"`
+	Exclusions        []string                                 `json:"exclusion_host_ids,omitempty"`
 	EntryExclusions   []FilterSubscriptionEntryExclusionExport `json:"entry_exclusions,omitempty"`
 }
 
@@ -654,23 +663,23 @@ type SystemSettingsExport struct {
 	ACMERenewDaysBefore int    `json:"acme_renew_days_before"`
 
 	// Notification Settings
-	NotificationEmail      string `json:"notification_email,omitempty"`
-	NotifyCertExpiry       bool   `json:"notify_cert_expiry"`
-	NotifyCertExpiryDays   int    `json:"notify_cert_expiry_days"`
-	NotifySecurityEvents   bool   `json:"notify_security_events"`
-	NotifyBackupComplete   bool   `json:"notify_backup_complete"`
+	NotificationEmail    string `json:"notification_email,omitempty"`
+	NotifyCertExpiry     bool   `json:"notify_cert_expiry"`
+	NotifyCertExpiryDays int    `json:"notify_cert_expiry_days"`
+	NotifySecurityEvents bool   `json:"notify_security_events"`
+	NotifyBackupComplete bool   `json:"notify_backup_complete"`
 
 	// Retention Settings
-	LogRetentionDays       int  `json:"log_retention_days"`
-	StatsRetentionDays     int  `json:"stats_retention_days"`
-	BackupRetentionCount   int  `json:"backup_retention_count"`
-	AutoBackupEnabled      bool `json:"auto_backup_enabled"`
+	LogRetentionDays       int    `json:"log_retention_days"`
+	StatsRetentionDays     int    `json:"stats_retention_days"`
+	BackupRetentionCount   int    `json:"backup_retention_count"`
+	AutoBackupEnabled      bool   `json:"auto_backup_enabled"`
 	AutoBackupSchedule     string `json:"auto_backup_schedule"`
-	AccessLogRetentionDays int  `json:"access_log_retention_days"`
-	WAFLogRetentionDays    int  `json:"waf_log_retention_days"`
-	ErrorLogRetentionDays  int  `json:"error_log_retention_days"`
-	SystemLogRetentionDays int  `json:"system_log_retention_days"`
-	AuditLogRetentionDays  int  `json:"audit_log_retention_days"`
+	AccessLogRetentionDays int    `json:"access_log_retention_days"`
+	WAFLogRetentionDays    int    `json:"waf_log_retention_days"`
+	ErrorLogRetentionDays  int    `json:"error_log_retention_days"`
+	SystemLogRetentionDays int    `json:"system_log_retention_days"`
+	AuditLogRetentionDays  int    `json:"audit_log_retention_days"`
 
 	// Raw Log Settings
 	RawLogEnabled         bool `json:"raw_log_enabled"`
@@ -689,10 +698,10 @@ type SystemSettingsExport struct {
 	BotFilterDefaultCustomBlockedAgents    string `json:"bot_filter_default_custom_blocked_agents,omitempty"`
 
 	// Bot Lists
-	BotListBadBots            string `json:"bot_list_bad_bots,omitempty"`
-	BotListAIBots             string `json:"bot_list_ai_bots,omitempty"`
-	BotListSearchEngines      string `json:"bot_list_search_engines,omitempty"`
-	BotListSuspiciousClients  string `json:"bot_list_suspicious_clients,omitempty"`
+	BotListBadBots           string `json:"bot_list_bad_bots,omitempty"`
+	BotListAIBots            string `json:"bot_list_ai_bots,omitempty"`
+	BotListSearchEngines     string `json:"bot_list_search_engines,omitempty"`
+	BotListSuspiciousClients string `json:"bot_list_suspicious_clients,omitempty"`
 
 	// WAF Auto-Ban Settings
 	WAFAutoBanEnabled   bool `json:"waf_auto_ban_enabled"`

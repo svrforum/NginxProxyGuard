@@ -83,9 +83,34 @@
       "advanced": "Advanced"
     },
     "basic": {
+      "proxyMode": "Proxy Mode",
+      "httpMode": "HTTP / HTTPS",
+      "httpModeDescription": "Virtual host reverse proxy",
+      "streamMode": "TCP / UDP Stream",
+      "streamModeDescription": "Layer 4 reverse proxy",
+      "streamSecurityNoticeTitle": "Stream Mode Security Notice",
+      "streamSecurityNoticeBody": "TCP/UDP stream hosts have no HTTP protocol, so ModSecurity (WAF), exploit blocking, bot filter, URI blocking, rate limit, and access lists do not apply. IP-based security (banned IPs) is automatically applied to stream.",
       "domainNames": "Domain Names",
       "domainPlaceholder": "example.com",
       "addDomain": "Add Domain",
+      "streamNames": "Stream Names",
+      "streamNamePlaceholder": "service.example.com or stream label",
+      "addStreamName": "Add Stream Name",
+      "streamListener": "Stream Listener",
+      "streamProtocol": "Protocol",
+      "streamListenHost": "Listen Host",
+      "streamListenPort": "Listen Port",
+      "streamSslPreread": "SSL Preread",
+      "streamSslPrereadDescription": "Read TLS SNI without terminating TLS",
+      "streamAcceptProxyProtocol": "Accept PROXY",
+      "streamAcceptProxyProtocolDescription": "Expect PROXY protocol from clients",
+      "streamSendProxyProtocol": "Send PROXY",
+      "streamSendProxyProtocolDescription": "Send PROXY protocol to upstream",
+      "streamConnectTimeout": "Connect Timeout (sec)",
+      "streamProxyTimeout": "Proxy Timeout (sec)",
+      "streamUpstream": "Stream Upstream",
+      "backendHost": "Backend Host",
+      "backendPort": "Backend Port",
       "forwardHost": "Forward Host",
       "forwardHostPlaceholder": "192.168.1.100 or container_name",
       "forwardPort": "Forward Port",
@@ -574,6 +599,10 @@
       "altSvc": "Alt-Svc Header",
       "altSvcDesc": "This header advertises HTTP/3 support to compatible browsers"
     },
+    "stream": {
+      "listener": "Listener",
+      "upstream": "Upstream"
+    },
     "cache": {
       "status": "Cache Status",
       "noStatus": "No Cache Status",
@@ -623,6 +652,7 @@
     "hostRequired": "Forward host is required",
     "portRequired": "Port is required",
     "portRange": "Port must be between 1 and 65535",
+    "streamListenHostInvalid": "Listen host must be empty, *, or a local IP address. Put upstream hostnames in Forward Host.",
     "certificateRequired": "Select a certificate to use SSL",
     "certSelectionRequired": "Please select a certificate or switch to \"Create New\"",
     "addDomainsBeforeCert": "Add domains first to create certificate"

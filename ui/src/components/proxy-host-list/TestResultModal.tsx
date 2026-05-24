@@ -25,6 +25,17 @@ export function TestResultModal({
 }: TestResultModalProps) {
   const { t } = useTranslation('proxyHost');
   const [activeTab, setActiveTab] = useState<'summary' | 'ssl' | 'http' | 'cache' | 'security' | 'headers'>('summary');
+  const isStream = host.proxy_type === 'stream';
+  const tabs = isStream
+    ? [{ id: 'summary', label: t('test.tabs.summary') }]
+    : [
+      { id: 'summary', label: t('test.tabs.summary') },
+      { id: 'ssl', label: t('test.tabs.ssl') },
+      { id: 'http', label: t('test.tabs.http') },
+      { id: 'cache', label: t('test.tabs.cache') },
+      { id: 'security', label: t('test.tabs.security') },
+      { id: 'headers', label: t('test.tabs.headers') },
+    ];
 
   useEscapeKey(onClose);
 
@@ -35,7 +46,11 @@ export function TestResultModal({
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-slate-900 dark:text-white">{t('test.title')}</h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400">{host.domain_names[0]}</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              {isStream
+                ? `${(host.stream_protocol || 'tcp').toUpperCase()} :${host.stream_listen_port || '?'}`
+                : host.domain_names[0]}
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -90,14 +105,7 @@ export function TestResultModal({
             {/* Tabs */}
             <div className="px-6 border-b border-slate-200 dark:border-slate-700">
               <nav className="flex gap-1 -mb-px">
-                {[
-                  { id: 'summary', label: t('test.tabs.summary') },
-                  { id: 'ssl', label: t('test.tabs.ssl') },
-                  { id: 'http', label: t('test.tabs.http') },
-                  { id: 'cache', label: t('test.tabs.cache') },
-                  { id: 'security', label: t('test.tabs.security') },
-                  { id: 'headers', label: t('test.tabs.headers') },
-                ].map(tab => (
+                {tabs.map(tab => (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id as typeof activeTab)}

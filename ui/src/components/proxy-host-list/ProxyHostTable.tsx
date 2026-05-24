@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import type { ProxyHost } from '../../types/proxy-host'
 import { ProxyHostRow } from './ProxyHostRow'
+import type { TabType } from '../proxy-host/types'
 
 interface HealthStatus {
   [hostId: string]: 'checking' | 'online' | 'offline' | 'unknown'
@@ -9,7 +10,7 @@ interface HealthStatus {
 interface ProxyHostTableProps {
   hosts: ProxyHost[]
   healthStatus: HealthStatus
-  onEdit: (host: ProxyHost, tab?: 'basic' | 'ssl' | 'security' | 'performance' | 'advanced' | 'protection') => void
+  onEdit: (host: ProxyHost, tab?: TabType) => void
   onDelete: (id: string) => void
   onToggle: (host: ProxyHost) => void
   onClone: (host: ProxyHost) => void

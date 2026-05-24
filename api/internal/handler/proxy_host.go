@@ -39,11 +39,16 @@ func (h *ProxyHostHandler) Create(c echo.Context) error {
 			"error": "domain_names is required",
 		})
 	}
-	// Validate each domain name format
+	proxyType := model.NormalizeProxyType(req.ProxyType)
+	// Validate each domain/name format
 	for _, domain := range req.DomainNames {
-		if !ValidateDomainName(domain) {
+		validName := ValidateDomainName(domain)
+		if proxyType == model.ProxyTypeStream {
+			validName = ValidateStreamName(domain)
+		}
+		if !validName {
 			return c.JSON(http.StatusBadRequest, map[string]string{
-				"error": "invalid domain format: " + domain,
+				"error": "invalid proxy name format: " + domain,
 			})
 		}
 	}
@@ -58,12 +63,24 @@ func (h *ProxyHostHandler) Create(c echo.Context) error {
 			"error": "invalid forward_host format",
 		})
 	}
+	if proxyType == model.ProxyTypeStream {
+		if !ValidatePort(req.ForwardPort) {
+			return c.JSON(http.StatusBadRequest, map[string]string{
+				"error": "forward_port must be between 1 and 65535",
+			})
+		}
+		if !ValidatePort(req.StreamListenPort) {
+			return c.JSON(http.StatusBadRequest, map[string]string{
+				"error": "stream_listen_port must be between 1 and 65535",
+			})
+		}
+	}
 
 	host, err := h.service.Create(c.Request().Context(), &req)
 	if err != nil {
 		errMsg := err.Error()
 		// Handle specific error cases with appropriate HTTP status codes
-		if strings.Contains(errMsg, "already exist") {
+		if strings.Contains(errMsg, "already exist") || strings.Contains(errMsg, "listener conflict") {
 			return conflictError(c, errMsg)
 		}
 		if strings.Contains(errMsg, "invalid") || strings.Contains(errMsg, "required") {
@@ -164,7 +181,7 @@ func (h *ProxyHostHandler) Update(c echo.Context) error {
 	if err != nil {
 		errMsg := err.Error()
 		// Handle specific error cases with appropriate HTTP status codes
-		if strings.Contains(errMsg, "already exist") {
+		if strings.Contains(errMsg, "already exist") || strings.Contains(errMsg, "listener conflict") {
 			return conflictError(c, errMsg)
 		}
 		if strings.Contains(errMsg, "invalid") || strings.Contains(errMsg, "required") {
@@ -320,11 +337,12 @@ func (h *ProxyHostHandler) Clone(c echo.Context) error {
 		})
 	}
 
-	// Validate each domain name format
+	// Validate each domain/name format. Stream clones may use service labels
+	// when SNI routing is disabled, so accept either domain or stream label.
 	for _, domain := range req.DomainNames {
-		if !ValidateDomainName(domain) {
+		if !ValidateDomainName(domain) && !ValidateStreamName(domain) {
 			return c.JSON(http.StatusBadRequest, map[string]string{
-				"error": "invalid domain format: " + domain,
+				"error": "invalid proxy name format: " + domain,
 			})
 		}
 	}
@@ -335,7 +353,7 @@ func (h *ProxyHostHandler) Clone(c echo.Context) error {
 	host, err := h.service.Clone(c.Request().Context(), id, &req)
 	if err != nil {
 		errMsg := err.Error()
-		if strings.Contains(errMsg, "already exist") {
+		if strings.Contains(errMsg, "already exist") || strings.Contains(errMsg, "listener conflict") {
 			return conflictError(c, errMsg)
 		}
 		if strings.Contains(errMsg, "not found") {

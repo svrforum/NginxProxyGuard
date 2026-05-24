@@ -5,6 +5,78 @@ import type { ProxyHost, ProxyHostTestResult } from '../../types/proxy-host';
 // Summary Tab
 export function SummaryTab({ result, host }: { result: ProxyHostTestResult; host: ProxyHost }) {
   const { t } = useTranslation('proxyHost');
+  if (host.proxy_type === 'stream') {
+    const stream = result.stream;
+    return (
+      <div className="space-y-6">
+        <div className={`p-4 rounded-lg ${result.success
+          ? 'bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-800'
+          : 'bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800'}`}>
+          <div className="flex items-center gap-3">
+            {result.success ? (
+              <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
+                <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+            ) : (
+              <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
+                <svg className="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </div>
+            )}
+            <div>
+              <h3 className={`font-semibold ${result.success ? 'text-green-800 dark:text-green-300' : 'text-red-800 dark:text-red-300'}`}>
+                {result.success ? t('test.passed') : t('test.failed')}
+              </h3>
+              <p className={`text-sm ${result.success ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                {result.error || `${t('test.responseTime')}: ${result.response_time_ms}ms`}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <StatCard
+            label={t('test.protocol')}
+            value={(stream?.protocol || host.stream_protocol || 'tcp').toUpperCase()}
+            status="neutral"
+          />
+          <StatCard
+            label={t('test.stream.listener')}
+            value={stream?.target_address || `${host.stream_listen_host || '*'}:${host.stream_listen_port || '?'}`}
+            status={result.success ? 'good' : 'bad'}
+          />
+          <StatCard
+            label={t('test.stream.upstream')}
+            value={stream?.upstream_address || `${host.forward_host}:${host.forward_port}`}
+            status="neutral"
+          />
+          <StatCard
+            label={t('test.responseTime')}
+            value={`${result.response_time_ms}ms`}
+            status={result.success ? 'good' : 'bad'}
+          />
+        </div>
+
+        <div>
+          <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">{t('test.featureVerification')}</h4>
+          <div className="grid grid-cols-2 gap-2">
+            <FeatureCheck label="SSL preread" configured={!!host.stream_ssl_preread} detected={!!stream?.ssl_preread} />
+            <FeatureCheck label="PROXY protocol in" configured={!!host.stream_accept_proxy_protocol} detected={!!stream?.proxy_protocol_in} />
+            <FeatureCheck label="PROXY protocol out" configured={!!host.stream_send_proxy_protocol} detected={!!stream?.proxy_protocol_out} />
+            <FeatureCheck label={(host.stream_protocol || 'tcp').toUpperCase()} configured detected={!!stream?.protocol} />
+          </div>
+        </div>
+
+        <div className="text-xs text-slate-400 text-right">
+          {t('test.testedAt')}: {new Date(result.tested_at).toLocaleString()}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Overall Status */}

@@ -79,9 +79,32 @@ func (r *BackupRepository) importProxyHost(ctx context.Context, tx *sql.Tx, ph *
 	if wafAnomalyThreshold < 1 {
 		wafAnomalyThreshold = 5
 	}
+	proxyType := model.NormalizeProxyType(ph.ProxyHost.ProxyType)
+	streamProtocol := model.NormalizeStreamProtocol(ph.ProxyHost.StreamProtocol)
+	forwardScheme := ph.ProxyHost.ForwardScheme
+	sslEnabled := ph.ProxyHost.SSLEnabled
+	sslForceHTTPS := ph.ProxyHost.SSLForceHTTPS
+	sslHTTP2 := ph.ProxyHost.SSLHTTP2
+	sslHTTP3 := ph.ProxyHost.SSLHTTP3
+	wafEnabled := ph.ProxyHost.WAFEnabled
+	blockExploits := ph.ProxyHost.BlockExploits
+	allowWebsocketUpgrade := ph.ProxyHost.AllowWebsocketUpgrade
+	if proxyType == model.ProxyTypeStream {
+		forwardScheme = streamProtocol
+		sslEnabled = false
+		sslForceHTTPS = false
+		sslHTTP2 = false
+		sslHTTP3 = false
+		wafEnabled = false
+		blockExploits = false
+		allowWebsocketUpgrade = false
+	}
 
 	query := `
-		INSERT INTO proxy_hosts (domain_names, forward_scheme, forward_host, forward_port,
+		INSERT INTO proxy_hosts (proxy_type, domain_names, forward_scheme, forward_host, forward_port,
+		                         stream_listen_host, stream_listen_port, stream_protocol, stream_ssl_preread,
+		                         stream_accept_proxy_protocol, stream_send_proxy_protocol,
+		                         stream_proxy_connect_timeout, stream_proxy_timeout,
 		                         ssl_enabled, ssl_force_https, ssl_http2, ssl_http3, certificate_id,
 		                         allow_websocket_upgrade, cache_enabled, cache_static_only, cache_ttl,
 		                         block_exploits, block_exploits_exceptions,
@@ -92,7 +115,8 @@ func (r *BackupRepository) importProxyHost(ctx context.Context, tx *sql.Tx, ph *
 		                         proxy_connect_timeout, proxy_send_timeout, proxy_read_timeout,
 		                         proxy_buffering, proxy_request_buffering, client_max_body_size, proxy_max_temp_file_size, meta)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19,
-		        $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36)
+		        $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36,
+		        $37, $38, $39, $40, $41, $42, $43, $44)
 		RETURNING id
 	`
 
@@ -106,11 +130,14 @@ func (r *BackupRepository) importProxyHost(ctx context.Context, tx *sql.Tx, ph *
 
 	var newID string
 	err := tx.QueryRowContext(ctx, query,
-		pq.Array(ph.ProxyHost.DomainNames), ph.ProxyHost.ForwardScheme, ph.ProxyHost.ForwardHost, ph.ProxyHost.ForwardPort,
-		ph.ProxyHost.SSLEnabled, ph.ProxyHost.SSLForceHTTPS, ph.ProxyHost.SSLHTTP2, ph.ProxyHost.SSLHTTP3, certID,
-		ph.ProxyHost.AllowWebsocketUpgrade, ph.ProxyHost.CacheEnabled, cacheStaticOnly, cacheTTL,
-		ph.ProxyHost.BlockExploits, ph.ProxyHost.BlockExploitsExceptions,
-		customLocations, ph.ProxyHost.AdvancedConfig, ph.ProxyHost.WAFEnabled, ph.ProxyHost.WAFMode,
+		proxyType, pq.Array(ph.ProxyHost.DomainNames), forwardScheme, ph.ProxyHost.ForwardHost, ph.ProxyHost.ForwardPort,
+		ph.ProxyHost.StreamListenHost, ph.ProxyHost.StreamListenPort, streamProtocol, ph.ProxyHost.StreamSSLPreread,
+		ph.ProxyHost.StreamAcceptProxyProtocol, ph.ProxyHost.StreamSendProxyProtocol,
+		ph.ProxyHost.StreamProxyConnectTimeout, ph.ProxyHost.StreamProxyTimeout,
+		sslEnabled, sslForceHTTPS, sslHTTP2, sslHTTP3, certID,
+		allowWebsocketUpgrade, ph.ProxyHost.CacheEnabled, cacheStaticOnly, cacheTTL,
+		blockExploits, ph.ProxyHost.BlockExploitsExceptions,
+		customLocations, ph.ProxyHost.AdvancedConfig, wafEnabled, ph.ProxyHost.WAFMode,
 		wafParanoiaLevel, wafAnomalyThreshold,
 		accessListID, ph.ProxyHost.Enabled, ph.ProxyHost.IsFavorite,
 		ph.ProxyHost.RateLimitEnabled, ph.ProxyHost.Fail2banEnabled, ph.ProxyHost.BotFilterEnabled, ph.ProxyHost.SecurityHeadersEnabled,

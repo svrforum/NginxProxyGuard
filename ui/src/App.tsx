@@ -8,6 +8,7 @@ import { InitialSetup } from './components/InitialSetup'
 import { getAuthStatus, logout, getToken, User } from './api/auth'
 import { apiPost } from './api/client'
 import type { ProxyHost } from './types/proxy-host'
+import type { TabType as ProxyHostTabType } from './components/proxy-host/types'
 import { useDarkMode } from './hooks/useDarkMode'
 import { SyncProgressModal, SyncAllResult } from './components/SyncProgressModal'
 
@@ -66,7 +67,7 @@ function AppContent({ user, onLogout }: AppContentProps) {
   const activeTab = getActiveTab()
   const [showForm, setShowForm] = useState(false)
   const [editingHost, setEditingHost] = useState<ProxyHost | null>(null)
-  const [initialFormTab, setInitialFormTab] = useState<'basic' | 'ssl' | 'security' | 'performance' | 'advanced' | 'protection'>('basic')
+  const [initialFormTab, setInitialFormTab] = useState<ProxyHostTabType>('basic')
   const [showAccountSettings, setShowAccountSettings] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
   const [showSyncModal, setShowSyncModal] = useState(false)
@@ -123,7 +124,7 @@ function AppContent({ user, onLogout }: AppContentProps) {
   // state change. Without useCallback, both handlers were redeclared on every
   // render (auth status refresh, dark-mode toggle, modal toggle, etc.) and
   // invalidated React.memo for all ~200 ProxyHostRow children.
-  const handleEdit = useCallback((host: ProxyHost, tab?: 'basic' | 'ssl' | 'security' | 'performance' | 'advanced' | 'protection') => {
+  const handleEdit = useCallback((host: ProxyHost, tab?: ProxyHostTabType) => {
     setEditingHost(host)
     setInitialFormTab(tab || 'basic')
     setShowForm(true)

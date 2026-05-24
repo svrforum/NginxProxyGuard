@@ -83,9 +83,34 @@
       "advanced": "고급"
     },
     "basic": {
+      "proxyMode": "프록시 모드",
+      "httpMode": "HTTP / HTTPS",
+      "httpModeDescription": "가상 호스트 리버스 프록시",
+      "streamMode": "TCP / UDP Stream",
+      "streamModeDescription": "Layer 4 리버스 프록시",
+      "streamSecurityNoticeTitle": "Stream 모드 보안 안내",
+      "streamSecurityNoticeBody": "TCP/UDP stream 호스트는 HTTP 프로토콜이 없어 ModSecurity(WAF), exploit 차단, bot filter, URI 차단, rate limit, access list는 적용되지 않습니다. IP 기반 보안(banned IPs)은 stream에 자동 적용됩니다.",
       "domainNames": "도메인 이름",
       "domainPlaceholder": "example.com",
       "addDomain": "도메인 추가",
+      "streamNames": "Stream 이름",
+      "streamNamePlaceholder": "service.example.com 또는 stream 라벨",
+      "addStreamName": "Stream 이름 추가",
+      "streamListener": "Stream 리스너",
+      "streamProtocol": "프로토콜",
+      "streamListenHost": "리스닝 호스트",
+      "streamListenPort": "리스닝 포트",
+      "streamSslPreread": "SSL Preread",
+      "streamSslPrereadDescription": "TLS 종료 없이 SNI를 읽습니다",
+      "streamAcceptProxyProtocol": "PROXY 수신",
+      "streamAcceptProxyProtocolDescription": "클라이언트의 PROXY 프로토콜을 받습니다",
+      "streamSendProxyProtocol": "PROXY 전송",
+      "streamSendProxyProtocolDescription": "업스트림으로 PROXY 프로토콜을 전송합니다",
+      "streamConnectTimeout": "연결 타임아웃 (초)",
+      "streamProxyTimeout": "프록시 타임아웃 (초)",
+      "streamUpstream": "Stream 업스트림",
+      "backendHost": "백엔드 호스트",
+      "backendPort": "백엔드 포트",
       "forwardHost": "포워드 호스트",
       "forwardHostPlaceholder": "192.168.1.100 또는 container_name",
       "forwardPort": "포워드 포트",
@@ -572,6 +597,10 @@
       "altSvc": "Alt-Svc 헤더",
       "altSvcDesc": "이 헤더는 호환되는 브라우저에 HTTP/3 지원을 알립니다"
     },
+    "stream": {
+      "listener": "리스너",
+      "upstream": "업스트림"
+    },
     "cache": {
       "status": "캐시 상태",
       "noStatus": "캐시 상태 없음",
@@ -621,6 +650,7 @@
     "hostRequired": "포워드 호스트가 필요합니다",
     "portRequired": "포트가 필요합니다",
     "portRange": "포트는 1-65535 사이여야 합니다",
+    "streamListenHostInvalid": "리스닝 호스트는 비워 두거나 *, 로컬 IP 주소만 사용할 수 있습니다. 업스트림 호스트명은 포워드 호스트에 입력하세요.",
     "certificateRequired": "SSL을 사용하려면 인증서를 선택하세요",
     "certSelectionRequired": "인증서를 선택하거나 \"새 인증서 생성\"으로 전환하세요",
     "addDomainsBeforeCert": "인증서를 생성하려면 먼저 도메인을 추가하세요"
