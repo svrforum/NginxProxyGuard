@@ -57,6 +57,7 @@ test.describe('Pipeline canary — healthy probe + health schema', () => {
     const body = await resp.json();
 
     expect(body.log_collector).toBeDefined();
+    const lc = body.log_collector;
     // A healthy stack must report 'healthy' — the canary above ran successfully.
     expect(body.log_collector.pipeline_status).toBe('healthy');
 
@@ -66,5 +67,7 @@ test.describe('Pipeline canary — healthy probe + health schema', () => {
     expect(body.log_collector).toHaveProperty('modsec_last_flush_seconds_ago');
     expect(body.log_collector).toHaveProperty('error_last_flush_seconds_ago');
     expect(body.log_collector).toHaveProperty('nginx_status_reachable');
+    expect(lc).toHaveProperty('auto_heal_attempts');
+    expect(lc).toHaveProperty('auto_heal_exhausted');
   });
 });
