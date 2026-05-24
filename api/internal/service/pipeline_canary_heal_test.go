@@ -1,6 +1,8 @@
 package service
 
 import (
+	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -32,5 +34,56 @@ func TestCanHeal(t *testing.T) {
 				t.Errorf("canHeal(%q, %d, ...) = %v, want %v", tc.stage, tc.attempts, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestAttemptHeal_BudgetLimit(t *testing.T) {
+	p := &PipelineCanary{}
+	var calls int32
+	p.SetHealer(func(ctx context.Context, stage string) error {
+		atomic.AddInt32(&calls, 1)
+		return nil
+	})
+	for i := 0; i < 5; i++ {
+		p.attemptHeal(context.Background(), "nginx_write")
+	}
+	if got := atomic.LoadInt32(&calls); got != int32(healMaxAttempts) {
+		t.Errorf("budget: expected %d heal calls, got %d", healMaxAttempts, got)
+	}
+}
+
+func TestAttemptHeal_InFlightGuard(t *testing.T) {
+	p := &PipelineCanary{}
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	var calls int32
+	p.SetHealer(func(ctx context.Context, stage string) error {
+		atomic.AddInt32(&calls, 1)
+		close(entered) // first heal is now in progress (holds healMu)
+		<-release
+		return nil
+	})
+	go p.attemptHeal(context.Background(), "nginx_write")
+	<-entered
+	// second concurrent attempt must be rejected by healMu.TryLock (no 2nd call)
+	p.attemptHeal(context.Background(), "nginx_write")
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Errorf("in-flight guard: expected 1 heal call, got %d", got)
+	}
+	close(release)
+	time.Sleep(20 * time.Millisecond) // let the first goroutine finish cleanly
+}
+
+func TestAttemptHeal_NotHealableStageDoesNotConsumeBudget(t *testing.T) {
+	p := &PipelineCanary{}
+	var calls int32
+	p.SetHealer(func(ctx context.Context, stage string) error {
+		atomic.AddInt32(&calls, 1)
+		return nil
+	})
+	p.attemptHeal(context.Background(), "db_insert")
+	p.attemptHeal(context.Background(), "nginx_unreachable")
+	if got := atomic.LoadInt32(&calls); got != 0 {
+		t.Errorf("non-healable stages must not call healer, got %d", got)
 	}
 }

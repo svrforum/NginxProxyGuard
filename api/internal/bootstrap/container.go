@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"nginx-proxy-guard/internal/config"
@@ -60,6 +61,7 @@ func NewContainer(cfg *config.Config) (*Container, error) {
 	svcs := InitServices(cfg, db, redisCache, nginxManager, repos)
 	wireServiceCallbacks(svcs, repos)
 	handlers := InitHandlers(repos, svcs, nginxManager, redisCache)
+	wirePipelineCanaryHealer(svcs, handlers)
 	schedulers := NewSchedulers(cfg, db, repos, svcs)
 
 	return &Container{
@@ -72,6 +74,31 @@ func NewContainer(cfg *config.Config) (*Container, error) {
 		Handlers:     handlers,
 		Schedulers:   schedulers,
 	}, nil
+}
+
+// wirePipelineCanaryHealer connects the Phase-2 auto-heal seam. Done after
+// InitHandlers because the healer needs the SystemSettings handler (raw-log
+// re-apply) and the LogCollector (tail restart). Stage->action map mirrors the
+// design spec §4.B; non-healable stages return an error so the canary escalates.
+func wirePipelineCanaryHealer(svcs *Services, handlers *Handlers) {
+	if svcs.PipelineCanary == nil {
+		return
+	}
+	sys := handlers.SystemSettings
+	lc := svcs.LogCollector
+	svcs.PipelineCanary.SetHealer(func(ctx context.Context, stage string) error {
+		switch stage {
+		case "nginx_write":
+			return sys.ForceEnableRawLog(ctx)
+		case "path_mismatch", "tail_stalled":
+			if lc != nil {
+				lc.RestartTail()
+			}
+			return nil
+		default:
+			return fmt.Errorf("stage %q is not auto-healable", stage)
+		}
+	})
 }
 
 // Startup performs one-time startup side effects and launches background

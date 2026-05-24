@@ -266,6 +266,27 @@ func (h *SystemSettingsHandler) EnsureRawLogEnabled(ctx context.Context) error {
 	return h.applyRawLogSettings(updated)
 }
 
+// ForceEnableRawLog unconditionally re-applies raw-log config: it ensures the
+// DB flag is on AND always regenerates 00-raw-logging.conf, recreates
+// access_raw.log, and reloads nginx (nginx -t first, via ReloadNginx). Unlike
+// EnsureRawLogEnabled (a boot no-op when the flag is already true), this always
+// re-applies — the pipeline-canary auto-heal needs it because the conf/file can
+// be missing even though the flag is true.
+func (h *SystemSettingsHandler) ForceEnableRawLog(ctx context.Context) error {
+	settings, err := h.repo.Get(ctx)
+	if err != nil {
+		return fmt.Errorf("load system settings: %w", err)
+	}
+	if !settings.RawLogEnabled {
+		t := true
+		settings, err = h.repo.Update(ctx, &model.UpdateSystemSettingsRequest{RawLogEnabled: &t})
+		if err != nil {
+			return fmt.Errorf("update system settings: %w", err)
+		}
+	}
+	return h.applyRawLogSettings(settings)
+}
+
 // applyRawLogSettings creates/removes raw log files and nginx config immediately
 func (h *SystemSettingsHandler) applyRawLogSettings(settings *model.SystemSettings) error {
 	rawLoggingConf := "/etc/nginx/conf.d/00-raw-logging.conf"
