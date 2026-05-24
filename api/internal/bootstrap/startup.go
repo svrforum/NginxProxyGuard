@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"strings"
 
 	"nginx-proxy-guard/internal/config"
 	"nginx-proxy-guard/internal/service"
@@ -15,6 +16,20 @@ func resolveNginxStatusURL() string {
 		return v
 	}
 	return "http://host.docker.internal:80/nginx_status"
+}
+
+// resolveNginxCanaryURL targets the internal /__npg_canary location. It reuses
+// the nginx_status host:port (same reachability as StatsCollector) and only
+// swaps the path, so it inherits the established host-network routing.
+func resolveNginxCanaryURL() string {
+	if v := os.Getenv("NGINX_CANARY_URL"); v != "" {
+		return v
+	}
+	status := resolveNginxStatusURL()
+	if i := strings.LastIndex(status, "/"); i > len("https://") {
+		return status[:i] + "/__npg_canary"
+	}
+	return "http://host.docker.internal:80/__npg_canary"
 }
 
 // resolveAccessLogPath reads NGINX_ACCESS_LOG with a stable default.
@@ -133,6 +148,9 @@ func startBackgroundServices(ctx context.Context, c *Container) {
 			}
 		}
 		go c.Services.LogCollector.Start(ctx)
+	}
+	if c.Services.PipelineCanary != nil {
+		go c.Services.PipelineCanary.Start(ctx)
 	}
 	go c.Services.WAFAutoBan.Start(ctx)
 	go c.Services.Fail2ban.Start(ctx)

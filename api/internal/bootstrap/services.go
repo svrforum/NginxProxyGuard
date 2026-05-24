@@ -32,6 +32,7 @@ type Services struct {
 	CloudProvider      *service.CloudProviderService
 	GeoIPScheduler     *service.GeoIPScheduler
 	LogCollector       *service.LogCollector
+	PipelineCanary     *service.PipelineCanary
 	WAFAutoBan         *service.WAFAutoBanService
 	Fail2ban           *service.Fail2banService
 	StatsCollector     *service.StatsCollector
@@ -144,6 +145,14 @@ func InitServices(
 			resolveAccessLogPath(),
 			svcs.GeoIP,
 			redisCache,
+		)
+	}
+
+	if cfg.LogCollection && svcs.LogCollector != nil {
+		svcs.PipelineCanary = service.NewPipelineCanary(
+			resolveNginxCanaryURL(),
+			repos.Log,
+			svcs.LogCollector,
 		)
 	}
 
