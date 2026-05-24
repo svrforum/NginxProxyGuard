@@ -70,15 +70,16 @@
 
 ```
 npg_nginx_data (/etc/nginx)
-  ← API: config 파일 쓰기 (.conf, WAF, certs)
+  ← API: config 파일 쓰기 (.conf, WAF, certs, stream)
   → Nginx: config 파일 읽기
 
 생성 파일:
-  /etc/nginx/conf.d/{domain}.conf       ← proxy host config
-  /etc/nginx/modsec/host_{id}.conf      ← per-host WAF config
-  /etc/nginx/conf.d/zzz_default.conf    ← catch-all server
-  /etc/nginx/conf.d/banned_ips.conf     ← IP ban list
-  /etc/nginx/certs/{certID}/            ← SSL certificates
+  /etc/nginx/conf.d/{domain}.conf            ← HTTP proxy host config
+  /etc/nginx/stream.d/stream_host_{name}.conf ← TCP/UDP stream host config (v2.18.0+)
+  /etc/nginx/modsec/host_{id}.conf           ← per-host WAF config
+  /etc/nginx/conf.d/zzz_default.conf         ← catch-all server
+  /etc/nginx/includes/banned_ips.conf        ← IP ban list (HTTP + stream 공유)
+  /etc/nginx/certs/{certID}/                 ← SSL certificates
 ```
 
 ---
@@ -1248,6 +1249,19 @@ Restore (2-phase):
 - **SSRF 보호:** 내부 네트워크 주소 차단 (127.0.0.0/8, 10.0.0.0/8, 169.254.0.0/16 등)
 - **호스트 제외:** 특정 프록시 호스트에 대해 구독 적용 제외 가능
 - **Nginx 연동:** 구독 항목이 nginx config에 반영 → test → reload
+
+### 8.15 TCP/UDP Stream Proxy (v2.18.0)
+
+- **목적:** HTTP가 아닌 L4 트래픽(TCP/UDP)을 nginx의 `stream {}` 모듈로 리버스 프록시
+- **DB 모델:** `proxy_hosts.proxy_type='stream'` + `stream_listen_host/port/protocol` + `stream_ssl_preread`, `stream_accept_proxy_protocol`, `stream_send_proxy_protocol`, `stream_proxy_connect_timeout`, `stream_proxy_timeout`
+- **Nginx config:** `/etc/nginx/stream.d/stream_host_*.conf` (HTTP `conf.d`와 별도). main `nginx.conf`가 `include /etc/nginx/stream.d/*.conf` + 전용 `log_format stream_main`
+- **포트 충돌 방어 (CRITICAL):** DB partial unique index `idx_proxy_hosts_stream_listener_unique` (proxy_type=stream + enabled=true + port>0) — 동시 생성 TOCTOU race도 차단
+- **UDP+ssl_preread:** ssl_preread는 TCP 전용 nginx directive. service 레이어 자동 reset + template 가드 양쪽으로 nginx -t 실패 방지
+- **listener conflict:** HTTP 409 반환 (`stream listener conflict: [...]`) — handler가 `already exist` + `listener conflict` 두 패턴 매핑
+- **보안 범위 (L4):** ModSecurity/exploit/bot/URI/rate limit/access list는 stream에 **적용 불가** (HTTP 전용). IP 기반 차단(banned_ips)은 stream에도 자동 주입 (`include /etc/nginx/includes/banned_ips*.conf;`). UI BasicTab에 boundary 안내 inline notice
+- **테스트 SSRF 방어:** stream tester의 `target_url`은 호스트의 listener port + allowlisted host (configured StreamListenHost, proxy host, loopback)만 허용. 내부 DB/Valkey 포트로의 SSRF 차단
+- **로깅:** `/var/log/nginx/stream_access.log` + `stream_error.log`에 기록. LogCollector의 stream 트래픽 DB 수집은 follow-up
+- **Backup sync:** model/backup.go + repository/backup_export_proxy.go + repository/backup_import_proxy.go 3-way 동기화 적용
 
 ---
 
