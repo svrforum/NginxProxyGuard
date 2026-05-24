@@ -48,6 +48,20 @@ server {
         try_files $uri =404;
     }
 
+    # Internal pipeline canary (PipelineCanary service). Returns 204, internal
+    # only. Deliberately declares NO access_log so it inherits the http-level
+    # 00-raw-logging.conf directive — i.e. it logs to access_raw.log IFF real
+    # traffic does. If raw logging is broken the canary correctly fails too.
+    location = /__npg_canary {
+        allow 127.0.0.1;
+        allow ::1;
+        allow 172.16.0.0/12;
+        allow 192.168.0.0/16;
+        allow 10.0.0.0/8;
+        deny all;
+        return 204;
+    }
+
     # Custom error pages
     error_page 403 /403.html;
     error_page 502 /502.html;
