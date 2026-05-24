@@ -103,6 +103,21 @@ export class APIHelper {
   }
 
   /**
+   * Expose the current bearer token for specs that need to call endpoints
+   * outside the helper's wrapper methods (e.g. /health/detailed).
+   * Auto-logs in on first call so the spec can use it directly.
+   */
+  async getToken(): Promise<string> {
+    if (!this.token) {
+      await this.login();
+    }
+    if (!this.token) {
+      throw new Error('getToken: login did not produce a token');
+    }
+    return this.token;
+  }
+
+  /**
    * Logout and clear token.
    */
   async logout(): Promise<void> {

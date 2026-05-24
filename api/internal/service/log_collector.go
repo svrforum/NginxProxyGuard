@@ -189,6 +189,17 @@ type LogCollector struct {
 	trustedIPs       map[string]bool   // exact IP -> true
 	trustedCIDRs     []string          // CIDR ranges
 	trustedIPsTime   time.Time
+
+	// Verbose per-line logging. Default off — on a busy server the previous
+	// always-on DEBUG lines flooded the API container log. Enable with
+	// LOG_COLLECTOR_DEBUG=1 for local diagnostics.
+	debugLog bool
+
+	// Boot probe: if no flush has happened within bootProbeTimeout after
+	// Start(), emit a single explicit warning. Surfaces silent failures
+	// where the file-tail source has no content (issue #141/#145 pattern).
+	startedAt        time.Time
+	bootProbeWarned  atomic.Bool
 }
 
 func NewLogCollector(logRepo *repository.LogRepository, nginxContainer string, accessLogPath string, geoIP *GeoIPService, redisCache *cache.RedisClient) *LogCollector {
@@ -208,6 +219,7 @@ func NewLogCollector(logRepo *repository.LogRepository, nginxContainer string, a
 		stopCh:         make(chan struct{}),
 		domainCache:    make(map[string]string),
 		useRedisBuffer: useRedis,
+		debugLog:       os.Getenv("LOG_COLLECTOR_DEBUG") == "1",
 	}
 }
 
@@ -359,6 +371,7 @@ func (c *LogCollector) getHostIDByDomain(ctx context.Context, domain string) str
 
 func (c *LogCollector) Start(ctx context.Context) {
 	log.Println("Starting log collector...")
+	c.startedAt = time.Now()
 
 	// Check Redis buffer status
 	if c.useRedisBuffer {
@@ -378,7 +391,42 @@ func (c *LogCollector) Start(ctx context.Context) {
 	go c.streamModSecLogs(ctx)
 	go c.streamErrorLogs(ctx)
 
+	// Boot probe: warn explicitly if no log has been flushed within
+	// bootProbeTimeout. The earlier "no logs" failures (#141/#144/#145) were
+	// silent for days; this surfaces them within a minute so operators see
+	// the actionable signal in API container logs and /health/detailed.
+	go c.runBootProbe(ctx)
+
 	log.Println("Log collector started")
+}
+
+// runBootProbe emits a single explicit warning if no log row has been flushed
+// within the boot probe window. Trigger is intentionally generous (60s) so a
+// genuinely idle server doesn't false-alarm; the warning's wording points the
+// operator at the exact files/env to check.
+func (c *LogCollector) runBootProbe(ctx context.Context) {
+	const bootProbeTimeout = 60 * time.Second
+	select {
+	case <-ctx.Done():
+		return
+	case <-c.stopCh:
+		return
+	case <-time.After(bootProbeTimeout):
+	}
+	if c.LastFlushUnix() != 0 {
+		return // we did flush something — silent failure ruled out
+	}
+	if c.bootProbeWarned.Swap(true) {
+		return // someone else already warned
+	}
+	configured := c.accessLogPath
+	actual := c.AccessLogPathActual()
+	log.Printf("[LogCollector] WARN: no logs flushed in %s after start — likely silent failure. "+
+		"Check (1) nginx is generating /etc/nginx/logs/access_raw.log (system_settings.raw_log_enabled must be true), "+
+		"(2) NGINX_ACCESS_LOG env points to that path (currently configured=%q actual=%q), "+
+		"(3) for ModSec/error: docker logs RPC reachable. "+
+		"Also see /api/v1/health/detailed for the same info.",
+		bootProbeTimeout, configured, actual)
 }
 
 func (c *LogCollector) Stop() {
@@ -691,8 +739,13 @@ func (c *LogCollector) handleAccessLine(ctx context.Context, line string) {
 }
 
 // handleModSecLine processes a single ModSec audit JSON line.
+// Two DEBUG log lines used to run for every audit line; on a busy server they
+// flooded the API container log. They're now gated behind LOG_COLLECTOR_DEBUG
+// so production stays quiet while local debugging can still opt in.
 func (c *LogCollector) handleModSecLine(ctx context.Context, line string) {
-	log.Printf("[DEBUG] Detected ModSec JSON log (len=%d)", len(line))
+	if c.debugLog {
+		log.Printf("[DEBUG] Detected ModSec JSON log (len=%d)", len(line))
+	}
 	logReq, err := c.parseModSecLog(line)
 	if err != nil {
 		if !strings.Contains(err.Error(), "no WAF rules triggered") {
@@ -705,7 +758,9 @@ func (c *LogCollector) handleModSecLine(ctx context.Context, line string) {
 		}
 		return
 	}
-	log.Printf("[DEBUG] Successfully parsed ModSec log: rule=%d, type=%s", logReq.RuleID, logReq.AttackType)
+	if c.debugLog {
+		log.Printf("[DEBUG] Successfully parsed ModSec log: rule=%d, type=%s", logReq.RuleID, logReq.AttackType)
+	}
 	c.addLog(*logReq)
 
 	// Notify WAF auto-ban service (only for blocked requests, not logged/detection mode).
@@ -1060,6 +1115,12 @@ func (c *LogCollector) AccessLogPathActual() string {
 		return v
 	}
 	return ""
+}
+
+// HasBootProbeFired reports whether the boot probe has emitted its silent-
+// failure warning. Used by /health/detailed to surface the same signal.
+func (c *LogCollector) HasBootProbeFired() bool {
+	return c.bootProbeWarned.Load()
 }
 
 // LastFlushUnix returns the unix timestamp (seconds) of the last successful

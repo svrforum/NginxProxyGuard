@@ -87,6 +87,11 @@ type detailedLogCollectorInfo struct {
 	FallbackActive          bool   `json:"fallback_active"`
 	LastFlushAt             string `json:"last_flush_at,omitempty"`
 	LastFlushSecondsAgo     int64  `json:"last_flush_seconds_ago"`
+	// NoFlushSinceStart is true when LogCollector has been running for more
+	// than its boot probe window (60s) without flushing a single log row.
+	// Surfaces silent-failure scenarios (#141/#144/#145 family) so monitors
+	// and the UI can warn instead of showing an empty log table.
+	NoFlushSinceStart bool `json:"no_flush_since_start"`
 }
 
 type detailedNginxInfo struct {
@@ -180,6 +185,9 @@ func (h *HealthDetailedHandler) logInfo() *detailedLogCollectorInfo {
 		t := time.Unix(ts, 0)
 		info.LastFlushAt = t.Format(time.RFC3339)
 		info.LastFlushSecondsAgo = int64(time.Since(t).Seconds())
+	} else if h.logCollect.HasBootProbeFired() {
+		// Boot probe has tripped (no flush in 60s after start) — surface it.
+		info.NoFlushSinceStart = true
 	}
 	return info
 }

@@ -33,6 +33,17 @@ type StatsCollector struct {
 	lastLogPosition int64
 	mu              sync.Mutex
 	stopCh          chan struct{}
+
+	// nginx_status fetch failure backoff state. Without this, a misconfigured
+	// host.docker.internal env (typical on plain Linux Docker without
+	// extra_hosts: host-gateway) caused a 30s error-log flood that buried
+	// real signal. We now warn once with a remediation hint, then quietly
+	// retry with exponential backoff up to nginxStatusMaxBackoff.
+	statusFailCount    int
+	statusNextAttempt  time.Time
+	statusWarnedOnce   bool
+	nginxStatusBackoffBase time.Duration
+	nginxStatusMaxBackoff  time.Duration
 }
 
 type NginxStatus struct {
@@ -82,6 +93,12 @@ func NewStatsCollector(db *sql.DB, nginxStatusURL, accessLogPath string) *StatsC
 		nginxStatusURL: nginxStatusURL,
 		accessLogPath:  accessLogPath,
 		stopCh:         make(chan struct{}),
+		// Backoff starts at 30s (= the collect interval, so we skip exactly
+		// one cycle on first failure) and caps at 30 minutes — long enough
+		// to be quiet, short enough that an operator fixing the env sees
+		// recovery within a reasonable wait.
+		nginxStatusBackoffBase: 30 * time.Second,
+		nginxStatusMaxBackoff:  30 * time.Minute,
 	}
 }
 
@@ -119,12 +136,14 @@ func (sc *StatsCollector) collectStats() {
 
 	log.Println("[StatsCollector] Collecting stats...")
 
-	// 1. Collect Nginx status
-	nginxStatus, err := sc.getNginxStatus()
+	// 1. Collect Nginx status — with backoff on repeated failure (issue #146).
+	//    Skip the HTTP call entirely while we're still within the backoff
+	//    window, so we don't generate a "Failed to get nginx status" line
+	//    every 30 seconds on environments where the URL is unreachable.
+	nginxStatus, err := sc.getNginxStatusWithBackoff()
 	if err != nil {
-		log.Printf("[StatsCollector] Failed to get nginx status: %v", err)
 		nginxStatus = NginxStatus{ActiveConnections: -1} // Mark as failed
-	} else {
+	} else if nginxStatus.ActiveConnections >= 0 {
 		log.Printf("[StatsCollector] Nginx status: connections=%d, reading=%d, writing=%d, waiting=%d",
 			nginxStatus.ActiveConnections, nginxStatus.Reading, nginxStatus.Writing, nginxStatus.Waiting)
 	}
@@ -139,6 +158,37 @@ func (sc *StatsCollector) collectStats() {
 
 	log.Printf("[StatsCollector] Stats collected: requests=%d, nginx_connections=%d",
 		stats.TotalRequests, nginxStatus.ActiveConnections)
+}
+
+// getNginxStatusWithBackoff wraps getNginxStatus with first-failure warn +
+// exponential backoff. On success it resets the failure counter so a brief
+// network blip doesn't permanently suppress logging. See issue #146.
+func (sc *StatsCollector) getNginxStatusWithBackoff() (NginxStatus, error) {
+	if !sc.statusNextAttempt.IsZero() && time.Now().Before(sc.statusNextAttempt) {
+		return NginxStatus{}, fmt.Errorf("skipped (backoff until %s)", sc.statusNextAttempt.Format(time.RFC3339))
+	}
+	status, err := sc.getNginxStatus()
+	if err == nil {
+		if sc.statusFailCount > 0 {
+			log.Printf("[StatsCollector] nginx_status recovered after %d failures", sc.statusFailCount)
+		}
+		sc.statusFailCount = 0
+		sc.statusNextAttempt = time.Time{}
+		sc.statusWarnedOnce = false
+		return status, nil
+	}
+	sc.statusFailCount++
+	// Compute the next attempt: 30s, 60s, 2m, 4m, 8m, ..., capped.
+	backoff := sc.nginxStatusBackoffBase * (1 << (sc.statusFailCount - 1))
+	if backoff > sc.nginxStatusMaxBackoff || backoff <= 0 {
+		backoff = sc.nginxStatusMaxBackoff
+	}
+	sc.statusNextAttempt = time.Now().Add(backoff)
+	if !sc.statusWarnedOnce {
+		log.Printf("[StatsCollector] nginx_status unreachable at %s (%v). Active-connection metrics will be unavailable. Set NGINX_STATUS_URL or add `extra_hosts: host.docker.internal:host-gateway` to your docker-compose for the api service. Suppressing further messages until recovery.", sc.nginxStatusURL, err)
+		sc.statusWarnedOnce = true
+	}
+	return status, err
 }
 
 func (sc *StatsCollector) getNginxStatus() (NginxStatus, error) {
