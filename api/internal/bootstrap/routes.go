@@ -173,6 +173,7 @@ func registerProtectedAuthRoutes(v1 *echo.Group, c *Container) {
 	protected.PUT("/auth/font", c.Handlers.Auth.SetFontFamily)
 
 	protected.GET("/health/detailed", c.Handlers.HealthDetailed.GetDetailed)
+	protected.POST("/health/canary", c.Handlers.HealthDetailed.RunCanary)
 
 	protected.GET("/status", func(ec echo.Context) error {
 		dbStatus := config.StatusOK

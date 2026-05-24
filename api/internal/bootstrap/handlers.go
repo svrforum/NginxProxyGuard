@@ -84,7 +84,7 @@ func InitHandlers(
 	h.FilterSubscription = handler.NewFilterSubscriptionHandler(svcs.FilterSubscription, svcs.Audit)
 	h.Swagger = handler.NewSwaggerHandler()
 	h.Metrics = handler.NewMetricsHandler()
-	h.HealthDetailed = handler.NewHealthDetailedHandler(repos.HealthDetailed, svcs.LogCollector, redisCache, repos.ProxyHost, repos.GlobalSettings)
+	h.HealthDetailed = handler.NewHealthDetailedHandler(repos.HealthDetailed, svcs.LogCollector, redisCache, repos.ProxyHost, repos.GlobalSettings, svcs.PipelineCanary, svcs.StatsCollector)
 
 	return h
 }

@@ -25,6 +25,8 @@ type HealthDetailedHandler struct {
 	redis       *cache.RedisClient
 	proxyRepo   *repository.ProxyHostRepository
 	settingsRepo *repository.GlobalSettingsRepository
+	canary      *service.PipelineCanary
+	stats       *service.StatsCollector
 }
 
 func NewHealthDetailedHandler(
@@ -33,6 +35,8 @@ func NewHealthDetailedHandler(
 	redis *cache.RedisClient,
 	proxyRepo *repository.ProxyHostRepository,
 	settingsRepo *repository.GlobalSettingsRepository,
+	canary *service.PipelineCanary,
+	stats *service.StatsCollector,
 ) *HealthDetailedHandler {
 	return &HealthDetailedHandler{
 		startedAt:    time.Now(),
@@ -41,6 +45,8 @@ func NewHealthDetailedHandler(
 		redis:        redis,
 		proxyRepo:    proxyRepo,
 		settingsRepo: settingsRepo,
+		canary:       canary,
+		stats:        stats,
 	}
 }
 
@@ -92,6 +98,14 @@ type detailedLogCollectorInfo struct {
 	// Surfaces silent-failure scenarios (#141/#144/#145 family) so monitors
 	// and the UI can warn instead of showing an empty log table.
 	NoFlushSinceStart bool `json:"no_flush_since_start"`
+
+	AccessLastFlushSecondsAgo int64  `json:"access_last_flush_seconds_ago"`
+	ModsecLastFlushSecondsAgo int64  `json:"modsec_last_flush_seconds_ago"`
+	ErrorLastFlushSecondsAgo  int64  `json:"error_last_flush_seconds_ago"`
+	PipelineStatus            string `json:"pipeline_status"`
+	CanaryFailureStage        string `json:"canary_failure_stage,omitempty"`
+	LastCanaryAt              string `json:"last_canary_at,omitempty"`
+	NginxStatusReachable      bool   `json:"nginx_status_reachable"`
 }
 
 type detailedNginxInfo struct {
@@ -116,6 +130,18 @@ func (h *HealthDetailedHandler) GetDetailed(c echo.Context) error {
 		NginxTuning:   h.tuningInfo(ctx),
 	}
 	return c.JSON(http.StatusOK, resp)
+}
+
+// RunCanary forces a synchronous pipeline canary run. Useful for operators
+// ("test my logging now") and for deterministic e2e assertions.
+func (h *HealthDetailedHandler) RunCanary(c echo.Context) error {
+	if h.canary == nil {
+		return c.JSON(http.StatusServiceUnavailable, map[string]string{"error": "canary not enabled"})
+	}
+	ctx, cancel := context.WithTimeout(c.Request().Context(), 20*time.Second)
+	defer cancel()
+	ok, stage := h.canary.RunOnce(ctx)
+	return c.JSON(http.StatusOK, map[string]any{"ok": ok, "stage": stage})
 }
 
 func (h *HealthDetailedHandler) tuningInfo(ctx context.Context) *detailedNginxTuningInfo {
@@ -188,6 +214,30 @@ func (h *HealthDetailedHandler) logInfo() *detailedLogCollectorInfo {
 	} else if h.logCollect.HasBootProbeFired() {
 		// Boot probe has tripped (no flush in 60s after start) — surface it.
 		info.NoFlushSinceStart = true
+	}
+
+	now := time.Now()
+	if a := h.logCollect.AccessLastFlushUnix(); a > 0 {
+		info.AccessLastFlushSecondsAgo = int64(now.Sub(time.Unix(a, 0)).Seconds())
+	}
+	if m := h.logCollect.ModsecLastFlushUnix(); m > 0 {
+		info.ModsecLastFlushSecondsAgo = int64(now.Sub(time.Unix(m, 0)).Seconds())
+	}
+	if e := h.logCollect.ErrorLastFlushUnix(); e > 0 {
+		info.ErrorLastFlushSecondsAgo = int64(now.Sub(time.Unix(e, 0)).Seconds())
+	}
+	if h.canary != nil {
+		status, stage, lastRun, _ := h.canary.Snapshot()
+		info.PipelineStatus = status
+		info.CanaryFailureStage = stage
+		if !lastRun.IsZero() {
+			info.LastCanaryAt = lastRun.Format(time.RFC3339)
+		}
+	} else {
+		info.PipelineStatus = "unknown"
+	}
+	if h.stats != nil {
+		info.NginxStatusReachable = h.stats.NginxStatusReachable()
 	}
 	return info
 }

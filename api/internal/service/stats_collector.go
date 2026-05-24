@@ -130,6 +130,15 @@ func (sc *StatsCollector) Stop() {
 	close(sc.stopCh)
 }
 
+// NginxStatusReachable reports whether the last nginx_status fetch succeeded.
+// Used by /health/detailed to surface issue #146 (host.docker.internal /
+// extra_hosts misconfig) without auto-healing it.
+func (sc *StatsCollector) NginxStatusReachable() bool {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	return sc.statusFailCount == 0
+}
+
 func (sc *StatsCollector) collectStats() {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
