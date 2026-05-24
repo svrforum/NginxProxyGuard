@@ -390,6 +390,7 @@ Protected: APITokenAuth → AuthMiddleware → Handler
 | GeoIPScheduler | 설정 | MaxMind DB 자동 업데이트 |
 | DockerLogCollector | 실시간 | Docker 컨테이너 로그 수집 |
 | FilterRefreshScheduler | 사용자 지정 | 필터 구독 주기적 갱신 |
+| PipelineCanary | 5분 (기본) | access 로그 파이프라인 종단 무결성 검증 (§8.16) |
 
 ### 2.11 Key Constants
 
@@ -1013,7 +1014,8 @@ system_log_level: 'debug','info','warn','error','fatal'
 |--------|------|-------------|
 | GET | `/api/v1/dashboard` | 대시보드 요약 |
 | GET | `/api/v1/dashboard/health(/history)` | 시스템 헬스 |
-| GET | `/api/v1/health/detailed` | 진단용 상세 health (DB compression, LogCollector fallback 등) |
+| GET | `/api/v1/health/detailed` | 진단용 상세 health (DB compression, LogCollector fallback, 파이프라인 카나리아 등) |
+| POST | `/api/v1/health/canary` | 동기 파이프라인 카나리아 1회 강제 실행 → `{ok, stage}` (운영자/e2e) |
 | GET | `/api/v1/dashboard/stats/hourly` | 시간별 통계 |
 | GET | `/api/v1/dashboard/containers` | Docker 상태 |
 | GET | `/api/v1/docker/containers` | Docker 컨테이너 목록 |
@@ -1262,6 +1264,20 @@ Restore (2-phase):
 - **테스트 SSRF 방어:** stream tester의 `target_url`은 호스트의 listener port + allowlisted host (configured StreamListenHost, proxy host, loopback)만 허용. 내부 DB/Valkey 포트로의 SSRF 차단
 - **로깅:** `/var/log/nginx/stream_access.log` + `stream_error.log`에 기록. LogCollector의 stream 트래픽 DB 수집은 follow-up
 - **Backup sync:** model/backup.go + repository/backup_export_proxy.go + repository/backup_import_proxy.go 3-way 동기화 적용
+
+### 8.16 Log Pipeline Canary (종단 무결성)
+
+> 설계 명세: `docs/superpowers/specs/2026-05-24-log-pipeline-integrity-canary-design.md`
+
+- **문제:** access 로그 파이프라인(nginx write → file-tail → parse → batch insert → 조회)은 다링크 사슬이고, 각 링크가 조용히(silent) 끊기는 단일 장애점. 동일 계열 고장이 매 릴리스마다 다른 링크에서 재발(#141/#144/#145/#146).
+- **PipelineCanary** (`service/pipeline_canary.go`): 백그라운드 고루틴. 주기적으로 내부 nginx location `GET /__npg_canary?n=<nonce>` 을 쏘고, **그 행이 deadline 내 `logs_partitioned` 에 도착**하는지 확인 → 통과 = 사슬 전체 정상. 미도착 시 access 파일을 중간 체크포인트로 고장 단계 국소화. **감지 전용** (auto-heal은 Phase 2 계획; `healer` 콜백은 미연결).
+  - **Env knobs:** `NPG_CANARY_INTERVAL` (기본 5m), `NPG_CANARY_BOOT_DELAY` (기본 20s), `NPG_CANARY_DEADLINE` (기본 10s), `NGINX_CANARY_URL` (override; 기본은 `NGINX_STATUS_URL` 의 host:port + path `/__npg_canary` 로 유도 — StatsCollector와 동일 도달성).
+  - **Failure stages:** `nginx_unreachable` (nginx 미도달) · `nginx_write` (access_raw.log에 미기록) · `path_mismatch` (tail이 nginx가 쓰는 파일과 다른 파일 읽음) · `tail_stalled` (파일엔 있으나 tail 미진행) · `db_insert` (tail은 읽었으나 행이 DB 미도착).
+- **Nginx location** (`nginx/default_server_config.go`, `zzz_default.conf` default server): `location = /__npg_canary` — 내부 전용(private CIDR allow + deny all), `return 204`. **의도적으로 `access_log` 미선언** → http-level `00-raw-logging.conf` 디렉티브 상속 = 실제 트래픽과 동일 경로로 `access_raw.log` 기록(raw_log OFF면 카나리아도 같이 실패, 충실).
+- **Per-stream flush 추적:** `LogCollector` 가 access/modsec/error **스트림별로** last-flush를 분리 기록(`accessLastFlush`/`modsecLastFlush`/`errorLastFlush`). 부트 프로브가 **ACCESS 스트림 전용** 신호(`AccessLastFlushUnix()`)를 검사 — 이전엔 공유 타임스탬프라 WAF/error 트래픽이 죽은 access 스트림을 가렸음(#141/#145 재발 원인).
+- **`/api/v1/health/detailed`** `log_collector` 블록 신규 필드: `pipeline_status` (healthy|broken|unknown) · `canary_failure_stage` · `last_canary_at` · `access_last_flush_seconds_ago` · `modsec_last_flush_seconds_ago` · `error_last_flush_seconds_ago` · `nginx_status_reachable`.
+- **`POST /api/v1/health/canary`** (인증 필요): 동기 카나리아 1회 강제 실행, `{"ok":<bool>,"stage":<string>}` 반환. 운영자("지금 내 로깅 테스트") + e2e 용.
+- **통계/로그 제외:** 카나리아 자가검증 행은 `request_uri` prefix `/__npg_canary` 로 사용자 노출 로그(`/api/v1/logs`, `repository/log.go`) 및 대시보드 집계(`service/stats_collector.go`)에서 제외 → 통계 오염 방지.
 
 ---
 
