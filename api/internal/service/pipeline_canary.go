@@ -39,6 +39,10 @@ type PipelineCanary struct {
 	// optional heal hook, wired in Phase 2 (nil = detection only)
 	healer func(ctx context.Context, stage string) error
 
+	healMu          sync.Mutex // in-flight guard: at most one heal at a time
+	healAttempts    int        // attempts in the current window (guarded by mu)
+	healWindowStart time.Time  // start of the current heal window (guarded by mu)
+
 	stopCh chan struct{}
 }
 
@@ -56,8 +60,13 @@ func NewPipelineCanary(canaryURL string, logRepo *repository.LogRepository, coll
 	}
 }
 
-// SetHealer wires the Phase 2 auto-heal callback. Safe to leave unset.
-func (p *PipelineCanary) SetHealer(fn func(ctx context.Context, stage string) error) { p.healer = fn }
+// SetHealer wires the auto-heal callback. Lock-guarded so it composes with the
+// canary's running goroutine; intended to be called once at wiring time.
+func (p *PipelineCanary) SetHealer(fn func(ctx context.Context, stage string) error) {
+	p.mu.Lock()
+	p.healer = fn
+	p.mu.Unlock()
+}
 
 func envDuration(key string, def time.Duration) time.Duration {
 	if v := os.Getenv(key); v != "" {
@@ -72,6 +81,27 @@ func newNonce() string {
 	b := make([]byte, 8)
 	_, _ = rand.Read(b)
 	return "npgc" + hex.EncodeToString(b)
+}
+
+const (
+	healMaxAttempts = 3
+	healWindow      = 30 * time.Minute
+)
+
+// canHeal reports whether an auto-heal attempt is allowed for stage, given the
+// attempts already made in the current window. Pure, for testability. Only the
+// three nginx/tail-side stages are auto-healable; db_insert and
+// nginx_unreachable must escalate.
+func canHeal(stage string, attempts int, windowStart, now time.Time) bool {
+	switch stage {
+	case "nginx_write", "path_mismatch", "tail_stalled":
+	default:
+		return false
+	}
+	if now.Sub(windowStart) > healWindow {
+		return true // window elapsed → fresh budget
+	}
+	return attempts < healMaxAttempts
 }
 
 // classifyCanaryFailure maps observed pipeline conditions to a failure stage.
@@ -134,11 +164,7 @@ func (p *PipelineCanary) RunOnce(ctx context.Context) (bool, string) {
 	if !ok {
 		stage = p.localize(reachable, nonce)
 		log.Printf("[PipelineCanary] WARN: pipeline broken at stage=%q (nonce=%s target=%s). See /api/v1/health/detailed.", stage, nonce, p.canaryURL)
-		if p.healer != nil {
-			if err := p.healer(ctx, stage); err != nil {
-				log.Printf("[PipelineCanary] heal attempt for stage=%q failed: %v", stage, err)
-			}
-		}
+		p.attemptHeal(ctx, stage)
 	} else if p.statusSnapshot() != "healthy" {
 		log.Printf("[PipelineCanary] pipeline recovered (healthy)")
 	}
@@ -149,11 +175,50 @@ func (p *PipelineCanary) RunOnce(ctx context.Context) (bool, string) {
 	p.failureStage = stage
 	if ok {
 		p.status = "healthy"
+		p.healAttempts = 0
+		p.healWindowStart = time.Time{}
 	} else {
 		p.status = "broken"
 	}
 	p.mu.Unlock()
 	return ok, stage
+}
+
+// attemptHeal runs the healer for a broken stage under the retry budget and the
+// in-flight guard. It does NOT re-probe inline — the next scheduled (or manual)
+// probe verifies recovery and resets the budget. Heal actions reuse fail-safe
+// paths (nginx -t before reload), so a failed action leaves prior config intact.
+func (p *PipelineCanary) attemptHeal(ctx context.Context, stage string) {
+	if !p.healMu.TryLock() {
+		return // a heal is already in progress
+	}
+	defer p.healMu.Unlock()
+
+	p.mu.Lock()
+	healer := p.healer
+	now := time.Now()
+	if p.healWindowStart.IsZero() || now.Sub(p.healWindowStart) > healWindow {
+		p.healWindowStart = now
+		p.healAttempts = 0
+	}
+	allowed := healer != nil && canHeal(stage, p.healAttempts, p.healWindowStart, now)
+	if allowed {
+		p.healAttempts++
+	}
+	attempts := p.healAttempts
+	p.mu.Unlock()
+
+	if healer == nil {
+		return // detection only (no healer wired)
+	}
+	if !allowed {
+		log.Printf("[PipelineCanary] auto-heal NOT attempted for stage=%q (attempts=%d/%d in window, or not healable) — escalating. Fix manually; see /api/v1/health/detailed.", stage, attempts, healMaxAttempts)
+		return
+	}
+	log.Printf("[PipelineCanary] auto-heal attempt %d/%d for stage=%q", attempts, healMaxAttempts, stage)
+	if err := healer(ctx, stage); err != nil {
+		log.Printf("[PipelineCanary] auto-heal for stage=%q failed: %v", stage, err)
+	}
 }
 
 func (p *PipelineCanary) fire(ctx context.Context, nonce string) bool {
