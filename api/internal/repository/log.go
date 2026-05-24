@@ -347,6 +347,10 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 	args := []interface{}{}
 	argIndex := 1
 
+	// Always exclude canary self-test rows (internal pipeline diagnostics) from
+	// the user-facing logs list, regardless of any user filters.
+	conditions = append(conditions, "(request_uri NOT LIKE '/__npg_canary%' OR request_uri IS NULL)")
+
 	if filter != nil {
 		if filter.LogType != nil {
 			conditions = append(conditions, fmt.Sprintf("log_type = $%d", argIndex))

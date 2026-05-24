@@ -412,6 +412,20 @@ type AggregatedStats struct {
 	ErrorCount      int
 }
 
+const aggregateStatsQuery = `
+	SELECT status_code, body_bytes_sent, request_time, host, request_uri, COALESCE(block_reason, 'none')
+	FROM logs_partitioned
+	WHERE log_type = 'access'
+	  AND created_at > NOW() - INTERVAL '35 seconds'
+	  AND host IS NOT NULL
+	  AND host NOT IN ('localhost', 'nginx', '127.0.0.1', '', '_', '0.0.0.0')
+	  AND host NOT LIKE 'localhost:%'
+	  AND request_uri NOT IN ('/health', '/nginx_status')
+	  AND request_uri NOT LIKE '/__npg_canary%'
+	  AND request_uri NOT LIKE '/.well-known/%'
+	LIMIT 10000
+`
+
 // aggregateStatsFromDB queries logs table for nginx request stats
 func (sc *StatsCollector) aggregateStatsFromDB() AggregatedStats {
 	stats := AggregatedStats{
@@ -425,20 +439,7 @@ func (sc *StatsCollector) aggregateStatsFromDB() AggregatedStats {
 	// Query access logs from the last collection interval (30 seconds + buffer)
 	// Only include requests to actual proxy hosts (exclude internal like localhost, nginx)
 	// LIMIT 10000 to prevent unbounded memory growth during traffic spikes
-	query := `
-		SELECT status_code, body_bytes_sent, request_time, host, request_uri, COALESCE(block_reason, 'none')
-		FROM logs_partitioned
-		WHERE log_type = 'access'
-		  AND created_at > NOW() - INTERVAL '35 seconds'
-		  AND host IS NOT NULL
-		  AND host NOT IN ('localhost', 'nginx', '127.0.0.1', '', '_', '0.0.0.0')
-		  AND host NOT LIKE 'localhost:%'
-		  AND request_uri NOT IN ('/health', '/nginx_status')
-		  AND request_uri NOT LIKE '/.well-known/%'
-		LIMIT 10000
-	`
-
-	rows, err := sc.db.QueryContext(ctx, query)
+	rows, err := sc.db.QueryContext(ctx, aggregateStatsQuery)
 	if err != nil {
 		log.Printf("[StatsCollector] Failed to query logs: %v", err)
 		return stats
