@@ -268,7 +268,7 @@ func (h *SystemSettingsHandler) EnsureRawLogEnabled(ctx context.Context) error {
 
 // ForceEnableRawLog unconditionally re-applies raw-log config: it ensures the
 // DB flag is on AND always regenerates 00-raw-logging.conf, recreates
-// access_raw.log, and reloads nginx (nginx -t first, via ReloadNginx). Unlike
+// access_raw.log, and reloads nginx (nginx -t first, via TestAndReload). Unlike
 // EnsureRawLogEnabled (a boot no-op when the flag is already true), this always
 // re-applies — the pipeline-canary auto-heal needs it because the conf/file can
 // be missing even though the flag is true.
@@ -327,13 +327,13 @@ access_log /etc/nginx/logs/access_raw.log main buffer=64k flush=5s;
 		log.Printf("[RawLog] Raw logging disabled - nginx config removed")
 	}
 
-	// Reload nginx to apply changes
+	// Reload nginx to apply changes (nginx -t first, rollback on failure)
 	if h.nginxManager != nil {
 		ctx := context.Background()
-		if err := h.nginxManager.ReloadNginx(ctx); err != nil {
+		if err := h.nginxManager.TestAndReload(ctx); err != nil {
 			return fmt.Errorf("failed to reload nginx: %w", err)
 		}
-		log.Printf("[RawLog] Nginx reloaded successfully")
+		log.Printf("[RawLog] Nginx tested and reloaded successfully")
 	}
 
 	return nil
