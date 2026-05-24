@@ -174,6 +174,7 @@ type LogCollector struct {
 	bufferMu        sync.Mutex
 	flushMu         sync.Mutex // 동시 flush 방지
 	stopCh          chan struct{}
+	restartTail     chan struct{} // signals streamFileAccessLogs to re-resolve path + reopen
 	useRedisBuffer  bool         // Whether to use Redis for log buffering
 	lastFlushAt     atomic.Int64 // unix seconds of the last successful flush, for /health/detailed
 	accessLastFlush atomic.Int64 // unix sec of last access-log flush
@@ -220,6 +221,7 @@ func NewLogCollector(logRepo *repository.LogRepository, nginxContainer string, a
 		flushInterval:  1 * time.Second,
 		buffer:         make([]model.CreateLogRequest, 0, 500),
 		stopCh:         make(chan struct{}),
+		restartTail:    make(chan struct{}, 1),
 		domainCache:    make(map[string]string),
 		useRedisBuffer: useRedis,
 		debugLog:       os.Getenv("LOG_COLLECTOR_DEBUG") == "1",
@@ -438,6 +440,17 @@ func (c *LogCollector) Stop() {
 	c.flushInner(context.Background())
 	c.flushMu.Unlock()
 	log.Println("Log collector stopped")
+}
+
+// RestartTail asks the file-tail goroutine to re-resolve NGINX_ACCESS_LOG and
+// reopen the access log. Non-blocking and coalescing — used by the pipeline
+// auto-heal for path_mismatch / tail_stalled. No-op if the collector wasn't
+// constructed via NewLogCollector (nil channel).
+func (c *LogCollector) RestartTail() {
+	select {
+	case c.restartTail <- struct{}{}:
+	default: // a restart is already pending; coalesce
+	}
 }
 
 func (c *LogCollector) flushLoop(ctx context.Context) {
@@ -923,6 +936,17 @@ func (c *LogCollector) streamFileAccessLogs(ctx context.Context) {
 			return
 		case <-c.stopCh:
 			return
+		case <-c.restartTail:
+			// Re-resolve the source (env/path may have been corrected) and reopen
+			// from the end. tailPath is captured by the openTail closure.
+			newPath := c.resolveTailPath()
+			c.actualTailPath.Store(newPath)
+			tailPath = newPath
+			log.Printf("[LogCollector] file-tail restart requested — re-resolved to %s", tailPath)
+			if err := openTail(true); err != nil {
+				log.Printf("[LogCollector] file-tail reopen after restart failed: %v", err)
+			}
+			continue
 		default:
 		}
 
