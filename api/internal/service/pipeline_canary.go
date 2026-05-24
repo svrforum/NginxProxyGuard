@@ -297,3 +297,11 @@ func (p *PipelineCanary) Snapshot() (status, stage string, lastRunAt time.Time, 
 	defer p.mu.RUnlock()
 	return p.status, p.failureStage, p.lastRunAt, p.lastOK
 }
+
+// HealState returns the current-window heal attempt count and whether the
+// budget is exhausted (auto-heal has stopped and the pipeline is escalated).
+func (p *PipelineCanary) HealState() (attempts int, exhausted bool) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.healAttempts, p.healAttempts >= healMaxAttempts
+}

@@ -106,6 +106,8 @@ type detailedLogCollectorInfo struct {
 	CanaryFailureStage        string `json:"canary_failure_stage,omitempty"`
 	LastCanaryAt              string `json:"last_canary_at,omitempty"`
 	NginxStatusReachable      bool   `json:"nginx_status_reachable"`
+	AutoHealAttempts          int    `json:"auto_heal_attempts"`
+	AutoHealExhausted         bool   `json:"auto_heal_exhausted"`
 }
 
 type detailedNginxInfo struct {
@@ -233,6 +235,9 @@ func (h *HealthDetailedHandler) logInfo() *detailedLogCollectorInfo {
 		if !lastRun.IsZero() {
 			info.LastCanaryAt = lastRun.Format(time.RFC3339)
 		}
+		attempts, exhausted := h.canary.HealState()
+		info.AutoHealAttempts = attempts
+		info.AutoHealExhausted = exhausted
 	} else {
 		info.PipelineStatus = "unknown"
 	}
