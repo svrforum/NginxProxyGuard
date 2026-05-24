@@ -242,6 +242,9 @@ func (s *Services) StopBackgroundServices() {
 	if s.LogCollector != nil {
 		s.LogCollector.Stop()
 	}
+	if s.PipelineCanary != nil {
+		s.PipelineCanary.Stop()
+	}
 	if s.StatsCollector != nil {
 		s.StatsCollector.Stop()
 	}
