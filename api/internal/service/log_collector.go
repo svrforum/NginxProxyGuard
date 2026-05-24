@@ -159,24 +159,27 @@ func (m *BotMatcher) MatchBot(userAgent string) (string, bool) {
 }
 
 type LogCollector struct {
-	logRepo        *repository.LogRepository
-	proxyHostRepo  *repository.ProxyHostRepository
-	geoIP          *GeoIPService
-	wafAutoBan     *WAFAutoBanService
-	fail2ban       *Fail2banService
-	botMatcher     *BotMatcher
-	redisCache     *cache.RedisClient
-	nginxContainer string
-	accessLogPath  string // Path to nginx access_raw.log (file-tail source)
-	batchSize      int
-	flushInterval  time.Duration
-	buffer         []model.CreateLogRequest
-	bufferMu       sync.Mutex
-	flushMu        sync.Mutex // 동시 flush 방지
-	stopCh         chan struct{}
-	useRedisBuffer bool         // Whether to use Redis for log buffering
-	lastFlushAt    atomic.Int64 // unix seconds of the last successful flush, for /health/detailed
-	actualTailPath atomic.Value // string, the resolved file-tail source (post-fallback)
+	logRepo         *repository.LogRepository
+	proxyHostRepo   *repository.ProxyHostRepository
+	geoIP           *GeoIPService
+	wafAutoBan      *WAFAutoBanService
+	fail2ban        *Fail2banService
+	botMatcher      *BotMatcher
+	redisCache      *cache.RedisClient
+	nginxContainer  string
+	accessLogPath   string // Path to nginx access_raw.log (file-tail source)
+	batchSize       int
+	flushInterval   time.Duration
+	buffer          []model.CreateLogRequest
+	bufferMu        sync.Mutex
+	flushMu         sync.Mutex // 동시 flush 방지
+	stopCh          chan struct{}
+	useRedisBuffer  bool         // Whether to use Redis for log buffering
+	lastFlushAt     atomic.Int64 // unix seconds of the last successful flush, for /health/detailed
+	accessLastFlush atomic.Int64 // unix sec of last access-log flush
+	modsecLastFlush atomic.Int64 // unix sec of last modsec flush
+	errorLastFlush  atomic.Int64 // unix sec of last error-log flush
+	actualTailPath  atomic.Value // string, the resolved file-tail source (post-fallback)
 
 	// Domain to host ID cache for Fail2ban
 	domainCacheMu    sync.RWMutex
@@ -413,8 +416,8 @@ func (c *LogCollector) runBootProbe(ctx context.Context) {
 		return
 	case <-time.After(bootProbeTimeout):
 	}
-	if c.LastFlushUnix() != 0 {
-		return // we did flush something — silent failure ruled out
+	if c.AccessLastFlushUnix() != 0 {
+		return // access logs did flush — the recurring silent failure is ruled out
 	}
 	if c.bootProbeWarned.Swap(true) {
 		return // someone else already warned
@@ -508,8 +511,17 @@ func (c *LogCollector) recordFlushedByType(logs []model.CreateLogRequest) {
 	for _, l := range logs {
 		byType[l.LogType]++
 	}
+	now := time.Now().Unix()
 	for t, n := range byType {
 		metrics.LogCollectorFlushedTotal.WithLabelValues(string(t)).Add(float64(n))
+		switch t {
+		case model.LogTypeAccess:
+			c.accessLastFlush.Store(now)
+		case model.LogTypeModSec:
+			c.modsecLastFlush.Store(now)
+		case model.LogTypeError:
+			c.errorLastFlush.Store(now)
+		}
 	}
 }
 
@@ -1128,3 +1140,7 @@ func (c *LogCollector) HasBootProbeFired() bool {
 func (c *LogCollector) LastFlushUnix() int64 {
 	return c.lastFlushAt.Load()
 }
+
+func (c *LogCollector) AccessLastFlushUnix() int64 { return c.accessLastFlush.Load() }
+func (c *LogCollector) ModsecLastFlushUnix() int64 { return c.modsecLastFlush.Load() }
+func (c *LogCollector) ErrorLastFlushUnix() int64  { return c.errorLastFlush.Load() }
