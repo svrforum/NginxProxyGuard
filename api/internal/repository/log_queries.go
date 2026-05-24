@@ -317,3 +317,20 @@ func (r *LogRepository) GetDistinctMethods(ctx context.Context) ([]string, error
 	}
 	return methods, nil
 }
+
+// CanaryRowExists reports whether a PipelineCanary nonce request has landed in
+// logs_partitioned since the given time. The nonce travels in the request URI
+// (/__npg_canary?n=<nonce>), so a positive result proves the full pipeline
+// (nginx write -> file-tail -> parse -> batch insert) is intact end to end.
+func (r *LogRepository) CanaryRowExists(ctx context.Context, nonce string, since time.Time) (bool, error) {
+	var exists bool
+	err := r.db.QueryRowContext(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM logs_partitioned
+			WHERE log_type = 'access'
+			  AND created_at > $1
+			  AND request_uri LIKE '%' || $2 || '%'
+			LIMIT 1
+		)`, since, nonce).Scan(&exists)
+	return exists, err
+}
