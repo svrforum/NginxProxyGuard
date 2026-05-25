@@ -406,23 +406,23 @@ func (sc *StatsCollector) parseCombinedLogLine(line string) (AccessLogEntry, err
 }
 
 type AggregatedStats struct {
-	TotalRequests   int64
+	TotalRequests int64
 	// TimedRequests counts requests whose request_time is a real latency
 	// measurement. WebSocket upgrades (HTTP 101) are excluded because their
 	// request_time is the connection lifetime, not latency. (GitHub Issue #148)
-	TimedRequests   int64
-	TotalBytes      int64
-	TotalTime       float64
-	Status2xx       int
-	Status3xx       int
-	Status4xx       int
-	Status5xx       int
-	WAFBlocked      int
-	RateLimited     int
-	BotBlocked      int
-	HostStats       map[string]int64
-	PathStats       map[string]int64
-	ErrorCount      int
+	TimedRequests int64
+	TotalBytes    int64
+	TotalTime     float64
+	Status2xx     int
+	Status3xx     int
+	Status4xx     int
+	Status5xx     int
+	WAFBlocked    int
+	RateLimited   int
+	BotBlocked    int
+	HostStats     map[string]int64
+	PathStats     map[string]int64
+	ErrorCount    int
 }
 
 // accumulateRow folds one access-log row into the aggregate. WebSocket upgrades
