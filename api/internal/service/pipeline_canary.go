@@ -232,7 +232,17 @@ func (p *PipelineCanary) fire(ctx context.Context, nonce string) bool {
 	}
 	_, _ = io.Copy(io.Discard, resp.Body)
 	_ = resp.Body.Close()
-	return resp.StatusCode > 0
+	// The /__npg_canary location returns 204. Any other status means the probe
+	// did not traverse the intended path — a 403 (API source IP outside the
+	// allowed private CIDRs), a 404 (location missing / config regressed), or a
+	// 5xx. Treat those as unreachable so they escalate as non-healable, rather
+	// than being misclassified as a downstream stage and triggering a heal
+	// (ForceEnableRawLog / RestartTail) that cannot fix the real fault.
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		log.Printf("[PipelineCanary] WARN: canary probe to %s returned HTTP %d (expected 204) — check the /__npg_canary location (allow <private CIDR> / deny all / config regression).", p.canaryURL, resp.StatusCode)
+		return false
+	}
+	return true
 }
 
 func (p *PipelineCanary) awaitRow(ctx context.Context, nonce string, since time.Time) bool {
@@ -271,6 +281,12 @@ func (p *PipelineCanary) localize(reachable bool, nonce string) string {
 func fileContainsRecent(path, needle string) bool {
 	f, err := os.Open(path)
 	if err != nil {
+		// A missing file is a legitimate "not present". Any other open error
+		// (e.g. EACCES after a logrotate create) would otherwise be silently
+		// read as "nginx didn't write the line" and mis-drive classification.
+		if !os.IsNotExist(err) {
+			log.Printf("[PipelineCanary] WARN: cannot open %s to check nonce (heal classification may be wrong): %v", path, err)
+		}
 		return false
 	}
 	defer f.Close()
@@ -280,6 +296,7 @@ func fileContainsRecent(path, needle string) bool {
 	}
 	data, err := io.ReadAll(f)
 	if err != nil {
+		log.Printf("[PipelineCanary] WARN: read error scanning %s for nonce (heal classification may be wrong): %v", path, err)
 		return false
 	}
 	return strings.Contains(string(data), needle)
