@@ -407,6 +407,10 @@ func (sc *StatsCollector) parseCombinedLogLine(line string) (AccessLogEntry, err
 
 type AggregatedStats struct {
 	TotalRequests   int64
+	// TimedRequests counts requests whose request_time is a real latency
+	// measurement. WebSocket upgrades (HTTP 101) are excluded because their
+	// request_time is the connection lifetime, not latency. (GitHub Issue #148)
+	TimedRequests   int64
 	TotalBytes      int64
 	TotalTime       float64
 	Status2xx       int
@@ -419,6 +423,49 @@ type AggregatedStats struct {
 	HostStats       map[string]int64
 	PathStats       map[string]int64
 	ErrorCount      int
+}
+
+// accumulateRow folds one access-log row into the aggregate. WebSocket upgrades
+// (HTTP 101) are counted as requests, but their request_time is the connection
+// lifetime — not latency — so they are excluded from the response-time average,
+// keeping a single long-lived socket from skewing avg_response_time. (Issue #148)
+func (stats *AggregatedStats) accumulateRow(statusCode int, bodyBytes int64, requestTime float64, host, uri, blockReason string) {
+	stats.TotalRequests++
+
+	switch {
+	case statusCode >= 200 && statusCode < 300:
+		stats.Status2xx++
+	case statusCode >= 300 && statusCode < 400:
+		stats.Status3xx++
+	case statusCode >= 400 && statusCode < 500:
+		stats.Status4xx++
+	case statusCode >= 500:
+		stats.Status5xx++
+		stats.ErrorCount++
+	}
+
+	switch blockReason {
+	case "waf":
+		stats.WAFBlocked++
+	case "rate_limit":
+		stats.RateLimited++
+	case "bot_filter":
+		stats.BotBlocked++
+	}
+
+	stats.TotalBytes += bodyBytes
+	// HTTP 101 = WebSocket upgrade; request_time is the connection lifetime.
+	if statusCode != 101 {
+		stats.TotalTime += requestTime // Already in seconds
+		stats.TimedRequests++
+	}
+
+	if host != "" {
+		stats.HostStats[host]++
+	}
+	if uri != "" {
+		stats.PathStats[uri]++
+	}
 }
 
 const aggregateStatsQuery = `
@@ -465,44 +512,7 @@ func (sc *StatsCollector) aggregateStatsFromDB() AggregatedStats {
 			continue
 		}
 
-		stats.TotalRequests++
-
-		// Categorize status code
-		switch {
-		case statusCode >= 200 && statusCode < 300:
-			stats.Status2xx++
-		case statusCode >= 300 && statusCode < 400:
-			stats.Status3xx++
-		case statusCode >= 400 && statusCode < 500:
-			stats.Status4xx++
-		case statusCode >= 500:
-			stats.Status5xx++
-			stats.ErrorCount++
-		}
-
-		// Count security blocks by reason
-		switch blockReason {
-		case "waf":
-			stats.WAFBlocked++
-		case "rate_limit":
-			stats.RateLimited++
-		case "bot_filter":
-			stats.BotBlocked++
-		}
-
-		// Accumulate bytes and time
-		stats.TotalBytes += bodyBytes
-		stats.TotalTime += requestTime // Already in seconds
-
-		// Track host stats
-		if host != "" {
-			stats.HostStats[host]++
-		}
-
-		// Track path stats
-		if uri != "" {
-			stats.PathStats[uri]++
-		}
+		stats.accumulateRow(statusCode, bodyBytes, requestTime, host, uri, blockReason)
 	}
 
 	return stats
@@ -515,28 +525,7 @@ func (sc *StatsCollector) aggregateStats(entries []AccessLogEntry) AggregatedSta
 	}
 
 	for _, e := range entries {
-		stats.TotalRequests++
-		stats.TotalBytes += e.BytesSent
-		stats.TotalTime += e.ResponseTime
-
-		switch {
-		case e.StatusCode >= 200 && e.StatusCode < 300:
-			stats.Status2xx++
-		case e.StatusCode >= 300 && e.StatusCode < 400:
-			stats.Status3xx++
-		case e.StatusCode >= 400 && e.StatusCode < 500:
-			stats.Status4xx++
-		case e.StatusCode >= 500:
-			stats.Status5xx++
-			stats.ErrorCount++
-		}
-
-		if e.Host != "" {
-			stats.HostStats[e.Host]++
-		}
-		if e.Path != "" {
-			stats.PathStats[e.Path]++
-		}
+		stats.accumulateRow(e.StatusCode, e.BytesSent, e.ResponseTime, e.Host, e.Path, "")
 	}
 
 	return stats
@@ -590,10 +579,11 @@ func (sc *StatsCollector) recordStats(nginxStatus NginxStatus, stats AggregatedS
 		return nil
 	}
 
-	// Calculate averages
+	// Calculate averages. Divide by TimedRequests (excludes WebSocket 101) so a
+	// long-lived socket's connection time cannot skew avg_response_time. (#148)
 	avgResponseTime := 0.0
-	if stats.TotalRequests > 0 {
-		avgResponseTime = stats.TotalTime / float64(stats.TotalRequests) * 1000 // Convert to ms
+	if stats.TimedRequests > 0 {
+		avgResponseTime = stats.TotalTime / float64(stats.TimedRequests) * 1000 // Convert to ms
 	}
 
 	// Upsert hourly stats for global (proxy_host_id IS NULL) bucket.
