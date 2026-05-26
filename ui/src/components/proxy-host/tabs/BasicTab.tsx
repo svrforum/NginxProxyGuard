@@ -33,8 +33,10 @@ export function BasicTabContent({
   const isStream = formData.proxy_type === 'stream'
   const streamProtocol = formData.stream_protocol || 'tcp'
 
-  const handleDockerSelect = (host: string, port: number) => {
-    setFormData(prev => ({ ...prev, forward_host: host }))
+  const handleDockerSelect = (host: string, port: number, containerName: string) => {
+    // Store the container NAME as the authoritative target (API re-resolves the
+    // name → current IP). Pre-fill forward_host with the resolved IP for display.
+    setFormData(prev => ({ ...prev, forward_host: host, forward_container_name: containerName }))
     setPortInput(port.toString())
   }
 
@@ -392,7 +394,9 @@ export function BasicTabContent({
                 type="text"
                 value={formData.forward_host}
                 onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, forward_host: e.target.value }))
+                  // Manual edit of the target clears any Docker container binding so
+                  // it is treated as a plain IP/FQDN target (non-regression).
+                  setFormData((prev) => ({ ...prev, forward_host: e.target.value, forward_container_name: undefined }))
                 }
                 placeholder={t('form.basic.forwardHostPlaceholder')}
                 className={`flex-1 rounded-lg border px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400 ${errors.forward_host ? 'border-red-300 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'}`}
@@ -411,6 +415,14 @@ export function BasicTabContent({
             </div>
             {errors.forward_host && (
               <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.forward_host}</p>
+            )}
+            {formData.forward_container_name && (
+              <p className="mt-1.5 inline-flex items-center gap-1.5 text-xs text-blue-700 dark:text-blue-300">
+                <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                </svg>
+                {t('form.basic.dockerContainerTarget', { name: formData.forward_container_name })}
+              </p>
             )}
           </div>
 

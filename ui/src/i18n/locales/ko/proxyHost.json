@@ -117,6 +117,7 @@
       "forwardScheme": "포워드 프로토콜",
       "dockerBrowse": "Docker 컨테이너 검색",
       "dockerBrowseShort": "Docker",
+      "dockerContainerTarget": "Docker 컨테이너: {{name}} (이름으로 자동 IP 갱신)",
       "websocket": "웹소켓 지원",
       "websocketDescription": "WebSocket 연결을 허용합니다"
     },

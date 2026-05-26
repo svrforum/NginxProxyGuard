@@ -5,7 +5,7 @@ import { fetchDockerContainers, type DockerContainerInfo } from '../../api/docke
 interface DockerContainerSelectorProps {
   isOpen: boolean
   onClose: () => void
-  onSelect: (host: string, port: number) => void
+  onSelect: (host: string, port: number, containerName: string) => void
 }
 
 export function DockerContainerSelector({ isOpen, onClose, onSelect }: DockerContainerSelectorProps) {
@@ -41,8 +41,8 @@ export function DockerContainerSelector({ isOpen, onClose, onSelect }: DockerCon
     c.image.toLowerCase().includes(search.toLowerCase())
   )
 
-  const handleSelect = (_container: DockerContainerInfo, networkIP: string, port?: number) => {
-    onSelect(networkIP, port || 80)
+  const handleSelect = (container: DockerContainerInfo, networkIP: string, port?: number) => {
+    onSelect(networkIP, port || 80, container.name)
     onClose()
   }
 

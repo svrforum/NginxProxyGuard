@@ -117,6 +117,7 @@
       "forwardScheme": "Forward Scheme",
       "dockerBrowse": "Browse Docker Containers",
       "dockerBrowseShort": "Docker",
+      "dockerContainerTarget": "Docker container: {{name}} (auto-resolved by name)",
       "websocket": "WebSocket Support",
       "websocketDescription": "Allow WebSocket connections"
     },
