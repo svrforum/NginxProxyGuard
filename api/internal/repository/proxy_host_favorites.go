@@ -14,7 +14,7 @@ func (r *ProxyHostRepository) ToggleFavorite(ctx context.Context, id string) (*m
 	query := `
 		UPDATE proxy_hosts SET is_favorite = NOT is_favorite
 		WHERE id = $1
-		RETURNING id, domain_names, forward_scheme, forward_host, forward_port,
+		RETURNING id, domain_names, forward_scheme, forward_host, forward_container_name, forward_port,
 			ssl_enabled, ssl_force_https, ssl_http2, ssl_http3, certificate_id,
 			allow_websocket_upgrade, cache_enabled,
 			COALESCE(cache_static_only, true) as cache_static_only,
@@ -35,6 +35,7 @@ func (r *ProxyHostRepository) ToggleFavorite(ctx context.Context, id string) (*m
 
 	var host model.ProxyHost
 	var certificateID, accessListID sql.NullString
+	var forwardContainerName sql.NullString
 	var customLocations, meta []byte
 
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
@@ -42,6 +43,7 @@ func (r *ProxyHostRepository) ToggleFavorite(ctx context.Context, id string) (*m
 		&host.DomainNames,
 		&host.ForwardScheme,
 		&host.ForwardHost,
+		&forwardContainerName,
 		&host.ForwardPort,
 		&host.SSLEnabled,
 		&host.SSLForceHTTPS,
@@ -84,6 +86,9 @@ func (r *ProxyHostRepository) ToggleFavorite(ctx context.Context, id string) (*m
 		return nil, fmt.Errorf("failed to toggle favorite: %w", err)
 	}
 
+	if forwardContainerName.Valid {
+		host.ForwardContainerName = &forwardContainerName.String
+	}
 	if certificateID.Valid {
 		host.CertificateID = &certificateID.String
 	}
