@@ -36,6 +36,11 @@ type CertificateCreator interface {
 	Create(ctx context.Context, req *model.CreateCertificateRequest) (*model.Certificate, error)
 }
 
+// ContainerResolver resolves a docker container name to its current IP. (#150)
+type ContainerResolver interface {
+	ResolveContainerIP(ctx context.Context, name string) (string, error)
+}
+
 type ProxyHostService struct {
 	repo                   *repository.ProxyHostRepository
 	wafRepo                *repository.WAFRepository
@@ -55,6 +60,7 @@ type ProxyHostService struct {
 	filterSubscriptionRepo *repository.FilterSubscriptionRepository
 	nginx                  NginxManager
 	certService            CertificateCreator // Optional: for creating certificates during clone
+	containerResolver      ContainerResolver  // Optional: resolves docker container name → IP (#150)
 }
 
 func NewProxyHostService(
@@ -102,6 +108,28 @@ func (s *ProxyHostService) SetCertificateService(certService CertificateCreator)
 
 func (s *ProxyHostService) SetFilterSubscriptionRepo(repo *repository.FilterSubscriptionRepository) {
 	s.filterSubscriptionRepo = repo
+}
+
+// SetContainerResolver injects the docker container → IP resolver. (#150)
+func (s *ProxyHostService) SetContainerResolver(r ContainerResolver) {
+	s.containerResolver = r
+}
+
+// applyContainerTarget resolves a container-name target to its current IP.
+// For non-container targets (nil/empty name) it returns forwardHost unchanged.
+// Resolution failure returns an "invalid ..." error so the handler maps it to 400. (#150)
+func (s *ProxyHostService) applyContainerTarget(ctx context.Context, containerName *string, forwardHost string) (string, error) {
+	if containerName == nil || *containerName == "" {
+		return forwardHost, nil
+	}
+	if s.containerResolver == nil {
+		return "", fmt.Errorf("invalid: container targets unavailable (no docker access)")
+	}
+	ip, err := s.containerResolver.ResolveContainerIP(ctx, *containerName)
+	if err != nil {
+		return "", fmt.Errorf("invalid forward container %q: %w", *containerName, err)
+	}
+	return ip, nil
 }
 
 func normalizeCreateProxyHostRequest(req *model.CreateProxyHostRequest) error {
@@ -295,6 +323,18 @@ func (s *ProxyHostService) prepareUpdateProxyHostRequest(ctx context.Context, id
 		return "", nil, err
 	}
 
+	// Resolve container-name target to its current IP before persisting (#150).
+	// Only fires when a non-empty container name is supplied; otherwise
+	// forward_host is left untouched (existing behavior preserved).
+	if req.ForwardContainerName != nil && *req.ForwardContainerName != "" {
+		resolvedForwardHost, resolveErr := s.applyContainerTarget(ctx, req.ForwardContainerName, req.ForwardHost)
+		if resolveErr != nil {
+			return "", nil, resolveErr
+		}
+		req.ForwardHost = resolvedForwardHost
+		candidate.ForwardHost = resolvedForwardHost
+	}
+
 	if candidate.ProxyType == model.ProxyTypeStream {
 		conflicts, err := s.repo.CheckStreamListenConflicts(ctx, candidate.DomainNames, candidate.StreamListenHost, candidate.StreamListenPort, candidate.StreamProtocol, candidate.StreamSSLPreread, id)
 		if err != nil {
@@ -414,6 +454,14 @@ func (s *ProxyHostService) Create(ctx context.Context, req *model.CreateProxyHos
 			}
 		}
 	}
+
+	// Resolve container-name target to its current IP before persisting (#150).
+	// Non-container requests leave forward_host unchanged.
+	resolvedForwardHost, err := s.applyContainerTarget(ctx, req.ForwardContainerName, req.ForwardHost)
+	if err != nil {
+		return nil, err
+	}
+	req.ForwardHost = resolvedForwardHost
 
 	// Create in database
 	host, err := s.repo.Create(ctx, req)

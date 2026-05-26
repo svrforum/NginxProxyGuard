@@ -52,16 +52,22 @@ func (h *ProxyHostHandler) Create(c echo.Context) error {
 			})
 		}
 	}
-	if req.ForwardHost == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "forward_host is required",
-		})
-	}
-	// Validate forward host (either domain or IP)
-	if !ValidateHostnameOrIP(req.ForwardHost) {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "invalid forward_host format",
-		})
+	// Container-name targets resolve forward_host server-side (#150); the
+	// container name lives in its own field and forward_host may be empty or a
+	// placeholder pre-resolution, so skip the hostname/IP validation for them.
+	isContainerTarget := req.ForwardContainerName != nil && *req.ForwardContainerName != ""
+	if !isContainerTarget {
+		if req.ForwardHost == "" {
+			return c.JSON(http.StatusBadRequest, map[string]string{
+				"error": "forward_host is required",
+			})
+		}
+		// Validate forward host (either domain or IP)
+		if !ValidateHostnameOrIP(req.ForwardHost) {
+			return c.JSON(http.StatusBadRequest, map[string]string{
+				"error": "invalid forward_host format",
+			})
+		}
 	}
 	if proxyType == model.ProxyTypeStream {
 		if !ValidatePort(req.ForwardPort) {
