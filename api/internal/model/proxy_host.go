@@ -194,9 +194,10 @@ type ProxyHost struct {
 	DomainNames pq.StringArray `json:"domain_names"`
 
 	// Forward configuration
-	ForwardScheme string `json:"forward_scheme"`
-	ForwardHost   string `json:"forward_host"`
-	ForwardPort   int    `json:"forward_port"`
+	ForwardScheme        string  `json:"forward_scheme"`
+	ForwardHost          string  `json:"forward_host"`
+	ForwardContainerName *string `json:"forward_container_name,omitempty"`
+	ForwardPort          int     `json:"forward_port"`
 
 	// Stream proxy configuration (TCP/UDP, generated under nginx stream{})
 	StreamListenHost          string `json:"stream_listen_host,omitempty"`
@@ -273,6 +274,7 @@ type CreateProxyHostRequest struct {
 	DomainNames               []string `json:"domain_names" validate:"required,min=1"`
 	ForwardScheme             string   `json:"forward_scheme"`
 	ForwardHost               string   `json:"forward_host" validate:"required"`
+	ForwardContainerName      *string  `json:"forward_container_name,omitempty"`
 	ForwardPort               int      `json:"forward_port" validate:"required,min=1,max=65535"`
 	StreamListenHost          string   `json:"stream_listen_host,omitempty"`
 	StreamListenPort          int      `json:"stream_listen_port,omitempty"`
@@ -314,6 +316,7 @@ type UpdateProxyHostRequest struct {
 	DomainNames               []string `json:"domain_names,omitempty"`
 	ForwardScheme             string   `json:"forward_scheme,omitempty"`
 	ForwardHost               string   `json:"forward_host,omitempty"`
+	ForwardContainerName      *string  `json:"forward_container_name,omitempty"`
 	ForwardPort               int      `json:"forward_port,omitempty"`
 	StreamListenHost          *string  `json:"stream_listen_host,omitempty"`
 	StreamListenPort          *int     `json:"stream_listen_port,omitempty"`
