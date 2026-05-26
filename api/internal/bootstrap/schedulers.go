@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"os"
 	"time"
 
 	"nginx-proxy-guard/internal/config"
@@ -10,11 +11,28 @@ import (
 
 // Schedulers bundles the background scheduler goroutines.
 type Schedulers struct {
-	Renewal       *scheduler.RenewalScheduler
-	Partition     *scheduler.PartitionScheduler
-	LogRotate     *scheduler.LogRotateScheduler
-	Backup        *scheduler.BackupScheduler
-	FilterRefresh *scheduler.FilterRefreshScheduler
+	Renewal            *scheduler.RenewalScheduler
+	Partition          *scheduler.PartitionScheduler
+	LogRotate          *scheduler.LogRotateScheduler
+	Backup             *scheduler.BackupScheduler
+	FilterRefresh      *scheduler.FilterRefreshScheduler
+	ContainerReconcile *scheduler.ContainerReconcileScheduler
+}
+
+// containerReconcileInterval reads NPG_CONTAINER_RECONCILE_INTERVAL (a Go
+// duration string, e.g. "30s", "2m"); it falls back to 30s when unset or
+// invalid. (#150)
+func containerReconcileInterval() time.Duration {
+	const def = 30 * time.Second
+	v := os.Getenv("NPG_CONTAINER_RECONCILE_INTERVAL")
+	if v == "" {
+		return def
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil || d <= 0 {
+		return def
+	}
+	return d
 }
 
 // NewSchedulers constructs (but does not start) each scheduler.
@@ -35,6 +53,11 @@ func NewSchedulers(cfg *config.Config, db *database.DB, repos *Repositories, svc
 		LogRotate:     scheduler.NewLogRotateScheduler(),
 		Backup:        scheduler.NewBackupScheduler(repos.Backup, repos.SystemSettings, cfg.BackupPath),
 		FilterRefresh: scheduler.NewFilterRefreshScheduler(svcs.FilterSubscription),
+		ContainerReconcile: scheduler.NewContainerReconcileScheduler(
+			svcs.ProxyHost,
+			svcs.DockerStats,
+			containerReconcileInterval(),
+		),
 	}
 }
 
@@ -45,6 +68,7 @@ func (s *Schedulers) Start() {
 	s.LogRotate.Start()
 	s.Backup.Start()
 	s.FilterRefresh.Start()
+	s.ContainerReconcile.Start()
 }
 
 // Stop signals every scheduler to stop.
@@ -55,6 +79,7 @@ func (s *Schedulers) Stop() {
 	s.Renewal.Stop()
 	s.Partition.Stop()
 	s.FilterRefresh.Stop()
+	s.ContainerReconcile.Stop()
 	// LogRotateScheduler and BackupScheduler also expose Stop, but the
 	// original main.go did not call them on shutdown. Keep the original
 	// semantics for minimal behavior change.

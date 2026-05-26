@@ -393,6 +393,130 @@ func (r *ProxyHostRepository) GetAllEnabled(ctx context.Context) ([]model.ProxyH
 	return hosts, nil
 }
 
+// GetEnabledContainerBacked returns enabled proxy hosts whose forward target is
+// a docker container name (forward_container_name IS NOT NULL). Used by the
+// periodic container IP reconcile scheduler — hosts without a container name are
+// never returned and therefore never touched. (#150)
+func (r *ProxyHostRepository) GetEnabledContainerBacked(ctx context.Context) ([]model.ProxyHost, error) {
+	query := `
+		SELECT id, COALESCE(proxy_type, 'http') as proxy_type, domain_names, forward_scheme, forward_host, forward_container_name, forward_port,
+			COALESCE(stream_listen_host, '') as stream_listen_host,
+			COALESCE(stream_listen_port, 0) as stream_listen_port,
+			COALESCE(stream_protocol, 'tcp') as stream_protocol,
+			COALESCE(stream_ssl_preread, false) as stream_ssl_preread,
+			COALESCE(stream_accept_proxy_protocol, false) as stream_accept_proxy_protocol,
+			COALESCE(stream_send_proxy_protocol, false) as stream_send_proxy_protocol,
+			COALESCE(stream_proxy_connect_timeout, 0) as stream_proxy_connect_timeout,
+			COALESCE(stream_proxy_timeout, 0) as stream_proxy_timeout,
+			ssl_enabled, ssl_force_https, ssl_http2, ssl_http3, certificate_id,
+			allow_websocket_upgrade, cache_enabled,
+			COALESCE(cache_static_only, true) as cache_static_only,
+			COALESCE(cache_ttl, '7d') as cache_ttl,
+			block_exploits,
+			COALESCE(block_exploits_exceptions, '') as block_exploits_exceptions,
+			custom_locations, advanced_config, waf_enabled, waf_mode,
+			waf_paranoia_level, waf_anomaly_threshold,
+			COALESCE(proxy_connect_timeout, 0) as proxy_connect_timeout,
+			COALESCE(proxy_send_timeout, 0) as proxy_send_timeout,
+			COALESCE(proxy_read_timeout, 0) as proxy_read_timeout,
+			COALESCE(proxy_buffering, '') as proxy_buffering,
+			COALESCE(proxy_request_buffering, '') as proxy_request_buffering,
+			COALESCE(client_max_body_size, '') as client_max_body_size,
+			COALESCE(proxy_max_temp_file_size, '') as proxy_max_temp_file_size,
+			access_list_id, enabled, is_favorite, COALESCE(config_status, 'ok') as config_status, COALESCE(config_error, '') as config_error, meta, created_at, updated_at
+		FROM proxy_hosts
+		WHERE enabled = true AND forward_container_name IS NOT NULL
+		ORDER BY created_at ASC
+	`
+
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get container-backed proxy hosts: %w", err)
+	}
+	defer rows.Close()
+
+	var hosts []model.ProxyHost
+	for rows.Next() {
+		var host model.ProxyHost
+		var certificateID, accessListID sql.NullString
+		var forwardContainerName sql.NullString
+		var customLocations, meta []byte
+
+		err := rows.Scan(
+			&host.ID,
+			&host.ProxyType,
+			&host.DomainNames,
+			&host.ForwardScheme,
+			&host.ForwardHost,
+			&forwardContainerName,
+			&host.ForwardPort,
+			&host.StreamListenHost,
+			&host.StreamListenPort,
+			&host.StreamProtocol,
+			&host.StreamSSLPreread,
+			&host.StreamAcceptProxyProtocol,
+			&host.StreamSendProxyProtocol,
+			&host.StreamProxyConnectTimeout,
+			&host.StreamProxyTimeout,
+			&host.SSLEnabled,
+			&host.SSLForceHTTPS,
+			&host.SSLHTTP2,
+			&host.SSLHTTP3,
+			&certificateID,
+			&host.AllowWebsocketUpgrade,
+			&host.CacheEnabled,
+			&host.CacheStaticOnly,
+			&host.CacheTTL,
+			&host.BlockExploits,
+			&host.BlockExploitsExceptions,
+			&customLocations,
+			&host.AdvancedConfig,
+			&host.WAFEnabled,
+			&host.WAFMode,
+			&host.WAFParanoiaLevel,
+			&host.WAFAnomalyThreshold,
+			&host.ProxyConnectTimeout,
+			&host.ProxySendTimeout,
+			&host.ProxyReadTimeout,
+			&host.ProxyBuffering,
+			&host.ProxyRequestBuffering,
+			&host.ClientMaxBodySize,
+			&host.ProxyMaxTempFileSize,
+			&accessListID,
+			&host.Enabled,
+			&host.IsFavorite,
+			&host.ConfigStatus,
+			&host.ConfigError,
+			&meta,
+			&host.CreatedAt,
+			&host.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan proxy host: %w", err)
+		}
+
+		if forwardContainerName.Valid {
+			host.ForwardContainerName = &forwardContainerName.String
+		}
+		if certificateID.Valid {
+			host.CertificateID = &certificateID.String
+		}
+		if accessListID.Valid {
+			host.AccessListID = &accessListID.String
+		}
+		host.CustomLocations = json.RawMessage(customLocations)
+		host.Meta = json.RawMessage(meta)
+
+		hosts = append(hosts, host)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating container-backed proxy hosts: %w", err)
+	}
+
+	return hosts, nil
+}
+
 // GetByCertificateID returns all proxy hosts using the specified certificate
 func (r *ProxyHostRepository) GetByCertificateID(ctx context.Context, certificateID string) ([]model.ProxyHost, error) {
 	query := `

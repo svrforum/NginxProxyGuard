@@ -788,3 +788,31 @@ func (s *ProxyHostService) Delete(ctx context.Context, id string) error {
 
 	return nil
 }
+
+// ListContainerBackedHosts returns enabled proxy hosts whose forward target is a
+// docker container name. Used by the container IP reconcile scheduler; hosts
+// without forward_container_name are never returned (non-regression). (#150)
+func (s *ProxyHostService) ListContainerBackedHosts(ctx context.Context) ([]*model.ProxyHost, error) {
+	hosts, err := s.repo.GetEnabledContainerBacked(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// Adapt the repo's []model.ProxyHost to the []*model.ProxyHost the scheduler iterates.
+	out := make([]*model.ProxyHost, len(hosts))
+	for i := range hosts {
+		h := hosts[i]
+		out[i] = &h
+	}
+	return out, nil
+}
+
+// UpdateForwardHostAndReload persists a new forward_host IP for a container-backed
+// host and regenerates that host's nginx config through the EXISTING fail-safe
+// path (Update → GenerateConfigAndReload → nginx -t → reload, rollback on test
+// failure). It deliberately reuses Update rather than hand-rolling a reload so
+// Core Principle 2 (fail-safe) holds; only forward_host is changed and
+// forward_container_name is left untouched so no container re-resolution occurs. (#150)
+func (s *ProxyHostService) UpdateForwardHostAndReload(ctx context.Context, id string, newIP string) error {
+	_, err := s.Update(ctx, id, &model.UpdateProxyHostRequest{ForwardHost: newIP})
+	return err
+}
