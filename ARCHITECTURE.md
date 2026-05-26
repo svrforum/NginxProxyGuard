@@ -391,6 +391,7 @@ Protected: APITokenAuth → AuthMiddleware → Handler
 | DockerLogCollector | 실시간 | Docker 컨테이너 로그 수집 |
 | FilterRefreshScheduler | 사용자 지정 | 필터 구독 주기적 갱신 |
 | PipelineCanary | 5분 (기본) | access 로그 파이프라인 종단 무결성 검증 (§8.16) |
+| ContainerReconcileScheduler | 30초 (기본, `NPG_CONTAINER_RECONCILE_INTERVAL`) | 컨테이너 기반 host의 container name → IP 재해석, 변경 시 fail-safe 경로로 config 재생성 (#150) |
 
 ### 2.11 Key Constants
 
@@ -739,6 +740,7 @@ Tag push (v*) → detect changes (SHA256 per component)
 | domain_names | text[] | NOT NULL | GIN 인덱스 |
 | forward_scheme | varchar(10) | 'http' | |
 | forward_host | varchar(255) | NOT NULL | |
+| forward_container_name | text | NULL | Docker container name target; resolved to forward_host IP and auto-refreshed (#150) |
 | forward_port | integer | 80 | |
 | ssl_enabled | boolean | false | |
 | ssl_force_https | boolean | false | |
@@ -1049,6 +1051,7 @@ type CreateProxyHostRequest struct {
 // Update: 선택 필드는 포인터 (nil = 변경 없음)
 type UpdateProxyHostRequest struct {
     DomainNames *[]string; ForwardScheme *string; ForwardHost *string
+    ForwardContainerName *string // Docker container name; 서버가 forward_host IP로 해석 (#150)
 }
 // List Response: 페이지네이션 포함
 type ProxyHostListResponse struct {
@@ -1061,7 +1064,7 @@ type ProxyHostListResponse struct {
 ```ts
 // ProxyHost
 interface ProxyHost {
-  id, domain_names[], forward_scheme, forward_host, forward_port
+  id, domain_names[], forward_scheme, forward_host, forward_container_name?, forward_port
   ssl_enabled, ssl_force_https, ssl_http2, ssl_http3, certificate_id?
   waf_enabled, waf_mode, waf_paranoia_level, waf_anomaly_threshold
   cache_enabled, block_exploits, access_list_id?, is_favorite, enabled
