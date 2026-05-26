@@ -542,5 +542,9 @@
     "global": {
       "description": "Rules disabled in global policies automatically apply to all proxy hosts."
     }
+  },
+  "pagination": {
+    "prev": "Previous",
+    "next": "Next"
   }
 }
