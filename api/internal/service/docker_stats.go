@@ -397,6 +397,33 @@ func (s *DockerStatsService) ListContainersWithNetworks(ctx context.Context) ([]
 	return containers, nil
 }
 
+// pickContainerIP returns the first non-empty network IP of the container whose
+// name matches. Pure, for testability. (#150)
+func pickContainerIP(containers []DockerContainerInfo, name string) (string, error) {
+	for _, c := range containers {
+		if c.Name != name {
+			continue
+		}
+		for _, n := range c.Networks {
+			if n.IPAddress != "" {
+				return n.IPAddress, nil
+			}
+		}
+		return "", fmt.Errorf("container %q has no network IP", name)
+	}
+	return "", fmt.Errorf("container %q not found or not running", name)
+}
+
+// ResolveContainerIP resolves a running container name to its current network IP
+// via docker.sock. (#150)
+func (s *DockerStatsService) ResolveContainerIP(ctx context.Context, name string) (string, error) {
+	containers, err := s.ListContainersWithNetworks(ctx)
+	if err != nil {
+		return "", err
+	}
+	return pickContainerIP(containers, name)
+}
+
 // inspectContainer gets detailed network info for a single container
 func (s *DockerStatsService) inspectContainer(ctx context.Context, name string) (*DockerContainerInfo, error) {
 	cmd := exec.CommandContext(ctx, "docker", "inspect", "--format",
