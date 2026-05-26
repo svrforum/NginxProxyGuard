@@ -1875,6 +1875,7 @@ CREATE TABLE IF NOT EXISTS public.proxy_hosts (
     forward_scheme character varying(10) DEFAULT 'http'::character varying NOT NULL,
     forward_host character varying(255) NOT NULL,
     forward_port integer DEFAULT 80 NOT NULL,
+    forward_container_name text,
     stream_listen_host character varying(255) DEFAULT ''::character varying,
     stream_listen_port integer DEFAULT 0,
     stream_protocol character varying(10) DEFAULT 'tcp'::character varying,
@@ -3315,6 +3316,8 @@ ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS is_favorite boolean DEFA
 ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS proxy_request_buffering character varying(10) DEFAULT '';
 ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS config_status character varying(20) DEFAULT 'ok' NOT NULL;
 ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS config_error text;
+-- v2.20.0: Docker container-name forward target (#150)
+ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS forward_container_name text;
 
 -- Add column comments
 COMMENT ON COLUMN public.proxy_hosts.cache_static_only IS 'Only cache static assets (js, css, images, fonts) - excludes API paths';

@@ -844,6 +844,16 @@ END $$`,
 				ON public.proxy_hosts (stream_listen_host, stream_listen_port, stream_protocol)
 				WHERE proxy_type = 'stream' AND enabled = true AND stream_listen_port > 0`,
 		},
+
+		// -----------------------------------------------------------------------
+		// v2.20.0 (Issue #150): Docker container-name forward target. Nullable
+		// TEXT — existing rows get NULL and behave exactly as before (host:port
+		// forwarding); a non-NULL value names a Docker container to resolve.
+		// -----------------------------------------------------------------------
+		{
+			desc: "v2.20.0: proxy_hosts.forward_container_name (#150)",
+			sql:  `ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS forward_container_name text`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {
