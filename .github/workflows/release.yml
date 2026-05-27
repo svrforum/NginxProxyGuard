@@ -451,13 +451,32 @@ jobs:
             TAG_MSG=""
           fi
 
-          # 3. 이전 태그부터 현재까지 커밋 로그로 자동 생성
+          # 3. 이전 태그부터 현재까지 커밋 로그로 자동 생성 (Conventional Commit type별 그룹핑)
+          #    feat -> 🚀 신기능, fix -> 🛡️ 버그 수정, perf -> ⚡ 성능,
+          #    docs/chore/test/refactor/style 는 접이식 Internal 섹션으로 정리.
+          #    (수동 작성 노트가 있으면 위 우선순위에서 보존되므로 이 블록은 fallback)
+          #    주의: 모든 입력은 git log(커밋 제목) -> 따옴표 변수 -> grep/sed/printf '%s'
+          #    로만 처리하며 eval/템플릿 보간이 없어 악성 커밋 메시지도 데이터로만 취급됨.
           PREV_TAG_FOR_LOG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           AUTO_NOTES=""
           if [ -n "$PREV_TAG_FOR_LOG" ]; then
-            COMMITS=$(git log --pretty=format:"- %s" "$PREV_TAG_FOR_LOG..HEAD" | grep -v "^- release:" | grep -v "^- Merge")
-            if [ -n "$COMMITS" ]; then
-              AUTO_NOTES=$(printf "## What's Changed\n\n%s" "$COMMITS")
+            ALL=$(git log --pretty=format:"%s" "$PREV_TAG_FOR_LOG..HEAD" | grep -vE "^(release:|Merge )")
+            AUTO_BODY=$(
+              section() {
+                local body
+                body=$(printf '%s\n' "$ALL" | grep -E "^($2)(\([^)]*\))?: " | sed -E "s/^($2)(\([^)]*\))?: */- /")
+                [ -n "$body" ] && printf '### %s\n\n%s\n\n' "$1" "$body"
+              }
+              section "🚀 New Features" "feat"
+              section "🛡️ Bug Fixes" "fix"
+              section "⚡ Performance" "perf"
+              OTHER=$(printf '%s\n' "$ALL" | grep -vE "^(feat|fix|perf|docs|chore|test|refactor|style)(\([^)]*\))?: " | sed 's/^/- /')
+              [ -n "$OTHER" ] && printf '### Other\n\n%s\n\n' "$OTHER"
+              INTERNAL=$(printf '%s\n' "$ALL" | grep -E "^(docs|chore|test|refactor|style)(\([^)]*\))?: " | sed -E 's/^[a-z]+(\([^)]*\))?: */- /')
+              [ -n "$INTERNAL" ] && printf '<details><summary>🔧 Internal (docs / chore / tests / refactor)</summary>\n\n%s\n</details>\n' "$INTERNAL"
+            )
+            if [ -n "$AUTO_BODY" ]; then
+              AUTO_NOTES=$(printf "## What's Changed\n\n%s" "$AUTO_BODY")
             fi
           fi
 
