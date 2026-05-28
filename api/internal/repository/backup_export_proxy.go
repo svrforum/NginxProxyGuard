@@ -11,7 +11,7 @@ import (
 
 func (r *BackupRepository) exportProxyHosts(ctx context.Context) ([]model.ProxyHostExport, error) {
 	query := `
-		SELECT id, COALESCE(proxy_type, 'http') as proxy_type, domain_names, forward_scheme, forward_host, forward_container_name, forward_port,
+		SELECT id, COALESCE(proxy_type, 'http') as proxy_type, domain_names, forward_scheme, forward_host, forward_container_name, forward_container_network, forward_port,
 		       COALESCE(stream_listen_host, '') as stream_listen_host,
 		       COALESCE(stream_listen_port, 0) as stream_listen_port,
 		       COALESCE(stream_protocol, 'tcp') as stream_protocol,
@@ -56,10 +56,10 @@ func (r *BackupRepository) exportProxyHosts(ctx context.Context) ([]model.ProxyH
 		var customLocations, meta []byte
 		var certID, accessListID sql.NullString
 		var advancedConfig sql.NullString
-		var forwardContainerName sql.NullString
+		var forwardContainerName, forwardContainerNetwork sql.NullString
 
 		err := rows.Scan(
-			&ph.ID, &ph.ProxyType, pq.Array(&ph.DomainNames), &ph.ForwardScheme, &ph.ForwardHost, &forwardContainerName, &ph.ForwardPort,
+			&ph.ID, &ph.ProxyType, pq.Array(&ph.DomainNames), &ph.ForwardScheme, &ph.ForwardHost, &forwardContainerName, &forwardContainerNetwork, &ph.ForwardPort,
 			&ph.StreamListenHost, &ph.StreamListenPort, &ph.StreamProtocol, &ph.StreamSSLPreread,
 			&ph.StreamAcceptProxyProtocol, &ph.StreamSendProxyProtocol,
 			&ph.StreamProxyConnectTimeout, &ph.StreamProxyTimeout,
@@ -86,6 +86,9 @@ func (r *BackupRepository) exportProxyHosts(ctx context.Context) ([]model.ProxyH
 		ph.AdvancedConfig = advancedConfig.String
 		if forwardContainerName.Valid {
 			ph.ForwardContainerName = &forwardContainerName.String
+		}
+		if forwardContainerNetwork.Valid {
+			ph.ForwardContainerNetwork = &forwardContainerNetwork.String
 		}
 		// Ensure domain names is not nil
 		if ph.DomainNames == nil {

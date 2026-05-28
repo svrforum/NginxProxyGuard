@@ -315,6 +315,7 @@ type ProxyHostData struct {
 	ForwardScheme             string                 `json:"forward_scheme"`
 	ForwardHost               string                 `json:"forward_host"`
 	ForwardContainerName      *string                `json:"forward_container_name,omitempty"`
+	ForwardContainerNetwork   *string                `json:"forward_container_network,omitempty"`
 	ForwardPort               int                    `json:"forward_port"`
 	StreamListenHost          string                 `json:"stream_listen_host,omitempty"`
 	StreamListenPort          int                    `json:"stream_listen_port,omitempty"`
