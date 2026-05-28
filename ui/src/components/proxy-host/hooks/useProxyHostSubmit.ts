@@ -253,6 +253,14 @@ export function useProxyHostSubmit({
     }
 
     if (isEditing && host) {
+      // Manual edit of forward_host clears forward_container_name/network in
+      // form state (sets them to undefined). JSON.stringify omits undefined →
+      // backend's pointer-merge treats omitted as "no change", so the reconcile
+      // scheduler keeps overriding the user's manually-typed IP. Send explicit
+      // "" instead so the backend's "*req == "" → clear" semantic fires. Safe
+      // no-op when the host never had a container binding. (#151)
+      data.forward_container_name = data.forward_container_name ?? ''
+      data.forward_container_network = data.forward_container_network ?? ''
       updateMutation.mutate({ id: host.id, data })
     } else {
       createMutation.mutate(data)

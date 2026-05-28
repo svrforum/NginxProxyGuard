@@ -108,6 +108,7 @@ func (s *ProxyHostService) Clone(ctx context.Context, sourceID string, req *mode
 		ForwardScheme:             forwardScheme,
 		ForwardHost:               forwardHost,
 		ForwardContainerName:      source.ForwardContainerName,
+		ForwardContainerNetwork:   source.ForwardContainerNetwork,
 		ForwardPort:               forwardPort,
 		StreamListenHost:          streamListenHost,
 		StreamListenPort:          streamListenPort,
