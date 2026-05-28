@@ -203,15 +203,15 @@ type VolumeStats struct {
 
 // Summary returns a summary of container resource usage
 type DockerStatsSummary struct {
-	Containers     []ContainerStats `json:"containers"`
-	Volumes        []VolumeStats    `json:"volumes"`
-	TotalCPU       float64          `json:"total_cpu_percent"`
-	TotalMemory    int64            `json:"total_memory_usage"`
-	TotalMemLimit  int64            `json:"total_memory_limit"`
-	TotalVolumeSize int64           `json:"total_volume_size"`
-	ContainerCount int              `json:"container_count"`
-	HealthyCount   int              `json:"healthy_count"`
-	UpdatedAt      time.Time        `json:"updated_at"`
+	Containers      []ContainerStats `json:"containers"`
+	Volumes         []VolumeStats    `json:"volumes"`
+	TotalCPU        float64          `json:"total_cpu_percent"`
+	TotalMemory     int64            `json:"total_memory_usage"`
+	TotalMemLimit   int64            `json:"total_memory_limit"`
+	TotalVolumeSize int64            `json:"total_volume_size"`
+	ContainerCount  int              `json:"container_count"`
+	HealthyCount    int              `json:"healthy_count"`
+	UpdatedAt       time.Time        `json:"updated_at"`
 }
 
 // getVolumeSizesFromSystemDF retrieves all volume sizes in a single docker command
@@ -397,12 +397,29 @@ func (s *DockerStatsService) ListContainersWithNetworks(ctx context.Context) ([]
 	return containers, nil
 }
 
-// pickContainerIP returns the first non-empty network IP of the container whose
-// name matches. Pure, for testability. (#150)
-func pickContainerIP(containers []DockerContainerInfo, name string) (string, error) {
+// pickContainerIP returns a network IP for the container whose name matches.
+// When network is non-empty, returns the IP of the network whose Name matches
+// exactly (case-sensitive); errors if no such network is attached — this is the
+// network-aware path used after Issue #151 so multi-network containers don't
+// get reconciled to a wrong-network IP. When network is empty, falls back to
+// the legacy behavior of returning the first non-empty network IP (still used
+// for create/update flexibility when the caller has not stored a network).
+// Pure, for testability. (#150, #151)
+func pickContainerIP(containers []DockerContainerInfo, name string, network string) (string, error) {
 	for _, c := range containers {
 		if c.Name != name {
 			continue
+		}
+		if network != "" {
+			for _, n := range c.Networks {
+				if n.Name == network {
+					if n.IPAddress == "" {
+						return "", fmt.Errorf("container %q on network %q has no IP", name, network)
+					}
+					return n.IPAddress, nil
+				}
+			}
+			return "", fmt.Errorf("container %q is not attached to network %q", name, network)
 		}
 		for _, n := range c.Networks {
 			if n.IPAddress != "" {
@@ -415,13 +432,16 @@ func pickContainerIP(containers []DockerContainerInfo, name string) (string, err
 }
 
 // ResolveContainerIP resolves a running container name to its current network IP
-// via docker.sock. (#150)
-func (s *DockerStatsService) ResolveContainerIP(ctx context.Context, name string) (string, error) {
+// via docker.sock. When network is non-empty, resolution is pinned to that
+// specific docker network (Issue #151); when empty, the first non-empty IP is
+// returned for backwards-compatibility with callers that have no stored
+// network. (#150, #151)
+func (s *DockerStatsService) ResolveContainerIP(ctx context.Context, name string, network string) (string, error) {
 	containers, err := s.ListContainersWithNetworks(ctx)
 	if err != nil {
 		return "", err
 	}
-	return pickContainerIP(containers, name)
+	return pickContainerIP(containers, name, network)
 }
 
 // inspectContainer gets detailed network info for a single container
@@ -435,10 +455,10 @@ func (s *DockerStatsService) inspectContainer(ctx context.Context, name string) 
 	}
 
 	var raw struct {
-		Image    string                            `json:"image"`
-		State    string                            `json:"state"`
-		Networks map[string]json.RawMessage        `json:"networks"`
-		Ports    map[string]json.RawMessage        `json:"ports"`
+		Image    string                     `json:"image"`
+		State    string                     `json:"state"`
+		Networks map[string]json.RawMessage `json:"networks"`
+		Ports    map[string]json.RawMessage `json:"ports"`
 	}
 
 	if err := json.Unmarshal(output, &raw); err != nil {
