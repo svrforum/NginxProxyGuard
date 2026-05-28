@@ -36,9 +36,13 @@ type CertificateCreator interface {
 	Create(ctx context.Context, req *model.CreateCertificateRequest) (*model.Certificate, error)
 }
 
-// ContainerResolver resolves a docker container name to its current IP. (#150)
+// ContainerResolver resolves a docker container name to its current IP.
+// When network is non-empty the resolution is pinned to that specific docker
+// network (Issue #151) so multi-network containers don't drift to the wrong
+// network's IP. An empty network preserves the legacy first-non-empty-IP
+// behavior for callers that have no stored network yet. (#150, #151)
 type ContainerResolver interface {
-	ResolveContainerIP(ctx context.Context, name string) (string, error)
+	ResolveContainerIP(ctx context.Context, name string, network string) (string, error)
 }
 
 type ProxyHostService struct {
@@ -117,16 +121,26 @@ func (s *ProxyHostService) SetContainerResolver(r ContainerResolver) {
 
 // applyContainerTarget resolves a container-name target to its current IP.
 // For non-container targets (nil/empty name) it returns forwardHost unchanged.
-// Resolution failure returns an "invalid ..." error so the handler maps it to 400. (#150)
-func (s *ProxyHostService) applyContainerTarget(ctx context.Context, containerName *string, forwardHost string) (string, error) {
+// When containerNetwork is non-empty the resolution is pinned to that docker
+// network (Issue #151); an empty/nil network falls back to the legacy
+// first-non-empty-IP behavior. Resolution failure returns an "invalid ..."
+// error so the handler maps it to 400. (#150, #151)
+func (s *ProxyHostService) applyContainerTarget(ctx context.Context, containerName *string, containerNetwork *string, forwardHost string) (string, error) {
 	if containerName == nil || *containerName == "" {
 		return forwardHost, nil
 	}
 	if s.containerResolver == nil {
 		return "", fmt.Errorf("invalid: container targets unavailable (no docker access)")
 	}
-	ip, err := s.containerResolver.ResolveContainerIP(ctx, *containerName)
+	network := ""
+	if containerNetwork != nil {
+		network = *containerNetwork
+	}
+	ip, err := s.containerResolver.ResolveContainerIP(ctx, *containerName, network)
 	if err != nil {
+		if network != "" {
+			return "", fmt.Errorf("invalid forward container %q (network %q): %w", *containerName, network, err)
+		}
 		return "", fmt.Errorf("invalid forward container %q: %w", *containerName, err)
 	}
 	return ip, nil
@@ -325,9 +339,10 @@ func (s *ProxyHostService) prepareUpdateProxyHostRequest(ctx context.Context, id
 
 	// Resolve container-name target to its current IP before persisting (#150).
 	// Only fires when a non-empty container name is supplied; otherwise
-	// forward_host is left untouched (existing behavior preserved).
+	// forward_host is left untouched (existing behavior preserved). When the
+	// request carries a container network, resolution is pinned to it (#151).
 	if req.ForwardContainerName != nil && *req.ForwardContainerName != "" {
-		resolvedForwardHost, resolveErr := s.applyContainerTarget(ctx, req.ForwardContainerName, req.ForwardHost)
+		resolvedForwardHost, resolveErr := s.applyContainerTarget(ctx, req.ForwardContainerName, req.ForwardContainerNetwork, req.ForwardHost)
 		if resolveErr != nil {
 			return "", nil, resolveErr
 		}
@@ -456,8 +471,9 @@ func (s *ProxyHostService) Create(ctx context.Context, req *model.CreateProxyHos
 	}
 
 	// Resolve container-name target to its current IP before persisting (#150).
-	// Non-container requests leave forward_host unchanged.
-	resolvedForwardHost, err := s.applyContainerTarget(ctx, req.ForwardContainerName, req.ForwardHost)
+	// Non-container requests leave forward_host unchanged. When a container
+	// network is supplied, resolution is pinned to it (#151).
+	resolvedForwardHost, err := s.applyContainerTarget(ctx, req.ForwardContainerName, req.ForwardContainerNetwork, req.ForwardHost)
 	if err != nil {
 		return nil, err
 	}
