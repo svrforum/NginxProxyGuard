@@ -61,6 +61,8 @@ func TestBackupSyncCriticalTables(t *testing.T) {
 				"domain_names",
 				"enabled",
 				"fail2ban_enabled",
+				"forward_container_name",
+				"forward_container_network",
 				"forward_host",
 				"forward_port",
 				"forward_scheme",
