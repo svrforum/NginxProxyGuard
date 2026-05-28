@@ -741,6 +741,7 @@ Tag push (v*) → detect changes (SHA256 per component)
 | forward_scheme | varchar(10) | 'http' | |
 | forward_host | varchar(255) | NOT NULL | |
 | forward_container_name | text | NULL | Docker container name target; resolved to forward_host IP and auto-refreshed (#150) |
+| forward_container_network | text | NULL | Docker network user picked when selecting the container; reconcile pins resolution to this specific network (#151) |
 | forward_port | integer | 80 | |
 | ssl_enabled | boolean | false | |
 | ssl_force_https | boolean | false | |
@@ -1064,7 +1065,7 @@ type ProxyHostListResponse struct {
 ```ts
 // ProxyHost
 interface ProxyHost {
-  id, domain_names[], forward_scheme, forward_host, forward_container_name?, forward_port
+  id, domain_names[], forward_scheme, forward_host, forward_container_name?, forward_container_network?, forward_port
   ssl_enabled, ssl_force_https, ssl_http2, ssl_http3, certificate_id?
   waf_enabled, waf_mode, waf_paranoia_level, waf_anomaly_threshold
   cache_enabled, block_exploits, access_list_id?, is_favorite, enabled
