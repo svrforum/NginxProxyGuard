@@ -9,6 +9,7 @@ export interface ProxyHost {
   forward_scheme: ForwardScheme
   forward_host: string
   forward_container_name?: string | null
+  forward_container_network?: string | null
   forward_port: number
   stream_listen_host?: string
   stream_listen_port?: number
@@ -59,6 +60,7 @@ export interface CreateProxyHostRequest {
   forward_scheme: ForwardScheme
   forward_host: string
   forward_container_name?: string | null
+  forward_container_network?: string | null
   forward_port: number
   stream_listen_host?: string
   stream_listen_port?: number
@@ -102,6 +104,7 @@ export interface UpdateProxyHostRequest {
   forward_scheme?: ForwardScheme
   forward_host?: string
   forward_container_name?: string | null
+  forward_container_network?: string | null
   forward_port?: number
   stream_listen_host?: string
   stream_listen_port?: number

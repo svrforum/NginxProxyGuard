@@ -33,10 +33,16 @@ export function BasicTabContent({
   const isStream = formData.proxy_type === 'stream'
   const streamProtocol = formData.stream_protocol || 'tcp'
 
-  const handleDockerSelect = (host: string, port: number, containerName: string) => {
-    // Store the container NAME as the authoritative target (API re-resolves the
-    // name → current IP). Pre-fill forward_host with the resolved IP for display.
-    setFormData(prev => ({ ...prev, forward_host: host, forward_container_name: containerName }))
+  const handleDockerSelect = (host: string, port: number, containerName: string, containerNetwork: string) => {
+    // Store the container NAME + NETWORK as the authoritative target (API
+    // re-resolves the name to the IP of the picked network, see Issue #151).
+    // Pre-fill forward_host with the resolved IP for display.
+    setFormData(prev => ({
+      ...prev,
+      forward_host: host,
+      forward_container_name: containerName,
+      forward_container_network: containerNetwork || undefined,
+    }))
     setPortInput(port.toString())
   }
 
@@ -395,8 +401,15 @@ export function BasicTabContent({
                 value={formData.forward_host}
                 onChange={(e) =>
                   // Manual edit of the target clears any Docker container binding so
-                  // it is treated as a plain IP/FQDN target (non-regression).
-                  setFormData((prev) => ({ ...prev, forward_host: e.target.value, forward_container_name: undefined }))
+                  // it is treated as a plain IP/FQDN target (non-regression). Both
+                  // the container name and network are cleared together so the
+                  // reconcile scheduler doesn't try to resolve a partial binding.
+                  setFormData((prev) => ({
+                    ...prev,
+                    forward_host: e.target.value,
+                    forward_container_name: undefined,
+                    forward_container_network: undefined,
+                  }))
                 }
                 placeholder={t('form.basic.forwardHostPlaceholder')}
                 className={`flex-1 rounded-lg border px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400 ${errors.forward_host ? 'border-red-300 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'}`}
@@ -421,7 +434,9 @@ export function BasicTabContent({
                 <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                 </svg>
-                {t('form.basic.dockerContainerTarget', { name: formData.forward_container_name })}
+                {formData.forward_container_network
+                  ? t('form.basic.dockerContainerTargetWithNetwork', { name: formData.forward_container_name, network: formData.forward_container_network })
+                  : t('form.basic.dockerContainerTarget', { name: formData.forward_container_name })}
               </p>
             )}
           </div>

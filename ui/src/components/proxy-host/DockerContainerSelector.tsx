@@ -5,7 +5,7 @@ import { fetchDockerContainers, type DockerContainerInfo } from '../../api/docke
 interface DockerContainerSelectorProps {
   isOpen: boolean
   onClose: () => void
-  onSelect: (host: string, port: number, containerName: string) => void
+  onSelect: (host: string, port: number, containerName: string, containerNetwork: string) => void
 }
 
 export function DockerContainerSelector({ isOpen, onClose, onSelect }: DockerContainerSelectorProps) {
@@ -41,8 +41,8 @@ export function DockerContainerSelector({ isOpen, onClose, onSelect }: DockerCon
     c.image.toLowerCase().includes(search.toLowerCase())
   )
 
-  const handleSelect = (container: DockerContainerInfo, networkIP: string, port?: number) => {
-    onSelect(networkIP, port || 80, container.name)
+  const handleSelect = (container: DockerContainerInfo, networkIP: string, port?: number, networkName?: string) => {
+    onSelect(networkIP, port || 80, container.name, networkName || '')
     onClose()
   }
 
@@ -154,7 +154,7 @@ function ContainerCard({
   onSelect,
 }: {
   container: DockerContainerInfo
-  onSelect: (container: DockerContainerInfo, ip: string, port?: number) => void
+  onSelect: (container: DockerContainerInfo, ip: string, port?: number, networkName?: string) => void
 }) {
   const { t } = useTranslation('proxyHost')
 
@@ -196,7 +196,7 @@ function ContainerCard({
                   <button
                     key={p.container_port}
                     type="button"
-                    onClick={() => onSelect(container, net.ip_address, p.container_port)}
+                    onClick={() => onSelect(container, net.ip_address, p.container_port, net.name)}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary-600 text-white rounded-lg hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600 transition-colors shadow-sm"
                   >
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -208,7 +208,7 @@ function ContainerCard({
               ) : (
                 <button
                   type="button"
-                  onClick={() => onSelect(container, net.ip_address)}
+                  onClick={() => onSelect(container, net.ip_address, undefined, net.name)}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary-600 text-white rounded-lg hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600 transition-colors shadow-sm"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

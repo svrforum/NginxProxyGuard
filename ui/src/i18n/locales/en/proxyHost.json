@@ -118,6 +118,7 @@
       "dockerBrowse": "Browse Docker Containers",
       "dockerBrowseShort": "Docker",
       "dockerContainerTarget": "Docker container: {{name}} (auto-resolved by name)",
+      "dockerContainerTargetWithNetwork": "Docker container: {{name}} (network: {{network}}, auto-resolved)",
       "websocket": "WebSocket Support",
       "websocketDescription": "Allow WebSocket connections"
     },

@@ -230,6 +230,7 @@ export function useProxyHostFormState(host: ProxyHost | null | undefined) {
         forward_scheme: host.forward_scheme,
         forward_host: host.forward_host,
         forward_container_name: host.forward_container_name ?? undefined,
+        forward_container_network: host.forward_container_network ?? undefined,
         forward_port: host.forward_port,
         stream_listen_host: host.stream_listen_host || '',
         stream_listen_port: host.stream_listen_port || 0,
