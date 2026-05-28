@@ -1876,6 +1876,7 @@ CREATE TABLE IF NOT EXISTS public.proxy_hosts (
     forward_host character varying(255) NOT NULL,
     forward_port integer DEFAULT 80 NOT NULL,
     forward_container_name text,
+    forward_container_network text,
     stream_listen_host character varying(255) DEFAULT ''::character varying,
     stream_listen_port integer DEFAULT 0,
     stream_protocol character varying(10) DEFAULT 'tcp'::character varying,
@@ -3318,6 +3319,10 @@ ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS config_status character 
 ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS config_error text;
 -- v2.20.0: Docker container-name forward target (#150)
 ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS forward_container_name text;
+-- v2.20.1: Docker container network (Issue #151) — records the user-picked network
+-- so multi-network containers are not reconciled to a wrong-network IP. Existing
+-- v2.20.0 rows get NULL and are skipped by the reconcile scheduler (safe mode).
+ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS forward_container_network text;
 
 -- Add column comments
 COMMENT ON COLUMN public.proxy_hosts.cache_static_only IS 'Only cache static assets (js, css, images, fonts) - excludes API paths';

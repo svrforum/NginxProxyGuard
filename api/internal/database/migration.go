@@ -854,6 +854,17 @@ END $$`,
 			desc: "v2.20.0: proxy_hosts.forward_container_name (#150)",
 			sql:  `ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS forward_container_name text`,
 		},
+		// -----------------------------------------------------------------------
+		// v2.20.1 (Issue #151): Docker container network. Nullable TEXT — records
+		// the network the user picked in the UI so the reconcile scheduler can
+		// pin to the correct network's IP on multi-network containers. Existing
+		// v2.20.0 rows (NULL) are skipped by the scheduler (safe mode) until the
+		// user re-selects the container.
+		// -----------------------------------------------------------------------
+		{
+			desc: "v2.20.1: proxy_hosts.forward_container_network (#151)",
+			sql:  `ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS forward_container_network text`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {
