@@ -56,7 +56,7 @@ func (r *ProxyHostRepository) List(ctx context.Context, page, perPage int, searc
 
 	// Get paginated data
 	query := fmt.Sprintf(`
-		SELECT id, COALESCE(proxy_type, 'http') as proxy_type, domain_names, forward_scheme, forward_host, forward_container_name, forward_port,
+		SELECT id, COALESCE(proxy_type, 'http') as proxy_type, domain_names, forward_scheme, forward_host, forward_container_name, forward_container_network, forward_port,
 			COALESCE(stream_listen_host, '') as stream_listen_host,
 			COALESCE(stream_listen_port, 0) as stream_listen_port,
 			COALESCE(stream_protocol, 'tcp') as stream_protocol,
@@ -98,7 +98,7 @@ func (r *ProxyHostRepository) List(ctx context.Context, page, perPage int, searc
 	for rows.Next() {
 		var host model.ProxyHost
 		var certificateID, accessListID sql.NullString
-		var forwardContainerName sql.NullString
+		var forwardContainerName, forwardContainerNetwork sql.NullString
 		var customLocations, meta []byte
 
 		err := rows.Scan(
@@ -108,6 +108,7 @@ func (r *ProxyHostRepository) List(ctx context.Context, page, perPage int, searc
 			&host.ForwardScheme,
 			&host.ForwardHost,
 			&forwardContainerName,
+			&forwardContainerNetwork,
 			&host.ForwardPort,
 			&host.StreamListenHost,
 			&host.StreamListenPort,
@@ -156,6 +157,9 @@ func (r *ProxyHostRepository) List(ctx context.Context, page, perPage int, searc
 
 		if forwardContainerName.Valid {
 			host.ForwardContainerName = &forwardContainerName.String
+		}
+		if forwardContainerNetwork.Valid {
+			host.ForwardContainerNetwork = &forwardContainerNetwork.String
 		}
 		if certificateID.Valid {
 			host.CertificateID = &certificateID.String
@@ -279,7 +283,7 @@ func (r *ProxyHostRepository) CheckStreamListenConflicts(ctx context.Context, do
 
 func (r *ProxyHostRepository) GetAllEnabled(ctx context.Context) ([]model.ProxyHost, error) {
 	query := `
-		SELECT id, COALESCE(proxy_type, 'http') as proxy_type, domain_names, forward_scheme, forward_host, forward_container_name, forward_port,
+		SELECT id, COALESCE(proxy_type, 'http') as proxy_type, domain_names, forward_scheme, forward_host, forward_container_name, forward_container_network, forward_port,
 			COALESCE(stream_listen_host, '') as stream_listen_host,
 			COALESCE(stream_listen_port, 0) as stream_listen_port,
 			COALESCE(stream_protocol, 'tcp') as stream_protocol,
@@ -319,7 +323,7 @@ func (r *ProxyHostRepository) GetAllEnabled(ctx context.Context) ([]model.ProxyH
 	for rows.Next() {
 		var host model.ProxyHost
 		var certificateID, accessListID sql.NullString
-		var forwardContainerName sql.NullString
+		var forwardContainerName, forwardContainerNetwork sql.NullString
 		var customLocations, meta []byte
 
 		err := rows.Scan(
@@ -329,6 +333,7 @@ func (r *ProxyHostRepository) GetAllEnabled(ctx context.Context) ([]model.ProxyH
 			&host.ForwardScheme,
 			&host.ForwardHost,
 			&forwardContainerName,
+			&forwardContainerNetwork,
 			&host.ForwardPort,
 			&host.StreamListenHost,
 			&host.StreamListenPort,
@@ -378,6 +383,9 @@ func (r *ProxyHostRepository) GetAllEnabled(ctx context.Context) ([]model.ProxyH
 		if forwardContainerName.Valid {
 			host.ForwardContainerName = &forwardContainerName.String
 		}
+		if forwardContainerNetwork.Valid {
+			host.ForwardContainerNetwork = &forwardContainerNetwork.String
+		}
 		if certificateID.Valid {
 			host.CertificateID = &certificateID.String
 		}
@@ -399,7 +407,7 @@ func (r *ProxyHostRepository) GetAllEnabled(ctx context.Context) ([]model.ProxyH
 // never returned and therefore never touched. (#150)
 func (r *ProxyHostRepository) GetEnabledContainerBacked(ctx context.Context) ([]model.ProxyHost, error) {
 	query := `
-		SELECT id, COALESCE(proxy_type, 'http') as proxy_type, domain_names, forward_scheme, forward_host, forward_container_name, forward_port,
+		SELECT id, COALESCE(proxy_type, 'http') as proxy_type, domain_names, forward_scheme, forward_host, forward_container_name, forward_container_network, forward_port,
 			COALESCE(stream_listen_host, '') as stream_listen_host,
 			COALESCE(stream_listen_port, 0) as stream_listen_port,
 			COALESCE(stream_protocol, 'tcp') as stream_protocol,
@@ -439,7 +447,7 @@ func (r *ProxyHostRepository) GetEnabledContainerBacked(ctx context.Context) ([]
 	for rows.Next() {
 		var host model.ProxyHost
 		var certificateID, accessListID sql.NullString
-		var forwardContainerName sql.NullString
+		var forwardContainerName, forwardContainerNetwork sql.NullString
 		var customLocations, meta []byte
 
 		err := rows.Scan(
@@ -449,6 +457,7 @@ func (r *ProxyHostRepository) GetEnabledContainerBacked(ctx context.Context) ([]
 			&host.ForwardScheme,
 			&host.ForwardHost,
 			&forwardContainerName,
+			&forwardContainerNetwork,
 			&host.ForwardPort,
 			&host.StreamListenHost,
 			&host.StreamListenPort,
@@ -498,6 +507,9 @@ func (r *ProxyHostRepository) GetEnabledContainerBacked(ctx context.Context) ([]
 		if forwardContainerName.Valid {
 			host.ForwardContainerName = &forwardContainerName.String
 		}
+		if forwardContainerNetwork.Valid {
+			host.ForwardContainerNetwork = &forwardContainerNetwork.String
+		}
 		if certificateID.Valid {
 			host.CertificateID = &certificateID.String
 		}
@@ -520,7 +532,7 @@ func (r *ProxyHostRepository) GetEnabledContainerBacked(ctx context.Context) ([]
 // GetByCertificateID returns all proxy hosts using the specified certificate
 func (r *ProxyHostRepository) GetByCertificateID(ctx context.Context, certificateID string) ([]model.ProxyHost, error) {
 	query := `
-		SELECT id, COALESCE(proxy_type, 'http') as proxy_type, domain_names, forward_scheme, forward_host, forward_container_name, forward_port,
+		SELECT id, COALESCE(proxy_type, 'http') as proxy_type, domain_names, forward_scheme, forward_host, forward_container_name, forward_container_network, forward_port,
 			COALESCE(stream_listen_host, '') as stream_listen_host,
 			COALESCE(stream_listen_port, 0) as stream_listen_port,
 			COALESCE(stream_protocol, 'tcp') as stream_protocol,
@@ -560,7 +572,7 @@ func (r *ProxyHostRepository) GetByCertificateID(ctx context.Context, certificat
 	for rows.Next() {
 		var host model.ProxyHost
 		var certificateID, accessListID sql.NullString
-		var forwardContainerName sql.NullString
+		var forwardContainerName, forwardContainerNetwork sql.NullString
 		var customLocations, meta []byte
 
 		err := rows.Scan(
@@ -570,6 +582,7 @@ func (r *ProxyHostRepository) GetByCertificateID(ctx context.Context, certificat
 			&host.ForwardScheme,
 			&host.ForwardHost,
 			&forwardContainerName,
+			&forwardContainerNetwork,
 			&host.ForwardPort,
 			&host.StreamListenHost,
 			&host.StreamListenPort,
@@ -618,6 +631,9 @@ func (r *ProxyHostRepository) GetByCertificateID(ctx context.Context, certificat
 
 		if forwardContainerName.Valid {
 			host.ForwardContainerName = &forwardContainerName.String
+		}
+		if forwardContainerNetwork.Valid {
+			host.ForwardContainerNetwork = &forwardContainerNetwork.String
 		}
 		if certificateID.Valid {
 			host.CertificateID = &certificateID.String
