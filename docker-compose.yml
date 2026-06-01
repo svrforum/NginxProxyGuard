@@ -14,7 +14,7 @@ services:
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
       POSTGRES_DB: ${DB_NAME:-nginx_proxy_guard}
-    command: postgres -c timezone=${TZ:-UTC} -c log_timezone=${TZ:-UTC} -c shared_preload_libraries=timescaledb -c timescaledb.telemetry_level=off
+    command: postgres -c timezone=${TZ:-UTC} -c log_timezone=${TZ:-UTC} -c shared_preload_libraries=timescaledb -c timescaledb.telemetry_level=off -c max_locks_per_transaction=512
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

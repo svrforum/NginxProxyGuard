@@ -1,9 +1,11 @@
 package repository
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
+	"strings"
 	"time"
 )
 
@@ -62,6 +64,62 @@ func NewSystemLogRepository(db *sql.DB) *SystemLogRepository {
 	return &SystemLogRepository{db: db}
 }
 
+// sanitizeLogText removes NUL bytes (0x00) which PostgreSQL text/varchar columns
+// reject ("invalid byte sequence for encoding UTF8: 0x00").
+func sanitizeLogText(s string) string {
+	if !strings.ContainsRune(s, 0) {
+		return s
+	}
+	return strings.ReplaceAll(s, "\x00", "")
+}
+
+// sanitizeJSONB strips data that PostgreSQL jsonb cannot store from JSON bytes:
+// raw NUL bytes and the \u0000 unicode-null escape sequence. Container/nginx log
+// lines can carry attacker-controlled NUL bytes (e.g. in a request URI); once
+// json.Marshal encodes them as \u0000 the INSERT fails with "unsupported Unicode
+// escape sequence", silently dropping system logs. Backslash runs are decoded so
+// a literal "\u0000" in log data (encoded as \\u0000) is preserved while a genuine
+// null escape is removed. (Issue #152)
+func sanitizeJSONB(b json.RawMessage) json.RawMessage {
+	if len(b) == 0 {
+		return b
+	}
+	if !bytes.Contains(b, []byte(`\u0000`)) && bytes.IndexByte(b, 0) < 0 {
+		return b
+	}
+	out := make([]byte, 0, len(b))
+	for i := 0; i < len(b); {
+		c := b[i]
+		if c == 0 { // raw NUL byte
+			i++
+			continue
+		}
+		if c == '\\' {
+			// Consume the run of consecutive backslashes.
+			j := i
+			for j < len(b) && b[j] == '\\' {
+				j++
+			}
+			run := j - i
+			for k := 0; k < run/2; k++ { // emit escaped-backslash pairs verbatim
+				out = append(out, '\\', '\\')
+			}
+			if run%2 == 1 { // odd trailing backslash starts an escape
+				if j+4 < len(b) && b[j] == 'u' && b[j+1] == '0' && b[j+2] == '0' && b[j+3] == '0' && b[j+4] == '0' {
+					i = j + 5 // drop the genuine \u0000 escape
+					continue
+				}
+				out = append(out, '\\')
+			}
+			i = j
+			continue
+		}
+		out = append(out, c)
+		i++
+	}
+	return out
+}
+
 // Create inserts a new system log entry
 func (r *SystemLogRepository) Create(ctx context.Context, log *SystemLog) error {
 	query := `
@@ -72,12 +130,12 @@ func (r *SystemLogRepository) Create(ctx context.Context, log *SystemLog) error 
 
 	var details interface{}
 	if log.Details != nil {
-		details = log.Details
+		details = sanitizeJSONB(log.Details)
 	}
 
 	return r.db.QueryRowContext(ctx, query,
-		log.Source, log.Level, log.Message, details,
-		nullString(log.ContainerName), nullString(log.Component),
+		log.Source, log.Level, sanitizeLogText(log.Message), details,
+		nullString(log.ContainerName), nullString(sanitizeLogText(log.Component)),
 	).Scan(&log.ID, &log.CreatedAt)
 }
 
@@ -105,12 +163,12 @@ func (r *SystemLogRepository) CreateBatch(ctx context.Context, logs []SystemLog)
 	for _, log := range logs {
 		var details interface{}
 		if log.Details != nil {
-			details = log.Details
+			details = sanitizeJSONB(log.Details)
 		}
 
 		_, err := stmt.ExecContext(ctx,
-			log.Source, log.Level, log.Message, details,
-			nullString(log.ContainerName), nullString(log.Component),
+			log.Source, log.Level, sanitizeLogText(log.Message), details,
+			nullString(log.ContainerName), nullString(sanitizeLogText(log.Component)),
 		)
 		if err != nil {
 			return err

@@ -397,12 +397,15 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 			argIndex++
 		}
 		if filter.StartTime != nil {
-			conditions = append(conditions, fmt.Sprintf("timestamp >= $%d", argIndex))
+			// Bound created_at (the hypertable partition key) so TimescaleDB can
+			// prune chunks; filtering timestamp could not prune and forced a
+			// lock on every chunk. (Issue #152)
+			conditions = append(conditions, fmt.Sprintf("created_at >= $%d", argIndex))
 			args = append(args, *filter.StartTime)
 			argIndex++
 		}
 		if filter.EndTime != nil {
-			conditions = append(conditions, fmt.Sprintf("timestamp <= $%d", argIndex))
+			conditions = append(conditions, fmt.Sprintf("created_at <= $%d", argIndex))
 			args = append(args, *filter.EndTime)
 			argIndex++
 		}

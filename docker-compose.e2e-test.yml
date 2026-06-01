@@ -23,7 +23,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: nginx_guard_test
-    command: postgres -c shared_preload_libraries=timescaledb -c timescaledb.telemetry_level=off -c shared_buffers=128MB -c work_mem=4MB -c maintenance_work_mem=64MB
+    command: postgres -c shared_preload_libraries=timescaledb -c timescaledb.telemetry_level=off -c shared_buffers=128MB -c work_mem=4MB -c maintenance_work_mem=64MB -c max_locks_per_transaction=512
     deploy:
       resources:
         limits:

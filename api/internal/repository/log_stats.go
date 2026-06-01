@@ -67,12 +67,15 @@ func (r *LogRepository) GetStatsWithFilter(ctx context.Context, filter *model.Lo
 			argIndex++
 		}
 		if filter.StartTime != nil {
-			whereClause += fmt.Sprintf(" AND timestamp >= $%d", argIndex)
+			// Filter on created_at (the hypertable partition key), not timestamp,
+			// so TimescaleDB can prune chunks. Bounding the wrong column made every
+			// stats query scan all chunks and exhaust max_locks_per_transaction. (Issue #152)
+			whereClause += fmt.Sprintf(" AND created_at >= $%d", argIndex)
 			args = append(args, *filter.StartTime)
 			argIndex++
 		}
 		if filter.EndTime != nil {
-			whereClause += fmt.Sprintf(" AND timestamp <= $%d", argIndex)
+			whereClause += fmt.Sprintf(" AND created_at <= $%d", argIndex)
 			args = append(args, *filter.EndTime)
 			argIndex++
 		}

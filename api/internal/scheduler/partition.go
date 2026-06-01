@@ -387,6 +387,21 @@ func (s *PartitionScheduler) enforceRetention() {
 		log.Printf("[PartitionScheduler] Dropped %d old log partitions (retention: %d months)", droppedLogs, logRetentionMonths)
 	}
 
+	// 3b. Drop old TimescaleDB chunks for logs_partitioned.
+	// drop_old_partitions() above only matches legacy native partitions named
+	// 'logs_p%'. Once logs_partitioned is a TimescaleDB hypertable its chunks live
+	// in _timescaledb_internal as _hyper_* and are never matched, so chunks would
+	// otherwise grow unbounded — large queries then lock every chunk and exhaust
+	// max_locks_per_transaction. Prune them with drop_chunks. (Issue #152)
+	s.dropOldChunks(ctx, "logs_partitioned", settings.AccessLogRetentionDays)
+
+	// system_logs and audit_logs are hypertables too. Their row-level DELETE
+	// cleanup (and audit_logs had no retention at all) leaves empty chunks behind,
+	// so prune their chunks as well to keep chunk counts — and lock pressure —
+	// bounded. (Issue #152)
+	s.dropOldChunks(ctx, "system_logs", settings.SystemLogRetentionDays)
+	s.dropOldChunks(ctx, "audit_logs", settings.AuditLogRetentionDays)
+
 	// 4. Drop old stats partitions (dashboard_stats_hourly_partitioned)
 	statsRetentionMonths := settings.StatsRetentionDays / 30
 	if statsRetentionMonths < 1 {
@@ -399,6 +414,44 @@ func (s *PartitionScheduler) enforceRetention() {
 		log.Printf("[PartitionScheduler] Failed to drop old stats partitions: %v", err)
 	} else if droppedStats > 0 {
 		log.Printf("[PartitionScheduler] Dropped %d old stats partitions (retention: %d months)", droppedStats, statsRetentionMonths)
+	}
+}
+
+// dropOldChunks prunes TimescaleDB chunks older than retentionDays from a
+// hypertable. It is a no-op (logged, not fatal) when TimescaleDB is unavailable
+// or the table is not a hypertable, preserving graceful degradation. (Issue #152)
+func (s *PartitionScheduler) dropOldChunks(ctx context.Context, hypertable string, retentionDays int) {
+	// Guard: a zero/negative retention means "unset" — never interpret it as
+	// "drop everything", which would wipe audit history. Skip instead. (Issue #152)
+	if retentionDays < 1 {
+		return
+	}
+
+	var isHypertable bool
+	err := s.db.QueryRowContext(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM timescaledb_information.hypertables
+			WHERE hypertable_name = $1
+		)`, hypertable).Scan(&isHypertable)
+	if err != nil {
+		// TimescaleDB extension/view absent — nothing to prune here.
+		log.Printf("[PartitionScheduler] Skipping chunk retention for %s: %v", hypertable, err)
+		return
+	}
+	if !isHypertable {
+		return
+	}
+
+	var dropped int
+	err = s.db.QueryRowContext(ctx, `
+		SELECT count(*)::int FROM drop_chunks($1, older_than => ($2 || ' days')::interval)`,
+		hypertable, retentionDays).Scan(&dropped)
+	if err != nil {
+		log.Printf("[PartitionScheduler] Failed to drop old chunks for %s: %v", hypertable, err)
+		return
+	}
+	if dropped > 0 {
+		log.Printf("[PartitionScheduler] Dropped %d old chunks from %s (retention: %d days)", dropped, hypertable, retentionDays)
 	}
 }
 
