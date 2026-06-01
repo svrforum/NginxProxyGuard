@@ -460,7 +460,12 @@ jobs:
           PREV_TAG_FOR_LOG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           AUTO_NOTES=""
           if [ -n "$PREV_TAG_FOR_LOG" ]; then
-            ALL=$(git log --pretty=format:"%s" "$PREV_TAG_FOR_LOG..HEAD" | grep -vE "^(release:|Merge )")
+            # `|| true`: an empty match here is valid (e.g. a release whose range
+            # is only release:/Merge commits) and must not trip `set -e`.
+            ALL=$(git log --pretty=format:"%s" "$PREV_TAG_FOR_LOG..HEAD" | grep -vE "^(release:|Merge )" || true)
+            # `|| true`: the subshell's final statement is a `[ -n ... ] && printf`
+            # guard whose test is false when a section (e.g. Internal) has no
+            # commits, returning non-zero. Without this a fix-only release fails.
             AUTO_BODY=$(
               section() {
                 local body
@@ -474,7 +479,7 @@ jobs:
               [ -n "$OTHER" ] && printf '### Other\n\n%s\n\n' "$OTHER"
               INTERNAL=$(printf '%s\n' "$ALL" | grep -E "^(docs|chore|test|refactor|style)(\([^)]*\))?: " | sed -E 's/^[a-z]+(\([^)]*\))?: */- /')
               [ -n "$INTERNAL" ] && printf '<details><summary>🔧 Internal (docs / chore / tests / refactor)</summary>\n\n%s\n</details>\n' "$INTERNAL"
-            )
+            ) || true
             if [ -n "$AUTO_BODY" ]; then
               AUTO_NOTES=$(printf "## What's Changed\n\n%s" "$AUTO_BODY")
             fi
