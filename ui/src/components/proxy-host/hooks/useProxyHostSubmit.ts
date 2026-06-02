@@ -235,11 +235,15 @@ export function useProxyHostSubmit({
     if (data.proxy_type === 'stream') {
       const protocol = data.stream_protocol || 'tcp'
       data.forward_scheme = protocol
-      data.ssl_enabled = false
+      // Stream TLS termination (ssl_enabled + certificate) is allowed for TCP and
+      // is mutually exclusive with passthrough (ssl_preread); preserve it. The
+      // other SSL flags are HTTP-only and stay off. (#156)
+      const isStreamTerminate = !!data.ssl_enabled && !!data.certificate_id && protocol !== 'udp' && !data.stream_ssl_preread
+      data.ssl_enabled = isStreamTerminate
       data.ssl_force_https = false
       data.ssl_http2 = false
       data.ssl_http3 = false
-      data.certificate_id = undefined
+      if (!isStreamTerminate) data.certificate_id = undefined
       data.allow_websocket_upgrade = false
       data.cache_enabled = false
       data.block_exploits = false
