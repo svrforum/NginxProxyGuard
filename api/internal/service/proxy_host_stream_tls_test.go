@@ -72,3 +72,76 @@ func TestNormalizeCreate_StreamTLSExclusions(t *testing.T) {
 		t.Fatal("passthrough should keep preread, clear cert/ssl")
 	}
 }
+
+func TestNormalizeUpdate_StreamTLS(t *testing.T) {
+	// 1. passthrough stream host -> update to terminate (ssl + cert): preread cleared.
+	existing := &model.ProxyHost{
+		ID: "h1", ProxyType: "stream", StreamProtocol: "tcp",
+		StreamListenPort: 18888, ForwardHost: "10.0.0.5", ForwardPort: 8888,
+		StreamSSLPreread: true, SSLEnabled: false,
+	}
+	req := &model.UpdateProxyHostRequest{
+		SSLEnabled:       boolPtr(true),
+		CertificateID:    cidPtr("cert-1"),
+		StreamSSLPreread: boolPtr(false),
+	}
+	cand, err := normalizeUpdateProxyHostRequest(existing, req)
+	if err != nil {
+		t.Fatalf("passthrough->terminate should be allowed: %v", err)
+	}
+	if !cand.SSLEnabled || cand.CertificateID == nil || *cand.CertificateID != "cert-1" {
+		t.Fatalf("terminate fields not applied: ssl=%v cert=%v", cand.SSLEnabled, cand.CertificateID)
+	}
+	if cand.StreamSSLPreread {
+		t.Fatal("preread must be false when terminating")
+	}
+
+	// 2. terminate stream host -> change protocol to udp: ssl forced off, cert cleared.
+	existing = &model.ProxyHost{
+		ID: "h2", ProxyType: "stream", StreamProtocol: "tcp",
+		StreamListenPort: 18889, ForwardHost: "10.0.0.6", ForwardPort: 8889,
+		SSLEnabled: true, CertificateID: cidPtr("cert-1"), StreamSSLPreread: false,
+	}
+	req = &model.UpdateProxyHostRequest{
+		StreamProtocol: cidPtr("udp"),
+	}
+	cand, err = normalizeUpdateProxyHostRequest(existing, req)
+	if err != nil {
+		t.Fatalf("terminate->udp normalize err: %v", err)
+	}
+	if cand.SSLEnabled {
+		t.Fatal("udp must force ssl off")
+	}
+	if cand.CertificateID != nil && *cand.CertificateID != "" {
+		t.Fatalf("udp must clear certificate, got %v", cand.CertificateID)
+	}
+
+	// 3. update to terminate WITHOUT cert -> error.
+	existing = &model.ProxyHost{
+		ID: "h3", ProxyType: "stream", StreamProtocol: "tcp",
+		StreamListenPort: 18890, ForwardHost: "10.0.0.7", ForwardPort: 8890,
+		StreamSSLPreread: false, SSLEnabled: false,
+	}
+	req = &model.UpdateProxyHostRequest{
+		SSLEnabled:    boolPtr(true),
+		CertificateID: cidPtr(""),
+	}
+	if _, err := normalizeUpdateProxyHostRequest(existing, req); err == nil {
+		t.Fatal("terminate without cert must be rejected")
+	}
+
+	// 4. update to terminate WITH preread also true -> mutual-exclusion error.
+	existing = &model.ProxyHost{
+		ID: "h4", ProxyType: "stream", StreamProtocol: "tcp",
+		StreamListenPort: 18891, ForwardHost: "10.0.0.8", ForwardPort: 8891,
+		StreamSSLPreread: true, SSLEnabled: false,
+	}
+	req = &model.UpdateProxyHostRequest{
+		SSLEnabled:       boolPtr(true),
+		CertificateID:    cidPtr("cert-1"),
+		StreamSSLPreread: boolPtr(true),
+	}
+	if _, err := normalizeUpdateProxyHostRequest(existing, req); err == nil {
+		t.Fatal("terminate + preread must be rejected")
+	}
+}
