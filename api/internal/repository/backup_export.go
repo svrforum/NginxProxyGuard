@@ -141,5 +141,12 @@ func (r *BackupRepository) ExportAllData(ctx context.Context) (*model.ExportData
 	}
 	export.FilterSubscriptions = filterSubscriptions
 
+	// Export DDNS Records (#154)
+	ddnsRecords, err := r.exportDDNSRecords(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to export ddns records: %w", err)
+	}
+	export.DDNSRecords = ddnsRecords
+
 	return export, nil
 }

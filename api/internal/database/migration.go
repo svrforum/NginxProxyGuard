@@ -865,6 +865,30 @@ END $$`,
 			desc: "v2.20.1: proxy_hosts.forward_container_network (#151)",
 			sql:  `ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS forward_container_network text`,
 		},
+		// -----------------------------------------------------------------------
+		// Issue #154: DDNS records table. Keeps registered hostnames' A records
+		// pointed at the server's public IPv4 via Cloudflare/DuckDNS. FK to
+		// dns_providers (credentials reused) with ON DELETE CASCADE.
+		// -----------------------------------------------------------------------
+		{
+			desc: "create ddns_records table (#154)",
+			sql: `CREATE TABLE IF NOT EXISTS public.ddns_records (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL PRIMARY KEY,
+    hostname character varying(253) NOT NULL,
+    dns_provider_id uuid NOT NULL REFERENCES public.dns_providers(id) ON DELETE CASCADE,
+    record_type character varying(8) DEFAULT 'A' NOT NULL,
+    proxied boolean DEFAULT false NOT NULL,
+    ttl integer DEFAULT 1 NOT NULL,
+    enabled boolean DEFAULT true NOT NULL,
+    last_ip character varying(45) DEFAULT '' NOT NULL,
+    last_synced_at timestamp with time zone,
+    last_status character varying(16) DEFAULT '' NOT NULL,
+    last_error text DEFAULT '' NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ddns_records_hostname_provider ON public.ddns_records (hostname, dns_provider_id);`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

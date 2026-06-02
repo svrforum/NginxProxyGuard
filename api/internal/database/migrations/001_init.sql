@@ -488,6 +488,22 @@ CREATE TABLE IF NOT EXISTS public.dns_providers (
 COMMENT ON TABLE public.dns_providers IS 'Stores DNS provider API credentials for ACME DNS-01 challenges';
 COMMENT ON COLUMN public.dns_providers.provider_type IS 'DNS provider type: cloudflare, route53, manual, etc.';
 COMMENT ON COLUMN public.dns_providers.credentials IS 'Encrypted JSON containing API tokens/keys';
+CREATE TABLE IF NOT EXISTS public.ddns_records (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL PRIMARY KEY,
+    hostname character varying(253) NOT NULL,
+    dns_provider_id uuid NOT NULL REFERENCES public.dns_providers(id) ON DELETE CASCADE,
+    record_type character varying(8) DEFAULT 'A' NOT NULL,
+    proxied boolean DEFAULT false NOT NULL,
+    ttl integer DEFAULT 1 NOT NULL,
+    enabled boolean DEFAULT true NOT NULL,
+    last_ip character varying(45) DEFAULT '' NOT NULL,
+    last_synced_at timestamp with time zone,
+    last_status character varying(16) DEFAULT '' NOT NULL,
+    last_error text DEFAULT '' NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ddns_records_hostname_provider ON public.ddns_records (hostname, dns_provider_id);
 CREATE TABLE IF NOT EXISTS public.exploit_block_rules (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     category character varying(50) NOT NULL,
@@ -3323,6 +3339,24 @@ ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS forward_container_name t
 -- so multi-network containers are not reconciled to a wrong-network IP. Existing
 -- v2.20.0 rows get NULL and are skipped by the reconcile scheduler (safe mode).
 ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS forward_container_network text;
+
+-- DDNS records (#154): keep registered hostnames' A records pointed at the server's public IPv4.
+CREATE TABLE IF NOT EXISTS public.ddns_records (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL PRIMARY KEY,
+    hostname character varying(253) NOT NULL,
+    dns_provider_id uuid NOT NULL REFERENCES public.dns_providers(id) ON DELETE CASCADE,
+    record_type character varying(8) DEFAULT 'A' NOT NULL,
+    proxied boolean DEFAULT false NOT NULL,
+    ttl integer DEFAULT 1 NOT NULL,
+    enabled boolean DEFAULT true NOT NULL,
+    last_ip character varying(45) DEFAULT '' NOT NULL,
+    last_synced_at timestamp with time zone,
+    last_status character varying(16) DEFAULT '' NOT NULL,
+    last_error text DEFAULT '' NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ddns_records_hostname_provider ON public.ddns_records (hostname, dns_provider_id);
 
 -- Add column comments
 COMMENT ON COLUMN public.proxy_hosts.cache_static_only IS 'Only cache static assets (js, css, images, fonts) - excludes API paths';

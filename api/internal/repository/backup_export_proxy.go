@@ -348,6 +348,40 @@ func (r *BackupRepository) exportDNSProviders(ctx context.Context) ([]model.DNSP
 	return exports, nil
 }
 
+// exportDDNSRecords exports DDNS records for backup (#154).
+func (r *BackupRepository) exportDDNSRecords(ctx context.Context) ([]model.DDNSRecordExport, error) {
+	query := `
+		SELECT id, hostname, dns_provider_id, record_type, proxied, ttl, enabled,
+		       last_ip, last_synced_at, last_status, last_error
+		FROM ddns_records ORDER BY created_at
+	`
+
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var exports []model.DDNSRecordExport
+	for rows.Next() {
+		var rec model.DDNSRecordExport
+		var lastSyncedAt sql.NullTime
+		err := rows.Scan(
+			&rec.ID, &rec.Hostname, &rec.DNSProviderID, &rec.RecordType, &rec.Proxied,
+			&rec.TTL, &rec.Enabled, &rec.LastIP, &lastSyncedAt, &rec.LastStatus, &rec.LastError,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if lastSyncedAt.Valid {
+			rec.LastSyncedAt = &lastSyncedAt.Time
+		}
+		exports = append(exports, rec)
+	}
+
+	return exports, nil
+}
+
 func (r *BackupRepository) exportCertificates(ctx context.Context) ([]model.CertificateExport, error) {
 	query := `
 		SELECT id, domain_names, expires_at, certificate_path, private_key_path, provider,

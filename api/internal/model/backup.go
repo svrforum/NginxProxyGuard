@@ -234,6 +234,24 @@ type ExportData struct {
 
 	// Filter Subscriptions
 	FilterSubscriptions []FilterSubscriptionExport `json:"filter_subscriptions,omitempty"`
+
+	// DDNS Records (#154)
+	DDNSRecords []DDNSRecordExport `json:"ddns_records,omitempty"`
+}
+
+// DDNSRecordExport represents a DDNS record for export (#154)
+type DDNSRecordExport struct {
+	ID            string     `json:"id"`
+	Hostname      string     `json:"hostname"`
+	DNSProviderID string     `json:"dns_provider_id"`
+	RecordType    string     `json:"record_type"`
+	Proxied       bool       `json:"proxied"`
+	TTL           int        `json:"ttl"`
+	Enabled       bool       `json:"enabled"`
+	LastIP        string     `json:"last_ip,omitempty"`
+	LastSyncedAt  *time.Time `json:"last_synced_at,omitempty"`
+	LastStatus    string     `json:"last_status,omitempty"`
+	LastError     string     `json:"last_error,omitempty"`
 }
 
 // GlobalSettingsExport represents global settings for export

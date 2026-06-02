@@ -223,6 +223,20 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 		}
 	}
 
+	// Import DDNS Records (#154) — depend on dns_providers
+	for _, rec := range data.DDNSRecords {
+		// Remap DNS provider ID
+		if newID, ok := dnsProviderIDMap[rec.DNSProviderID]; ok {
+			rec.DNSProviderID = newID
+		} else {
+			// Skip if the referenced provider wasn't imported (FK would fail)
+			continue
+		}
+		if err := r.importDDNSRecord(ctx, tx, &rec); err != nil {
+			return fmt.Errorf("failed to import ddns record %s: %w", rec.Hostname, err)
+		}
+	}
+
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
@@ -255,6 +269,7 @@ func (r *BackupRepository) clearExistingData(ctx context.Context, tx *sql.Tx) er
 		"proxy_hosts",       // references certificates and access_lists
 		"access_list_items", // references access_lists
 		"access_lists",
+		"ddns_records",    // references dns_providers (#154)
 		"certificates",    // references dns_providers
 		"dns_providers",
 		"global_uri_blocks",            // standalone table

@@ -36,6 +36,36 @@ func (r *BackupRepository) importDNSProvider(ctx context.Context, tx *sql.Tx, dp
 	return newID, err
 }
 
+// importDDNSRecord imports a single DDNS record (#154). dns_provider_id must
+// already be remapped to the freshly-imported provider ID by the caller.
+func (r *BackupRepository) importDDNSRecord(ctx context.Context, tx *sql.Tx, rec *model.DDNSRecordExport) error {
+	// Backwards-compat defaults for older backups missing these columns.
+	if rec.RecordType == "" {
+		rec.RecordType = "A"
+	}
+	if rec.TTL < 1 {
+		rec.TTL = 1
+	}
+
+	var lastSyncedAt interface{}
+	if rec.LastSyncedAt != nil {
+		lastSyncedAt = *rec.LastSyncedAt
+	}
+
+	query := `
+		INSERT INTO ddns_records (hostname, dns_provider_id, record_type, proxied, ttl, enabled,
+		                          last_ip, last_synced_at, last_status, last_error)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		ON CONFLICT (hostname, dns_provider_id) DO NOTHING
+	`
+
+	_, err := tx.ExecContext(ctx, query,
+		rec.Hostname, rec.DNSProviderID, rec.RecordType, rec.Proxied, rec.TTL, rec.Enabled,
+		rec.LastIP, lastSyncedAt, rec.LastStatus, rec.LastError,
+	)
+	return err
+}
+
 func (r *BackupRepository) importCertificate(ctx context.Context, tx *sql.Tx, cert *model.CertificateExport) (string, error) {
 	query := `
 		INSERT INTO certificates (domain_names, expires_at, certificate_path, private_key_path, provider,
