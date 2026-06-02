@@ -440,6 +440,15 @@ jobs:
           # 1. 기존 릴리즈 노트 확인 (수동 작성된 것이 있으면 보존)
           EXISTING=$(gh release view "$TAG_NAME" --json body --jq '.body' 2>/dev/null || echo "")
 
+          # 1b. 체크인된 사용자 작성 릴리스 노트 (docs/release-notes/<tag>.md).
+          #     커밋 로그 자동 생성(아래 3번)은 개발용 노이즈가 많으므로, 릴리스 시
+          #     이 파일에 사용자 관점 changelog를 작성해 버전 bump 커밋에 포함하면
+          #     그대로 발행된다. (Docker Images 블록은 Create Release 스텝이 append)
+          FILE_NOTES=""
+          if [ -f "docs/release-notes/${TAG_NAME}.md" ]; then
+            FILE_NOTES=$(cat "docs/release-notes/${TAG_NAME}.md")
+          fi
+
           # 2. Annotated tag 메시지 확인
           # `git tag -l --format='%(contents)'` returns the underlying commit
           # message for lightweight tags, which leaks the release commit body
@@ -485,9 +494,11 @@ jobs:
             fi
           fi
 
-          # 우선순위: 기존 릴리즈 노트 > 태그 메시지 > 자동 생성
+          # 우선순위: 기존 릴리즈 노트 > 체크인 노트 파일 > 태그 메시지 > 자동 생성
           if [ -n "$EXISTING" ]; then
             NOTES="$EXISTING"
+          elif [ -n "$FILE_NOTES" ]; then
+            NOTES="$FILE_NOTES"
           elif [ -n "$TAG_MSG" ]; then
             NOTES="$TAG_MSG"
           elif [ -n "$AUTO_NOTES" ]; then
