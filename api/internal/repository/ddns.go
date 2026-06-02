@@ -3,12 +3,22 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
+
+	"github.com/lib/pq"
 
 	"nginx-proxy-guard/internal/database"
 	"nginx-proxy-guard/internal/model"
 )
+
+// isDDNSUniqueViolation reports whether err is a PostgreSQL unique-violation on
+// the (hostname, dns_provider_id) index (idx_ddns_records_hostname_provider).
+func isDDNSUniqueViolation(err error) bool {
+	var pqErr *pq.Error
+	return errors.As(err, &pqErr) && pqErr.Code == "23505"
+}
 
 // DDNSRepository persists DDNS records (#154).
 type DDNSRepository struct {
@@ -68,6 +78,9 @@ func (r *DDNSRepository) Create(ctx context.Context, req *model.CreateDDNSRecord
 		req.Hostname, req.DNSProviderID, recordType, req.Proxied, ttl, req.Enabled,
 	).Scan)
 	if err != nil {
+		if isDDNSUniqueViolation(err) {
+			return nil, fmt.Errorf("DDNS record for this hostname and provider already exists")
+		}
 		return nil, fmt.Errorf("failed to create ddns record: %w", err)
 	}
 	return rec, nil
@@ -163,6 +176,9 @@ func (r *DDNSRepository) Update(ctx context.Context, id string, req *model.Updat
 		return nil, nil
 	}
 	if err != nil {
+		if isDDNSUniqueViolation(err) {
+			return nil, fmt.Errorf("DDNS record for this hostname and provider already exists")
+		}
 		return nil, fmt.Errorf("failed to update ddns record: %w", err)
 	}
 	return rec, nil

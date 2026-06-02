@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 
@@ -62,6 +63,9 @@ func (h *DDNSHandler) Create(c echo.Context) error {
 
 	rec, err := h.service.Create(c.Request().Context(), &req)
 	if err != nil {
+		if strings.Contains(err.Error(), "already exist") {
+			return conflictError(c, err.Error())
+		}
 		return internalError(c, "create DDNS record", err)
 	}
 
@@ -81,6 +85,9 @@ func (h *DDNSHandler) Update(c echo.Context) error {
 	if err != nil {
 		if err == model.ErrNotFound {
 			return notFoundError(c, "DDNS record")
+		}
+		if strings.Contains(err.Error(), "already exist") {
+			return conflictError(c, err.Error())
 		}
 		return internalError(c, "update DDNS record", err)
 	}
