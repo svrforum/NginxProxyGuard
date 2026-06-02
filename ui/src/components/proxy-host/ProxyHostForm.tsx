@@ -119,8 +119,10 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
     if (Object.keys(errors).length > 0) {
       if (errors.domain_names || errors.forward_host || errors.forward_port || errors.stream_listen_port) {
         setActiveTab('basic')
-      } else if (!isStream && errors.certificate_id) {
-        setActiveTab('ssl')
+      } else if (errors.certificate_id) {
+        // Stream TLS termination has no SSL tab — the cert dropdown lives in
+        // the Basic tab. HTTP certs live in the SSL tab.
+        setActiveTab(isStream ? 'basic' : 'ssl')
       }
     }
   }, [errors, isStream])
@@ -253,6 +255,7 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
                 addDomain={addDomain}
                 removeDomain={removeDomain}
                 updateDomain={updateDomain}
+                availableCerts={availableCerts}
               />
             )}
 

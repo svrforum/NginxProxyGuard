@@ -122,6 +122,16 @@
       "websocket": "WebSocket Support",
       "websocketDescription": "Allow WebSocket connections"
     },
+    "stream": {
+      "tlsMode": {
+        "label": "TLS Mode",
+        "none": "None (plain TCP)",
+        "passthrough": "TLS passthrough (ssl_preread)",
+        "terminate": "TLS termination (certificate)",
+        "help": "TCP only. Passthrough reads the TLS SNI without terminating; termination decrypts TLS with a certificate and forwards plaintext to the backend. The two are mutually exclusive.",
+        "certLabel": "Certificate"
+      }
+    },
     "ssl": {
       "enabled": "SSL Enabled",
       "enabledDescription": "Enable HTTPS connections",

@@ -15,6 +15,12 @@ interface BasicTabFullProps {
   addDomain: () => void
   removeDomain: (index: number) => void
   updateDomain: (index: number, value: string) => void
+  availableCerts: Array<{
+    id: string
+    domain_names: string[]
+    provider: string
+    status: string
+  }>
 }
 
 export function BasicTabContent({
@@ -27,6 +33,7 @@ export function BasicTabContent({
   addDomain,
   removeDomain,
   updateDomain,
+  availableCerts,
 }: BasicTabFullProps) {
   const { t } = useTranslation('proxyHost')
   const [dockerSelectorOpen, setDockerSelectorOpen] = useState(false)
@@ -79,9 +86,26 @@ export function BasicTabContent({
       ...prev,
       stream_protocol: protocol,
       forward_scheme: protocol,
+      // UDP supports neither passthrough (ssl_preread) nor TLS termination —
+      // reset the TLS mode to 'none' (clear preread, ssl_enabled and cert).
       stream_ssl_preread: protocol === 'udp' ? false : prev.stream_ssl_preread,
+      ssl_enabled: protocol === 'udp' ? false : prev.ssl_enabled,
+      certificate_id: protocol === 'udp' ? undefined : prev.certificate_id,
       stream_accept_proxy_protocol: protocol === 'udp' ? false : prev.stream_accept_proxy_protocol,
       stream_send_proxy_protocol: protocol === 'udp' ? false : prev.stream_send_proxy_protocol,
+    }))
+  }
+
+  // Stream TLS mode is derived from the existing fields (no new model field):
+  // ssl_enabled => 'terminate', stream_ssl_preread => 'passthrough', else 'none'.
+  const streamTlsMode: 'none' | 'passthrough' | 'terminate' =
+    formData.ssl_enabled ? 'terminate' : (formData.stream_ssl_preread ? 'passthrough' : 'none')
+  const setStreamTlsMode = (mode: 'none' | 'passthrough' | 'terminate') => {
+    setFormData((prev) => ({
+      ...prev,
+      stream_ssl_preread: mode === 'passthrough',
+      ssl_enabled: mode === 'terminate',
+      certificate_id: mode === 'terminate' ? prev.certificate_id : undefined,
     }))
   }
 
@@ -268,20 +292,60 @@ export function BasicTabContent({
             </div>
           </div>
 
-          <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <label className={`flex items-start gap-2 rounded-lg border p-3 text-sm ${streamProtocol === 'udp' ? 'opacity-50' : 'cursor-pointer border-slate-200 dark:border-slate-700'}`}>
-              <input
-                type="checkbox"
-                checked={!!formData.stream_ssl_preread}
-                disabled={streamProtocol === 'udp'}
-                onChange={(e) => setFormData((prev) => ({ ...prev, stream_ssl_preread: e.target.checked }))}
-                className="mt-0.5 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span>
-                <span className="block font-medium text-slate-700 dark:text-slate-300">{t('form.basic.streamSslPreread')}</span>
-                <span className="text-xs text-slate-500 dark:text-slate-400">{t('form.basic.streamSslPrereadDescription')}</span>
-              </span>
+          <div className="mt-4">
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
+              {t('form.stream.tlsMode.label')}
             </label>
+            <select
+              value={streamTlsMode}
+              disabled={streamProtocol === 'udp'}
+              onChange={(e) => setStreamTlsMode(e.target.value as 'none' | 'passthrough' | 'terminate')}
+              className={`w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 dark:text-white font-medium ${streamProtocol === 'udp' ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <option value="none">{t('form.stream.tlsMode.none')}</option>
+              <option value="passthrough">{t('form.stream.tlsMode.passthrough')}</option>
+              <option value="terminate">{t('form.stream.tlsMode.terminate')}</option>
+            </select>
+            <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">{t('form.stream.tlsMode.help')}</p>
+
+            {streamTlsMode === 'terminate' && (
+              <div className="mt-3">
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
+                  {t('form.stream.tlsMode.certLabel')}
+                </label>
+                <select
+                  value={formData.certificate_id || ''}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      certificate_id: e.target.value || undefined,
+                    }))
+                  }
+                  className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 dark:text-white ${errors.certificate_id ? 'border-red-300 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'}`}
+                >
+                  <option value="">{t('form.ssl.selectCertificate')}...</option>
+                  {availableCerts.map((cert) => (
+                    <option key={cert.id} value={cert.id}>
+                      {cert.domain_names.join(', ')} ({cert.provider})
+                    </option>
+                  ))}
+                </select>
+                {errors.certificate_id && (
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.certificate_id}</p>
+                )}
+                {availableCerts.length === 0 && (
+                  <p className="mt-2 text-xs text-amber-600 bg-amber-50 p-2 rounded flex items-center gap-2 dark:text-amber-400 dark:bg-amber-900/20">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    {t('form.ssl.noCertificate')}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className={`flex items-start gap-2 rounded-lg border p-3 text-sm ${streamProtocol === 'udp' ? 'opacity-50' : 'cursor-pointer border-slate-200 dark:border-slate-700'}`}>
               <input
                 type="checkbox"

@@ -65,6 +65,12 @@ export function validateProxyHostForm({
     if (!listenPort || listenPort < 1 || listenPort > 65535) {
       newErrors.stream_listen_port = t('validation.portRange')
     }
+
+    // Stream TLS termination reuses ssl_enabled + certificate_id and requires
+    // a certificate (selected via the Basic tab dropdown; no create-mode here).
+    if (formData.ssl_enabled && !formData.certificate_id) {
+      newErrors.certificate_id = t('validation.certSelectionRequired')
+    }
   }
 
   if (formData.proxy_type !== 'stream' && formData.ssl_enabled && certMode === 'select' && !formData.certificate_id) {

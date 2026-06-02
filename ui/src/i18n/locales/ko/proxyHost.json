@@ -122,6 +122,16 @@
       "websocket": "웹소켓 지원",
       "websocketDescription": "WebSocket 연결을 허용합니다"
     },
+    "stream": {
+      "tlsMode": {
+        "label": "TLS 모드",
+        "none": "없음(평문 TCP)",
+        "passthrough": "TLS 패스스루 (ssl_preread)",
+        "terminate": "TLS 종단 (인증서)",
+        "help": "TCP 전용. 패스스루는 TLS를 종단하지 않고 SNI만 읽고, 종단은 인증서로 TLS를 복호화해 백엔드로 평문 전달합니다. 둘은 함께 사용할 수 없습니다.",
+        "certLabel": "인증서"
+      }
+    },
     "ssl": {
       "enabled": "SSL 활성화",
       "enabledDescription": "HTTPS 연결을 활성화합니다",
