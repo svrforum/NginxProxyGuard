@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"sort"
 	"strings"
 	"time"
 )
@@ -394,6 +395,7 @@ func (s *DockerStatsService) ListContainersWithNetworks(ctx context.Context) ([]
 		}
 	}
 
+	sortContainers(containers)
 	return containers, nil
 }
 
@@ -442,6 +444,28 @@ func (s *DockerStatsService) ResolveContainerIP(ctx context.Context, name string
 		return "", err
 	}
 	return pickContainerIP(containers, name, network)
+}
+
+// sortContainerInfo orders a container's networks (by name) and ports (by port
+// number, then protocol) deterministically. Docker inspect returns these from
+// Go maps, so without this the UI reshuffles them on every refresh. (Issue #153)
+func sortContainerInfo(info *DockerContainerInfo) {
+	sort.Slice(info.Networks, func(i, j int) bool {
+		return info.Networks[i].Name < info.Networks[j].Name
+	})
+	sort.Slice(info.Ports, func(i, j int) bool {
+		if info.Ports[i].ContainerPort != info.Ports[j].ContainerPort {
+			return info.Ports[i].ContainerPort < info.Ports[j].ContainerPort
+		}
+		return info.Ports[i].Protocol < info.Ports[j].Protocol
+	})
+}
+
+// sortContainers orders containers by name for a stable picker list. (Issue #153)
+func sortContainers(containers []DockerContainerInfo) {
+	sort.Slice(containers, func(i, j int) bool {
+		return containers[i].Name < containers[j].Name
+	})
 }
 
 // inspectContainer gets detailed network info for a single container
@@ -506,6 +530,8 @@ func (s *DockerStatsService) inspectContainer(ctx context.Context, name string) 
 			}
 		}
 	}
+
+	sortContainerInfo(info)
 
 	return info, nil
 }
