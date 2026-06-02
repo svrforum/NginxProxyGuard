@@ -99,6 +99,8 @@ export interface CloneProxyHostRequest {
   forward_scheme?: string      // http/https or tcp/udp for stream
   forward_host?: string
   forward_port?: number
+  forward_container_name?: string
+  forward_container_network?: string
   stream_listen_host?: string
   stream_listen_port?: number
   stream_protocol?: string
