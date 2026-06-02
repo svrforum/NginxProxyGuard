@@ -116,10 +116,7 @@ func (h *DDNSHandler) SyncOne(c echo.Context) error {
 		if err == model.ErrNotFound {
 			return notFoundError(c, "DDNS record")
 		}
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error":   err.Error(),
-			"success": false,
-		})
+		return internalError(c, "sync DDNS record", err)
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{

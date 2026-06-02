@@ -1,19 +1,10 @@
 package service
 
 import (
-	"context"
-	"encoding/json"
 	"testing"
 
 	"nginx-proxy-guard/internal/model"
 )
-
-type fakeUpdater struct{ calls int }
-
-func (f *fakeUpdater) Update(ctx context.Context, rec model.DDNSRecord, c json.RawMessage, ip string) error {
-	f.calls++
-	return nil
-}
 
 func TestNeedsUpdate(t *testing.T) {
 	// already ok + same IP -> skip
