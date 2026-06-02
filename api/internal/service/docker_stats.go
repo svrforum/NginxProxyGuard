@@ -358,11 +358,26 @@ type DockerContainerPort struct {
 	Protocol      string `json:"protocol"`
 }
 
+// isHiddenContainer reports whether a container is excluded from the proxy-host
+// docker picker. NPG's own infra containers are hidden, EXCEPT the admin UI
+// (npg-ui), which users legitimately proxy externally (e.g. to expose the UI
+// behind a domain). (#155)
+func isHiddenContainer(name string) bool {
+	if name == "" {
+		return true
+	}
+	if name == "npg-ui" || name == "npg_ui" {
+		return false
+	}
+	return strings.HasPrefix(name, "npg-") || strings.HasPrefix(name, "npg_")
+}
+
 // ListContainersWithNetworks returns all running containers with their network IPs,
-// excluding npg-* containers. This is used by the UI to help users select
-// Docker containers as proxy targets when nginx runs in host network mode.
+// excluding NPG infra containers (except the admin UI, npg-ui). This is used by the
+// UI to help users select Docker containers as proxy targets when nginx runs in
+// host network mode.
 func (s *DockerStatsService) ListContainersWithNetworks(ctx context.Context) ([]DockerContainerInfo, error) {
-	// Get all running containers (exclude npg-* self containers)
+	// Get all running containers (NPG infra containers are filtered by isHiddenContainer)
 	cmd := exec.CommandContext(ctx, "docker", "ps", "--format", `{{.Names}}`)
 	output, err := cmd.Output()
 	if err != nil {
@@ -374,7 +389,7 @@ func (s *DockerStatsService) ListContainersWithNetworks(ctx context.Context) ([]
 
 	for _, name := range names {
 		name = strings.TrimSpace(name)
-		if name == "" || strings.HasPrefix(name, "npg-") || strings.HasPrefix(name, "npg_") {
+		if isHiddenContainer(name) {
 			continue
 		}
 
