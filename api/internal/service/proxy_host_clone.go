@@ -14,6 +14,23 @@ func boolPtr(b bool) *bool {
 	return &b
 }
 
+// resolveCloneContainerBinding decides the cloned host's container binding:
+//   - explicit container in request    -> use it (request drives name+network)
+//   - forward_host overridden, no name  -> clear (drop the source's stale binding)
+//   - neither                           -> copy from source
+//
+// Mirrors the create/edit form semantics so a cloned host never carries a
+// container binding that contradicts a manually typed forward_host. (Issue #153)
+func resolveCloneContainerBinding(srcName, srcNetwork, reqName, reqNetwork *string, reqHost string) (*string, *string) {
+	if reqName != nil {
+		return reqName, reqNetwork
+	}
+	if reqHost != "" {
+		return nil, nil
+	}
+	return srcName, srcNetwork
+}
+
 // Clone creates a copy of an existing proxy host with new domain names
 // It copies all related configurations including:
 // - GeoRestriction, RateLimit, SecurityHeaders, BotFilter
@@ -101,14 +118,19 @@ func (s *ProxyHostService) Clone(ctx context.Context, sourceID string, req *mode
 		}
 	}
 
+	cloneContainerName, cloneContainerNetwork := resolveCloneContainerBinding(
+		source.ForwardContainerName, source.ForwardContainerNetwork,
+		req.ForwardContainerName, req.ForwardContainerNetwork, req.ForwardHost,
+	)
+
 	// Create the new proxy host with copied settings
 	createReq := &model.CreateProxyHostRequest{
 		ProxyType:                 source.ProxyType,
 		DomainNames:               validDomains,
 		ForwardScheme:             forwardScheme,
 		ForwardHost:               forwardHost,
-		ForwardContainerName:      source.ForwardContainerName,
-		ForwardContainerNetwork:   source.ForwardContainerNetwork,
+		ForwardContainerName:      cloneContainerName,
+		ForwardContainerNetwork:   cloneContainerNetwork,
 		ForwardPort:               forwardPort,
 		StreamListenHost:          streamListenHost,
 		StreamListenPort:          streamListenPort,

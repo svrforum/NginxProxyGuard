@@ -358,16 +358,18 @@ type UpdateProxyHostRequest struct {
 
 // CloneProxyHostRequest is the request to clone a proxy host
 type CloneProxyHostRequest struct {
-	DomainNames      []string `json:"domain_names" validate:"required,min=1"`
-	CertificateID    *string  `json:"certificate_id"`     // Optional: use existing certificate
-	CertProvider     string   `json:"cert_provider"`      // Optional: 'letsencrypt' or 'selfsigned' to create new cert
-	DNSProviderID    *string  `json:"dns_provider_id"`    // Optional: DNS provider for Let's Encrypt DNS challenge
-	ForwardScheme    string   `json:"forward_scheme"`     // Optional: http/https or tcp/udp for stream
-	ForwardHost      string   `json:"forward_host"`       // Optional: target host (default: copy from source)
-	ForwardPort      int      `json:"forward_port"`       // Optional: target port (default: copy from source)
-	StreamListenHost string   `json:"stream_listen_host"` // Optional: stream listen host (default: copy from source)
-	StreamListenPort int      `json:"stream_listen_port"` // Optional: stream listen port (default: copy from source)
-	StreamProtocol   string   `json:"stream_protocol"`    // Optional: tcp or udp (default: copy from source)
+	DomainNames             []string `json:"domain_names" validate:"required,min=1"`
+	CertificateID           *string  `json:"certificate_id"`            // Optional: use existing certificate
+	CertProvider            string   `json:"cert_provider"`             // Optional: 'letsencrypt' or 'selfsigned' to create new cert
+	DNSProviderID           *string  `json:"dns_provider_id"`           // Optional: DNS provider for Let's Encrypt DNS challenge
+	ForwardScheme           string   `json:"forward_scheme"`            // Optional: http/https or tcp/udp for stream
+	ForwardHost             string   `json:"forward_host"`              // Optional: target host (default: copy from source)
+	ForwardPort             int      `json:"forward_port"`              // Optional: target port (default: copy from source)
+	ForwardContainerName    *string  `json:"forward_container_name"`    // Optional: pick a docker container
+	ForwardContainerNetwork *string  `json:"forward_container_network"` // Optional: container network
+	StreamListenHost        string   `json:"stream_listen_host"`        // Optional: stream listen host (default: copy from source)
+	StreamListenPort        int      `json:"stream_listen_port"`        // Optional: stream listen port (default: copy from source)
+	StreamProtocol          string   `json:"stream_protocol"`           // Optional: tcp or udp (default: copy from source)
 }
 
 type ProxyHostListResponse struct {
