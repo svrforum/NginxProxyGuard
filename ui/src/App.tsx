@@ -377,6 +377,7 @@ function AppContent({ user, onLogout }: AppContentProps) {
           <Route path="/settings/waf-auto-ban" element={<SettingsPage subTab="waf-auto-ban" />} />
           <Route path="/settings/system-logs" element={<SettingsPage subTab="system-logs" />} />
           <Route path="/settings/filter-subscriptions" element={<SettingsPage subTab="filter-subscriptions" />} />
+          <Route path="/settings/ddns" element={<SettingsPage subTab="ddns" />} />
         </Routes>
         </Suspense>
       </main>

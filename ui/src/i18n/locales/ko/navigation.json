@@ -75,7 +75,8 @@
       "maintenance": "유지보수",
       "backups": "백업",
       "systemLogs": "시스템 로그",
-      "filterSubscriptions": "필터 구독"
+      "filterSubscriptions": "필터 구독",
+      "ddns": "DDNS"
     }
   },
   "loading": "로딩 중..."

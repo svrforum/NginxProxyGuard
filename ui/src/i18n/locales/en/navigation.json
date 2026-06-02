@@ -75,7 +75,8 @@
       "maintenance": "Maintenance",
       "backups": "Backups",
       "systemLogs": "System Logs",
-      "filterSubscriptions": "Filter Subscriptions"
+      "filterSubscriptions": "Filter Subscriptions",
+      "ddns": "DDNS"
     }
   },
   "loading": "Loading..."

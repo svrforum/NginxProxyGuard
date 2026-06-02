@@ -41,6 +41,7 @@ const LAZY_NAMESPACES = [
   'fail2ban',
   'exploitLogs',
   'filterSubscription',
+  'ddns',
 ] as const
 
 export const ALL_NAMESPACES = [...EAGER_NAMESPACES, ...LAZY_NAMESPACES]
