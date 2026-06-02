@@ -12,7 +12,7 @@ import (
 
 func TestBuildDuckDNSURL(t *testing.T) {
 	got := buildDuckDNSURL("https://www.duckdns.org", "myhome.duckdns.org", "tok-123", "203.0.113.7")
-	want := "https://www.duckdns.org/update?domains=myhome&token=tok-123&ip=203.0.113.7"
+	want := "https://www.duckdns.org/update?domains=myhome&ip=203.0.113.7&token=tok-123"
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}

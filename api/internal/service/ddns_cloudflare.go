@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -95,7 +96,7 @@ func (u *cloudflareUpdater) resolveZoneID(ctx context.Context, c model.Cloudflar
 		return "", fmt.Errorf("cloudflare: cannot derive zone for %q; set Zone ID in DNS provider", hostname)
 	}
 	guess := strings.Join(labels[len(labels)-2:], ".")
-	cr, err := u.do(ctx, http.MethodGet, fmt.Sprintf("%s/zones?name=%s", u.apiBase, guess), c, nil)
+	cr, err := u.do(ctx, http.MethodGet, fmt.Sprintf("%s/zones?name=%s", u.apiBase, url.QueryEscape(guess)), c, nil)
 	if err != nil {
 		return "", err
 	}
@@ -119,7 +120,7 @@ func (u *cloudflareUpdater) Update(ctx context.Context, rec model.DDNSRecord, ra
 	}
 
 	// find existing A record by name
-	listURL := fmt.Sprintf("%s/zones/%s/dns_records?type=A&name=%s", u.apiBase, zone, rec.Hostname)
+	listURL := fmt.Sprintf("%s/zones/%s/dns_records?type=A&name=%s", u.apiBase, zone, url.QueryEscape(rec.Hostname))
 	cr, err := u.do(ctx, http.MethodGet, listURL, c, nil)
 	if err != nil {
 		return err

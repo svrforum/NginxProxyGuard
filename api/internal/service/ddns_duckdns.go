@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -25,7 +26,8 @@ func newDuckDNSUpdater() *duckDNSUpdater {
 // subdomain (the label before ".duckdns.org"), not the full hostname.
 func buildDuckDNSURL(base, hostname, token, ip string) string {
 	sub := strings.TrimSuffix(hostname, ".duckdns.org")
-	return fmt.Sprintf("%s/update?domains=%s&token=%s&ip=%s", base, sub, token, ip)
+	q := url.Values{"domains": {sub}, "token": {token}, "ip": {ip}}
+	return fmt.Sprintf("%s/update?%s", base, q.Encode())
 }
 
 func (u *duckDNSUpdater) Update(ctx context.Context, rec model.DDNSRecord, rawCreds json.RawMessage, ip string) error {
