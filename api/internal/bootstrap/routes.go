@@ -199,6 +199,7 @@ func registerTokenProtectedRoutes(v1 *echo.Group, c *Container) {
 	registerAPITokenRoutes(v1, c.Handlers.APIToken)
 	registerProxyHostRoutes(v1, c.Handlers.ProxyHost)
 	registerDNSProviderRoutes(v1, c.Handlers.DNSProvider)
+	registerDDNSRoutes(v1, c.Handlers.DDNS)
 	registerCertificateRoutes(v1, c.Handlers.Certificate)
 	registerLogRoutes(v1, c.Handlers.Log)
 	registerWAFTestRoutes(v1, c.Handlers.WAFTest)
@@ -254,6 +255,17 @@ func registerDNSProviderRoutes(v1 *echo.Group, h *handler.DNSProviderHandler) {
 	g.GET("/:id", h.Get)
 	g.PUT("/:id", h.Update)
 	g.DELETE("/:id", h.Delete)
+}
+
+func registerDDNSRoutes(v1 *echo.Group, h *handler.DDNSHandler) {
+	g := v1.Group("/ddns-records")
+	g.GET("", h.List)
+	g.POST("", h.Create)
+	g.POST("/sync", h.SyncAll)
+	g.GET("/:id", h.Get)
+	g.PUT("/:id", h.Update)
+	g.DELETE("/:id", h.Delete)
+	g.POST("/:id/sync", h.SyncOne)
 }
 
 func registerCertificateRoutes(v1 *echo.Group, h *handler.CertificateHandler) {

@@ -31,6 +31,7 @@ type Handlers struct {
 	Swagger            *handler.SwaggerHandler
 	Metrics            *handler.MetricsHandler
 	HealthDetailed     *handler.HealthDetailedHandler
+	DDNS               *handler.DDNSHandler
 }
 
 // InitHandlers constructs every HTTP handler with the previously built
@@ -85,6 +86,7 @@ func InitHandlers(
 	h.Swagger = handler.NewSwaggerHandler()
 	h.Metrics = handler.NewMetricsHandler()
 	h.HealthDetailed = handler.NewHealthDetailedHandler(repos.HealthDetailed, svcs.LogCollector, redisCache, repos.ProxyHost, repos.GlobalSettings, svcs.PipelineCanary, svcs.StatsCollector)
+	h.DDNS = handler.NewDDNSHandler(svcs.DDNS)
 
 	return h
 }

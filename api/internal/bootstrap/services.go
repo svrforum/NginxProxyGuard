@@ -36,6 +36,7 @@ type Services struct {
 	WAFAutoBan         *service.WAFAutoBanService
 	Fail2ban           *service.Fail2banService
 	StatsCollector     *service.StatsCollector
+	DDNS               *service.DDNSService
 }
 
 // InitServices creates the full service graph in the same order as the
@@ -179,6 +180,8 @@ func InitServices(
 		resolveNginxStatusURL(),
 		resolveAccessLogPath(),
 	)
+
+	svcs.DDNS = service.NewDDNSService(repos.DDNS, repos.DNSProvider, service.NewPublicIPDetector())
 
 	return svcs
 }
