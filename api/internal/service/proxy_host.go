@@ -156,20 +156,34 @@ func normalizeCreateProxyHostRequest(req *model.CreateProxyHostRequest) error {
 		}
 		req.StreamListenHost = streamListenHost
 		req.ForwardScheme = req.StreamProtocol
-		req.SSLEnabled = false
+		// HTTP-only features never apply to stream.
 		req.SSLForceHTTPS = false
 		req.SSLHTTP2 = false
 		req.SSLHTTP3 = false
-		req.CertificateID = nil
 		req.AllowWebsocketUpgrade = false
 		req.CacheEnabled = false
 		req.BlockExploits = false
 		req.WAFEnabled = false
 		req.AccessListID = nil
+
 		if req.StreamProtocol == model.StreamProtocolUDP {
+			// UDP supports neither passthrough nor TLS termination.
 			req.StreamSSLPreread = false
 			req.StreamAcceptProxyProtocol = false
 			req.StreamSendProxyProtocol = false
+			req.SSLEnabled = false
+			req.CertificateID = nil
+		} else if req.SSLEnabled {
+			// TLS termination mode (mutually exclusive with passthrough).
+			if req.StreamSSLPreread {
+				return fmt.Errorf("invalid stream config: TLS termination and ssl_preread passthrough are mutually exclusive")
+			}
+			if req.CertificateID == nil || *req.CertificateID == "" {
+				return fmt.Errorf("invalid stream config: TLS termination requires a certificate")
+			}
+		} else {
+			// passthrough or plain — no certificate.
+			req.CertificateID = nil
 		}
 		if req.StreamListenPort < 1 || req.StreamListenPort > 65535 {
 			return fmt.Errorf("stream_listen_port is required and must be between 1 and 65535")
@@ -226,6 +240,16 @@ func applyUpdateCandidate(existing *model.ProxyHost, req *model.UpdateProxyHostR
 	if req.StreamProtocol != nil {
 		candidate.StreamProtocol = *req.StreamProtocol
 	}
+	if req.SSLEnabled != nil {
+		candidate.SSLEnabled = *req.SSLEnabled
+	}
+	if req.CertificateID != nil {
+		if *req.CertificateID == "" {
+			candidate.CertificateID = nil
+		} else {
+			candidate.CertificateID = req.CertificateID
+		}
+	}
 	if req.StreamSSLPreread != nil {
 		candidate.StreamSSLPreread = *req.StreamSSLPreread
 	}
@@ -264,16 +288,17 @@ func normalizeUpdateProxyHostRequest(existing *model.ProxyHost, req *model.Updat
 		req.ForwardScheme = streamProtocol
 
 		falseValue := false
-		req.SSLEnabled = &falseValue
 		req.SSLForceHTTPS = &falseValue
 		req.SSLHTTP2 = &falseValue
 		req.SSLHTTP3 = &falseValue
-		req.CertificateID = stringPtr("")
 		req.AllowWebsocketUpgrade = &falseValue
 		req.CacheEnabled = &falseValue
 		req.BlockExploits = &falseValue
 		req.WAFEnabled = &falseValue
 		req.AccessListID = stringPtr("")
+		candidate.SSLForceHTTPS, candidate.SSLHTTP2, candidate.SSLHTTP3 = false, false, false
+		candidate.AllowWebsocketUpgrade, candidate.CacheEnabled, candidate.BlockExploits, candidate.WAFEnabled = false, false, false, false
+		candidate.AccessListID = nil
 
 		if candidate.StreamProtocol == model.StreamProtocolUDP {
 			req.StreamSSLPreread = &falseValue
@@ -282,6 +307,25 @@ func normalizeUpdateProxyHostRequest(existing *model.ProxyHost, req *model.Updat
 			candidate.StreamSSLPreread = false
 			candidate.StreamAcceptProxyProtocol = false
 			candidate.StreamSendProxyProtocol = false
+			sslOff := false
+			req.SSLEnabled = &sslOff
+			req.CertificateID = stringPtr("")
+			candidate.SSLEnabled = false
+			candidate.CertificateID = nil
+		} else if candidate.SSLEnabled {
+			if candidate.StreamSSLPreread {
+				return nil, fmt.Errorf("invalid stream config: TLS termination and ssl_preread passthrough are mutually exclusive")
+			}
+			if candidate.CertificateID == nil || *candidate.CertificateID == "" {
+				return nil, fmt.Errorf("invalid stream config: TLS termination requires a certificate")
+			}
+			// leave req.SSLEnabled / req.CertificateID as the merged values
+		} else {
+			off := false
+			req.SSLEnabled = &off
+			req.CertificateID = stringPtr("")
+			candidate.SSLEnabled = false
+			candidate.CertificateID = nil
 		}
 		if candidate.StreamListenPort < 1 || candidate.StreamListenPort > 65535 {
 			return nil, fmt.Errorf("stream_listen_port is required and must be between 1 and 65535")
