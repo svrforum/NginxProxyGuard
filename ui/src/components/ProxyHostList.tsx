@@ -102,6 +102,8 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
       forwardScheme: string
       forwardHost: string
       forwardPort: number
+      forwardContainerName?: string
+      forwardContainerNetwork?: string
       streamListenHost?: string
       streamListenPort?: number
       streamProtocol?: string
@@ -115,6 +117,8 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
         forward_scheme: params.forwardScheme,
         forward_host: params.forwardHost,
         forward_port: params.forwardPort,
+        forward_container_name: params.forwardContainerName,
+        forward_container_network: params.forwardContainerNetwork,
         stream_listen_host: params.streamListenHost,
         stream_listen_port: params.streamListenPort,
         stream_protocol: params.streamProtocol,
@@ -431,6 +435,8 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
               forwardScheme: params.forwardScheme,
               forwardHost: params.forwardHost,
               forwardPort: params.forwardPort,
+              forwardContainerName: params.forwardContainerName,
+              forwardContainerNetwork: params.forwardContainerNetwork,
               streamListenHost: params.streamListenHost,
               streamListenPort: params.streamListenPort,
               streamProtocol: params.streamProtocol,
