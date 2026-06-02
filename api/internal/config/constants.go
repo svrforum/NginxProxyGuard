@@ -142,3 +142,9 @@ const (
 	FilterCatalogBaseURL       = "https://raw.githubusercontent.com/svrforum/npg-filters/main/"
 	FilterCatalogIndexURL      = "https://raw.githubusercontent.com/svrforum/npg-filters/main/index.json"
 )
+
+// DDNS constants
+const (
+	// DDNSCheckInterval is how often the DDNS scheduler re-checks the public IP. (#154)
+	DDNSCheckInterval = 5 * time.Minute
+)

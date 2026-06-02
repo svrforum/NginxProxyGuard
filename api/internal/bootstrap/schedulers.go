@@ -17,6 +17,22 @@ type Schedulers struct {
 	Backup             *scheduler.BackupScheduler
 	FilterRefresh      *scheduler.FilterRefreshScheduler
 	ContainerReconcile *scheduler.ContainerReconcileScheduler
+	DDNS               *scheduler.DDNSScheduler
+}
+
+// ddnsInterval reads NPG_DDNS_INTERVAL (a Go duration string, e.g. "5m"); it
+// falls back to config.DDNSCheckInterval when unset or invalid. (#154)
+func ddnsInterval() time.Duration {
+	const def = config.DDNSCheckInterval
+	v := os.Getenv("NPG_DDNS_INTERVAL")
+	if v == "" {
+		return def
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil || d <= 0 {
+		return def
+	}
+	return d
 }
 
 // containerReconcileInterval reads NPG_CONTAINER_RECONCILE_INTERVAL (a Go
@@ -58,6 +74,7 @@ func NewSchedulers(cfg *config.Config, db *database.DB, repos *Repositories, svc
 			svcs.DockerStats,
 			containerReconcileInterval(),
 		),
+		DDNS: scheduler.NewDDNSScheduler(svcs.DDNS, ddnsInterval()),
 	}
 }
 
@@ -69,6 +86,7 @@ func (s *Schedulers) Start() {
 	s.Backup.Start()
 	s.FilterRefresh.Start()
 	s.ContainerReconcile.Start()
+	s.DDNS.Start()
 }
 
 // Stop signals every scheduler to stop.
@@ -80,6 +98,7 @@ func (s *Schedulers) Stop() {
 	s.Partition.Stop()
 	s.FilterRefresh.Stop()
 	s.ContainerReconcile.Stop()
+	s.DDNS.Stop()
 	// LogRotateScheduler and BackupScheduler also expose Stop, but the
 	// original main.go did not call them on shutdown. Keep the original
 	// semantics for minimal behavior change.
