@@ -505,6 +505,8 @@
     }
   },
   "actions": {
+    "cloneBrowseDocker": "Browse Docker",
+    "cloneSelectedContainer": "Selected container",
     "enable": "Enable",
     "disable": "Disable",
     "enableConfirmTitle": "Enable Proxy Host",

@@ -507,6 +507,8 @@
     }
   },
   "actions": {
+    "cloneBrowseDocker": "Docker 컨테이너 찾기",
+    "cloneSelectedContainer": "선택된 컨테이너",
     "enable": "활성화",
     "disable": "비활성화",
     "enableConfirmTitle": "프록시 호스트 활성화",
