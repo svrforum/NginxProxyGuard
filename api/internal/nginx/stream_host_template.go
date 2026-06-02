@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,7 +25,7 @@ upstream {{streamUpstreamName .Host}} {
 }
 {{end}}
 server {
-    listen {{streamListen .Host}}{{if eq (streamProtocol .Host) "udp"}} udp reuseport{{end}}{{if .Host.StreamAcceptProxyProtocol}} proxy_protocol{{end}};
+    listen {{streamListen .Host}}{{if streamTLSTerminate}} ssl{{end}}{{if eq (streamProtocol .Host) "udp"}} udp reuseport{{end}}{{if .Host.StreamAcceptProxyProtocol}} proxy_protocol{{end}};
 {{if and .Host.StreamSSLPreread .Host.DomainNames}}    server_name {{join .Host.DomainNames " "}};
 {{end}}    # IP-based security (L3/L4 only — stream module supports allow/deny
     # via ngx_stream_access_module). banned_ips.conf is shared with HTTP hosts
@@ -32,7 +33,10 @@ server {
     # a fixed filename so nginx does not fail on fresh installs where the file
     # has not been generated yet (an empty glob is silently ignored).
     include /etc/nginx/includes/banned_ips*.conf;
-{{if .Host.StreamProxyConnectTimeout}}    proxy_connect_timeout {{.Host.StreamProxyConnectTimeout}}s;
+{{if streamTLSTerminate}}    ssl_certificate /etc/nginx/certs/{{certPath .Host}}/fullchain.pem;
+    ssl_certificate_key /etc/nginx/certs/{{certPath .Host}}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+{{end}}{{if .Host.StreamProxyConnectTimeout}}    proxy_connect_timeout {{.Host.StreamProxyConnectTimeout}}s;
 {{end}}{{if .Host.StreamProxyTimeout}}    proxy_timeout {{.Host.StreamProxyTimeout}}s;
 {{end}}{{if .Host.StreamSendProxyProtocol}}    proxy_protocol on;
 {{end}}{{if streamAccessLog}}    access_log /var/log/nginx/stream_access.log stream_main;
@@ -74,9 +78,28 @@ func (m *Manager) GenerateStreamConfig(ctx context.Context, data ProxyHostConfig
 	if data.Host.StreamSSLPreread && strings.EqualFold(model.NormalizeStreamProtocol(data.Host.StreamProtocol), "udp") {
 		return fmt.Errorf("invalid stream config: ssl_preread is not supported for UDP stream hosts (TCP only)")
 	}
+
+	// TLS termination (mutually exclusive with ssl_preread; TCP only).
+	terminate := data.Host.SSLEnabled && data.Host.CertificateID != nil && *data.Host.CertificateID != "" && !data.Host.StreamSSLPreread
+	if terminate && strings.EqualFold(model.NormalizeStreamProtocol(data.Host.StreamProtocol), "udp") {
+		return fmt.Errorf("invalid stream config: TLS termination is not supported for UDP stream hosts (TCP only)")
+	}
+	if data.Host.SSLEnabled && data.Host.StreamSSLPreread {
+		return fmt.Errorf("invalid stream config: TLS termination and ssl_preread are mutually exclusive")
+	}
+	if terminate {
+		// graceful degrade if the cert has not been issued yet (mirror HTTP path)
+		certFile := filepath.Join(m.certsPath, *data.Host.CertificateID, "fullchain.pem")
+		if _, err := os.Stat(certFile); os.IsNotExist(err) {
+			log.Printf("[Stream] cert %s not found for host %s; generating without TLS termination until issued", *data.Host.CertificateID, data.Host.ID)
+			terminate = false
+		}
+	}
+
 	streamListenHost := model.NormalizeStreamListenHost(data.Host.StreamListenHost)
 
 	funcMap := GetTemplateFuncMap("")
+	funcMap["streamTLSTerminate"] = func() bool { return terminate }
 	funcMap["streamListen"] = func(host *model.ProxyHost) string {
 		return formatListenAddress(streamListenHost, host.StreamListenPort)
 	}
