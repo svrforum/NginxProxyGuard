@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { listCertificates } from '../../api/certificates'
 import { listDNSProviders } from '../../api/dns-providers'
 import type { ProxyHost } from '../../types/proxy-host'
+import { DockerContainerSelector } from '../proxy-host/DockerContainerSelector'
 
 interface CloneModalProps {
   host: ProxyHost
@@ -18,6 +19,8 @@ interface CloneModalProps {
     forwardScheme: string
     forwardHost: string
     forwardPort: number
+    forwardContainerName?: string
+    forwardContainerNetwork?: string
     streamListenHost?: string
     streamListenPort?: number
     streamProtocol?: string
@@ -55,6 +58,9 @@ export function CloneModal({
   const [cloneForwardScheme, setCloneForwardScheme] = useState<string>(isStream ? (host.stream_protocol || 'tcp') : host.forward_scheme)
   const [cloneForwardHost, setCloneForwardHost] = useState(host.forward_host)
   const [cloneForwardPort, setCloneForwardPort] = useState(String(host.forward_port))
+  const [cloneContainerName, setCloneContainerName] = useState<string>(host.forward_container_name || '')
+  const [cloneContainerNetwork, setCloneContainerNetwork] = useState<string>(host.forward_container_network || '')
+  const [dockerSelectorOpen, setDockerSelectorOpen] = useState(false)
   const [cloneStreamListenHost, setCloneStreamListenHost] = useState(host.stream_listen_host || '')
   const [cloneStreamListenPort, setCloneStreamListenPort] = useState(String(host.stream_listen_port || ''))
 
@@ -68,6 +74,13 @@ export function CloneModal({
     queryFn: () => listDNSProviders(1, 100),
     enabled: cloneCertMode === 'create' && cloneCertProvider === 'letsencrypt',
   })
+
+  const handleDockerSelect = (host: string, port: number, containerName: string, containerNetwork: string) => {
+    setCloneForwardHost(host)
+    setCloneForwardPort(port.toString())
+    setCloneContainerName(containerName)
+    setCloneContainerNetwork(containerNetwork || '')
+  }
 
   const confirmClone = () => {
     if (!cloneDomains.trim()) return
@@ -99,6 +112,8 @@ export function CloneModal({
       forwardScheme: cloneForwardScheme,
       forwardHost: cloneForwardHost,
       forwardPort: isNaN(forwardPort) ? host.forward_port : forwardPort,
+      forwardContainerName: cloneContainerName || undefined,
+      forwardContainerNetwork: cloneContainerNetwork || undefined,
       streamListenHost: isStream ? cloneStreamListenHost : undefined,
       streamListenPort: isStream ? parseInt(cloneStreamListenPort, 10) || host.stream_listen_port : undefined,
       streamProtocol: isStream ? cloneForwardScheme : undefined,
@@ -163,7 +178,11 @@ export function CloneModal({
               <input
                 type="text"
                 value={cloneForwardHost}
-                onChange={(e) => setCloneForwardHost(e.target.value)}
+                onChange={(e) => {
+                  setCloneForwardHost(e.target.value)
+                  setCloneContainerName('')
+                  setCloneContainerNetwork('')
+                }}
                 placeholder={host.forward_host}
                 className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
@@ -181,6 +200,19 @@ export function CloneModal({
               />
             </div>
           </div>
+          <button
+            type="button"
+            onClick={() => setDockerSelectorOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary-700 dark:text-primary-300 bg-primary-50 dark:bg-primary-900/20 hover:bg-primary-100 dark:hover:bg-primary-900/40 rounded-lg transition-colors"
+          >
+            🐳 {t('actions.cloneBrowseDocker')}
+          </button>
+          {cloneContainerName && (
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {t('actions.cloneSelectedContainer')}: <span className="font-mono">{cloneContainerName}</span>
+              {cloneContainerNetwork ? ` (${cloneContainerNetwork})` : ''}
+            </p>
+          )}
           {isStream && (
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -425,6 +457,11 @@ export function CloneModal({
           </button>
         </div>
       </div>
+      <DockerContainerSelector
+        isOpen={dockerSelectorOpen}
+        onClose={() => setDockerSelectorOpen(false)}
+        onSelect={handleDockerSelect}
+      />
     </div>
   )
 }
