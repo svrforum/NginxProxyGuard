@@ -488,10 +488,14 @@ CREATE TABLE IF NOT EXISTS public.dns_providers (
 COMMENT ON TABLE public.dns_providers IS 'Stores DNS provider API credentials for ACME DNS-01 challenges';
 COMMENT ON COLUMN public.dns_providers.provider_type IS 'DNS provider type: cloudflare, route53, manual, etc.';
 COMMENT ON COLUMN public.dns_providers.credentials IS 'Encrypted JSON containing API tokens/keys';
+-- ddns_records: PRIMARY KEY and the FK to dns_providers are added later via
+-- ALTER (see the constraint section below), because this pg_dump-style file
+-- creates all tables first and only then adds PKs — dns_providers' PK does not
+-- exist yet at this point, so an inline FK would fail on a fresh install. (#154)
 CREATE TABLE IF NOT EXISTS public.ddns_records (
-    id uuid DEFAULT public.uuid_generate_v4() NOT NULL PRIMARY KEY,
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
     hostname character varying(253) NOT NULL,
-    dns_provider_id uuid NOT NULL REFERENCES public.dns_providers(id) ON DELETE CASCADE,
+    dns_provider_id uuid NOT NULL,
     record_type character varying(8) DEFAULT 'A' NOT NULL,
     proxied boolean DEFAULT false NOT NULL,
     ttl integer DEFAULT 1 NOT NULL,
@@ -2537,6 +2541,8 @@ ALTER TABLE ONLY public.dashboard_stats_hourly
     ADD CONSTRAINT dashboard_stats_hourly_proxy_host_id_hour_bucket_key UNIQUE (proxy_host_id, hour_bucket);
 ALTER TABLE ONLY public.dns_providers
     ADD CONSTRAINT dns_providers_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.ddns_records
+    ADD CONSTRAINT ddns_records_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.exploit_block_rules
     ADD CONSTRAINT exploit_block_rules_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.fail2ban_configs
@@ -3163,6 +3169,8 @@ ALTER TABLE ONLY public.bot_filters
     ADD CONSTRAINT bot_filters_proxy_host_id_fkey FOREIGN KEY (proxy_host_id) REFERENCES public.proxy_hosts(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.certificates
     ADD CONSTRAINT certificates_dns_provider_id_fkey FOREIGN KEY (dns_provider_id) REFERENCES public.dns_providers(id) ON DELETE SET NULL;
+ALTER TABLE ONLY public.ddns_records
+    ADD CONSTRAINT ddns_records_dns_provider_id_fkey FOREIGN KEY (dns_provider_id) REFERENCES public.dns_providers(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.certificate_history
     ADD CONSTRAINT certificate_history_certificate_id_fkey FOREIGN KEY (certificate_id) REFERENCES public.certificates(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.challenge_configs
