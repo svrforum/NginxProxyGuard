@@ -3,6 +3,7 @@ CLAUDE.md
 .claude/
 .serena/
 docs/*
+!docs/release-notes/
 !docs/superpowers/
 docs/superpowers/*
 !docs/superpowers/specs/
