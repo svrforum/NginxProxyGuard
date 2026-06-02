@@ -34,5 +34,5 @@
   "hostnameRequired": "Hostname is required.",
   "providerRequired": "Please select a DNS provider.",
   "loadError": "Failed to load DDNS records.",
-  "syncError": "Sync failed."
+  "disabledBadge": "Disabled"
 }

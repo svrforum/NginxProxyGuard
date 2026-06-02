@@ -167,7 +167,7 @@ export default function DDNSRecordList() {
                   <td className="px-6 py-4">
                     <div className="text-sm font-medium text-slate-900 dark:text-white">{record.hostname}</div>
                     {!record.enabled && (
-                      <span className="text-xs text-slate-400">({t('enabled')}: off)</span>
+                      <span className="text-xs text-slate-400 dark:text-slate-500">{t('disabledBadge')}</span>
                     )}
                   </td>
                   <td className="px-6 py-4">

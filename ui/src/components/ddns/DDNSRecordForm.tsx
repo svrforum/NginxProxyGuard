@@ -4,6 +4,7 @@ import { createDDNSRecord, updateDDNSRecord } from '../../api/ddns'
 import { listDNSProviders } from '../../api/dns-providers'
 import { useTranslation } from 'react-i18next'
 import { HelpTip } from '../common/HelpTip'
+import { useEscapeKey } from '../../hooks/useEscapeKey'
 import type { DDNSRecord, CreateDDNSRecordRequest, UpdateDDNSRecordRequest } from '../../types/ddns'
 import type { DNSProvider } from '../../types/certificate'
 
@@ -19,6 +20,8 @@ const SUPPORTED_PROVIDER_TYPES: DNSProvider['provider_type'][] = ['cloudflare', 
 export default function DDNSRecordForm({ record, onClose, onSuccess }: DDNSRecordFormProps) {
   const { t } = useTranslation('ddns')
   const isEditing = !!record
+
+  useEscapeKey(onClose)
 
   const [hostname, setHostname] = useState(record?.hostname || '')
   const [dnsProviderId, setDnsProviderId] = useState(record?.dns_provider_id || '')

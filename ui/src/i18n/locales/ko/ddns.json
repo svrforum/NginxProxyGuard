@@ -34,5 +34,5 @@
   "hostnameRequired": "호스트네임을 입력하세요.",
   "providerRequired": "DNS 프로바이더를 선택하세요.",
   "loadError": "DDNS 레코드를 불러오지 못했습니다.",
-  "syncError": "동기화에 실패했습니다."
+  "disabledBadge": "비활성"
 }
