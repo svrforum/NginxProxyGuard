@@ -864,6 +864,11 @@ func (s *ProxyHostService) UpdateDBOnly(ctx context.Context, id string, req *mod
 		}
 	}
 
+	// Sync managed DDNS records to the host's (possibly changed) domains and
+	// opt-in state (#157). The UI saves via skip_nginx=true (this path), so the
+	// reconcile must run here too — not only in Update. Graceful: never fails.
+	s.reconcileHostDDNS(ctx, host)
+
 	return host, nil
 }
 
