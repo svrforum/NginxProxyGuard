@@ -180,7 +180,7 @@ func (h *ProxyHostHandler) Update(c echo.Context) error {
 	var host *model.ProxyHost
 	var err error
 	if skipNginx {
-		host, err = h.service.UpdateDBOnly(c.Request().Context(), id, &req)
+		host, err = h.service.UpdateDBOnly(c.Request().Context(), id, &req, true)
 	} else {
 		host, err = h.service.Update(c.Request().Context(), id, &req)
 	}

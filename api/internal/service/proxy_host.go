@@ -626,7 +626,7 @@ func (s *ProxyHostService) Create(ctx context.Context, req *model.CreateProxyHos
 
 	// Sync managed DDNS records to the host's domains (#157). Graceful: never
 	// fails the create — the host has already been persisted + reloaded.
-	s.reconcileHostDDNS(ctx, host)
+	s.reconcileHostDDNS(ctx, host, true)
 
 	return host, nil
 }
@@ -838,14 +838,17 @@ func (s *ProxyHostService) Update(ctx context.Context, id string, req *model.Upd
 
 	// Sync managed DDNS records to the host's (possibly changed) domains and
 	// opt-in state (#157). Graceful: never fails the update.
-	s.reconcileHostDDNS(ctx, host)
+	s.reconcileHostDDNS(ctx, host, true)
 
 	return host, nil
 }
 
 // UpdateDBOnly performs only DB update and domain change cleanup without nginx operations.
 // Use this when a subsequent RegenerateConfigForHost call will handle nginx config/test/reload.
-func (s *ProxyHostService) UpdateDBOnly(ctx context.Context, id string, req *model.UpdateProxyHostRequest) (*model.ProxyHost, error) {
+//
+// immediateDDNSSync is forwarded to reconcileHostDDNS: interactive UI saves pass true
+// (sync the managed record immediately); bulk DDNS import passes false (let the scheduler sync).
+func (s *ProxyHostService) UpdateDBOnly(ctx context.Context, id string, req *model.UpdateProxyHostRequest, immediateDDNSSync bool) (*model.ProxyHost, error) {
 	if req == nil {
 		return s.repo.GetByID(ctx, id)
 	}
@@ -876,7 +879,7 @@ func (s *ProxyHostService) UpdateDBOnly(ctx context.Context, id string, req *mod
 	// Sync managed DDNS records to the host's (possibly changed) domains and
 	// opt-in state (#157). The UI saves via skip_nginx=true (this path), so the
 	// reconcile must run here too — not only in Update. Graceful: never fails.
-	s.reconcileHostDDNS(ctx, host)
+	s.reconcileHostDDNS(ctx, host, immediateDDNSSync)
 
 	return host, nil
 }

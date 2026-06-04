@@ -90,7 +90,8 @@ func (s *DDNSService) SyncAll(ctx context.Context) {
 
 // SyncByProxyHost immediately syncs the managed records of a single proxy host
 // (used right after a host opts into DDNS, instead of waiting for the scheduler).
-// Graceful: per-record failures are recorded as last_status='error' (no panic/return). (#157 follow-up)
+// Graceful: detection/list errors abort the run with a log; per-record failures are
+// recorded as last_status='error' and don't abort the remaining records. (#157 follow-up)
 func (s *DDNSService) SyncByProxyHost(ctx context.Context, proxyHostID string) {
 	ip, err := s.detector.DetectPublicIPv4(ctx)
 	if err != nil {
