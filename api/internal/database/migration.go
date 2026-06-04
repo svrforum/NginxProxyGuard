@@ -889,6 +889,28 @@ END $$`,
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_ddns_records_hostname_provider ON public.ddns_records (hostname, dns_provider_id);`,
 		},
+		// -----------------------------------------------------------------------
+		// Issue #157: proxy host ↔ DDNS integration. Opt-in on the host
+		// (ddns_enabled + ddns_provider_id), a back-link on the DDNS record
+		// (proxy_host_id, ON DELETE CASCADE), and a configurable sync interval.
+		// FKs are wrapped in DO/EXCEPTION blocks so re-running is idempotent
+		// (ADD CONSTRAINT has no IF NOT EXISTS).
+		// -----------------------------------------------------------------------
+		{
+			desc: "v2.23.0: proxy_hosts.ddns_enabled/ddns_provider_id (#157)",
+			sql: `ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS ddns_enabled boolean DEFAULT false NOT NULL;
+ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS ddns_provider_id uuid;
+DO $$ BEGIN ALTER TABLE public.proxy_hosts ADD CONSTRAINT proxy_hosts_ddns_provider_id_fkey FOREIGN KEY (ddns_provider_id) REFERENCES public.dns_providers(id) ON DELETE SET NULL; EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
+		},
+		{
+			desc: "v2.23.0: ddns_records.proxy_host_id (#157)",
+			sql: `ALTER TABLE public.ddns_records ADD COLUMN IF NOT EXISTS proxy_host_id uuid;
+DO $$ BEGIN ALTER TABLE public.ddns_records ADD CONSTRAINT ddns_records_proxy_host_id_fkey FOREIGN KEY (proxy_host_id) REFERENCES public.proxy_hosts(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
+		},
+		{
+			desc: "v2.23.0: system_settings.ddns_check_interval_minutes (#157)",
+			sql:  `ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS ddns_check_interval_minutes integer DEFAULT 5 NOT NULL;`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

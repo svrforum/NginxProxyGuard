@@ -257,6 +257,11 @@ type ProxyHost struct {
 	ConfigStatus string `json:"config_status"`
 	ConfigError  string `json:"config_error,omitempty"`
 
+	// DDNS integration (#157): opt-in auto-registration of this host's domains
+	// as managed DDNS records via the given provider (cloudflare/duckdns).
+	DDNSEnabled    bool    `json:"ddns_enabled"`
+	DDNSProviderID *string `json:"ddns_provider_id,omitempty"`
+
 	// Metadata
 	Meta      json.RawMessage `json:"meta,omitempty"`
 	CreatedAt time.Time       `json:"created_at"`
@@ -311,6 +316,8 @@ type CreateProxyHostRequest struct {
 	ClientMaxBodySize         string   `json:"client_max_body_size,omitempty"`
 	ProxyMaxTempFileSize      string   `json:"proxy_max_temp_file_size,omitempty"`
 	Enabled                   bool     `json:"enabled"`
+	DDNSEnabled               bool     `json:"ddns_enabled"`
+	DDNSProviderID            *string  `json:"ddns_provider_id,omitempty"`
 }
 
 type UpdateProxyHostRequest struct {
@@ -354,6 +361,8 @@ type UpdateProxyHostRequest struct {
 	ClientMaxBodySize         *string  `json:"client_max_body_size,omitempty"`
 	ProxyMaxTempFileSize      *string  `json:"proxy_max_temp_file_size,omitempty"`
 	Enabled                   *bool    `json:"enabled,omitempty"`
+	DDNSEnabled               *bool    `json:"ddns_enabled,omitempty"`
+	DDNSProviderID            *string  `json:"ddns_provider_id,omitempty"`
 }
 
 // CloneProxyHostRequest is the request to clone a proxy host
