@@ -204,6 +204,9 @@ export default function DDNSRecordList() {
           onSuccess={() => {
             setShowImport(false)
             queryClient.invalidateQueries({ queryKey: ['ddns-records'] })
+            // import bulk-enables ddns on the selected proxy hosts -> refresh
+            // proxy-host caches so their ddns_enabled flags aren't stale. (#157)
+            queryClient.invalidateQueries({ queryKey: ['proxy-hosts'] })
           }}
         />
       )}
