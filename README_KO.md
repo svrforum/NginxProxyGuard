@@ -6,7 +6,10 @@
 
 [English](./README.md) | **한국어**
 
-<img src="./NPG_banner.png" alt="Nginx Proxy Guard" width="800">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./NPG_banner_dark.png">
+  <img src="./NPG_banner.png" alt="Nginx Proxy Guard" width="520">
+</picture>
 
 [![Version](https://img.shields.io/badge/Version-2.23.1-brightgreen?style=for-the-badge)](https://github.com/svrforum/NginxProxyGuard/releases)
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
