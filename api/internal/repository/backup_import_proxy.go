@@ -52,16 +52,22 @@ func (r *BackupRepository) importDDNSRecord(ctx context.Context, tx *sql.Tx, rec
 		lastSyncedAt = *rec.LastSyncedAt
 	}
 
+	// proxy_host_id is remapped (or cleared) by the caller (#157). nil = manual record.
+	var proxyHostID interface{}
+	if rec.ProxyHostID != nil && *rec.ProxyHostID != "" {
+		proxyHostID = *rec.ProxyHostID
+	}
+
 	query := `
 		INSERT INTO ddns_records (hostname, dns_provider_id, record_type, proxied, ttl, enabled,
-		                          last_ip, last_synced_at, last_status, last_error)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		                          last_ip, last_synced_at, last_status, last_error, proxy_host_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		ON CONFLICT (hostname, dns_provider_id) DO NOTHING
 	`
 
 	_, err := tx.ExecContext(ctx, query,
 		rec.Hostname, rec.DNSProviderID, rec.RecordType, rec.Proxied, rec.TTL, rec.Enabled,
-		rec.LastIP, lastSyncedAt, rec.LastStatus, rec.LastError,
+		rec.LastIP, lastSyncedAt, rec.LastStatus, rec.LastError, proxyHostID,
 	)
 	return err
 }
@@ -144,19 +150,23 @@ func (r *BackupRepository) importProxyHost(ctx context.Context, tx *sql.Tx, ph *
 		                         rate_limit_enabled, fail2ban_enabled, bot_filter_enabled, security_headers_enabled,
 		                         proxy_connect_timeout, proxy_send_timeout, proxy_read_timeout,
 		                         proxy_buffering, proxy_request_buffering, client_max_body_size, proxy_max_temp_file_size, meta,
-		                         forward_container_name, forward_container_network)
+		                         forward_container_name, forward_container_network,
+		                         ddns_enabled, ddns_provider_id)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19,
 		        $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36,
-		        $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47)
+		        $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49)
 		RETURNING id
 	`
 
-	var certID, accessListID interface{}
+	var certID, accessListID, ddnsProviderID interface{}
 	if ph.ProxyHost.CertificateID != "" {
 		certID = ph.ProxyHost.CertificateID
 	}
 	if ph.ProxyHost.AccessListID != "" {
 		accessListID = ph.ProxyHost.AccessListID
+	}
+	if ph.ProxyHost.DDNSProviderID != "" {
+		ddnsProviderID = ph.ProxyHost.DDNSProviderID
 	}
 
 	var newID string
@@ -175,6 +185,7 @@ func (r *BackupRepository) importProxyHost(ctx context.Context, tx *sql.Tx, ph *
 		ph.ProxyHost.ProxyConnectTimeout, ph.ProxyHost.ProxySendTimeout, ph.ProxyHost.ProxyReadTimeout,
 		ph.ProxyHost.ProxyBuffering, ph.ProxyHost.ProxyRequestBuffering, ph.ProxyHost.ClientMaxBodySize, ph.ProxyHost.ProxyMaxTempFileSize, meta,
 		ph.ProxyHost.ForwardContainerName, ph.ProxyHost.ForwardContainerNetwork,
+		ph.ProxyHost.DDNSEnabled, ddnsProviderID,
 	).Scan(&newID)
 	if err != nil {
 		return "", err

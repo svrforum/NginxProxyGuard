@@ -40,6 +40,7 @@ func (r *BackupRepository) exportProxyHosts(ctx context.Context) ([]model.ProxyH
 		       COALESCE(proxy_request_buffering, '') as proxy_request_buffering,
 		       COALESCE(client_max_body_size, '') as client_max_body_size,
 		       COALESCE(proxy_max_temp_file_size, '') as proxy_max_temp_file_size,
+		       COALESCE(ddns_enabled, false) as ddns_enabled, ddns_provider_id,
 		       meta
 		FROM proxy_hosts ORDER BY created_at
 	`
@@ -57,6 +58,7 @@ func (r *BackupRepository) exportProxyHosts(ctx context.Context) ([]model.ProxyH
 		var certID, accessListID sql.NullString
 		var advancedConfig sql.NullString
 		var forwardContainerName, forwardContainerNetwork sql.NullString
+		var ddnsProviderID sql.NullString
 
 		err := rows.Scan(
 			&ph.ID, &ph.ProxyType, pq.Array(&ph.DomainNames), &ph.ForwardScheme, &ph.ForwardHost, &forwardContainerName, &forwardContainerNetwork, &ph.ForwardPort,
@@ -72,6 +74,7 @@ func (r *BackupRepository) exportProxyHosts(ctx context.Context) ([]model.ProxyH
 			&ph.RateLimitEnabled, &ph.Fail2banEnabled, &ph.BotFilterEnabled, &ph.SecurityHeadersEnabled,
 			&ph.ProxyConnectTimeout, &ph.ProxySendTimeout, &ph.ProxyReadTimeout,
 			&ph.ProxyBuffering, &ph.ProxyRequestBuffering, &ph.ClientMaxBodySize, &ph.ProxyMaxTempFileSize,
+			&ph.DDNSEnabled, &ddnsProviderID,
 			&meta,
 		)
 		if err != nil {
@@ -83,6 +86,7 @@ func (r *BackupRepository) exportProxyHosts(ctx context.Context) ([]model.ProxyH
 		json.Unmarshal(meta, &ph.Meta)
 		ph.CertificateID = certID.String
 		ph.AccessListID = accessListID.String
+		ph.DDNSProviderID = ddnsProviderID.String
 		ph.AdvancedConfig = advancedConfig.String
 		if forwardContainerName.Valid {
 			ph.ForwardContainerName = &forwardContainerName.String
@@ -352,7 +356,7 @@ func (r *BackupRepository) exportDNSProviders(ctx context.Context) ([]model.DNSP
 func (r *BackupRepository) exportDDNSRecords(ctx context.Context) ([]model.DDNSRecordExport, error) {
 	query := `
 		SELECT id, hostname, dns_provider_id, record_type, proxied, ttl, enabled,
-		       last_ip, last_synced_at, last_status, last_error
+		       last_ip, last_synced_at, last_status, last_error, proxy_host_id
 		FROM ddns_records ORDER BY created_at
 	`
 
@@ -366,15 +370,19 @@ func (r *BackupRepository) exportDDNSRecords(ctx context.Context) ([]model.DDNSR
 	for rows.Next() {
 		var rec model.DDNSRecordExport
 		var lastSyncedAt sql.NullTime
+		var proxyHostID sql.NullString
 		err := rows.Scan(
 			&rec.ID, &rec.Hostname, &rec.DNSProviderID, &rec.RecordType, &rec.Proxied,
-			&rec.TTL, &rec.Enabled, &rec.LastIP, &lastSyncedAt, &rec.LastStatus, &rec.LastError,
+			&rec.TTL, &rec.Enabled, &rec.LastIP, &lastSyncedAt, &rec.LastStatus, &rec.LastError, &proxyHostID,
 		)
 		if err != nil {
 			return nil, err
 		}
 		if lastSyncedAt.Valid {
 			rec.LastSyncedAt = &lastSyncedAt.Time
+		}
+		if proxyHostID.Valid {
+			rec.ProxyHostID = &proxyHostID.String
 		}
 		exports = append(exports, rec)
 	}
