@@ -268,6 +268,18 @@ func (r *DDNSRepository) CreateManaged(ctx context.Context, rec model.DDNSRecord
 	return rowsAffected > 0, nil
 }
 
+// DeleteManagedWrongProvider removes a host's managed records whose provider
+// differs from keepProviderID (used when a host's DDNS provider changes). (#157)
+func (r *DDNSRepository) DeleteManagedWrongProvider(ctx context.Context, proxyHostID, keepProviderID string) (int64, error) {
+	res, err := r.db.ExecContext(ctx,
+		`DELETE FROM ddns_records WHERE proxy_host_id = $1 AND dns_provider_id <> $2`,
+		proxyHostID, keepProviderID)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
 // DeleteManagedNotIn removes a host's managed records whose hostname is not in keep.
 // An empty keep slice deletes all of the host's managed records (NOT (hostname = ANY('{}'))
 // is true for every row), which is the intended behaviour when a host has no domains. (#157)

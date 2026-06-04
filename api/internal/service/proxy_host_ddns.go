@@ -18,8 +18,10 @@ func ddnsDesiredDiff(desired, existing []string) (toCreate, toDelete []string) {
 	for _, e := range existing {
 		es[e] = true
 	}
+	seen := map[string]bool{}
 	for _, d := range desired {
-		if !es[d] {
+		if !es[d] && !seen[d] {
+			seen[d] = true
 			toCreate = append(toCreate, d)
 		}
 	}
@@ -45,6 +47,21 @@ func (s *ProxyHostService) reconcileHostDDNS(ctx context.Context, host *model.Pr
 
 	managed := host.DDNSEnabled && host.DDNSProviderID != nil && *host.DDNSProviderID != ""
 
+	if !managed {
+		if _, err := s.ddnsRepo.DeleteByProxyHost(ctx, host.ID); err != nil {
+			log.Printf("[DDNS] reconcile delete-all failed for host %s: %v", host.ID, err)
+		}
+		return
+	}
+
+	// Provider changed? Drop this host's managed records under any other provider
+	// first, so the diff below recreates them under the current provider. (#157)
+	if _, err := s.ddnsRepo.DeleteManagedWrongProvider(ctx, host.ID, *host.DDNSProviderID); err != nil {
+		log.Printf("[DDNS] reconcile provider-prune failed for host %s: %v", host.ID, err)
+	}
+
+	// List existing AFTER the wrong-provider prune so old-provider hostnames are
+	// seen as missing and recreated under the current provider. (#157)
 	existing, err := s.ddnsRepo.ListByProxyHost(ctx, host.ID)
 	if err != nil {
 		log.Printf("[DDNS] reconcile list failed for host %s: %v", host.ID, err)
@@ -53,13 +70,6 @@ func (s *ProxyHostService) reconcileHostDDNS(ctx context.Context, host *model.Pr
 	existingNames := make([]string, 0, len(existing))
 	for _, r := range existing {
 		existingNames = append(existingNames, r.Hostname)
-	}
-
-	if !managed {
-		if _, err := s.ddnsRepo.DeleteByProxyHost(ctx, host.ID); err != nil {
-			log.Printf("[DDNS] reconcile delete-all failed for host %s: %v", host.ID, err)
-		}
-		return
 	}
 
 	desired := []string(host.DomainNames)
