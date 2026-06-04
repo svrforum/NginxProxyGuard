@@ -10,9 +10,8 @@ import BotFilterSettings from '../components/BotFilterSettings'
 import WAFAutoBanSettings from '../components/WAFAutoBanSettings'
 import SystemLogSettings from '../components/SystemLogSettings'
 import FilterSubscriptionList from '../components/FilterSubscriptionList'
-import DDNSRecordList from '../components/ddns/DDNSRecordList'
 
-export default function SettingsPage({ subTab }: { subTab: 'global' | 'captcha' | 'geoip' | 'ssl' | 'maintenance' | 'backups' | 'botfilter' | 'waf-auto-ban' | 'system-logs' | 'filter-subscriptions' | 'ddns' }) {
+export default function SettingsPage({ subTab }: { subTab: 'global' | 'captcha' | 'geoip' | 'ssl' | 'maintenance' | 'backups' | 'botfilter' | 'waf-auto-ban' | 'system-logs' | 'filter-subscriptions' }) {
   const { t } = useTranslation('navigation')
   const navigate = useNavigate()
 
@@ -111,15 +110,6 @@ export default function SettingsPage({ subTab }: { subTab: 'global' | 'captcha' 
           >
             {t('subTabs.settings.filterSubscriptions', 'Filter Subscriptions')}
           </button>
-          <button
-            onClick={() => navigate('/settings/ddns')}
-            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${subTab === 'ddns'
-              ? 'border-sky-600 text-sky-600 dark:text-sky-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.settings.ddns', 'DDNS')}
-          </button>
         </div>
       </div>
 
@@ -133,7 +123,6 @@ export default function SettingsPage({ subTab }: { subTab: 'global' | 'captcha' 
       {subTab === 'backups' && <BackupManager />}
       {subTab === 'system-logs' && <SystemLogSettings />}
       {subTab === 'filter-subscriptions' && <FilterSubscriptionList />}
-      {subTab === 'ddns' && <DDNSRecordList />}
     </div>
   )
 }

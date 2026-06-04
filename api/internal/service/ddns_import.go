@@ -35,7 +35,7 @@ func (s *ProxyHostService) ImportFromHosts(ctx context.Context, hostIDs []string
 			DDNSEnabled:    &enabled,
 			DDNSProviderID: &providerID,
 		}
-		host, err := s.UpdateDBOnly(ctx, id, req)
+		host, err := s.UpdateDBOnly(ctx, id, req, false) // bulk: no per-host immediate sync; scheduler will sync
 		if err != nil {
 			log.Printf("[DDNS] import: enabling DDNS on host %s failed: %v", id, err)
 			continue
@@ -44,8 +44,8 @@ func (s *ProxyHostService) ImportFromHosts(ctx context.Context, hostIDs []string
 			log.Printf("[DDNS] import: proxy host %s not found; skipped", id)
 			continue
 		}
-		// Reconcile is graceful and logs its own errors.
-		s.reconcileHostDDNS(ctx, host)
+		// UpdateDBOnly(false) already reconciled (created managed records) without immediate sync;
+		// the DDNS scheduler syncs them on its next cycle. No explicit reconcile needed here.
 	}
 	return nil
 }

@@ -348,6 +348,7 @@ function AppContent({ user, onLogout }: AppContentProps) {
           <Route path="/certificates/list" element={<CertificatesPage subTab="certificates" />} />
           <Route path="/certificates/history" element={<CertificatesPage subTab="history" />} />
           <Route path="/certificates/dns-providers" element={<CertificatesPage subTab="dns-providers" />} />
+          <Route path="/certificates/ddns" element={<CertificatesPage subTab="ddns" />} />
           <Route path="/redirects" element={<RedirectHostManager />} />
           <Route path="/waf" element={<Navigate to="/waf/settings" replace />} />
           <Route path="/waf/settings" element={<WAFPage subTab="settings" />} />
@@ -377,7 +378,6 @@ function AppContent({ user, onLogout }: AppContentProps) {
           <Route path="/settings/waf-auto-ban" element={<SettingsPage subTab="waf-auto-ban" />} />
           <Route path="/settings/system-logs" element={<SettingsPage subTab="system-logs" />} />
           <Route path="/settings/filter-subscriptions" element={<SettingsPage subTab="filter-subscriptions" />} />
-          <Route path="/settings/ddns" element={<SettingsPage subTab="ddns" />} />
         </Routes>
         </Suspense>
       </main>

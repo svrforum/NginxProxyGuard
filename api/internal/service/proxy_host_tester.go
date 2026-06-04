@@ -12,12 +12,62 @@ import (
 	"time"
 
 	"nginx-proxy-guard/internal/model"
+	"nginx-proxy-guard/internal/repository"
 )
 
 type ProxyHostTester struct {
 	proxyHost  string // nginx-guard-proxy hostname
 	proxyHTTP  int    // HTTP port (80)
 	proxyHTTPS int    // HTTPS port (443)
+
+	dnsProvider *DNSProviderService
+	ddnsRepo    *repository.DDNSRepository
+}
+
+// SetDDNSDeps wires read-only DDNS deps for the config test's DDNS section. (#157 follow-up)
+func (t *ProxyHostTester) SetDDNSDeps(dp *DNSProviderService, ddnsRepo *repository.DDNSRepository) {
+	t.dnsProvider = dp
+	t.ddnsRepo = ddnsRepo
+}
+
+// fillDDNSResult builds the read-only DDNS section: live credential check + last-sync status.
+// Representative last-sync = most recent last_synced_at; any record in error -> error. (#157 follow-up)
+func (t *ProxyHostTester) fillDDNSResult(ctx context.Context, host *model.ProxyHost) *model.DDNSTestResult {
+	if !host.DDNSEnabled || host.DDNSProviderID == nil || *host.DDNSProviderID == "" {
+		return nil
+	}
+	res := &model.DDNSTestResult{Enabled: true}
+	if t.dnsProvider != nil {
+		if prov, _ := t.dnsProvider.GetByID(ctx, *host.DDNSProviderID); prov != nil {
+			res.ProviderName = prov.Name
+			res.ProviderType = prov.ProviderType
+		}
+		if err := t.dnsProvider.TestConnectionByID(ctx, *host.DDNSProviderID); err != nil {
+			res.CredentialError = err.Error()
+		} else {
+			res.CredentialsValid = true
+		}
+	}
+	if t.ddnsRepo != nil {
+		recs, _ := t.ddnsRepo.ListByProxyHost(ctx, host.ID)
+		var latest *model.DDNSRecord
+		for i := range recs {
+			if recs[i].LastStatus == model.DDNSStatusError {
+				res.LastStatus = model.DDNSStatusError
+			}
+			if recs[i].LastSyncedAt != nil && (latest == nil || latest.LastSyncedAt == nil || recs[i].LastSyncedAt.After(*latest.LastSyncedAt)) {
+				latest = &recs[i]
+			}
+		}
+		if latest != nil {
+			res.LastIP = latest.LastIP
+			res.LastSyncedAt = latest.LastSyncedAt
+			if res.LastStatus == "" {
+				res.LastStatus = latest.LastStatus
+			}
+		}
+	}
+	return res
 }
 
 func NewProxyHostTester() *ProxyHostTester {
@@ -35,7 +85,9 @@ func NewProxyHostTester() *ProxyHostTester {
 
 func (t *ProxyHostTester) TestHost(ctx context.Context, host *model.ProxyHost, targetURL string) (*model.ProxyHostTestResult, error) {
 	if host.IsStream() {
-		return t.testStreamProxy(ctx, host, targetURL), nil
+		r := t.testStreamProxy(ctx, host, targetURL)
+		r.DDNS = t.fillDDNSResult(ctx, host)
+		return r, nil
 	}
 
 	domain := host.DomainNames[0]
@@ -44,6 +96,7 @@ func (t *ProxyHostTester) TestHost(ctx context.Context, host *model.ProxyHost, t
 		TestedAt: time.Now(),
 		Headers:  make(map[string]string),
 	}
+	result.DDNS = t.fillDDNSResult(ctx, host)
 
 	// Determine scheme based on host configuration
 	scheme := "http"

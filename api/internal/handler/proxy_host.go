@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"nginx-proxy-guard/internal/model"
+	"nginx-proxy-guard/internal/repository"
 	"nginx-proxy-guard/internal/service"
 
 	"github.com/labstack/echo/v4"
@@ -17,11 +18,13 @@ type ProxyHostHandler struct {
 	tester  *service.ProxyHostTester
 }
 
-func NewProxyHostHandler(svc *service.ProxyHostService, audit *service.AuditService) *ProxyHostHandler {
+func NewProxyHostHandler(svc *service.ProxyHostService, audit *service.AuditService, dnsProvider *service.DNSProviderService, ddnsRepo *repository.DDNSRepository) *ProxyHostHandler {
+	tester := service.NewProxyHostTester()
+	tester.SetDDNSDeps(dnsProvider, ddnsRepo)
 	return &ProxyHostHandler{
 		service: svc,
 		audit:   audit,
-		tester:  service.NewProxyHostTester(),
+		tester:  tester,
 	}
 }
 
@@ -180,7 +183,7 @@ func (h *ProxyHostHandler) Update(c echo.Context) error {
 	var host *model.ProxyHost
 	var err error
 	if skipNginx {
-		host, err = h.service.UpdateDBOnly(c.Request().Context(), id, &req)
+		host, err = h.service.UpdateDBOnly(c.Request().Context(), id, &req, true)
 	} else {
 		host, err = h.service.Update(c.Request().Context(), id, &req)
 	}

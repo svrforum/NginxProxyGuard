@@ -23,6 +23,7 @@ type ddnsRecordRepo interface {
 	Update(ctx context.Context, id string, req *model.UpdateDDNSRecordRequest) (*model.DDNSRecord, error)
 	Delete(ctx context.Context, id string) error
 	ListEnabled(ctx context.Context) ([]model.DDNSRecord, error)
+	ListByProxyHost(ctx context.Context, proxyHostID string) ([]model.DDNSRecord, error)
 	UpdateStatus(ctx context.Context, id, ip, status, errMsg string, syncedAt time.Time) error
 }
 
@@ -84,6 +85,29 @@ func (s *DDNSService) SyncAll(ctx context.Context) {
 			continue
 		}
 		s.syncRecord(ctx, rec, ip)
+	}
+}
+
+// SyncByProxyHost immediately syncs the managed records of a single proxy host
+// (used right after a host opts into DDNS, instead of waiting for the scheduler).
+// Graceful: detection/list errors abort the run with a log; per-record failures are
+// recorded as last_status='error' and don't abort the remaining records. (#157 follow-up)
+func (s *DDNSService) SyncByProxyHost(ctx context.Context, proxyHostID string) {
+	ip, err := s.detector.DetectPublicIPv4(ctx)
+	if err != nil {
+		log.Printf("[DDNS] public IP detection failed for host %s, skipping immediate sync: %v", proxyHostID, err)
+		return
+	}
+	recs, err := s.records.ListByProxyHost(ctx, proxyHostID)
+	if err != nil {
+		log.Printf("[DDNS] list managed records failed for host %s: %v", proxyHostID, err)
+		return
+	}
+	for _, rec := range recs {
+		if !rec.Enabled {
+			continue
+		}
+		s.syncRecord(ctx, rec, ip) // force sync (first sync after enabling), no needsUpdate gate
 	}
 }
 

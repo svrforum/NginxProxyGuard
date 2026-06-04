@@ -169,7 +169,19 @@ export interface ProxyHostTestResult {
   http?: HTTPTestResult
   cache?: CacheTestResult
   security?: SecurityTestResult
+  ddns?: DDNSTestResult
   headers?: Record<string, string>
+}
+
+export interface DDNSTestResult {
+  enabled: boolean
+  provider_name?: string
+  provider_type?: string
+  credentials_valid: boolean
+  credential_error?: string
+  last_status?: string
+  last_ip?: string
+  last_synced_at?: string
 }
 
 export interface StreamTestResult {

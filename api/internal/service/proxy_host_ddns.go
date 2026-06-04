@@ -40,7 +40,12 @@ func ddnsDesiredDiff(desired, existing []string) (toCreate, toDelete []string) {
 // records are removed. Manually-created records (proxy_host_id IS NULL) and other
 // hosts' records are never touched. The ddnsRepo dependency is optional; when it
 // is nil (e.g. unit tests constructing a bare service) reconcile is a no-op.
-func (s *ProxyHostService) reconcileHostDDNS(ctx context.Context, host *model.ProxyHost) {
+//
+// immediateSync controls the post-reconcile public-IP sync: interactive single-host
+// saves (Create/Update/UI UpdateDBOnly) pass true so the record reflects the current
+// IP within seconds; bulk import passes false and relies on the DDNS scheduler's next
+// cycle, avoiding a burst of per-host public-IP detection + provider API writes.
+func (s *ProxyHostService) reconcileHostDDNS(ctx context.Context, host *model.ProxyHost, immediateSync bool) {
 	if s.ddnsRepo == nil || host == nil {
 		return
 	}
@@ -90,5 +95,12 @@ func (s *ProxyHostService) reconcileHostDDNS(ctx context.Context, host *model.Pr
 	}
 	if err := s.ddnsRepo.DeleteManagedNotIn(ctx, host.ID, desired); err != nil {
 		log.Printf("[DDNS] reconcile prune failed for host %s: %v", host.ID, err)
+	}
+
+	// Immediate first sync (async, graceful) so the record reflects the current public
+	// IP within seconds instead of waiting for the scheduler. context.Background() so it
+	// survives the request context ending. (#157 follow-up)
+	if immediateSync && s.ddnsSyncer != nil {
+		go s.ddnsSyncer.SyncByProxyHost(context.Background(), host.ID)
 	}
 }

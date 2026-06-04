@@ -520,6 +520,7 @@ App mount → getToken() → if none → 'unauthenticated' → <Login />
 | `/certificates/list` | CertificatesPage | primary |
 | `/certificates/history` | CertificatesPage | primary |
 | `/certificates/dns-providers` | CertificatesPage | primary |
+| `/certificates/ddns` | CertificatesPage (DDNSRecordList) | primary |
 | `/waf/settings` | WAFPage | orange |
 | `/waf/banned-ips` | WAFPage | red |
 | `/waf/uri-blocks` | WAFPage | rose |
@@ -544,7 +545,6 @@ App mount → getToken() → if none → 'unauthenticated' → <Login />
 | `/settings/waf-auto-ban` | SettingsPage | red |
 | `/settings/system-logs` | SettingsPage | indigo |
 | `/settings/filter-subscriptions` | FilterSubscriptionList | primary |
-| `/settings/ddns` | DDNSRecordList | primary |
 
 ### 3.4 State Management
 

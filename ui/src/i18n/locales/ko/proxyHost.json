@@ -126,6 +126,7 @@
       "ddnsProvider": "DNS 프로바이더",
       "ddnsSelectProvider": "프로바이더 선택",
       "ddnsProviderHint": "DDNS는 현재 Cloudflare와 DuckDNS만 지원합니다.",
+      "ddnsStatusHint": "등록 후 동기화 상태는 인증서 → DDNS에서 확인할 수 있어요.",
       "ddnsNoProviders": "사용 가능한 Cloudflare/DuckDNS 프로바이더가 없습니다. 인증서 > DNS 프로바이더에서 먼저 추가하세요."
     },
     "stream": {
@@ -652,6 +653,15 @@
       "response": "응답 헤더",
       "count": "개 헤더",
       "none": "캡처된 헤더 없음"
+    },
+    "ddns": {
+      "title": "DDNS",
+      "provider": "프로바이더",
+      "credentials": "자격증명",
+      "valid": "유효",
+      "invalid": "실패",
+      "lastSync": "마지막 동기화",
+      "never": "아직 동기화 안 됨"
     }
   },
   "messages": {

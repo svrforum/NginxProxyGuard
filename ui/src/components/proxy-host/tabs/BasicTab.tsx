@@ -642,6 +642,9 @@ export function BasicTabContent({
             ) : (
               <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{t('form.basic.ddnsProviderHint')}</p>
             )}
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+              {t('form.basic.ddnsStatusHint')}
+            </p>
           </div>
         )}
       </div>

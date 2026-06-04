@@ -44,7 +44,7 @@ func InitHandlers(
 ) *Handlers {
 	h := &Handlers{}
 
-	h.ProxyHost = handler.NewProxyHostHandler(svcs.ProxyHost, svcs.Audit)
+	h.ProxyHost = handler.NewProxyHostHandler(svcs.ProxyHost, svcs.Audit, svcs.DNSProvider, repos.DDNS)
 	h.DNSProvider = handler.NewDNSProviderHandler(svcs.DNSProvider)
 	h.Certificate = handler.NewCertificateHandler(svcs.Certificate, svcs.Audit)
 	h.Log = handler.NewLogHandler(repos.Log, redisCache, repos.RateLimit)

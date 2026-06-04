@@ -45,7 +45,8 @@
     "certificates": {
       "list": "Certificates",
       "history": "Issuance/Renewal History",
-      "dnsProviders": "DNS Providers"
+      "dnsProviders": "DNS Providers",
+      "ddns": "DDNS"
     },
     "waf": {
       "ruleSettings": "WAF Policy Settings",
@@ -75,8 +76,7 @@
       "maintenance": "Maintenance",
       "backups": "Backups",
       "systemLogs": "System Logs",
-      "filterSubscriptions": "Filter Subscriptions",
-      "ddns": "DDNS"
+      "filterSubscriptions": "Filter Subscriptions"
     }
   },
   "loading": "Loading..."
