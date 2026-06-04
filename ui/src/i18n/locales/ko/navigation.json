@@ -45,7 +45,8 @@
     "certificates": {
       "list": "인증서",
       "history": "발급/갱신 이력",
-      "dnsProviders": "DNS 프로바이더"
+      "dnsProviders": "DNS 프로바이더",
+      "ddns": "DDNS"
     },
     "waf": {
       "ruleSettings": "WAF 정책 설정",
@@ -75,8 +76,7 @@
       "maintenance": "유지보수",
       "backups": "백업",
       "systemLogs": "시스템 로그",
-      "filterSubscriptions": "필터 구독",
-      "ddns": "DDNS"
+      "filterSubscriptions": "필터 구독"
     }
   },
   "loading": "로딩 중..."

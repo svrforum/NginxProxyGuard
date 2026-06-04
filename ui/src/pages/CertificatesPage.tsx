@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import CertificateList from '../components/CertificateList'
 import CertificateHistoryList from '../components/CertificateHistory'
 import DNSProviderList from '../components/DNSProviderList'
+import DDNSRecordList from '../components/ddns/DDNSRecordList'
 
-export default function CertificatesPage({ subTab }: { subTab: 'certificates' | 'history' | 'dns-providers' }) {
+export default function CertificatesPage({ subTab }: { subTab: 'certificates' | 'history' | 'dns-providers' | 'ddns' }) {
   const { t } = useTranslation('navigation')
   const navigate = useNavigate()
 
@@ -40,12 +41,22 @@ export default function CertificatesPage({ subTab }: { subTab: 'certificates' | 
           >
             {t('subTabs.certificates.dnsProviders')}
           </button>
+          <button
+            onClick={() => navigate('/certificates/ddns')}
+            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors ${subTab === 'ddns'
+              ? 'border-primary-600 text-primary-600 dark:text-primary-400'
+              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+          >
+            {t('subTabs.certificates.ddns')}
+          </button>
         </div>
       </div>
 
       {subTab === 'certificates' && <CertificateList />}
       {subTab === 'history' && <CertificateHistoryList />}
       {subTab === 'dns-providers' && <DNSProviderList />}
+      {subTab === 'ddns' && <DDNSRecordList />}
     </div>
   )
 }

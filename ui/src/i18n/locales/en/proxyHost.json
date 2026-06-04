@@ -126,6 +126,7 @@
       "ddnsProvider": "DNS Provider",
       "ddnsSelectProvider": "Select a provider",
       "ddnsProviderHint": "DDNS currently supports Cloudflare and DuckDNS only.",
+      "ddnsStatusHint": "After saving, check sync status under Certificates → DDNS.",
       "ddnsNoProviders": "No Cloudflare/DuckDNS providers available. Add one under Certificates > DNS Providers first."
     },
     "stream": {
@@ -654,6 +655,15 @@
       "response": "Response Headers",
       "count": "headers",
       "none": "No headers captured"
+    },
+    "ddns": {
+      "title": "DDNS",
+      "provider": "Provider",
+      "credentials": "Credentials",
+      "valid": "Valid",
+      "invalid": "Failed",
+      "lastSync": "Last sync",
+      "never": "Not synced yet"
     }
   },
   "messages": {

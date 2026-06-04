@@ -128,6 +128,25 @@ export function TestResultModal({
               {activeTab === 'cache' && <CacheTab result={result} host={host} />}
               {activeTab === 'security' && <SecurityTab result={result} />}
               {activeTab === 'headers' && <HeadersTab result={result} />}
+
+              {result.ddns?.enabled && (
+                <div className="mt-4 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                  <div className="font-medium text-sm mb-1">{t('test.ddns.title')}</div>
+                  <div className="text-xs text-slate-600 dark:text-slate-300 space-y-0.5">
+                    <div>
+                      {t('test.ddns.provider')}: {result.ddns.provider_name} ({result.ddns.provider_type})
+                    </div>
+                    <div className={result.ddns.credentials_valid ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                      {t('test.ddns.credentials')}: {result.ddns.credentials_valid ? t('test.ddns.valid') : `${t('test.ddns.invalid')}${result.ddns.credential_error ? ` (${result.ddns.credential_error})` : ''}`}
+                    </div>
+                    <div>
+                      {t('test.ddns.lastSync')}: {result.ddns.last_synced_at
+                        ? `${new Date(result.ddns.last_synced_at).toLocaleString()} · ${result.ddns.last_ip || '-'} · ${result.ddns.last_status || '-'}`
+                        : t('test.ddns.never')}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </>
         )}
