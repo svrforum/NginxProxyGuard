@@ -111,6 +111,9 @@ Global proxy request/response buffering settings for fine-tuned performance. Use
 ### 🔍 Config Error Diagnostics (v2.4.0)
 Actionable error guides for proxy host configuration failures. Clickable error badges with detailed troubleshooting. Auto-disable broken configs on Nginx startup.
 
+### 🌐 Dynamic DNS (v2.21.0, integrated v2.23.0)
+Built-in DDNS keeps your domains pointed at your home server as your public IP changes (Cloudflare / DuckDNS). Enable per proxy host with one toggle — the host's domains become managed DDNS records that auto-sync on domain changes and are cleaned up when the host is deleted. Bulk-enable existing hosts, and configure the refresh interval from the DDNS settings.
+
 ---
 
 ## 🛠 Tech Stack

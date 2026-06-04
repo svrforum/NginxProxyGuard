@@ -392,6 +392,7 @@ Protected: APITokenAuth → AuthMiddleware → Handler
 | FilterRefreshScheduler | 사용자 지정 | 필터 구독 주기적 갱신 |
 | PipelineCanary | 5분 (기본) | access 로그 파이프라인 종단 무결성 검증 (§8.16) |
 | ContainerReconcileScheduler | 30초 (기본, `NPG_CONTAINER_RECONCILE_INTERVAL`) | 컨테이너 기반 host의 container name → IP 재해석, 변경 시 fail-safe 경로로 config 재생성 (#150) |
+| DDNSScheduler | 동적 (기본 5분) | DDNS 레코드의 공인 IP 확인 후 Cloudflare/DuckDNS 갱신. 주기는 매 사이클 후 `system_settings.ddns_check_interval_minutes` 재조회(env `NPG_DDNS_INTERVAL` 우선, 최소 1분) (#154, #157) |
 
 ### 2.11 Key Constants
 
@@ -543,6 +544,7 @@ App mount → getToken() → if none → 'unauthenticated' → <Login />
 | `/settings/waf-auto-ban` | SettingsPage | red |
 | `/settings/system-logs` | SettingsPage | indigo |
 | `/settings/filter-subscriptions` | FilterSubscriptionList | primary |
+| `/settings/ddns` | DDNSRecordList | primary |
 
 ### 3.4 State Management
 
@@ -763,6 +765,8 @@ Tag push (v*) → detect changes (SHA256 per component)
 | config_status | varchar(20) | 'ok' | ok/error (nginx config 상태) |
 | config_error | text | NULL | config 생성/테스트 실패 시 에러 메시지 |
 | is_favorite | boolean | false | UI 즐겨찾기 (상단 고정) |
+| ddns_enabled | boolean | false | DDNS 자동 등록 옵트인. 켜면 domain_names가 관리형 ddns_records로 동기화 (#157) |
+| ddns_provider_id | uuid | NULL | FK → dns_providers (SET NULL). ddns_enabled 시 필수 (#157) |
 | enabled | boolean | true | |
 | meta | jsonb | '{}' | |
 
@@ -777,6 +781,28 @@ Tag push (v*) → detect changes (SHA256 per component)
 | acme_account | jsonb | ACME registration |
 | auto_renew | boolean | |
 | expires_at | timestamptz | |
+
+**`dns_providers`** — DNS 프로바이더 자격 증명 (DNS-01 인증서 발급 + DDNS 공용)
+| Column | Type | Notes |
+|--------|------|-------|
+| name | varchar(100) | NOT NULL |
+| provider_type | varchar(50) | cloudflare/duckdns/route53/… (DDNS는 cloudflare/duckdns만 지원) |
+| credentials | jsonb | API 토큰 등 (백업 시 평문 포함 주의) |
+| is_default | boolean | 부분 유니크 인덱스 (default 1개) |
+
+**`ddns_records`** — DDNS 레코드 (공인 IP 변경 시 자동 갱신) (#154, #157)
+| Column | Type | Notes |
+|--------|------|-------|
+| hostname | text | NOT NULL. (hostname, dns_provider_id) 유니크 |
+| dns_provider_id | uuid | FK → dns_providers (CASCADE) |
+| proxy_host_id | uuid | FK → proxy_hosts (CASCADE). NULL=수동 레코드, 非NULL=프록시 호스트가 관리하는 관리형 레코드 (#157) |
+| record_type | text | 'A' |
+| last_ip | text | 마지막으로 갱신한 공인 IP |
+| last_status | text | ok/error |
+| last_synced_at | timestamptz | |
+| enabled | boolean | |
+
+> **관리형 레코드 규칙(#157):** `proxy_host_id`가 있는 레코드는 호스트의 `ddns_enabled`/`domain_names`/`ddns_provider_id`에 의해 생성·갱신·삭제된다. reconcile은 `proxy_host_id = host.id` 인 행만 건드리고, 신규 생성은 `ON CONFLICT (hostname, dns_provider_id) DO NOTHING`으로 수동 레코드(`proxy_host_id NULL`)를 보호한다. DDNS 페이지에서 관리형 레코드는 hostname/provider 편집·삭제가 비활성.
 
 **`logs_partitioned`** — 접근 로그 (월별 파티션)
 | Column | Type | Notes |
@@ -880,6 +906,9 @@ system_log_level: 'debug','info','warn','error','fatal'
 | logs, ip_ban_history | proxy_hosts | SET NULL |
 | proxy_hosts | certificates | SET NULL |
 | proxy_hosts | access_lists | SET NULL |
+| proxy_hosts (ddns_provider_id) | dns_providers | SET NULL (#157) |
+| ddns_records | proxy_hosts | CASCADE (#157 — 호스트 삭제 시 관리형 레코드 정리) |
+| ddns_records | dns_providers | CASCADE |
 | auth_sessions, api_tokens | users | CASCADE |
 | certificate_history | certificates | CASCADE |
 
@@ -1038,6 +1067,22 @@ system_log_level: 'debug','info','warn','error','fatal'
 | GET | `/api/v1/system-logs` | 시스템 로그 |
 | GET | `/api/v1/audit-logs` | 감사 로그 |
 
+> `system_settings`에는 DDNS 갱신 주기 `ddns_check_interval_minutes`(기본 5, 최소 1)가 포함되며, DDNSScheduler가 매 사이클 후 재조회한다 (#157).
+
+### 6.11 DDNS & DNS Providers (#154, #157)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET/POST | `/api/v1/dns-providers` | DNS 프로바이더 목록/생성 |
+| POST | `/api/v1/dns-providers/test` | 자격 증명 테스트 |
+| GET | `/api/v1/dns-providers/default` | 기본 프로바이더 |
+| GET/PUT/DELETE | `/api/v1/dns-providers/:id` | 프로바이더 CRUD |
+| GET/POST | `/api/v1/ddns-records` | DDNS 레코드 목록/추가 |
+| POST | `/api/v1/ddns-records/sync` | 전체 레코드 즉시 동기화 |
+| POST | `/api/v1/ddns-records/import-from-hosts` | 프록시 호스트 일괄 옵트인 → 관리형 레코드 생성 (#157). body `{proxy_host_ids[], dns_provider_id}` |
+| GET/PUT/DELETE | `/api/v1/ddns-records/:id` | 레코드 CRUD (관리형 레코드는 호스트가 관리) |
+| POST | `/api/v1/ddns-records/:id/sync` | 단일 레코드 즉시 동기화 |
+
 ---
 
 ## 7. Data Models
@@ -1069,10 +1114,18 @@ interface ProxyHost {
   ssl_enabled, ssl_force_https, ssl_http2, ssl_http3, certificate_id?
   waf_enabled, waf_mode, waf_paranoia_level, waf_anomaly_threshold
   cache_enabled, block_exploits, access_list_id?, is_favorite, enabled
+  ddns_enabled, ddns_provider_id?          // #157 DDNS 자동 등록 옵트인
   config_status, config_error?
   proxy_connect_timeout?, proxy_send_timeout?, proxy_read_timeout?
   client_max_body_size?, advanced_config?
   created_at, updated_at
+}
+
+// DDNS (#154, #157)
+interface DNSProvider { id, name, provider_type, is_default, has_credentials }
+interface DDNSRecord {
+  id, hostname, dns_provider_id, proxy_host_id?   // proxy_host_id 있으면 관리형
+  record_type, last_ip?, last_status?, last_synced_at?, enabled
 }
 
 // Log (30+ fields)
