@@ -58,6 +58,8 @@ func TestBackupSyncCriticalTables(t *testing.T) {
 				"certificate_id",
 				"client_max_body_size",
 				"custom_locations",
+				"ddns_enabled",
+				"ddns_provider_id",
 				"domain_names",
 				"enabled",
 				"fail2ban_enabled",

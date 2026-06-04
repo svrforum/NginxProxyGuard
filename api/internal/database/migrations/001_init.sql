@@ -504,6 +504,7 @@ CREATE TABLE IF NOT EXISTS public.ddns_records (
     last_synced_at timestamp with time zone,
     last_status character varying(16) DEFAULT '' NOT NULL,
     last_error text DEFAULT '' NOT NULL,
+    proxy_host_id uuid,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -1941,6 +1942,8 @@ CREATE TABLE IF NOT EXISTS public.proxy_hosts (
     is_favorite boolean DEFAULT false NOT NULL,
     config_status character varying(20) DEFAULT 'ok'::character varying NOT NULL,
     config_error text,
+    ddns_enabled boolean DEFAULT false NOT NULL,
+    ddns_provider_id uuid,
     CONSTRAINT chk_waf_anomaly_threshold CHECK (((waf_anomaly_threshold >= 1) AND (waf_anomaly_threshold <= 100))),
     CONSTRAINT chk_waf_paranoia_level CHECK (((waf_paranoia_level >= 1) AND (waf_paranoia_level <= 4)))
 );
@@ -2323,7 +2326,8 @@ geckodriver'::text,
 ^/api/v1/challenge/
 ^/wp-admin/admin-ajax.php
 ^/webapi/'::text,
-    global_trusted_ips text DEFAULT ''
+    global_trusted_ips text DEFAULT '',
+    ddns_check_interval_minutes integer DEFAULT 5 NOT NULL
 );
 COMMENT ON COLUMN public.system_settings.access_log_retention_days IS 'Retention period for access logs in days (default: 3 years)';
 COMMENT ON COLUMN public.system_settings.waf_log_retention_days IS 'Retention period for WAF/ModSecurity logs in days (default: 3 months)';
@@ -3171,6 +3175,8 @@ ALTER TABLE ONLY public.certificates
     ADD CONSTRAINT certificates_dns_provider_id_fkey FOREIGN KEY (dns_provider_id) REFERENCES public.dns_providers(id) ON DELETE SET NULL;
 ALTER TABLE ONLY public.ddns_records
     ADD CONSTRAINT ddns_records_dns_provider_id_fkey FOREIGN KEY (dns_provider_id) REFERENCES public.dns_providers(id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.ddns_records
+    ADD CONSTRAINT ddns_records_proxy_host_id_fkey FOREIGN KEY (proxy_host_id) REFERENCES public.proxy_hosts(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.certificate_history
     ADD CONSTRAINT certificate_history_certificate_id_fkey FOREIGN KEY (certificate_id) REFERENCES public.certificates(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.challenge_configs
@@ -3201,6 +3207,8 @@ ALTER TABLE ONLY public.logs
     ADD CONSTRAINT logs_proxy_host_id_fkey FOREIGN KEY (proxy_host_id) REFERENCES public.proxy_hosts(id) ON DELETE SET NULL;
 ALTER TABLE ONLY public.proxy_hosts
     ADD CONSTRAINT proxy_hosts_certificate_id_fkey FOREIGN KEY (certificate_id) REFERENCES public.certificates(id) ON DELETE SET NULL;
+ALTER TABLE ONLY public.proxy_hosts
+    ADD CONSTRAINT proxy_hosts_ddns_provider_id_fkey FOREIGN KEY (ddns_provider_id) REFERENCES public.dns_providers(id) ON DELETE SET NULL;
 ALTER TABLE ONLY public.rate_limits
     ADD CONSTRAINT rate_limits_proxy_host_id_fkey FOREIGN KEY (proxy_host_id) REFERENCES public.proxy_hosts(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.redirect_hosts
@@ -3347,6 +3355,10 @@ ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS forward_container_name t
 -- so multi-network containers are not reconciled to a wrong-network IP. Existing
 -- v2.20.0 rows get NULL and are skipped by the reconcile scheduler (safe mode).
 ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS forward_container_network text;
+-- v2.23.0: proxy host ↔ DDNS opt-in (#157). FK to dns_providers is added in the
+-- constraint section above for fresh installs; existing installs get it via migration.go.
+ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS ddns_enabled boolean DEFAULT false NOT NULL;
+ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS ddns_provider_id uuid;
 
 -- DDNS records (#154): keep registered hostnames' A records pointed at the server's public IPv4.
 CREATE TABLE IF NOT EXISTS public.ddns_records (
@@ -3365,6 +3377,12 @@ CREATE TABLE IF NOT EXISTS public.ddns_records (
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_ddns_records_hostname_provider ON public.ddns_records (hostname, dns_provider_id);
+-- v2.23.0: link a managed DDNS record back to its proxy host (#157). FK + ON DELETE
+-- CASCADE added in the constraint section above (fresh installs) / migration.go (upgrades).
+ALTER TABLE public.ddns_records ADD COLUMN IF NOT EXISTS proxy_host_id uuid;
+
+-- v2.23.0: DDNS sync interval, minutes (#157). Scheduler reads this dynamically.
+ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS ddns_check_interval_minutes integer DEFAULT 5 NOT NULL;
 
 -- Add column comments
 COMMENT ON COLUMN public.proxy_hosts.cache_static_only IS 'Only cache static assets (js, css, images, fonts) - excludes API paths';

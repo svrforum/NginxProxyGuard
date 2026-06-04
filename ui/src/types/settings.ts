@@ -415,6 +415,9 @@ export interface SystemSettings {
   ui_font_family?: string;
   ui_error_page_language?: string; // 'auto' | 'ko' | 'en'
 
+  // DDNS Settings
+  ddns_check_interval_minutes: number; // Default: 5 (minimum 1)
+
   updated_at: string;
 }
 
@@ -497,6 +500,9 @@ export interface UpdateSystemSettingsRequest {
   // UI Settings (global)
   ui_font_family?: string;
   ui_error_page_language?: string;
+
+  // DDNS Settings
+  ddns_check_interval_minutes?: number;
 }
 
 export interface GeoIPStatus {

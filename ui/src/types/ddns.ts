@@ -10,6 +10,7 @@ export interface DDNSRecord {
   last_synced_at?: string
   last_status: string
   last_error: string
+  proxy_host_id?: string
   created_at: string
   updated_at: string
 }

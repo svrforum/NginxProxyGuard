@@ -252,6 +252,9 @@ type DDNSRecordExport struct {
 	LastSyncedAt  *time.Time `json:"last_synced_at,omitempty"`
 	LastStatus    string     `json:"last_status,omitempty"`
 	LastError     string     `json:"last_error,omitempty"`
+	// ProxyHostID links a managed record to its proxy host (#157). On import it is
+	// remapped via proxyHostIDMap; records whose host wasn't imported are skipped.
+	ProxyHostID *string `json:"proxy_host_id,omitempty"`
 }
 
 // GlobalSettingsExport represents global settings for export
@@ -374,6 +377,8 @@ type ProxyHostData struct {
 	ProxyRequestBuffering     string                 `json:"proxy_request_buffering,omitempty"`
 	ClientMaxBodySize         string                 `json:"client_max_body_size,omitempty"`
 	ProxyMaxTempFileSize      string                 `json:"proxy_max_temp_file_size,omitempty"`
+	DDNSEnabled               bool                   `json:"ddns_enabled,omitempty"`
+	DDNSProviderID            string                 `json:"ddns_provider_id,omitempty"`
 	Meta                      map[string]interface{} `json:"meta,omitempty"`
 }
 
@@ -734,4 +739,7 @@ type SystemSettingsExport struct {
 
 	// System Log Settings
 	SystemLogsEnabled bool `json:"system_logs_enabled"`
+
+	// DDNS Settings
+	DDNSCheckIntervalMinutes int `json:"ddns_check_interval_minutes"`
 }

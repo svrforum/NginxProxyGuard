@@ -120,7 +120,13 @@
       "dockerContainerTarget": "Docker container: {{name}} (auto-resolved by name)",
       "dockerContainerTargetWithNetwork": "Docker container: {{name}} (network: {{network}}, auto-resolved)",
       "websocket": "WebSocket Support",
-      "websocketDescription": "Allow WebSocket connections"
+      "websocketDescription": "Allow WebSocket connections",
+      "ddnsAutoRegister": "DDNS Auto-Registration",
+      "ddnsAutoRegisterDescription": "Automatically create and sync managed DDNS records for this host's domains so they keep pointing at this server even when your public IP changes.",
+      "ddnsProvider": "DNS Provider",
+      "ddnsSelectProvider": "Select a provider",
+      "ddnsProviderHint": "DDNS currently supports Cloudflare and DuckDNS only.",
+      "ddnsNoProviders": "No Cloudflare/DuckDNS providers available. Add one under Certificates > DNS Providers first."
     },
     "stream": {
       "tlsMode": {
@@ -669,7 +675,8 @@
     "streamListenHostInvalid": "Listen host must be empty, *, or a local IP address. Put upstream hostnames in Forward Host.",
     "certificateRequired": "Select a certificate to use SSL",
     "certSelectionRequired": "Please select a certificate or switch to \"Create New\"",
-    "addDomainsBeforeCert": "Add domains first to create certificate"
+    "addDomainsBeforeCert": "Add domains first to create certificate",
+    "ddnsProviderRequired": "Select a DNS provider to enable DDNS auto-registration"
   },
   "upstream": {
     "description": "Distribute traffic across multiple backend servers for load balancing and high availability.",

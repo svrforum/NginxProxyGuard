@@ -22,11 +22,11 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 	}
 
 	// Create ID mappings for foreign key references
-	certificateIDMap := make(map[string]string)    // old ID -> new ID
-	accessListIDMap := make(map[string]string)     // old ID -> new ID
-	dnsProviderIDMap := make(map[string]string)    // old ID -> new ID
-	proxyHostIDMap := make(map[string]string)      // old ID -> new ID
-	exploitRuleIDMap := make(map[string]string)    // old ID -> new ID
+	certificateIDMap := make(map[string]string) // old ID -> new ID
+	accessListIDMap := make(map[string]string)  // old ID -> new ID
+	dnsProviderIDMap := make(map[string]string) // old ID -> new ID
+	proxyHostIDMap := make(map[string]string)   // old ID -> new ID
+	exploitRuleIDMap := make(map[string]string) // old ID -> new ID
 
 	// Import Global Settings (update existing)
 	if data.GlobalSettings != nil {
@@ -81,6 +81,18 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 			if newID, ok := accessListIDMap[ph.ProxyHost.AccessListID]; ok {
 				ph.ProxyHost.AccessListID = newID
 			}
+		}
+		// Remap DDNS provider ID (#157). If the provider wasn't imported, drop the
+		// link and disable DDNS so the host doesn't reference a dangling provider.
+		if ph.ProxyHost.DDNSProviderID != "" {
+			if newID, ok := dnsProviderIDMap[ph.ProxyHost.DDNSProviderID]; ok {
+				ph.ProxyHost.DDNSProviderID = newID
+			} else {
+				ph.ProxyHost.DDNSProviderID = ""
+				ph.ProxyHost.DDNSEnabled = false
+			}
+		} else {
+			ph.ProxyHost.DDNSEnabled = false
 		}
 
 		newID, err := r.importProxyHost(ctx, tx, &ph)
@@ -223,7 +235,8 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 		}
 	}
 
-	// Import DDNS Records (#154) — depend on dns_providers
+	// Import DDNS Records (#154) — depend on dns_providers and (for managed
+	// records) proxy_hosts, both imported above.
 	for _, rec := range data.DDNSRecords {
 		// Remap DNS provider ID
 		if newID, ok := dnsProviderIDMap[rec.DNSProviderID]; ok {
@@ -231,6 +244,16 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 		} else {
 			// Skip if the referenced provider wasn't imported (FK would fail)
 			continue
+		}
+		// Remap proxy host ID for managed records (#157). If the host wasn't
+		// imported, skip the managed record entirely — it would otherwise be an
+		// orphaned managed record with no owning host to reconcile it.
+		if rec.ProxyHostID != nil && *rec.ProxyHostID != "" {
+			if newID, ok := proxyHostIDMap[*rec.ProxyHostID]; ok {
+				rec.ProxyHostID = &newID
+			} else {
+				continue
+			}
 		}
 		if err := r.importDDNSRecord(ctx, tx, &rec); err != nil {
 			return fmt.Errorf("failed to import ddns record %s: %w", rec.Hostname, err)
@@ -250,8 +273,8 @@ func (r *BackupRepository) clearExistingData(ctx context.Context, tx *sql.Tx) er
 	// 1. Delete proxy host related tables (they reference proxy_hosts)
 	tables := []string{
 		"filter_subscription_entry_exclusions", // references filter_subscriptions
-		"filter_subscription_host_exclusions", // references filter_subscriptions + proxy_hosts
-		"filter_subscription_entries",         // references filter_subscriptions
+		"filter_subscription_host_exclusions",  // references filter_subscriptions + proxy_hosts
+		"filter_subscription_entries",          // references filter_subscriptions
 		"filter_subscriptions",
 		"waf_rule_exclusions",
 		"host_exploit_rule_exclusions", // references proxy_hosts
@@ -266,17 +289,17 @@ func (r *BackupRepository) clearExistingData(ctx context.Context, tx *sql.Tx) er
 		"uri_blocks",        // references proxy_hosts
 		"banned_ips",        // references proxy_hosts
 		"redirect_hosts",    // references certificates
-		"proxy_hosts",       // references certificates and access_lists
+		"ddns_records",      // references dns_providers (#154) + proxy_hosts (#157) — clear before proxy_hosts
+		"proxy_hosts",       // references certificates and access_lists; ddns_provider_id -> dns_providers
 		"access_list_items", // references access_lists
 		"access_lists",
-		"ddns_records",    // references dns_providers (#154)
-		"certificates",    // references dns_providers
+		"certificates", // references dns_providers
 		"dns_providers",
-		"global_uri_blocks",            // standalone table
-		"global_waf_rule_exclusions",   // standalone table
+		"global_uri_blocks",              // standalone table
+		"global_waf_rule_exclusions",     // standalone table
 		"global_exploit_rule_exclusions", // standalone table
-		"cloud_providers",              // standalone table
-		"exploit_block_rules",          // standalone table (only non-builtin)
+		"cloud_providers",                // standalone table
+		"exploit_block_rules",            // standalone table (only non-builtin)
 	}
 
 	for _, table := range tables {

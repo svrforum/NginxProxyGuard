@@ -59,6 +59,8 @@ export function useProxyHostFormState(host: ProxyHost | null | undefined) {
     waf_paranoia_level: 1,
     waf_anomaly_threshold: 5,
     advanced_config: '',
+    ddns_enabled: false,
+    ddns_provider_id: undefined,
     enabled: true,
   })
 
@@ -261,6 +263,8 @@ export function useProxyHostFormState(host: ProxyHost | null | undefined) {
         waf_paranoia_level: host.waf_paranoia_level || 1,
         waf_anomaly_threshold: host.waf_anomaly_threshold || 5,
         advanced_config: host.advanced_config || '',
+        ddns_enabled: host.ddns_enabled ?? false,
+        ddns_provider_id: host.ddns_provider_id || undefined,
         enabled: host.enabled,
       })
       setPortInput(host.forward_port.toString())

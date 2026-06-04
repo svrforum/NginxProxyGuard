@@ -34,5 +34,17 @@
   "hostnameRequired": "Hostname is required.",
   "providerRequired": "Please select a DNS provider.",
   "loadError": "Failed to load DDNS records.",
-  "disabledBadge": "Disabled"
+  "disabledBadge": "Disabled",
+  "managedBadge": "Proxy-linked",
+  "managedHint": "This record is managed by a proxy host. Change its DDNS settings from the host's edit screen.",
+  "importFromHosts": "Add from Proxy Hosts",
+  "importAction": "Add",
+  "importHint": "Enables DDNS auto-registration on the selected proxy hosts and creates a managed DDNS record for each host's domains.",
+  "selectHosts": "Select proxy hosts",
+  "importNoHosts": "No proxy hosts yet. Add a proxy host first.",
+  "importNoHostsSelected": "Select at least one proxy host.",
+  "ddnsAlreadyEnabled": "DDNS on",
+  "checkIntervalMinutes": "Renewal interval (minutes)",
+  "checkIntervalDesc": "How often the scheduler checks the public IP and renews DDNS records. (minimum 1 minute)",
+  "checkIntervalSaved": "Saved"
 }

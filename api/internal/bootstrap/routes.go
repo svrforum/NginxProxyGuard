@@ -262,6 +262,7 @@ func registerDDNSRoutes(v1 *echo.Group, h *handler.DDNSHandler) {
 	g.GET("", h.List)
 	g.POST("", h.Create)
 	g.POST("/sync", h.SyncAll)
+	g.POST("/import-from-hosts", h.ImportFromHosts)
 	g.GET("/:id", h.Get)
 	g.PUT("/:id", h.Update)
 	g.DELETE("/:id", h.Delete)

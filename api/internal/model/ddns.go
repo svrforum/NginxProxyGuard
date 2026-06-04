@@ -21,8 +21,11 @@ type DDNSRecord struct {
 	LastSyncedAt  *time.Time `json:"last_synced_at,omitempty"`
 	LastStatus    string     `json:"last_status"` // '', 'ok', 'error'
 	LastError     string     `json:"last_error"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
+	// ProxyHostID links a managed record back to the proxy host that owns it (#157).
+	// nil = a manually-created record (never auto-modified by host reconcile).
+	ProxyHostID *string   `json:"proxy_host_id,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type CreateDDNSRecordRequest struct {

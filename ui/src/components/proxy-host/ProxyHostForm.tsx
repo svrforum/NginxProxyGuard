@@ -117,7 +117,7 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
   // Auto-switch to tab with error on validation failure
   useEffect(() => {
     if (Object.keys(errors).length > 0) {
-      if (errors.domain_names || errors.forward_host || errors.forward_port || errors.stream_listen_port) {
+      if (errors.domain_names || errors.forward_host || errors.forward_port || errors.stream_listen_port || errors.ddns_provider_id) {
         setActiveTab('basic')
       } else if (errors.certificate_id) {
         // Stream TLS termination has no SSL tab — the cert dropdown lives in
@@ -256,6 +256,7 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
                 removeDomain={removeDomain}
                 updateDomain={updateDomain}
                 availableCerts={availableCerts}
+                dnsProviders={dnsProviders}
               />
             )}
 

@@ -45,6 +45,8 @@ export interface ProxyHost {
   waf_paranoia_level: number
   waf_anomaly_threshold: number
   access_list_id?: string
+  ddns_enabled?: boolean
+  ddns_provider_id?: string
   enabled: boolean
   is_favorite: boolean
   config_status: string
@@ -95,6 +97,8 @@ export interface CreateProxyHostRequest {
   waf_paranoia_level?: number
   waf_anomaly_threshold?: number
   advanced_config?: string
+  ddns_enabled?: boolean
+  ddns_provider_id?: string
   enabled?: boolean
 }
 
@@ -139,6 +143,8 @@ export interface UpdateProxyHostRequest {
   waf_anomaly_threshold?: number
   access_list_id?: string
   advanced_config?: string
+  ddns_enabled?: boolean
+  ddns_provider_id?: string
   enabled?: boolean
 }
 

@@ -19,20 +19,20 @@ type SystemSettings struct {
 	GeoIPDatabaseVersion string     `json:"geoip_database_version" db:"geoip_database_version"`
 
 	// ACME / Let's Encrypt Settings
-	ACMEEnabled        bool            `json:"acme_enabled" db:"acme_enabled"`
-	ACMEEmail          string          `json:"acme_email" db:"acme_email"`
-	ACMEStaging        bool            `json:"acme_staging" db:"acme_staging"`
-	ACMEAutoRenew      bool            `json:"acme_auto_renew" db:"acme_auto_renew"`
-	ACMERenewDaysBefore int            `json:"acme_renew_days_before" db:"acme_renew_days_before"`
-	ACMEDNSProvider    string          `json:"acme_dns_provider" db:"acme_dns_provider"`
-	ACMEDNSCredentials json.RawMessage `json:"acme_dns_credentials" db:"acme_dns_credentials"`
+	ACMEEnabled         bool            `json:"acme_enabled" db:"acme_enabled"`
+	ACMEEmail           string          `json:"acme_email" db:"acme_email"`
+	ACMEStaging         bool            `json:"acme_staging" db:"acme_staging"`
+	ACMEAutoRenew       bool            `json:"acme_auto_renew" db:"acme_auto_renew"`
+	ACMERenewDaysBefore int             `json:"acme_renew_days_before" db:"acme_renew_days_before"`
+	ACMEDNSProvider     string          `json:"acme_dns_provider" db:"acme_dns_provider"`
+	ACMEDNSCredentials  json.RawMessage `json:"acme_dns_credentials" db:"acme_dns_credentials"`
 
 	// Notification Settings
-	NotificationEmail     string `json:"notification_email" db:"notification_email"`
-	NotifyCertExpiry      bool   `json:"notify_cert_expiry" db:"notify_cert_expiry"`
-	NotifyCertExpiryDays  int    `json:"notify_cert_expiry_days" db:"notify_cert_expiry_days"`
-	NotifySecurityEvents  bool   `json:"notify_security_events" db:"notify_security_events"`
-	NotifyBackupComplete  bool   `json:"notify_backup_complete" db:"notify_backup_complete"`
+	NotificationEmail    string `json:"notification_email" db:"notification_email"`
+	NotifyCertExpiry     bool   `json:"notify_cert_expiry" db:"notify_cert_expiry"`
+	NotifyCertExpiryDays int    `json:"notify_cert_expiry_days" db:"notify_cert_expiry_days"`
+	NotifySecurityEvents bool   `json:"notify_security_events" db:"notify_security_events"`
+	NotifyBackupComplete bool   `json:"notify_backup_complete" db:"notify_backup_complete"`
 
 	// Maintenance Settings (legacy - kept for backwards compatibility)
 	LogRetentionDays     int    `json:"log_retention_days" db:"log_retention_days"`
@@ -40,6 +40,9 @@ type SystemSettings struct {
 	BackupRetentionCount int    `json:"backup_retention_count" db:"backup_retention_count"`
 	AutoBackupEnabled    bool   `json:"auto_backup_enabled" db:"auto_backup_enabled"`
 	AutoBackupSchedule   string `json:"auto_backup_schedule" db:"auto_backup_schedule"`
+
+	// DDNS Settings (#157)
+	DDNSCheckIntervalMinutes int `json:"ddns_check_interval_minutes" db:"ddns_check_interval_minutes"` // DDNS sync interval in minutes (default: 5, min: 1)
 
 	// Log Retention Settings (per log type)
 	AccessLogRetentionDays int `json:"access_log_retention_days" db:"access_log_retention_days"` // Default: 1095 (3 years)
@@ -56,18 +59,18 @@ type SystemSettings struct {
 	RawLogCompressRotated bool `json:"raw_log_compress_rotated" db:"raw_log_compress_rotated"` // Default: true
 
 	// Bot Filter Default Settings (applied to new proxy hosts)
-	BotFilterDefaultEnabled               bool   `json:"bot_filter_default_enabled" db:"bot_filter_default_enabled"`
-	BotFilterDefaultBlockBadBots          bool   `json:"bot_filter_default_block_bad_bots" db:"bot_filter_default_block_bad_bots"`
-	BotFilterDefaultBlockAIBots           bool   `json:"bot_filter_default_block_ai_bots" db:"bot_filter_default_block_ai_bots"`
-	BotFilterDefaultAllowSearchEngines    bool   `json:"bot_filter_default_allow_search_engines" db:"bot_filter_default_allow_search_engines"`
-	BotFilterDefaultBlockSuspiciousClients bool  `json:"bot_filter_default_block_suspicious_clients" db:"bot_filter_default_block_suspicious_clients"`
-	BotFilterDefaultChallengeSuspicious   bool   `json:"bot_filter_default_challenge_suspicious" db:"bot_filter_default_challenge_suspicious"`
-	BotFilterDefaultCustomBlockedAgents   string `json:"bot_filter_default_custom_blocked_agents" db:"bot_filter_default_custom_blocked_agents"`
+	BotFilterDefaultEnabled                bool   `json:"bot_filter_default_enabled" db:"bot_filter_default_enabled"`
+	BotFilterDefaultBlockBadBots           bool   `json:"bot_filter_default_block_bad_bots" db:"bot_filter_default_block_bad_bots"`
+	BotFilterDefaultBlockAIBots            bool   `json:"bot_filter_default_block_ai_bots" db:"bot_filter_default_block_ai_bots"`
+	BotFilterDefaultAllowSearchEngines     bool   `json:"bot_filter_default_allow_search_engines" db:"bot_filter_default_allow_search_engines"`
+	BotFilterDefaultBlockSuspiciousClients bool   `json:"bot_filter_default_block_suspicious_clients" db:"bot_filter_default_block_suspicious_clients"`
+	BotFilterDefaultChallengeSuspicious    bool   `json:"bot_filter_default_challenge_suspicious" db:"bot_filter_default_challenge_suspicious"`
+	BotFilterDefaultCustomBlockedAgents    string `json:"bot_filter_default_custom_blocked_agents" db:"bot_filter_default_custom_blocked_agents"`
 
 	// Bot Lists (global lists used by all proxy hosts)
-	BotListBadBots           string `json:"bot_list_bad_bots" db:"bot_list_bad_bots"`                       // Line-separated list of bad bot patterns
-	BotListAIBots            string `json:"bot_list_ai_bots" db:"bot_list_ai_bots"`                         // Line-separated list of AI bot patterns
-	BotListSearchEngines     string `json:"bot_list_search_engines" db:"bot_list_search_engines"`           // Line-separated list of allowed search engines
+	BotListBadBots           string `json:"bot_list_bad_bots" db:"bot_list_bad_bots"`                     // Line-separated list of bad bot patterns
+	BotListAIBots            string `json:"bot_list_ai_bots" db:"bot_list_ai_bots"`                       // Line-separated list of AI bot patterns
+	BotListSearchEngines     string `json:"bot_list_search_engines" db:"bot_list_search_engines"`         // Line-separated list of allowed search engines
 	BotListSuspiciousClients string `json:"bot_list_suspicious_clients" db:"bot_list_suspicious_clients"` // Line-separated list of suspicious HTTP clients
 
 	// WAF Auto-Ban Settings
@@ -86,8 +89,8 @@ type SystemSettings struct {
 	DirectIPAccessAction string `json:"direct_ip_access_action" db:"direct_ip_access_action"` // How to handle direct IP access: allow, block_403, block_444
 
 	// UI Settings (global)
-	UIFontFamily         string `json:"ui_font_family" db:"ui_font_family"`                   // Global font family: system, gowun-batang, noto-sans-kr, pretendard, inter
-	UIErrorPageLanguage  string `json:"ui_error_page_language" db:"ui_error_page_language"` // Default language for error pages (403, etc.): auto, ko, en
+	UIFontFamily        string `json:"ui_font_family" db:"ui_font_family"`                 // Global font family: system, gowun-batang, noto-sans-kr, pretendard, inter
+	UIErrorPageLanguage string `json:"ui_error_page_language" db:"ui_error_page_language"` // Default language for error pages (403, etc.): auto, ko, en
 
 	// System Log Settings
 	SystemLogsEnabled         bool            `json:"system_logs_enabled" db:"system_logs_enabled"`
@@ -105,7 +108,7 @@ type SystemSettingsResponse struct {
 
 	// GeoIP Settings
 	GeoIPEnabled         bool       `json:"geoip_enabled"`
-	MaxmindLicenseKey    string     `json:"maxmind_license_key"`    // Will be masked
+	MaxmindLicenseKey    string     `json:"maxmind_license_key"` // Will be masked
 	MaxmindAccountID     string     `json:"maxmind_account_id"`
 	GeoIPAutoUpdate      bool       `json:"geoip_auto_update"`
 	GeoIPUpdateInterval  string     `json:"geoip_update_interval"`
@@ -136,6 +139,9 @@ type SystemSettingsResponse struct {
 	AutoBackupEnabled    bool   `json:"auto_backup_enabled"`
 	AutoBackupSchedule   string `json:"auto_backup_schedule"`
 
+	// DDNS Settings (#157)
+	DDNSCheckIntervalMinutes int `json:"ddns_check_interval_minutes"`
+
 	// Log Retention Settings (per log type)
 	AccessLogRetentionDays int `json:"access_log_retention_days"`
 	WAFLogRetentionDays    int `json:"waf_log_retention_days"`
@@ -151,13 +157,13 @@ type SystemSettingsResponse struct {
 	RawLogCompressRotated bool `json:"raw_log_compress_rotated"`
 
 	// Bot Filter Default Settings
-	BotFilterDefaultEnabled               bool   `json:"bot_filter_default_enabled"`
-	BotFilterDefaultBlockBadBots          bool   `json:"bot_filter_default_block_bad_bots"`
-	BotFilterDefaultBlockAIBots           bool   `json:"bot_filter_default_block_ai_bots"`
-	BotFilterDefaultAllowSearchEngines    bool   `json:"bot_filter_default_allow_search_engines"`
-	BotFilterDefaultBlockSuspiciousClients bool  `json:"bot_filter_default_block_suspicious_clients"`
-	BotFilterDefaultChallengeSuspicious   bool   `json:"bot_filter_default_challenge_suspicious"`
-	BotFilterDefaultCustomBlockedAgents   string `json:"bot_filter_default_custom_blocked_agents"`
+	BotFilterDefaultEnabled                bool   `json:"bot_filter_default_enabled"`
+	BotFilterDefaultBlockBadBots           bool   `json:"bot_filter_default_block_bad_bots"`
+	BotFilterDefaultBlockAIBots            bool   `json:"bot_filter_default_block_ai_bots"`
+	BotFilterDefaultAllowSearchEngines     bool   `json:"bot_filter_default_allow_search_engines"`
+	BotFilterDefaultBlockSuspiciousClients bool   `json:"bot_filter_default_block_suspicious_clients"`
+	BotFilterDefaultChallengeSuspicious    bool   `json:"bot_filter_default_challenge_suspicious"`
+	BotFilterDefaultCustomBlockedAgents    string `json:"bot_filter_default_custom_blocked_agents"`
 
 	// Bot Lists
 	BotListBadBots           string `json:"bot_list_bad_bots"`
@@ -196,65 +202,66 @@ type SystemSettingsResponse struct {
 // ToResponse converts SystemSettings to a safe API response
 func (s *SystemSettings) ToResponse() *SystemSettingsResponse {
 	resp := &SystemSettingsResponse{
-		ID:                   s.ID,
-		GeoIPEnabled:         s.GeoIPEnabled,
-		MaxmindAccountID:     s.MaxmindAccountID,
-		GeoIPAutoUpdate:      s.GeoIPAutoUpdate,
-		GeoIPUpdateInterval:  s.GeoIPUpdateInterval,
-		GeoIPLastUpdated:     s.GeoIPLastUpdated,
-		GeoIPDatabaseVersion: s.GeoIPDatabaseVersion,
-		ACMEEnabled:          s.ACMEEnabled,
-		ACMEEmail:            s.ACMEEmail,
-		ACMEStaging:          s.ACMEStaging,
-		ACMEAutoRenew:        s.ACMEAutoRenew,
-		ACMERenewDaysBefore:  s.ACMERenewDaysBefore,
-		ACMEDNSProvider:      s.ACMEDNSProvider,
-		NotificationEmail:    s.NotificationEmail,
-		NotifyCertExpiry:     s.NotifyCertExpiry,
-		NotifyCertExpiryDays: s.NotifyCertExpiryDays,
-		NotifySecurityEvents: s.NotifySecurityEvents,
-		NotifyBackupComplete: s.NotifyBackupComplete,
-		LogRetentionDays:       s.LogRetentionDays,
-		StatsRetentionDays:     s.StatsRetentionDays,
-		BackupRetentionCount:   s.BackupRetentionCount,
-		AutoBackupEnabled:      s.AutoBackupEnabled,
-		AutoBackupSchedule:     s.AutoBackupSchedule,
-		AccessLogRetentionDays: s.AccessLogRetentionDays,
-		WAFLogRetentionDays:    s.WAFLogRetentionDays,
-		ErrorLogRetentionDays:  s.ErrorLogRetentionDays,
-		SystemLogRetentionDays: s.SystemLogRetentionDays,
-		AuditLogRetentionDays:  s.AuditLogRetentionDays,
-		RawLogEnabled:          s.RawLogEnabled,
-		RawLogRetentionDays:    s.RawLogRetentionDays,
-		RawLogMaxSizeMB:        s.RawLogMaxSizeMB,
-		RawLogRotateCount:      s.RawLogRotateCount,
-		RawLogCompressRotated:  s.RawLogCompressRotated,
-		BotFilterDefaultEnabled:               s.BotFilterDefaultEnabled,
-		BotFilterDefaultBlockBadBots:          s.BotFilterDefaultBlockBadBots,
-		BotFilterDefaultBlockAIBots:           s.BotFilterDefaultBlockAIBots,
-		BotFilterDefaultAllowSearchEngines:    s.BotFilterDefaultAllowSearchEngines,
+		ID:                                     s.ID,
+		GeoIPEnabled:                           s.GeoIPEnabled,
+		MaxmindAccountID:                       s.MaxmindAccountID,
+		GeoIPAutoUpdate:                        s.GeoIPAutoUpdate,
+		GeoIPUpdateInterval:                    s.GeoIPUpdateInterval,
+		GeoIPLastUpdated:                       s.GeoIPLastUpdated,
+		GeoIPDatabaseVersion:                   s.GeoIPDatabaseVersion,
+		ACMEEnabled:                            s.ACMEEnabled,
+		ACMEEmail:                              s.ACMEEmail,
+		ACMEStaging:                            s.ACMEStaging,
+		ACMEAutoRenew:                          s.ACMEAutoRenew,
+		ACMERenewDaysBefore:                    s.ACMERenewDaysBefore,
+		ACMEDNSProvider:                        s.ACMEDNSProvider,
+		NotificationEmail:                      s.NotificationEmail,
+		NotifyCertExpiry:                       s.NotifyCertExpiry,
+		NotifyCertExpiryDays:                   s.NotifyCertExpiryDays,
+		NotifySecurityEvents:                   s.NotifySecurityEvents,
+		NotifyBackupComplete:                   s.NotifyBackupComplete,
+		LogRetentionDays:                       s.LogRetentionDays,
+		StatsRetentionDays:                     s.StatsRetentionDays,
+		BackupRetentionCount:                   s.BackupRetentionCount,
+		AutoBackupEnabled:                      s.AutoBackupEnabled,
+		AutoBackupSchedule:                     s.AutoBackupSchedule,
+		DDNSCheckIntervalMinutes:               s.DDNSCheckIntervalMinutes,
+		AccessLogRetentionDays:                 s.AccessLogRetentionDays,
+		WAFLogRetentionDays:                    s.WAFLogRetentionDays,
+		ErrorLogRetentionDays:                  s.ErrorLogRetentionDays,
+		SystemLogRetentionDays:                 s.SystemLogRetentionDays,
+		AuditLogRetentionDays:                  s.AuditLogRetentionDays,
+		RawLogEnabled:                          s.RawLogEnabled,
+		RawLogRetentionDays:                    s.RawLogRetentionDays,
+		RawLogMaxSizeMB:                        s.RawLogMaxSizeMB,
+		RawLogRotateCount:                      s.RawLogRotateCount,
+		RawLogCompressRotated:                  s.RawLogCompressRotated,
+		BotFilterDefaultEnabled:                s.BotFilterDefaultEnabled,
+		BotFilterDefaultBlockBadBots:           s.BotFilterDefaultBlockBadBots,
+		BotFilterDefaultBlockAIBots:            s.BotFilterDefaultBlockAIBots,
+		BotFilterDefaultAllowSearchEngines:     s.BotFilterDefaultAllowSearchEngines,
 		BotFilterDefaultBlockSuspiciousClients: s.BotFilterDefaultBlockSuspiciousClients,
-		BotFilterDefaultChallengeSuspicious:   s.BotFilterDefaultChallengeSuspicious,
-		BotFilterDefaultCustomBlockedAgents:   s.BotFilterDefaultCustomBlockedAgents,
-		BotListBadBots:                      s.BotListBadBots,
-		BotListAIBots:                       s.BotListAIBots,
-		BotListSearchEngines:                s.BotListSearchEngines,
-		BotListSuspiciousClients:            s.BotListSuspiciousClients,
-		WAFAutoBanEnabled:                   s.WAFAutoBanEnabled,
-		WAFAutoBanThreshold:                 s.WAFAutoBanThreshold,
-		WAFAutoBanWindow:                    s.WAFAutoBanWindow,
-		WAFAutoBanDuration:                  s.WAFAutoBanDuration,
-		GlobalTrustedIPs:                    s.GlobalTrustedIPs,
-		GlobalBlockExploitsExceptions:       s.GlobalBlockExploitsExceptions,
+		BotFilterDefaultChallengeSuspicious:    s.BotFilterDefaultChallengeSuspicious,
+		BotFilterDefaultCustomBlockedAgents:    s.BotFilterDefaultCustomBlockedAgents,
+		BotListBadBots:                         s.BotListBadBots,
+		BotListAIBots:                          s.BotListAIBots,
+		BotListSearchEngines:                   s.BotListSearchEngines,
+		BotListSuspiciousClients:               s.BotListSuspiciousClients,
+		WAFAutoBanEnabled:                      s.WAFAutoBanEnabled,
+		WAFAutoBanThreshold:                    s.WAFAutoBanThreshold,
+		WAFAutoBanWindow:                       s.WAFAutoBanWindow,
+		WAFAutoBanDuration:                     s.WAFAutoBanDuration,
+		GlobalTrustedIPs:                       s.GlobalTrustedIPs,
+		GlobalBlockExploitsExceptions:          s.GlobalBlockExploitsExceptions,
 
-		DirectIPAccessAction:                s.DirectIPAccessAction,
-		UIFontFamily:                        s.UIFontFamily,
-		UIErrorPageLanguage:                 s.UIErrorPageLanguage,
-		SystemLogsEnabled:                   s.SystemLogsEnabled,
-		SystemLogsLevels:                    s.SystemLogsLevels,
-		SystemLogsExcludePatterns:           s.SystemLogsExcludePatterns,
-		SystemLogsStdoutExcluded:            s.SystemLogsStdoutExcluded,
-		UpdatedAt:                           s.UpdatedAt,
+		DirectIPAccessAction:      s.DirectIPAccessAction,
+		UIFontFamily:              s.UIFontFamily,
+		UIErrorPageLanguage:       s.UIErrorPageLanguage,
+		SystemLogsEnabled:         s.SystemLogsEnabled,
+		SystemLogsLevels:          s.SystemLogsLevels,
+		SystemLogsExcludePatterns: s.SystemLogsExcludePatterns,
+		SystemLogsStdoutExcluded:  s.SystemLogsStdoutExcluded,
+		UpdatedAt:                 s.UpdatedAt,
 	}
 
 	// Mask license key
@@ -319,6 +326,9 @@ type UpdateSystemSettingsRequest struct {
 	AutoBackupEnabled    *bool   `json:"auto_backup_enabled,omitempty"`
 	AutoBackupSchedule   *string `json:"auto_backup_schedule,omitempty"`
 
+	// DDNS Settings (#157)
+	DDNSCheckIntervalMinutes *int `json:"ddns_check_interval_minutes,omitempty"`
+
 	// Log Retention Settings (per log type)
 	AccessLogRetentionDays *int `json:"access_log_retention_days,omitempty"`
 	WAFLogRetentionDays    *int `json:"waf_log_retention_days,omitempty"`
@@ -334,13 +344,13 @@ type UpdateSystemSettingsRequest struct {
 	RawLogCompressRotated *bool `json:"raw_log_compress_rotated,omitempty"`
 
 	// Bot Filter Default Settings
-	BotFilterDefaultEnabled               *bool   `json:"bot_filter_default_enabled,omitempty"`
-	BotFilterDefaultBlockBadBots          *bool   `json:"bot_filter_default_block_bad_bots,omitempty"`
-	BotFilterDefaultBlockAIBots           *bool   `json:"bot_filter_default_block_ai_bots,omitempty"`
-	BotFilterDefaultAllowSearchEngines    *bool   `json:"bot_filter_default_allow_search_engines,omitempty"`
-	BotFilterDefaultBlockSuspiciousClients *bool  `json:"bot_filter_default_block_suspicious_clients,omitempty"`
-	BotFilterDefaultChallengeSuspicious   *bool   `json:"bot_filter_default_challenge_suspicious,omitempty"`
-	BotFilterDefaultCustomBlockedAgents   *string `json:"bot_filter_default_custom_blocked_agents,omitempty"`
+	BotFilterDefaultEnabled                *bool   `json:"bot_filter_default_enabled,omitempty"`
+	BotFilterDefaultBlockBadBots           *bool   `json:"bot_filter_default_block_bad_bots,omitempty"`
+	BotFilterDefaultBlockAIBots            *bool   `json:"bot_filter_default_block_ai_bots,omitempty"`
+	BotFilterDefaultAllowSearchEngines     *bool   `json:"bot_filter_default_allow_search_engines,omitempty"`
+	BotFilterDefaultBlockSuspiciousClients *bool   `json:"bot_filter_default_block_suspicious_clients,omitempty"`
+	BotFilterDefaultChallengeSuspicious    *bool   `json:"bot_filter_default_challenge_suspicious,omitempty"`
+	BotFilterDefaultCustomBlockedAgents    *string `json:"bot_filter_default_custom_blocked_agents,omitempty"`
 
 	// Bot Lists
 	BotListBadBots           *string `json:"bot_list_bad_bots,omitempty"`
@@ -376,14 +386,14 @@ type UpdateSystemSettingsRequest struct {
 
 // GeoIPStatus represents the status of GeoIP databases
 type GeoIPStatus struct {
-	Enabled          bool       `json:"enabled"`
-	Status           string     `json:"status"` // "active", "inactive", "updating", "error"
-	CountryDB        bool       `json:"country_db"`
-	ASNDB            bool       `json:"asn_db"`
-	LastUpdated      *time.Time `json:"last_updated,omitempty"`
-	DatabaseVersion  string     `json:"database_version"`
-	NextUpdate       *time.Time `json:"next_update,omitempty"`
-	ErrorMessage     string     `json:"error_message,omitempty"`
+	Enabled         bool       `json:"enabled"`
+	Status          string     `json:"status"` // "active", "inactive", "updating", "error"
+	CountryDB       bool       `json:"country_db"`
+	ASNDB           bool       `json:"asn_db"`
+	LastUpdated     *time.Time `json:"last_updated,omitempty"`
+	DatabaseVersion string     `json:"database_version"`
+	NextUpdate      *time.Time `json:"next_update,omitempty"`
+	ErrorMessage    string     `json:"error_message,omitempty"`
 }
 
 // GeoIPUpdateRequest is the request to trigger GeoIP database update
