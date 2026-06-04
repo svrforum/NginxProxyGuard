@@ -2,14 +2,26 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"nginx-proxy-guard/internal/model"
 	"nginx-proxy-guard/internal/repository"
 )
 
+// dnsProviderRepo is the narrow repo dependency (interface for testability).
+type dnsProviderRepo interface {
+	Create(ctx context.Context, req *model.CreateDNSProviderRequest) (*model.DNSProvider, error)
+	GetByID(ctx context.Context, id string) (*model.DNSProvider, error)
+	GetDefault(ctx context.Context) (*model.DNSProvider, error)
+	List(ctx context.Context, page, perPage int) ([]model.DNSProvider, int, error)
+	Update(ctx context.Context, id string, req *model.UpdateDNSProviderRequest) (*model.DNSProvider, error)
+	Delete(ctx context.Context, id string) error
+	TestConnection(ctx context.Context, providerType string, credentials json.RawMessage) error
+}
+
 type DNSProviderService struct {
-	repo *repository.DNSProviderRepository
+	repo dnsProviderRepo
 }
 
 func NewDNSProviderService(repo *repository.DNSProviderRepository) *DNSProviderService {
@@ -98,4 +110,17 @@ func (s *DNSProviderService) Delete(ctx context.Context, id string) error {
 // TestConnection tests DNS provider credentials
 func (s *DNSProviderService) TestConnection(ctx context.Context, req *model.CreateDNSProviderRequest) error {
 	return s.repo.TestConnection(ctx, req.ProviderType, req.Credentials)
+}
+
+// TestConnectionByID validates a STORED provider's credentials (read-only; no remote DNS change).
+// Used by the proxy-host config test. (#157 follow-up)
+func (s *DNSProviderService) TestConnectionByID(ctx context.Context, id string) error {
+	prov, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if prov == nil {
+		return fmt.Errorf("dns provider not found")
+	}
+	return s.repo.TestConnection(ctx, prov.ProviderType, prov.Credentials)
 }

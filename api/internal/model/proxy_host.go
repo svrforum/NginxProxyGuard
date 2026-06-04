@@ -402,7 +402,20 @@ type ProxyHostTestResult struct {
 	HTTP         *HTTPTestResult     `json:"http,omitempty"`
 	Cache        *CacheTestResult    `json:"cache,omitempty"`
 	Security     *SecurityTestResult `json:"security,omitempty"`
+	DDNS         *DDNSTestResult     `json:"ddns,omitempty"`
 	Headers      map[string]string   `json:"headers,omitempty"`
+}
+
+// DDNSTestResult reports DDNS health for a proxy host's config test (#157 follow-up).
+type DDNSTestResult struct {
+	Enabled          bool       `json:"enabled"`
+	ProviderName     string     `json:"provider_name,omitempty"`
+	ProviderType     string     `json:"provider_type,omitempty"`
+	CredentialsValid bool       `json:"credentials_valid"`
+	CredentialError  string     `json:"credential_error,omitempty"`
+	LastStatus       string     `json:"last_status,omitempty"`
+	LastIP           string     `json:"last_ip,omitempty"`
+	LastSyncedAt     *time.Time `json:"last_synced_at,omitempty"`
 }
 
 type StreamTestResult struct {
