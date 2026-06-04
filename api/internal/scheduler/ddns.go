@@ -13,20 +13,35 @@ type ddnsSyncer interface {
 }
 
 // DDNSScheduler periodically syncs enabled DDNS records to the public IP. (#154)
+//
+// The interval is resolved dynamically each cycle via intervalFn so changes to
+// the configured DDNS check interval (system_settings) take effect on the next
+// cycle without a restart. (#157)
 type DDNSScheduler struct {
-	svc      ddnsSyncer
-	interval time.Duration
-	stopChan chan struct{}
-	running  bool
+	svc        ddnsSyncer
+	intervalFn func() time.Duration
+	stopChan   chan struct{}
+	running    bool
 }
 
-// NewDDNSScheduler constructs (but does not start) the scheduler. A non-positive
-// interval defaults to 5 minutes.
-func NewDDNSScheduler(svc ddnsSyncer, interval time.Duration) *DDNSScheduler {
-	if interval <= 0 {
-		interval = 5 * time.Minute
+// NewDDNSScheduler constructs (but does not start) the scheduler. intervalFn is
+// consulted at the start of every cycle; a non-positive result is clamped to 1
+// minute so a misconfiguration can never busy-loop the syncer. A nil intervalFn
+// defaults to a fixed 5 minutes. (#157)
+func NewDDNSScheduler(svc ddnsSyncer, intervalFn func() time.Duration) *DDNSScheduler {
+	if intervalFn == nil {
+		intervalFn = func() time.Duration { return 5 * time.Minute }
 	}
-	return &DDNSScheduler{svc: svc, interval: interval, stopChan: make(chan struct{})}
+	return &DDNSScheduler{svc: svc, intervalFn: intervalFn, stopChan: make(chan struct{})}
+}
+
+// currentInterval resolves and clamps the configured interval for one cycle.
+func (s *DDNSScheduler) currentInterval() time.Duration {
+	d := s.intervalFn()
+	if d < time.Minute {
+		d = time.Minute
+	}
+	return d
 }
 
 // Start launches the sync loop. It is a no-op when already running. When the
@@ -42,7 +57,7 @@ func (s *DDNSScheduler) Start() {
 	}
 	s.running = true
 	go s.run()
-	log.Printf("[DDNS] scheduler started (interval: %v)", s.interval)
+	log.Printf("[DDNS] scheduler started (interval: %v)", s.currentInterval())
 }
 
 // Stop signals the sync loop to exit.
@@ -55,11 +70,12 @@ func (s *DDNSScheduler) Stop() {
 
 func (s *DDNSScheduler) run() {
 	s.svc.SyncAll(context.Background()) // run once at startup
-	t := time.NewTicker(s.interval)
-	defer t.Stop()
 	for {
+		// Re-read the interval each cycle so config changes apply next tick. (#157)
+		t := time.NewTimer(s.currentInterval())
 		select {
 		case <-s.stopChan:
+			t.Stop()
 			return
 		case <-t.C:
 			s.svc.SyncAll(context.Background())

@@ -1,11 +1,13 @@
 package bootstrap
 
 import (
+	"context"
 	"os"
 	"time"
 
 	"nginx-proxy-guard/internal/config"
 	"nginx-proxy-guard/internal/database"
+	"nginx-proxy-guard/internal/repository"
 	"nginx-proxy-guard/internal/scheduler"
 )
 
@@ -20,19 +22,35 @@ type Schedulers struct {
 	DDNS               *scheduler.DDNSScheduler
 }
 
-// ddnsInterval reads NPG_DDNS_INTERVAL (a Go duration string, e.g. "5m"); it
-// falls back to config.DDNSCheckInterval when unset or invalid. (#154)
-func ddnsInterval() time.Duration {
-	const def = config.DDNSCheckInterval
-	v := os.Getenv("NPG_DDNS_INTERVAL")
-	if v == "" {
-		return def
+// ddnsIntervalFn returns a function the DDNS scheduler consults each cycle so a
+// changed interval applies on the next tick without a restart (#157). Resolution
+// order, evaluated lazily on every call:
+//  1. NPG_DDNS_INTERVAL env (a Go duration string, e.g. "5m") — operator override.
+//  2. system_settings.ddns_check_interval_minutes (minutes, UI-configurable).
+//  3. config.DDNSCheckInterval (compile-time default).
+//
+// The result is floored at 1 minute by the scheduler; we additionally never
+// return a non-positive value here.
+func ddnsIntervalFn(repo *repository.SystemSettingsRepository) func() time.Duration {
+	return func() time.Duration {
+		// 1. Env override (highest priority).
+		if v := os.Getenv("NPG_DDNS_INTERVAL"); v != "" {
+			if d, err := time.ParseDuration(v); err == nil && d > 0 {
+				return d
+			}
+		}
+		// 2. system_settings (UI-configurable, minutes).
+		if repo != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			settings, err := repo.Get(ctx)
+			cancel()
+			if err == nil && settings != nil && settings.DDNSCheckIntervalMinutes >= 1 {
+				return time.Duration(settings.DDNSCheckIntervalMinutes) * time.Minute
+			}
+		}
+		// 3. Compile-time default.
+		return config.DDNSCheckInterval
 	}
-	d, err := time.ParseDuration(v)
-	if err != nil || d <= 0 {
-		return def
-	}
-	return d
 }
 
 // containerReconcileInterval reads NPG_CONTAINER_RECONCILE_INTERVAL (a Go
@@ -74,7 +92,7 @@ func NewSchedulers(cfg *config.Config, db *database.DB, repos *Repositories, svc
 			svcs.DockerStats,
 			containerReconcileInterval(),
 		),
-		DDNS: scheduler.NewDDNSScheduler(svcs.DDNS, ddnsInterval()),
+		DDNS: scheduler.NewDDNSScheduler(svcs.DDNS, ddnsIntervalFn(repos.SystemSettings)),
 	}
 }
 
