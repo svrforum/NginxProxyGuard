@@ -30,21 +30,26 @@ func NewDDNSRepository(db *database.DB) *DDNSRepository {
 }
 
 const ddnsColumns = `id, hostname, dns_provider_id, record_type, proxied, ttl, enabled,
-	last_ip, last_synced_at, last_status, last_error, created_at, updated_at`
+	last_ip, last_synced_at, last_status, last_error, proxy_host_id, created_at, updated_at`
 
-// scanDDNSRow scans a single row into a DDNSRecord, mapping NULL last_synced_at to *time.Time.
+// scanDDNSRow scans a single row into a DDNSRecord, mapping NULL last_synced_at to *time.Time
+// and NULL proxy_host_id to *string (nil = manual record). (#157)
 func scanDDNSRow(scan func(dest ...interface{}) error) (*model.DDNSRecord, error) {
 	rec := &model.DDNSRecord{}
 	var lastSyncedAt sql.NullTime
+	var proxyHostID sql.NullString
 	err := scan(
 		&rec.ID, &rec.Hostname, &rec.DNSProviderID, &rec.RecordType, &rec.Proxied, &rec.TTL, &rec.Enabled,
-		&rec.LastIP, &lastSyncedAt, &rec.LastStatus, &rec.LastError, &rec.CreatedAt, &rec.UpdatedAt,
+		&rec.LastIP, &lastSyncedAt, &rec.LastStatus, &rec.LastError, &proxyHostID, &rec.CreatedAt, &rec.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
 	}
 	if lastSyncedAt.Valid {
 		rec.LastSyncedAt = &lastSyncedAt.Time
+	}
+	if proxyHostID.Valid {
+		rec.ProxyHostID = &proxyHostID.String
 	}
 	return rec, nil
 }
@@ -219,6 +224,59 @@ func (r *DDNSRepository) UpdateStatus(ctx context.Context, id, ip, status, errMs
 		id, ip, status, errMsg, syncedAt)
 	if err != nil {
 		return fmt.Errorf("failed to update ddns status: %w", err)
+	}
+	return nil
+}
+
+// ListByProxyHost returns managed records linked to a proxy host (#157).
+func (r *DDNSRepository) ListByProxyHost(ctx context.Context, proxyHostID string) ([]model.DDNSRecord, error) {
+	query := `SELECT ` + ddnsColumns + ` FROM ddns_records WHERE proxy_host_id = $1 ORDER BY hostname`
+
+	rows, err := r.db.QueryContext(ctx, query, proxyHostID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list ddns records by proxy host: %w", err)
+	}
+	defer rows.Close()
+
+	return scanDDNSRows(rows)
+}
+
+// DeleteByProxyHost removes all managed records for a host (used on disable; host
+// delete itself is handled by ON DELETE CASCADE). Returns the number of rows removed. (#157)
+func (r *DDNSRepository) DeleteByProxyHost(ctx context.Context, proxyHostID string) (int64, error) {
+	result, err := r.db.ExecContext(ctx, `DELETE FROM ddns_records WHERE proxy_host_id = $1`, proxyHostID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete ddns records by proxy host: %w", err)
+	}
+	rowsAffected, _ := result.RowsAffected()
+	return rowsAffected, nil
+}
+
+// CreateManaged inserts a host-linked record. ON CONFLICT (hostname, dns_provider_id)
+// DO NOTHING protects any manually-created or other-host record from being clobbered.
+// Returns true if a row was actually created. (#157)
+func (r *DDNSRepository) CreateManaged(ctx context.Context, rec model.DDNSRecord) (bool, error) {
+	result, err := r.db.ExecContext(ctx, `
+		INSERT INTO ddns_records (hostname, dns_provider_id, record_type, proxied, ttl, enabled, proxy_host_id)
+		VALUES ($1, $2, 'A', false, 1, true, $3)
+		ON CONFLICT (hostname, dns_provider_id) DO NOTHING`,
+		rec.Hostname, rec.DNSProviderID, rec.ProxyHostID)
+	if err != nil {
+		return false, fmt.Errorf("failed to create managed ddns record: %w", err)
+	}
+	rowsAffected, _ := result.RowsAffected()
+	return rowsAffected > 0, nil
+}
+
+// DeleteManagedNotIn removes a host's managed records whose hostname is not in keep.
+// An empty keep slice deletes all of the host's managed records (NOT (hostname = ANY('{}'))
+// is true for every row), which is the intended behaviour when a host has no domains. (#157)
+func (r *DDNSRepository) DeleteManagedNotIn(ctx context.Context, proxyHostID string, keep []string) error {
+	_, err := r.db.ExecContext(ctx,
+		`DELETE FROM ddns_records WHERE proxy_host_id = $1 AND hostname <> ALL($2)`,
+		proxyHostID, pq.Array(keep))
+	if err != nil {
+		return fmt.Errorf("failed to prune managed ddns records: %w", err)
 	}
 	return nil
 }

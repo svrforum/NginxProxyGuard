@@ -59,8 +59,9 @@ func (r *ProxyHostRepository) Create(ctx context.Context, req *model.CreateProxy
 			block_exploits, block_exploits_exceptions,
 			waf_enabled, waf_mode, waf_paranoia_level, waf_anomaly_threshold,
 			advanced_config, proxy_connect_timeout, proxy_send_timeout, proxy_read_timeout,
-			proxy_buffering, proxy_request_buffering, client_max_body_size, proxy_max_temp_file_size, access_list_id, enabled
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40)
+			proxy_buffering, proxy_request_buffering, client_max_body_size, proxy_max_temp_file_size, access_list_id, enabled,
+			ddns_enabled, ddns_provider_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42)
 		RETURNING id, COALESCE(proxy_type, 'http') as proxy_type, domain_names, forward_scheme, forward_host, forward_container_name, forward_container_network, forward_port,
 			COALESCE(stream_listen_host, '') as stream_listen_host,
 			COALESCE(stream_listen_port, 0) as stream_listen_port,
@@ -78,12 +79,13 @@ func (r *ProxyHostRepository) Create(ctx context.Context, req *model.CreateProxy
 			proxy_connect_timeout, proxy_send_timeout, proxy_read_timeout,
 			proxy_buffering, COALESCE(proxy_request_buffering, '') as proxy_request_buffering,
 			client_max_body_size, COALESCE(proxy_max_temp_file_size, '') as proxy_max_temp_file_size,
-			access_list_id, enabled, is_favorite, COALESCE(config_status, 'ok') as config_status, COALESCE(config_error, '') as config_error, meta, created_at, updated_at
+			access_list_id, enabled, is_favorite, COALESCE(config_status, 'ok') as config_status, COALESCE(config_error, '') as config_error, ddns_enabled, ddns_provider_id, meta, created_at, updated_at
 	`
 
 	var host model.ProxyHost
 	var certificateID, accessListID sql.NullString
 	var forwardContainerName, forwardContainerNetwork sql.NullString
+	var ddnsProviderID sql.NullString
 	var customLocations, meta []byte
 
 	// Convert certificate_id to NullString
@@ -96,6 +98,12 @@ func (r *ProxyHostRepository) Create(ctx context.Context, req *model.CreateProxy
 	var accessListIDParam sql.NullString
 	if req.AccessListID != nil && *req.AccessListID != "" {
 		accessListIDParam = sql.NullString{String: *req.AccessListID, Valid: true}
+	}
+
+	// Convert ddns_provider_id to NullString (#157)
+	var ddnsProviderIDParam sql.NullString
+	if req.DDNSProviderID != nil && *req.DDNSProviderID != "" {
+		ddnsProviderIDParam = sql.NullString{String: *req.DDNSProviderID, Valid: true}
 	}
 
 	// Set default WAF mode if not provided
@@ -167,6 +175,8 @@ func (r *ProxyHostRepository) Create(ctx context.Context, req *model.CreateProxy
 		req.ProxyMaxTempFileSize,
 		accessListIDParam,
 		req.Enabled,
+		req.DDNSEnabled,
+		ddnsProviderIDParam,
 	).Scan(
 		&host.ID,
 		&host.ProxyType,
@@ -213,6 +223,8 @@ func (r *ProxyHostRepository) Create(ctx context.Context, req *model.CreateProxy
 		&host.IsFavorite,
 		&host.ConfigStatus,
 		&host.ConfigError,
+		&host.DDNSEnabled,
+		&ddnsProviderID,
 		&meta,
 		&host.CreatedAt,
 		&host.UpdatedAt,
@@ -233,6 +245,9 @@ func (r *ProxyHostRepository) Create(ctx context.Context, req *model.CreateProxy
 	}
 	if accessListID.Valid {
 		host.AccessListID = &accessListID.String
+	}
+	if ddnsProviderID.Valid {
+		host.DDNSProviderID = &ddnsProviderID.String
 	}
 	host.CustomLocations = json.RawMessage(customLocations)
 	host.Meta = json.RawMessage(meta)
@@ -280,13 +295,14 @@ func (r *ProxyHostRepository) GetByID(ctx context.Context, id string) (*model.Pr
 			COALESCE(proxy_request_buffering, '') as proxy_request_buffering,
 			COALESCE(client_max_body_size, '') as client_max_body_size,
 			COALESCE(proxy_max_temp_file_size, '') as proxy_max_temp_file_size,
-			access_list_id, enabled, is_favorite, COALESCE(config_status, 'ok') as config_status, COALESCE(config_error, '') as config_error, meta, created_at, updated_at
+			access_list_id, enabled, is_favorite, COALESCE(config_status, 'ok') as config_status, COALESCE(config_error, '') as config_error, ddns_enabled, ddns_provider_id, meta, created_at, updated_at
 		FROM proxy_hosts WHERE id = $1
 	`
 
 	var host model.ProxyHost
 	var certificateID, accessListID sql.NullString
 	var forwardContainerName, forwardContainerNetwork sql.NullString
+	var ddnsProviderID sql.NullString
 	var customLocations, meta []byte
 
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
@@ -335,6 +351,8 @@ func (r *ProxyHostRepository) GetByID(ctx context.Context, id string) (*model.Pr
 		&host.IsFavorite,
 		&host.ConfigStatus,
 		&host.ConfigError,
+		&host.DDNSEnabled,
+		&ddnsProviderID,
 		&meta,
 		&host.CreatedAt,
 		&host.UpdatedAt,
@@ -358,6 +376,9 @@ func (r *ProxyHostRepository) GetByID(ctx context.Context, id string) (*model.Pr
 	}
 	if accessListID.Valid {
 		host.AccessListID = &accessListID.String
+	}
+	if ddnsProviderID.Valid {
+		host.DDNSProviderID = &ddnsProviderID.String
 	}
 	host.CustomLocations = json.RawMessage(customLocations)
 	host.Meta = json.RawMessage(meta)
@@ -519,6 +540,16 @@ func (r *ProxyHostRepository) Update(ctx context.Context, id string, req *model.
 			existing.AccessListID = req.AccessListID
 		}
 	}
+	if req.DDNSEnabled != nil {
+		existing.DDNSEnabled = *req.DDNSEnabled
+	}
+	if req.DDNSProviderID != nil {
+		if *req.DDNSProviderID == "" {
+			existing.DDNSProviderID = nil // Clear DDNS provider
+		} else {
+			existing.DDNSProviderID = req.DDNSProviderID
+		}
+	}
 
 	query := `
 		UPDATE proxy_hosts SET
@@ -561,8 +592,10 @@ func (r *ProxyHostRepository) Update(ctx context.Context, id string, req *model.
 			client_max_body_size = $37,
 			proxy_max_temp_file_size = $38,
 			enabled = $39,
-			access_list_id = $40
-		WHERE id = $41
+			access_list_id = $40,
+			ddns_enabled = $41,
+			ddns_provider_id = $42
+		WHERE id = $43
 		RETURNING updated_at
 	`
 
@@ -576,6 +609,12 @@ func (r *ProxyHostRepository) Update(ctx context.Context, id string, req *model.
 	var accessListIDParam sql.NullString
 	if existing.AccessListID != nil && *existing.AccessListID != "" {
 		accessListIDParam = sql.NullString{String: *existing.AccessListID, Valid: true}
+	}
+
+	// Convert ddns_provider_id to NullString for update (#157)
+	var ddnsProviderIDParam sql.NullString
+	if existing.DDNSProviderID != nil && *existing.DDNSProviderID != "" {
+		ddnsProviderIDParam = sql.NullString{String: *existing.DDNSProviderID, Valid: true}
 	}
 
 	err = r.db.QueryRowContext(ctx, query,
@@ -619,6 +658,8 @@ func (r *ProxyHostRepository) Update(ctx context.Context, id string, req *model.
 		existing.ProxyMaxTempFileSize,
 		existing.Enabled,
 		accessListIDParam,
+		existing.DDNSEnabled,
+		ddnsProviderIDParam,
 		id,
 	).Scan(&existing.UpdatedAt)
 
@@ -690,7 +731,7 @@ func (r *ProxyHostRepository) GetByDomain(ctx context.Context, domain string) (*
 			COALESCE(proxy_request_buffering, '') as proxy_request_buffering,
 			COALESCE(client_max_body_size, '') as client_max_body_size,
 			COALESCE(proxy_max_temp_file_size, '') as proxy_max_temp_file_size,
-			access_list_id, enabled, is_favorite, COALESCE(config_status, 'ok') as config_status, COALESCE(config_error, '') as config_error, meta, created_at, updated_at
+			access_list_id, enabled, is_favorite, COALESCE(config_status, 'ok') as config_status, COALESCE(config_error, '') as config_error, ddns_enabled, ddns_provider_id, meta, created_at, updated_at
 		FROM proxy_hosts WHERE $1 = ANY(domain_names)
 		LIMIT 1
 	`
@@ -698,6 +739,7 @@ func (r *ProxyHostRepository) GetByDomain(ctx context.Context, domain string) (*
 	var host model.ProxyHost
 	var certificateID, accessListID sql.NullString
 	var forwardContainerName, forwardContainerNetwork sql.NullString
+	var ddnsProviderID sql.NullString
 	var customLocations, meta []byte
 
 	err := r.db.QueryRowContext(ctx, query, domain).Scan(
@@ -746,6 +788,8 @@ func (r *ProxyHostRepository) GetByDomain(ctx context.Context, domain string) (*
 		&host.IsFavorite,
 		&host.ConfigStatus,
 		&host.ConfigError,
+		&host.DDNSEnabled,
+		&ddnsProviderID,
 		&meta,
 		&host.CreatedAt,
 		&host.UpdatedAt,
@@ -769,6 +813,9 @@ func (r *ProxyHostRepository) GetByDomain(ctx context.Context, domain string) (*
 	}
 	if accessListID.Valid {
 		host.AccessListID = &accessListID.String
+	}
+	if ddnsProviderID.Valid {
+		host.DDNSProviderID = &ddnsProviderID.String
 	}
 	host.CustomLocations = json.RawMessage(customLocations)
 	host.Meta = json.RawMessage(meta)

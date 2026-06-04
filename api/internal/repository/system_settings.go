@@ -52,6 +52,7 @@ func (r *SystemSettingsRepository) getFromDB(ctx context.Context) (*model.System
 		       notify_security_events, notify_backup_complete,
 		       log_retention_days, stats_retention_days, backup_retention_count,
 		       auto_backup_enabled, auto_backup_schedule,
+		       COALESCE(ddns_check_interval_minutes, 5) as ddns_check_interval_minutes,
 		       COALESCE(access_log_retention_days, 1095) as access_log_retention_days,
 		       COALESCE(waf_log_retention_days, 90) as waf_log_retention_days,
 		       COALESCE(error_log_retention_days, 30) as error_log_retention_days,
@@ -126,6 +127,7 @@ func (r *SystemSettingsRepository) getFromDB(ctx context.Context) (*model.System
 		&settings.BackupRetentionCount,
 		&settings.AutoBackupEnabled,
 		&autoBackupSchedule,
+		&settings.DDNSCheckIntervalMinutes,
 		&settings.AccessLogRetentionDays,
 		&settings.WAFLogRetentionDays,
 		&settings.ErrorLogRetentionDays,
@@ -196,6 +198,11 @@ func (r *SystemSettingsRepository) getFromDB(ctx context.Context) (*model.System
 	if autoBackupSchedule.Valid {
 		settings.AutoBackupSchedule = autoBackupSchedule.String
 	}
+	// Clamp DDNS interval to a sane minimum (#157): a 0/negative value (e.g. from a
+	// pre-#157 row default) would busy-loop the scheduler, so coerce it to 5 minutes.
+	if settings.DDNSCheckIntervalMinutes < 1 {
+		settings.DDNSCheckIntervalMinutes = 5
+	}
 	if len(acmeDNSCredentials) > 0 {
 		settings.ACMEDNSCredentials = acmeDNSCredentials
 	} else {
@@ -226,20 +233,21 @@ func (r *SystemSettingsRepository) createDefault(ctx context.Context) (*model.Sy
 	`
 
 	settings := &model.SystemSettings{
-		GeoIPEnabled:         false,
-		GeoIPAutoUpdate:      true,
-		GeoIPUpdateInterval:  "7d",
-		ACMEEnabled:          true,
-		ACMEStaging:          false,
-		ACMEAutoRenew:        true,
-		ACMERenewDaysBefore:  30,
-		NotifyCertExpiry:     true,
-		NotifyCertExpiryDays: 14,
-		NotifySecurityEvents: true,
-		LogRetentionDays:     30,
-		StatsRetentionDays:   90,
-		BackupRetentionCount: 10,
-		ACMEDNSCredentials:   json.RawMessage("{}"),
+		GeoIPEnabled:             false,
+		GeoIPAutoUpdate:          true,
+		GeoIPUpdateInterval:      "7d",
+		ACMEEnabled:              true,
+		ACMEStaging:              false,
+		ACMEAutoRenew:            true,
+		ACMERenewDaysBefore:      30,
+		NotifyCertExpiry:         true,
+		NotifyCertExpiryDays:     14,
+		NotifySecurityEvents:     true,
+		LogRetentionDays:         30,
+		StatsRetentionDays:       90,
+		BackupRetentionCount:     10,
+		DDNSCheckIntervalMinutes: 5,
+		ACMEDNSCredentials:       json.RawMessage("{}"),
 	}
 
 	err := r.db.QueryRowContext(ctx, query,
@@ -380,6 +388,16 @@ func (r *SystemSettingsRepository) Update(ctx context.Context, req *model.Update
 	if req.AutoBackupSchedule != nil {
 		setClauses = append(setClauses, fmt.Sprintf("auto_backup_schedule = $%d", argIndex))
 		args = append(args, *req.AutoBackupSchedule)
+		argIndex++
+	}
+	if req.DDNSCheckIntervalMinutes != nil {
+		// Clamp to a sane minimum (#157): a sub-1 interval would busy-loop the scheduler.
+		interval := *req.DDNSCheckIntervalMinutes
+		if interval < 1 {
+			interval = 5
+		}
+		setClauses = append(setClauses, fmt.Sprintf("ddns_check_interval_minutes = $%d", argIndex))
+		args = append(args, interval)
 		argIndex++
 	}
 
