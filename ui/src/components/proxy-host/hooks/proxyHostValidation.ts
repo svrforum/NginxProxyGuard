@@ -77,6 +77,11 @@ export function validateProxyHostForm({
     newErrors.certificate_id = t('validation.certSelectionRequired')
   }
 
+  // DDNS auto-registration requires a DNS provider (Cloudflare/DuckDNS). (#157)
+  if (formData.ddns_enabled && !formData.ddns_provider_id) {
+    newErrors.ddns_provider_id = t('validation.ddnsProviderRequired')
+  }
+
   return newErrors
 }
 

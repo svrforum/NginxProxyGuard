@@ -77,3 +77,17 @@ export async function syncAllDDNSRecords(): Promise<{ success: boolean; message:
   });
   return handleResponse<{ success: boolean; message: string }>(response);
 }
+
+// Bulk-enable DDNS on the given proxy hosts with the given provider; the
+// backend reconciles each so their domains become managed DDNS records. (#157)
+export async function importDDNSFromHosts(
+  proxyHostIds: string[],
+  dnsProviderId: string
+): Promise<{ success: boolean; message: string }> {
+  const response = await fetch(`${API_BASE}/ddns-records/import-from-hosts`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ proxy_host_ids: proxyHostIds, dns_provider_id: dnsProviderId }),
+  });
+  return handleResponse<{ success: boolean; message: string }>(response);
+}

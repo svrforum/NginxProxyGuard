@@ -34,5 +34,17 @@
   "hostnameRequired": "호스트네임을 입력하세요.",
   "providerRequired": "DNS 프로바이더를 선택하세요.",
   "loadError": "DDNS 레코드를 불러오지 못했습니다.",
-  "disabledBadge": "비활성"
+  "disabledBadge": "비활성",
+  "managedBadge": "프록시 연동",
+  "managedHint": "이 레코드는 프록시 호스트에서 관리됩니다. 호스트 편집 화면에서 DDNS 설정을 변경하세요.",
+  "importFromHosts": "프록시 호스트에서 추가",
+  "importAction": "추가",
+  "importHint": "선택한 프록시 호스트에 DDNS 자동 등록을 켜고, 각 호스트의 도메인을 관리형 DDNS 레코드로 생성합니다.",
+  "selectHosts": "프록시 호스트 선택",
+  "importNoHosts": "프록시 호스트가 없습니다. 먼저 프록시 호스트를 추가하세요.",
+  "importNoHostsSelected": "프록시 호스트를 하나 이상 선택하세요.",
+  "ddnsAlreadyEnabled": "DDNS 켜짐",
+  "checkIntervalMinutes": "갱신 주기(분)",
+  "checkIntervalDesc": "스케줄러가 공인 IP를 확인하고 DDNS 레코드를 갱신하는 주기입니다. (최소 1분)",
+  "checkIntervalSaved": "저장됨"
 }

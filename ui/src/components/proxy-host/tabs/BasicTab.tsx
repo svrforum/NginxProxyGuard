@@ -21,7 +21,15 @@ interface BasicTabFullProps {
     provider: string
     status: string
   }>
+  dnsProviders: Array<{
+    id: string
+    name: string
+    provider_type: string
+  }>
 }
+
+// DDNS only supports providers whose A record can be updated programmatically.
+const DDNS_SUPPORTED_PROVIDER_TYPES = ['cloudflare', 'duckdns']
 
 export function BasicTabContent({
   formData,
@@ -34,6 +42,7 @@ export function BasicTabContent({
   removeDomain,
   updateDomain,
   availableCerts,
+  dnsProviders,
 }: BasicTabFullProps) {
   const { t } = useTranslation('proxyHost')
   const [dockerSelectorOpen, setDockerSelectorOpen] = useState(false)
@@ -133,6 +142,11 @@ export function BasicTabContent({
       clearPortError('stream_listen_port')
     }
   }
+
+  const ddnsProviders = dnsProviders.filter((p) =>
+    DDNS_SUPPORTED_PROVIDER_TYPES.includes(p.provider_type)
+  )
+  const ddnsEnabled = !!formData.ddns_enabled
 
   const listenHostDisplay = formData.stream_listen_host?.trim() || '*'
   const listenPortDisplay = formData.stream_listen_port || '??'
@@ -553,6 +567,83 @@ export function BasicTabContent({
             </button>
           ))}
         </div>
+      </div>
+
+      {/* DDNS Auto-Registration */}
+      <div className={`p-4 rounded-lg border-2 transition-colors ${ddnsEnabled ? 'bg-cyan-50 border-cyan-200 dark:bg-cyan-900/20 dark:border-cyan-800' : 'bg-slate-50 border-slate-200 dark:bg-slate-800/50 dark:border-slate-700'}`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${ddnsEnabled ? 'bg-cyan-100 dark:bg-cyan-900/40' : 'bg-slate-200 dark:bg-slate-700'}`}>
+              <svg className={`w-5 h-5 ${ddnsEnabled ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-400 dark:text-slate-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div>
+              <span className="text-sm font-medium text-slate-900 dark:text-white flex items-center gap-2">
+                {t('form.basic.ddnsAutoRegister')}
+                <HelpTip content={t('form.basic.ddnsAutoRegisterDescription')} />
+              </span>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{t('form.basic.ddnsAutoRegisterDescription')}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              const enabled = !ddnsEnabled
+              setFormData(prev => ({
+                ...prev,
+                ddns_enabled: enabled,
+                // Clear the provider when turning DDNS off.
+                ddns_provider_id: enabled ? prev.ddns_provider_id : undefined,
+              }))
+              setErrors(prev => {
+                const { ddns_provider_id: _removed, ...rest } = prev
+                return rest
+              })
+            }}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${ddnsEnabled ? 'bg-cyan-500' : 'bg-slate-300 dark:bg-slate-600'}`}
+          >
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${ddnsEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+          </button>
+        </div>
+
+        {ddnsEnabled && (
+          <div className="mt-4">
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
+              {t('form.basic.ddnsProvider')}
+            </label>
+            <select
+              value={formData.ddns_provider_id || ''}
+              onChange={(e) => {
+                const value = e.target.value || undefined
+                setFormData(prev => ({ ...prev, ddns_provider_id: value }))
+                if (value) {
+                  setErrors(prev => {
+                    const { ddns_provider_id: _removed, ...rest } = prev
+                    return rest
+                  })
+                }
+              }}
+              disabled={ddnsProviders.length === 0}
+              className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 dark:text-white ${errors.ddns_provider_id ? 'border-red-300 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'} ${ddnsProviders.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <option value="">{t('form.basic.ddnsSelectProvider')}</option>
+              {ddnsProviders.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} ({p.provider_type})
+                </option>
+              ))}
+            </select>
+            {errors.ddns_provider_id && (
+              <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.ddns_provider_id}</p>
+            )}
+            {ddnsProviders.length === 0 ? (
+              <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">{t('form.basic.ddnsNoProviders')}</p>
+            ) : (
+              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{t('form.basic.ddnsProviderHint')}</p>
+            )}
+          </div>
+        )}
       </div>
 
       <DockerContainerSelector

@@ -1,10 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { listDDNSRecords, deleteDDNSRecord, syncDDNSRecord } from '../../api/ddns'
 import { listDNSProviders } from '../../api/dns-providers'
+import { getSystemSettings, updateSystemSettings } from '../../api/settings'
 import type { DDNSRecord } from '../../types/ddns'
 import DDNSRecordForm from './DDNSRecordForm'
+import DDNSImportFromHostsModal from './DDNSImportFromHostsModal'
 
 function StatusBadge({ status }: { status: string }) {
   const { t } = useTranslation('ddns')
@@ -33,6 +35,7 @@ export default function DDNSRecordList() {
   const { t } = useTranslation('ddns')
   const queryClient = useQueryClient()
   const [showForm, setShowForm] = useState(false)
+  const [showImport, setShowImport] = useState(false)
   const [editingRecord, setEditingRecord] = useState<DDNSRecord | null>(null)
 
   const { data, isLoading, error } = useQuery({
@@ -48,6 +51,35 @@ export default function DDNSRecordList() {
   const providerName = (id: string): string => {
     const p = providersData?.data?.find((x) => x.id === id)
     return p ? p.name : id
+  }
+
+  // DDNS check interval (system setting) — renewal cadence in minutes.
+  const { data: systemSettings } = useQuery({
+    queryKey: ['system-settings'],
+    queryFn: getSystemSettings,
+  })
+  const [intervalInput, setIntervalInput] = useState('')
+  const [intervalSaved, setIntervalSaved] = useState(false)
+
+  useEffect(() => {
+    if (systemSettings?.ddns_check_interval_minutes != null) {
+      setIntervalInput(String(systemSettings.ddns_check_interval_minutes))
+    }
+  }, [systemSettings?.ddns_check_interval_minutes])
+
+  const intervalMutation = useMutation({
+    mutationFn: (minutes: number) => updateSystemSettings({ ddns_check_interval_minutes: minutes }),
+    onSuccess: () => {
+      setIntervalSaved(true)
+      setTimeout(() => setIntervalSaved(false), 2000)
+      queryClient.invalidateQueries({ queryKey: ['system-settings'] })
+    },
+  })
+
+  const handleSaveInterval = () => {
+    const minutes = Math.max(1, parseInt(intervalInput, 10) || 1)
+    setIntervalInput(String(minutes))
+    intervalMutation.mutate(minutes)
   }
 
   const deleteMutation = useMutation({
@@ -111,12 +143,48 @@ export default function DDNSRecordList() {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-semibold text-slate-900 dark:text-white">{t('title')}</h2>
-        <button
-          onClick={() => setShowForm(true)}
-          className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        >
-          + {t('addRecord')}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowImport(true)}
+            className="px-4 py-2 bg-cyan-600 text-white rounded-md hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+          >
+            {t('importFromHosts')}
+          </button>
+          <button
+            onClick={() => setShowForm(true)}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            + {t('addRecord')}
+          </button>
+        </div>
+      </div>
+
+      {/* DDNS check interval setting */}
+      <div className="bg-white dark:bg-slate-800 shadow rounded-lg border border-slate-200 dark:border-slate-700 p-4">
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+          {t('checkIntervalMinutes')}
+        </label>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">{t('checkIntervalDesc')}</p>
+        <div className="flex items-center gap-3">
+          <input
+            type="number"
+            min={1}
+            value={intervalInput}
+            onChange={(e) => setIntervalInput(e.target.value)}
+            className="w-32 rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 dark:text-white"
+          />
+          <button
+            type="button"
+            onClick={handleSaveInterval}
+            disabled={intervalMutation.isPending}
+            className="px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-50"
+          >
+            {t('save')}
+          </button>
+          {intervalSaved && (
+            <span className="text-sm text-green-600 dark:text-green-400">{t('checkIntervalSaved')}</span>
+          )}
+        </div>
       </div>
 
       {showForm && (
@@ -125,6 +193,16 @@ export default function DDNSRecordList() {
           onClose={handleFormClose}
           onSuccess={() => {
             handleFormClose()
+            queryClient.invalidateQueries({ queryKey: ['ddns-records'] })
+          }}
+        />
+      )}
+
+      {showImport && (
+        <DDNSImportFromHostsModal
+          onClose={() => setShowImport(false)}
+          onSuccess={() => {
+            setShowImport(false)
             queryClient.invalidateQueries({ queryKey: ['ddns-records'] })
           }}
         />
@@ -162,10 +240,22 @@ export default function DDNSRecordList() {
                 </td>
               </tr>
             ) : (
-              data?.data?.map((record) => (
+              data?.data?.map((record) => {
+                const isManaged = !!record.proxy_host_id
+                return (
                 <tr key={record.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
                   <td className="px-6 py-4">
-                    <div className="text-sm font-medium text-slate-900 dark:text-white">{record.hostname}</div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-slate-900 dark:text-white">{record.hostname}</span>
+                      {isManaged && (
+                        <span
+                          className="px-2 py-0.5 text-xs font-medium rounded-full bg-cyan-100 dark:bg-cyan-900/30 text-cyan-800 dark:text-cyan-300"
+                          title={t('managedHint')}
+                        >
+                          {t('managedBadge')}
+                        </span>
+                      )}
+                    </div>
                     {!record.enabled && (
                       <span className="text-xs text-slate-400 dark:text-slate-500">{t('disabledBadge')}</span>
                     )}
@@ -197,20 +287,24 @@ export default function DDNSRecordList() {
                     </button>
                     <button
                       onClick={() => handleEdit(record)}
-                      className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm font-medium"
+                      disabled={isManaged}
+                      title={isManaged ? t('managedHint') : undefined}
+                      className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-indigo-600"
                     >
                       {t('edit')}
                     </button>
                     <button
                       onClick={() => handleDelete(record.id)}
-                      disabled={deleteMutation.isPending}
-                      className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium disabled:opacity-50"
+                      disabled={deleteMutation.isPending || isManaged}
+                      title={isManaged ? t('managedHint') : undefined}
+                      className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-red-600"
                     >
                       {t('delete')}
                     </button>
                   </td>
                 </tr>
-              ))
+                )
+              })
             )}
           </tbody>
         </table>
