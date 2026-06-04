@@ -67,6 +67,8 @@ func InitServices(
 		repos.ExploitBlockRule,
 		repos.Certificate,
 		repos.SystemLog,
+		repos.DDNS,
+		repos.DNSProvider,
 		nginxManager,
 	)
 

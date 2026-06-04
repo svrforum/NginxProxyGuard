@@ -62,6 +62,8 @@ type ProxyHostService struct {
 	certRepo               *repository.CertificateRepository
 	systemLogRepo          *repository.SystemLogRepository
 	filterSubscriptionRepo *repository.FilterSubscriptionRepository
+	ddnsRepo               *repository.DDNSRepository        // managed DDNS record reconcile (#157)
+	dnsProviderRepo        *repository.DNSProviderRepository // DDNS provider-type validation (#157)
 	nginx                  NginxManager
 	certService            CertificateCreator // Optional: for creating certificates during clone
 	containerResolver      ContainerResolver  // Optional: resolves docker container name → IP (#150)
@@ -83,6 +85,8 @@ func NewProxyHostService(
 	exploitBlockRuleRepo *repository.ExploitBlockRuleRepository,
 	certRepo *repository.CertificateRepository,
 	systemLogRepo *repository.SystemLogRepository,
+	ddnsRepo *repository.DDNSRepository,
+	dnsProviderRepo *repository.DNSProviderRepository,
 	nginx NginxManager,
 ) *ProxyHostService {
 	return &ProxyHostService{
@@ -101,6 +105,8 @@ func NewProxyHostService(
 		exploitBlockRuleRepo: exploitBlockRuleRepo,
 		certRepo:             certRepo,
 		systemLogRepo:        systemLogRepo,
+		ddnsRepo:             ddnsRepo,
+		dnsProviderRepo:      dnsProviderRepo,
 		nginx:                nginx,
 	}
 }
@@ -265,6 +271,16 @@ func applyUpdateCandidate(existing *model.ProxyHost, req *model.UpdateProxyHostR
 	if req.StreamProxyTimeout != nil {
 		candidate.StreamProxyTimeout = *req.StreamProxyTimeout
 	}
+	if req.DDNSEnabled != nil {
+		candidate.DDNSEnabled = *req.DDNSEnabled
+	}
+	if req.DDNSProviderID != nil {
+		if *req.DDNSProviderID == "" {
+			candidate.DDNSProviderID = nil
+		} else {
+			candidate.DDNSProviderID = req.DDNSProviderID
+		}
+	}
 	return candidate
 }
 
@@ -343,6 +359,33 @@ func normalizeUpdateProxyHostRequest(existing *model.ProxyHost, req *model.Updat
 
 func stringPtr(value string) *string {
 	return &value
+}
+
+// validateDDNSOptIn enforces that DDNS auto-registration is only enabled with a
+// provider whose type supports DDNS (cloudflare/duckdns). Returns an "invalid ..."
+// error (mapped to 400 by the handler) when the opt-in is malformed. When DDNS is
+// off this is a no-op. (#157)
+func (s *ProxyHostService) validateDDNSOptIn(ctx context.Context, enabled bool, providerID *string) error {
+	if !enabled {
+		return nil
+	}
+	if providerID == nil || *providerID == "" {
+		return fmt.Errorf("invalid: DDNS auto-registration requires a DNS provider")
+	}
+	if s.dnsProviderRepo == nil {
+		return fmt.Errorf("invalid: DDNS provider validation unavailable")
+	}
+	provider, err := s.dnsProviderRepo.GetByID(ctx, *providerID)
+	if err != nil {
+		return fmt.Errorf("failed to validate ddns_provider_id: %w", err)
+	}
+	if provider == nil {
+		return fmt.Errorf("invalid: DDNS provider not found: %s", *providerID)
+	}
+	if provider.ProviderType != model.DNSProviderCloudflare && provider.ProviderType != model.DNSProviderDuckDNS {
+		return fmt.Errorf("invalid: DDNS requires a Cloudflare or DuckDNS provider")
+	}
+	return nil
 }
 
 func (s *ProxyHostService) prepareUpdateProxyHostRequest(ctx context.Context, id string, req *model.UpdateProxyHostRequest) (string, *model.ProxyHost, error) {
@@ -442,6 +485,14 @@ func (s *ProxyHostService) prepareUpdateProxyHostRequest(ctx context.Context, id
 		}
 	}
 
+	// Validate the merged DDNS opt-in: enabled requires a cloudflare/duckdns
+	// provider, evaluated against the effective (merged) candidate so a request
+	// that only toggles ddns_enabled is still validated against the stored
+	// provider. (#157)
+	if err := s.validateDDNSOptIn(ctx, candidate.DDNSEnabled, candidate.DDNSProviderID); err != nil {
+		return "", nil, err
+	}
+
 	return oldConfigFilename, candidate, nil
 }
 
@@ -514,6 +565,11 @@ func (s *ProxyHostService) Create(ctx context.Context, req *model.CreateProxyHos
 		}
 	}
 
+	// Validate DDNS opt-in: enabled requires a cloudflare/duckdns provider (#157).
+	if err := s.validateDDNSOptIn(ctx, req.DDNSEnabled, req.DDNSProviderID); err != nil {
+		return nil, err
+	}
+
 	// Resolve container-name target to its current IP before persisting (#150).
 	// Non-container requests leave forward_host unchanged. When a container
 	// network is supplied, resolution is pinned to it (#151).
@@ -558,6 +614,10 @@ func (s *ProxyHostService) Create(ctx context.Context, req *model.CreateProxyHos
 			return nil, fmt.Errorf("failed to generate nginx config: %w", err)
 		}
 	}
+
+	// Sync managed DDNS records to the host's domains (#157). Graceful: never
+	// fails the create — the host has already been persisted + reloaded.
+	s.reconcileHostDDNS(ctx, host)
 
 	return host, nil
 }
@@ -766,6 +826,10 @@ func (s *ProxyHostService) Update(ctx context.Context, id string, req *model.Upd
 	metrics.NginxConfigStatus.WithLabelValues(host.ID).Set(1)
 	host.ConfigStatus = "ok"
 	host.ConfigError = ""
+
+	// Sync managed DDNS records to the host's (possibly changed) domains and
+	// opt-in state (#157). Graceful: never fails the update.
+	s.reconcileHostDDNS(ctx, host)
 
 	return host, nil
 }
