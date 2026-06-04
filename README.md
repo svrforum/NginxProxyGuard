@@ -8,25 +8,32 @@
 
 <img src="./NPG_banner.png" alt="Nginx Proxy Guard" width="800">
 
-[![Version](https://img.shields.io/badge/Version-2.7.0-brightgreen?style=for-the-badge)]()
-[![Nginx](https://img.shields.io/badge/Nginx-1.28.0-009639?style=for-the-badge&logo=nginx&logoColor=white)](https://nginx.org/)
-[![ModSecurity](https://img.shields.io/badge/ModSecurity-v3.0.14-red?style=for-the-badge)](https://modsecurity.org/)
-[![OWASP CRS](https://img.shields.io/badge/OWASP_CRS-v4.21.0-orange?style=for-the-badge)](https://coreruleset.org/)
-[![HTTP/3](https://img.shields.io/badge/HTTP/3-QUIC-blue?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-2.23.1-brightgreen?style=for-the-badge)](https://github.com/svrforum/NginxProxyGuard/releases)
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/svrforum/NginxProxyGuard?style=for-the-badge&logo=github&color=gold)](https://github.com/svrforum/NginxProxyGuard/stargazers)
+[![Docker](https://img.shields.io/badge/Docker-ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://hub.docker.com/u/svrforum)
+
+[![Nginx](https://img.shields.io/badge/Nginx-1.30.1-009639?style=for-the-badge&logo=nginx&logoColor=white)](https://nginx.org/)
+[![ModSecurity](https://img.shields.io/badge/ModSecurity-v3.0.15-red?style=for-the-badge)](https://modsecurity.org/)
+[![OWASP CRS](https://img.shields.io/badge/OWASP_CRS-v4.26.0-orange?style=for-the-badge)](https://coreruleset.org/)
+[![HTTP/3](https://img.shields.io/badge/HTTP/3-QUIC-blue?style=for-the-badge)]()
 
 <p align="center">
   <strong>A secure and fast solution to manage proxy hosts, SSL certificates,<br/>and security rules through an intuitive web UI</strong>
 </p>
 
 <p align="center">
-  <a href="https://nginxproxyguard.com">Website</a> •
-  <a href="https://nginxproxyguard.com/en/docs">Docs</a> •
-  <a href="#-key-features">Features</a> •
-  <a href="#-quick-start">Quick Start</a> •
-  <a href="#-tech-stack">Tech Stack</a> •
-  <a href="#-api-documentation">API</a> •
-  <a href="https://buymeacoffee.com/svrforum">☕ Sponsor</a>
+  <a href="https://nginxproxyguard.com">🌐 Website</a> •
+  <a href="https://nginxproxyguard.com/en/docs">📖 Docs</a> •
+  <a href="#-key-features">✨ Features</a> •
+  <a href="#-quick-start">🚀 Quick Start</a> •
+  <a href="#-tech-stack">🛠 Tech Stack</a> •
+  <a href="#-api-documentation">📚 API</a>
+</p>
+
+<p align="center">
+  <em>Love this project? A coffee keeps it going ↓</em><br/>
+  <a href="https://buymeacoffee.com/svrforum" target="_blank"><img src="https://img.shields.io/badge/%E2%98%95%20Sponsor%20this%20project-Buy%20Me%20a%20Coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Sponsor Nginx Proxy Guard"></a>
 </p>
 
 ---
@@ -53,7 +60,7 @@ Block or allow traffic by country with interactive world map visualization. MaxM
 Analyze Nginx access/error logs with powerful filtering and exclusion patterns. **TimescaleDB** time-series optimization with automatic compression.
 
 ### 🛡️ Web Application Firewall
-ModSecurity v3 with OWASP Core Rule Set v4.21. Paranoia Level 1-4, per-host rule exceptions, exploit blocking rules.
+ModSecurity v3 with OWASP Core Rule Set v4.26. Paranoia Level 1-4, per-host rule exceptions, exploit blocking rules.
 
 ### ⚡ Rate Limiting
 Protect against DDoS and brute-force attacks with configurable rate limits per IP, URI, or IP+URI combination.
@@ -122,12 +129,12 @@ Built-in DDNS keeps your domains pointed at your home server as your public IP c
 
 | Technology | Purpose |
 |------------|---------|
-| **Nginx 1.28** | High-performance HTTP and stream reverse proxy core with HTTP/3 & QUIC support |
-| **TimescaleDB** | PostgreSQL with time-series optimization for log compression |
-| **Valkey 8** | Redis-compatible high-speed caching and session management |
-| **Go 1.24** | Backend API with efficient resource management and concurrency |
-| **React 18 & TypeScript** | Type-safe, component-based modern UI |
-| **ModSecurity 3** | Web Application Firewall with OWASP Core Rule Set v4.21 |
+| **Nginx 1.30.1** | High-performance HTTP and stream reverse proxy core with HTTP/3 & QUIC support |
+| **TimescaleDB (PostgreSQL 17)** | Time-series-optimized database with automatic log compression |
+| **Valkey 9** | Redis-compatible high-speed caching and session management (optional) |
+| **Go 1.26 (Echo v4)** | Backend API with efficient resource management and concurrency |
+| **React 19 & TypeScript 6** | Type-safe, component-based modern UI (Vite 8 + Tailwind 4) |
+| **ModSecurity v3.0.15** | Web Application Firewall with OWASP Core Rule Set v4.26.0 |
 | **MaxMind GeoIP2** | Geographic IP database for country-level access control |
 
 ---
@@ -204,11 +211,11 @@ Each successful reset:
 
 Sign in with the printed password and change it immediately from **Account Settings** in the UI.
 
-### Upgrading to v2.7.0
+### Upgrading
 
-All versions are fully backward compatible. No manual migration needed — database schema upgrades are applied automatically on startup.
+All versions are fully backward compatible. No manual migration needed — database schema upgrades are applied automatically on startup. Just pull the latest image and recreate the containers.
 
-> **What's new in v2.7.0**: Filter Subscriptions — subscribe to external IP blocklists with automatic sync and Nginx integration. See [Key Features](#-key-features) for details.
+> **Recently added**: built-in Dynamic DNS (Cloudflare/DuckDNS) integrated per proxy host. See the [latest releases](https://github.com/svrforum/NginxProxyGuard/releases) and [Key Features](#-key-features).
 
 ---
 
