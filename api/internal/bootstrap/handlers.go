@@ -86,7 +86,7 @@ func InitHandlers(
 	h.Swagger = handler.NewSwaggerHandler()
 	h.Metrics = handler.NewMetricsHandler()
 	h.HealthDetailed = handler.NewHealthDetailedHandler(repos.HealthDetailed, svcs.LogCollector, redisCache, repos.ProxyHost, repos.GlobalSettings, svcs.PipelineCanary, svcs.StatsCollector)
-	h.DDNS = handler.NewDDNSHandler(svcs.DDNS)
+	h.DDNS = handler.NewDDNSHandler(svcs.DDNS, svcs.ProxyHost)
 
 	return h
 }

@@ -11,11 +11,12 @@ import (
 )
 
 type DDNSHandler struct {
-	service *service.DDNSService
+	service      *service.DDNSService
+	proxyHostSvc *service.ProxyHostService // for importing DDNS from proxy hosts (#157)
 }
 
-func NewDDNSHandler(service *service.DDNSService) *DDNSHandler {
-	return &DDNSHandler{service: service}
+func NewDDNSHandler(service *service.DDNSService, proxyHostSvc *service.ProxyHostService) *DDNSHandler {
+	return &DDNSHandler{service: service, proxyHostSvc: proxyHostSvc}
 }
 
 // List handles GET /api/v1/ddns-records
@@ -129,6 +130,40 @@ func (h *DDNSHandler) SyncOne(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "record synced",
+	})
+}
+
+// ImportFromHostsRequest is the body for POST /api/v1/ddns-records/import-from-hosts (#157).
+type ImportFromHostsRequest struct {
+	ProxyHostIDs  []string `json:"proxy_host_ids"`
+	DNSProviderID string   `json:"dns_provider_id"`
+}
+
+// ImportFromHosts handles POST /api/v1/ddns-records/import-from-hosts — enables
+// DDNS on the selected proxy hosts with the given provider and reconciles their
+// domains into managed DDNS records. (#157)
+func (h *DDNSHandler) ImportFromHosts(c echo.Context) error {
+	var req ImportFromHostsRequest
+	if err := c.Bind(&req); err != nil {
+		return badRequestError(c, "invalid request body")
+	}
+	if len(req.ProxyHostIDs) == 0 {
+		return badRequestError(c, "proxy_host_ids is required")
+	}
+	if req.DNSProviderID == "" {
+		return badRequestError(c, "dns_provider_id is required")
+	}
+
+	if err := h.proxyHostSvc.ImportFromHosts(c.Request().Context(), req.ProxyHostIDs, req.DNSProviderID); err != nil {
+		if strings.Contains(err.Error(), "invalid") {
+			return badRequestError(c, err.Error())
+		}
+		return internalError(c, "import DDNS from hosts", err)
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "DDNS import triggered",
 	})
 }
 
