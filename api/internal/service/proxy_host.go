@@ -45,6 +45,11 @@ type ContainerResolver interface {
 	ResolveContainerIP(ctx context.Context, name string, network string) (string, error)
 }
 
+// ddnsSyncer triggers an immediate DDNS sync for a host's managed records (#157 follow-up).
+type ddnsSyncer interface {
+	SyncByProxyHost(ctx context.Context, proxyHostID string)
+}
+
 type ProxyHostService struct {
 	repo                   *repository.ProxyHostRepository
 	wafRepo                *repository.WAFRepository
@@ -64,6 +69,7 @@ type ProxyHostService struct {
 	filterSubscriptionRepo *repository.FilterSubscriptionRepository
 	ddnsRepo               *repository.DDNSRepository        // managed DDNS record reconcile (#157)
 	dnsProviderRepo        *repository.DNSProviderRepository // DDNS provider-type validation (#157)
+	ddnsSyncer             ddnsSyncer                        // optional: immediate first sync after opt-in (#157 follow-up)
 	nginx                  NginxManager
 	certService            CertificateCreator // Optional: for creating certificates during clone
 	containerResolver      ContainerResolver  // Optional: resolves docker container name → IP (#150)
@@ -115,6 +121,9 @@ func NewProxyHostService(
 func (s *ProxyHostService) SetCertificateService(certService CertificateCreator) {
 	s.certService = certService
 }
+
+// SetDDNSSyncer wires the DDNS service for immediate first-sync after a host opts in. (#157 follow-up)
+func (s *ProxyHostService) SetDDNSSyncer(d ddnsSyncer) { s.ddnsSyncer = d }
 
 func (s *ProxyHostService) SetFilterSubscriptionRepo(repo *repository.FilterSubscriptionRepository) {
 	s.filterSubscriptionRepo = repo

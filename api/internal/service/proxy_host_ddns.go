@@ -91,4 +91,11 @@ func (s *ProxyHostService) reconcileHostDDNS(ctx context.Context, host *model.Pr
 	if err := s.ddnsRepo.DeleteManagedNotIn(ctx, host.ID, desired); err != nil {
 		log.Printf("[DDNS] reconcile prune failed for host %s: %v", host.ID, err)
 	}
+
+	// Immediate first sync (async, graceful) so the record reflects the current public
+	// IP within seconds instead of waiting for the scheduler. context.Background() so it
+	// survives the request context ending. (#157 follow-up)
+	if s.ddnsSyncer != nil {
+		go s.ddnsSyncer.SyncByProxyHost(context.Background(), host.ID)
+	}
 }

@@ -196,6 +196,8 @@ func wireServiceCallbacks(svcs *Services, repos *Repositories) {
 	svcs.ProxyHost.SetFilterSubscriptionRepo(repos.FilterSubscription)
 	// ProxyHost: resolve docker container-name targets to their current IP (#150).
 	svcs.ProxyHost.SetContainerResolver(svcs.DockerStats)
+	// ProxyHost: immediate first DDNS sync after a host opts in (#157 follow-up).
+	svcs.ProxyHost.SetDDNSSyncer(svcs.DDNS)
 
 	// Certificate: regenerate proxy-host configs after a cert is ready.
 	//
