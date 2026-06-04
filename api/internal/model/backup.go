@@ -739,4 +739,7 @@ type SystemSettingsExport struct {
 
 	// System Log Settings
 	SystemLogsEnabled bool `json:"system_logs_enabled"`
+
+	// DDNS Settings
+	DDNSCheckIntervalMinutes int `json:"ddns_check_interval_minutes"`
 }

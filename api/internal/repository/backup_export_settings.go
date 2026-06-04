@@ -88,7 +88,8 @@ func (r *BackupRepository) exportSystemSettings(ctx context.Context) (*model.Sys
 		       bot_filter_default_custom_blocked_agents,
 		       bot_list_bad_bots, bot_list_ai_bots, bot_list_search_engines, bot_list_suspicious_clients,
 		       waf_auto_ban_enabled, waf_auto_ban_threshold, waf_auto_ban_window, waf_auto_ban_duration,
-		       direct_ip_access_action, system_logs_enabled
+		       direct_ip_access_action, system_logs_enabled,
+		       COALESCE(ddns_check_interval_minutes, 5) as ddns_check_interval_minutes
 		FROM system_settings LIMIT 1
 	`
 
@@ -118,6 +119,7 @@ func (r *BackupRepository) exportSystemSettings(ctx context.Context) (*model.Sys
 		&botListBadBots, &botListAIBots, &botListSearchEngines, &botListSuspiciousClients,
 		&ss.WAFAutoBanEnabled, &ss.WAFAutoBanThreshold, &ss.WAFAutoBanWindow, &ss.WAFAutoBanDuration,
 		&directIPAccessAction, &ss.SystemLogsEnabled,
+		&ss.DDNSCheckIntervalMinutes,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil

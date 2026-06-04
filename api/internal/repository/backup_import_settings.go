@@ -79,8 +79,15 @@ func (r *BackupRepository) importSystemSettings(ctx context.Context, tx *sql.Tx,
 			bot_list_bad_bots = $38, bot_list_ai_bots = $39, bot_list_search_engines = $40, bot_list_suspicious_clients = $41,
 			waf_auto_ban_enabled = $42, waf_auto_ban_threshold = $43, waf_auto_ban_window = $44, waf_auto_ban_duration = $45,
 			direct_ip_access_action = $46, system_logs_enabled = $47,
+			ddns_check_interval_minutes = $48,
 			updated_at = NOW()
 	`
+
+	// 하위 버전 백업 호환: 구 버전 백업엔 이 필드가 없어 zero value(0)가 되므로
+	// 최소 제약(>=1)을 위반하지 않도록 기본값 5로 보정.
+	if ss.DDNSCheckIntervalMinutes < 1 {
+		ss.DDNSCheckIntervalMinutes = 5
+	}
 
 	_, err := tx.ExecContext(ctx, query,
 		ss.GeoIPEnabled, ss.GeoIPAutoUpdate, ss.GeoIPUpdateInterval,
@@ -101,6 +108,7 @@ func (r *BackupRepository) importSystemSettings(ctx context.Context, tx *sql.Tx,
 		ss.BotListBadBots, ss.BotListAIBots, ss.BotListSearchEngines, ss.BotListSuspiciousClients,
 		ss.WAFAutoBanEnabled, ss.WAFAutoBanThreshold, ss.WAFAutoBanWindow, ss.WAFAutoBanDuration,
 		ss.DirectIPAccessAction, ss.SystemLogsEnabled,
+		ss.DDNSCheckIntervalMinutes,
 	)
 	return err
 }
