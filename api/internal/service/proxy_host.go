@@ -371,7 +371,7 @@ func stringPtr(value string) *string {
 }
 
 // validateDDNSOptIn enforces that DDNS auto-registration is only enabled with a
-// provider whose type supports DDNS (cloudflare/duckdns). Returns an "invalid ..."
+// provider whose type supports DDNS (cloudflare/duckdns/dynu). Returns an "invalid ..."
 // error (mapped to 400 by the handler) when the opt-in is malformed. When DDNS is
 // off this is a no-op. (#157)
 func (s *ProxyHostService) validateDDNSOptIn(ctx context.Context, enabled bool, providerID *string) error {
@@ -391,8 +391,10 @@ func (s *ProxyHostService) validateDDNSOptIn(ctx context.Context, enabled bool, 
 	if provider == nil {
 		return fmt.Errorf("invalid: DDNS provider not found: %s", *providerID)
 	}
-	if provider.ProviderType != model.DNSProviderCloudflare && provider.ProviderType != model.DNSProviderDuckDNS {
-		return fmt.Errorf("invalid: DDNS requires a Cloudflare or DuckDNS provider")
+	if provider.ProviderType != model.DNSProviderCloudflare &&
+		provider.ProviderType != model.DNSProviderDuckDNS &&
+		provider.ProviderType != model.DNSProviderDynu {
+		return fmt.Errorf("invalid: DDNS requires a Cloudflare, DuckDNS, or Dynu provider")
 	}
 	return nil
 }

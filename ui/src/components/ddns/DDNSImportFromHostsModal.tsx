@@ -13,7 +13,7 @@ interface DDNSImportFromHostsModalProps {
 }
 
 // DDNS only supports providers whose A record can be updated programmatically.
-const SUPPORTED_PROVIDER_TYPES: DNSProvider['provider_type'][] = ['cloudflare', 'duckdns']
+const SUPPORTED_PROVIDER_TYPES: DNSProvider['provider_type'][] = ['cloudflare', 'duckdns', 'dynu']
 
 export default function DDNSImportFromHostsModal({ onClose, onSuccess }: DDNSImportFromHostsModalProps) {
   const { t } = useTranslation('ddns')
