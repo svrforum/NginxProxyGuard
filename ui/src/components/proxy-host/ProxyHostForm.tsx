@@ -100,10 +100,10 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
         { id: 'security' as TabType, label: t('form.tabs.security'), icon: '🛡️' },
         { id: 'protection' as TabType, label: t('form.tabs.protection'), icon: '🚫' },
         { id: 'performance' as TabType, label: t('form.tabs.performance'), icon: '⚡' },
-        ...(isEditing ? [{ id: 'upstream' as TabType, label: t('form.tabs.upstream'), icon: '⚖️' }] : []),
+        { id: 'upstream' as TabType, label: t('form.tabs.upstream'), icon: '⚖️' },
         { id: 'advanced' as TabType, label: t('form.tabs.advanced'), icon: '⚙️' },
       ]
-  ), [isEditing, isStream, t])
+  ), [isStream, t])
 
   // ESC to close (but not during save progress unless there's an error)
   useEscapeKey(onClose, !saveProgress.isOpen || (saveProgress.isOpen && !!saveProgress.error))
@@ -310,8 +310,20 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
             )}
 
             {/* Upstream Tab */}
-              {activeTab === 'upstream' && !isStream && isEditing && host && (
-              <UpstreamTabContent hostId={host.id} />
+              {activeTab === 'upstream' && !isStream && (
+                isEditing && host ? (
+                  <UpstreamTabContent hostId={host.id} />
+                ) : (
+                  <div className="text-center py-10 px-6 text-slate-500 dark:text-slate-400">
+                    <div className="text-3xl mb-3">⚖️</div>
+                    <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      {t('form.upstream.createFirstTitle', '로드 밸런싱은 호스트 저장 후 설정할 수 있어요')}
+                    </p>
+                    <p className="text-xs max-w-sm mx-auto leading-relaxed">
+                      {t('form.upstream.createFirstHint', '먼저 이 프록시 호스트를 생성한 다음, 목록에서 이 호스트를 수정하면 여러 백엔드 서버와 분배 방식(라운드 로빈/least_conn/IP 해시/랜덤), 헬스 체크를 설정할 수 있습니다.')}
+                    </p>
+                  </div>
+                )
             )}
 
             {/* Advanced Tab */}

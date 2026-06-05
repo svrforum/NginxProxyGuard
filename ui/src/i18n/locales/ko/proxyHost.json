@@ -55,7 +55,17 @@
       "updatedAsc": "오래된 수정순",
       "createdDesc": "최근 등록순",
       "createdAsc": "오래된 등록순"
-    }
+    },
+    "health": {
+      "checking": "확인 중…",
+      "online": "백엔드 온라인",
+      "offline": "백엔드 오프라인",
+      "unknown": "상태 알 수 없음"
+    },
+    "refreshStatus": "상태 새로고침",
+    "editStreamSettings": "스트림 설정 편집",
+    "editStreamProtocol": "스트림 프로토콜 편집",
+    "editFeatureHint": "클릭하여 설정 편집"
   },
   "form": {
     "addTitle": "프록시 호스트 추가",
@@ -160,7 +170,8 @@
       "httpChallenge": "HTTP 챌린지",
       "creatingCertificate": "인증서 생성 중...",
       "certificateSuccess": "인증서가 생성되었습니다",
-      "certificateFailed": "인증서 생성에 실패했습니다"
+      "certificateFailed": "인증서 생성에 실패했습니다",
+      "disabledHint": "SSL을 활성화하면 HTTPS 설정을 구성할 수 있습니다"
     },
     "security": {
       "priorityAllowIPs": {
@@ -450,6 +461,10 @@
       "paranoiaLevelDescription": "높을수록 더 민감하게 탐지합니다 (1-4)",
       "anomalyThreshold": "이상 임계값",
       "anomalyThresholdDescription": "차단하기 위한 최소 점수"
+    },
+    "upstream": {
+      "createFirstTitle": "로드 밸런싱은 호스트 저장 후 설정할 수 있어요",
+      "createFirstHint": "먼저 이 프록시 호스트를 생성한 다음, 목록에서 이 호스트를 수정하면 여러 백엔드 서버와 분배 방식(라운드 로빈/least_conn/IP 해시/랜덤), 헬스 체크를 설정할 수 있습니다."
     }
   },
   "dockerSelector": {
