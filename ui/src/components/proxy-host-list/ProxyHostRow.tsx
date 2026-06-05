@@ -43,17 +43,17 @@ function streamTarget(host: ProxyHost) {
   return `${protocol}://${host.forward_host}:${host.forward_port}`;
 }
 
-function renderHealthDot(status: HealthDot) {
+function renderHealthDot(status: HealthDot, t: (key: string) => string) {
   if (status === 'checking') {
-    return <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" title="Checking..." />;
+    return <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" title={t('list.health.checking')} />;
   }
   if (status === 'online') {
-    return <span className="w-2 h-2 rounded-full bg-green-500" title="Online" />;
+    return <span className="w-2 h-2 rounded-full bg-green-500" title={t('list.health.online')} />;
   }
   if (status === 'offline') {
-    return <span className="w-2 h-2 rounded-full bg-red-500" title="Offline" />;
+    return <span className="w-2 h-2 rounded-full bg-red-500" title={t('list.health.offline')} />;
   }
-  return <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600" title="Unknown" />;
+  return <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600" title={t('list.health.unknown')} />;
 }
 
 function ProxyHostRowImpl({
@@ -131,14 +131,14 @@ function ProxyHostRowImpl({
       {/* Destination */}
       <td className="px-4 py-3">
         <div className="flex items-center gap-2">
-          {renderHealthDot(healthStatus)}
+          {renderHealthDot(healthStatus, t)}
           <code className="text-sm text-slate-600 dark:text-slate-400">
             {isStream ? streamTarget(host) : `${host.forward_scheme}://${host.forward_host}:${host.forward_port}`}
           </code>
           <button
             onClick={() => onCheckHealth(host.id)}
             className="p-0.5 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400"
-            title="Refresh status"
+            title={t('list.refreshStatus')}
           >
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -154,7 +154,7 @@ function ProxyHostRowImpl({
             <button
               onClick={() => onEdit(host, 'basic')}
               className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400 hover:bg-violet-200 dark:hover:bg-violet-900/50 transition-colors cursor-pointer"
-              title="Click to edit stream settings"
+              title={t('list.editStreamSettings')}
             >
               STREAM
             </button>
@@ -163,7 +163,7 @@ function ProxyHostRowImpl({
             <button
               onClick={() => onEdit(host, 'basic')}
               className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors cursor-pointer"
-              title="Click to edit stream protocol"
+              title={t('list.editStreamProtocol')}
             >
               {(host.stream_protocol || 'tcp').toUpperCase()}
             </button>
@@ -172,7 +172,7 @@ function ProxyHostRowImpl({
             <button
               onClick={() => onEdit(host, 'basic')}
               className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/50 transition-colors cursor-pointer"
-              title="Click to edit SSL preread"
+              title={t('list.editFeatureHint')}
             >
               SNI
             </button>
@@ -181,7 +181,7 @@ function ProxyHostRowImpl({
             <button
               onClick={() => onEdit(host, 'basic')}
               className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400 hover:bg-cyan-200 dark:hover:bg-cyan-900/50 transition-colors cursor-pointer"
-              title="Click to edit PROXY protocol"
+              title={t('list.editFeatureHint')}
             >
               PROXY
             </button>
@@ -190,7 +190,7 @@ function ProxyHostRowImpl({
             <button
               onClick={() => onEdit(host, 'ssl')}
               className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors cursor-pointer"
-              title="Click to edit SSL settings"
+              title={t('list.editFeatureHint')}
             >
               SSL{host.ssl_http2 ? '+H2' : ''}{host.ssl_http3 ? '+H3' : ''}
             </button>
@@ -199,7 +199,7 @@ function ProxyHostRowImpl({
             <button
               onClick={() => onEdit(host, 'ssl')}
               className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/50 transition-colors cursor-pointer"
-              title="Click to edit HTTP/3 settings"
+              title={t('list.editFeatureHint')}
             >
               QUIC
             </button>
@@ -218,7 +218,7 @@ function ProxyHostRowImpl({
             <button
               onClick={() => onEdit(host, 'performance')}
               className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400 hover:bg-cyan-200 dark:hover:bg-cyan-900/50 transition-colors cursor-pointer"
-              title="Click to edit WebSocket settings"
+              title={t('list.editFeatureHint')}
             >
               WS
             </button>
@@ -227,7 +227,7 @@ function ProxyHostRowImpl({
             <button
               onClick={() => onEdit(host, 'performance')}
               className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors cursor-pointer"
-              title="Click to edit Cache settings"
+              title={t('list.editFeatureHint')}
             >
               Cache
             </button>
@@ -236,7 +236,7 @@ function ProxyHostRowImpl({
             <button
               onClick={() => onEdit(host, 'security')}
               className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors cursor-pointer"
-              title="Click to edit Exploit Block settings"
+              title={t('list.editFeatureHint')}
             >
               Exploits
             </button>
@@ -303,7 +303,7 @@ function ProxyHostRowImpl({
           </button>
           <button
             onClick={() => onDelete(host.id)}
-            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 dark:hover:text-red-400 rounded transition-colors"
+            className="p-1.5 ml-1 pl-2 border-l border-slate-200 dark:border-slate-600 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 dark:hover:text-red-400 rounded-r transition-colors"
             title={t('actions.delete')}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

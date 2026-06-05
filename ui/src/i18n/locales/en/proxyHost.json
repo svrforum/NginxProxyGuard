@@ -55,7 +55,17 @@
       "updatedAsc": "Oldest updated",
       "createdDesc": "Recently created",
       "createdAsc": "Oldest created"
-    }
+    },
+    "health": {
+      "checking": "Checking…",
+      "online": "Backend online",
+      "offline": "Backend offline",
+      "unknown": "Status unknown"
+    },
+    "refreshStatus": "Refresh status",
+    "editStreamSettings": "Edit stream settings",
+    "editStreamProtocol": "Edit stream protocol",
+    "editFeatureHint": "Click to edit settings"
   },
   "form": {
     "addTitle": "Add Proxy Host",
@@ -160,7 +170,8 @@
       "httpChallenge": "HTTP Challenge",
       "creatingCertificate": "Creating certificate...",
       "certificateSuccess": "Certificate created",
-      "certificateFailed": "Failed to create certificate"
+      "certificateFailed": "Failed to create certificate",
+      "disabledHint": "Enable SSL to configure HTTPS settings"
     },
     "security": {
       "priorityAllowIPs": {
@@ -448,6 +459,10 @@
       "paranoiaLevelDescription": "Higher values are more sensitive (1-4)",
       "anomalyThreshold": "Anomaly Threshold",
       "anomalyThresholdDescription": "Minimum score to block request"
+    },
+    "upstream": {
+      "createFirstTitle": "Load balancing is configured after saving the host",
+      "createFirstHint": "Create this proxy host first, then edit it from the list to add multiple backend servers, a distribution method (round robin / least_conn / IP hash / random), and health checks."
     }
   },
   "dockerSelector": {

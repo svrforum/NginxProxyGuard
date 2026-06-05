@@ -8,6 +8,7 @@ import { BotFilterSettings } from './security/BotFilterSettings'
 import { GeoIPSettings } from './security/GeoIPSettings'
 import { PriorityAllowIPs } from './security/PriorityAllowIPs'
 import { CloudProviderBlocking } from './security/CloudProviderBlocking'
+import { CollapsibleSection } from './security/CollapsibleSection'
 import { useTranslation } from 'react-i18next'
 import { HelpTip } from '../../common/HelpTip'
 import { Link } from 'react-router-dom'
@@ -117,14 +118,17 @@ export function SecurityTabContent({
   return (
     <div className="space-y-6">
       {/* Priority Allow IPs - Always visible at the top */}
-      <PriorityAllowIPs
-        allowedIPsInput={allowedIPsInput}
-        setAllowedIPsInput={setAllowedIPsInput}
-        geoData={geoData}
-        setGeoData={setGeoData}
-      />
+      <CollapsibleSection title={t('form.security.priorityAllowIPs.title')}>
+        <PriorityAllowIPs
+          allowedIPsInput={allowedIPsInput}
+          setAllowedIPsInput={setAllowedIPsInput}
+          geoData={geoData}
+          setGeoData={setGeoData}
+        />
+      </CollapsibleSection>
 
       {/* Block Exploits */}
+      <CollapsibleSection title={t('form.security.blockExploits')}>
       <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4 space-y-4">
         <div className="flex items-start gap-3">
           <div className="flex items-center h-5 mt-1">
@@ -178,6 +182,7 @@ export function SecurityTabContent({
           </div>
         )}
       </div>
+      </CollapsibleSection>
 
       {/* Fail2ban - Auto IP Ban */}
       {hostId && (
@@ -242,9 +247,12 @@ export function SecurityTabContent({
       )}
 
       {/* WAF Settings */}
-      <WAFSettings formData={formData} setFormData={setFormData} />
+      <CollapsibleSection title={t('form.waf.title')}>
+        <WAFSettings formData={formData} setFormData={setFormData} />
+      </CollapsibleSection>
 
       {/* Access Control */}
+      <CollapsibleSection title={t('form.security.accessList')}>
       <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4 transition-colors">
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-2">
           <svg className="w-4 h-4 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -274,29 +282,36 @@ export function SecurityTabContent({
           {t('form.security.selectAccessList')}
         </p>
       </div>
+      </CollapsibleSection>
 
       {/* Bot Filter Settings */}
-      <BotFilterSettings botFilterData={botFilterData} setBotFilterData={setBotFilterData} />
+      <CollapsibleSection title={t('form.security.botFilter.title')}>
+        <BotFilterSettings botFilterData={botFilterData} setBotFilterData={setBotFilterData} />
+      </CollapsibleSection>
 
       {/* GeoIP Settings */}
-      <GeoIPSettings
-        geoData={geoData}
-        setGeoData={setGeoData}
-        geoSearchTerm={geoSearchTerm}
-        setGeoSearchTerm={setGeoSearchTerm}
-        geoipStatus={geoipStatus}
-        countryCodes={countryCodes}
-      />
+      <CollapsibleSection title={t('form.security.geoip.title')}>
+        <GeoIPSettings
+          geoData={geoData}
+          setGeoData={setGeoData}
+          geoSearchTerm={geoSearchTerm}
+          setGeoSearchTerm={setGeoSearchTerm}
+          geoipStatus={geoipStatus}
+          countryCodes={countryCodes}
+        />
+      </CollapsibleSection>
 
       {/* Cloud Provider Blocking */}
-      <CloudProviderBlocking
-        blockedProviders={blockedCloudProviders}
-        setBlockedProviders={setBlockedCloudProviders}
-        challengeMode={cloudProviderChallengeMode}
-        setChallengeMode={setCloudProviderChallengeMode}
-        allowSearchBots={cloudProviderAllowSearchBots}
-        setAllowSearchBots={setCloudProviderAllowSearchBots}
-      />
+      <CollapsibleSection title={t('form.security.cloudProvider.title')}>
+        <CloudProviderBlocking
+          blockedProviders={blockedCloudProviders}
+          setBlockedProviders={setBlockedCloudProviders}
+          challengeMode={cloudProviderChallengeMode}
+          setChallengeMode={setCloudProviderChallengeMode}
+          allowSearchBots={cloudProviderAllowSearchBots}
+          setAllowSearchBots={setCloudProviderAllowSearchBots}
+        />
+      </CollapsibleSection>
     </div>
   )
 }
