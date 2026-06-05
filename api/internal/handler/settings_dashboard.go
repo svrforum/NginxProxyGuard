@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
 	"nginx-proxy-guard/internal/model"
@@ -81,6 +82,13 @@ func (h *SettingsHandler) GetHourlyStats(c echo.Context) error {
 	startStr := c.QueryParam("start")
 	endStr := c.QueryParam("end")
 	proxyHostID := c.QueryParam("proxy_host_id")
+	// Validate uuid; an invalid value would hit the uuid column and raise a
+	// Postgres "invalid input syntax for type uuid" error (500 + DB log).
+	if proxyHostID != "" {
+		if _, err := uuid.Parse(proxyHostID); err != nil {
+			proxyHostID = ""
+		}
+	}
 
 	var start, end time.Time
 	var err error

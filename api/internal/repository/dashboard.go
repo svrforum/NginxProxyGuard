@@ -321,7 +321,7 @@ func (r *DashboardRepository) GetGeoIPStats(ctx context.Context, since time.Time
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT
 			geo_country_code,
-			COALESCE(geo_country, geo_country_code) as country_name,
+			COALESCE(MAX(geo_country), geo_country_code) as country_name,
 			COUNT(*) as request_count,
 			SUM(COUNT(*)) OVER () as total_count
 		FROM logs_partitioned
@@ -329,7 +329,7 @@ func (r *DashboardRepository) GetGeoIPStats(ctx context.Context, since time.Time
 		AND created_at >= $1
 		AND geo_country_code IS NOT NULL
 		AND geo_country_code != ''
-		GROUP BY geo_country_code, geo_country
+		GROUP BY geo_country_code
 		ORDER BY request_count DESC
 		LIMIT 50
 	`, since)

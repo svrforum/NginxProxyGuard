@@ -72,6 +72,35 @@ const (
 	LogSeverityEmerg  LogSeverity = "emerg"
 )
 
+// validLogTypes / validSeverities back the IsValid* guards. Filter values that
+// fail these would otherwise reach Postgres and raise "invalid input value for
+// enum ..." errors (a 500 plus a noisy DB error log) — see the log-perf fix.
+var validLogTypes = map[string]bool{
+	string(LogTypeAccess): true,
+	string(LogTypeError):  true,
+	string(LogTypeModSec): true,
+}
+
+var validSeverities = map[string]bool{
+	string(LogSeverityDebug):  true,
+	string(LogSeverityInfo):   true,
+	string(LogSeverityNotice): true,
+	string(LogSeverityWarn):   true,
+	string(LogSeverityError):  true,
+	string(LogSeverityCrit):   true,
+	string(LogSeverityAlert):  true,
+	string(LogSeverityEmerg):  true,
+}
+
+// IsValidLogType reports whether s is a valid log_type enum value.
+func IsValidLogType(s string) bool { return validLogTypes[s] }
+
+// IsValidSeverity reports whether s is a valid log_severity enum value.
+func IsValidSeverity(s string) bool { return validSeverities[s] }
+
+// IsValidBlockReason reports whether s is a valid block_reason enum value.
+func IsValidBlockReason(s string) bool { _, ok := validBlockReasons[s]; return ok }
+
 type Log struct {
 	ID        string    `json:"id"`
 	LogType   LogType   `json:"log_type"`

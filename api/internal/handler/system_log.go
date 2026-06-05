@@ -22,11 +22,17 @@ func NewSystemLogHandler(repo *repository.SystemLogRepository) *SystemLogHandler
 // GET /api/v1/system-logs
 func (h *SystemLogHandler) List(c echo.Context) error {
 	filter := repository.SystemLogFilter{
-		Source:        repository.SystemLogSource(c.QueryParam("source")),
-		Level:         repository.SystemLogLevel(c.QueryParam("level")),
 		ContainerName: c.QueryParam("container"),
 		Component:     c.QueryParam("component"),
 		Search:        c.QueryParam("search"),
+	}
+	// Validate enum filters; an unknown value would raise a Postgres enum error
+	// (500 + noisy DB log). Drop invalid values so the filter is simply ignored.
+	if s := c.QueryParam("source"); s != "" && repository.IsValidSystemLogSource(s) {
+		filter.Source = repository.SystemLogSource(s)
+	}
+	if l := c.QueryParam("level"); l != "" && repository.IsValidSystemLogLevel(l) {
+		filter.Level = repository.SystemLogLevel(l)
 	}
 
 	// Parse limit and offset using utility functions

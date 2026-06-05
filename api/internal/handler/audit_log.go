@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
 	"nginx-proxy-guard/internal/config"
@@ -24,10 +25,16 @@ func NewAuditLogHandler(repo *repository.AuditLogRepository, tokenRepo *reposito
 // GET /api/v1/audit-logs
 func (h *AuditLogHandler) ListAuditLogs(c echo.Context) error {
 	filter := repository.AuditLogFilter{
-		UserID:       c.QueryParam("user_id"),
 		Action:       c.QueryParam("action"),
 		ResourceType: c.QueryParam("resource_type"),
 		Search:       c.QueryParam("search"),
+	}
+	// Validate uuid; an invalid value would hit the uuid column and raise a
+	// Postgres "invalid input syntax for type uuid" error (500 + DB log).
+	if uid := c.QueryParam("user_id"); uid != "" {
+		if _, err := uuid.Parse(uid); err == nil {
+			filter.UserID = uid
+		}
 	}
 
 	// Parse limit and offset using utility functions

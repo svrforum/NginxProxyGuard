@@ -38,7 +38,7 @@ func limitArray(arr []string, max int) []string {
 func parseLogFilter(q url.Values) *model.LogFilter {
 	filter := &model.LogFilter{}
 
-	if logType := q.Get("log_type"); logType != "" {
+	if logType := q.Get("log_type"); logType != "" && model.IsValidLogType(logType) {
 		lt := model.LogType(logType)
 		filter.LogType = &lt
 	}
@@ -66,7 +66,7 @@ func parseLogFilter(q url.Values) *model.LogFilter {
 			filter.StatusCode = &code
 		}
 	}
-	if severity := q.Get("severity"); severity != "" {
+	if severity := q.Get("severity"); severity != "" && model.IsValidSeverity(severity) {
 		sev := model.LogSeverity(severity)
 		filter.Severity = &sev
 	}
@@ -135,7 +135,7 @@ func parseLogFilter(q url.Values) *model.LogFilter {
 	}
 
 	// Block reason filters
-	if blockReason := q.Get("block_reason"); blockReason != "" {
+	if blockReason := q.Get("block_reason"); blockReason != "" && model.IsValidBlockReason(blockReason) {
 		br := model.BlockReason(blockReason)
 		filter.BlockReason = &br
 	}

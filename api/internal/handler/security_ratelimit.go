@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
 	"nginx-proxy-guard/internal/model"
@@ -198,10 +199,16 @@ func (h *SecurityHandler) GetUpstreamHealth(c echo.Context) error {
 func (h *SecurityHandler) GetIPBanHistory(c echo.Context) error {
 	// Parse filter parameters
 	filter := &model.IPBanHistoryFilter{
-		IPAddress:   c.QueryParam("ip_address"),
-		EventType:   c.QueryParam("event_type"),
-		Source:      c.QueryParam("source"),
-		ProxyHostID: c.QueryParam("proxy_host_id"),
+		IPAddress: c.QueryParam("ip_address"),
+		EventType: c.QueryParam("event_type"),
+		Source:    c.QueryParam("source"),
+	}
+	// Validate uuid; an invalid value would hit the uuid column and raise a
+	// Postgres "invalid input syntax for type uuid" error (500 + DB log).
+	if phid := c.QueryParam("proxy_host_id"); phid != "" {
+		if _, err := uuid.Parse(phid); err == nil {
+			filter.ProxyHostID = phid
+		}
 	}
 
 	// Parse pagination

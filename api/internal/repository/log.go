@@ -14,6 +14,8 @@ import (
 	"nginx-proxy-guard/internal/database"
 	"nginx-proxy-guard/internal/model"
 	"nginx-proxy-guard/pkg/cache"
+
+	"github.com/google/uuid"
 )
 
 // logCursor encodes the (timestamp, id) of the last row from a previous page
@@ -392,9 +394,16 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 			argIndex++
 		}
 		if filter.ProxyHostID != nil && *filter.ProxyHostID != "" {
-			conditions = append(conditions, fmt.Sprintf("proxy_host_id = $%d::uuid", argIndex))
-			args = append(args, *filter.ProxyHostID)
-			argIndex++
+			// Guard the ::uuid cast: a malformed value (e.g. "1000") makes
+			// Postgres raise "invalid input syntax for type uuid" and 500 the
+			// request. Treat an unparseable id as "matches nothing" instead.
+			if _, err := uuid.Parse(*filter.ProxyHostID); err == nil {
+				conditions = append(conditions, fmt.Sprintf("proxy_host_id = $%d::uuid", argIndex))
+				args = append(args, *filter.ProxyHostID)
+				argIndex++
+			} else {
+				conditions = append(conditions, "1=0")
+			}
 		}
 		if filter.StartTime != nil {
 			// Bound created_at (the hypertable partition key) so TimescaleDB can

@@ -360,6 +360,31 @@ func (c *DockerLogCollector) processLogStream(ctx context.Context, container Con
 	}
 }
 
+// isBenignDBLifecycle reports whether a Postgres/TimescaleDB log line is a
+// normal shutdown/restart/startup message rather than a real failure. These
+// arrive at FATAL/LOG severity (e.g. "terminating ... due to administrator
+// command" when the container restarts) and would otherwise pollute the system
+// log viewer as fatal "DB errors".
+func isBenignDBLifecycle(line string) bool {
+	benign := []string{
+		"due to administrator command",
+		"received fast shutdown request",
+		"received smart shutdown request",
+		"received immediate shutdown request",
+		"database system is shut down",
+		"database system was shut down",
+		"database system is ready to accept connections",
+		"shutting down",
+		"background worker \"logical replication launcher\"",
+	}
+	for _, s := range benign {
+		if strings.Contains(line, s) {
+			return true
+		}
+	}
+	return false
+}
+
 func (c *DockerLogCollector) parseLogLine(container ContainerConfig, line string, isStderr bool) *repository.SystemLog {
 	level := repository.LevelInfo
 	source := container.Source
@@ -429,8 +454,13 @@ func (c *DockerLogCollector) parseLogLine(container ContainerConfig, line string
 		
 		// Postgres format: "... [PID] LEVEL:  message"
 		// Nginx error format: "... [level] ..."
-		
-		if strings.Contains(line, "ERROR:") || strings.Contains(line, "[error]") || strings.HasPrefix(lineLower, "error") {
+
+		if container.Source == repository.SourceDockerDB && isBenignDBLifecycle(line) {
+			// Postgres/TimescaleDB shutdown/restart/startup messages are logged
+			// at FATAL/LOG but are normal operational noise, not failures.
+			// Classify as info so they don't surface as scary "DB errors".
+			level = repository.LevelInfo
+		} else if strings.Contains(line, "ERROR:") || strings.Contains(line, "[error]") || strings.HasPrefix(lineLower, "error") {
 			level = repository.LevelError
 		} else if strings.Contains(line, "WARN:") || strings.Contains(line, "WARNING:") || strings.Contains(line, "[warn]") || strings.HasPrefix(lineLower, "warn") {
 			level = repository.LevelWarn

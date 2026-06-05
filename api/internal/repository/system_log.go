@@ -22,7 +22,8 @@ const (
 	SourceScheduler      SystemLogSource = "scheduler"
 	SourceBackup         SystemLogSource = "backup"
 	SourceCertificate    SystemLogSource = "certificate"
-	SourceAdmin          SystemLogSource = "admin"
+	SourceAudit          SystemLogSource = "audit"
+	SourceAPIToken       SystemLogSource = "api_token"
 )
 
 const (
@@ -32,6 +33,27 @@ const (
 	LevelError SystemLogLevel = "error"
 	LevelFatal SystemLogLevel = "fatal"
 )
+
+// validSystemLogSources / validSystemLogLevels back the IsValid* guards used by
+// the handler to reject filter values that would otherwise reach Postgres and
+// raise "invalid input value for enum ..." (a 500 plus a noisy DB error log).
+var validSystemLogSources = map[SystemLogSource]bool{
+	SourceDockerAPI: true, SourceDockerNginx: true, SourceDockerDB: true,
+	SourceDockerUI: true, SourceHealthCheck: true, SourceInternal: true,
+	SourceScheduler: true, SourceBackup: true, SourceCertificate: true,
+	SourceAudit: true, SourceAPIToken: true,
+}
+
+var validSystemLogLevels = map[SystemLogLevel]bool{
+	LevelDebug: true, LevelInfo: true, LevelWarn: true,
+	LevelError: true, LevelFatal: true,
+}
+
+// IsValidSystemLogSource reports whether s is a valid system_log_source enum value.
+func IsValidSystemLogSource(s string) bool { return validSystemLogSources[SystemLogSource(s)] }
+
+// IsValidSystemLogLevel reports whether s is a valid system_log_level enum value.
+func IsValidSystemLogLevel(s string) bool { return validSystemLogLevels[SystemLogLevel(s)] }
 
 type SystemLog struct {
 	ID            string          `json:"id"`
