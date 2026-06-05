@@ -107,7 +107,9 @@ export function WAFRulesModal({
   const handleBulkDisable = (categoryId: string) => {
     const category = rulesQuery.data?.categories.find((c) => c.id === categoryId);
     if (!category?.rules) return;
-    category.rules.filter((r) => r.enabled).forEach((rule) => {
+    const toDisable = category.rules.filter((r) => r.enabled);
+    if (!confirm(t('policyManager.confirmBulkDisable', { count: toDisable.length }))) return;
+    toDisable.forEach((rule) => {
       disableMutation.mutate({ ruleId: rule.id, category: category.name, description: rule.description });
     });
   };
@@ -353,6 +355,7 @@ function RuleRow({ rule, onToggle, isPending }: { rule: WAFRule; onToggle: () =>
 }
 
 function PolicyHistoryPanel({ history, isLoading, error }: { history: WAFPolicyHistory[]; isLoading: boolean; error: Error | null; }) {
+  const { t } = useTranslation('waf');
   const [historySearch, setHistorySearch] = useState('');
   const filteredHistory = useMemo(() => {
     if (!historySearch.trim()) return history;
@@ -361,7 +364,7 @@ function PolicyHistoryPanel({ history, isLoading, error }: { history: WAFPolicyH
   }, [history, historySearch]);
 
   if (isLoading) return <div className="flex items-center justify-center h-full"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>;
-  if (error) return <div className="p-6 text-center text-red-600 dark:text-red-400">변경 이력을 불러오는데 실패했습니다</div>;
+  if (error) return <div className="p-6 text-center text-red-600 dark:text-red-400">{t('policyManager.history.loadError')}</div>;
 
   return (
     <>
@@ -370,13 +373,13 @@ function PolicyHistoryPanel({ history, isLoading, error }: { history: WAFPolicyH
           <div className="flex-1 max-w-xs">
             <div className="relative">
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-              <input type="text" placeholder="규칙 ID 또는 카테고리로 검색..." value={historySearch} onChange={(e) => setHistorySearch(e.target.value)}
+              <input type="text" placeholder={t('policyManager.history.searchPlaceholder')} value={historySearch} onChange={(e) => setHistorySearch(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-700 text-gray-900 dark:text-white dark:placeholder-slate-400" />
             </div>
           </div>
           <div className="text-sm text-gray-500 dark:text-slate-400">
-            {filteredHistory.length}개 이력
-            {historySearch && history.length !== filteredHistory.length && (<span className="text-gray-400 dark:text-slate-500 ml-1">(전체 {history.length}개)</span>)}
+            {t('policyManager.history.count', { count: filteredHistory.length })}
+            {historySearch && history.length !== filteredHistory.length && (<span className="text-gray-400 dark:text-slate-500 ml-1">{t('policyManager.history.total', { count: history.length })}</span>)}
           </div>
         </div>
       </div>
@@ -384,8 +387,8 @@ function PolicyHistoryPanel({ history, isLoading, error }: { history: WAFPolicyH
         {filteredHistory.length === 0 ? (
           <div className="p-12 text-center text-gray-500 dark:text-slate-400">
             <svg className="w-12 h-12 mx-auto mb-4 text-gray-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            <p className="text-lg font-medium">변경 이력이 없습니다</p>
-            <p className="text-sm mt-1">정책을 변경하면 이력이 기록됩니다</p>
+            <p className="text-lg font-medium">{t('policyManager.history.empty')}</p>
+            <p className="text-sm mt-1">{t('policyManager.history.emptyDescription')}</p>
           </div>
         ) : (
           <div className="divide-y">
@@ -401,12 +404,12 @@ function PolicyHistoryPanel({ history, isLoading, error }: { history: WAFPolicyH
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className={`px-2 py-0.5 text-xs font-medium rounded ${item.action === 'disabled' ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400' : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'}`}>{item.action === 'disabled' ? '비활성화' : '활성화'}</span>
+                      <span className={`px-2 py-0.5 text-xs font-medium rounded ${item.action === 'disabled' ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400' : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'}`}>{item.action === 'disabled' ? t('policyManager.history.disabled') : t('policyManager.history.enabled')}</span>
                       <span className="font-mono text-sm font-semibold text-gray-900 dark:text-white">#{item.rule_id}</span>
                       {item.rule_category && (<span className="px-1.5 py-0.5 text-xs bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 rounded">{item.rule_category}</span>)}
                     </div>
                     {item.rule_description && <p className="text-sm text-gray-700 dark:text-slate-300 mb-1">{item.rule_description}</p>}
-                    {item.reason && <p className="text-sm text-gray-500 dark:text-slate-400"><span className="font-medium">사유:</span> {item.reason}</p>}
+                    {item.reason && <p className="text-sm text-gray-500 dark:text-slate-400"><span className="font-medium">{t('policyManager.history.reason')}:</span> {item.reason}</p>}
                     <div className="flex items-center gap-4 mt-2 text-xs text-gray-400 dark:text-slate-500">
                       <span>{new Date(item.created_at).toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
                       {item.changed_by && <span>by {item.changed_by}</span>}

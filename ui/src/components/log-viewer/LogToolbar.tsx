@@ -239,6 +239,9 @@ export function LogToolbar({
           <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-300">
             <button
               onClick={() => setAutoRefresh(!autoRefresh)}
+              role="switch"
+              aria-checked={autoRefresh}
+              aria-label={t('viewer.autoRefresh')}
               className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
                 autoRefresh
                   ? 'bg-primary-600'
@@ -260,7 +263,7 @@ export function LogToolbar({
               {autoRefresh ? (
                 <span ref={countdownElRef} className="font-medium">{countdownRef.current}s</span>
               ) : (
-                'Auto'
+                t('viewer.auto')
               )}
             </span>
           </div>
@@ -269,6 +272,7 @@ export function LogToolbar({
           <button
             onClick={handleManualRefresh}
             disabled={logsFetching}
+            aria-label={t('common:buttons.refresh')}
             className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
               logsFetching
                 ? 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'

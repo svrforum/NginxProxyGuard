@@ -39,6 +39,7 @@
     "perPage": "{{count}} per page",
     "collapse": "Collapse",
     "noResults": "No certificates match your search criteria.",
+    "searchClear": "Clear search",
     "bulkDeleteErrors": "Delete All Error Certificates",
     "sort": {
       "createdDesc": "Newest first",
@@ -83,6 +84,7 @@
     },
     "dnsProvider": "DNS Provider",
     "selectDnsProvider": "Select DNS Provider",
+    "defaultSuffix": " - Default",
     "noDnsProvider": "No DNS Provider found. Please add a DNS Provider first.",
     "httpChallengeInfo": "HTTP-01 Challenge: Domain must point to this server (Port 80). Wildcard certificates are not supported.",
     "autoRenew": "Auto Renew before expiration",
@@ -144,6 +146,7 @@
   },
   "dnsProviders": {
     "title": "DNS Providers",
+    "loadError": "Failed to load DNS providers",
     "addProvider": "Add DNS Provider",
     "editProvider": "Edit DNS Provider",
     "deleteProvider": "Delete DNS Provider",

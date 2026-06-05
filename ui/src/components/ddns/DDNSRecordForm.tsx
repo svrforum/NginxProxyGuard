@@ -4,7 +4,7 @@ import { createDDNSRecord, updateDDNSRecord } from '../../api/ddns'
 import { listDNSProviders } from '../../api/dns-providers'
 import { useTranslation } from 'react-i18next'
 import { HelpTip } from '../common/HelpTip'
-import { useEscapeKey } from '../../hooks/useEscapeKey'
+import { ModalShell } from '../common/ModalShell'
 import type { DDNSRecord, CreateDDNSRecordRequest, UpdateDDNSRecordRequest } from '../../types/ddns'
 import type { DNSProvider } from '../../types/certificate'
 
@@ -18,10 +18,8 @@ interface DDNSRecordFormProps {
 const SUPPORTED_PROVIDER_TYPES: DNSProvider['provider_type'][] = ['cloudflare', 'duckdns']
 
 export default function DDNSRecordForm({ record, onClose, onSuccess }: DDNSRecordFormProps) {
-  const { t } = useTranslation('ddns')
+  const { t } = useTranslation(['ddns', 'common'])
   const isEditing = !!record
-
-  useEscapeKey(onClose)
 
   const [hostname, setHostname] = useState(record?.hostname || '')
   const [dnsProviderId, setDnsProviderId] = useState(record?.dns_provider_id || '')
@@ -91,17 +89,23 @@ export default function DDNSRecordForm({ record, onClose, onSuccess }: DDNSRecor
 
   const isPending = createMutation.isPending || updateMutation.isPending
 
+  // Block backdrop/ESC close while a request is in flight, mirroring the disabled close button.
+  const handleClose = () => {
+    if (!isPending) onClose()
+  }
+
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border dark:border-slate-700">
+    <ModalShell isOpen onClose={handleClose} closeOnBackdrop={false} panelClassName="max-w-2xl" labelledById="ddns-record-form-title">
+      <div>
         <div className="p-6 border-b border-slate-200 dark:border-slate-700">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
+            <h2 id="ddns-record-form-title" className="text-xl font-semibold text-slate-900 dark:text-white">
               {isEditing ? t('editRecord') : t('addRecord')}
             </h2>
             <button
               onClick={onClose}
               disabled={isPending}
+              aria-label={t('common:buttons.close')}
               className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -249,6 +253,6 @@ export default function DDNSRecordForm({ record, onClose, onSuccess }: DDNSRecor
           </div>
         </form>
       </div>
-    </div>
+    </ModalShell>
   )
 }

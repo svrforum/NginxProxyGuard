@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { getCertificateHistory } from '../api/certificates'
+import { ModalShell } from './common/ModalShell'
 import type { CertificateHistory, CertificateLog } from '../types/certificate'
 
 interface CertificateHistoryLogModalProps {
@@ -13,7 +14,7 @@ interface CertificateHistoryLogModalProps {
 function HistoryLogModal({ isOpen, history, onClose }: CertificateHistoryLogModalProps) {
   const { t } = useTranslation(['common', 'certificates'])
 
-  if (!isOpen || !history) return null
+  if (!history) return null
 
   let logs: CertificateLog[] = []
   try {
@@ -67,8 +68,8 @@ function HistoryLogModal({ isOpen, history, onClose }: CertificateHistoryLogModa
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+    <ModalShell isOpen={isOpen} onClose={onClose} panelClassName="max-w-2xl" labelledById="certificate-history-log-title">
+      <div className="flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
           <div className="flex items-center justify-between">
@@ -87,7 +88,7 @@ function HistoryLogModal({ isOpen, history, onClose }: CertificateHistoryLogModa
                 </svg>
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+                <h3 id="certificate-history-log-title" className="text-lg font-semibold text-slate-900 dark:text-white">
                   {t('certificates:history.logTitle', 'Operation Log')}
                 </h3>
                 <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -97,6 +98,7 @@ function HistoryLogModal({ isOpen, history, onClose }: CertificateHistoryLogModa
             </div>
             <button
               onClick={onClose}
+              aria-label={t('common:buttons.close')}
               className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -150,7 +152,7 @@ function HistoryLogModal({ isOpen, history, onClose }: CertificateHistoryLogModa
           </div>
         </div>
       </div>
-    </div>
+    </ModalShell>
   )
 }
 
@@ -284,7 +286,7 @@ export default function CertificateHistoryList() {
                     </div>
                     {h.domain_names.length > 1 && (
                       <div className="text-xs text-slate-500 dark:text-slate-400">
-                        +{h.domain_names.length - 1} more
+                        {t('certificates:list.more', { count: h.domain_names.length - 1 })}
                       </div>
                     )}
                   </td>

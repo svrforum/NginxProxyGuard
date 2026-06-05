@@ -8,7 +8,8 @@
         "update": "업데이트",
         "create": "생성",
         "save": "저장 중...",
-        "addRule": "규칙 추가"
+        "addRule": "규칙 추가",
+        "removeRule": "규칙 제거"
     },
     "form": {
         "newTitle": "새 접근 목록",
@@ -26,6 +27,7 @@
         "deny": "차단"
     },
     "list": {
+        "title": "접근 목록 (IP 허용/차단)",
         "name": "이름",
         "rules": "규칙",
         "options": "옵션",
@@ -34,7 +36,7 @@
         "rulesCount": "{{count}}개 규칙",
         "expand": "[+]",
         "collapse": "[-]",
-        "statisfyAny": "조건 완화",
+        "satisfyAny": "조건 완화",
         "passAuth": "인증 전달"
     },
     "messages": {

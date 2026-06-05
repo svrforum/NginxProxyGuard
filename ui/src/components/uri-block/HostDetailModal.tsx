@@ -10,6 +10,7 @@ import {
   type URIBlockWithHost,
 } from '../../api/security'
 import type { URIBlockRule, URIMatchType, AddURIBlockRuleRequest } from '../../types/security'
+import { ModalShell } from '../common/ModalShell'
 
 function getMatchTypeLabel(matchType: URIMatchType, t: (key: string) => string): string {
   switch (matchType) {
@@ -114,8 +115,8 @@ export function HostDetailModal({ block: editingBlock, proxyHostsCount, onClose 
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+    <ModalShell isOpen onClose={onClose} closeOnBackdrop={false} panelClassName="max-w-2xl">
+      <div className="flex flex-col max-h-[90vh]">
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-slate-900 dark:text-white">{editingBlock.domain_names[0]}</h2>
@@ -176,8 +177,8 @@ export function HostDetailModal({ block: editingBlock, proxyHostsCount, onClose 
                 <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-200 dark:border-slate-600">
                   <span className="text-xs text-slate-500 dark:text-slate-400">{t('uriBlock.modal.quickTemplates')}:</span>
                   {[
-                    { p: '/wp-admin', t: 'prefix', d: 'Block WP Admin' }, { p: '/xmlrpc.php', t: 'exact', d: 'Block XML-RPC' },
-                    { p: '/wp-login.php', t: 'exact', d: 'Block WP Login' }, { p: '\\.php$', t: 'regex', d: 'Block PHP' }, { p: '/.env', t: 'prefix', d: 'Block .env' },
+                    { p: '/wp-admin', t: 'prefix', d: t('uriBlock.templates.wpAdmin') }, { p: '/xmlrpc.php', t: 'exact', d: t('uriBlock.templates.xmlrpc') },
+                    { p: '/wp-login.php', t: 'exact', d: t('uriBlock.templates.wpLogin') }, { p: '\\.php$', t: 'regex', d: t('uriBlock.templates.php') }, { p: '/.env', t: 'prefix', d: t('uriBlock.templates.env') },
                   ].map(({ p, t: type, d }) => (
                     <button key={p} onClick={() => { setNewPattern(p); setNewMatchType(type as URIMatchType); setNewDescription(d); }} className="px-2 py-0.5 text-xs bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-300 rounded hover:bg-slate-300 dark:hover:bg-slate-500">{p}</button>
                   ))}
@@ -249,9 +250,9 @@ export function HostDetailModal({ block: editingBlock, proxyHostsCount, onClose 
             {deleteURIBlockMutation.isPending && (<svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>)}
             {t('common:delete')}
           </button>
-          <button onClick={onClose} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors">{t('common:close')}</button>
+          <button onClick={onClose} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors">{t('common:buttons.close')}</button>
         </div>
       </div>
-    </div>
+    </ModalShell>
   )
 }

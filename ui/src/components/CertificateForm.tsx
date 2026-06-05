@@ -5,6 +5,7 @@ import { createCertificate, uploadCertificate } from '../api/certificates'
 import { listDNSProviders } from '../api/dns-providers'
 import type { CreateCertificateRequest, UploadCertificateRequest } from '../types/certificate'
 import { HelpTip } from './common/HelpTip'
+import { ModalShell } from './common/ModalShell'
 import { CertificateLogModal } from './CertificateLogModal'
 
 interface CertificateFormProps {
@@ -16,7 +17,7 @@ type ProviderType = 'letsencrypt' | 'selfsigned' | 'custom'
 type ChallengeType = 'http' | 'dns'
 
 export default function CertificateForm({ onClose, onSuccess }: CertificateFormProps) {
-  const { t } = useTranslation('certificates')
+  const { t } = useTranslation(['certificates', 'common'])
   const [provider, setProvider] = useState<ProviderType>('selfsigned')
   const [challengeType, setChallengeType] = useState<ChallengeType>('http')
   const [domainNames, setDomainNames] = useState('')
@@ -122,15 +123,22 @@ export default function CertificateForm({ onClose, onSuccess }: CertificateFormP
 
   const isPending = createMutation.isPending || uploadMutation.isPending
 
+  // Block backdrop/ESC close while a request is in flight, mirroring the disabled close button.
+  const handleClose = () => {
+    if (!isPending) onClose()
+  }
+
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border dark:border-slate-700">
+    <>
+    <ModalShell isOpen onClose={handleClose} closeOnBackdrop={false} panelClassName="max-w-2xl" labelledById="certificate-form-title">
+      <div>
         <div className="p-6 border-b border-slate-200 dark:border-slate-700">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-slate-900 dark:text-white">{t('form.title')}</h2>
+            <h2 id="certificate-form-title" className="text-xl font-semibold text-slate-900 dark:text-white">{t('form.title')}</h2>
             <button
               onClick={onClose}
               disabled={isPending}
+              aria-label={t('common:buttons.close')}
               className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -303,7 +311,7 @@ export default function CertificateForm({ onClose, onSuccess }: CertificateFormP
                     {dnsProviders?.data?.map((dp) => (
                       <option key={dp.id} value={dp.id}>
                         {dp.name} ({dp.provider_type})
-                        {dp.is_default ? ' - Default' : ''}
+                        {dp.is_default ? t('form.defaultSuffix') : ''}
                       </option>
                     ))}
                   </select>
@@ -453,22 +461,23 @@ export default function CertificateForm({ onClose, onSuccess }: CertificateFormP
           </div>
         </form>
       </div>
+    </ModalShell>
 
-      {/* Certificate Issuance Log Modal */}
-      <CertificateLogModal
-        isOpen={showLogModal}
-        certificateId={createdCertId}
-        onClose={() => {
-          setShowLogModal(false)
-          setCreatedCertId(null)
-          onSuccess()
-        }}
-        onComplete={(success) => {
-          if (!success) {
-            // Keep modal open on error so user can see what happened
-          }
-        }}
-      />
-    </div>
+    {/* Certificate Issuance Log Modal */}
+    <CertificateLogModal
+      isOpen={showLogModal}
+      certificateId={createdCertId}
+      onClose={() => {
+        setShowLogModal(false)
+        setCreatedCertId(null)
+        onSuccess()
+      }}
+      onComplete={(success) => {
+        if (!success) {
+          // Keep modal open on error so user can see what happened
+        }
+      }}
+    />
+    </>
   )
 }

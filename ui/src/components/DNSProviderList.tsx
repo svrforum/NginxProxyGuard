@@ -10,7 +10,7 @@ function ProviderTypeBadge({ type }: { type: DNSProvider['provider_type'] }) {
   const colors: Record<DNSProvider['provider_type'], string> = {
     cloudflare: 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300',
     route53: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300',
-    duckdns: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300',
+    duckdns: 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300',
     dynu: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300',
     manual: 'bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-300',
   };
@@ -59,7 +59,7 @@ export default function DNSProviderList() {
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
       </div>
     );
   }
@@ -67,7 +67,7 @@ export default function DNSProviderList() {
   if (error) {
     return (
       <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded">
-        Error loading DNS providers
+        {t('dnsProviders.loadError')}
       </div>
     );
   }
@@ -78,7 +78,7 @@ export default function DNSProviderList() {
         <h2 className="text-xl font-semibold text-slate-900 dark:text-white">{t('dnsProviders.title')}</h2>
         <button
           onClick={() => setShowForm(true)}
-          className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors"
         >
           + {t('dnsProviders.add')}
         </button>

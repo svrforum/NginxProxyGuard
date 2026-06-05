@@ -187,7 +187,7 @@ export default function ChallengeSettings() {
               value={getValue('site_key') ?? ''}
               onChange={(e) => handleChange('site_key', e.target.value)}
               className={inputClass}
-              placeholder="Your site key"
+              placeholder={t('captcha.keys.siteKeyPlaceholder')}
             />
           </div>
           <div>
@@ -202,7 +202,7 @@ export default function ChallengeSettings() {
               value={(editedConfig.secret_key !== undefined) ? editedConfig.secret_key : ''}
               onChange={(e) => handleChange('secret_key', e.target.value)}
               className={inputClass}
-              placeholder={config?.has_secret_key ? '••••••••••••••••' : 'Your secret key'}
+              placeholder={config?.has_secret_key ? '••••••••••••••••' : t('captcha.keys.secretKeyPlaceholder')}
             />
             <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
               {config?.has_secret_key ? t('captcha.keys.secretKeySet') : t('captcha.keys.secretKeyDesc')}
@@ -262,7 +262,7 @@ export default function ChallengeSettings() {
               value={getValue('page_title') ?? 'Security Check'}
               onChange={(e) => handleChange('page_title', e.target.value)}
               className={inputClass}
-              placeholder="Security Check"
+              placeholder={t('captcha.appearance.pageTitlePlaceholder')}
             />
           </div>
           <div>
@@ -274,8 +274,8 @@ export default function ChallengeSettings() {
               onChange={(e) => handleChange('theme', e.target.value)}
               className={inputClass}
             >
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
+              <option value="light">{t('captcha.appearance.themeLight')}</option>
+              <option value="dark">{t('captcha.appearance.themeDark')}</option>
             </select>
           </div>
         </div>
@@ -292,7 +292,7 @@ export default function ChallengeSettings() {
             onChange={(e) => handleChange('page_message', e.target.value)}
             rows={2}
             className={inputClass}
-            placeholder="Please complete the security check to continue."
+            placeholder={t('captcha.appearance.messagePlaceholder')}
           />
         </div>
       </div>

@@ -7,6 +7,7 @@
   "viewer": {
     "title": "로그 뷰어",
     "refresh": "새로고침",
+    "auto": "자동",
     "autoRefresh": "자동 새로고침",
     "autoRefreshOn": "자동 새로고침 켜짐",
     "autoRefreshOff": "자동 새로고침 꺼짐",
@@ -36,6 +37,7 @@
     "uri": "URI",
     "uriPlaceholder": "/api/v1/...",
     "userAgent": "User Agent",
+    "userAgentShort": "UA",
     "userAgentPlaceholder": "Mozilla/5.0...",
     "method": "HTTP 메서드",
     "allMethods": "모든 메서드",
@@ -543,6 +545,7 @@
     "saveSuccess": "원본 로그 설정이 저장되었습니다. 변경사항을 적용하려면 nginx를 재시작해주세요.",
     "rotateSuccess": "로그 로테이션이 완료되었습니다.",
     "saveFail": "저장 실패: {{error}}",
+    "downloadFailed": "다운로드에 실패했습니다.",
     "status": {
       "enabled": "원본 로그 저장이 활성화되어 있습니다. 총 {{count}}개 파일, {{size}}",
       "disabled": "원본 로그 저장이 비활성화되어 있습니다. 아래에서 활성화할 수 있습니다."
@@ -576,7 +579,8 @@
     },
     "actions": {
       "manualRotate": "수동 로테이션",
-      "rotating": "로테이션 중..."
+      "rotating": "로테이션 중...",
+      "refresh": "새로고침"
     },
     "modal": {
       "deleteTitle": "파일 삭제 확인",

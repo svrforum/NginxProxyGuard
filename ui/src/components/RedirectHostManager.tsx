@@ -5,6 +5,7 @@ import { listCertificates } from '../api/certificates';
 import type { RedirectHost, CreateRedirectHostRequest } from '../types/access';
 import { useTranslation } from 'react-i18next';
 import { HelpTip } from './common/HelpTip';
+import { ModalShell } from './common/ModalShell';
 
 interface RedirectHostFormProps {
   redirectHost: RedirectHost | null;
@@ -72,10 +73,9 @@ function RedirectHostForm({ redirectHost, onClose, onSuccess }: RedirectHostForm
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4 border dark:border-slate-700">
+    <ModalShell isOpen onClose={onClose} closeOnBackdrop={false} panelClassName="max-w-2xl" labelledById="redirect-host-form-title">
         <div className="p-6">
-          <h3 className="text-lg font-semibold mb-4 text-slate-900 dark:text-white">
+          <h3 id="redirect-host-form-title" className="text-lg font-semibold mb-4 text-slate-900 dark:text-white">
             {redirectHost ? t('form.editTitle') : t('form.newTitle')}
           </h3>
 
@@ -112,7 +112,7 @@ function RedirectHostForm({ redirectHost, onClose, onSuccess }: RedirectHostForm
                   onChange={(e) => setForwardScheme(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-700 dark:text-white"
                 >
-                  <option value="auto">Auto</option>
+                  <option value="auto">{t('form.schemeAuto')}</option>
                   <option value="http">HTTP</option>
                   <option value="https">HTTPS</option>
                 </select>
@@ -138,10 +138,10 @@ function RedirectHostForm({ redirectHost, onClose, onSuccess }: RedirectHostForm
                   onChange={(e) => setRedirectCode(Number(e.target.value))}
                   className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-700 dark:text-white"
                 >
-                  <option value={301}>301 (Permanent)</option>
-                  <option value={302}>302 (Found)</option>
-                  <option value={307}>307 (Temporary)</option>
-                  <option value={308}>308 (Permanent)</option>
+                  <option value={301}>301 ({t('form.redirectCodePermanent')})</option>
+                  <option value={302}>302 ({t('form.redirectCodeFound')})</option>
+                  <option value={307}>307 ({t('form.redirectCodeTemporary')})</option>
+                  <option value={308}>308 ({t('form.redirectCodePermanent')})</option>
                 </select>
               </div>
             </div>
@@ -267,8 +267,7 @@ function RedirectHostForm({ redirectHost, onClose, onSuccess }: RedirectHostForm
             </div>
           </form>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }
 
@@ -341,7 +340,7 @@ export default function RedirectHostManager() {
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded">
         {t('messages.loadError')}
       </div>
     );

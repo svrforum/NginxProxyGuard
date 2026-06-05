@@ -13,6 +13,7 @@ export default function SystemLogSettings() {
     const { t } = useTranslation('settings');
     const [editedLogConfig, setEditedLogConfig] = useState<Partial<SystemLogConfig>>({});
     const [excludePatternsText, setExcludePatternsText] = useState<string | null>(null);
+    const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
     const { data: systemLogConfig, isLoading } = useQuery({
         queryKey: ['systemLogConfig'],
@@ -24,6 +25,12 @@ export default function SystemLogSettings() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['systemLogConfig'] });
             setEditedLogConfig({});
+            setSaveMessage({ type: 'success', text: t('messages.saveSuccess') });
+            setTimeout(() => setSaveMessage(null), 3000);
+        },
+        onError: (error: Error) => {
+            setSaveMessage({ type: 'error', text: `${t('messages.saveFailed')}: ${error.message}` });
+            setTimeout(() => setSaveMessage(null), 5000);
         },
     });
 
@@ -65,7 +72,12 @@ export default function SystemLogSettings() {
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <div>
-                    {/* Title matches the logic from other settings pages if any, but simplistic here */}
+                    <h1 className="text-xl font-bold text-slate-800 dark:text-white">
+                        {t('system.systemlogs.title')}
+                    </h1>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                        {t('system.systemlogs.description')}
+                    </p>
                 </div>
                 <button
                     onClick={handleSave}
@@ -75,6 +87,16 @@ export default function SystemLogSettings() {
                     {updateLogConfigMutation.isPending ? t('system.buttons.saving') : t('system.buttons.save')}
                 </button>
             </div>
+
+            {/* Save Message */}
+            {saveMessage && (
+                <div className={`px-4 py-3 rounded-lg text-sm font-medium ${saveMessage.type === 'success'
+                    ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-900/30'
+                    : 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-900/30'
+                    }`}>
+                    {saveMessage.text}
+                </div>
+            )}
 
             <div className="p-4 bg-slate-50 dark:bg-slate-700/30 border border-slate-200 dark:border-slate-700 rounded-lg">
                 <div className="flex gap-4">
@@ -143,11 +165,11 @@ export default function SystemLogSettings() {
                                     }}
                                     className={inputClass}
                                 >
-                                    <option value="debug">Debug</option>
-                                    <option value="info">Info</option>
-                                    <option value="warn">Warning</option>
-                                    <option value="error">Error</option>
-                                    <option value="fatal">Fatal</option>
+                                    <option value="debug">{t('system.systemlogs.levels.debug')}</option>
+                                    <option value="info">{t('system.systemlogs.levels.info')}</option>
+                                    <option value="warn">{t('system.systemlogs.levels.warn')}</option>
+                                    <option value="error">{t('system.systemlogs.levels.error')}</option>
+                                    <option value="fatal">{t('system.systemlogs.levels.fatal')}</option>
                                 </select>
                             </div>
                         );

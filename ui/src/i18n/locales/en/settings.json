@@ -147,7 +147,12 @@
         "description": "Collect logs from docker containers"
       },
       "levels": {
-        "title": "Container Log Levels"
+        "title": "Container Log Levels",
+        "debug": "Debug",
+        "info": "Info",
+        "warn": "Warning",
+        "error": "Error",
+        "fatal": "Fatal"
       },
       "exclude": {
         "label": "Exclude Patterns",
@@ -554,7 +559,9 @@
       "siteKeyDesc": "Site Key issued by the CAPTCHA provider.",
       "secretKey": "Secret Key",
       "secretKeyDesc": "Secret Key issued by the CAPTCHA provider.",
-      "secretKeySet": "Secret Key is already set. Enter a new value to change it."
+      "secretKeySet": "Secret Key is already set. Enter a new value to change it.",
+      "siteKeyPlaceholder": "Your site key",
+      "secretKeyPlaceholder": "Your secret key"
     },
     "recaptcha": {
       "score": "Minimum Score (0.0 - 1.0)",
@@ -569,7 +576,11 @@
       "pageTitle": "Page Title",
       "theme": "Theme",
       "message": "Page Message",
-      "messageDesc": "Message displayed above the CAPTCHA."
+      "messageDesc": "Message displayed above the CAPTCHA.",
+      "pageTitlePlaceholder": "Security Check",
+      "themeLight": "Light",
+      "themeDark": "Dark",
+      "messagePlaceholder": "Please complete the security check to continue."
     },
     "messages": {
       "saveSuccess": "CAPTCHA settings saved successfully."
@@ -591,7 +602,8 @@
     "buttons": {
       "reset": "Reset to Defaults",
       "save": "Save Changes",
-      "saving": "Saving..."
+      "saving": "Saving...",
+      "resetConfirm": "Reset all global settings to defaults?"
     },
     "presets": {
       "title": "Quick Presets",

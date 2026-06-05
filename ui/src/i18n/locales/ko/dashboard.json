@@ -1,5 +1,8 @@
 {
   "title": "대시보드",
+  "errors": {
+    "loadFailed": "대시보드를 불러오지 못했습니다"
+  },
   "actions": {
     "selfCheck": "셀프 체크",
     "refresh": "새로고침"
@@ -68,6 +71,7 @@
     "title": "글로벌 트래픽 (24시간)",
     "subtitle": "지역별 트래픽",
     "topCountries": "상위 국가 (24시간)",
-    "total": "총: {{count}} 요청"
+    "total": "총: {{count}} 요청",
+    "totalRequests": "총: {{count}} 요청"
   }
 }

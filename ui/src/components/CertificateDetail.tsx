@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { getCertificate } from '../api/certificates'
 import { fetchProxyHosts } from '../api/proxy-hosts'
-import { useEscapeKey } from '../hooks/useEscapeKey'
+import { ModalShell } from './common/ModalShell'
 import type { Certificate } from '../types/certificate'
 
 interface CertificateDetailProps {
@@ -11,8 +11,7 @@ interface CertificateDetailProps {
 }
 
 export function CertificateDetail({ certificateId, onClose }: CertificateDetailProps) {
-  const { t, i18n } = useTranslation('certificates')
-  useEscapeKey(onClose)
+  const { t, i18n } = useTranslation(['certificates', 'common'])
 
   const { data: cert, isLoading, error } = useQuery({
     queryKey: ['certificate', certificateId],
@@ -61,11 +60,11 @@ export function CertificateDetail({ certificateId, onClose }: CertificateDetailP
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border dark:border-slate-700">
+    <ModalShell isOpen onClose={onClose} panelClassName="max-w-2xl" labelledById="certificate-detail-title">
+      <div>
         <div className="p-6 border-b border-slate-200 dark:border-slate-700">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+            <h2 id="certificate-detail-title" className="text-xl font-semibold text-slate-900 dark:text-white flex items-center gap-2">
               <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
               </svg>
@@ -73,6 +72,7 @@ export function CertificateDetail({ certificateId, onClose }: CertificateDetailP
             </h2>
             <button
               onClick={onClose}
+              aria-label={t('common:buttons.close')}
               className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -211,7 +211,7 @@ export function CertificateDetail({ certificateId, onClose }: CertificateDetailP
                         </p>
                         {host.domain_names.length > 1 && (
                           <p className="text-xs text-slate-500 dark:text-slate-400">
-                            +{host.domain_names.length - 1} more
+                            {t('list.more', { count: host.domain_names.length - 1 })}
                           </p>
                         )}
                       </div>
@@ -263,6 +263,6 @@ export function CertificateDetail({ certificateId, onClose }: CertificateDetailP
           </button>
         </div>
       </div>
-    </div>
+    </ModalShell>
   )
 }

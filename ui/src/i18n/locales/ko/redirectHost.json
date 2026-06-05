@@ -32,7 +32,11 @@
         "cancel": "취소",
         "create": "생성",
         "update": "수정",
-        "saving": "저장 중..."
+        "saving": "저장 중...",
+        "schemeAuto": "자동",
+        "redirectCodePermanent": "영구",
+        "redirectCodeFound": "찾음",
+        "redirectCodeTemporary": "임시"
     },
     "messages": {
         "deleteConfirm": "이 리다이렉트 호스트를 삭제하시겠습니까?",

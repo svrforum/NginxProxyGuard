@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { HelpTip } from '../common/HelpTip'
+import { ModalShell } from '../common/ModalShell'
 
 interface NewBan {
   ip_address: string
@@ -24,15 +25,15 @@ interface AddBanModalProps {
 }
 
 export function AddBanModal({ newBan, proxyHosts, isError, isPending, onChange, onClose, onSubmit }: AddBanModalProps) {
-  const { t } = useTranslation('waf')
+  const { t } = useTranslation(['waf', 'common'])
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md border border-slate-200 dark:border-slate-700">
+    <ModalShell isOpen onClose={onClose} closeOnBackdrop={false} panelClassName="max-w-md">
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-slate-900 dark:text-white">{t('bannedIp.modal.title')}</h3>
           <button
             onClick={onClose}
+            aria-label={t('common:buttons.close')}
             className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -128,7 +129,6 @@ export function AddBanModal({ newBan, proxyHosts, isError, isPending, onChange, 
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </ModalShell>
   )
 }

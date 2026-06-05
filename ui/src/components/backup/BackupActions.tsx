@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CreateBackupRequest } from '../../types/settings';
 import { formatBytes } from './BackupList';
+import { ModalShell } from '../common/ModalShell';
 
 interface CreateBackupModalProps {
   newBackup: CreateBackupRequest;
@@ -15,9 +16,9 @@ export function CreateBackupModal({ newBackup, setNewBackup, isPending, onCreate
   const { t } = useTranslation('settings');
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-md p-6 transition-colors">
-        <h2 className="text-xl font-bold mb-4 dark:text-white">{t('backupManager.createModal.title')}</h2>
+    <ModalShell isOpen onClose={onClose} closeOnBackdrop={false} panelClassName="max-w-md" labelledById="create-backup-modal-title">
+      <div className="p-6">
+        <h2 id="create-backup-modal-title" className="text-xl font-bold mb-4 dark:text-white">{t('backupManager.createModal.title')}</h2>
 
         <div className="space-y-4">
           <div className="space-y-2">
@@ -78,7 +79,7 @@ export function CreateBackupModal({ newBackup, setNewBackup, isPending, onCreate
           </button>
         </div>
       </div>
-    </div>
+    </ModalShell>
   );
 }
 
@@ -101,9 +102,9 @@ export function UploadRestoreModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-md p-6 transition-colors">
-        <h2 className="text-xl font-bold mb-4 dark:text-white">{t('backupManager.uploadModal.title')}</h2>
+    <ModalShell isOpen onClose={onClose} closeOnBackdrop={false} panelClassName="max-w-md" labelledById="upload-restore-modal-title">
+      <div className="p-6">
+        <h2 id="upload-restore-modal-title" className="text-xl font-bold mb-4 dark:text-white">{t('backupManager.uploadModal.title')}</h2>
 
         <div className="space-y-4">
           <div className="text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 p-3 rounded-lg border border-amber-200 dark:border-amber-800">
@@ -166,6 +167,6 @@ export function UploadRestoreModal({
           </button>
         </div>
       </div>
-    </div>
+    </ModalShell>
   );
 }

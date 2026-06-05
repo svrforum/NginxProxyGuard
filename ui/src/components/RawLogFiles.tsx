@@ -11,6 +11,7 @@ import {
   triggerLogRotation,
 } from '../api/settings';
 import type { LogFileInfo, UpdateSystemSettingsRequest, SystemSettings } from '../types/settings';
+import { ModalShell } from './common/ModalShell';
 
 function formatFileSize(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -21,7 +22,7 @@ function formatFileSize(bytes: number): string {
 }
 
 export default function RawLogFiles() {
-  const { t } = useTranslation('logs');
+  const { t, i18n } = useTranslation('logs');
   const queryClient = useQueryClient();
   const [viewingFile, setViewingFile] = useState<string | null>(null);
   const [viewContent, setViewContent] = useState<string>('');
@@ -97,7 +98,7 @@ export default function RawLogFiles() {
     } catch {
       setSaveMessage({
         type: 'error',
-        text: t('rawLogs.downloadFailed') || 'Download failed'
+        text: t('rawFiles.downloadFailed')
       });
       setTimeout(() => setSaveMessage(null), 5000);
     }
@@ -276,7 +277,8 @@ export default function RawLogFiles() {
             <button
               onClick={() => refetchLogFiles()}
               className="px-3 py-2 text-sm font-medium bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
-              title="새로고침"
+              title={t('rawFiles.actions.refresh')}
+              aria-label={t('rawFiles.actions.refresh')}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -324,7 +326,7 @@ export default function RawLogFiles() {
                     <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-0.5">
                       <span>{formatFileSize(file.size)}</span>
                       <span>•</span>
-                      <span>{new Date(file.modified_at).toLocaleString('ko-KR')}</span>
+                      <span>{new Date(file.modified_at).toLocaleString(i18n.language)}</span>
                       {file.is_compressed && (
                         <>
                           <span>•</span>
@@ -384,82 +386,90 @@ export default function RawLogFiles() {
       )}
 
       {/* File Viewer Modal */}
-      {viewingFile && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-4xl max-h-[80vh] flex flex-col transition-colors">
-            <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-              <h3 className="font-semibold text-slate-800 dark:text-white">{viewingFile}</h3>
-              <button
-                onClick={() => {
-                  setViewingFile(null);
-                  setViewContent('');
-                }}
-                className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="flex-1 overflow-auto p-4">
-              {viewFileMutation.isPending ? (
-                <div className="flex items-center justify-center h-32">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                </div>
-              ) : (
-                <pre className="text-xs font-mono text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-all bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
-                  {viewContent || 'No content'}
-                </pre>
-              )}
-            </div>
-            <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-2">
-              <button
-                onClick={() => handleDownloadFile(viewingFile)}
-                className="px-4 py-2 text-sm font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
-              >
-                {t('rawFiles.list.download')}
-              </button>
-              <button
-                onClick={() => {
-                  setViewingFile(null);
-                  setViewContent('');
-                }}
-                className="px-4 py-2 text-sm font-medium bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
-              >
-                {t('rawFiles.modal.close')}
-              </button>
-            </div>
-          </div>
+      <ModalShell
+        isOpen={!!viewingFile}
+        onClose={() => {
+          setViewingFile(null);
+          setViewContent('');
+        }}
+        panelClassName="max-w-4xl"
+        labelledById="raw-log-view-title"
+      >
+        <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+          <h3 id="raw-log-view-title" className="font-semibold text-slate-800 dark:text-white">{viewingFile}</h3>
+          <button
+            onClick={() => {
+              setViewingFile(null);
+              setViewContent('');
+            }}
+            aria-label={t('common:buttons.close')}
+            className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
-      )}
+        <div className="p-4">
+          {viewFileMutation.isPending ? (
+            <div className="flex items-center justify-center h-32">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+          ) : (
+            <pre className="text-xs font-mono text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-all bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
+              {viewContent || t('rawFiles.modal.noContent')}
+            </pre>
+          )}
+        </div>
+        <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-2">
+          <button
+            onClick={() => viewingFile && handleDownloadFile(viewingFile)}
+            className="px-4 py-2 text-sm font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+          >
+            {t('rawFiles.list.download')}
+          </button>
+          <button
+            onClick={() => {
+              setViewingFile(null);
+              setViewContent('');
+            }}
+            className="px-4 py-2 text-sm font-medium bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+          >
+            {t('rawFiles.modal.close')}
+          </button>
+        </div>
+      </ModalShell>
 
       {/* Delete Confirmation Modal */}
-      {confirmDelete && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md p-6 transition-colors">
-            <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-2">{t('rawFiles.modal.deleteTitle')}</h3>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
-              {t('rawFiles.modal.deleteConfirm', { file: confirmDelete })}
-              <br />{t('rawFiles.modal.irreversible')}
-            </p>
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setConfirmDelete(null)}
-                className="px-4 py-2 text-sm font-medium bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
-              >
-                {t('rawFiles.modal.cancel')}
-              </button>
-              <button
-                onClick={() => deleteMutation.mutate(confirmDelete)}
-                disabled={deleteMutation.isPending}
-                className="px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
-              >
-                {deleteMutation.isPending ? t('rawFiles.modal.deleting') : t('rawFiles.modal.delete')}
-              </button>
-            </div>
+      <ModalShell
+        isOpen={!!confirmDelete}
+        onClose={() => setConfirmDelete(null)}
+        panelClassName="max-w-md"
+        labelledById="raw-log-delete-title"
+      >
+        <div className="p-6">
+          <h3 id="raw-log-delete-title" className="text-lg font-semibold text-slate-800 dark:text-white mb-2">{t('rawFiles.modal.deleteTitle')}</h3>
+          <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+            {t('rawFiles.modal.deleteConfirm', { file: confirmDelete })}
+            <br />{t('rawFiles.modal.irreversible')}
+          </p>
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => setConfirmDelete(null)}
+              className="px-4 py-2 text-sm font-medium bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+            >
+              {t('rawFiles.modal.cancel')}
+            </button>
+            <button
+              onClick={() => confirmDelete && deleteMutation.mutate(confirmDelete)}
+              disabled={deleteMutation.isPending}
+              className="px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+            >
+              {deleteMutation.isPending ? t('rawFiles.modal.deleting') : t('rawFiles.modal.delete')}
+            </button>
           </div>
         </div>
-      )}
+      </ModalShell>
     </div>
   );
 }

@@ -17,12 +17,12 @@ export function ActiveFilterTags({ filter, onRemove }: ActiveFilterTagsProps) {
   if (filter.hosts?.length) tags.push({ key: 'hosts', label: t('filters.host'), value: filter.hosts.join(', ') });
   if (filter.client_ips?.length) tags.push({ key: 'client_ips', label: t('filters.clientIp'), value: filter.client_ips.join(', ') });
   if (filter.uris?.length) tags.push({ key: 'uris', label: t('filters.uri'), value: filter.uris.join(', ') });
-  if (filter.user_agents?.length) tags.push({ key: 'user_agents', label: 'UA', value: filter.user_agents.join(', ').slice(0, 50) + (filter.user_agents.join(', ').length > 50 ? '...' : '') });
+  if (filter.user_agents?.length) tags.push({ key: 'user_agents', label: t('filters.userAgentShort'), value: filter.user_agents.join(', ').slice(0, 50) + (filter.user_agents.join(', ').length > 50 ? '...' : '') });
   // Legacy single-value filters
   if (filter.host) tags.push({ key: 'host', label: t('filters.host'), value: filter.host });
   if (filter.client_ip) tags.push({ key: 'client_ip', label: t('filters.clientIp'), value: filter.client_ip });
   if (filter.uri) tags.push({ key: 'uri', label: t('filters.uri'), value: filter.uri });
-  if (filter.user_agent) tags.push({ key: 'user_agent', label: 'UA', value: filter.user_agent.slice(0, 30) + '...' });
+  if (filter.user_agent) tags.push({ key: 'user_agent', label: t('filters.userAgentShort'), value: filter.user_agent.slice(0, 30) + '...' });
   if (filter.method) tags.push({ key: 'method', label: t('filters.method'), value: filter.method });
   if (filter.geo_country_code) tags.push({ key: 'geo_country_code', label: t('filters.country'), value: filter.geo_country_code });
   if (filter.status_codes?.length) tags.push({ key: 'status_codes', label: t('filters.statusCodes'), value: filter.status_codes.join(', ') });

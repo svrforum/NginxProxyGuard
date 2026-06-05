@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query'
 import { createDNSProvider, updateDNSProvider, testDNSProvider } from '../api/dns-providers'
 import { useTranslation } from 'react-i18next'
 import { HelpTip } from './common/HelpTip'
+import { ModalShell } from './common/ModalShell'
 import type { DNSProvider, CreateDNSProviderRequest } from '../types/certificate'
 
 interface DNSProviderFormProps {
@@ -14,7 +15,7 @@ interface DNSProviderFormProps {
 type ProviderType = 'cloudflare' | 'route53' | 'duckdns' | 'dynu' | 'manual'
 
 export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSProviderFormProps) {
-  const { t } = useTranslation('certificates')
+  const { t } = useTranslation(['certificates', 'common'])
   const isEditing = !!provider
 
   const [name, setName] = useState(provider?.name || '')
@@ -167,17 +168,23 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
 
   const isPending = createMutation.isPending || updateMutation.isPending
 
+  // Block backdrop/ESC close while a request is in flight, mirroring the disabled close button.
+  const handleClose = () => {
+    if (!isPending) onClose()
+  }
+
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border dark:border-slate-700">
+    <ModalShell isOpen onClose={handleClose} closeOnBackdrop={false} panelClassName="max-w-2xl" labelledById="dns-provider-form-title">
+      <div>
         <div className="p-6 border-b border-slate-200 dark:border-slate-700">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
+            <h2 id="dns-provider-form-title" className="text-xl font-semibold text-slate-900 dark:text-white">
               {isEditing ? t('dnsProviders.form.editTitle') : t('dnsProviders.form.addTitle')}
             </h2>
             <button
               onClick={onClose}
               disabled={isPending}
+              aria-label={t('common:buttons.close')}
               className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -296,7 +303,7 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
                   type="text"
                   value={cfZoneId}
                   onChange={(e) => { setCfZoneId(e.target.value); setCredentialsModified(true) }}
-                  placeholder={hasExistingCredentials ? t('dnsProviders.form.cloudflare.zoneIdPlaceholder') : t('dnsProviders.form.cloudflare.zoneIdPlaceholder')}
+                  placeholder={t('dnsProviders.form.cloudflare.zoneIdPlaceholder')}
                   className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 placeholder:text-slate-400 bg-white dark:bg-slate-700 dark:text-white font-mono"
                 />
               </div>
@@ -561,7 +568,7 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
             </div>
           </div>
         </form>
-      </div >
-    </div >
+      </div>
+    </ModalShell>
   )
 }

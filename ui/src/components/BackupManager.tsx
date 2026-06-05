@@ -33,6 +33,12 @@ export default function BackupManager() {
   });
   const [editedSettings, setEditedSettings] = useState<UpdateSystemSettingsRequest>({});
   const [settingsSaveMessage, setSettingsSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const showActionMessage = (type: 'success' | 'error', text: string) => {
+    setActionMessage({ type, text });
+    setTimeout(() => setActionMessage(null), type === 'success' ? 5000 : 7000);
+  };
 
   // Poll the backup list only while a backup is actively running (status
   // 'pending' or 'in_progress'). Idle admin sessions used to refetch every
@@ -120,10 +126,10 @@ export default function BackupManager() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['backups'] });
       queryClient.invalidateQueries({ queryKey: ['backupStats'] });
-      alert(t('backupManager.messages.restoreSuccess'));
+      showActionMessage('success', t('backupManager.messages.restoreSuccess'));
     },
     onError: (error: Error) => {
-      alert(t('backupManager.messages.restoreFailed', { error: error.message }));
+      showActionMessage('error', t('backupManager.messages.restoreFailed', { error: error.message }));
     },
   });
 
@@ -134,10 +140,10 @@ export default function BackupManager() {
       queryClient.invalidateQueries({ queryKey: ['backupStats'] });
       setShowUploadModal(false);
       setUploadFile(null);
-      alert(t('backupManager.messages.uploadSuccess'));
+      showActionMessage('success', t('backupManager.messages.uploadSuccess'));
     },
     onError: (error: Error) => {
-      alert(t('backupManager.messages.uploadFailed', { error: error.message }));
+      showActionMessage('error', t('backupManager.messages.uploadFailed', { error: error.message }));
     },
   });
 
@@ -169,7 +175,7 @@ export default function BackupManager() {
     const file = e.target.files?.[0];
     if (file) {
       if (!file.name.endsWith('.tar.gz')) {
-        alert(t('backupManager.messages.invalidFormat'));
+        showActionMessage('error', t('backupManager.messages.invalidFormat'));
         return;
       }
       setUploadFile(file);
@@ -196,6 +202,16 @@ export default function BackupManager() {
           </button>
         </div>
       </div>
+
+      {/* Action Message */}
+      {actionMessage && (
+        <div className={`px-4 py-3 rounded-lg text-sm font-medium ${actionMessage.type === 'success'
+          ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-900/30'
+          : 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-900/30'
+          }`}>
+          {actionMessage.text}
+        </div>
+      )}
 
       {/* Stats */}
       <BackupStatsCards

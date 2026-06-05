@@ -93,7 +93,7 @@ export function BanHistoryTab({ hostMap }: { hostMap: Record<string, string> }) 
             <select value={sourceFilter} onChange={(e) => { setSourceFilter(e.target.value); setPage(1); }} className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm bg-white dark:bg-slate-700 dark:text-white">
               <option value="all">{t('bannedIp.history.filter.all', { defaultValue: '모두' })}</option>
               <option value="fail2ban">Fail2ban</option>
-              <option value="waf_auto_ban">WAF Auto Ban</option>
+              <option value="waf_auto_ban">{t('bannedIp.history.source.wafAutoBan', { defaultValue: 'WAF Auto Ban' })}</option>
               <option value="manual">{t('bannedIp.history.filter.manual', { defaultValue: '수동' })}</option>
               <option value="expired">{t('bannedIp.history.filter.expired', { defaultValue: '만료' })}</option>
             </select>

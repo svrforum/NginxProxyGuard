@@ -146,7 +146,10 @@ export default function GlobalSettings() {
               : t('global.preset.applyPerformance', { defaultValue: '권장 설정 적용' })}
           </button>
           <button
-            onClick={() => resetMutation.mutate()}
+            onClick={() => {
+              if (!confirm(t('global.buttons.resetConfirm'))) return;
+              resetMutation.mutate();
+            }}
             disabled={resetMutation.isPending}
             className="px-4 py-2 text-[13px] font-semibold bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-white rounded-lg disabled:opacity-50 transition-colors"
           >

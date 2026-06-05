@@ -7,6 +7,7 @@
   "viewer": {
     "title": "Log Viewer",
     "refresh": "Refresh",
+    "auto": "Auto",
     "autoRefresh": "Auto Refresh",
     "autoRefreshOn": "Auto Refresh ON",
     "autoRefreshOff": "Auto Refresh OFF",
@@ -36,6 +37,7 @@
     "uri": "URI",
     "uriPlaceholder": "/api/v1/...",
     "userAgent": "User Agent",
+    "userAgentShort": "UA",
     "userAgentPlaceholder": "Mozilla/5.0...",
     "method": "HTTP Method",
     "allMethods": "All Methods",
@@ -541,6 +543,7 @@
     "saveSuccess": "Raw log settings saved. Please restart nginx to apply changes.",
     "rotateSuccess": "Log rotation completed.",
     "saveFail": "Save failed: {{error}}",
+    "downloadFailed": "Download failed.",
     "status": {
       "enabled": "Raw log saving is enabled. Total {{count}} files, {{size}}",
       "disabled": "Raw log saving is disabled. You can enable it below."
@@ -574,7 +577,8 @@
     },
     "actions": {
       "manualRotate": "Manual Rotate",
-      "rotating": "Rotating..."
+      "rotating": "Rotating...",
+      "refresh": "Refresh"
     },
     "modal": {
       "deleteTitle": "Confirm File Delete",

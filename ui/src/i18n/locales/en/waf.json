@@ -278,7 +278,8 @@
       },
       "source": {
         "manual": "Manual",
-        "expired": "Expired"
+        "expired": "Expired",
+        "wafAutoBan": "WAF Auto Ban"
       },
       "fetchError": "Failed to load history.",
       "noHistory": "No history found.",
@@ -337,7 +338,20 @@
     "disabledAt": "Disabled At",
     "reason": "Reason",
     "disabledBy": "Disabled By",
-    "category": "Category"
+    "category": "Category",
+    "confirmBulkDisable": "Disable all {{count}} rules?",
+    "unnamedHost": "Unnamed Host",
+    "history": {
+      "loadError": "Failed to load change history",
+      "searchPlaceholder": "Search by rule ID or category...",
+      "count": "{{count}} entries",
+      "total": "({{count}} total)",
+      "empty": "No change history",
+      "emptyDescription": "Changes are recorded when you modify policies",
+      "disabled": "Disabled",
+      "enabled": "Enabled",
+      "reason": "Reason"
+    }
   },
   "disableModal": {
     "title": "Disable Rule",
@@ -384,6 +398,15 @@
       "blocking": "Blocking mode: Attacks are blocked and logged (returns 403).",
       "detection": "Detection mode: Attacks are only logged but not blocked (returns 200).",
       "configure": "Configure WAF mode in Proxy Host settings."
+    },
+    "result": {
+      "blocked": "Blocked ({{code}})",
+      "passed": "Passed ({{code}})"
+    },
+    "options": {
+      "blocking": "(Blocking)",
+      "detection": "(Detection)",
+      "noWaf": "(No WAF)"
     }
   },
   "uriBlock": {
@@ -495,6 +518,13 @@
       "willApplyToAll": "Will apply to {{count}} hosts",
       "success": "Rule added to {{count}}/{{total}} hosts",
       "failed": "Failed to add rule: {{error}}"
+    },
+    "templates": {
+      "wpAdmin": "Block WP Admin",
+      "xmlrpc": "Block XML-RPC",
+      "wpLogin": "Block WP Login",
+      "php": "Block PHP",
+      "env": "Block .env"
     }
   },
   "global": {

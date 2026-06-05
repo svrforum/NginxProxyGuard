@@ -152,7 +152,7 @@ function WAFHostCard({
             </svg>
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900 dark:text-white">{host.proxy_host_name || 'Unnamed Host'}</h3>
+            <h3 className="font-semibold text-gray-900 dark:text-white">{host.proxy_host_name || t('policyManager.unnamedHost')}</h3>
             {getStatusBadge()}
           </div>
         </div>

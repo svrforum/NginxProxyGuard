@@ -9,6 +9,7 @@ export default function WAFAutoBanSettings() {
   const { t } = useTranslation('settings');
   const queryClient = useQueryClient();
   const [editedSettings, setEditedSettings] = useState<UpdateSystemSettingsRequest>({});
+  const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const { data: settings, isLoading } = useQuery({
     queryKey: ['systemSettings'],
@@ -20,6 +21,12 @@ export default function WAFAutoBanSettings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['systemSettings'] });
       setEditedSettings({});
+      setSaveMessage({ type: 'success', text: t('messages.saveSuccess') });
+      setTimeout(() => setSaveMessage(null), 3000);
+    },
+    onError: (error: Error) => {
+      setSaveMessage({ type: 'error', text: `${t('messages.saveFailed')}: ${error.message}` });
+      setTimeout(() => setSaveMessage(null), 5000);
     },
   });
 
@@ -70,6 +77,16 @@ export default function WAFAutoBanSettings() {
           {updateMutation.isPending ? t('system.buttons.saving') : t('system.buttons.save')}
         </button>
       </div>
+
+      {/* Save Message */}
+      {saveMessage && (
+        <div className={`px-4 py-3 rounded-lg text-sm font-medium ${saveMessage.type === 'success'
+          ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-900/30'
+          : 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-900/30'
+          }`}>
+          {saveMessage.text}
+        </div>
+      )}
 
       {/* Status Card */}
       <div className={`p-5 rounded-xl ${getValue('waf_auto_ban_enabled') ? 'bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800' : 'bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700'

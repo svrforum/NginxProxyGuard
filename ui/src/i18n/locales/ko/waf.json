@@ -278,7 +278,8 @@
       },
       "source": {
         "manual": "수동",
-        "expired": "만료"
+        "expired": "만료",
+        "wafAutoBan": "WAF 자동 차단"
       },
       "fetchError": "이력을 불러오는 데 실패했습니다.",
       "noHistory": "이력이 없습니다.",
@@ -337,7 +338,20 @@
     "disabledAt": "비활성화 일시",
     "reason": "사유",
     "disabledBy": "비활성화한 사용자",
-    "category": "카테고리"
+    "category": "카테고리",
+    "confirmBulkDisable": "{{count}}개 규칙을 모두 비활성화할까요?",
+    "unnamedHost": "이름 없는 호스트",
+    "history": {
+      "loadError": "변경 이력을 불러오는데 실패했습니다",
+      "searchPlaceholder": "규칙 ID 또는 카테고리로 검색...",
+      "count": "{{count}}개 이력",
+      "total": "(전체 {{count}}개)",
+      "empty": "변경 이력이 없습니다",
+      "emptyDescription": "정책을 변경하면 이력이 기록됩니다",
+      "disabled": "비활성화",
+      "enabled": "활성화",
+      "reason": "사유"
+    }
   },
   "disableModal": {
     "title": "규칙 비활성화",
@@ -384,6 +398,15 @@
       "blocking": "차단 모드: 공격을 차단하고 로그를 기록합니다 (403 반환).",
       "detection": "탐지 모드: 공격을 탐지하고 로그만 기록하며 차단하지 않습니다 (200 반환).",
       "configure": "프록시 호스트 설정에서 WAF 모드를 구성하세요."
+    },
+    "result": {
+      "blocked": "차단됨 ({{code}})",
+      "passed": "통과됨 ({{code}})"
+    },
+    "options": {
+      "blocking": "(차단)",
+      "detection": "(탐지)",
+      "noWaf": "(WAF 없음)"
     }
   },
   "uriBlock": {
@@ -489,6 +512,13 @@
         "enabled": "활성화",
         "disabled": "비활성화"
       }
+    },
+    "templates": {
+      "wpAdmin": "WP 관리자 차단",
+      "xmlrpc": "XML-RPC 차단",
+      "wpLogin": "WP 로그인 차단",
+      "php": "PHP 차단",
+      "env": ".env 차단"
     }
   },
   "global": {

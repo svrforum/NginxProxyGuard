@@ -1,5 +1,8 @@
 {
   "title": "Dashboard",
+  "errors": {
+    "loadFailed": "Failed to load dashboard"
+  },
   "actions": {
     "selfCheck": "Self Check",
     "refresh": "Refresh"
@@ -68,6 +71,7 @@
     "title": "Global Traffic (24h)",
     "subtitle": "Traffic by region",
     "topCountries": "Top Countries (24h)",
-    "total": "Total: {{count}} requests"
+    "total": "Total: {{count}} requests",
+    "totalRequests": "Total: {{count}} requests"
   }
 }

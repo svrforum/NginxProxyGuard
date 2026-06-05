@@ -10,6 +10,7 @@ export default function BotFilterSettings() {
   const queryClient = useQueryClient();
   const [editedSettings, setEditedSettings] = useState<UpdateSystemSettingsRequest>({});
   const [expandedList, setExpandedList] = useState<'bad' | 'ai' | 'search' | 'suspicious' | null>(null);
+  const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const { data: settings, isLoading } = useQuery({
     queryKey: ['systemSettings'],
@@ -21,6 +22,12 @@ export default function BotFilterSettings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['systemSettings'] });
       setEditedSettings({});
+      setSaveMessage({ type: 'success', text: t('messages.saveSuccess') });
+      setTimeout(() => setSaveMessage(null), 3000);
+    },
+    onError: (error: Error) => {
+      setSaveMessage({ type: 'error', text: `${t('messages.saveFailed')}: ${error.message}` });
+      setTimeout(() => setSaveMessage(null), 5000);
     },
   });
 
@@ -93,6 +100,16 @@ export default function BotFilterSettings() {
           </button>
         )}
       </div>
+
+      {/* Save Message */}
+      {saveMessage && (
+        <div className={`px-4 py-3 rounded-lg text-sm font-medium ${saveMessage.type === 'success'
+          ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-900/30'
+          : 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-900/30'
+          }`}>
+          {saveMessage.text}
+        </div>
+      )}
 
       {/* Info Banner */}
       <div className="p-4 bg-blue-50 dark:bg-blue-900/10 rounded-xl border border-blue-200 dark:border-blue-800 transition-colors">
@@ -317,26 +334,6 @@ export default function BotFilterSettings() {
               </>
             )}
           </button>
-        </div>
-      )}
-
-      {/* Success Message */}
-      {updateMutation.isSuccess && !hasChanges && (
-        <div className="p-4 bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800 rounded-lg flex items-center gap-3">
-          <svg className="w-5 h-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <span className="text-sm text-emerald-700 dark:text-emerald-400 font-medium">{t('common:messages.saveSuccess')}</span>
-        </div>
-      )}
-
-      {/* Error Message */}
-      {updateMutation.isError && (
-        <div className="p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg flex items-center gap-3">
-          <svg className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <span className="text-sm text-red-700 dark:text-red-400 font-medium">{t('common:messages.saveFailed')}</span>
         </div>
       )}
     </div>

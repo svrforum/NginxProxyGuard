@@ -65,7 +65,7 @@ export default function Dashboard() {
   if (error) {
     return (
       <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-        <p className="text-red-600 dark:text-red-400">Failed to load dashboard</p>
+        <p className="text-red-600 dark:text-red-400">{t('errors.loadFailed')}</p>
       </div>
     );
   }
@@ -323,7 +323,7 @@ export default function Dashboard() {
             <h2 className="text-lg font-semibold dark:text-white">{t('geo.topCountries')}</h2>
             {geoIPStats && (
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                Total: {formatNumber(geoIPStats.total_count)} requests
+                {t('geo.totalRequests', { count: formatNumber(geoIPStats.total_count) })}
               </p>
             )}
           </div>

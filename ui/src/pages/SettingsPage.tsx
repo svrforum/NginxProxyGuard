@@ -95,7 +95,7 @@ export default function SettingsPage({ subTab }: { subTab: 'global' | 'captcha' 
           <button
             onClick={() => navigate('/settings/system-logs')}
             className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${subTab === 'system-logs'
-              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+              ? 'border-sky-600 text-sky-600 dark:text-sky-400'
               : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
               }`}
           >

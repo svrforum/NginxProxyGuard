@@ -8,7 +8,8 @@
         "update": "Update",
         "create": "Create",
         "save": "Saving...",
-        "addRule": "Add Rule"
+        "addRule": "Add Rule",
+        "removeRule": "Remove Rule"
     },
     "form": {
         "newTitle": "New Access List",
@@ -26,6 +27,7 @@
         "deny": "Deny"
     },
     "list": {
+        "title": "Access Lists (IP Allow/Deny)",
         "name": "Name",
         "rules": "Rules",
         "options": "Options",
@@ -34,7 +36,7 @@
         "rulesCount": "{{count}} rules",
         "expand": "[+]",
         "collapse": "[-]",
-        "statisfyAny": "Satisfy Any",
+        "satisfyAny": "Satisfy Any",
         "passAuth": "Pass Auth"
     },
     "messages": {

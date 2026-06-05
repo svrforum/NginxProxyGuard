@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useEscapeKey } from '../hooks/useEscapeKey'
 import { getCertificateLogs } from '../api/certificates'
+import { ModalShell } from './common/ModalShell'
 import type { CertificateLog, CertificateLogResponse } from '../types/certificate'
 
 interface CertificateLogModalProps {
@@ -22,12 +22,11 @@ export function CertificateLogModal({ isOpen = true, certificateId, onClose, onC
   const logContainerRef = useRef<HTMLDivElement>(null)
   const pollIntervalRef = useRef<number | null>(null)
 
-  // Allow ESC to close when complete or error
-  useEscapeKey(() => {
-    if (isComplete || error) {
-      onClose()
-    }
-  }, isOpen && (isComplete || !!error))
+  // Only allow closing (ESC / backdrop / button) once the operation finished.
+  const canClose = isComplete || !!error
+  const handleClose = () => {
+    if (canClose) onClose()
+  }
 
   // Poll for logs
   useEffect(() => {
@@ -80,8 +79,6 @@ export function CertificateLogModal({ isOpen = true, certificateId, onClose, onC
       logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight
     }
   }, [logs])
-
-  if (!isOpen) return null
 
   const getLogLevelStyles = (level: string) => {
     switch (level) {
@@ -156,8 +153,8 @@ export function CertificateLogModal({ isOpen = true, certificateId, onClose, onC
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden max-h-[80vh] flex flex-col">
+    <ModalShell isOpen={isOpen} onClose={handleClose} closeOnBackdrop={canClose} panelClassName="max-w-2xl" labelledById="certificate-log-title">
+      <div className="flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
           <div className="flex items-center justify-between">
@@ -168,7 +165,7 @@ export function CertificateLogModal({ isOpen = true, certificateId, onClose, onC
                 </svg>
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+                <h3 id="certificate-log-title" className="text-lg font-semibold text-slate-900 dark:text-white">
                   {title || t('certificates:issuance.title', 'Certificate Issuance')}
                 </h3>
                 <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -259,6 +256,6 @@ export function CertificateLogModal({ isOpen = true, certificateId, onClose, onC
           </div>
         </div>
       </div>
-    </div>
+    </ModalShell>
   )
 }

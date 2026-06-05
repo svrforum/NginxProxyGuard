@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
-import { useEscapeKey } from '../../hooks/useEscapeKey'
+import { ModalShell } from '../common/ModalShell'
 import { fetchIPLogs } from '../../api/banned-ips'
 import type { BannedIP } from '../../api/banned-ips'
 
@@ -17,19 +17,17 @@ function getStatusColor(statusCode?: number): string {
 }
 
 export function IPLogsModal({ ip, hostName, onClose }: { ip: BannedIP; hostName?: string; onClose: () => void }) {
-  const { t, i18n } = useTranslation('waf')
+  const { t, i18n } = useTranslation(['waf', 'common'])
   const { data, isLoading, error } = useQuery({
     queryKey: ['ip-logs', ip.ip_address],
     queryFn: () => fetchIPLogs(ip.ip_address),
   })
 
-  useEscapeKey(onClose)
-
   const logs = data?.data || []
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col border border-slate-200 dark:border-slate-700">
+    <ModalShell isOpen onClose={onClose} panelClassName="max-w-4xl">
+      <div className="flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex items-center justify-between">
           <div>
@@ -41,7 +39,7 @@ export function IPLogsModal({ ip, hostName, onClose }: { ip: BannedIP; hostName?
               {ip.reason ? `${t('bannedIp.logs.reasonPrefix')}${ip.reason}` : t('bannedIp.logs.subtitle')}
             </p>
           </div>
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg">
+          <button onClick={onClose} aria-label={t('common:buttons.close')} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
@@ -120,6 +118,6 @@ export function IPLogsModal({ ip, hostName, onClose }: { ip: BannedIP; hostName?
           <button onClick={onClose} className="px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700">{t('bannedIp.logs.close')}</button>
         </div>
       </div>
-    </div>
+    </ModalShell>
   )
 }

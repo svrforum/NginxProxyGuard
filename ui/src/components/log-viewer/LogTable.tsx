@@ -241,6 +241,7 @@ export function LogTable({
             <button
               onClick={goToFirstPage}
               disabled={page === 1}
+              aria-label={t('pagination.first')}
               className="px-2 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
               title={t('pagination.first')}
             >

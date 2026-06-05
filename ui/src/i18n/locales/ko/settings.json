@@ -148,7 +148,12 @@
         "description": "Docker 컨테이너에서 로그 수집"
       },
       "levels": {
-        "title": "컨테이너 로그 레벨"
+        "title": "컨테이너 로그 레벨",
+        "debug": "디버그",
+        "info": "정보",
+        "warn": "경고",
+        "error": "오류",
+        "fatal": "심각"
       },
       "exclude": {
         "label": "제외 패턴",
@@ -558,7 +563,9 @@
       "siteKeyDesc": "CAPTCHA provider에서 발급받은 Site Key입니다.",
       "secretKey": "비밀 키",
       "secretKeyDesc": "CAPTCHA provider에서 발급받은 Secret Key입니다.",
-      "secretKeySet": "Secret Key가 이미 설정되어 있습니다. 변경하려면 새 값을 입력하세요."
+      "secretKeySet": "Secret Key가 이미 설정되어 있습니다. 변경하려면 새 값을 입력하세요.",
+      "siteKeyPlaceholder": "사이트 키를 입력하세요",
+      "secretKeyPlaceholder": "비밀 키를 입력하세요"
     },
     "recaptcha": {
       "score": "최소 점수 (0.0 - 1.0)",
@@ -573,7 +580,11 @@
       "pageTitle": "페이지 제목",
       "theme": "테마",
       "message": "페이지 메시지",
-      "messageDesc": "CAPTCHA 위에 표시될 메시지입니다."
+      "messageDesc": "CAPTCHA 위에 표시될 메시지입니다.",
+      "pageTitlePlaceholder": "보안 확인",
+      "themeLight": "밝게",
+      "themeDark": "어둡게",
+      "messagePlaceholder": "계속하려면 보안 확인을 완료하세요."
     },
     "messages": {
       "saveSuccess": "CAPTCHA 설정이 저장되었습니다."
@@ -595,7 +606,8 @@
     "buttons": {
       "reset": "기본값으로 초기화",
       "save": "변경사항 저장",
-      "saving": "저장 중..."
+      "saving": "저장 중...",
+      "resetConfirm": "모든 전역 설정을 기본값으로 초기화할까요?"
     },
     "presets": {
       "title": "Quick Presets",

@@ -20,7 +20,7 @@ function parseSortOption(option: SortOption): { sortBy: string; sortOrder: strin
 }
 
 export default function CertificateList() {
-  const { t, i18n } = useTranslation('certificates');
+  const { t, i18n } = useTranslation(['certificates', 'common']);
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [selectedCertId, setSelectedCertId] = useState<string | null>(null);
@@ -28,6 +28,7 @@ export default function CertificateList() {
   const [showRenewLogModal, setShowRenewLogModal] = useState(false);
   const [downloadingCertId, setDownloadingCertId] = useState<string | null>(null);
   const [updatingCertId, setUpdatingCertId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Search state
   const [searchInput, setSearchInput] = useState('');
@@ -107,10 +108,10 @@ export default function CertificateList() {
     mutationFn: bulkDeleteErrorCertificates,
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['certificates'] });
-      alert(t('messages.bulkDeleteSuccess', { count: result.deleted }));
+      setNotice({ type: 'success', message: t('messages.bulkDeleteSuccess', { count: result.deleted }) });
     },
     onError: () => {
-      alert(t('messages.bulkDeleteFailed'));
+      setNotice({ type: 'error', message: t('messages.bulkDeleteFailed') });
     },
   });
 
@@ -153,7 +154,7 @@ export default function CertificateList() {
     try {
       await downloadCertificate(certId, 'all');
     } catch (err) {
-      alert(err instanceof Error ? err.message : t('messages.downloadError'));
+      setNotice({ type: 'error', message: err instanceof Error ? err.message : t('messages.downloadError') });
     } finally {
       setDownloadingCertId(null);
     }
@@ -170,7 +171,7 @@ export default function CertificateList() {
   if (isLoading && !data) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
       </div>
     );
   }
@@ -200,12 +201,34 @@ export default function CertificateList() {
           )}
           <button
             onClick={() => setShowForm(true)}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors"
           >
             + {t('list.actionNew')}
           </button>
         </div>
       </div>
+
+      {/* Inline result notice (bulk delete / download) */}
+      {notice && (
+        <div
+          className={`flex items-start justify-between gap-3 px-4 py-3 rounded-lg border text-sm ${
+            notice.type === 'success'
+              ? 'bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800 text-green-700 dark:text-green-400'
+              : 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800 text-red-700 dark:text-red-400'
+          }`}
+        >
+          <span className="break-words">{notice.message}</span>
+          <button
+            onClick={() => setNotice(null)}
+            aria-label={t('common:buttons.close')}
+            className="flex-shrink-0 opacity-70 hover:opacity-100 transition-opacity"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
 
       {showForm && (
         <CertificateForm

@@ -1,10 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getAccessLists, createAccessList, updateAccessList, deleteAccessList } from '../api/access';
 import type { AccessList, AccessListItem, CreateAccessListRequest } from '../types/access';
 import { HelpTip } from './common/HelpTip';
-import { useEscapeKey } from '../hooks/useEscapeKey';
+import { ModalShell } from './common/ModalShell';
 
 interface AccessListFormProps {
   accessList: AccessList | null;
@@ -29,8 +29,6 @@ function AccessListForm({ accessList, onClose, onSuccess }: AccessListFormProps)
   );
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  useEscapeKey(onClose);
 
   const handleAddItem = () => {
     setItems([...items, { directive: 'allow', address: '', description: '', sort_order: items.length }]);
@@ -79,10 +77,9 @@ function AccessListForm({ accessList, onClose, onSuccess }: AccessListFormProps)
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4 border dark:border-slate-700">
+    <ModalShell isOpen onClose={onClose} closeOnBackdrop={false} panelClassName="max-w-2xl" labelledById="access-list-form-title">
         <div className="p-6">
-          <h3 className="text-lg font-semibold mb-4 text-slate-900 dark:text-white">
+          <h3 id="access-list-form-title" className="text-lg font-semibold mb-4 text-slate-900 dark:text-white">
             {accessList ? t('form.editTitle') : t('form.newTitle')}
           </h3>
 
@@ -159,7 +156,7 @@ function AccessListForm({ accessList, onClose, onSuccess }: AccessListFormProps)
                 <button
                   type="button"
                   onClick={handleAddItem}
-                  className="text-sm text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300"
+                  className="text-sm text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   + {t('actions.addRule')}
                 </button>
@@ -194,6 +191,8 @@ function AccessListForm({ accessList, onClose, onSuccess }: AccessListFormProps)
                       <button
                         type="button"
                         onClick={() => handleRemoveItem(index)}
+                        aria-label={t('actions.removeRule')}
+                        title={t('actions.removeRule')}
                         className="p-2 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -224,8 +223,7 @@ function AccessListForm({ accessList, onClose, onSuccess }: AccessListFormProps)
             </div>
           </form>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }
 
@@ -285,7 +283,7 @@ export default function AccessListManager() {
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded">
         {t('messages.loadError')}
       </div>
     );
@@ -294,10 +292,10 @@ export default function AccessListManager() {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Access Lists (IP Allow/Deny)</h2>
+        <h2 className="text-xl font-semibold text-slate-900 dark:text-white">{t('list.title')}</h2>
         <button
           onClick={() => setShowForm(true)}
-          className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
         >
           + {t('actions.add')}
         </button>
@@ -341,8 +339,8 @@ export default function AccessListManager() {
               </tr>
             ) : (
               data?.data?.map((list) => (
-                <>
-                  <tr key={list.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                <Fragment key={list.id}>
+                  <tr className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
                     <td className="px-6 py-4">
                       <div className="text-sm font-medium text-slate-900 dark:text-white">{list.name}</div>
                       {list.description && (
@@ -361,7 +359,7 @@ export default function AccessListManager() {
                       <div className="flex gap-2">
                         {list.satisfy_any && (
                           <span className="px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded">
-                            {t('list.statisfyAny')}
+                            {t('list.satisfyAny')}
                           </span>
                         )}
                         {list.pass_auth && (
@@ -388,7 +386,7 @@ export default function AccessListManager() {
                     </td>
                   </tr>
                   {expandedId === list.id && list.items && list.items.length > 0 && (
-                    <tr key={`${list.id}-items`}>
+                    <tr>
                       <td colSpan={4} className="px-6 py-3 bg-slate-50 dark:bg-slate-900/30">
                         <div className="space-y-1">
                           {list.items.map((item, index) => (
@@ -404,7 +402,7 @@ export default function AccessListManager() {
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               ))
             )}
           </tbody>

@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { downloadBackup } from '../../api/settings';
 import type { Backup } from '../../types/settings';
+import { ModalShell } from '../common/ModalShell';
 
 export function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -157,7 +158,7 @@ export function BackupProgressModal({
   backups: Backup[];
   onClose: () => void;
 }) {
-  const { t, i18n } = useTranslation('settings');
+  const { t, i18n } = useTranslation(['settings', 'common']);
   const currentBackup = backups.find((b) => b.id === backupId);
   const status = currentBackup?.status || 'in_progress';
   const isCompleted = status === 'completed';
@@ -176,10 +177,10 @@ export function BackupProgressModal({
   const currentStep = isCompleted ? 5 : isFailed ? -1 : 2;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-md p-6 transition-colors">
+    <ModalShell isOpen onClose={onClose} panelClassName="max-w-md" labelledById="backup-progress-modal-title">
+      <div className="p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold dark:text-white">
+          <h2 id="backup-progress-modal-title" className="text-xl font-bold dark:text-white">
             {isCompleted
               ? t('backupManager.progress.titleComplete')
               : isFailed
@@ -188,6 +189,7 @@ export function BackupProgressModal({
           </h2>
           <button
             onClick={onClose}
+            aria-label={t('common:buttons.close')}
             className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -272,6 +274,6 @@ export function BackupProgressModal({
           </button>
         </div>
       </div>
-    </div>
+    </ModalShell>
   );
 }

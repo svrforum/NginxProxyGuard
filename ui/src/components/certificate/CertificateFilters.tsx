@@ -46,6 +46,8 @@ export default function CertificateFilters({
         {searchInput && (
           <button
             onClick={onClearSearch}
+            title={t('list.searchClear')}
+            aria-label={t('list.searchClear')}
             className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
