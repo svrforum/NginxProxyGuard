@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import GlobalSettings from '../components/GlobalSettings'
@@ -11,105 +12,83 @@ import WAFAutoBanSettings from '../components/WAFAutoBanSettings'
 import SystemLogSettings from '../components/SystemLogSettings'
 import FilterSubscriptionList from '../components/FilterSubscriptionList'
 
-export default function SettingsPage({ subTab }: { subTab: 'global' | 'captcha' | 'geoip' | 'ssl' | 'maintenance' | 'backups' | 'botfilter' | 'waf-auto-ban' | 'system-logs' | 'filter-subscriptions' }) {
+type SubTab =
+  | 'global'
+  | 'captcha'
+  | 'geoip'
+  | 'ssl'
+  | 'maintenance'
+  | 'backups'
+  | 'botfilter'
+  | 'waf-auto-ban'
+  | 'system-logs'
+  | 'filter-subscriptions'
+
+export default function SettingsPage({ subTab }: { subTab: SubTab }) {
   const { t } = useTranslation('navigation')
   const navigate = useNavigate()
 
+  // Horizontal sub-tabs (consistent with the other areas) but reordered into
+  // three logical groups separated by dividers, with a single primary accent
+  // color instead of the previous flat, rainbow-colored row.
+  const groups: { label: string; items: { key: SubTab; label: string }[] }[] = [
+    {
+      label: t('subTabs.settings.groups.general'),
+      items: [
+        { key: 'global', label: t('subTabs.settings.global') },
+        { key: 'ssl', label: t('subTabs.settings.ssl') },
+      ],
+    },
+    {
+      label: t('subTabs.settings.groups.security'),
+      items: [
+        { key: 'captcha', label: t('subTabs.settings.captcha') },
+        { key: 'geoip', label: t('subTabs.settings.geoip') },
+        { key: 'botfilter', label: t('subTabs.settings.botfilter') },
+        { key: 'waf-auto-ban', label: t('subTabs.settings.wafAutoBan') },
+        { key: 'filter-subscriptions', label: t('subTabs.settings.filterSubscriptions') },
+      ],
+    },
+    {
+      label: t('subTabs.settings.groups.operations'),
+      items: [
+        { key: 'maintenance', label: t('subTabs.settings.maintenance') },
+        { key: 'backups', label: t('subTabs.settings.backups') },
+        { key: 'system-logs', label: t('subTabs.settings.systemLogs') },
+      ],
+    },
+  ]
+
   return (
     <div className="space-y-6">
-      {/* Sub-tabs for settings */}
-      <div className="border-b border-slate-200">
-        <div className="flex gap-4 overflow-x-auto">
-          <button
-            onClick={() => navigate('/settings/global')}
-            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${subTab === 'global'
-              ? 'border-teal-600 text-teal-600 dark:text-teal-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.settings.global')}
-          </button>
-          <button
-            onClick={() => navigate('/settings/captcha')}
-            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${subTab === 'captcha'
-              ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.settings.captcha')}
-          </button>
-          <button
-            onClick={() => navigate('/settings/geoip')}
-            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${subTab === 'geoip'
-              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.settings.geoip')}
-          </button>
-          <button
-            onClick={() => navigate('/settings/botfilter')}
-            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${subTab === 'botfilter'
-              ? 'border-orange-600 text-orange-600 dark:text-orange-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.settings.botfilter')}
-          </button>
-          <button
-            onClick={() => navigate('/settings/waf-auto-ban')}
-            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${subTab === 'waf-auto-ban'
-              ? 'border-red-600 text-red-600 dark:text-red-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.settings.wafAutoBan')}
-          </button>
-          <button
-            onClick={() => navigate('/settings/ssl')}
-            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${subTab === 'ssl'
-              ? 'border-amber-600 text-amber-600 dark:text-amber-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.settings.ssl')}
-          </button>
-          <button
-            onClick={() => navigate('/settings/maintenance')}
-            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${subTab === 'maintenance'
-              ? 'border-purple-600 text-purple-600 dark:text-purple-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.settings.maintenance')}
-          </button>
-          <button
-            onClick={() => navigate('/settings/backups')}
-            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${subTab === 'backups'
-              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.settings.backups')}
-          </button>
-          <button
-            onClick={() => navigate('/settings/system-logs')}
-            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${subTab === 'system-logs'
-              ? 'border-sky-600 text-sky-600 dark:text-sky-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.settings.systemLogs', 'System Logs')}
-          </button>
-          <button
-            onClick={() => navigate('/settings/filter-subscriptions')}
-            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${subTab === 'filter-subscriptions'
-              ? 'border-cyan-600 text-cyan-600 dark:text-cyan-400'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            {t('subTabs.settings.filterSubscriptions', 'Filter Subscriptions')}
-          </button>
+      <div className="border-b border-slate-200 dark:border-slate-700">
+        <div className="flex items-stretch gap-1 overflow-x-auto">
+          {groups.map((group, gi) => (
+            <Fragment key={group.label}>
+              {gi > 0 && (
+                <span aria-hidden className="mx-2 my-2 w-px self-stretch bg-slate-200 dark:bg-slate-700" />
+              )}
+              <div role="group" aria-label={group.label} className="flex items-stretch gap-1">
+                {group.items.map((item) => {
+                  const active = subTab === item.key
+                  return (
+                    <button
+                      key={item.key}
+                      onClick={() => navigate(`/settings/${item.key}`)}
+                      aria-current={active ? 'page' : undefined}
+                      className={`whitespace-nowrap border-b-2 px-3 pb-2 text-[13px] font-semibold transition-colors ${
+                        active
+                          ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400'
+                          : 'border-transparent text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </Fragment>
+          ))}
         </div>
       </div>
 

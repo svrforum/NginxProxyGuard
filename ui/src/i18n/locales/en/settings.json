@@ -336,7 +336,7 @@
       }
     },
     "waf": {
-      "title": "Security Settings",
+      "title": "WAF Auto-Ban",
       "description": "Manage automatic IP banning and global trusted IP settings.",
       "status": {
         "title": "WAF Auto-Ban Status",

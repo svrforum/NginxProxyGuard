@@ -340,7 +340,7 @@
       }
     },
     "waf": {
-      "title": "보안 설정",
+      "title": "WAF 자동 차단",
       "description": "자동 IP 차단 및 전역 신뢰 IP 설정을 관리합니다.",
       "status": {
         "title": "WAF 자동 차단 상태",
@@ -601,7 +601,7 @@
     "restoreFailed": "복원에 실패했습니다"
   },
   "global": {
-    "title": "Global Settings",
+    "title": "전역 설정",
     "description": "Nginx 전역 설정을 관리합니다. 변경 후 저장하면 Nginx가 자동으로 재로드됩니다.",
     "buttons": {
       "reset": "기본값으로 초기화",

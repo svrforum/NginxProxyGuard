@@ -71,12 +71,17 @@
       "captcha": "CAPTCHA",
       "geoip": "GeoIP",
       "botfilter": "Bot Filter",
-      "wafAutoBan": "Security",
+      "wafAutoBan": "WAF Auto-Ban",
       "ssl": "SSL / ACME",
       "maintenance": "Maintenance",
       "backups": "Backups",
       "systemLogs": "System Logs",
-      "filterSubscriptions": "Filter Subscriptions"
+      "filterSubscriptions": "Filter Subscriptions",
+      "groups": {
+        "general": "General",
+        "security": "Security",
+        "operations": "Operations"
+      }
     }
   },
   "loading": "Loading..."

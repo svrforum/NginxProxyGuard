@@ -71,12 +71,17 @@
       "captcha": "CAPTCHA",
       "geoip": "GeoIP",
       "botfilter": "봇 필터",
-      "wafAutoBan": "보안",
+      "wafAutoBan": "WAF 자동 차단",
       "ssl": "SSL / ACME",
       "maintenance": "유지보수",
       "backups": "백업",
       "systemLogs": "시스템 로그",
-      "filterSubscriptions": "필터 구독"
+      "filterSubscriptions": "필터 구독",
+      "groups": {
+        "general": "일반",
+        "security": "보안",
+        "operations": "운영"
+      }
     }
   },
   "loading": "로딩 중..."
