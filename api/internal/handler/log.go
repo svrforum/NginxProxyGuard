@@ -155,9 +155,14 @@ func parseLogFilter(q url.Values) *model.LogFilter {
 	}
 
 	// Default time range: always apply a 24-hour window when no start_time specified
-	// to prevent full table scans on large datasets (GitHub Issue #96)
+	// to prevent full table scans on large datasets (GitHub Issue #96).
+	// Truncate to the minute so the resolved value is stable across requests in
+	// the same minute — otherwise the now()-based timestamp changes every call,
+	// the stats cache key (which hashes the filter) never repeats, and the Redis
+	// stats cache never hits for the default (no-date) view. 1-minute buckets sit
+	// comfortably under the 5-minute stats cache TTL.
 	if filter.StartTime == nil {
-		defaultStart := time.Now().Add(-24 * time.Hour)
+		defaultStart := time.Now().Truncate(time.Minute).Add(-24 * time.Hour)
 		filter.StartTime = &defaultStart
 	}
 
