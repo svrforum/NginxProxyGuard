@@ -306,7 +306,7 @@
     "topClientIps": "Top Client IPs",
     "topCountries": "Top Countries",
     "topUserAgents": "Top User Agents",
-    "topUris": "Top URIs",
+    "topUris": "Top Paths",
     "topWafRules": "Top WAF Rules",
     "statusCodeDist": "Status Code Distribution",
     "statusCodes": "Status Codes",

@@ -308,7 +308,7 @@
     "topClientIps": "상위 클라이언트 IP",
     "topCountries": "상위 국가",
     "topUserAgents": "상위 User Agent",
-    "topUris": "상위 URI",
+    "topUris": "상위 경로",
     "topWafRules": "상위 WAF 규칙",
     "statusCodeDist": "상태 코드 분포",
     "statusCodes": "상태 코드",
