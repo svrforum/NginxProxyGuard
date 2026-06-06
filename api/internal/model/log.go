@@ -259,7 +259,7 @@ type LogFilter struct {
 
 	// Cursor for keyset pagination. Opaque base64 token returned in
 	// LogListResponse.NextCursor. Only honoured for the default
-	// (timestamp DESC) sort — custom sort orders fall back to OFFSET.
+	// (created_at DESC) sort — custom sort orders fall back to OFFSET.
 	Cursor *string `json:"cursor,omitempty"`
 }
 

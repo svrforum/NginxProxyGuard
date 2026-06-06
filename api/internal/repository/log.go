@@ -18,12 +18,14 @@ import (
 	"github.com/google/uuid"
 )
 
-// logCursor encodes the (timestamp, id) of the last row from a previous page
-// so the next page can be served via WHERE (timestamp, id) < ($1, $2) instead
-// of OFFSET N. Round-trips through base64-encoded JSON so it stays opaque to
-// clients (they shouldn't construct or interpret it).
+// logCursor encodes the (created_at, id) of the last row from a previous page
+// so the next page can be served via WHERE (created_at, id) < ($1, $2) instead
+// of OFFSET N. created_at is the hypertable partition key, so ordering/keyset on
+// it lets TimescaleDB walk chunks newest-first and stop early (vs. sorting the
+// whole window when ordering by timestamp). Round-trips through base64-encoded
+// JSON so it stays opaque to clients (they shouldn't construct or interpret it).
 type logCursor struct {
-	Timestamp time.Time `json:"t"`
+	CreatedAt time.Time `json:"c"`
 	ID        string    `json:"i"`
 }
 
@@ -44,15 +46,15 @@ func decodeLogCursor(s string) (logCursor, error) {
 	if err := json.Unmarshal(b, &c); err != nil {
 		return c, fmt.Errorf("invalid cursor payload: %w", err)
 	}
-	if c.ID == "" || c.Timestamp.IsZero() {
+	if c.ID == "" || c.CreatedAt.IsZero() {
 		return c, fmt.Errorf("cursor missing fields")
 	}
-	// Reject far-future timestamps. Without this, `(timestamp, id) < ($ts, $id)`
+	// Reject far-future values. Without this, `(created_at, id) < ($ca, $id)`
 	// would match every existing row and the "cursor" silently becomes "give me
 	// everything", defeating pagination. Allow a small clock-skew margin so a
 	// freshly-issued cursor isn't rejected by a marginally-behind client clock.
-	if c.Timestamp.After(time.Now().Add(time.Minute)) {
-		return c, fmt.Errorf("cursor timestamp in future")
+	if c.CreatedAt.After(time.Now().Add(time.Minute)) {
+		return c, fmt.Errorf("cursor created_at in future")
 	}
 	return c, nil
 }
@@ -307,7 +309,7 @@ func (r *LogRepository) CreateBatch(ctx context.Context, logs []model.CreateLogR
 //
 // NextCursor is empty when there are no further rows or when the request used
 // a custom (non-default) sort order (the encoded cursor only carries
-// timestamp+id; switching sort key would silently return the wrong rows).
+// created_at+id; switching sort key would silently return the wrong rows).
 type ListResult struct {
 	Logs       []model.Log
 	Total      int
@@ -327,11 +329,15 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 	offset := (page - 1) * perPage
 
 	// Cursor mode is only safe for the default sort. Custom SortBy still
-	// uses OFFSET because the cursor encodes (timestamp, id) — switching
+	// uses OFFSET because the cursor encodes (created_at, id) — switching
 	// the sort key mid-stream would silently return the wrong rows.
 	useCursor := false
 	var cursor logCursor
-	if filter != nil && filter.Cursor != nil && *filter.Cursor != "" && (filter.SortBy == nil || *filter.SortBy == "" || *filter.SortBy == "timestamp") {
+	if filter != nil && filter.Cursor != nil && *filter.Cursor != "" &&
+		(filter.SortBy == nil || *filter.SortBy == "" || *filter.SortBy == "created_at") &&
+		(filter.SortOrder == nil || strings.EqualFold(*filter.SortOrder, "desc")) {
+		// Keyset predicate below is DESC-only ((created_at,id) < cursor); an ASC
+		// sort must fall back to OFFSET or it would page the wrong direction.
 		c, err := decodeLogCursor(*filter.Cursor)
 		if err == nil {
 			cursor = c
@@ -622,13 +628,19 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 		whereClause = "WHERE " + strings.Join(conditions, " AND ")
 	}
 
-	// Build ORDER BY clause. Default sort gains `, id DESC` as a stable
-	// tiebreaker so keyset pagination doesn't skip or duplicate rows when
-	// two logs share the same millisecond timestamp.
-	orderBy := "timestamp DESC, id DESC"
+	// Build ORDER BY clause. Default sort is created_at (the hypertable partition
+	// key) DESC with `, id DESC` as a stable tiebreaker so keyset pagination
+	// doesn't skip or duplicate rows. Ordering by created_at lets TimescaleDB's
+	// ChunkAppend walk chunks newest-first and stop at LIMIT, instead of scanning
+	// and sorting the entire time window (which ORDER BY timestamp forces, since
+	// timestamp is not the partition key and has no covering index). On a large
+	// table this is the difference between ~2.6s and ~100ms. created_at ≈
+	// timestamp for ingested logs, so the visible order is unchanged.
+	orderBy := "created_at DESC, id DESC"
 	customSort := false
 	if filter != nil && filter.SortBy != nil && *filter.SortBy != "" {
 		allowedSortFields := map[string]bool{
+			"created_at":      true,
 			"timestamp":       true,
 			"body_bytes_sent": true,
 			"request_time":    true,
@@ -641,25 +653,27 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 			if filter.SortOrder != nil && (*filter.SortOrder == "asc" || *filter.SortOrder == "ASC") {
 				sortOrder = "ASC"
 			}
-			if *filter.SortBy == "timestamp" {
-				orderBy = fmt.Sprintf("timestamp %s, id %s", sortOrder, sortOrder)
+			if *filter.SortBy == "created_at" {
+				orderBy = fmt.Sprintf("created_at %s, id %s", sortOrder, sortOrder)
 			} else {
+				// Any other explicit sort (incl. timestamp) can't keyset on
+				// (created_at, id), so it falls back to OFFSET pagination.
 				orderBy = fmt.Sprintf("%s %s", *filter.SortBy, sortOrder)
 				customSort = true
 			}
 		}
 	}
 	if customSort {
-		// Custom sort can't safely keyset on (timestamp, id).
+		// Custom sort can't safely keyset on (created_at, id).
 		useCursor = false
 	}
 
 	// Cursor predicate: keep before the LIMIT clause but after the sort.
-	// Row-comparison lets the planner use an index on (timestamp, id) and
-	// keeps the keyset semantics atomic vs. concurrent inserts.
+	// Row-comparison on (created_at, id) matches the ORDER BY so ChunkAppend
+	// stays ordered, and keeps the keyset semantics atomic vs. concurrent inserts.
 	if useCursor {
-		conditions = append(conditions, fmt.Sprintf("(timestamp, id) < ($%d, $%d::uuid)", argIndex, argIndex+1))
-		args = append(args, cursor.Timestamp, cursor.ID)
+		conditions = append(conditions, fmt.Sprintf("(created_at, id) < ($%d, $%d::uuid)", argIndex, argIndex+1))
+		args = append(args, cursor.CreatedAt, cursor.ID)
 		argIndex += 2
 		whereClause = "WHERE " + strings.Join(conditions, " AND ")
 	}
@@ -816,13 +830,13 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 	}
 
 	// Mint the next-page cursor only when there's something to fetch next.
-	// Custom sorts skip this (cursor encodes timestamp+id, not the custom
+	// Custom sorts skip this (cursor encodes created_at+id, not the custom
 	// column) so the client falls back to OFFSET on the next request.
 	var nextCursor string
 	if hasMore && !customSort && len(logs) > 0 {
 		last := logs[len(logs)-1]
-		if !last.Timestamp.IsZero() && last.ID != "" {
-			tok, err := encodeLogCursor(logCursor{Timestamp: last.Timestamp, ID: last.ID})
+		if !last.CreatedAt.IsZero() && last.ID != "" {
+			tok, err := encodeLogCursor(logCursor{CreatedAt: last.CreatedAt, ID: last.ID})
 			if err == nil {
 				nextCursor = tok
 			} else {
