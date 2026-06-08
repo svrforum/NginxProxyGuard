@@ -94,8 +94,10 @@ services:
       NGINX_HTTPS_PORT: ${NGINX_HTTPS_PORT:-443}
       # API host port (nginx uses this to reach API via localhost)
       API_HOST_PORT: ${API_HOST_PORT:-9080}
-      # API host for nginx config generation
-      API_HOST: ${API_HOST:-127.0.0.1:${API_HOST_PORT:-9080}}
+      # API host for nginx config generation. Leave empty to derive from
+      # API_HOST_PORT (single source of truth); set only to override. Do NOT use
+      # nested ${...} defaults here — old compose parsers emit them literally (#158).
+      API_HOST: ${API_HOST:-}
     ports:
       # API host port - MUST NOT conflict with NGINX_HTTP_PORT
       - "127.0.0.1:${API_HOST_PORT:-9080}:8080"

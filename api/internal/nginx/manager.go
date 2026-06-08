@@ -32,6 +32,7 @@ type Manager struct {
 	httpPort         string // HTTP listen port (default: 80)
 	httpsPort        string // HTTPS listen port (default: 443)
 	apiURL           string // API URL for nginx to reach API (default: http://127.0.0.1:9080)
+	apiHost          string // API host:port for proxy_pass in generated configs (default: 127.0.0.1:9080)
 	dnsResolver      string // DNS resolver for nginx (default: 127.0.0.53 8.8.8.8)
 	enableIPv6       bool   // Enable IPv6 listen directives (default: true)
 	streamAccessLog  bool
@@ -73,6 +74,24 @@ func NewManager(configPath, certsPath string) *Manager {
 	}
 	apiURL := "http://127.0.0.1:" + apiHostPort
 
+	// API host:port used in generated proxy_pass directives (host network mode).
+	// Guard against unexpanded compose substitution (e.g. an old parser leaving
+	// the literal "127.0.0.1:${API_HOST_PORT:-9080}"). Such a value gets emitted
+	// verbatim into proxy_pass directives and breaks nginx ("closing bracket ...
+	// is missing"), which surfaces when Challenge mode renders apiHost (#158).
+	// Resolved once at boot (logged once) and reused for every render.
+	apiHost := strings.TrimSpace(os.Getenv("API_HOST"))
+	if apiHost == "" || strings.ContainsAny(apiHost, "${} \t") {
+		if apiHost != "" {
+			log.Printf("nginx: ignoring malformed API_HOST %q (unexpanded variable or whitespace); falling back to API_HOST_PORT", apiHost)
+		}
+		port := strings.TrimSpace(apiHostPort)
+		if port == "" || strings.ContainsAny(port, "${} \t") {
+			port = "9080"
+		}
+		apiHost = "127.0.0.1:" + port
+	}
+
 	// DNS resolver for nginx (host network mode uses system resolver)
 	dnsResolver := os.Getenv("DNS_RESOLVER")
 	if dnsResolver == "" {
@@ -89,6 +108,7 @@ func NewManager(configPath, certsPath string) *Manager {
 		httpPort:         httpPort,
 		httpsPort:        httpsPort,
 		apiURL:           apiURL,
+		apiHost:          apiHost,
 		dnsResolver:      dnsResolver,
 		enableIPv6:       true,
 		streamAccessLog:  true,
@@ -452,14 +472,9 @@ func (m *Manager) GenerateConfigFull(ctx context.Context, data ProxyHostConfigDa
 	data.HTTPSPort = m.httpsPort
 	data.EnableIPv6 = m.enableIPv6
 
-	// Get API host from environment or default (host network mode)
-	apiHostValue := os.Getenv("API_HOST")
-	if apiHostValue == "" {
-		apiHostValue = "127.0.0.1:9080"
-	}
-
-	// Use centralized template functions and add proxy-host-specific ones
-	funcMap := GetTemplateFuncMap(apiHostValue)
+	// Use centralized template functions and add proxy-host-specific ones.
+	// apiHost is resolved+sanitized once at boot in NewManager (see #158).
+	funcMap := GetTemplateFuncMap(m.apiHost)
 	funcMap["dnsResolver"] = func() string {
 		return m.dnsResolver
 	}
