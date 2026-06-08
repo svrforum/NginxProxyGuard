@@ -137,6 +137,8 @@
       "ddnsSelectProvider": "Select a provider",
       "ddnsProviderHint": "DDNS currently supports Cloudflare and DuckDNS only.",
       "ddnsStatusHint": "After saving, check sync status under Certificates → DDNS.",
+      "ddnsProxied": "Cloudflare proxied",
+      "ddnsProxiedHint": "Default for managed DDNS records created for this host. Per-record overrides on the DDNS page are preserved.",
       "ddnsNoProviders": "No Cloudflare/DuckDNS providers available. Add one under Certificates > DNS Providers first."
     },
     "stream": {

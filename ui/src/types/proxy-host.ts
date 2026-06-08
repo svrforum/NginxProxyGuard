@@ -47,6 +47,7 @@ export interface ProxyHost {
   access_list_id?: string
   ddns_enabled?: boolean
   ddns_provider_id?: string
+  ddns_proxied?: boolean
   enabled: boolean
   is_favorite: boolean
   config_status: string
@@ -99,6 +100,7 @@ export interface CreateProxyHostRequest {
   advanced_config?: string
   ddns_enabled?: boolean
   ddns_provider_id?: string
+  ddns_proxied?: boolean
   enabled?: boolean
 }
 
@@ -145,6 +147,7 @@ export interface UpdateProxyHostRequest {
   advanced_config?: string
   ddns_enabled?: boolean
   ddns_provider_id?: string
+  ddns_proxied?: boolean
   enabled?: boolean
 }
 

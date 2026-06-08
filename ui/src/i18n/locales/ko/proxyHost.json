@@ -137,6 +137,8 @@
       "ddnsSelectProvider": "프로바이더 선택",
       "ddnsProviderHint": "DDNS는 현재 Cloudflare와 DuckDNS만 지원합니다.",
       "ddnsStatusHint": "등록 후 동기화 상태는 인증서 → DDNS에서 확인할 수 있어요.",
+      "ddnsProxied": "Cloudflare 프록시",
+      "ddnsProxiedHint": "이 호스트에서 생성되는 관리형 DDNS 레코드의 기본값입니다. DDNS 페이지에서 레코드별로 변경한 값은 그대로 유지됩니다.",
       "ddnsNoProviders": "사용 가능한 Cloudflare/DuckDNS 프로바이더가 없습니다. 인증서 > DNS 프로바이더에서 먼저 추가하세요."
     },
     "stream": {

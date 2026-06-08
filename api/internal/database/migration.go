@@ -903,6 +903,10 @@ ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS ddns_provider_id uuid;
 DO $$ BEGIN ALTER TABLE public.proxy_hosts ADD CONSTRAINT proxy_hosts_ddns_provider_id_fkey FOREIGN KEY (ddns_provider_id) REFERENCES public.dns_providers(id) ON DELETE SET NULL; EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
 		},
 		{
+			desc: "v2.24.5: proxy_hosts.ddns_proxied default for managed DDNS (#160)",
+			sql:  `ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS ddns_proxied boolean DEFAULT false NOT NULL;`,
+		},
+		{
 			desc: "v2.23.0: ddns_records.proxy_host_id (#157)",
 			sql: `ALTER TABLE public.ddns_records ADD COLUMN IF NOT EXISTS proxy_host_id uuid;
 DO $$ BEGIN ALTER TABLE public.ddns_records ADD CONSTRAINT ddns_records_proxy_host_id_fkey FOREIGN KEY (proxy_host_id) REFERENCES public.proxy_hosts(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,

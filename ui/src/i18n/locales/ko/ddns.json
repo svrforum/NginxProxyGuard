@@ -37,6 +37,7 @@
   "disabledBadge": "비활성",
   "managedBadge": "프록시 연동",
   "managedHint": "이 레코드는 프록시 호스트에서 관리됩니다. 호스트 편집 화면에서 DDNS 설정을 변경하세요.",
+  "managedFieldsLocked": "호스트네임과 프로바이더는 프록시 호스트가 관리하므로 여기서는 잠겨 있습니다. Cloudflare 프록시 상태, TTL, 활성화 여부만 변경할 수 있습니다.",
   "importFromHosts": "프록시 호스트에서 추가",
   "importAction": "추가",
   "importHint": "선택한 프록시 호스트에 DDNS 자동 등록을 켜고, 각 호스트의 도메인을 관리형 DDNS 레코드로 생성합니다.",

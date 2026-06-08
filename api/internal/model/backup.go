@@ -379,6 +379,7 @@ type ProxyHostData struct {
 	ProxyMaxTempFileSize      string                 `json:"proxy_max_temp_file_size,omitempty"`
 	DDNSEnabled               bool                   `json:"ddns_enabled,omitempty"`
 	DDNSProviderID            string                 `json:"ddns_provider_id,omitempty"`
+	DDNSProxied               bool                   `json:"ddns_proxied,omitempty"`
 	Meta                      map[string]interface{} `json:"meta,omitempty"`
 }
 

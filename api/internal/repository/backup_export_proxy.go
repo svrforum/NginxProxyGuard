@@ -40,7 +40,7 @@ func (r *BackupRepository) exportProxyHosts(ctx context.Context) ([]model.ProxyH
 		       COALESCE(proxy_request_buffering, '') as proxy_request_buffering,
 		       COALESCE(client_max_body_size, '') as client_max_body_size,
 		       COALESCE(proxy_max_temp_file_size, '') as proxy_max_temp_file_size,
-		       COALESCE(ddns_enabled, false) as ddns_enabled, ddns_provider_id,
+		       COALESCE(ddns_enabled, false) as ddns_enabled, ddns_provider_id, COALESCE(ddns_proxied, false) as ddns_proxied,
 		       meta
 		FROM proxy_hosts ORDER BY created_at
 	`
@@ -74,7 +74,7 @@ func (r *BackupRepository) exportProxyHosts(ctx context.Context) ([]model.ProxyH
 			&ph.RateLimitEnabled, &ph.Fail2banEnabled, &ph.BotFilterEnabled, &ph.SecurityHeadersEnabled,
 			&ph.ProxyConnectTimeout, &ph.ProxySendTimeout, &ph.ProxyReadTimeout,
 			&ph.ProxyBuffering, &ph.ProxyRequestBuffering, &ph.ClientMaxBodySize, &ph.ProxyMaxTempFileSize,
-			&ph.DDNSEnabled, &ddnsProviderID,
+			&ph.DDNSEnabled, &ddnsProviderID, &ph.DDNSProxied,
 			&meta,
 		)
 		if err != nil {

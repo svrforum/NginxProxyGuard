@@ -84,6 +84,7 @@ func (s *ProxyHostService) reconcileHostDDNS(ctx context.Context, host *model.Pr
 			Hostname:      name,
 			DNSProviderID: *host.DDNSProviderID,
 			ProxyHostID:   &host.ID,
+			Proxied:       host.DDNSProxied,
 		})
 		if err != nil {
 			log.Printf("[DDNS] reconcile create %q failed: %v", name, err)

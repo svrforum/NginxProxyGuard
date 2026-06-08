@@ -1944,6 +1944,7 @@ CREATE TABLE IF NOT EXISTS public.proxy_hosts (
     config_error text,
     ddns_enabled boolean DEFAULT false NOT NULL,
     ddns_provider_id uuid,
+    ddns_proxied boolean DEFAULT false NOT NULL,
     CONSTRAINT chk_waf_anomaly_threshold CHECK (((waf_anomaly_threshold >= 1) AND (waf_anomaly_threshold <= 100))),
     CONSTRAINT chk_waf_paranoia_level CHECK (((waf_paranoia_level >= 1) AND (waf_paranoia_level <= 4)))
 );
@@ -3359,6 +3360,8 @@ ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS forward_container_networ
 -- constraint section above for fresh installs; existing installs get it via migration.go.
 ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS ddns_enabled boolean DEFAULT false NOT NULL;
 ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS ddns_provider_id uuid;
+-- v2.24.5: default Cloudflare proxied for this host's managed DDNS records (#160)
+ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS ddns_proxied boolean DEFAULT false NOT NULL;
 
 -- DDNS records (#154): keep registered hostnames' A records pointed at the server's public IPv4.
 CREATE TABLE IF NOT EXISTS public.ddns_records (

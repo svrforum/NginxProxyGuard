@@ -61,6 +61,7 @@ export function useProxyHostFormState(host: ProxyHost | null | undefined) {
     advanced_config: '',
     ddns_enabled: false,
     ddns_provider_id: undefined,
+    ddns_proxied: false,
     enabled: true,
   })
 
@@ -265,6 +266,7 @@ export function useProxyHostFormState(host: ProxyHost | null | undefined) {
         advanced_config: host.advanced_config || '',
         ddns_enabled: host.ddns_enabled ?? false,
         ddns_provider_id: host.ddns_provider_id || undefined,
+        ddns_proxied: host.ddns_proxied ?? false,
         enabled: host.enabled,
       })
       setPortInput(host.forward_port.toString())

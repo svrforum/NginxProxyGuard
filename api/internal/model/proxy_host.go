@@ -261,6 +261,7 @@ type ProxyHost struct {
 	// as managed DDNS records via the given provider (cloudflare/duckdns).
 	DDNSEnabled    bool    `json:"ddns_enabled"`
 	DDNSProviderID *string `json:"ddns_provider_id,omitempty"`
+	DDNSProxied    bool    `json:"ddns_proxied"` // default Cloudflare proxied for this host's managed DDNS records (#160)
 
 	// Metadata
 	Meta      json.RawMessage `json:"meta,omitempty"`
@@ -318,6 +319,7 @@ type CreateProxyHostRequest struct {
 	Enabled                   bool     `json:"enabled"`
 	DDNSEnabled               bool     `json:"ddns_enabled"`
 	DDNSProviderID            *string  `json:"ddns_provider_id,omitempty"`
+	DDNSProxied               bool     `json:"ddns_proxied"`
 }
 
 type UpdateProxyHostRequest struct {
@@ -363,6 +365,7 @@ type UpdateProxyHostRequest struct {
 	Enabled                   *bool    `json:"enabled,omitempty"`
 	DDNSEnabled               *bool    `json:"ddns_enabled,omitempty"`
 	DDNSProviderID            *string  `json:"ddns_provider_id,omitempty"`
+	DDNSProxied               *bool    `json:"ddns_proxied,omitempty"`
 }
 
 // CloneProxyHostRequest is the request to clone a proxy host

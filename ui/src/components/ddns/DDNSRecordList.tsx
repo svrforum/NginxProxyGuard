@@ -290,9 +290,8 @@ export default function DDNSRecordList() {
                     </button>
                     <button
                       onClick={() => handleEdit(record)}
-                      disabled={isManaged}
-                      title={isManaged ? t('managedHint') : undefined}
-                      className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-indigo-600"
+                      title={isManaged ? t('managedFieldsLocked') : undefined}
+                      className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm font-medium"
                     >
                       {t('edit')}
                     </button>

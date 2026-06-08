@@ -20,6 +20,9 @@ const SUPPORTED_PROVIDER_TYPES: DNSProvider['provider_type'][] = ['cloudflare', 
 export default function DDNSRecordForm({ record, onClose, onSuccess }: DDNSRecordFormProps) {
   const { t } = useTranslation(['ddns', 'common'])
   const isEditing = !!record
+  // Records created by a proxy host own their hostname/provider; reconcile recreates
+  // any renamed managed hostname, so lock identity fields here (proxied/ttl/enabled stay editable).
+  const isManaged = !!record?.proxy_host_id
 
   const [hostname, setHostname] = useState(record?.hostname || '')
   const [dnsProviderId, setDnsProviderId] = useState(record?.dns_provider_id || '')
@@ -132,7 +135,8 @@ export default function DDNSRecordForm({ record, onClose, onSuccess }: DDNSRecor
               value={hostname}
               onChange={(e) => setHostname(e.target.value)}
               placeholder={t('hostnamePlaceholder')}
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 placeholder:text-slate-400 bg-white dark:bg-slate-700 dark:text-white"
+              disabled={isManaged}
+              className={`w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 placeholder:text-slate-400 ${isManaged ? 'bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400' : 'bg-white dark:bg-slate-700 dark:text-white'}`}
               required
             />
           </div>
@@ -145,7 +149,8 @@ export default function DDNSRecordForm({ record, onClose, onSuccess }: DDNSRecor
             <select
               value={dnsProviderId}
               onChange={(e) => setDnsProviderId(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 dark:text-white"
+              disabled={isManaged}
+              className={`w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${isManaged ? 'bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400' : 'bg-white dark:bg-slate-700 dark:text-white'}`}
             >
               <option value="">{t('selectProvider')}</option>
               {supportedProviders.map((p) => (
@@ -157,6 +162,9 @@ export default function DDNSRecordForm({ record, onClose, onSuccess }: DDNSRecor
             <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{t('providerHint')}</p>
             {supportedProviders.length === 0 && (
               <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">{t('noProviders')}</p>
+            )}
+            {isManaged && (
+              <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">{t('managedFieldsLocked')}</p>
             )}
           </div>
 

@@ -80,7 +80,7 @@ func (r *ProxyHostRepository) List(ctx context.Context, page, perPage int, searc
 			COALESCE(proxy_request_buffering, '') as proxy_request_buffering,
 			COALESCE(client_max_body_size, '') as client_max_body_size,
 			COALESCE(proxy_max_temp_file_size, '') as proxy_max_temp_file_size,
-			access_list_id, enabled, is_favorite, COALESCE(config_status, 'ok') as config_status, COALESCE(config_error, '') as config_error, ddns_enabled, ddns_provider_id, meta, created_at, updated_at
+			access_list_id, enabled, is_favorite, COALESCE(config_status, 'ok') as config_status, COALESCE(config_error, '') as config_error, ddns_enabled, ddns_provider_id, ddns_proxied, meta, created_at, updated_at
 		FROM proxy_hosts
 		%s
 		ORDER BY %s
@@ -150,6 +150,7 @@ func (r *ProxyHostRepository) List(ctx context.Context, page, perPage int, searc
 			&host.ConfigError,
 			&host.DDNSEnabled,
 			&ddnsProviderID,
+			&host.DDNSProxied,
 			&meta,
 			&host.CreatedAt,
 			&host.UpdatedAt,
@@ -313,7 +314,7 @@ func (r *ProxyHostRepository) GetAllEnabled(ctx context.Context) ([]model.ProxyH
 			COALESCE(proxy_request_buffering, '') as proxy_request_buffering,
 			COALESCE(client_max_body_size, '') as client_max_body_size,
 			COALESCE(proxy_max_temp_file_size, '') as proxy_max_temp_file_size,
-			access_list_id, enabled, is_favorite, COALESCE(config_status, 'ok') as config_status, COALESCE(config_error, '') as config_error, ddns_enabled, ddns_provider_id, meta, created_at, updated_at
+			access_list_id, enabled, is_favorite, COALESCE(config_status, 'ok') as config_status, COALESCE(config_error, '') as config_error, ddns_enabled, ddns_provider_id, ddns_proxied, meta, created_at, updated_at
 		FROM proxy_hosts
 		WHERE enabled = true
 		ORDER BY created_at ASC
@@ -381,6 +382,7 @@ func (r *ProxyHostRepository) GetAllEnabled(ctx context.Context) ([]model.ProxyH
 			&host.ConfigError,
 			&host.DDNSEnabled,
 			&ddnsProviderID,
+			&host.DDNSProxied,
 			&meta,
 			&host.CreatedAt,
 			&host.UpdatedAt,
@@ -443,7 +445,7 @@ func (r *ProxyHostRepository) GetEnabledContainerBacked(ctx context.Context) ([]
 			COALESCE(proxy_request_buffering, '') as proxy_request_buffering,
 			COALESCE(client_max_body_size, '') as client_max_body_size,
 			COALESCE(proxy_max_temp_file_size, '') as proxy_max_temp_file_size,
-			access_list_id, enabled, is_favorite, COALESCE(config_status, 'ok') as config_status, COALESCE(config_error, '') as config_error, ddns_enabled, ddns_provider_id, meta, created_at, updated_at
+			access_list_id, enabled, is_favorite, COALESCE(config_status, 'ok') as config_status, COALESCE(config_error, '') as config_error, ddns_enabled, ddns_provider_id, ddns_proxied, meta, created_at, updated_at
 		FROM proxy_hosts
 		WHERE enabled = true AND forward_container_name IS NOT NULL
 		ORDER BY created_at ASC
@@ -511,6 +513,7 @@ func (r *ProxyHostRepository) GetEnabledContainerBacked(ctx context.Context) ([]
 			&host.ConfigError,
 			&host.DDNSEnabled,
 			&ddnsProviderID,
+			&host.DDNSProxied,
 			&meta,
 			&host.CreatedAt,
 			&host.UpdatedAt,
@@ -574,7 +577,7 @@ func (r *ProxyHostRepository) GetByCertificateID(ctx context.Context, certificat
 			COALESCE(proxy_request_buffering, '') as proxy_request_buffering,
 			COALESCE(client_max_body_size, '') as client_max_body_size,
 			COALESCE(proxy_max_temp_file_size, '') as proxy_max_temp_file_size,
-			access_list_id, enabled, is_favorite, COALESCE(config_status, 'ok') as config_status, COALESCE(config_error, '') as config_error, ddns_enabled, ddns_provider_id, meta, created_at, updated_at
+			access_list_id, enabled, is_favorite, COALESCE(config_status, 'ok') as config_status, COALESCE(config_error, '') as config_error, ddns_enabled, ddns_provider_id, ddns_proxied, meta, created_at, updated_at
 		FROM proxy_hosts
 		WHERE certificate_id = $1
 		ORDER BY created_at ASC
@@ -642,6 +645,7 @@ func (r *ProxyHostRepository) GetByCertificateID(ctx context.Context, certificat
 			&host.ConfigError,
 			&host.DDNSEnabled,
 			&ddnsProviderID,
+			&host.DDNSProxied,
 			&meta,
 			&host.CreatedAt,
 			&host.UpdatedAt,

@@ -188,8 +188,20 @@ func (s *DDNSService) List(ctx context.Context, page, perPage int) (*model.DDNSR
 	}, nil
 }
 
-// Update applies a partial update to a DDNS record.
+// Update applies a partial update to a DDNS record. For records managed by a
+// proxy host (ProxyHostID set), the identity fields (hostname, DNS provider) are
+// owned by the host: changing them would orphan the record on the next reconcile
+// (#160). They are stripped here so the invariant holds for any client, not just
+// the UI lock. Editable fields (proxied, TTL, enabled) pass through unchanged.
 func (s *DDNSService) Update(ctx context.Context, id string, req *model.UpdateDDNSRecordRequest) (*model.DDNSRecord, error) {
+	existing, err := s.records.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil && existing.ProxyHostID != nil {
+		req.Hostname = nil
+		req.DNSProviderID = nil
+	}
 	return s.records.Update(ctx, id, req)
 }
 

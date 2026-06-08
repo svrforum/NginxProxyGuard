@@ -147,6 +147,9 @@ export function BasicTabContent({
     DDNS_SUPPORTED_PROVIDER_TYPES.includes(p.provider_type)
   )
   const ddnsEnabled = !!formData.ddns_enabled
+  const selectedDdnsProvider = ddnsProviders.find((p) => p.id === formData.ddns_provider_id)
+  const ddnsIsCloudflare = selectedDdnsProvider?.provider_type === 'cloudflare'
+  const ddnsProxied = !!formData.ddns_proxied
 
   const listenHostDisplay = formData.stream_listen_host?.trim() || '*'
   const listenPortDisplay = formData.stream_listen_port || '??'
@@ -645,6 +648,27 @@ export function BasicTabContent({
             <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
               {t('form.basic.ddnsStatusHint')}
             </p>
+            {ddnsIsCloudflare && (
+              <div className="mt-4 flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                    {t('form.basic.ddnsProxied')}
+                  </h4>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    {t('form.basic.ddnsProxiedHint')}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, ddns_proxied: !prev.ddns_proxied }))}
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-slate-800 ${ddnsProxied ? 'bg-primary-600' : 'bg-slate-200 dark:bg-slate-600'}`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${ddnsProxied ? 'translate-x-5' : 'translate-x-0'}`}
+                  />
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

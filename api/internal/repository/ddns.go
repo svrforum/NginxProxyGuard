@@ -258,9 +258,9 @@ func (r *DDNSRepository) DeleteByProxyHost(ctx context.Context, proxyHostID stri
 func (r *DDNSRepository) CreateManaged(ctx context.Context, rec model.DDNSRecord) (bool, error) {
 	result, err := r.db.ExecContext(ctx, `
 		INSERT INTO ddns_records (hostname, dns_provider_id, record_type, proxied, ttl, enabled, proxy_host_id)
-		VALUES ($1, $2, 'A', false, 1, true, $3)
+		VALUES ($1, $2, 'A', $3, 1, true, $4)
 		ON CONFLICT (hostname, dns_provider_id) DO NOTHING`,
-		rec.Hostname, rec.DNSProviderID, rec.ProxyHostID)
+		rec.Hostname, rec.DNSProviderID, rec.Proxied, rec.ProxyHostID)
 	if err != nil {
 		return false, fmt.Errorf("failed to create managed ddns record: %w", err)
 	}

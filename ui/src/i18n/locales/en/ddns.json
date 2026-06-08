@@ -37,6 +37,7 @@
   "disabledBadge": "Disabled",
   "managedBadge": "Proxy-linked",
   "managedHint": "This record is managed by a proxy host. Change its DDNS settings from the host's edit screen.",
+  "managedFieldsLocked": "Hostname and provider are managed by the proxy host and locked here. You can edit the Cloudflare proxy status, TTL, and enabled state.",
   "importFromHosts": "Add from Proxy Hosts",
   "importAction": "Add",
   "importHint": "Enables DDNS auto-registration on the selected proxy hosts and creates a managed DDNS record for each host's domains.",
