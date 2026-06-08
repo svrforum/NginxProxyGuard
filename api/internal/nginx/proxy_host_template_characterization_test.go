@@ -697,7 +697,225 @@ func goldenCases() []goldenCase {
 		},
 	})
 
+	// 9) trusted_ip_bypass — pins issue #161: GlobalTrustedIPs must bypass
+	// per-host PERIMETER controls (geo block-mode restriction + access list +
+	// cloud-provider block) in addition to the already-correct geo-challenge /
+	// bot-filter / rate-limit paths. Combines a block-mode geo blacklist
+	// (AllowSearchBots), an access list (allow + deny-all), and a cloud-provider
+	// block so the single fixture exercises all three perimeter-bypass guards.
+	{
+		host := goldenBaseHost("00000000-0000-0000-0000-000000000a09", "trusted.example.com")
+		alID := "00000000-0000-0000-0000-0000000000a2"
+		host.AccessListID = &alID
+		cases = append(cases, goldenCase{
+			name: "trusted_ip_bypass",
+			data: ProxyHostConfigData{
+				Host:                 host,
+				GlobalSettings:       baseGlobalSettings(),
+				GlobalTrustedIPs:     []string{"192.0.2.10", "192.0.2.0/24"},
+				BlockedCloudIPRanges: []string{"198.51.100.0/24"},
+				GeoRestriction: &model.GeoRestriction{
+					ID:              "00000000-0000-0000-0000-0000000000g2",
+					ProxyHostID:     host.ID,
+					Mode:            "blacklist",
+					Countries:       []string{"CN", "RU"},
+					Enabled:         true,
+					AllowSearchBots: true,
+					CreatedAt:       fixtureNow,
+					UpdatedAt:       fixtureNow,
+				},
+				AccessList: &model.AccessList{
+					ID:         alID,
+					Name:       "internal-only",
+					SatisfyAny: false,
+					Items: []model.AccessListItem{
+						{ID: "00000000-0000-0000-0000-0000000000j1", AccessListID: alID, Directive: "allow", Address: "10.0.0.0/8", SortOrder: 1, CreatedAt: fixtureNow},
+						{ID: "00000000-0000-0000-0000-0000000000j2", AccessListID: alID, Directive: "deny", Address: "all", SortOrder: 2, CreatedAt: fixtureNow},
+					},
+					CreatedAt: fixtureNow,
+					UpdatedAt: fixtureNow,
+				},
+			},
+		})
+	}
+
 	return cases
+}
+
+// TestTrustedIPBypassesPerimeterControls pins issue #161: GlobalTrustedIPs must
+// bypass per-host PERIMETER controls (geo block restriction, access list) but
+// must NOT bypass CONTENT/attack controls (WAF, exploit/scanner blocks, the
+// return 405 method blocks). This is the perimeter-vs-content invariant — a new
+// security section author must not silently reintroduce #161.
+func TestTrustedIPBypassesPerimeterControls(t *testing.T) {
+	var fixture ProxyHostConfigData
+	for _, tc := range goldenCases() {
+		if tc.name == "trusted_ip_bypass" {
+			fixture = tc.data
+			break
+		}
+	}
+	if fixture.Host == nil {
+		t.Fatalf("trusted_ip_bypass fixture not found in goldenCases()")
+	}
+
+	configPath := t.TempDir()
+	certsPath := t.TempDir()
+	m := NewManager(configPath, certsPath)
+	if err := m.GenerateConfigFull(context.Background(), fixture); err != nil {
+		t.Fatalf("GenerateConfigFull: %v", err)
+	}
+	rendered, err := os.ReadFile(filepath.Join(configPath, GetConfigFilename(fixture.Host)))
+	if err != nil {
+		t.Fatalf("read rendered: %v", err)
+	}
+	out := string(rendered)
+
+	// sanitizeID (template_funcs.go) replaces hyphens with underscores for nginx
+	// zone names, so the guard variable is trusted_ip_<id-with-underscores>.
+	sanitizedID := strings.ReplaceAll(fixture.Host.ID, "-", "_")
+	guard := "if ($trusted_ip_" + sanitizedID + " = 1)"
+
+	// (a) The block-mode geo section must contain the trusted-IP guard.
+	geoIdx := strings.Index(out, "Direct Block Mode")
+	if geoIdx < 0 {
+		t.Fatalf("rendered config missing block-mode geo section")
+	}
+	// Anchor the access-list section AFTER the geo section: "Access List:" also
+	// appears in the file header comment (before the geo block), so a plain
+	// Index from the start matches the header and slices backwards (panics).
+	accessRel := strings.Index(out[geoIdx:], "Access List:")
+	if accessRel < 0 {
+		t.Fatalf("rendered config missing access list section")
+	}
+	accessIdx := geoIdx + accessRel
+	geoSection := out[geoIdx:accessIdx]
+	if !strings.Contains(geoSection, guard) {
+		t.Errorf("geo block section missing trusted-IP guard %q; got:\n%s", guard, geoSection)
+	}
+
+	// (b) The access list must allow trusted IPs BEFORE the trailing deny all.
+	allowIdx := strings.Index(out, "allow 192.0.2.10;")
+	denyAllRel := strings.Index(out[accessIdx:], "deny all;")
+	if allowIdx < 0 {
+		t.Errorf("access list missing `allow 192.0.2.10;` for trusted IP")
+	} else if denyAllRel < 0 {
+		t.Errorf("access list missing trailing `deny all;`")
+	} else if allowIdx > accessIdx+denyAllRel {
+		t.Errorf("`allow 192.0.2.10;` must appear before `deny all;` (access-phase first-match wins)")
+	}
+
+	// (c) Perimeter-vs-content boundary: the trusted-IP guard must appear in the
+	// perimeter region (geo/access, processed before WAF) but must NOT leak into
+	// the content/attack sections (WAF, exploit/scanner, return-405). Asserting
+	// the boundary structurally (present-before / absent-after the content marker)
+	// expresses the real invariant without coupling to how many perimeter paths
+	// this particular fixture happens to exercise.
+	if !strings.Contains(out[:accessIdx], guard) {
+		t.Errorf("trusted-IP guard missing from the perimeter (geo) region")
+	}
+	// The content/attack region starts at the exploit-block section. If this
+	// fixture renders none, there is nothing after the perimeter to leak into.
+	if contentIdx := strings.Index(out, "Block common exploits"); contentIdx >= 0 {
+		if strings.Contains(out[contentIdx:], guard) {
+			t.Errorf("trusted-IP guard leaked into a content/attack section (WAF/exploit/405); " +
+				"trusted IPs must bypass PERIMETER controls only")
+		}
+	}
+
+	// (d) Cloud-provider blocking is a perimeter control too (blocks by source
+	// IP range): trusted IPs must bypass it via $is_priority_allow_cloud (#161
+	// follow-up — the cloud section formerly ignored trusted IPs).
+	cloudIdx := strings.Index(out, "Blocked Cloud Provider IPs check")
+	if cloudIdx < 0 {
+		t.Fatalf("rendered config missing cloud-provider block section")
+	}
+	cloudEnd := strings.Index(out[cloudIdx:], "set $cloud_block_check")
+	if cloudEnd < 0 {
+		t.Fatalf("cloud-provider block section missing its check directive")
+	}
+	if !strings.Contains(out[cloudIdx:cloudIdx+cloudEnd], guard) {
+		t.Errorf("cloud-provider block section missing trusted-IP bypass guard %q", guard)
+	}
+}
+
+// TestChallengeApiHostSanitized pins issue #158: when an old docker-compose
+// parser leaves API_HOST as the literal "127.0.0.1:${API_HOST_PORT:-9080}",
+// the unexpanded value must NOT reach the rendered config. NewManager sanitizes
+// API_HOST once at boot and falls back to 127.0.0.1:<API_HOST_PORT|9080>, so the
+// Challenge-mode proxy_pass directives stay valid (no nested ${} → nginx -t no
+// longer fails with "closing bracket ... is missing").
+//
+// This is an assertion test (not a golden) because the bug is specifically about
+// a malformed substring never appearing in proxy_pass; a golden would obscure it.
+func TestChallengeApiHostSanitized(t *testing.T) {
+	t.Setenv("API_HOST", "127.0.0.1:${API_HOST_PORT:-9080}")
+	t.Setenv("API_HOST_PORT", "")
+
+	m := NewManager(t.TempDir(), t.TempDir())
+
+	// geo_challenge fixture has ChallengeMode=true, so the template renders the
+	// challenge endpoint locations that use {{apiHost}} in proxy_pass.
+	data := ProxyHostConfigData{
+		Host:           goldenBaseHost("00000000-0000-0000-0000-000000000a06", "challenge.example.com"),
+		GlobalSettings: baseGlobalSettings(),
+		GeoRestriction: &model.GeoRestriction{
+			ID:            "00000000-0000-0000-0000-00000000bbb2",
+			ProxyHostID:   "00000000-0000-0000-0000-000000000a06",
+			Mode:          "blacklist",
+			Countries:     []string{"CN"},
+			Enabled:       true,
+			ChallengeMode: true,
+			CreatedAt:     fixtureNow,
+			UpdatedAt:     fixtureNow,
+		},
+	}
+
+	if err := m.GenerateConfigFull(context.Background(), data); err != nil {
+		t.Fatalf("GenerateConfigFull: %v", err)
+	}
+	rendered, err := os.ReadFile(filepath.Join(m.configPath, GetConfigFilename(data.Host)))
+	if err != nil {
+		t.Fatalf("read rendered: %v", err)
+	}
+	out := string(rendered)
+
+	// The sanitized fallback host:port must be used for the challenge upstream.
+	if !strings.Contains(out, "proxy_pass http://127.0.0.1:9080/api/v1/challenge/") {
+		t.Errorf("rendered config missing sanitized challenge proxy_pass; got:\n%s", out)
+	}
+
+	// No proxy_pass directive may contain an unexpanded ${ or a space inside the URL.
+	for _, line := range strings.Split(out, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "proxy_pass http://") {
+			continue
+		}
+		url := strings.TrimSuffix(strings.TrimPrefix(trimmed, "proxy_pass "), ";")
+		if strings.Contains(url, "${") {
+			t.Errorf("proxy_pass URL contains unexpanded ${: %q", trimmed)
+		}
+		if strings.ContainsAny(url, " \t") {
+			t.Errorf("proxy_pass URL contains whitespace: %q", trimmed)
+		}
+	}
+}
+
+// TestAPIHostDerivedFromPort pins the #158 single-source-of-truth behavior: when
+// API_HOST is empty (compose no longer hardcodes a default), the upstream is
+// derived from API_HOST_PORT, so a custom port is honored without also setting
+// API_HOST. An explicit API_HOST still overrides.
+func TestAPIHostDerivedFromPort(t *testing.T) {
+	t.Setenv("API_HOST", "")
+	t.Setenv("API_HOST_PORT", "9999")
+	if m := NewManager(t.TempDir(), t.TempDir()); m.apiHost != "127.0.0.1:9999" {
+		t.Errorf("derive from API_HOST_PORT: got %q, want 127.0.0.1:9999", m.apiHost)
+	}
+
+	t.Setenv("API_HOST", "10.0.0.5:8080")
+	if m := NewManager(t.TempDir(), t.TempDir()); m.apiHost != "10.0.0.5:8080" {
+		t.Errorf("explicit API_HOST override: got %q, want 10.0.0.5:8080", m.apiHost)
+	}
 }
 
 func TestProxyHostTemplateGolden(t *testing.T) {

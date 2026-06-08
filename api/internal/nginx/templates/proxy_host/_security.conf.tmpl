@@ -41,6 +41,13 @@
         set $block_reason_var "-";
     }
 {{end}}
+{{- if $.GlobalTrustedIPs}}
+    # Global trusted IPs - bypass geo restriction
+    if ($trusted_ip_{{sanitizeID $.Host.ID}} = 1) {
+        set $geo_allowed_ip 1;
+        set $block_reason_var "-";
+    }
+{{- end}}
     # Combine checks: block only if geo_allowed_ip=0 AND geo_block_check=Y AND not ACME challenge
     set $geo_final_block "${geo_allowed_ip}${geo_block_check}${skip_security_for_acme}";
     if ($geo_final_block = "0Y0") {
@@ -72,6 +79,13 @@
         set $geo_block_check "";
         set $block_reason_var "-";
     }
+{{- if $.GlobalTrustedIPs}}
+    # Global trusted IPs - bypass geo restriction
+    if ($trusted_ip_{{sanitizeID $.Host.ID}} = 1) {
+        set $geo_block_check "";
+        set $block_reason_var "-";
+    }
+{{- end}}
     # Skip geo block for ACME challenge
     set $geo_block_final "${geo_block_check}${skip_security_for_acme}";
     if ($geo_block_final = "Y0") {
@@ -85,6 +99,13 @@
         set $geo_direct_block "Y";
         set $block_reason_var "geo_block";
     }
+{{- if $.GlobalTrustedIPs}}
+    # Global trusted IPs - bypass geo restriction
+    if ($trusted_ip_{{sanitizeID $.Host.ID}} = 1) {
+        set $geo_direct_block "";
+        set $block_reason_var "-";
+    }
+{{- end}}
     set $geo_direct_final "${geo_direct_block}${skip_security_for_acme}";
     if ($geo_direct_final = "Y0") {
         return 403;
@@ -103,6 +124,13 @@
         set $block_reason_var "-";
     }
 {{end}}
+{{- if $.GlobalTrustedIPs}}
+    # Global trusted IPs - bypass geo restriction
+    if ($trusted_ip_{{sanitizeID $.Host.ID}} = 1) {
+        set $geo_direct_block "";
+        set $block_reason_var "-";
+    }
+{{- end}}
     set $geo_direct_final "${geo_direct_block}${skip_security_for_acme}";
     if ($geo_direct_final = "Y0") {
         return 403;
@@ -181,6 +209,10 @@
     # Note: Access list denials will have block_reason set to access_denied
     set $block_reason_var "access_denied";
 {{if .AccessList.SatisfyAny}}    satisfy any;{{end}}
+{{- if $.GlobalTrustedIPs}}
+    # Global trusted IPs - allow before deny (access phase, first-match wins)
+{{range $.GlobalTrustedIPs}}    allow {{.}};
+{{end}}{{- end}}
 {{range .AccessList.Items}}
     {{.Directive}} {{.Address}};{{if .Description}} # {{.Description}}{{end}}
 {{end}}
@@ -428,6 +460,12 @@
         set $is_priority_allow_cloud 1;
     }
 {{end}}{{end}}
+{{- if $.GlobalTrustedIPs}}
+    # Global trusted IPs bypass cloud provider blocking
+    if ($trusted_ip_{{sanitizeID $.Host.ID}} = 1) {
+        set $is_priority_allow_cloud 1;
+    }
+{{- end}}
     set $cloud_block_check_{{sanitizeID .Host.ID}} "${blocked_cloud_{{sanitizeID .Host.ID}}}${is_priority_allow_cloud}";
 {{if .CloudProviderChallengeMode}}
     # Challenge mode - redirect to challenge page instead of blocking (skip for priority IPs, search bots, and ACME/challenge paths)

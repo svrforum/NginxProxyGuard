@@ -370,8 +370,8 @@
       },
       "trustedIps": {
         "title": "Global Trusted IPs",
-        "description": "IPs that bypass Fail2ban, WAF Auto-Ban, and IP bans. These IPs will never be automatically blocked.",
-        "help": "Add internal network ranges, monitoring systems, or trusted service IPs. These addresses are excluded from automatic banning (Fail2ban, WAF Auto-Ban) and removed from the banned IP list in nginx configs. Supports IPv4, IPv6, and CIDR notation.",
+        "description": "IPs that bypass per-host perimeter controls (geo restriction, access lists, bot filter, rate limiting) and are never automatically banned (Fail2ban, WAF Auto-Ban, IP bans). They do NOT bypass WAF rules or exploit/scanner blocking.",
+        "help": "Add internal network ranges, monitoring systems, or trusted service IPs. These addresses bypass per-host perimeter controls (geo restriction, access lists, bot filter, rate limiting), are excluded from automatic banning (Fail2ban, WAF Auto-Ban), and are removed from the banned IP list in nginx configs. For safety they still pass through WAF rules and exploit/scanner detection, so a compromised trusted host cannot proxy attacks to the backend. Supports IPv4, IPv6, and CIDR notation.",
         "placeholder": "# Internal network\n192.168.1.0/24\n10.0.0.0/8\n# Monitoring server\n203.0.113.50",
         "format": "One IP or CIDR per line. Lines starting with # are comments. Supports IPv4, IPv6, and CIDR. Invalid entries are silently ignored."
       }
