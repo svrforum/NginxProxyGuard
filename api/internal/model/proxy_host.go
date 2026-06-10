@@ -54,6 +54,52 @@ func ValidateStreamListenHost(host string) bool {
 	return net.ParseIP(ipText) != nil
 }
 
+// MaxDomainLength is the RFC 1035 max domain length.
+const MaxDomainLength = 253
+
+// domainRegex validates domain name format (RFC 1035). Mirrors the handler-layer
+// validator so the service Update path can enforce the same rules without a
+// reverse handler->service import. Kept in sync with handler.domainRegex.
+var domainRegex = regexp.MustCompile(`^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$`)
+
+// streamNameRegex accepts DNS-like SNI names plus simple service labels used for
+// raw TCP/UDP listeners. Kept in sync with handler.streamNameRegex.
+var streamNameRegex = regexp.MustCompile(`^[a-zA-Z0-9*_.-]+$`)
+
+// ValidateDomainName validates a domain name format (allows a leading wildcard).
+func ValidateDomainName(domain string) bool {
+	if len(domain) == 0 || len(domain) > MaxDomainLength {
+		return false
+	}
+	// Allow wildcards
+	if strings.HasPrefix(domain, "*.") {
+		domain = domain[2:]
+	}
+	return domainRegex.MatchString(domain)
+}
+
+// ValidateStreamName validates a stream listener name (SNI label or service label).
+func ValidateStreamName(name string) bool {
+	name = strings.TrimSpace(name)
+	if len(name) == 0 || len(name) > MaxDomainLength {
+		return false
+	}
+	return streamNameRegex.MatchString(name)
+}
+
+// ValidateHostnameOrIP validates that a string is either a valid hostname or IP
+// address. Used to reject forward_host values that could break out of the
+// generated proxy_pass directive (e.g. embedded spaces, semicolons, newlines).
+func ValidateHostnameOrIP(host string) bool {
+	if len(host) == 0 || len(host) > MaxDomainLength {
+		return false
+	}
+	if net.ParseIP(host) != nil {
+		return true
+	}
+	return ValidateDomainName(host)
+}
+
 // Dangerous nginx directives that should not be allowed in advanced config
 var dangerousDirectives = []string{
 	"load_module", // Could load malicious modules
@@ -121,16 +167,45 @@ var dangerousDirectives = []string{
 	"modsecurity_rules",   // Could modify WAF rules
 	"SecRuleEngine",       // Could disable WAF (ModSecurity directive)
 	"SecRule",             // Could add/modify WAF rules
+	// Upstream/backend override directives — could redirect traffic, bypass the
+	// managed proxy_pass, or break out of the generated location/server block.
+	"proxy_pass",
+	"fastcgi_pass",
+	"grpc_pass",
+	"uwsgi_pass",
+	// Filesystem exposure directives — could serve arbitrary files / enable
+	// directory listing or local file disclosure.
+	"alias",
+	"root",
+	"autoindex",
+	"internal",
+	// Access-control / request-flow override directives.
+	"satisfy",      // Could weaken combined allow/deny + auth requirements
+	"auth_request", // Could route auth subrequests to an attacker endpoint
+	"sub_filter",   // Could inject content into responses
+	"error_page",   // Could override managed security / challenge pages
 }
 
-// Security-overriding directives that are warned but not blocked
+// Security-overriding directive phrases. These are multi-token / contextual
+// patterns that the word-boundary denylist above cannot express precisely.
+// Previously this slice was never wired (commented "warn but not block"); it is
+// now actively blocked by ValidateAdvancedConfig below. The generic forms
+// (error_page, satisfy) are also covered by dangerousDirectives, so this slice
+// is defense-in-depth for the specific override phrasings.
 var securityOverrideDirectives = []string{
 	"error_page 403", // Could override security block pages
 	"error_page 418", // Could override cloud challenge
 	"satisfy",        // Could override access control
 }
 
-// validateAdvancedConfig checks if the advanced config contains dangerous directives
+// validateAdvancedConfig checks if the advanced config contains dangerous directives.
+//
+// NOTE: This is a denylist (block known-bad) which is inherently bypassable —
+// e.g. via include indirection, unusual whitespace, or directives we have not
+// enumerated. The real fix is allowlist-based parsing of the nginx config (only
+// permit a vetted set of directives in a vetted set of contexts). That is a
+// larger follow-up; the checks below are bounded hardening, not a complete
+// guarantee.
 func ValidateAdvancedConfig(config string) error {
 	if config == "" {
 		return nil
@@ -145,6 +220,14 @@ func ValidateAdvancedConfig(config string) error {
 		pattern := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(directive) + `\b`)
 		if pattern.MatchString(configLower) {
 			return fmt.Errorf("advanced config contains forbidden directive: %s", directive)
+		}
+	}
+
+	// Check security-overriding directive phrases (substring match, since these
+	// are multi-token patterns the word-boundary loop above cannot express).
+	for _, phrase := range securityOverrideDirectives {
+		if strings.Contains(configLower, strings.ToLower(phrase)) {
+			return fmt.Errorf("advanced config contains forbidden security-override directive: %s", phrase)
 		}
 	}
 

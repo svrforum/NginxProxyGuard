@@ -439,13 +439,39 @@ func (s *ProxyHostService) prepareUpdateProxyHostRequest(ctx context.Context, id
 	// Only fires when a non-empty container name is supplied; otherwise
 	// forward_host is left untouched (existing behavior preserved). When the
 	// request carries a container network, resolution is pinned to it (#151).
-	if req.ForwardContainerName != nil && *req.ForwardContainerName != "" {
+	isContainerTarget := req.ForwardContainerName != nil && *req.ForwardContainerName != ""
+	if isContainerTarget {
 		resolvedForwardHost, resolveErr := s.applyContainerTarget(ctx, req.ForwardContainerName, req.ForwardContainerNetwork, req.ForwardHost)
 		if resolveErr != nil {
 			return "", nil, resolveErr
 		}
 		req.ForwardHost = resolvedForwardHost
 		candidate.ForwardHost = resolvedForwardHost
+	}
+
+	// Enforce the SAME format validation that the Create path runs at the handler
+	// layer. The Update path previously skipped this, letting unvalidated
+	// domain_names / forward_host reach config generation and break out of the
+	// generated server_name / proxy_pass directives (server_name / proxy_pass
+	// injection). Applies to Update, UpdateWithoutReload and UpdateDBOnly
+	// (skip_nginx) since all route through here.
+	for _, domain := range candidate.DomainNames {
+		validName := model.ValidateDomainName(domain)
+		if candidate.ProxyType == model.ProxyTypeStream {
+			validName = model.ValidateStreamName(domain)
+		}
+		if !validName {
+			return "", nil, fmt.Errorf("invalid proxy name format: %s", domain)
+		}
+	}
+	// Container-name targets resolve forward_host server-side, so the candidate
+	// value is already a resolved IP; validating it here is still correct. Only
+	// skip validation when no forward_host is set on a container target (the
+	// resolver may legitimately leave it empty pre-resolution).
+	if !(isContainerTarget && candidate.ForwardHost == "") {
+		if !model.ValidateHostnameOrIP(candidate.ForwardHost) {
+			return "", nil, fmt.Errorf("invalid forward_host format")
+		}
 	}
 
 	if candidate.ProxyType == model.ProxyTypeStream {
