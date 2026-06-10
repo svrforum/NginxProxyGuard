@@ -16,7 +16,42 @@ import (
 	"nginx-proxy-guard/internal/model"
 )
 
+// safeJoinUnderBase joins relPath onto base and verifies the result stays
+// within base, blocking path-traversal entries (e.g. "../conf.d/evil.conf")
+// in untrusted backup archives. Returns the cleaned destination path or an
+// error if it escapes base.
+func safeJoinUnderBase(base, relPath string) (string, error) {
+	cleanBase := filepath.Clean(base)
+	dest := filepath.Clean(filepath.Join(cleanBase, relPath))
+	if dest != cleanBase && !strings.HasPrefix(dest, cleanBase+string(os.PathSeparator)) {
+		return "", fmt.Errorf("path traversal blocked: %q escapes %q", relPath, cleanBase)
+	}
+	return dest, nil
+}
+
+// secureFileMode returns the permission bits to use when restoring a backup
+// entry, ignoring the (untrusted) archive header mode. Private keys are forced
+// to 0600 so they are never restored world-readable; everything else is 0644.
+func secureFileMode(destPath string) os.FileMode {
+	base := filepath.Base(destPath)
+	if base == "privkey.pem" || strings.HasSuffix(base, ".key") {
+		return 0600
+	}
+	return 0644
+}
+
+// restoreRootDir is the only filesystem subtree backup files may be written
+// into. Both config (conf.d) and certificate restores live under it.
+const restoreRootDir = "/etc/nginx"
+
 func (h *SettingsHandler) extractFile(tarReader *tar.Reader, destPath string, header *tar.Header) error {
+	// Defense-in-depth: reject any destination that escapes the nginx tree,
+	// even if a caller forgot to sanitize the relative path (path traversal).
+	cleanDest := filepath.Clean(destPath)
+	if cleanDest != restoreRootDir && !strings.HasPrefix(cleanDest, restoreRootDir+string(os.PathSeparator)) {
+		return fmt.Errorf("path traversal blocked: %q escapes %q", destPath, restoreRootDir)
+	}
+
 	// Ensure parent directory exists
 	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
 		return err
@@ -33,12 +68,20 @@ func (h *SettingsHandler) extractFile(tarReader *tar.Reader, destPath string, he
 		}
 	}
 
-	// Create destination file
-	outFile, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode))
+	// Create destination file. Force secure permissions regardless of the
+	// archive header mode so restored private keys are never world-readable.
+	mode := secureFileMode(destPath)
+	outFile, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
 	if err != nil {
 		return err
 	}
 	defer outFile.Close()
+
+	// O_TRUNC keeps the existing file's permission bits when the file already
+	// exists, so enforce the secure mode explicitly (private keys -> 0600).
+	if err := outFile.Chmod(mode); err != nil {
+		return err
+	}
 
 	// Use LimitReader to read exactly the expected amount
 	limitReader := io.LimitReader(tarReader, header.Size)
@@ -142,7 +185,13 @@ func (h *SettingsHandler) restoreFilesFromBackup(backup *model.Backup) error {
 			// Restore certificates
 			if backup.IncludesCertificates && !strings.HasSuffix(header.Name, "/") && strings.Contains(filepath.Base(header.Name), ".") {
 				relPath := header.Name[6:] // Remove "certs/" prefix
-				destPath := filepath.Join("/etc/nginx/certs", relPath)
+				// Block path traversal (e.g. "certs/../conf.d/evil.conf").
+				// Cert layout is always certs/<id>/<file>, so only safe segments.
+				destPath, err := safeJoinUnderBase("/etc/nginx/certs", relPath)
+				if err != nil {
+					restoreErrors = append(restoreErrors, fmt.Sprintf("cert %s: %v", header.Name, err))
+					continue
+				}
 				if err := h.extractFile(tarReader, destPath, header); err != nil {
 					restoreErrors = append(restoreErrors, fmt.Sprintf("cert %s: %v", header.Name, err))
 				}
@@ -207,7 +256,13 @@ func (h *SettingsHandler) restoreFilesFromBackupDetailed(backup *model.Backup) (
 			if backup.IncludesCertificates && !strings.HasSuffix(header.Name, "/") &&
 				strings.Contains(filepath.Base(header.Name), ".") {
 				relPath := header.Name[6:]
-				destPath := filepath.Join("/etc/nginx/certs", relPath)
+				// Block path traversal (e.g. "certs/../conf.d/evil.conf").
+				// Cert layout is always certs/<id>/<file>, so only safe segments.
+				destPath, err := safeJoinUnderBase("/etc/nginx/certs", relPath)
+				if err != nil {
+					restoreErrors = append(restoreErrors, fmt.Sprintf("cert %s: %v", header.Name, err))
+					continue
+				}
 				if err := h.extractFile(tarReader, destPath, header); err != nil {
 					restoreErrors = append(restoreErrors, fmt.Sprintf("cert %s: %v", header.Name, err))
 				} else {

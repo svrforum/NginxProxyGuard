@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	neturl "net/url"
 	"strings"
 	"sync"
 	"time"
@@ -82,10 +83,47 @@ var defaultCloudProviders = []DefaultCloudProvider{
 
 // NewCloudProviderService creates a new cloud provider service
 func NewCloudProviderService(repo *repository.CloudProviderRepository) *CloudProviderService {
+	// IPRangesURL is user-settable, so the fetch client must be SSRF-hardened:
+	// resolve the host and reject private/loopback/link-local/IMDS targets at
+	// dial time, and re-validate every redirect hop. Mirrors the filter
+	// subscription client (isFilterPrivateIP / isPrivateAddr).
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			host, port, err := net.SplitHostPort(addr)
+			if err != nil {
+				return nil, fmt.Errorf("invalid address: %w", err)
+			}
+			ips, err := net.DefaultResolver.LookupHost(ctx, host)
+			if err != nil {
+				return nil, err
+			}
+			for _, ipStr := range ips {
+				ip := net.ParseIP(ipStr)
+				if ip != nil && isFilterPrivateIP(ip) {
+					return nil, fmt.Errorf("connection to private IP blocked: %s", ipStr)
+				}
+			}
+			dialer := &net.Dialer{Timeout: 5 * time.Second}
+			return dialer.DialContext(ctx, network, net.JoinHostPort(host, port))
+		},
+	}
+
 	return &CloudProviderService{
 		repo: repo,
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout:   30 * time.Second,
+			Transport: transport,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				if len(via) >= 5 {
+					return fmt.Errorf("too many redirects (max %d)", 5)
+				}
+				// Re-validate each redirect hop against private addresses.
+				host := req.URL.Hostname()
+				if isPrivateAddr(host) {
+					return fmt.Errorf("redirect to private address blocked: %s", host)
+				}
+				return nil
+			},
 		},
 		updateInterval: 24 * time.Hour, // Update daily
 	}
@@ -290,8 +328,33 @@ func (s *CloudProviderService) UpdateAllIPRanges(ctx context.Context) {
 	}
 }
 
+// validateIPRangesURL enforces SSRF-safe constraints on a user-settable
+// IPRangesURL: it must be a well-formed https URL whose host does not resolve
+// to a private/loopback/link-local/IMDS address. The dial-time guard in the
+// HTTP client is the authoritative backstop; this rejects bad URLs early.
+func validateIPRangesURL(rawURL string) error {
+	parsed, err := neturl.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL: %w", err)
+	}
+	if parsed.Scheme != "https" {
+		return fmt.Errorf("invalid URL scheme %q: only https is allowed", parsed.Scheme)
+	}
+	if parsed.Hostname() == "" {
+		return fmt.Errorf("invalid URL: missing host")
+	}
+	if isPrivateAddr(parsed.Hostname()) {
+		return fmt.Errorf("invalid URL: private addresses are not allowed")
+	}
+	return nil
+}
+
 // fetchIPRanges fetches IP ranges from a provider's URL
 func (s *CloudProviderService) fetchIPRanges(ctx context.Context, slug, url string) ([]string, error) {
+	if err := validateIPRangesURL(url); err != nil {
+		return nil, err
+	}
+
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
