@@ -27,10 +27,11 @@ export default function DNSProviderList() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editingProvider, setEditingProvider] = useState<DNSProvider | null>(null);
+  const [page, setPage] = useState(1);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['dns-providers'],
-    queryFn: () => listDNSProviders(),
+    queryKey: ['dns-providers', page],
+    queryFn: () => listDNSProviders(page),
   });
 
   const deleteMutation = useMutation({
@@ -169,6 +170,29 @@ export default function DNSProviderList() {
           </tbody>
         </table>
       </div>
+
+      {/* Pagination (#162: list was capped at the first page of 20) */}
+      {(data?.total_pages || 1) > 1 && (
+        <div className="flex items-center justify-center gap-2 mt-4">
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page === 1}
+            className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-sm disabled:opacity-50 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
+          >
+            {t('pagination.prev', { defaultValue: '이전' })}
+          </button>
+          <span className="px-4 py-1.5 text-sm text-slate-600 dark:text-slate-400">
+            {page} / {data?.total_pages || 1}
+          </span>
+          <button
+            onClick={() => setPage((p) => Math.min(data?.total_pages || 1, p + 1))}
+            disabled={page === (data?.total_pages || 1)}
+            className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-sm disabled:opacity-50 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
+          >
+            {t('pagination.next', { defaultValue: '다음' })}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
