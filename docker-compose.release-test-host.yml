@@ -243,6 +243,25 @@ services:
         fi
         echo "✅ PASS: Login successful, token obtained"
 
+        # Complete initial setup: the default admin must change its credentials
+        # before any protected endpoint is allowed (server-side initial-setup gate).
+        echo ""
+        echo "Test 2.1b: Complete initial setup (change default credentials)"
+        curl -s -X POST http://host.docker.internal:$$API_PORT/api/v1/auth/change-credentials \
+          -H "Content-Type: application/json" \
+          -H "Authorization: Bearer $$TOKEN" \
+          -d '{"current_password":"admin","new_username":"ciadmin","new_password":"CiAdmin123!","new_password_confirm":"CiAdmin123!"}' > /dev/null
+        LOGIN_RESP=$$(curl -s -X POST http://host.docker.internal:$$API_PORT/api/v1/auth/login \
+          -H "Content-Type: application/json" \
+          -d '{"username":"ciadmin","password":"CiAdmin123!"}')
+        TOKEN=$$(echo "$$LOGIN_RESP" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+        if [ -z "$$TOKEN" ]; then
+          echo "❌ FAIL: Re-login after credential change failed"
+          echo "Response: $$LOGIN_RESP"
+          exit 1
+        fi
+        echo "✅ PASS: Initial setup completed, re-authenticated"
+
         # Create proxy host
         echo ""
         echo "Test 2.2: Create proxy host"
