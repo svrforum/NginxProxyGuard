@@ -112,6 +112,14 @@ func runStartup(ctx context.Context, c *Container) error {
 		log.Printf("[Startup] Default server config regenerated successfully (action: %s)\n", directIPAction)
 	}
 
+	// Surface the default-credentials risk in container logs (H1). The
+	// initial-setup gate blocks protected endpoints server-side, but the
+	// operator still needs a loud, actionable nudge to change admin/admin.
+	if stillDefault, err := c.Repositories.Auth.IsInitialSetupRequired(ctx); err == nil && stillDefault {
+		log.Println("[Startup] WARN: default admin account still has initial credentials (admin/admin) — " +
+			"protected endpoints are blocked until you change them via the UI / /api/v1/auth/change-credentials")
+	}
+
 	return nil
 }
 

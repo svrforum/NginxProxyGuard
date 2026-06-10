@@ -19,6 +19,7 @@ import (
 	"nginx-proxy-guard/internal/config"
 	"nginx-proxy-guard/internal/handler"
 	authMiddleware "nginx-proxy-guard/internal/middleware"
+	"nginx-proxy-guard/internal/model"
 	"nginx-proxy-guard/internal/service"
 )
 
@@ -158,6 +159,10 @@ func registerPublicRoutes(v1 *echo.Group, c *Container) {
 func registerProtectedAuthRoutes(v1 *echo.Group, c *Container) {
 	protected := v1.Group("")
 	protected.Use(authMiddleware.AuthMiddleware(c.Services.Auth))
+	// Server-side initial-setup gate: while the logged-in user still has the
+	// default credentials (is_initial_setup=true), only change-credentials and
+	// read-only auth status are reachable (H1). No-op for set-up users.
+	protected.Use(authMiddleware.InitialSetupRequired)
 
 	protected.GET("/auth/me", c.Handlers.Auth.GetCurrentUser)
 	protected.POST("/auth/change-credentials", c.Handlers.Auth.ChangeCredentials)
@@ -195,6 +200,10 @@ func registerProtectedAuthRoutes(v1 *echo.Group, c *Container) {
 func registerTokenProtectedRoutes(v1 *echo.Group, c *Container) {
 	v1.Use(authMiddleware.APITokenAuth(c.Repositories.APIToken, c.Repositories.AuditLog))
 	v1.Use(authMiddleware.AuthMiddleware(c.Services.Auth))
+	// Block initial-setup (default-credential) session users from every
+	// resource endpoint until they change their credentials (H1). No-op for
+	// API tokens (no *model.User in context) and for set-up users.
+	v1.Use(authMiddleware.InitialSetupRequired)
 
 	registerAPITokenRoutes(v1, c.Handlers.APIToken)
 	registerProxyHostRoutes(v1, c.Handlers.ProxyHost)
@@ -220,320 +229,422 @@ func registerTokenProtectedRoutes(v1 *echo.Group, c *Container) {
 }
 
 func registerAPITokenRoutes(v1 *echo.Group, h *handler.APITokenHandler) {
+	// Token management is privileged: no dedicated scope exists, so reads
+	// require settings:read and mutations settings:write. This blocks a
+	// non-admin token from minting/revoking tokens (only a "*" token passes).
+	tokenRead := authMiddleware.RequireAPIPermission(model.PermissionSettingsRead)
+	tokenWrite := authMiddleware.RequireAPIPermission(model.PermissionSettingsWrite)
+
 	g := v1.Group("/api-tokens")
-	g.GET("", h.ListTokens)
-	g.POST("", h.CreateToken)
-	g.GET("/permissions", h.GetPermissions)
-	g.GET("/:id", h.GetToken)
-	g.PUT("/:id", h.UpdateToken)
-	g.POST("/:id/revoke", h.RevokeToken)
-	g.DELETE("/:id", h.DeleteToken)
-	g.GET("/:id/usage", h.GetTokenUsage)
+	g.GET("", h.ListTokens, tokenRead)
+	g.POST("", h.CreateToken, tokenWrite)
+	g.GET("/permissions", h.GetPermissions, tokenRead)
+	g.GET("/:id", h.GetToken, tokenRead)
+	g.PUT("/:id", h.UpdateToken, tokenWrite)
+	g.POST("/:id/revoke", h.RevokeToken, tokenWrite)
+	g.DELETE("/:id", h.DeleteToken, tokenWrite)
+	g.GET("/:id/usage", h.GetTokenUsage, tokenRead)
 }
 
 func registerProxyHostRoutes(v1 *echo.Group, h *handler.ProxyHostHandler) {
+	// RequireAPIPermission is a no-op for session requests; it only enforces
+	// scopes when the caller authenticated with an API token (H2).
+	proxyRead := authMiddleware.RequireAPIPermission(model.PermissionProxyRead)
+	proxyWrite := authMiddleware.RequireAPIPermission(model.PermissionProxyWrite)
+	proxyDelete := authMiddleware.RequireAPIPermission(model.PermissionProxyDelete)
+
 	g := v1.Group("/proxy-hosts")
-	g.GET("", h.List)
-	g.POST("", h.Create)
-	g.GET("/by-domain/:domain", h.GetByDomain)
-	g.POST("/sync", h.SyncAll)
-	g.GET("/:id", h.GetByID)
-	g.PUT("/:id", h.Update)
-	g.DELETE("/:id", h.Delete)
-	g.POST("/:id/regenerate", h.Regenerate)
-	g.POST("/:id/test", h.TestHost)
-	g.POST("/:id/clone", h.Clone)
-	g.PUT("/:id/favorite", h.ToggleFavorite)
+	g.GET("", h.List, proxyRead)
+	g.POST("", h.Create, proxyWrite)
+	g.GET("/by-domain/:domain", h.GetByDomain, proxyRead)
+	g.POST("/sync", h.SyncAll, proxyWrite)
+	g.GET("/:id", h.GetByID, proxyRead)
+	g.PUT("/:id", h.Update, proxyWrite)
+	g.DELETE("/:id", h.Delete, proxyDelete)
+	g.POST("/:id/regenerate", h.Regenerate, proxyWrite)
+	g.POST("/:id/test", h.TestHost, proxyRead)
+	g.POST("/:id/clone", h.Clone, proxyWrite)
+	g.PUT("/:id/favorite", h.ToggleFavorite, proxyWrite)
 }
 
 func registerDNSProviderRoutes(v1 *echo.Group, h *handler.DNSProviderHandler) {
+	// DNS providers back certificate DNS-01 issuance → certificate scopes (H2).
+	certRead := authMiddleware.RequireAPIPermission(model.PermissionCertRead)
+	certWrite := authMiddleware.RequireAPIPermission(model.PermissionCertWrite)
+	certDelete := authMiddleware.RequireAPIPermission(model.PermissionCertDelete)
+
 	g := v1.Group("/dns-providers")
-	g.GET("", h.List)
-	g.POST("", h.Create)
-	g.POST("/test", h.Test)
-	g.GET("/default", h.GetDefault)
-	g.GET("/:id", h.Get)
-	g.PUT("/:id", h.Update)
-	g.DELETE("/:id", h.Delete)
+	g.GET("", h.List, certRead)
+	g.POST("", h.Create, certWrite)
+	g.POST("/test", h.Test, certRead)
+	g.GET("/default", h.GetDefault, certRead)
+	g.GET("/:id", h.Get, certRead)
+	g.PUT("/:id", h.Update, certWrite)
+	g.DELETE("/:id", h.Delete, certDelete)
 }
 
 func registerDDNSRoutes(v1 *echo.Group, h *handler.DDNSHandler) {
+	// DDNS records are infrastructure/DNS configuration → settings scopes (H2).
+	settingsRead := authMiddleware.RequireAPIPermission(model.PermissionSettingsRead)
+	settingsWrite := authMiddleware.RequireAPIPermission(model.PermissionSettingsWrite)
+
 	g := v1.Group("/ddns-records")
-	g.GET("", h.List)
-	g.POST("", h.Create)
-	g.POST("/sync", h.SyncAll)
-	g.POST("/import-from-hosts", h.ImportFromHosts)
-	g.GET("/:id", h.Get)
-	g.PUT("/:id", h.Update)
-	g.DELETE("/:id", h.Delete)
-	g.POST("/:id/sync", h.SyncOne)
+	g.GET("", h.List, settingsRead)
+	g.POST("", h.Create, settingsWrite)
+	g.POST("/sync", h.SyncAll, settingsWrite)
+	g.POST("/import-from-hosts", h.ImportFromHosts, settingsWrite)
+	g.GET("/:id", h.Get, settingsRead)
+	g.PUT("/:id", h.Update, settingsWrite)
+	g.DELETE("/:id", h.Delete, settingsWrite)
+	g.POST("/:id/sync", h.SyncOne, settingsWrite)
 }
 
 func registerCertificateRoutes(v1 *echo.Group, h *handler.CertificateHandler) {
+	certRead := authMiddleware.RequireAPIPermission(model.PermissionCertRead)
+	certWrite := authMiddleware.RequireAPIPermission(model.PermissionCertWrite)
+	certDelete := authMiddleware.RequireAPIPermission(model.PermissionCertDelete)
+
 	g := v1.Group("/certificates")
-	g.GET("", h.List)
-	g.POST("", h.Create)
-	g.POST("/upload", h.Upload)
-	g.GET("/expiring", h.GetExpiring)
-	g.GET("/history", h.ListHistory)
-	g.DELETE("/errors", h.BulkDeleteErrors)
-	g.GET("/:id", h.Get)
-	g.DELETE("/:id", h.Delete)
-	g.DELETE("/:id/error", h.ClearError)
-	g.PUT("/:id/upload", h.UpdateUpload)
-	g.POST("/:id/renew", h.Renew)
-	g.GET("/:id/logs", h.GetLogs)
-	g.GET("/:id/download", h.Download)
+	g.GET("", h.List, certRead)
+	g.POST("", h.Create, certWrite)
+	g.POST("/upload", h.Upload, certWrite)
+	g.GET("/expiring", h.GetExpiring, certRead)
+	g.GET("/history", h.ListHistory, certRead)
+	g.DELETE("/errors", h.BulkDeleteErrors, certDelete)
+	g.GET("/:id", h.Get, certRead)
+	g.DELETE("/:id", h.Delete, certDelete)
+	g.DELETE("/:id/error", h.ClearError, certWrite)
+	g.PUT("/:id/upload", h.UpdateUpload, certWrite)
+	g.POST("/:id/renew", h.Renew, certWrite)
+	g.GET("/:id/logs", h.GetLogs, certRead)
+	g.GET("/:id/download", h.Download, certRead)
 }
 
 func registerLogRoutes(v1 *echo.Group, h *handler.LogHandler) {
+	logsRead := authMiddleware.RequireAPIPermission(model.PermissionLogsRead)
+	// No logs:write scope exists; mutating log endpoints (settings, cleanup,
+	// manual create) are administrative, so require settings:write.
+	logsWrite := authMiddleware.RequireAPIPermission(model.PermissionSettingsWrite)
+
 	g := v1.Group("/logs")
-	g.GET("", echo.WrapHandler(http.HandlerFunc(h.List)))
-	g.POST("", echo.WrapHandler(http.HandlerFunc(h.Create)))
-	g.GET("/stats", echo.WrapHandler(http.HandlerFunc(h.GetStats)))
-	g.GET("/settings", echo.WrapHandler(http.HandlerFunc(h.GetSettings)))
-	g.PUT("/settings", echo.WrapHandler(http.HandlerFunc(h.UpdateSettings)))
-	g.POST("/cleanup", echo.WrapHandler(http.HandlerFunc(h.Cleanup)))
-	g.GET("/autocomplete/hosts", echo.WrapHandler(http.HandlerFunc(h.GetDistinctHosts)))
-	g.GET("/autocomplete/ips", echo.WrapHandler(http.HandlerFunc(h.GetDistinctIPs)))
-	g.GET("/autocomplete/user-agents", echo.WrapHandler(http.HandlerFunc(h.GetDistinctUserAgents)))
-	g.GET("/autocomplete/countries", echo.WrapHandler(http.HandlerFunc(h.GetDistinctCountries)))
-	g.GET("/autocomplete/uris", echo.WrapHandler(http.HandlerFunc(h.GetDistinctURIs)))
-	g.GET("/autocomplete/methods", echo.WrapHandler(http.HandlerFunc(h.GetDistinctMethods)))
+	g.GET("", echo.WrapHandler(http.HandlerFunc(h.List)), logsRead)
+	g.POST("", echo.WrapHandler(http.HandlerFunc(h.Create)), logsWrite)
+	g.GET("/stats", echo.WrapHandler(http.HandlerFunc(h.GetStats)), logsRead)
+	g.GET("/settings", echo.WrapHandler(http.HandlerFunc(h.GetSettings)), logsRead)
+	g.PUT("/settings", echo.WrapHandler(http.HandlerFunc(h.UpdateSettings)), logsWrite)
+	g.POST("/cleanup", echo.WrapHandler(http.HandlerFunc(h.Cleanup)), logsWrite)
+	g.GET("/autocomplete/hosts", echo.WrapHandler(http.HandlerFunc(h.GetDistinctHosts)), logsRead)
+	g.GET("/autocomplete/ips", echo.WrapHandler(http.HandlerFunc(h.GetDistinctIPs)), logsRead)
+	g.GET("/autocomplete/user-agents", echo.WrapHandler(http.HandlerFunc(h.GetDistinctUserAgents)), logsRead)
+	g.GET("/autocomplete/countries", echo.WrapHandler(http.HandlerFunc(h.GetDistinctCountries)), logsRead)
+	g.GET("/autocomplete/uris", echo.WrapHandler(http.HandlerFunc(h.GetDistinctURIs)), logsRead)
+	g.GET("/autocomplete/methods", echo.WrapHandler(http.HandlerFunc(h.GetDistinctMethods)), logsRead)
 }
 
 func registerWAFTestRoutes(v1 *echo.Group, h *handler.WAFTestHandler) {
+	// WAF self-test is read-only diagnostics over the WAF → waf:read (H2).
+	wafRead := authMiddleware.RequireAPIPermission(model.PermissionWAFRead)
+
 	g := v1.Group("/waf-test")
-	g.GET("/patterns", echo.WrapHandler(http.HandlerFunc(h.ListPatterns)))
-	g.POST("/test", echo.WrapHandler(http.HandlerFunc(h.Test)))
-	g.POST("/test-all", echo.WrapHandler(http.HandlerFunc(h.TestAll)))
+	g.GET("/patterns", echo.WrapHandler(http.HandlerFunc(h.ListPatterns)), wafRead)
+	g.POST("/test", echo.WrapHandler(http.HandlerFunc(h.Test)), wafRead)
+	g.POST("/test-all", echo.WrapHandler(http.HandlerFunc(h.TestAll)), wafRead)
 }
 
 func registerWAFRoutes(v1 *echo.Group, h *handler.WAFHandler) {
+	wafRead := authMiddleware.RequireAPIPermission(model.PermissionWAFRead)
+	wafWrite := authMiddleware.RequireAPIPermission(model.PermissionWAFWrite)
+
 	g := v1.Group("/waf")
-	g.GET("/rules", echo.WrapHandler(http.HandlerFunc(h.GetRules)))
-	g.GET("/hosts", echo.WrapHandler(http.HandlerFunc(h.GetHostConfigs)))
-	g.GET("/hosts/:id/config", echo.WrapHandler(http.HandlerFunc(h.GetHostConfig)))
-	g.GET("/hosts/:id/history", echo.WrapHandler(http.HandlerFunc(h.GetPolicyHistory)))
-	g.POST("/hosts/:id/rules/:ruleId/disable", echo.WrapHandler(http.HandlerFunc(h.DisableRule)))
-	g.POST("/rules/disable-by-host", echo.WrapHandler(http.HandlerFunc(h.DisableRuleByHost)))
-	g.DELETE("/hosts/:id/rules/:ruleId/disable", echo.WrapHandler(http.HandlerFunc(h.EnableRule)))
-	g.GET("/global/rules", echo.WrapHandler(http.HandlerFunc(h.GetGlobalRules)))
-	g.GET("/global/exclusions", echo.WrapHandler(http.HandlerFunc(h.GetGlobalExclusions)))
-	g.GET("/global/history", echo.WrapHandler(http.HandlerFunc(h.GetGlobalPolicyHistory)))
-	g.POST("/global/rules/:ruleId/disable", echo.WrapHandler(http.HandlerFunc(h.DisableGlobalRule)))
-	g.DELETE("/global/rules/:ruleId/disable", echo.WrapHandler(http.HandlerFunc(h.EnableGlobalRule)))
+	g.GET("/rules", echo.WrapHandler(http.HandlerFunc(h.GetRules)), wafRead)
+	g.GET("/hosts", echo.WrapHandler(http.HandlerFunc(h.GetHostConfigs)), wafRead)
+	g.GET("/hosts/:id/config", echo.WrapHandler(http.HandlerFunc(h.GetHostConfig)), wafRead)
+	g.GET("/hosts/:id/history", echo.WrapHandler(http.HandlerFunc(h.GetPolicyHistory)), wafRead)
+	g.POST("/hosts/:id/rules/:ruleId/disable", echo.WrapHandler(http.HandlerFunc(h.DisableRule)), wafWrite)
+	g.POST("/rules/disable-by-host", echo.WrapHandler(http.HandlerFunc(h.DisableRuleByHost)), wafWrite)
+	g.DELETE("/hosts/:id/rules/:ruleId/disable", echo.WrapHandler(http.HandlerFunc(h.EnableRule)), wafWrite)
+	g.GET("/global/rules", echo.WrapHandler(http.HandlerFunc(h.GetGlobalRules)), wafRead)
+	g.GET("/global/exclusions", echo.WrapHandler(http.HandlerFunc(h.GetGlobalExclusions)), wafRead)
+	g.GET("/global/history", echo.WrapHandler(http.HandlerFunc(h.GetGlobalPolicyHistory)), wafRead)
+	g.POST("/global/rules/:ruleId/disable", echo.WrapHandler(http.HandlerFunc(h.DisableGlobalRule)), wafWrite)
+	g.DELETE("/global/rules/:ruleId/disable", echo.WrapHandler(http.HandlerFunc(h.EnableGlobalRule)), wafWrite)
 }
 
 func registerExploitRuleRoutes(v1 *echo.Group, h *handler.ExploitBlockRuleHandler) {
+	// Exploit-block rules are WAF-adjacent security rules → waf scopes (H2).
+	wafRead := authMiddleware.RequireAPIPermission(model.PermissionWAFRead)
+	wafWrite := authMiddleware.RequireAPIPermission(model.PermissionWAFWrite)
+
 	g := v1.Group("/exploit-rules")
-	g.GET("", echo.WrapHandler(http.HandlerFunc(h.ListRules)))
-	g.GET("/:id", echo.WrapHandler(http.HandlerFunc(h.GetRule)))
-	g.POST("", echo.WrapHandler(http.HandlerFunc(h.CreateRule)))
-	g.PUT("/:id", echo.WrapHandler(http.HandlerFunc(h.UpdateRule)))
-	g.DELETE("/:id", echo.WrapHandler(http.HandlerFunc(h.DeleteRule)))
-	g.POST("/:id/toggle", echo.WrapHandler(http.HandlerFunc(h.ToggleRule)))
-	g.POST("/:id/global-exclude", echo.WrapHandler(http.HandlerFunc(h.AddGlobalExclusion)))
-	g.DELETE("/:id/global-exclude", echo.WrapHandler(http.HandlerFunc(h.RemoveGlobalExclusion)))
-	g.GET("/hosts", echo.WrapHandler(http.HandlerFunc(h.ListHostsWithExploitBlocking)))
-	g.GET("/hosts/:hostId/rules", echo.WrapHandler(http.HandlerFunc(h.GetHostRules)))
-	g.POST("/hosts/:hostId/rules/:ruleId/exclude", echo.WrapHandler(http.HandlerFunc(h.AddHostExclusion)))
-	g.DELETE("/hosts/:hostId/rules/:ruleId/exclude", echo.WrapHandler(http.HandlerFunc(h.RemoveHostExclusion)))
+	g.GET("", echo.WrapHandler(http.HandlerFunc(h.ListRules)), wafRead)
+	g.GET("/:id", echo.WrapHandler(http.HandlerFunc(h.GetRule)), wafRead)
+	g.POST("", echo.WrapHandler(http.HandlerFunc(h.CreateRule)), wafWrite)
+	g.PUT("/:id", echo.WrapHandler(http.HandlerFunc(h.UpdateRule)), wafWrite)
+	g.DELETE("/:id", echo.WrapHandler(http.HandlerFunc(h.DeleteRule)), wafWrite)
+	g.POST("/:id/toggle", echo.WrapHandler(http.HandlerFunc(h.ToggleRule)), wafWrite)
+	g.POST("/:id/global-exclude", echo.WrapHandler(http.HandlerFunc(h.AddGlobalExclusion)), wafWrite)
+	g.DELETE("/:id/global-exclude", echo.WrapHandler(http.HandlerFunc(h.RemoveGlobalExclusion)), wafWrite)
+	g.GET("/hosts", echo.WrapHandler(http.HandlerFunc(h.ListHostsWithExploitBlocking)), wafRead)
+	g.GET("/hosts/:hostId/rules", echo.WrapHandler(http.HandlerFunc(h.GetHostRules)), wafRead)
+	g.POST("/hosts/:hostId/rules/:ruleId/exclude", echo.WrapHandler(http.HandlerFunc(h.AddHostExclusion)), wafWrite)
+	g.DELETE("/hosts/:hostId/rules/:ruleId/exclude", echo.WrapHandler(http.HandlerFunc(h.RemoveHostExclusion)), wafWrite)
 }
 
 func registerAccessListRoutes(v1 *echo.Group, h *handler.AccessListHandler) {
+	// Access lists are applied to proxy hosts → proxy scopes (H2).
+	proxyRead := authMiddleware.RequireAPIPermission(model.PermissionProxyRead)
+	proxyWrite := authMiddleware.RequireAPIPermission(model.PermissionProxyWrite)
+	proxyDelete := authMiddleware.RequireAPIPermission(model.PermissionProxyDelete)
+
 	g := v1.Group("/access-lists")
-	g.GET("", h.List)
-	g.POST("", h.Create)
-	g.GET("/:id", h.Get)
-	g.PUT("/:id", h.Update)
-	g.DELETE("/:id", h.Delete)
+	g.GET("", h.List, proxyRead)
+	g.POST("", h.Create, proxyWrite)
+	g.GET("/:id", h.Get, proxyRead)
+	g.PUT("/:id", h.Update, proxyWrite)
+	g.DELETE("/:id", h.Delete, proxyDelete)
 }
 
 func registerRedirectHostRoutes(v1 *echo.Group, h *handler.RedirectHostHandler) {
+	// Redirect hosts are proxy-host-like resources → proxy scopes (H2).
+	proxyRead := authMiddleware.RequireAPIPermission(model.PermissionProxyRead)
+	proxyWrite := authMiddleware.RequireAPIPermission(model.PermissionProxyWrite)
+	proxyDelete := authMiddleware.RequireAPIPermission(model.PermissionProxyDelete)
+
 	g := v1.Group("/redirect-hosts")
-	g.GET("", h.List)
-	g.POST("", h.Create)
-	g.POST("/sync", h.SyncAll)
-	g.GET("/:id", h.Get)
-	g.PUT("/:id", h.Update)
-	g.DELETE("/:id", h.Delete)
+	g.GET("", h.List, proxyRead)
+	g.POST("", h.Create, proxyWrite)
+	g.POST("/sync", h.SyncAll, proxyWrite)
+	g.GET("/:id", h.Get, proxyRead)
+	g.PUT("/:id", h.Update, proxyWrite)
+	g.DELETE("/:id", h.Delete, proxyDelete)
 }
 
 func registerGeoRoutes(v1 *echo.Group, h *handler.GeoHandler) {
-	v1.GET("/proxy-hosts/:id/geo", h.GetByProxyHost)
-	v1.POST("/proxy-hosts/:id/geo", h.SetForProxyHost)
-	v1.PUT("/proxy-hosts/:id/geo", h.UpdateForProxyHost)
-	v1.DELETE("/proxy-hosts/:id/geo", h.DeleteForProxyHost)
-	v1.GET("/geo/countries", h.GetCountryCodes)
+	// GeoIP filtering is per-proxy-host configuration → proxy scopes (H2).
+	proxyRead := authMiddleware.RequireAPIPermission(model.PermissionProxyRead)
+	proxyWrite := authMiddleware.RequireAPIPermission(model.PermissionProxyWrite)
+	proxyDelete := authMiddleware.RequireAPIPermission(model.PermissionProxyDelete)
+
+	v1.GET("/proxy-hosts/:id/geo", h.GetByProxyHost, proxyRead)
+	v1.POST("/proxy-hosts/:id/geo", h.SetForProxyHost, proxyWrite)
+	v1.PUT("/proxy-hosts/:id/geo", h.UpdateForProxyHost, proxyWrite)
+	v1.DELETE("/proxy-hosts/:id/geo", h.DeleteForProxyHost, proxyDelete)
+	v1.GET("/geo/countries", h.GetCountryCodes, proxyRead)
 }
 
 func registerSecurityRoutes(v1 *echo.Group, h *handler.SecurityHandler) {
+	// All security features here are per-proxy-host (or global) proxy
+	// configuration, so they map to the proxy scopes (H2).
+	proxyRead := authMiddleware.RequireAPIPermission(model.PermissionProxyRead)
+	proxyWrite := authMiddleware.RequireAPIPermission(model.PermissionProxyWrite)
+	proxyDelete := authMiddleware.RequireAPIPermission(model.PermissionProxyDelete)
+
 	// Rate limit (per proxy host)
-	v1.GET("/proxy-hosts/:proxyHostId/rate-limit", h.GetRateLimit)
-	v1.PUT("/proxy-hosts/:proxyHostId/rate-limit", h.UpsertRateLimit)
-	v1.DELETE("/proxy-hosts/:proxyHostId/rate-limit", h.DeleteRateLimit)
+	v1.GET("/proxy-hosts/:proxyHostId/rate-limit", h.GetRateLimit, proxyRead)
+	v1.PUT("/proxy-hosts/:proxyHostId/rate-limit", h.UpsertRateLimit, proxyWrite)
+	v1.DELETE("/proxy-hosts/:proxyHostId/rate-limit", h.DeleteRateLimit, proxyDelete)
 
 	// Fail2ban (per proxy host)
-	v1.GET("/proxy-hosts/:proxyHostId/fail2ban", h.GetFail2ban)
-	v1.PUT("/proxy-hosts/:proxyHostId/fail2ban", h.UpsertFail2ban)
-	v1.DELETE("/proxy-hosts/:proxyHostId/fail2ban", h.DeleteFail2ban)
+	v1.GET("/proxy-hosts/:proxyHostId/fail2ban", h.GetFail2ban, proxyRead)
+	v1.PUT("/proxy-hosts/:proxyHostId/fail2ban", h.UpsertFail2ban, proxyWrite)
+	v1.DELETE("/proxy-hosts/:proxyHostId/fail2ban", h.DeleteFail2ban, proxyDelete)
 
 	// Banned IPs
 	bannedIPs := v1.Group("/banned-ips")
-	bannedIPs.GET("", h.ListBannedIPs)
-	bannedIPs.POST("", h.BanIP)
-	bannedIPs.POST("/bulk-unban", h.UnbanIPsBulk)
-	bannedIPs.DELETE("/:id", h.UnbanIP)
-	bannedIPs.DELETE("", h.UnbanIPByAddress)
-	bannedIPs.GET("/history", h.GetIPBanHistory)
-	bannedIPs.GET("/history/stats", h.GetIPBanHistoryStats)
-	bannedIPs.GET("/history/ip/:ip", h.GetIPBanHistoryByIP)
+	bannedIPs.GET("", h.ListBannedIPs, proxyRead)
+	bannedIPs.POST("", h.BanIP, proxyWrite)
+	bannedIPs.POST("/bulk-unban", h.UnbanIPsBulk, proxyWrite)
+	bannedIPs.DELETE("/:id", h.UnbanIP, proxyDelete)
+	bannedIPs.DELETE("", h.UnbanIPByAddress, proxyDelete)
+	bannedIPs.GET("/history", h.GetIPBanHistory, proxyRead)
+	bannedIPs.GET("/history/stats", h.GetIPBanHistoryStats, proxyRead)
+	bannedIPs.GET("/history/ip/:ip", h.GetIPBanHistoryByIP, proxyRead)
 
 	// Bot filter (per proxy host)
-	v1.GET("/proxy-hosts/:proxyHostId/bot-filter", h.GetBotFilter)
-	v1.PUT("/proxy-hosts/:proxyHostId/bot-filter", h.UpsertBotFilter)
-	v1.DELETE("/proxy-hosts/:proxyHostId/bot-filter", h.DeleteBotFilter)
-	v1.GET("/bots/known", h.GetKnownBots)
+	v1.GET("/proxy-hosts/:proxyHostId/bot-filter", h.GetBotFilter, proxyRead)
+	v1.PUT("/proxy-hosts/:proxyHostId/bot-filter", h.UpsertBotFilter, proxyWrite)
+	v1.DELETE("/proxy-hosts/:proxyHostId/bot-filter", h.DeleteBotFilter, proxyDelete)
+	v1.GET("/bots/known", h.GetKnownBots, proxyRead)
 
 	// URI block (per proxy host)
-	v1.GET("/uri-blocks", h.ListAllURIBlocks)
-	v1.POST("/uri-blocks/bulk-add-rule", h.BulkAddURIBlockRule)
-	v1.GET("/proxy-hosts/:proxyHostId/uri-block", h.GetURIBlock)
-	v1.PUT("/proxy-hosts/:proxyHostId/uri-block", h.UpsertURIBlock)
-	v1.DELETE("/proxy-hosts/:proxyHostId/uri-block", h.DeleteURIBlock)
-	v1.POST("/proxy-hosts/:proxyHostId/uri-block/rules", h.AddURIBlockRule)
-	v1.DELETE("/proxy-hosts/:proxyHostId/uri-block/rules/:ruleId", h.RemoveURIBlockRule)
+	v1.GET("/uri-blocks", h.ListAllURIBlocks, proxyRead)
+	v1.POST("/uri-blocks/bulk-add-rule", h.BulkAddURIBlockRule, proxyWrite)
+	v1.GET("/proxy-hosts/:proxyHostId/uri-block", h.GetURIBlock, proxyRead)
+	v1.PUT("/proxy-hosts/:proxyHostId/uri-block", h.UpsertURIBlock, proxyWrite)
+	v1.DELETE("/proxy-hosts/:proxyHostId/uri-block", h.DeleteURIBlock, proxyDelete)
+	v1.POST("/proxy-hosts/:proxyHostId/uri-block/rules", h.AddURIBlockRule, proxyWrite)
+	v1.DELETE("/proxy-hosts/:proxyHostId/uri-block/rules/:ruleId", h.RemoveURIBlockRule, proxyDelete)
 
 	// Global URI block
-	v1.GET("/global-uri-block", h.GetGlobalURIBlock)
-	v1.PUT("/global-uri-block", h.UpdateGlobalURIBlock)
-	v1.POST("/global-uri-block/rules", h.AddGlobalURIBlockRule)
-	v1.DELETE("/global-uri-block/rules/:ruleId", h.RemoveGlobalURIBlockRule)
+	v1.GET("/global-uri-block", h.GetGlobalURIBlock, proxyRead)
+	v1.PUT("/global-uri-block", h.UpdateGlobalURIBlock, proxyWrite)
+	v1.POST("/global-uri-block/rules", h.AddGlobalURIBlockRule, proxyWrite)
+	v1.DELETE("/global-uri-block/rules/:ruleId", h.RemoveGlobalURIBlockRule, proxyDelete)
 
 	// Security headers (per proxy host)
-	v1.GET("/proxy-hosts/:proxyHostId/security-headers", h.GetSecurityHeaders)
-	v1.PUT("/proxy-hosts/:proxyHostId/security-headers", h.UpsertSecurityHeaders)
-	v1.DELETE("/proxy-hosts/:proxyHostId/security-headers", h.DeleteSecurityHeaders)
-	v1.GET("/security-headers/presets", h.GetSecurityHeaderPresets)
-	v1.POST("/proxy-hosts/:proxyHostId/security-headers/preset/:preset", h.ApplySecurityHeaderPreset)
+	v1.GET("/proxy-hosts/:proxyHostId/security-headers", h.GetSecurityHeaders, proxyRead)
+	v1.PUT("/proxy-hosts/:proxyHostId/security-headers", h.UpsertSecurityHeaders, proxyWrite)
+	v1.DELETE("/proxy-hosts/:proxyHostId/security-headers", h.DeleteSecurityHeaders, proxyDelete)
+	v1.GET("/security-headers/presets", h.GetSecurityHeaderPresets, proxyRead)
+	v1.POST("/proxy-hosts/:proxyHostId/security-headers/preset/:preset", h.ApplySecurityHeaderPreset, proxyWrite)
 
 	// Upstream (per proxy host)
-	v1.GET("/proxy-hosts/:proxyHostId/upstream", h.GetUpstream)
-	v1.PUT("/proxy-hosts/:proxyHostId/upstream", h.UpsertUpstream)
-	v1.DELETE("/proxy-hosts/:proxyHostId/upstream", h.DeleteUpstream)
-	v1.GET("/upstreams/:id/health", h.GetUpstreamHealth)
+	v1.GET("/proxy-hosts/:proxyHostId/upstream", h.GetUpstream, proxyRead)
+	v1.PUT("/proxy-hosts/:proxyHostId/upstream", h.UpsertUpstream, proxyWrite)
+	v1.DELETE("/proxy-hosts/:proxyHostId/upstream", h.DeleteUpstream, proxyDelete)
+	v1.GET("/upstreams/:id/health", h.GetUpstreamHealth, proxyRead)
 }
 
 func registerSettingsRoutes(v1 *echo.Group, h *handler.SettingsHandler) {
+	settingsRead := authMiddleware.RequireAPIPermission(model.PermissionSettingsRead)
+	settingsWrite := authMiddleware.RequireAPIPermission(model.PermissionSettingsWrite)
+
 	settings := v1.Group("/settings")
-	settings.GET("", h.GetGlobalSettings)
-	settings.PUT("", h.UpdateGlobalSettings)
-	settings.POST("/reset", h.ResetGlobalSettings)
-	settings.GET("/presets", h.GetSettingsPresets)
-	settings.POST("/preset/:preset", h.ApplySettingsPreset)
+	settings.GET("", h.GetGlobalSettings, settingsRead)
+	settings.PUT("", h.UpdateGlobalSettings, settingsWrite)
+	settings.POST("/reset", h.ResetGlobalSettings, settingsWrite)
+	settings.GET("/presets", h.GetSettingsPresets, settingsRead)
+	settings.POST("/preset/:preset", h.ApplySettingsPreset, settingsWrite)
 
 	dashboard := v1.Group("/dashboard")
-	dashboard.GET("", h.GetDashboard)
-	dashboard.GET("/health", h.GetSystemHealth)
-	dashboard.GET("/health/history", h.GetSystemHealthHistory)
-	dashboard.GET("/stats/hourly", h.GetHourlyStats)
-	dashboard.GET("/containers", h.GetDockerStats)
-	dashboard.GET("/geoip-stats", h.GetGeoIPStats)
+	dashboard.GET("", h.GetDashboard, settingsRead)
+	dashboard.GET("/health", h.GetSystemHealth, settingsRead)
+	dashboard.GET("/health/history", h.GetSystemHealthHistory, settingsRead)
+	dashboard.GET("/stats/hourly", h.GetHourlyStats, settingsRead)
+	dashboard.GET("/containers", h.GetDockerStats, settingsRead)
+	dashboard.GET("/geoip-stats", h.GetGeoIPStats, settingsRead)
 
-	v1.GET("/docker/containers", h.ListDockerContainers)
+	v1.GET("/docker/containers", h.ListDockerContainers, settingsRead)
+
+	backupRead := authMiddleware.RequireAPIPermission(model.PermissionBackupRead)
+	backupCreate := authMiddleware.RequireAPIPermission(model.PermissionBackupCreate)
+	backupRestore := authMiddleware.RequireAPIPermission(model.PermissionBackupRestore)
 
 	backups := v1.Group("/backups")
-	backups.GET("", h.ListBackups)
-	backups.POST("", h.CreateBackup)
-	backups.POST("/upload-restore", h.UploadAndRestoreBackup)
-	backups.GET("/stats", h.GetBackupStats)
-	backups.GET("/:id", h.GetBackup)
-	backups.GET("/:id/download", h.DownloadBackup)
-	backups.DELETE("/:id", h.DeleteBackup)
-	backups.POST("/:id/restore", h.RestoreBackup)
+	backups.GET("", h.ListBackups, backupRead)
+	backups.POST("", h.CreateBackup, backupCreate)
+	backups.POST("/upload-restore", h.UploadAndRestoreBackup, backupRestore)
+	backups.GET("/stats", h.GetBackupStats, backupRead)
+	backups.GET("/:id", h.GetBackup, backupRead)
+	backups.GET("/:id/download", h.DownloadBackup, backupRead)
+	backups.DELETE("/:id", h.DeleteBackup, backupCreate)
+	backups.POST("/:id/restore", h.RestoreBackup, backupRestore)
 }
 
 func registerSystemLogRoutes(v1 *echo.Group, h *handler.SystemLogHandler) {
+	// System logs are administrative observability data → settings scopes (H2).
+	settingsRead := authMiddleware.RequireAPIPermission(model.PermissionSettingsRead)
+	settingsWrite := authMiddleware.RequireAPIPermission(model.PermissionSettingsWrite)
+
 	g := v1.Group("/system-logs")
-	g.GET("", h.List)
-	g.GET("/stats", h.GetStats)
-	g.POST("/cleanup", h.Cleanup)
-	g.GET("/sources", h.GetSources)
-	g.GET("/levels", h.GetLevels)
+	g.GET("", h.List, settingsRead)
+	g.GET("/stats", h.GetStats, settingsRead)
+	g.POST("/cleanup", h.Cleanup, settingsWrite)
+	g.GET("/sources", h.GetSources, settingsRead)
+	g.GET("/levels", h.GetLevels, settingsRead)
 }
 
 func registerSystemSettingsRoutes(v1 *echo.Group, h *handler.SystemSettingsHandler) {
+	settingsRead := authMiddleware.RequireAPIPermission(model.PermissionSettingsRead)
+	settingsWrite := authMiddleware.RequireAPIPermission(model.PermissionSettingsWrite)
+
 	g := v1.Group("/system-settings")
-	g.GET("", h.GetSystemSettings)
-	g.PUT("", h.UpdateSystemSettings)
-	g.GET("/geoip/status", h.GetGeoIPStatus)
-	g.POST("/geoip/update", h.UpdateGeoIPDatabases)
-	g.GET("/geoip/history", h.GetGeoIPHistory)
-	g.POST("/acme/test", h.TestACME)
+	g.GET("", h.GetSystemSettings, settingsRead)
+	g.PUT("", h.UpdateSystemSettings, settingsWrite)
+	g.GET("/geoip/status", h.GetGeoIPStatus, settingsRead)
+	g.POST("/geoip/update", h.UpdateGeoIPDatabases, settingsWrite)
+	g.GET("/geoip/history", h.GetGeoIPHistory, settingsRead)
+	g.POST("/acme/test", h.TestACME, settingsWrite)
 
-	g.GET("/log-files", h.ListLogFiles)
-	g.GET("/log-files/:filename/download", h.DownloadLogFile)
-	g.GET("/log-files/:filename/view", h.ViewLogFile)
-	g.DELETE("/log-files/:filename", h.DeleteLogFile)
-	g.POST("/log-files/rotate", h.TriggerLogRotation)
+	g.GET("/log-files", h.ListLogFiles, settingsRead)
+	g.GET("/log-files/:filename/download", h.DownloadLogFile, settingsRead)
+	g.GET("/log-files/:filename/view", h.ViewLogFile, settingsRead)
+	g.DELETE("/log-files/:filename", h.DeleteLogFile, settingsWrite)
+	g.POST("/log-files/rotate", h.TriggerLogRotation, settingsWrite)
 
-	g.GET("/logs", h.GetSystemLogConfig)
-	g.PUT("/logs", h.UpdateSystemLogConfig)
+	g.GET("/logs", h.GetSystemLogConfig, settingsRead)
+	g.PUT("/logs", h.UpdateSystemLogConfig, settingsWrite)
 }
 
 func registerAuditLogRoutes(v1 *echo.Group, h *handler.AuditLogHandler) {
+	// Audit logs are administrative read-only observability data.
+	auditRead := authMiddleware.RequireAPIPermission(model.PermissionSettingsRead)
+
 	g := v1.Group("/audit-logs")
-	g.GET("", h.ListAuditLogs)
-	g.GET("/actions", h.GetActions)
-	g.GET("/resource-types", h.GetResourceTypes)
-	g.GET("/api-tokens", h.ListAPITokenUsage)
+	g.GET("", h.ListAuditLogs, auditRead)
+	g.GET("/actions", h.GetActions, auditRead)
+	g.GET("/resource-types", h.GetResourceTypes, auditRead)
+	g.GET("/api-tokens", h.ListAPITokenUsage, auditRead)
 }
 
 func registerChallengeConfigRoutes(v1 *echo.Group, h *handler.ChallengeHandler) {
-	challengeConfig := v1.Group("/challenge-config")
-	challengeConfig.GET("", h.GetGlobalConfig)
-	challengeConfig.PUT("", h.UpdateGlobalConfig)
-	challengeConfig.GET("/stats", h.GetStats)
+	// Global challenge config is a settings-level concern; per-proxy-host
+	// challenge config maps to proxy scopes (H2).
+	settingsRead := authMiddleware.RequireAPIPermission(model.PermissionSettingsRead)
+	settingsWrite := authMiddleware.RequireAPIPermission(model.PermissionSettingsWrite)
+	proxyRead := authMiddleware.RequireAPIPermission(model.PermissionProxyRead)
+	proxyWrite := authMiddleware.RequireAPIPermission(model.PermissionProxyWrite)
+	proxyDelete := authMiddleware.RequireAPIPermission(model.PermissionProxyDelete)
 
-	v1.GET("/proxy-hosts/:id/challenge", h.GetProxyHostConfig)
-	v1.PUT("/proxy-hosts/:id/challenge", h.UpdateProxyHostConfig)
-	v1.DELETE("/proxy-hosts/:id/challenge", h.DeleteProxyHostConfig)
+	challengeConfig := v1.Group("/challenge-config")
+	challengeConfig.GET("", h.GetGlobalConfig, settingsRead)
+	challengeConfig.PUT("", h.UpdateGlobalConfig, settingsWrite)
+	challengeConfig.GET("/stats", h.GetStats, settingsRead)
+
+	v1.GET("/proxy-hosts/:id/challenge", h.GetProxyHostConfig, proxyRead)
+	v1.PUT("/proxy-hosts/:id/challenge", h.UpdateProxyHostConfig, proxyWrite)
+	v1.DELETE("/proxy-hosts/:id/challenge", h.DeleteProxyHostConfig, proxyDelete)
 }
 
 func registerCloudProviderRoutes(v1 *echo.Group, h *handler.CloudProviderHandler) {
-	g := v1.Group("/cloud-providers")
-	g.GET("", h.ListProviders)
-	g.GET("/by-region", h.ListProvidersByRegion)
-	g.GET("/:slug", h.GetProvider)
-	g.POST("", h.CreateProvider)
-	g.PUT("/:slug", h.UpdateProvider)
-	g.DELETE("/:slug", h.DeleteProvider)
+	// Provider catalog is a settings-level concern; per-proxy-host blocked
+	// providers map to proxy scopes (H2).
+	settingsRead := authMiddleware.RequireAPIPermission(model.PermissionSettingsRead)
+	settingsWrite := authMiddleware.RequireAPIPermission(model.PermissionSettingsWrite)
+	proxyRead := authMiddleware.RequireAPIPermission(model.PermissionProxyRead)
+	proxyWrite := authMiddleware.RequireAPIPermission(model.PermissionProxyWrite)
 
-	v1.GET("/proxy-hosts/:proxyHostId/blocked-cloud-providers", h.GetBlockedProviders)
-	v1.PUT("/proxy-hosts/:proxyHostId/blocked-cloud-providers", h.SetBlockedProviders)
+	g := v1.Group("/cloud-providers")
+	g.GET("", h.ListProviders, settingsRead)
+	g.GET("/by-region", h.ListProvidersByRegion, settingsRead)
+	g.GET("/:slug", h.GetProvider, settingsRead)
+	g.POST("", h.CreateProvider, settingsWrite)
+	g.PUT("/:slug", h.UpdateProvider, settingsWrite)
+	g.DELETE("/:slug", h.DeleteProvider, settingsWrite)
+
+	v1.GET("/proxy-hosts/:proxyHostId/blocked-cloud-providers", h.GetBlockedProviders, proxyRead)
+	v1.PUT("/proxy-hosts/:proxyHostId/blocked-cloud-providers", h.SetBlockedProviders, proxyWrite)
 }
 
 func registerFilterSubscriptionRoutes(v1 *echo.Group, h *handler.FilterSubscriptionHandler) {
+	// Filter subscriptions are security block-lists applied to proxy hosts →
+	// proxy scopes (H2).
+	proxyRead := authMiddleware.RequireAPIPermission(model.PermissionProxyRead)
+	proxyWrite := authMiddleware.RequireAPIPermission(model.PermissionProxyWrite)
+	proxyDelete := authMiddleware.RequireAPIPermission(model.PermissionProxyDelete)
+
 	g := v1.Group("/filter-subscriptions")
-	g.GET("/catalog", h.GetCatalog)
-	g.POST("/catalog/subscribe", h.SubscribeFromCatalog)
-	g.GET("", h.List)
-	g.POST("", h.Create)
-	g.GET("/:id", h.GetByID)
-	g.PUT("/:id", h.Update)
-	g.DELETE("/:id", h.Delete)
-	g.POST("/:id/refresh", h.Refresh)
-	g.GET("/:id/exclusions", h.ListExclusions)
-	g.POST("/:id/exclusions/:hostId", h.AddExclusion)
-	g.DELETE("/:id/exclusions/:hostId", h.RemoveExclusion)
-	g.GET("/:id/entry-exclusions", h.ListEntryExclusions)
-	g.POST("/:id/entry-exclusions", h.AddEntryExclusion)
-	g.DELETE("/:id/entry-exclusions", h.RemoveEntryExclusion)
+	g.GET("/catalog", h.GetCatalog, proxyRead)
+	g.POST("/catalog/subscribe", h.SubscribeFromCatalog, proxyWrite)
+	g.GET("", h.List, proxyRead)
+	g.POST("", h.Create, proxyWrite)
+	g.GET("/:id", h.GetByID, proxyRead)
+	g.PUT("/:id", h.Update, proxyWrite)
+	g.DELETE("/:id", h.Delete, proxyDelete)
+	g.POST("/:id/refresh", h.Refresh, proxyWrite)
+	g.GET("/:id/exclusions", h.ListExclusions, proxyRead)
+	g.POST("/:id/exclusions/:hostId", h.AddExclusion, proxyWrite)
+	g.DELETE("/:id/exclusions/:hostId", h.RemoveExclusion, proxyDelete)
+	g.GET("/:id/entry-exclusions", h.ListEntryExclusions, proxyRead)
+	g.POST("/:id/entry-exclusions", h.AddEntryExclusion, proxyWrite)
+	g.DELETE("/:id/entry-exclusions", h.RemoveEntryExclusion, proxyDelete)
 }
 
 func registerTestRoutes(v1 *echo.Group, c *Container) {
 	test := v1.Group("/test")
+	// Diagnostic/self-check endpoints are administrative reads → settings:read.
+	// No-op for session requests (H2).
+	test.Use(authMiddleware.RequireAPIPermission(model.PermissionSettingsRead))
 
 	test.POST("/nginx-config", func(ec echo.Context) error {
 		if err := c.Nginx.TestConfig(ec.Request().Context()); err != nil {
