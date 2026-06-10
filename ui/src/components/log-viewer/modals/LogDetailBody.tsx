@@ -1,4 +1,4 @@
-import { useTranslation } from 'react-i18next';
+import { useTranslation, Trans } from 'react-i18next';
 import type { Log } from '../../../types/log';
 import type { URIMatchType } from '../../../types/security';
 import { formatBytes } from '../utils';
@@ -205,7 +205,6 @@ export function DisableRuleForm({
   log, disableReason, setDisableReason, isGlobalDisable, setIsGlobalDisable, onSubmit, onCancel, isPending,
 }: DisableRuleFormProps) {
   const { t } = useTranslation('logs');
-  const descriptionHtml = t('disableRule.description', { ruleId: log.rule_id, host: log.host, interpolation: { escapeValue: false } });
   return (
     <div className="space-y-3">
       {/* Scope Toggle */}
@@ -285,8 +284,16 @@ export function DisableRuleForm({
       <p className="text-xs text-slate-500 dark:text-slate-400">
         {isGlobalDisable
           ? <span>{t('disableRule.globalNote', { ruleId: log.rule_id, defaultValue: `정책 ${log.rule_id}이(가) 모든 호스트에서 비활성화됩니다.` })}</span>
-          // eslint-disable-next-line react/no-danger
-          : <span dangerouslySetInnerHTML={{ __html: descriptionHtml }} />
+          : (
+            <span>
+              <Trans
+                ns="logs"
+                i18nKey="disableRule.description"
+                values={{ ruleId: log.rule_id, host: log.host }}
+                components={{ 1: <strong /> }}
+              />
+            </span>
+          )
         }
       </p>
     </div>

@@ -248,7 +248,7 @@
     "submitGlobal": "Disable Globally",
     "processing": "Disabling...",
     "cancel": "Cancel",
-    "description": "This will disable policy {{ruleId}} for <strong>{{host}}</strong>. You can re-enable it from WAF Settings.",
+    "description": "This will disable policy {{ruleId}} for <1>{{host}}</1>. You can re-enable it from WAF Settings.",
     "globalNote": "Policy {{ruleId}} will be disabled for all hosts.",
     "successGlobal": "Policy {{ruleId}} has been globally disabled."
   },

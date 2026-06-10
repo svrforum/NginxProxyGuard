@@ -250,7 +250,7 @@
     "submitGlobal": "전역 비활성화",
     "processing": "비활성화 중...",
     "cancel": "취소",
-    "description": "이 작업은 <strong>{{host}}</strong>에 대해 정책 {{ruleId}}를 비활성화합니다. WAF 설정에서 다시 활성화할 수 있습니다.",
+    "description": "이 작업은 <1>{{host}}</1>에 대해 정책 {{ruleId}}를 비활성화합니다. WAF 설정에서 다시 활성화할 수 있습니다.",
     "globalNote": "정책 {{ruleId}}이(가) 모든 호스트에서 비활성화됩니다.",
     "successGlobal": "정책 {{ruleId}}이(가) 전역으로 비활성화되었습니다."
   },
