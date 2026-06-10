@@ -59,6 +59,25 @@ services:
     #   dockerfile: Dockerfile
     container_name: npg-api
     restart: unless-stopped
+    # Container hardening (H8 / MEDIUM-8).
+    # no-new-privileges blocks setuid privilege escalation even though the API
+    # still runs as root (it needs docker.sock; see api/Dockerfile for why it is
+    # not switched to a non-root user). cap_drop ALL removes every Linux
+    # capability — the API needs none of them for normal operation.
+    #
+    # FOLLOW-UP (larger change, tracked separately): front docker.sock with
+    # tecnativa/docker-socket-proxy so the API can only LIST/INSPECT/EXEC the
+    # nginx container and can never create containers. Sketch:
+    #   docker-socket-proxy:
+    #     image: tecnativa/docker-socket-proxy
+    #     environment: { CONTAINERS: 1, EXEC: 1, POST: 1 }  # tighten further
+    #     volumes: [ "/var/run/docker.sock:/var/run/docker.sock:ro" ]
+    # then point the api at tcp://docker-socket-proxy:2375 and drop the direct
+    # docker.sock mount below + drop root in api/Dockerfile.
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
     logging:
       driver: "json-file"
       options:
@@ -119,6 +138,16 @@ services:
     #   dockerfile: Dockerfile
     container_name: npg-ui
     restart: unless-stopped
+    # Container hardening (H8 / MEDIUM-8).
+    # The UI runs nginx as the non-root "nginx" user (see ui/Dockerfile). We drop
+    # ALL capabilities and re-add only NET_BIND_SERVICE, which the non-root nginx
+    # needs to bind the privileged container port 443.
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
     logging:
       driver: "json-file"
       options:
@@ -143,6 +172,14 @@ services:
     container_name: npg-proxy
     restart: always
     network_mode: host
+    # Container hardening (H8 / MEDIUM-8).
+    # no-new-privileges blocks setuid privilege escalation. NOTE: do NOT cap_drop
+    # this service — it runs nginx in host-network mode with a root master that
+    # drops workers to the nginx user, so it needs CHOWN/SETUID/SETGID and binds
+    # privileged 80/443; cap_drop ALL breaks boot (nginx [emerg] chown failed).
+    # Capability-scoping a rootless nginx is a follow-up.
+    security_opt:
+      - "no-new-privileges:true"
     logging:
       driver: "json-file"
       options:

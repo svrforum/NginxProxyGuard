@@ -20,8 +20,10 @@ RUN npm run build
 # Runtime stage
 FROM nginx:alpine
 
-# Install openssl for certificate generation
-RUN apk add --no-cache openssl
+# Install openssl for certificate generation. libcap is needed to grant the
+# nginx binary CAP_NET_BIND_SERVICE so the non-root user below can still bind
+# the privileged port 443.
+RUN apk add --no-cache openssl libcap
 
 # Copy built files
 COPY --from=builder /app/dist /usr/share/nginx/html
@@ -39,6 +41,27 @@ RUN chmod +x /docker-entrypoint.sh
 
 # Create SSL directory
 RUN mkdir -p /etc/nginx/ssl
+
+# --- Non-root hardening (H8 / MEDIUM-8) -------------------------------------
+# Run the UI nginx as the unprivileged "nginx" user (uid 101, present in the
+# stock nginx:alpine image) instead of root. This is safe here because, unlike
+# the proxy container, the UI has no docker.sock access and no host network.
+#
+# Three things must be writable / permitted for nginx to start non-root:
+#   1. listen 443 (privileged port) — grant CAP_NET_BIND_SERVICE on the binary
+#      so we don't need root just to bind the port. The compose layer also
+#      cap_drops ALL and re-adds NET_BIND_SERVICE for defense in depth.
+#   2. pid file + runtime/temp dirs — make them owned by nginx.
+#   3. /etc/nginx/ssl — the entrypoint generates a self-signed cert here on
+#      first boot, so it must be writable by nginx. (Note: this dir lives in
+#      the image layer, not a volume — the ui_data volume is mounted at
+#      /app/ssl and is intentionally left untouched by this change.)
+RUN setcap 'cap_net_bind_service=+ep' /usr/sbin/nginx \
+    && chown -R nginx:nginx /etc/nginx/ssl /var/cache/nginx \
+    && touch /var/run/nginx.pid \
+    && chown nginx:nginx /var/run/nginx.pid
+
+USER nginx
 
 EXPOSE 443
 

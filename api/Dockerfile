@@ -51,5 +51,27 @@ RUN chmod +x entrypoint.sh
 # Expose port
 EXPOSE 8080
 
+# --- Non-root hardening note (H8 / MEDIUM-8) --------------------------------
+# This container is intentionally NOT switched to a non-root USER.
+#
+# The API needs read/write access to the mounted docker.sock to manage the
+# nginx container (exec `nginx -t` / `nginx -s reload`, inspect status). The
+# socket is owned by root and the host "docker" group, and that group's GID is
+# host-specific (e.g. 999 on Debian, 100 on some NAS, etc.). Baking a fixed
+# non-root user + matching group GID into the image would break docker.sock
+# access on any host whose docker GID differs — the exact failure mode we must
+# avoid (container starts but every nginx reload silently fails).
+#
+# Defense-in-depth is instead applied at the compose layer via
+# `security_opt: no-new-privileges:true` (prevents privilege escalation even
+# while running as root).
+#
+# RECOMMENDED FOLLOW-UP (out of scope for this bounded fix):
+#   Put tecnativa/docker-socket-proxy in front of /var/run/docker.sock so the
+#   API can only LIST / INSPECT / EXEC the nginx container and can NEVER create
+#   or start new containers. With the proxy terminating the socket, the API can
+#   then safely drop root (it talks HTTP to the proxy, no group GID needed).
+#   See compose files for the matching sketch.
+
 # Run with entrypoint for Docker API version compatibility
 ENTRYPOINT ["./entrypoint.sh"]
