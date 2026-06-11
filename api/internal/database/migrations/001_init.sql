@@ -3802,3 +3802,17 @@ ALTER TABLE public.system_settings ALTER COLUMN raw_log_enabled SET DEFAULT true
 CREATE UNIQUE INDEX IF NOT EXISTS idx_proxy_hosts_stream_listener_unique
     ON public.proxy_hosts (stream_listen_host, stream_listen_port, stream_protocol)
     WHERE proxy_type = 'stream' AND enabled = true AND stream_listen_port > 0;
+
+-- v2.24.7: logs_partitioned index ensure (documentation only — canonical
+-- execution lives in migration.go ensureLogsPartitionedIndexes).
+-- The background hypertable migration creates a NEW table (with only four
+-- idx_logs_ht_* basics) and renames the original to logs_partitioned_backup,
+-- which KEEPS every original idx_logs_part_* index name. From then on every
+-- `CREATE INDEX IF NOT EXISTS idx_logs_part_*` silently no-ops (the name
+-- exists — on the wrong table), so upgraded installs ran the hypertable
+-- with almost no indexes (incl. the pg_trgm search indexes from
+-- 011_trgm_indexes, whose one-shot schema_migrations gate also never re-ran).
+-- ensureLogsPartitionedIndexes runs after the swap and on every boot: it
+-- reclaims names squatted by logs_partitioned_backup (DROP INDEX — the backup
+-- is verification-only) and builds the canonical index set on the live table
+-- using timescaledb.transaction_per_chunk to keep ingest unblocked.

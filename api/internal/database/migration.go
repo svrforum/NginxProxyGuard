@@ -1405,6 +1405,13 @@ func (db *DB) migrateToTimescaleDB() {
 	} else {
 		log.Println("[TimescaleDB] Backup table 'logs_partitioned_backup' kept for safety. Drop manually when verified.")
 	}
+
+	// Build the canonical index set on the NEW live hypertable. The swap left
+	// the original idx_logs_part_* names on the backup table, so without this
+	// the live table runs with only the four idx_logs_ht_* basics and every
+	// CREATE INDEX IF NOT EXISTS elsewhere silently no-ops on the squatted
+	// names. (Already in a background goroutine — safe to run inline.)
+	db.ensureLogsPartitionedIndexes()
 }
 
 // migrateLogTablesToHypertables migrates system_logs, challenge_logs, audit_logs to hypertables
@@ -1934,52 +1941,137 @@ func (db *DB) runHypertableNumericFixMigration() error {
 	return nil
 }
 
-// runTrgmIndexMigration adds pg_trgm GIN indexes for fast ILIKE search on logs
+// logsPartitionedIndexes is the canonical index set the LIVE logs_partitioned
+// table must carry (mirrors the 001_init.sql definitions + upgradeSQL
+// additions + the pg_trgm search indexes).
+//
+// Why this exists: the background hypertable migration creates a NEW table
+// (with only the four idx_logs_ht_* basics) and renames the original to
+// logs_partitioned_backup — which keeps every original idx_logs_part_* index
+// NAME. From then on, every `CREATE INDEX IF NOT EXISTS idx_logs_part_*`
+// (upgradeSQL and the old one-shot 011_trgm_indexes) silently no-ops because
+// the name exists — on the wrong table. Upgraded installs ended up running
+// the hypertable with almost no indexes. ensureLogsPartitionedIndexes
+// reclaims squatted names from the backup table and builds the indexes on the
+// live table; it runs after the hypertable swap and on every boot thereafter
+// (cheap catalog lookups when everything is in place).
+var logsPartitionedIndexes = []struct {
+	Name  string
+	Def   string // USING clause + column list
+	Where string // optional partial-index predicate (must come after WITH)
+}{
+	{"idx_logs_part_host", "USING btree (host)", ""},
+	{"idx_logs_part_log_type", "USING btree (log_type)", ""},
+	{"idx_logs_part_timestamp", `USING btree ("timestamp" DESC)`, ""},
+	{"idx_logs_part_type_timestamp", `USING btree (log_type, "timestamp" DESC)`, ""},
+	{"idx_logs_partitioned_exploit_rule", "USING btree (exploit_rule)", "exploit_rule IS NOT NULL AND exploit_rule::text <> '-'"},
+	{"idx_logs_part_block_reason_ts", `USING btree (block_reason, "timestamp" DESC)`, "block_reason != 'none'"},
+	{"idx_logs_part_client_ip", "USING btree (client_ip)", ""},
+	{"idx_logs_part_created_at", "USING btree (created_at DESC)", ""},
+	{"idx_logs_part_status_code", "USING btree (status_code)", "status_code IS NOT NULL"},
+	{"idx_logs_part_host_ts", `USING btree (host, "timestamp" DESC)`, ""},
+	{"idx_logs_part_status_ts", `USING btree (status_code, "timestamp" DESC)`, "status_code IS NOT NULL"},
+	{"idx_logs_part_proxy_host_ts", `USING btree (proxy_host_id, "timestamp" DESC)`, "proxy_host_id IS NOT NULL"},
+	{"idx_logs_part_geo_ts", `USING btree (geo_country_code, "timestamp" DESC)`, "geo_country_code IS NOT NULL AND geo_country_code::text <> ''"},
+	{"idx_logs_part_type_created", "USING btree (log_type, created_at DESC)", ""},
+	{"idx_logs_part_block_reason", "USING btree (block_reason)", "block_reason != 'none'"},
+	{"idx_logs_part_status_created", "USING btree (status_code, created_at)", ""},
+	{"idx_logs_part_block_reason_created", "USING btree (created_at DESC, block_reason)", "block_reason != 'none' AND log_type = 'access'"},
+	{"idx_logs_part_host_trgm", "USING gin (host gin_trgm_ops)", ""},
+	{"idx_logs_part_uri_trgm", "USING gin (request_uri gin_trgm_ops)", ""},
+	{"idx_logs_part_ua_trgm", "USING gin (http_user_agent gin_trgm_ops)", ""},
+}
+
+// ensureLogsPartitionedIndexes verifies every canonical index exists ON the
+// live logs_partitioned table, reclaiming names squatted by
+// logs_partitioned_backup (the backup exists only for operator verification
+// and does not need indexes). Heavy builds use TimescaleDB's
+// transaction_per_chunk so ingest stays mostly unblocked on large installs.
+func (db *DB) ensureLogsPartitionedIndexes() {
+	var isHypertable bool
+	_ = db.QueryRow(`SELECT EXISTS (
+		SELECT 1 FROM timescaledb_information.hypertables
+		WHERE hypertable_name = 'logs_partitioned'
+	)`).Scan(&isHypertable)
+
+	created := 0
+	for _, idx := range logsPartitionedIndexes {
+		var onTable string
+		err := db.QueryRow(
+			`SELECT tablename FROM pg_indexes WHERE schemaname = 'public' AND indexname = $1`,
+			idx.Name,
+		).Scan(&onTable)
+		switch {
+		case err == nil && onTable == "logs_partitioned":
+			continue // already on the live table
+		case err == nil && onTable == "logs_partitioned_backup":
+			if _, dropErr := db.Exec(fmt.Sprintf(`DROP INDEX IF EXISTS public.%s`, idx.Name)); dropErr != nil {
+				log.Printf("[Migration] Warning: could not reclaim index name %s from backup table: %v", idx.Name, dropErr)
+				continue
+			}
+			log.Printf("[Migration] Reclaimed index name %s from logs_partitioned_backup", idx.Name)
+		case err == nil:
+			log.Printf("[Migration] Warning: index %s exists on unexpected table %q; leaving it alone", idx.Name, onTable)
+			continue
+		case err != sql.ErrNoRows:
+			log.Printf("[Migration] Warning: could not check index %s: %v", idx.Name, err)
+			continue
+		}
+
+		stmt := fmt.Sprintf("CREATE INDEX IF NOT EXISTS %s ON logs_partitioned %s", idx.Name, idx.Def)
+		if isHypertable {
+			stmt += " WITH (timescaledb.transaction_per_chunk)"
+		}
+		if idx.Where != "" {
+			stmt += " WHERE " + idx.Where
+		}
+		if _, err := db.Exec(stmt); err != nil {
+			// transaction_per_chunk is best-effort; retry as a plain build.
+			plain := fmt.Sprintf("CREATE INDEX IF NOT EXISTS %s ON logs_partitioned %s", idx.Name, idx.Def)
+			if idx.Where != "" {
+				plain += " WHERE " + idx.Where
+			}
+			if _, err2 := db.Exec(plain); err2 != nil {
+				log.Printf("[Migration] Warning: failed to create index %s: %v (plain retry: %v)", idx.Name, err, err2)
+				continue
+			}
+		}
+		created++
+		log.Printf("[Migration] Created index %s on logs_partitioned", idx.Name)
+	}
+
+	if created > 0 {
+		log.Printf("[Migration] logs_partitioned index ensure: %d index(es) built", created)
+	}
+}
+
+// runTrgmIndexMigration enables pg_trgm and ensures the canonical
+// logs_partitioned index set. When the background hypertable migration has
+// not happened yet it defers entirely — building indexes on the pre-swap
+// table would strand them on the future backup table (the original bug that
+// left upgraded installs without indexes). The ensure pass runs in the
+// background: GIN/trgm builds over a large hypertable can take a long time
+// and must not block boot.
 func (db *DB) runTrgmIndexMigration() error {
-	const migVersion = "011_trgm_indexes"
-
-	var exists bool
-	err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = $1)", migVersion).Scan(&exists)
-	if err != nil {
-		return fmt.Errorf("failed to check migration status: %w", err)
-	}
-	if exists {
-		return nil
-	}
-
-	log.Printf("[Migration] Running %s...", migVersion)
-
 	// Enable pg_trgm extension
 	if _, err := db.Exec("CREATE EXTENSION IF NOT EXISTS pg_trgm"); err != nil {
 		return fmt.Errorf("failed to create pg_trgm extension: %w", err)
 	}
 
-	// Create GIN indexes on frequently searched text columns
-	indexes := []string{
-		"CREATE INDEX IF NOT EXISTS idx_logs_part_host_trgm ON logs_partitioned USING gin (host gin_trgm_ops)",
-		"CREATE INDEX IF NOT EXISTS idx_logs_part_uri_trgm ON logs_partitioned USING gin (request_uri gin_trgm_ops)",
-		"CREATE INDEX IF NOT EXISTS idx_logs_part_ua_trgm ON logs_partitioned USING gin (http_user_agent gin_trgm_ops)",
+	var swapped bool
+	if err := db.QueryRow(`SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = 'timescaledb_hypertable')`).Scan(&swapped); err != nil {
+		return fmt.Errorf("failed to check hypertable migration status: %w", err)
 	}
-
-	var indexFailed bool
-	for _, idx := range indexes {
-		if _, err := db.Exec(idx); err != nil {
-			log.Printf("[Migration] Warning: index creation failed: %v", err)
-			indexFailed = true
-		}
-	}
-
-	if indexFailed {
-		log.Printf("[Migration] %s: some indexes failed to create, will retry on next startup", migVersion)
+	if !swapped && db.isTimescaleDBAvailable() {
+		log.Println("[Migration] Deferring logs_partitioned index ensure until the hypertable migration completes")
 		return nil
 	}
 
-	_, err = db.Exec("INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT DO NOTHING", migVersion)
-	if err != nil {
-		return fmt.Errorf("failed to record migration: %w", err)
-	}
-
-	log.Printf("[Migration] %s completed successfully!", migVersion)
+	db.TrackBackground()
+	go func() {
+		defer db.BackgroundDone()
+		db.ensureLogsPartitionedIndexes()
+	}()
 	return nil
 }
 
