@@ -1,4 +1,4 @@
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import type { AccountInfo, Setup2FAResponse, Disable2FARequest } from '../../api/auth';
 
 interface TwoFactorTabProps {
@@ -35,7 +35,6 @@ export function TwoFactorTab({
   onDisable2FA,
 }: TwoFactorTabProps) {
   const { t } = useTranslation(['auth', 'common']);
-  const enabledHtml = t('account.twoFactor.enabled');
 
   return (
     <div className="space-y-6">
@@ -132,11 +131,11 @@ export function TwoFactorTab({
       ) : (
         <div className="space-y-4">
           <div className="bg-green-500/20 border border-green-500 p-4 rounded">
-            <p
-              className="text-green-600 dark:text-green-400"
-              // eslint-disable-next-line react/no-danger
-              dangerouslySetInnerHTML={{ __html: enabledHtml }}
-            />
+            <p className="text-green-600 dark:text-green-400">
+              {/* <Trans> auto-escapes interpolations; the <strong> tag in the
+                  locale string maps to a real element — no raw-HTML sink. */}
+              <Trans t={t} i18nKey="account.twoFactor.enabled" components={{ strong: <strong /> }} />
+            </p>
           </div>
           <form onSubmit={onDisable2FA} className="space-y-4">
             <p className="text-gray-500 dark:text-gray-400">

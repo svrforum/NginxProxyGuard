@@ -339,6 +339,17 @@ func (s *AuditService) LogUserLogin(ctx context.Context, username, ipAddress, us
 	})
 }
 
+// LogUserLoginFailed logs a failed admin-UI login attempt so operators can
+// see brute-force activity in the audit log (API-token denials were already
+// audited; UI login failures previously left no operator-visible trace).
+func (s *AuditService) LogUserLoginFailed(ctx context.Context, username, ipAddress, userAgent, reason string) error {
+	return s.logEntry(ctx, "user_login_failed", "user", "", username, map[string]interface{}{
+		"ip_address": ipAddress,
+		"user_agent": userAgent,
+		"reason":     reason,
+	})
+}
+
 // LogUserLogout logs user logout
 func (s *AuditService) LogUserLogout(ctx context.Context, username string) error {
 	return s.logEntry(ctx, "user_logout", "user", "", username, nil)

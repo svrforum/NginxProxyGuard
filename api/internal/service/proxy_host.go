@@ -736,6 +736,10 @@ func (s *ProxyHostService) UpdateWithoutReload(ctx context.Context, id string, r
 			render.RemoveOldFilename = oldConfigFilename
 		}
 		if err := s.nginx.RegenerateConfigsAtomic(ctx, []nginx.HostConfigRender{render}, false); err != nil {
+			// DB already updated; configs were rolled back — surface the error
+			// state on the host so the UI shows it.
+			_ = s.repo.UpdateConfigStatus(ctx, host.ID, "error", err.Error())
+			metrics.NginxConfigStatus.WithLabelValues(host.ID).Set(0)
 			return nil, fmt.Errorf("nginx config test failed: %w", err)
 		}
 	} else {
@@ -805,11 +809,18 @@ func (s *ProxyHostService) Update(ctx context.Context, id string, req *model.Upd
 			// Domain changed - use method that removes old config before nginx test
 			// This prevents limit_req_zone duplicate errors when zone names stay same
 			if err := s.nginx.GenerateConfigAndReloadWithCleanup(ctx, configData, wafExclusions, oldConfigFilename); err != nil {
+				// The DB row is already updated but nginx rejected (and rolled
+				// back) the generated config — record that so the UI shows the
+				// error badge instead of a silently-stale 'ok'.
+				_ = s.repo.UpdateConfigStatus(ctx, host.ID, "error", err.Error())
+				metrics.NginxConfigStatus.WithLabelValues(host.ID).Set(0)
 				return nil, fmt.Errorf("failed to generate nginx config: %w", err)
 			}
 		} else {
 			// No domain change - use standard method
 			if err := s.nginx.GenerateConfigAndReload(ctx, configData, wafExclusions); err != nil {
+				_ = s.repo.UpdateConfigStatus(ctx, host.ID, "error", err.Error())
+				metrics.NginxConfigStatus.WithLabelValues(host.ID).Set(0)
 				return nil, fmt.Errorf("failed to generate nginx config: %w", err)
 			}
 		}

@@ -55,10 +55,13 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	if err != nil {
 		switch err {
 		case service.ErrInvalidCredentials:
+			// Audit failed attempts so operators can see brute-force activity
+			_ = h.auditService.LogUserLoginFailed(c.Request().Context(), req.Username, ip, userAgent, "invalid_credentials")
 			return c.JSON(http.StatusUnauthorized, map[string]string{
 				"error": "Invalid username or password",
 			})
 		case service.ErrTooManyAttempts:
+			_ = h.auditService.LogUserLoginFailed(c.Request().Context(), req.Username, ip, userAgent, "locked_out")
 			return c.JSON(http.StatusTooManyRequests, map[string]string{
 				"error": "Too many failed login attempts. Please try again later.",
 			})

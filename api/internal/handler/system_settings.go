@@ -162,30 +162,40 @@ func (h *SystemSettingsHandler) UpdateSystemSettings(c echo.Context) error {
 	//      per-host, so global rate limits ignored the whitelist).
 	if req.GlobalTrustedIPs != nil {
 		trustedIPs := service.ParseGlobalTrustedIPs(settings.GlobalTrustedIPs)
-		if h.globalSettingsRepo != nil && h.nginxManager != nil {
-			go func() {
-				bgCtx := context.Background()
+		// One ORDERED background worker: nginx.conf first, then per-host
+		// configs, then a single reload via SyncAllConfigs. The previous two
+		// unsynchronized goroutines could interleave their writes/reloads, and
+		// a failure in either left the trusted-IP promise silently unapplied.
+		go func() {
+			bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+
+			if h.globalSettingsRepo != nil && h.nginxManager != nil {
 				gs, err := h.globalSettingsRepo.Get(bgCtx)
 				if err != nil {
-					log.Printf("[SystemSettings] Warning: failed to load global settings for nginx.conf regen: %v", err)
+					log.Printf("[SystemSettings] ERROR: trusted IPs change NOT fully applied — failed to load global settings for nginx.conf regen: %v (run Sync All to retry)", err)
 					return
 				}
 				if err := h.nginxManager.GenerateMainNginxConfig(bgCtx, gs, trustedIPs); err != nil {
-					log.Printf("[SystemSettings] Warning: failed to regenerate nginx.conf after trusted IPs change: %v", err)
+					log.Printf("[SystemSettings] ERROR: trusted IPs change NOT fully applied — nginx.conf regeneration failed: %v (run Sync All to retry)", err)
 					return
 				}
+			}
+			if h.proxyHostService != nil {
+				// SyncAllConfigs regenerates every host config and performs the
+				// test+reload, picking up the new nginx.conf at the same time.
+				if err := h.proxyHostService.SyncAllConfigs(bgCtx); err != nil {
+					log.Printf("[SystemSettings] ERROR: trusted IPs change NOT fully applied — host config sync failed: %v (run Sync All to retry)", err)
+					return
+				}
+			} else if h.nginxManager != nil {
 				if err := h.nginxManager.ReloadNginx(bgCtx); err != nil {
-					log.Printf("[SystemSettings] Warning: failed to reload nginx after trusted IPs change: %v", err)
+					log.Printf("[SystemSettings] ERROR: trusted IPs change NOT fully applied — nginx reload failed: %v", err)
+					return
 				}
-			}()
-		}
-		if h.proxyHostService != nil {
-			go func() {
-				if err := h.proxyHostService.SyncAllConfigs(context.Background()); err != nil {
-					log.Printf("[SystemSettings] Warning: failed to sync nginx configs after trusted IPs change: %v", err)
-				}
-			}()
-		}
+			}
+			log.Printf("[SystemSettings] Global trusted IPs change applied to nginx.conf and all host configs")
+		}()
 	}
 
 	// Generate default server config if direct IP access action changed
