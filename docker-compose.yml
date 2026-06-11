@@ -132,7 +132,11 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 60s
+      # Must exceed the API's startupTimeout (5m, bootstrap/container.go): the
+      # API only begins listening after Startup() finishes reconciling every
+      # host, so on large/slow installs a 60s window marked it unhealthy and
+      # could churn before it ever listened.
+      start_period: 360s
 
   # React UI (Production) - Admin Panel on port 81 (HTTPS)
   ui:

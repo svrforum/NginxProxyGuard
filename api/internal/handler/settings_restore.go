@@ -137,20 +137,32 @@ func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Back
 					continue
 				}
 				fullchainPath := filepath.Join(certDir, "fullchain.pem")
+				privkeyPath := filepath.Join(certDir, "privkey.pem")
+				// Skip if a prior materialization (e.g. a re-run of restore) already
+				// wrote files under this new ID. Archive-restored PEMs land under
+				// the ORIGINAL ID and are served via the symlink path below, so this
+				// Stat only guards re-runs, not the archive case.
 				if _, err := os.Stat(fullchainPath); err == nil {
-					continue // files already on disk (restored from the archive)
+					continue
 				}
 				if err := os.MkdirAll(certDir, 0755); err != nil {
 					log.Printf("[Backup] Warning: failed to create cert directory for %s: %v", newID, err)
 					continue
 				}
+				// Write privkey first, fullchain last. The nginx config generator
+				// keys its SSL-existence check on fullchain.pem alone, so if
+				// fullchain were written first and privkey then failed, SSL would
+				// be enabled pointing at a missing key. On a fullchain failure we
+				// also remove the orphan privkey so a partial materialization can
+				// never present a keyless cert.
+				if err := os.WriteFile(privkeyPath, []byte(cert.PrivateKeyPEM), 0600); err != nil {
+					log.Printf("[Backup] Warning: failed to write privkey.pem for cert %s: %v", newID, err)
+					continue
+				}
 				fullchain := acme.BuildFullchain(cert.CertificatePEM, cert.IssuerCertificatePEM)
 				if err := os.WriteFile(fullchainPath, []byte(fullchain), 0644); err != nil {
 					log.Printf("[Backup] Warning: failed to write fullchain.pem for cert %s: %v", newID, err)
-					continue
-				}
-				if err := os.WriteFile(filepath.Join(certDir, "privkey.pem"), []byte(cert.PrivateKeyPEM), 0600); err != nil {
-					log.Printf("[Backup] Warning: failed to write privkey.pem for cert %s: %v", newID, err)
+					_ = os.Remove(privkeyPath)
 					continue
 				}
 				log.Printf("[Backup] Materialized certificate files for %s from backup data", newID)

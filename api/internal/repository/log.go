@@ -271,7 +271,24 @@ func (r *LogRepository) CreateBatch(ctx context.Context, logs []model.CreateLogR
 		return nil
 	}
 
-	// Batch failed - fall back to mini-batch inserts (50 at a time) to avoid N round-trips
+	// Distinguish a connection-level failure (DB down/unreachable) from a poison
+	// row. A cheap PingContext tells them apart: if the DB itself is unreachable,
+	// the per-row fallback below would issue up to len(logs) doomed single-row
+	// round trips per flush tick — and the collector re-queues and retries every
+	// second, turning a DB outage into a self-inflicted round-trip storm. When
+	// the ping fails, skip the fallback and return the error so the caller backs
+	// off (the rows are re-queued, not lost). When the ping succeeds the DB is
+	// up and the batch failure is a poison row, so the per-row fallback still
+	// runs to isolate it — its behavior is unchanged.
+	pingCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	pingErr := r.db.PingContext(pingCtx)
+	cancel()
+	if pingErr != nil {
+		log.Printf("[LogRepository] Batch insert failed and DB ping failed (%v); skipping per-row fallback to avoid retry storm: %v", pingErr, err)
+		return fmt.Errorf("database unreachable during batch insert: %w", err)
+	}
+
+	// Batch failed but DB is up (poison row) - fall back to mini-batch inserts (50 at a time) to avoid N round-trips
 	log.Printf("[LogRepository] Batch insert failed, falling back to mini-batch inserts: %v", err)
 	const miniBatchSize = 50
 	var failCount int

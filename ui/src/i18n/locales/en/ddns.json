@@ -30,7 +30,7 @@
   "emptyState": "No DDNS records yet. Add a hostname and its A record will be kept pointed at your public IP automatically.",
   "providerHint": "DDNS currently supports Cloudflare and DuckDNS only. Other provider types are not listed.",
   "noProviders": "No Cloudflare/DuckDNS providers available. Add one under Certificates > DNS Providers first.",
-  "confirmDelete": "Delete this DDNS record?",
+  "confirmDelete": "Delete this DDNS record? This also removes the live DNS record at your provider (e.g. the Cloudflare A record), so the hostname will stop resolving to this server.",
   "hostnameRequired": "Hostname is required.",
   "providerRequired": "Please select a DNS provider.",
   "loadError": "Failed to load DDNS records.",

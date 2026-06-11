@@ -344,18 +344,30 @@ update_owasp_crs() {
 
     echo "[Entrypoint] OWASP CRS in volume (${volume_version:-pre-stamp version}) differs from image ($image_version) - refreshing ruleset..."
 
-    # Preserve an operator-tuned crs-setup.conf. NPG never writes this file;
-    # if it still matches the vendor example it is untouched and we take the
-    # new version's default instead.
-    local preserved_setup=""
-    if [ -f "$current_crs/crs-setup.conf" ]; then
-        if [ -f "$current_crs/crs-setup.conf.example" ] && cmp -s "$current_crs/crs-setup.conf" "$current_crs/crs-setup.conf.example"; then
-            : # untouched vendor default — replace with the new version's default
-        else
-            preserved_setup="/tmp/.npg-crs-setup.preserved"
-            cp -f "$current_crs/crs-setup.conf" "$preserved_setup"
+    # Preserve operator-tunable files across the refresh. In the CRS layout the
+    # vendor rules are plain rules/*.conf (vendor-owned, safe to replace), but a
+    # handful of files are shipped as *.conf.example and meant to be activated /
+    # edited by the operator: crs-setup.conf and the exclusion files
+    # (REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf, RESPONSE-999-EXCLUSION-RULES-AFTER-CRS.conf).
+    # For every *.conf.example in the CURRENT volume, if the activated *.conf
+    # exists and differs from its example, it is operator-modified — stash and
+    # restore it so a version refresh (incl. the first stamped-image boot, when
+    # volume_version is empty) cannot silently wipe WAF tuning.
+    local stash="/tmp/.npg-crs-preserved"
+    rm -rf "$stash"; mkdir -p "$stash"
+    local preserved_any=""
+    local example active rel
+    for example in $(find "$current_crs" -name '*.conf.example' 2>/dev/null); do
+        active="${example%.example}"
+        [ -f "$active" ] || continue
+        if cmp -s "$active" "$example"; then
+            continue # untouched vendor default — take the new version's default
         fi
-    fi
+        rel="${active#$current_crs/}"
+        mkdir -p "$stash/$(dirname "$rel")"
+        cp -f "$active" "$stash/$rel"
+        preserved_any="$preserved_any $rel"
+    done
 
     # Stage the new ruleset next to the old one (same volume), then swap.
     # If the container dies mid-swap the stamp check re-runs the refresh on
@@ -365,11 +377,14 @@ update_owasp_crs() {
     rm -rf "$current_crs"
     mv "$current_crs.new" "$current_crs"
 
-    if [ -n "$preserved_setup" ]; then
-        cp -f "$preserved_setup" "$current_crs/crs-setup.conf"
-        rm -f "$preserved_setup"
-        echo "[Entrypoint] Preserved operator-modified crs-setup.conf (new vendor default available at crs-setup.conf.example)"
+    if [ -n "$preserved_any" ]; then
+        for rel in $preserved_any; do
+            mkdir -p "$current_crs/$(dirname "$rel")"
+            cp -f "$stash/$rel" "$current_crs/$rel"
+        done
+        echo "[Entrypoint] Preserved operator-modified CRS file(s):$preserved_any (new vendor defaults available at the matching *.conf.example)"
     fi
+    rm -rf "$stash"
 
     chown -R nginx:nginx "$current_crs" 2>/dev/null || true
     echo "[Entrypoint] OWASP CRS refreshed to $image_version"

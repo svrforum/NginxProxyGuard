@@ -1183,6 +1183,12 @@ func (db *DB) migrateToTimescaleDB() {
 	if db.isHypertable("logs_hypertable") {
 		log.Println("[TimescaleDB] Hypertable already exists")
 		db.setupTimescaleDBCompression()
+		// This branch returns without swapping/recording the marker, so the
+		// canonical index ensure (deferred by runTrgmIndexMigration when the
+		// marker is absent) would otherwise never run on these installs. Run it
+		// here so the trgm/search indexes still get built. (Already in a
+		// background goroutine — safe to run inline.)
+		db.ensureLogsPartitionedIndexes()
 		return
 	}
 
@@ -2005,14 +2011,32 @@ func (db *DB) ensureLogsPartitionedIndexes() {
 
 	created := 0
 	for _, idx := range logsPartitionedIndexes {
+		// Join pg_index for indisvalid: a CREATE INDEX interrupted partway (build
+		// failure, or process restart mid-build — Close() waits only 5s) leaves an
+		// INVALID index whose NAME exists. A name-only check (pg_indexes) would
+		// treat it as present and never rebuild it, stranding an unusable index
+		// forever. Detect indisvalid=false on the live table and DROP+recreate.
 		var onTable string
+		var valid bool
 		err := db.QueryRow(
-			`SELECT tablename FROM pg_indexes WHERE schemaname = 'public' AND indexname = $1`,
+			`SELECT c.relname, i.indisvalid
+			   FROM pg_index i
+			   JOIN pg_class ic ON ic.oid = i.indexrelid
+			   JOIN pg_namespace n ON n.oid = ic.relnamespace
+			   JOIN pg_class c ON c.oid = i.indrelid
+			  WHERE n.nspname = 'public' AND ic.relname = $1`,
 			idx.Name,
-		).Scan(&onTable)
+		).Scan(&onTable, &valid)
 		switch {
-		case err == nil && onTable == "logs_partitioned":
-			continue // already on the live table
+		case err == nil && onTable == "logs_partitioned" && valid:
+			continue // already on the live table and usable
+		case err == nil && onTable == "logs_partitioned" && !valid:
+			// Invalid index latched on the live table — drop so it gets rebuilt.
+			if _, dropErr := db.Exec(fmt.Sprintf(`DROP INDEX IF EXISTS public.%s`, idx.Name)); dropErr != nil {
+				log.Printf("[Migration] Warning: could not drop invalid index %s for rebuild: %v", idx.Name, dropErr)
+				continue
+			}
+			log.Printf("[Migration] Dropped invalid index %s on logs_partitioned for rebuild", idx.Name)
 		case err == nil && onTable == "logs_partitioned_backup":
 			if _, dropErr := db.Exec(fmt.Sprintf(`DROP INDEX IF EXISTS public.%s`, idx.Name)); dropErr != nil {
 				log.Printf("[Migration] Warning: could not reclaim index name %s from backup table: %v", idx.Name, dropErr)
@@ -2071,7 +2095,14 @@ func (db *DB) runTrgmIndexMigration() error {
 	if err := db.QueryRow(`SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = 'timescaledb_hypertable')`).Scan(&swapped); err != nil {
 		return fmt.Errorf("failed to check hypertable migration status: %w", err)
 	}
-	if !swapped && db.isTimescaleDBAvailable() {
+	// Defer only when the swap genuinely hasn't happened yet — building indexes
+	// on the pre-swap logs_partitioned would strand them on the future backup
+	// table. But if logs_partitioned is ALREADY a hypertable (e.g. a prior boot
+	// completed the swap but never recorded the marker, or migrateToTimescaleDB
+	// took its "hypertable already exists" early-return path), deferring would
+	// wait on a migration that returns without ever calling ensure — leaving the
+	// trgm/search indexes permanently unbuilt. Detect that and ensure directly.
+	if !swapped && db.isTimescaleDBAvailable() && !db.isHypertable("logs_partitioned") {
 		log.Println("[Migration] Deferring logs_partitioned index ensure until the hypertable migration completes")
 		return nil
 	}

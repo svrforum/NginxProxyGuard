@@ -328,6 +328,18 @@ func (c *DockerLogCollector) processLogStream(ctx context.Context, container Con
 		}
 	}()
 
+	// drainReader waits for the reader goroutine to finish before the main loop
+	// returns. Without it, an exit via ctx.Done()/stopCh leaves the reader still
+	// blocked in scanner.Scan()->pipe Read; tailContainerLogs would then race
+	// cmd.Wait()/cleanup against the still-live reader (and leak the goroutine).
+	// The subprocess is killed by ctx cancel on shutdown, so the pending Read
+	// unblocks and the reader closes `lines`; any buffered lines are discarded
+	// because we're shutting down.
+	drainReader := func() {
+		for range lines {
+		}
+	}
+
 	batch := make([]repository.SystemLog, 0, 10)
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
@@ -336,9 +348,11 @@ func (c *DockerLogCollector) processLogStream(ctx context.Context, container Con
 		select {
 		case <-ctx.Done():
 			c.flushBatch(ctx, batch)
+			drainReader()
 			return
 		case <-c.stopCh:
 			c.flushBatch(ctx, batch)
+			drainReader()
 			return
 		case <-ticker.C:
 			if len(batch) > 0 {

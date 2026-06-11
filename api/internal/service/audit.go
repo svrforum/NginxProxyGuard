@@ -343,10 +343,13 @@ func (s *AuditService) LogUserLogin(ctx context.Context, username, ipAddress, us
 // see brute-force activity in the audit log (API-token denials were already
 // audited; UI login failures previously left no operator-visible trace).
 func (s *AuditService) LogUserLoginFailed(ctx context.Context, username, ipAddress, userAgent, reason string) error {
-	return s.logEntry(ctx, "user_login_failed", "user", "", username, map[string]interface{}{
-		"ip_address": ipAddress,
-		"user_agent": userAgent,
-		"reason":     reason,
+	// A failed login has no authenticated user in context, so logEntry would
+	// record actor="system" and leave ip_address/user_agent NULL — putting the
+	// attacker's IP only in the details JSONB the audit UI doesn't surface.
+	// Use logEntryWithUser so the attempted username + IP + UA land in the real
+	// operator-visible columns. userID stays empty (no account is implied).
+	return s.logEntryWithUser(ctx, "", username, ipAddress, userAgent, "user_login_failed", "user", "", username, map[string]interface{}{
+		"reason": reason,
 	})
 }
 

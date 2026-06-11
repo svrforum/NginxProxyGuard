@@ -30,7 +30,7 @@
   "emptyState": "등록된 DDNS 레코드가 없습니다. 호스트네임을 추가하면 공인 IP가 바뀔 때마다 A 레코드가 자동으로 갱신됩니다.",
   "providerHint": "DDNS는 현재 Cloudflare와 DuckDNS만 지원합니다. 다른 프로바이더는 목록에 표시되지 않습니다.",
   "noProviders": "사용 가능한 Cloudflare/DuckDNS 프로바이더가 없습니다. 인증서 > DNS 프로바이더에서 먼저 추가하세요.",
-  "confirmDelete": "이 DDNS 레코드를 삭제하시겠습니까?",
+  "confirmDelete": "이 DDNS 레코드를 삭제하시겠습니까? 프로바이더에 등록된 실제 DNS 레코드(예: Cloudflare A 레코드)도 함께 삭제되어 해당 호스트네임이 더 이상 이 서버로 연결되지 않습니다.",
   "hostnameRequired": "호스트네임을 입력하세요.",
   "providerRequired": "DNS 프로바이더를 선택하세요.",
   "loadError": "DDNS 레코드를 불러오지 못했습니다.",
