@@ -101,6 +101,8 @@ func ValidateHostnameOrIP(host string) bool {
 }
 
 // Dangerous nginx directives that should not be allowed in advanced config
+// ANYWHERE — code execution, config escape, security disable, traffic/log
+// redirection at any nesting depth. These are blocked regardless of context.
 var dangerousDirectives = []string{
 	"load_module", // Could load malicious modules
 	"include",     // Could include arbitrary files
@@ -167,23 +169,41 @@ var dangerousDirectives = []string{
 	"modsecurity_rules",   // Could modify WAF rules
 	"SecRuleEngine",       // Could disable WAF (ModSecurity directive)
 	"SecRule",             // Could add/modify WAF rules
-	// Upstream/backend override directives — could redirect traffic, bypass the
-	// managed proxy_pass, or break out of the generated location/server block.
-	"proxy_pass",
-	"fastcgi_pass",
-	"grpc_pass",
-	"uwsgi_pass",
-	// Filesystem exposure directives — could serve arbitrary files / enable
-	// directory listing or local file disclosure.
-	"alias",
-	"root",
-	"autoindex",
-	"internal",
-	// Access-control / request-flow override directives.
+	// Access-control / request-flow override directives — dangerous at any
+	// context because they weaken the managed perimeter.
 	"satisfy",      // Could weaken combined allow/deny + auth requirements
 	"auth_request", // Could route auth subrequests to an attacker endpoint
 	"sub_filter",   // Could inject content into responses
 	"error_page",   // Could override managed security / challenge pages
+	// Filesystem exposure directives — blocked at ANY depth. Unlike proxy_pass
+	// (which only proxies to a network target the caller already controls via
+	// forward_host), alias/root/autoindex expose the NGINX CONTAINER's local
+	// filesystem to the internet (e.g. `location /x { alias /etc/; autoindex on; }`
+	// → /etc/passwd disclosure), a privilege a proxy:write caller otherwise
+	// has no way to obtain. Static-file serving from a custom location is not a
+	// supported feature; keep these unconditionally blocked.
+	"alias",
+	"root",
+	"autoindex",
+	"internal",
+}
+
+// locationOnlyDirectives are legitimate ONLY inside a nested block
+// (location / if / limit_except), which is the documented custom-location use
+// case (#129 — e.g. a custom `location / { proxy_pass ... }`). They are
+// rejected at server level (brace depth 0) where they would override the
+// managed proxy_pass or escape the generated block. Allowing them inside a
+// location grants no privilege a proxy:write caller doesn't already have via
+// forward_host (proxy_pass is grammar-restricted to these contexts anyway),
+// while still blocking naive top-level injection. NOTE: only the upstream
+// *_pass family is here — filesystem directives (alias/root/...) stay in
+// dangerousDirectives because they expose local files, not just network
+// targets the caller already controls.
+var locationOnlyDirectives = []string{
+	"proxy_pass",
+	"fastcgi_pass",
+	"grpc_pass",
+	"uwsgi_pass",
 }
 
 // Security-overriding directive phrases. These are multi-token / contextual
@@ -231,6 +251,15 @@ func ValidateAdvancedConfig(config string) error {
 		}
 	}
 
+	// Structural validation: brace balance + context for location-only
+	// directives. This both restores #129 (proxy_pass inside a location) AND
+	// closes a server-block breakout — an unbalanced '}' could otherwise close
+	// the managed server{} early and let the config open a fresh top-level
+	// server{} with none of the managed WAF/access/ratelimit includes.
+	if err := validateAdvancedConfigStructure(config); err != nil {
+		return err
+	}
+
 	// Check for potential shell command injection in proxy_pass
 	if strings.Contains(configLower, "proxy_pass") {
 		// Check for backticks or $() which could be shell command substitution
@@ -266,6 +295,86 @@ func ValidateAdvancedConfig(config string) error {
 		return fmt.Errorf("advanced config contains null bytes")
 	}
 
+	return nil
+}
+
+// validateAdvancedConfigStructure walks the config tracking nginx brace depth
+// (ignoring braces inside # comments and quoted strings) and enforces three
+// invariants that together restore #129 while keeping the managed server block
+// intact:
+//
+//  1. Depth never goes negative. A '}' that would drop below the starting
+//     context would close the generated server{} early, after which the config
+//     could open its own top-level server{} with NONE of the managed WAF /
+//     access-list / rate-limit / GeoIP includes (SSRF, local-file serving,
+//     server_name hijack). This is the breakout the brace check exists to stop.
+//  2. Final depth is 0 (balanced). An unbalanced blob is rejected outright.
+//  3. locationOnlyDirectives (proxy_pass etc.) only appear as the leading token
+//     of a line while depth >= 1, i.e. inside a location/if/limit_except block;
+//     at server level (depth 0) they are rejected (override of the managed
+//     proxy_pass, or simply invalid nginx).
+//
+// nginx -t on the generated config remains the backstop for anything this
+// heuristic does not model (e.g. a non-leading server-level directive), but the
+// balance + non-negative checks make the perimeter breakout unreachable
+// regardless of how the blob is wrapped.
+func validateAdvancedConfigStructure(config string) error {
+	depth := 0
+	inSingle, inDouble := false, false
+
+	for _, line := range strings.Split(config, "\n") {
+		// Leading-token context check (only meaningful outside a quoted string
+		// carried over from a previous line, which would be malformed anyway).
+		if !inSingle && !inDouble && depth == 0 {
+			trimmed := strings.TrimSpace(line)
+			if trimmed != "" && !strings.HasPrefix(trimmed, "#") {
+				token := strings.ToLower(trimmed)
+				if i := strings.IndexAny(token, " \t{};"); i >= 0 {
+					token = token[:i]
+				}
+				for _, d := range locationOnlyDirectives {
+					if token == d {
+						return fmt.Errorf("advanced config directive %q must be inside a location block, not at the server level", d)
+					}
+				}
+			}
+		}
+
+		// Brace walk, respecting quotes and # comments.
+		for i := 0; i < len(line); i++ {
+			c := line[i]
+			switch {
+			case inSingle:
+				if c == '\'' {
+					inSingle = false
+				}
+			case inDouble:
+				if c == '"' {
+					inDouble = false
+				}
+			case c == '#':
+				i = len(line) // rest of line is a comment
+			case c == '\'':
+				inSingle = true
+			case c == '"':
+				inDouble = true
+			case c == '{':
+				depth++
+			case c == '}':
+				depth--
+				if depth < 0 {
+					return fmt.Errorf("advanced config has an unbalanced '}' that would break out of the managed server block")
+				}
+			}
+		}
+	}
+
+	if inSingle || inDouble {
+		return fmt.Errorf("advanced config has an unterminated quoted string")
+	}
+	if depth != 0 {
+		return fmt.Errorf("advanced config has unbalanced braces")
+	}
 	return nil
 }
 
