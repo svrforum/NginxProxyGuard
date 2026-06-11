@@ -32,8 +32,10 @@ type NginxManager interface {
 	// Same, but additionally renders redirect host configs under the same lock
 	// (certificate fan-out: redirect host configs embed certificate paths too)
 	RegenerateConfigsAtomicWithRedirects(ctx context.Context, renders []nginx.HostConfigRender, redirectHosts []*model.RedirectHost, reload bool) error
-	// Boot drift detection: remove on-disk host configs no enabled host accounts for
-	RemoveOrphanedHostConfigs(ctx context.Context, enabledHosts []model.ProxyHost) []string
+	// Boot drift detection: remove on-disk host configs no enabled host
+	// accounts for. fetchEnabled is invoked under the global nginx lock so the
+	// expected-filename set reflects hosts created during the sync (TOCTOU).
+	RemoveOrphanedHostConfigs(ctx context.Context, fetchEnabled func(context.Context) ([]model.ProxyHost, error)) []string
 	// Filter subscription shared config generation
 	GenerateFilterSubscriptionConfigs(ctx context.Context, ips []string, uas []string) error
 }
@@ -748,6 +750,10 @@ func (s *ProxyHostService) UpdateWithoutReload(ctx context.Context, id string, r
 			metrics.NginxConfigStatus.WithLabelValues(host.ID).Set(0)
 			return nil, fmt.Errorf("nginx config test failed: %w", err)
 		}
+		// Clear any prior config error (e.g. a host that errored once must not
+		// stay 'error' in the UI after a later successful skip_nginx save).
+		_ = s.repo.UpdateConfigStatus(ctx, host.ID, "ok", "")
+		metrics.NginxConfigStatus.WithLabelValues(host.ID).Set(1)
 	} else {
 		// Host is disabled - remove config (old filename too when domain changed)
 		render := nginx.HostConfigRender{

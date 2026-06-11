@@ -89,7 +89,13 @@ func (s *ProxyHostService) RegenerateConfigsForCertificate(ctx context.Context, 
 		}
 		render, err := s.buildHostRender(ctx, &hosts[i])
 		if err != nil {
-			return err
+			// Skip this host rather than abort the whole renewal fan-out: a
+			// transient DB error on one host must not stop nginx from picking
+			// up the renewed cert for every other host. The skipped host's
+			// existing config still references the same cert file paths, so
+			// reloading the others is strictly better than reloading none.
+			log.Printf("[Certificate] Skipping host %s during cert %s fan-out: %v", hosts[i].ID, certificateID, err)
+			continue
 		}
 		renders = append(renders, render)
 	}
@@ -263,8 +269,11 @@ func (s *ProxyHostService) SyncAllConfigsWithDetails(ctx context.Context) (*Sync
 	// Drift detection: configs may exist on disk for hosts that are deleted or
 	// disabled in the DB (e.g. after a DB or volume restore). Remove them
 	// before testing — nginx includes conf.d/*.conf wholesale, so leftovers
-	// would keep serving traffic indefinitely.
-	if removed := s.nginx.RemoveOrphanedHostConfigs(ctx, hosts); len(removed) > 0 {
+	// would keep serving traffic indefinitely. The enabled-host list is
+	// re-queried under the nginx lock (not reusing the `hosts` snapshot above):
+	// the per-host loop does many DB reads, so a host created meanwhile would
+	// otherwise have its just-written config deleted as a false orphan.
+	if removed := s.nginx.RemoveOrphanedHostConfigs(ctx, s.repo.GetAllEnabled); len(removed) > 0 {
 		log.Printf("[SyncConfigs] Removed %d stale host config file(s): %s", len(removed), strings.Join(removed, ", "))
 	}
 
@@ -420,7 +429,10 @@ func (s *ProxyHostService) RegenerateConfigForHost(ctx context.Context, hostID s
 		return fmt.Errorf("failed to get proxy host %s: %w", hostID, err)
 	}
 	if host == nil {
-		return fmt.Errorf("proxy host %s not found", hostID)
+		// Idempotent no-op: nothing to regenerate for an unknown/deleted host.
+		// Callers like the geo DELETE handler delegate here after the row is
+		// already gone — a missing host must return 204, not 500.
+		return nil
 	}
 
 	if !host.Enabled {

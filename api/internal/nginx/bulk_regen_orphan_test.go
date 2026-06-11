@@ -61,7 +61,9 @@ func TestRemoveOrphanedHostConfigs(t *testing.T) {
 	}
 
 	m := &Manager{configPath: confDir, streamConfigPath: streamDir, modsecPath: modsecDir}
-	removed := m.RemoveOrphanedHostConfigs(context.Background(), enabled)
+	removed := m.RemoveOrphanedHostConfigs(context.Background(), func(context.Context) ([]model.ProxyHost, error) {
+		return enabled, nil
+	})
 
 	if len(removed) != 4 {
 		t.Errorf("expected 4 removed files, got %d: %v", len(removed), removed)
@@ -76,5 +78,66 @@ func TestRemoveOrphanedHostConfigs(t *testing.T) {
 		if _, err := os.Stat(p); err != nil {
 			t.Errorf("expected %s to be preserved, got: %v", p, err)
 		}
+	}
+}
+
+// TestRemoveOrphanedHostConfigs_FetchUnderLock proves the TOCTOU fix: a host
+// created during the sync (absent from any earlier snapshot but present when
+// the fetcher is invoked under the lock) keeps its just-written config.
+func TestRemoveOrphanedHostConfigs_FetchUnderLock(t *testing.T) {
+	confDir := t.TempDir()
+	streamDir := t.TempDir()
+	modsecDir := t.TempDir()
+
+	write := func(path string) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte("# test\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	newHost := model.ProxyHost{
+		ID:          "55555555-5555-5555-5555-555555555555",
+		DomainNames: pq.StringArray{"created-during-sync.example.com"},
+	}
+	newConf := filepath.Join(confDir, GetConfigFilename(&newHost))
+	write(newConf)
+
+	m := &Manager{configPath: confDir, streamConfigPath: streamDir, modsecPath: modsecDir}
+	// The fetcher returns the host that appeared while the per-host loop ran.
+	removed := m.RemoveOrphanedHostConfigs(context.Background(), func(context.Context) ([]model.ProxyHost, error) {
+		return []model.ProxyHost{newHost}, nil
+	})
+
+	if len(removed) != 0 {
+		t.Errorf("expected no removals when fetcher reports the host, got: %v", removed)
+	}
+	if _, err := os.Stat(newConf); err != nil {
+		t.Errorf("config for host created during sync must survive, got: %v", err)
+	}
+}
+
+// TestRemoveOrphanedHostConfigs_FetchError skips the sweep entirely on a
+// fetcher error rather than deleting against a partial/empty list.
+func TestRemoveOrphanedHostConfigs_FetchError(t *testing.T) {
+	confDir := t.TempDir()
+	streamDir := t.TempDir()
+	modsecDir := t.TempDir()
+
+	orphanConf := filepath.Join(confDir, "proxy_host_anything_example_com.conf")
+	if err := os.WriteFile(orphanConf, []byte("# test\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	m := &Manager{configPath: confDir, streamConfigPath: streamDir, modsecPath: modsecDir}
+	removed := m.RemoveOrphanedHostConfigs(context.Background(), func(context.Context) ([]model.ProxyHost, error) {
+		return nil, context.DeadlineExceeded
+	})
+
+	if len(removed) != 0 {
+		t.Errorf("expected no removals on fetcher error, got: %v", removed)
+	}
+	if _, err := os.Stat(orphanConf); err != nil {
+		t.Errorf("file must NOT be deleted when enabled-host fetch failed, got: %v", err)
 	}
 }

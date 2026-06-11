@@ -188,7 +188,11 @@ func (m *Manager) RegenerateConfigsAtomicWithRedirects(ctx context.Context, rend
 		if reload {
 			opErr = m.testAndReloadNginxWithRetry(ctx)
 		} else {
-			opErr = m.testConfigInternal(ctx)
+			// Same transient-error backoff as the reload path: a docker/nginx
+			// hiccup during `nginx -t` must not roll the just-written config
+			// (e.g. a manual ban) out of disk before a retry. Genuine config
+			// errors are non-transient and return immediately for rollback.
+			opErr = m.testConfigWithRetry(ctx)
 		}
 		if opErr != nil {
 			return rollback(opErr)
@@ -245,22 +249,35 @@ func (m *Manager) GenerateRedirectConfigAndReload(ctx context.Context, host *mod
 // redirect_host_*.conf, includes/ and *.conf.disabled leftovers are never
 // removed. Best-effort: failures are logged, never fatal. Returns the removed
 // filenames.
-func (m *Manager) RemoveOrphanedHostConfigs(ctx context.Context, enabledHosts []model.ProxyHost) []string {
-	expectedHTTP := make(map[string]struct{})
-	expectedStream := make(map[string]struct{})
-	activeIDs := make(map[string]struct{})
-	for i := range enabledHosts {
-		host := &enabledHosts[i]
-		activeIDs[host.ID] = struct{}{}
-		if host.IsStream() {
-			expectedStream[GetStreamConfigFilename(host)] = struct{}{}
-		} else {
-			expectedHTTP[GetConfigFilename(host)] = struct{}{}
-		}
-	}
-
+//
+// fetchEnabled is called INSIDE the global lock to build the expected-filename
+// set: the sync that calls this does many DB reads between fetching its own
+// host list and reaching the sweep, so a host created meanwhile would be
+// absent from a snapshot taken earlier and its just-written config deleted as
+// a false orphan. Re-querying under the lock closes that TOCTOU window. If
+// fetchEnabled errors, the sweep is skipped entirely (deleting on a partial
+// list is worse than leaving a stale file for the next sync to catch).
+func (m *Manager) RemoveOrphanedHostConfigs(ctx context.Context, fetchEnabled func(context.Context) ([]model.ProxyHost, error)) []string {
 	var removed []string
 	if err := m.executeWithLock(ctx, func() error {
+		enabledHosts, err := fetchEnabled(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to re-query enabled hosts for orphan sweep: %w", err)
+		}
+
+		expectedHTTP := make(map[string]struct{})
+		expectedStream := make(map[string]struct{})
+		activeIDs := make(map[string]struct{})
+		for i := range enabledHosts {
+			host := &enabledHosts[i]
+			activeIDs[host.ID] = struct{}{}
+			if host.IsStream() {
+				expectedStream[GetStreamConfigFilename(host)] = struct{}{}
+			} else {
+				expectedHTTP[GetConfigFilename(host)] = struct{}{}
+			}
+		}
+
 		httpRemoved, httpFailed := m.removeOrphanedConfFiles(m.configPath, "proxy_host_", expectedHTTP)
 		streamRemoved, streamFailed := m.removeOrphanedConfFiles(m.getStreamConfigPath(), "stream_host_", expectedStream)
 		removed = append(removed, httpRemoved...)

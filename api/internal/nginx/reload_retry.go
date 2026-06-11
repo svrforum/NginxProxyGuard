@@ -100,3 +100,41 @@ func (m *Manager) testAndReloadNginxWithRetry(ctx context.Context) error {
 	return fmt.Errorf("nginx reload failed after %d attempts: %w",
 		config.ReloadMaxRetries+1, lastErr)
 }
+
+// testConfigWithRetry runs testConfigInternal with the same transient-error
+// backoff as testAndReloadNginxWithRetry, but never reloads. It exists so the
+// reload=false bulk path (debounced reloader: ban fan-out, single-host saves)
+// does not roll back a just-written config on a transient docker/nginx hiccup
+// during `nginx -t` — a genuine config error (non-transient) still returns
+// immediately so the caller rolls back.
+//
+// Must be called within executeWithLock (same contract as testConfigInternal).
+func (m *Manager) testConfigWithRetry(ctx context.Context) error {
+	var lastErr error
+	delay := config.ReloadRetryBaseDelay
+
+	for attempt := 0; attempt <= config.ReloadMaxRetries; attempt++ {
+		if attempt > 0 {
+			log.Printf("[NginxTest] Retry %d/%d after %v (last error: %v)",
+				attempt, config.ReloadMaxRetries, delay, lastErr)
+			select {
+			case <-time.After(delay):
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+			delay *= 2
+		}
+
+		err := m.testConfigInternal(ctx)
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		if !isTransientReloadError(err) {
+			return err
+		}
+	}
+
+	return fmt.Errorf("nginx config test failed after %d attempts: %w",
+		config.ReloadMaxRetries+1, lastErr)
+}

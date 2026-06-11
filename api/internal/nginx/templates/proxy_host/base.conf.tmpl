@@ -59,7 +59,10 @@ server {
         {{if and .Upstream .Upstream.Servers}}proxy_pass {{upstreamScheme .Upstream}}://{{.Upstream.Name}};{{if eq (upstreamScheme .Upstream) "https"}}
         proxy_ssl_server_name on;
         proxy_ssl_name $host;
-        proxy_ssl_verify off;{{end}}{{else}}proxy_pass {{.Host.ForwardScheme}}://npg_direct_{{sanitizeID .Host.ID}};{{end}}
+        proxy_ssl_verify off;{{end}}{{else}}proxy_pass {{.Host.ForwardScheme}}://npg_direct_{{sanitizeID .Host.ID}};
+        # Direct-forward upstream is an upstream group name, so `proxy_redirect
+        # default` can't derive the backend URL — rewrite backend Location/Refresh explicitly.
+        proxy_redirect {{.Host.ForwardScheme}}://{{.Host.ForwardHost}}:{{.Host.ForwardPort}}/ /;{{end}}
         include /etc/nginx/includes/proxy_params.conf;
     }
 
