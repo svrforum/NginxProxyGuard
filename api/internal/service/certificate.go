@@ -472,7 +472,13 @@ func (s *CertificateService) List(ctx context.Context, page, perPage int, search
 	}, nil
 }
 
-// DeleteErrorCertificates deletes all certificates with error status
+// DeleteErrorCertificates deletes all certificates with error status.
+//
+// A still-referenced cert can land in 'error' (e.g. RecoverInterruptedStates
+// routes an interrupted issuance/renewal there while a proxy host still points
+// at it), so the same in-use guard as Delete applies per-cert: removing a
+// referenced cert's files while its nginx config still references them breaks
+// the next nginx -t system-wide. Referenced certs are skipped.
 func (s *CertificateService) DeleteErrorCertificates(ctx context.Context) (int64, error) {
 	// Get error certificates for file cleanup
 	errorCerts, err := s.repo.ListByStatus(ctx, "error")
@@ -480,16 +486,29 @@ func (s *CertificateService) DeleteErrorCertificates(ctx context.Context) (int64
 		return 0, fmt.Errorf("failed to list error certificates: %w", err)
 	}
 
-	// Delete certificate files (best-effort)
 	acmeService, _ := s.getACMEService(ctx)
-	for _, cert := range errorCerts {
-		_ = acmeService.DeleteCertificateFiles(cert.ID)
-	}
 
-	// Delete from DB
-	count, err := s.repo.DeleteByErrorStatus(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("failed to delete error certificates: %w", err)
+	var count int64
+	for _, cert := range errorCerts {
+		// Skip certs still referenced by a proxy/redirect host.
+		if s.inUseChecker != nil {
+			proxyCount, redirectCount, err := s.inUseChecker(ctx, cert.ID)
+			if err != nil {
+				return count, fmt.Errorf("failed to check certificate usage: %w", err)
+			}
+			if proxyCount+redirectCount > 0 {
+				log.Printf("[CertificateService] Skipping error cert %s: referenced by %d proxy host(s) and %d redirect host(s)",
+					cert.ID, proxyCount, redirectCount)
+				continue
+			}
+		}
+
+		// Delete files (best-effort) then the DB row.
+		_ = acmeService.DeleteCertificateFiles(cert.ID)
+		if err := s.repo.Delete(ctx, cert.ID); err != nil {
+			return count, fmt.Errorf("failed to delete error certificate %s: %w", cert.ID, err)
+		}
+		count++
 	}
 
 	return count, nil

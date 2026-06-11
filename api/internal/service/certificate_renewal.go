@@ -28,7 +28,12 @@ func (s *CertificateService) Renew(ctx context.Context, id string) error {
 	// actionable error instead of attempting an HTTP-01 order that Let's
 	// Encrypt will always reject (e.g. after the cert's DNS provider was removed).
 	if cert.Provider == model.CertProviderLetsEncrypt && cert.DNSProviderID == nil && hasWildcardDomain(cert.DomainNames) {
-		return fmt.Errorf("%w: certificate contains wildcard domains, which require the DNS-01 challenge — assign a DNS provider to this certificate before renewing (HTTP-01 cannot issue wildcard certificates)", model.ErrInvalidInput)
+		msg := "certificate contains wildcard domains, which require the DNS-01 challenge — assign a DNS provider to this certificate before renewing (HTTP-01 cannot issue wildcard certificates)"
+		// Persist the message so it surfaces in the UI: the scheduler path only
+		// logs this error, so without persisting it the cert would show no
+		// error_message. updateRenewalError keeps the still-valid cert "issued".
+		s.updateRenewalError(ctx, cert.ID, msg)
+		return fmt.Errorf("%w: %s", model.ErrInvalidInput, msg)
 	}
 
 	// Refuse when the certificate is already mid-renewal/issuance. Stale
@@ -40,24 +45,27 @@ func (s *CertificateService) Renew(ctx context.Context, id string) error {
 
 	// In-process concurrency guard — always applies, even when Valkey is
 	// absent (it is optional). The Redis lock below remains the
-	// cross-instance layer.
-	if _, loaded := s.renewalInflight.LoadOrStore(id, struct{}{}); loaded {
-		return fmt.Errorf("renewal already in progress for certificate %s", id)
+	// cross-instance layer. Key on cert.ID (canonical) — the caller-supplied
+	// id may be non-canonical (e.g. different case), and the goroutine's
+	// deferred cleanup deletes cert.ID, so a mismatched key would leak the slot
+	// and wedge future renewals.
+	if _, loaded := s.renewalInflight.LoadOrStore(cert.ID, struct{}{}); loaded {
+		return fmt.Errorf("renewal already in progress for certificate %s", cert.ID)
 	}
 
 	// Try to acquire distributed lock to prevent concurrent renewals
-	lockKey := "cert:renewal:" + id
+	lockKey := "cert:renewal:" + cert.ID
 	lockValue := uuid.New().String()
 
 	if s.redisCache != nil && s.redisCache.IsReady() {
 		acquired, err := s.redisCache.AcquireLock(ctx, lockKey, lockValue, certRenewalLockTTL)
 		if err != nil {
-			log.Printf("[Certificate] Warning: Failed to acquire lock for cert %s: %v", id, err)
+			log.Printf("[Certificate] Warning: Failed to acquire lock for cert %s: %v", cert.ID, err)
 			// Continue without lock if Redis fails - single instance fallback
 		} else if !acquired {
-			s.renewalInflight.Delete(id)
-			log.Printf("[Certificate] Renewal already in progress for cert %s, skipping", id)
-			return fmt.Errorf("renewal already in progress for certificate %s", id)
+			s.renewalInflight.Delete(cert.ID)
+			log.Printf("[Certificate] Renewal already in progress for cert %s, skipping", cert.ID)
+			return fmt.Errorf("renewal already in progress for certificate %s", cert.ID)
 		}
 	}
 
@@ -70,7 +78,7 @@ func (s *CertificateService) Renew(ctx context.Context, id string) error {
 		if s.redisCache != nil && s.redisCache.IsReady() {
 			s.redisCache.ReleaseLock(ctx, lockKey, lockValue)
 		}
-		s.renewalInflight.Delete(id)
+		s.renewalInflight.Delete(cert.ID)
 		return fmt.Errorf("failed to update certificate status: %w", err)
 	}
 
@@ -138,6 +146,19 @@ func (s *CertificateService) renewLetsEncrypt(ctx context.Context, cert *model.C
 		}
 	}
 
+	// Self-heal after a staging↔production switch: the stored account was
+	// registered against the previous CA directory. Reusing it now would make
+	// lego skip registration (Registration != nil) so the account is never
+	// created on the current directory and every order fails. When the account
+	// belongs to a different directory, clear its registration so the renewal /
+	// obtain path re-registers the reused key against the current CA, and never
+	// pass the stale registered account into the obtain fallback below.
+	accountMatchesDir := hasValidUser && acmeService.AccountMatchesDirectory(&user)
+	if hasValidUser && !accountMatchesDir {
+		s.addCertLog(cert.ID, "warn", "Stored ACME account was registered against a different CA directory (staging/production switch); re-registering on the current directory", "init")
+		user.Registration = nil
+	}
+
 	var result *acme.CertificateResult
 	var newUser *acme.ACMEUser
 	var renewErr error
@@ -159,11 +180,13 @@ func (s *CertificateService) renewLetsEncrypt(ctx context.Context, cert *model.C
 		}
 
 		// If renewal failed or no valid user, obtain new certificate.
-		// Reuse the stored ACME account when we have one — registering a fresh
-		// account on every failed attempt burns Let's Encrypt rate limits.
+		// Reuse the stored ACME account only when it belongs to the current CA
+		// directory — registering a fresh account on every failed attempt burns
+		// Let's Encrypt rate limits, but a mismatched account (after a
+		// staging↔production switch) must be discarded so a new one is created.
 		if !hasValidUser || renewErr != nil {
 			var existingUser *acme.ACMEUser
-			if hasValidUser {
+			if accountMatchesDir {
 				existingUser = &user
 			}
 			if renewErr != nil {
@@ -189,11 +212,13 @@ func (s *CertificateService) renewLetsEncrypt(ctx context.Context, cert *model.C
 		}
 
 		// If renewal failed or no valid user, obtain new certificate.
-		// Reuse the stored ACME account when we have one — registering a fresh
-		// account on every failed attempt burns Let's Encrypt rate limits.
+		// Reuse the stored ACME account only when it belongs to the current CA
+		// directory — registering a fresh account on every failed attempt burns
+		// Let's Encrypt rate limits, but a mismatched account (after a
+		// staging↔production switch) must be discarded so a new one is created.
 		if !hasValidUser || renewErr != nil {
 			var existingUser *acme.ACMEUser
-			if hasValidUser {
+			if accountMatchesDir {
 				existingUser = &user
 			}
 			if renewErr != nil {

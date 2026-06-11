@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/go-acme/lego/v4/registration"
 )
 
 // generateTestCert creates a self-signed test certificate for given domains
@@ -85,6 +87,63 @@ func countPEMBlocks(data string) int {
 		count++
 	}
 	return count
+}
+
+// --- AccountMatchesDirectory tests ---
+//
+// Guards the staging↔production self-heal: a stored account registered against
+// the previous CA directory must NOT be reused against the current one (lego
+// would skip registration and every order would fail).
+
+func userWithRegistrationURI(uri string) *ACMEUser {
+	u := &ACMEUser{}
+	if uri != "" {
+		u.Registration = &registration.Resource{URI: uri}
+	}
+	return u
+}
+
+func TestAccountMatchesDirectory_SameDirectory(t *testing.T) {
+	prod := NewService(false, t.TempDir())
+	user := userWithRegistrationURI("https://acme-v02.api.letsencrypt.org/acme/acct/123456")
+	if !prod.AccountMatchesDirectory(user) {
+		t.Error("expected production account to match production directory")
+	}
+
+	staging := NewService(true, t.TempDir())
+	stagingUser := userWithRegistrationURI("https://acme-staging-v02.api.letsencrypt.org/acme/acct/123456")
+	if !staging.AccountMatchesDirectory(stagingUser) {
+		t.Error("expected staging account to match staging directory")
+	}
+}
+
+func TestAccountMatchesDirectory_StagingToProductionSwitch(t *testing.T) {
+	// Account was registered against staging; service now points at production.
+	prod := NewService(false, t.TempDir())
+	stagingAccount := userWithRegistrationURI("https://acme-staging-v02.api.letsencrypt.org/acme/acct/123456")
+	if prod.AccountMatchesDirectory(stagingAccount) {
+		t.Error("staging account must NOT match production directory (self-heal required)")
+	}
+
+	// And the reverse: production account against a staging service.
+	staging := NewService(true, t.TempDir())
+	prodAccount := userWithRegistrationURI("https://acme-v02.api.letsencrypt.org/acme/acct/123456")
+	if staging.AccountMatchesDirectory(prodAccount) {
+		t.Error("production account must NOT match staging directory (self-heal required)")
+	}
+}
+
+func TestAccountMatchesDirectory_NoRegistration(t *testing.T) {
+	prod := NewService(false, t.TempDir())
+	if prod.AccountMatchesDirectory(nil) {
+		t.Error("nil user must not match")
+	}
+	if prod.AccountMatchesDirectory(&ACMEUser{}) {
+		t.Error("user with no registration must not match")
+	}
+	if prod.AccountMatchesDirectory(userWithRegistrationURI("")) {
+		t.Error("user with empty registration URI must not match")
+	}
 }
 
 // --- BuildFullchain tests ---

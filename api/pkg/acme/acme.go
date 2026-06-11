@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -149,6 +150,32 @@ func NewService(useStaging bool, certsDir string) *Service {
 // SetWebrootDir sets the webroot directory for HTTP-01 challenges
 func (s *Service) SetWebrootDir(dir string) {
 	s.webrootDir = dir
+}
+
+// AccountMatchesDirectory reports whether the stored ACME account belongs to
+// this service's current CA directory (production vs staging). ACME account
+// URLs are hosted under the directory's own host (e.g.
+// acme-v02.api.letsencrypt.org vs acme-staging-v02.api.letsencrypt.org), so a
+// host mismatch means the account was registered against a different CA.
+//
+// Reusing an account from the old CA against a new CADirURL fails every order:
+// lego skips registration when Registration != nil, so the account is never
+// created on the new directory. Callers use this to decide whether the stored,
+// already-registered account can be reused (same directory → rate-limit-friendly
+// reuse) or must be discarded so a fresh registration happens on the current CA.
+func (s *Service) AccountMatchesDirectory(user *ACMEUser) bool {
+	if user == nil || user.Registration == nil || user.Registration.URI == "" {
+		return false
+	}
+	accountURL, err := url.Parse(user.Registration.URI)
+	if err != nil {
+		return false
+	}
+	dirURL, err := url.Parse(s.caURL)
+	if err != nil {
+		return false
+	}
+	return accountURL.Host == dirURL.Host
 }
 
 // CertificateResult contains the issued certificate data

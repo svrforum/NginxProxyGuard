@@ -608,32 +608,56 @@ func (r *CertificateRepository) GetExpiringSoon(ctx context.Context, days int) (
 // Assumes a single API instance (the deployment model): at boot no goroutine
 // of this process can be mid-renewal.
 func (r *CertificateRepository) RecoverInterruptedStates(ctx context.Context) (recovered int64, failed int64, err error) {
-	res, err := r.db.ExecContext(ctx, `
+	// RETURNING id + per-row invalidation mirrors DeleteByErrorStatus: these
+	// raw UPDATEs change status/error_message, so a stale GetByID cache entry
+	// would otherwise serve the pre-restart status for up to 60s after recovery.
+	recovered, err = r.updateAndInvalidate(ctx, `
 		UPDATE certificates
 		SET status = 'issued',
 			error_message = 'renewal interrupted by API restart; will retry on schedule',
 			updated_at = NOW()
 		WHERE status = 'renewing' AND certificate_pem IS NOT NULL AND certificate_pem != ''
+		RETURNING id
 	`)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to recover interrupted renewals: %w", err)
 	}
-	recovered, _ = res.RowsAffected()
 
-	res, err = r.db.ExecContext(ctx, `
+	failed, err = r.updateAndInvalidate(ctx, `
 		UPDATE certificates
 		SET status = 'error',
 			error_message = 'issuance interrupted by API restart; please retry',
 			updated_at = NOW()
 		WHERE status IN ('pending', 'renewing')
 			AND (certificate_pem IS NULL OR certificate_pem = '')
+		RETURNING id
 	`)
 	if err != nil {
 		return recovered, 0, fmt.Errorf("failed to fail interrupted issuances: %w", err)
 	}
-	failed, _ = res.RowsAffected()
 
 	return recovered, failed, nil
+}
+
+// updateAndInvalidate runs an UPDATE ... RETURNING id query, drops each
+// affected row's per-id cache entry, and returns the number of rows changed.
+func (r *CertificateRepository) updateAndInvalidate(ctx context.Context, query string) (int64, error) {
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	var affected int64
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return affected, fmt.Errorf("failed to scan recovered cert id: %w", err)
+		}
+		r.invalidateCert(ctx, id)
+		affected++
+	}
+	return affected, rows.Err()
 }
 
 // Helper functions
