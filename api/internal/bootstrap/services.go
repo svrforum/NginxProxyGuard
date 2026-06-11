@@ -83,7 +83,7 @@ func InitServices(
 		redisCache,
 	)
 
-	svcs.NginxReloader = service.NewNginxReloader(nginxManager, config.NginxReloaderDebounce)
+	svcs.NginxReloader = service.NewNginxReloader(nginxManager, repos.SystemLog, config.NginxReloaderDebounce)
 
 	svcs.FilterSubscription = service.NewFilterSubscriptionService(
 		repos.FilterSubscription,

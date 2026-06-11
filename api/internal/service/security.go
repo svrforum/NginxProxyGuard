@@ -419,18 +419,20 @@ func (s *SecurityService) regenerateConfigsForBan(proxyHostID *string) {
 	if proxyHostID != nil {
 		// Regenerate specific host config without immediate reload
 		if _, err := s.proxyHostService.UpdateWithoutReload(ctx, *proxyHostID, nil); err != nil {
-			log.Printf("[SecurityService] Failed to regenerate config for host: %v", err)
+			log.Printf("[SecurityService] IP ban change NOT applied to host %s — config regeneration failed (ban is saved in DB and will be enforced on the next successful config sync): %v", *proxyHostID, err)
 			return
 		}
 	} else {
 		// For global ban, regenerate all enabled hosts without reload
 		hosts, _, err := s.proxyHostRepo.List(ctx, 1, config.MaxWAFRulesLimit, "", "", "")
-		if err == nil && hosts != nil {
-			for _, host := range hosts {
-				if host.Enabled {
-					if _, err := s.proxyHostService.UpdateWithoutReload(ctx, host.ID, nil); err != nil {
-						log.Printf("[SecurityService] Failed to regenerate config for host %s: %v", host.ID, err)
-					}
+		if err != nil {
+			log.Printf("[SecurityService] IP ban change NOT applied to nginx — failed to list proxy hosts (ban is saved in DB and will be enforced on the next successful config sync): %v", err)
+			return
+		}
+		for _, host := range hosts {
+			if host.Enabled {
+				if _, err := s.proxyHostService.UpdateWithoutReload(ctx, host.ID, nil); err != nil {
+					log.Printf("[SecurityService] IP ban change NOT applied to host %s — config regeneration failed (ban is saved in DB and will be enforced on the next successful config sync): %v", host.ID, err)
 				}
 			}
 		}
@@ -451,17 +453,19 @@ func (s *SecurityService) regenerateAllConfigsForBan() {
 	}
 
 	hosts, _, err := s.proxyHostRepo.List(ctx, 1, config.MaxWAFRulesLimit, "", "", "")
-	if err == nil && hosts != nil {
-		for _, host := range hosts {
-			if host.Enabled {
-				if _, err := s.proxyHostService.UpdateWithoutReload(ctx, host.ID, nil); err != nil {
-					log.Printf("[SecurityService] Failed to regenerate config for host %s: %v", host.ID, err)
-				}
+	if err != nil {
+		log.Printf("[SecurityService] IP ban list change NOT applied to nginx — failed to list proxy hosts (the change is saved in DB and will be enforced on the next successful config sync): %v", err)
+		return
+	}
+	for _, host := range hosts {
+		if host.Enabled {
+			if _, err := s.proxyHostService.UpdateWithoutReload(ctx, host.ID, nil); err != nil {
+				log.Printf("[SecurityService] IP ban list change NOT applied to host %s — config regeneration failed (the change is saved in DB and will be enforced on the next successful config sync): %v", host.ID, err)
 			}
 		}
-		if s.nginxReloader != nil {
-			s.nginxReloader.RequestReload(ctx)
-		}
+	}
+	if s.nginxReloader != nil {
+		s.nginxReloader.RequestReload(ctx)
 	}
 }
 
