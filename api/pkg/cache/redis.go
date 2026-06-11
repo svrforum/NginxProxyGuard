@@ -39,8 +39,9 @@ const (
 
 // Retry configuration constants
 const (
-	maxRetries            = 5              // Maximum number of connection retry attempts
-	retryBaseIntervalSecs = 1              // Base interval in seconds for retry backoff
+	maxRetries            = 5                // Maximum number of fast initial connection attempts
+	retryBaseIntervalSecs = 1                // Base interval in seconds for retry backoff
+	reconnectInterval     = 30 * time.Second // Background re-ping cadence after the fast attempts fail
 )
 
 // RedisClient wraps the Redis client with helper methods
@@ -48,6 +49,11 @@ type RedisClient struct {
 	client *redis.Client
 	ready  bool
 	mu     sync.RWMutex
+
+	// done stops the background reconnect loop on Close(). Nil when no
+	// client is configured (empty REDIS_URL).
+	done      chan struct{}
+	closeOnce sync.Once
 }
 
 // NewRedisClient creates a new Redis client from URL
@@ -68,6 +74,7 @@ func NewRedisClient(redisURL string) (*RedisClient, error) {
 	rc := &RedisClient{
 		client: client,
 		ready:  false,
+		done:   make(chan struct{}),
 	}
 
 	// Test connection in background
@@ -108,29 +115,56 @@ func parseRedisURL(redisURL string) (*redis.Options, error) {
 }
 
 func (r *RedisClient) connect() {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
 	if r.client == nil {
 		return
 	}
 
-	// Retry connection with backoff
+	// Fast initial attempts with backoff — covers the normal compose
+	// startup race where Valkey is up within seconds.
 	for i := 0; i < maxRetries; i++ {
-		if err := r.client.Ping(ctx).Err(); err != nil {
-			log.Printf("[Cache] Redis connection attempt %d/%d failed: %v", i+1, maxRetries, err)
-			time.Sleep(time.Duration((i+1)*retryBaseIntervalSecs) * time.Second)
-			continue
+		err := r.tryPing()
+		if err == nil {
+			return
 		}
-
-		r.mu.Lock()
-		r.ready = true
-		r.mu.Unlock()
-		log.Println("[Cache] Redis connected successfully")
-		return
+		log.Printf("[Cache] Redis connection attempt %d/%d failed: %v", i+1, maxRetries, err)
+		time.Sleep(time.Duration((i+1)*retryBaseIntervalSecs) * time.Second)
 	}
 
-	log.Println("[Cache] Redis connection failed after retries, caching disabled")
+	log.Printf("[Cache] Redis connection failed after retries, caching disabled — retrying in background every %v", reconnectInterval)
+
+	// Background reconnect: Valkey can come up later than the fast window
+	// (slow image pull, crash-loop at boot, recovery after power loss).
+	// Without this, cache features stay off for the API's entire lifetime
+	// even once Valkey is healthy. Failures here are deliberately not logged
+	// per-tick (one line every 30s forever would drown container logs); the
+	// success transition is. Loop ends on success or Close().
+	ticker := time.NewTicker(reconnectInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-r.done:
+			return
+		case <-ticker.C:
+			if r.tryPing() == nil {
+				return
+			}
+		}
+	}
+}
+
+// tryPing performs one bounded ping; on success it flips ready and returns
+// nil. ready is only ever written here, so IsReady stays a cheap flag read.
+func (r *RedisClient) tryPing() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := r.client.Ping(ctx).Err(); err != nil {
+		return err
+	}
+	r.mu.Lock()
+	r.ready = true
+	r.mu.Unlock()
+	log.Println("[Cache] Redis connected successfully")
+	return nil
 }
 
 // IsReady returns whether the cache is connected
@@ -140,8 +174,13 @@ func (r *RedisClient) IsReady() bool {
 	return r.ready && r.client != nil
 }
 
-// Close closes the Redis connection
+// Close closes the Redis connection and stops the background reconnect loop
 func (r *RedisClient) Close() error {
+	r.closeOnce.Do(func() {
+		if r.done != nil {
+			close(r.done)
+		}
+	})
 	if r.client != nil {
 		return r.client.Close()
 	}
@@ -476,25 +515,25 @@ func (r *RedisClient) Delete(ctx context.Context, key string) error {
 
 // LogEntry represents a log entry for buffering
 type LogEntry struct {
-	LogType        string            `json:"log_type"`
-	Timestamp      time.Time         `json:"timestamp"`
-	Host           string            `json:"host,omitempty"`
-	ClientIP       string            `json:"client_ip,omitempty"`
-	Method         string            `json:"method,omitempty"`
-	URI            string            `json:"uri,omitempty"`
-	Protocol       string            `json:"protocol,omitempty"`
-	StatusCode     int               `json:"status_code,omitempty"`
-	BodyBytes      int64             `json:"body_bytes,omitempty"`
-	UserAgent      string            `json:"user_agent,omitempty"`
-	Referer        string            `json:"referer,omitempty"`
-	BlockReason    string            `json:"block_reason,omitempty"`
-	BotCategory    string            `json:"bot_category,omitempty"`
-	ExploitRule    string            `json:"exploit_rule,omitempty"`
-	GeoCountry     string            `json:"geo_country,omitempty"`
-	GeoCountryCode string            `json:"geo_country_code,omitempty"`
-	GeoCity        string            `json:"geo_city,omitempty"`
-	GeoASN         string            `json:"geo_asn,omitempty"`
-	GeoOrg         string            `json:"geo_org,omitempty"`
+	LogType              string            `json:"log_type"`
+	Timestamp            time.Time         `json:"timestamp"`
+	Host                 string            `json:"host,omitempty"`
+	ClientIP             string            `json:"client_ip,omitempty"`
+	Method               string            `json:"method,omitempty"`
+	URI                  string            `json:"uri,omitempty"`
+	Protocol             string            `json:"protocol,omitempty"`
+	StatusCode           int               `json:"status_code,omitempty"`
+	BodyBytes            int64             `json:"body_bytes,omitempty"`
+	UserAgent            string            `json:"user_agent,omitempty"`
+	Referer              string            `json:"referer,omitempty"`
+	BlockReason          string            `json:"block_reason,omitempty"`
+	BotCategory          string            `json:"bot_category,omitempty"`
+	ExploitRule          string            `json:"exploit_rule,omitempty"`
+	GeoCountry           string            `json:"geo_country,omitempty"`
+	GeoCountryCode       string            `json:"geo_country_code,omitempty"`
+	GeoCity              string            `json:"geo_city,omitempty"`
+	GeoASN               string            `json:"geo_asn,omitempty"`
+	GeoOrg               string            `json:"geo_org,omitempty"`
 	RequestTime          float64           `json:"request_time,omitempty"`
 	XForwardedFor        string            `json:"x_forwarded_for,omitempty"`
 	UpstreamResponseTime float64           `json:"upstream_response_time,omitempty"`
@@ -624,10 +663,10 @@ func (r *RedisClient) Stats(ctx context.Context) (map[string]interface{}, error)
 
 // URIBlockEntry represents a cached URI block rule
 type URIBlockEntry struct {
-	HostID          string   `json:"host_id"`
-	Enabled         bool     `json:"enabled"`
-	AllowPrivateIPs bool     `json:"allow_private_ips"`
-	ExceptionIPs    []string `json:"exception_ips"`
+	HostID          string            `json:"host_id"`
+	Enabled         bool              `json:"enabled"`
+	AllowPrivateIPs bool              `json:"allow_private_ips"`
+	ExceptionIPs    []string          `json:"exception_ips"`
 	Patterns        []URIBlockPattern `json:"patterns"`
 }
 
@@ -780,56 +819,6 @@ func (r *RedisClient) GetGeoIPStats(ctx context.Context, hours int, dest interfa
 	}
 
 	return json.Unmarshal(data, dest)
-}
-
-// ========================================
-// GeoIP Lookup Cache Operations
-// ========================================
-
-// GeoIPResult represents cached GeoIP lookup result
-type GeoIPResult struct {
-	CountryCode string `json:"country_code"`
-	Country     string `json:"country"`
-	City        string `json:"city"`
-	ASN         string `json:"asn"`
-	Org         string `json:"org"`
-}
-
-// SetGeoIPLookup caches GeoIP lookup result for an IP
-func (r *RedisClient) SetGeoIPLookup(ctx context.Context, ip string, result *GeoIPResult) error {
-	if !r.IsReady() {
-		return ErrNotReady
-	}
-
-	data, err := json.Marshal(result)
-	if err != nil {
-		return err
-	}
-
-	// Cache for 1 hour
-	return r.client.Set(ctx, PrefixGeoIP+"ip:"+ip, data, time.Hour).Err()
-}
-
-// GetGeoIPLookup retrieves cached GeoIP lookup result for an IP
-func (r *RedisClient) GetGeoIPLookup(ctx context.Context, ip string) (*GeoIPResult, error) {
-	if !r.IsReady() {
-		return nil, ErrNotReady
-	}
-
-	data, err := r.client.Get(ctx, PrefixGeoIP+"ip:"+ip).Bytes()
-	if errors.Is(err, redis.Nil) {
-		return nil, ErrCacheMiss
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	var result GeoIPResult
-	if err := json.Unmarshal(data, &result); err != nil {
-		return nil, err
-	}
-
-	return &result, nil
 }
 
 // ========================================

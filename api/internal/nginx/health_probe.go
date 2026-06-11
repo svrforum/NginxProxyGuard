@@ -23,7 +23,19 @@ type dockerHealthExecutor struct {
 	containerName string
 }
 
+// dockerExecTimeout bounds each individual docker exec spawned by the prober.
+// Verify runs while the caller holds globalNginxMutex, and HTTP-handler
+// contexts carry no deadline — without a per-exec cap, one stalled dockerd
+// exec RPC (the project's documented 2026-05 failure mode) would hold the
+// mutex forever and wedge every subsequent nginx operation. Same hardening
+// as nginx_cli.go's per-method timeouts. Generous vs. the probe-level
+// budgets (WorkerReadyTimeout=2s, HealthProbeTimeout=500ms) so it only fires
+// when dockerd itself is stuck, not on a slow-but-working probe.
+const dockerExecTimeout = 10 * time.Second
+
 func (e *dockerHealthExecutor) Exec(ctx context.Context, args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, dockerExecTimeout)
+	defer cancel()
 	full := append([]string{"exec", e.containerName}, args...)
 	cmd := exec.CommandContext(ctx, "docker", full...)
 	out, err := cmd.CombinedOutput()

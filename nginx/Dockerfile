@@ -163,7 +163,12 @@ RUN echo "Downloading OWASP CRS ${OWASP_CRS_VERSION}..." \
     && wget -q https://github.com/coreruleset/coreruleset/archive/refs/tags/v${OWASP_CRS_VERSION}.tar.gz \
     && tar -xzf v${OWASP_CRS_VERSION}.tar.gz \
     && mv coreruleset-${OWASP_CRS_VERSION} /etc/nginx/owasp-crs \
-    && cp /etc/nginx/owasp-crs/crs-setup.conf.example /etc/nginx/owasp-crs/crs-setup.conf
+    && cp /etc/nginx/owasp-crs/crs-setup.conf.example /etc/nginx/owasp-crs/crs-setup.conf \
+    # Version stamp consumed by docker-entrypoint.sh update_owasp_crs(): on
+    # boot, if the stamp in the nginx_data volume differs from this one, the
+    # vendored ruleset in the volume is refreshed from the image copy so WAF
+    # rules are not frozen at the first-install CRS version.
+    && echo "${OWASP_CRS_VERSION}" > /etc/nginx/owasp-crs/.npg-crs-version
 
 # =============================================================================
 # Stage 2: Runtime Stage

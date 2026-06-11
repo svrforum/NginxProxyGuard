@@ -4,10 +4,20 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
 	_ "github.com/lib/pq"
+)
+
+// Initial-connect retry budget. TimescaleDB crash recovery (WAL replay after
+// power loss) can outlast the compose healthcheck window on large installs;
+// a bounded in-app retry lets the api ride it out instead of relying solely
+// on Docker restart semantics.
+const (
+	connectRetryBudget   = 60 * time.Second
+	connectRetryInterval = 2 * time.Second
 )
 
 type DB struct {
@@ -21,6 +31,14 @@ type DB struct {
 	bgCtx    context.Context
 	bgCancel context.CancelFunc
 	bgWG     sync.WaitGroup
+
+	// Upgrade-migration failures recorded by RunMigrations' warn-and-continue
+	// path. count > 0 means the schema may be partially migrated (affected
+	// features can 500 until the next boot retries the idempotent statements).
+	// Surfaced via MigrationHealth(); must never fail the liveness probe.
+	migMu           sync.Mutex
+	migFailureCount int
+	migLastError    string
 }
 
 func New(databaseURL string) (*DB, error) {
@@ -35,13 +53,45 @@ func New(databaseURL string) (*DB, error) {
 	db.SetMaxIdleConns(20)
 	db.SetConnMaxLifetime(5 * time.Minute)
 
-	// Test the connection
-	if err := db.Ping(); err != nil {
-		return nil, fmt.Errorf("failed to ping database: %w", err)
+	// Test the connection, retrying within a bounded budget (see constants
+	// above) so a recovering database doesn't fail the whole container boot.
+	deadline := time.Now().Add(connectRetryBudget)
+	for {
+		err = db.Ping()
+		if err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			_ = db.Close()
+			return nil, fmt.Errorf("failed to ping database: %w", err)
+		}
+		log.Printf("[DB] Database not reachable yet (%v) — retrying in %v", err, connectRetryInterval)
+		time.Sleep(connectRetryInterval)
 	}
 
 	bgCtx, bgCancel := context.WithCancel(context.Background())
 	return &DB{DB: db, bgCtx: bgCtx, bgCancel: bgCancel}, nil
+}
+
+// RecordMigrationFailure accumulates a failed upgrade-migration statement.
+// Called from RunMigrations' per-statement warn-and-continue loop; the
+// statements are idempotent and retried on every boot, so this state always
+// reflects the current process' boot.
+func (db *DB) RecordMigrationFailure(desc string, err error) {
+	db.migMu.Lock()
+	defer db.migMu.Unlock()
+	db.migFailureCount++
+	db.migLastError = fmt.Sprintf("%s: %v", desc, err)
+}
+
+// MigrationHealth reports upgrade-migration failures from this boot:
+// count == 0 means every upgrade statement applied cleanly. Intended for the
+// detailed health endpoint to report a degraded (NOT unhealthy) state — the
+// liveness probe must stay green while the app serves.
+func (db *DB) MigrationHealth() (count int, lastError string) {
+	db.migMu.Lock()
+	defer db.migMu.Unlock()
+	return db.migFailureCount, db.migLastError
 }
 
 // SetPool overrides the default connection pool sizing. Idle is clamped to

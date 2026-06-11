@@ -2,8 +2,10 @@ package middleware
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"nginx-proxy-guard/internal/model"
@@ -11,6 +13,28 @@ import (
 
 	"github.com/labstack/echo/v4"
 )
+
+// Rate-limited error reporting for the per-request async usage writer. A DB
+// outage would otherwise either spam one line per authenticated request or
+// (as before) discard every error silently. At most one summary line per
+// minute, carrying the count of failures suppressed since the last report.
+var (
+	asyncTokenLogMu         sync.Mutex
+	asyncTokenLogLastEmit   time.Time
+	asyncTokenLogSuppressed int
+)
+
+func logAsyncTokenError(what string, err error) {
+	asyncTokenLogMu.Lock()
+	defer asyncTokenLogMu.Unlock()
+	asyncTokenLogSuppressed++
+	if time.Since(asyncTokenLogLastEmit) < time.Minute {
+		return
+	}
+	log.Printf("[APIToken] %s failed: %v (%d async write failure(s) since last report)", what, err, asyncTokenLogSuppressed)
+	asyncTokenLogLastEmit = time.Now()
+	asyncTokenLogSuppressed = 0
+}
 
 // APITokenAuth creates a middleware that authenticates using API tokens
 // This should be used in combination with the JWT auth - API tokens are an alternative auth method
@@ -98,13 +122,6 @@ func APITokenAuth(tokenRepo *repository.APITokenRepository, auditRepo *repositor
 			tokenUsername := token.Username
 			tokenPrefix := token.TokenPrefix
 
-			// Update last used (async to not slow down request)
-			go func() {
-				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				defer cancel()
-				tokenRepo.UpdateLastUsed(ctx, tokenID, clientIP)
-			}()
-
 			// Execute the handler
 			err = next(c)
 
@@ -112,10 +129,20 @@ func APITokenAuth(tokenRepo *repository.APITokenRepository, auditRepo *repositor
 			statusCode := c.Response().Status
 			responseTime := time.Since(startTime).Milliseconds()
 
-			// Log API usage (async)
+			// Persist usage bookkeeping (last_used, usage row, audit entry)
+			// off the request path. A single goroutine per request (was two),
+			// bounded by the 5s context; errors are reported via the
+			// rate-limited logger above instead of silently discarded. A
+			// shared worker + buffered channel would shave the per-request
+			// goroutine entirely but needs lifecycle wiring through
+			// bootstrap — not warranted for three small bounded writes.
 			go func() {
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer cancel()
+
+				if err := tokenRepo.UpdateLastUsed(ctx, tokenID, clientIP); err != nil {
+					logAsyncTokenError("update token last_used", err)
+				}
 
 				usage := &model.APITokenUsage{
 					TokenID:         tokenID,
@@ -127,14 +154,16 @@ func APITokenAuth(tokenRepo *repository.APITokenRepository, auditRepo *repositor
 					RequestBodySize: contentLength,
 					ResponseTimeMs:  int(responseTime),
 				}
-				tokenRepo.LogUsage(ctx, usage)
+				if err := tokenRepo.LogUsage(ctx, usage); err != nil {
+					logAsyncTokenError("record token usage", err)
+				}
 
 				// Also log to audit log for API calls
 				action := "api_call"
 				if statusCode >= 400 {
 					action = "api_call_error"
 				}
-				auditRepo.Log(ctx, &model.AuditLogEntry{
+				auditErr := auditRepo.Log(ctx, &model.AuditLogEntry{
 					UserID:     tokenUserID,
 					Username:   tokenUsername + " (API)",
 					Action:     action,
@@ -149,6 +178,9 @@ func APITokenAuth(tokenRepo *repository.APITokenRepository, auditRepo *repositor
 					IPAddress: clientIP,
 					UserAgent: userAgent,
 				})
+				if auditErr != nil {
+					logAsyncTokenError("write audit log", auditErr)
+				}
 			}()
 
 			return err

@@ -918,8 +918,17 @@ DO $$ BEGIN ALTER TABLE public.ddns_records ADD CONSTRAINT ddns_records_proxy_ho
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {
+			// Warn-and-continue is deliberate (see the header comment above —
+			// a fail-fast boot would brick existing installs; statements are
+			// idempotent and retried next boot). Record the failure so
+			// MigrationHealth() can surface the partially-migrated schema
+			// instead of health staying silently green.
 			log.Printf("Warning: upgrade %q failed: %v", a.desc, err)
+			db.RecordMigrationFailure(a.desc, err)
 		}
+	}
+	if count, lastErr := db.MigrationHealth(); count > 0 {
+		log.Printf("[Migration] ERROR: %d upgrade statement(s) failed — schema may be partially migrated and affected features can return errors until a restart retries them. Last failure: %s", count, lastErr)
 	}
 
 	// v2.13.3: one-shot auto-disable for overly-broad system rules (Issue #123).

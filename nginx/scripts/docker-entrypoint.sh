@@ -311,6 +311,71 @@ update_managed_includes() {
 }
 update_managed_includes
 
+# Refresh the vendored OWASP CRS ruleset when the image ships a different
+# version than the volume copy. The volume masks /etc/nginx/owasp-crs, so
+# without this the WAF rules stay frozen at whatever CRS version the install
+# was first provisioned with (crs-global.conf — refreshed above — includes
+# the volume's rules/*.conf). The ruleset is vendor-owned: custom rules live
+# in modsec/custom-rules.conf and per-host modsec/host_*.conf, never here.
+# Exception: crs-setup.conf may be operator-tuned, so it is preserved when it
+# differs from the (old) vendor example shipped alongside it.
+update_owasp_crs() {
+    local default_crs="$NGINX_DEFAULT/owasp-crs"
+    local current_crs="$NGINX_DIR/owasp-crs"
+    local stamp=".npg-crs-version"
+
+    if [ ! -d "$default_crs" ]; then
+        return 0
+    fi
+
+    local image_version=""
+    [ -f "$default_crs/$stamp" ] && image_version=$(cat "$default_crs/$stamp")
+    if [ -z "$image_version" ]; then
+        # Image predates version stamping — keep the old behaviour.
+        return 0
+    fi
+
+    local volume_version=""
+    [ -f "$current_crs/$stamp" ] && volume_version=$(cat "$current_crs/$stamp")
+    if [ "$volume_version" = "$image_version" ]; then
+        echo "[Entrypoint] OWASP CRS up to date ($image_version)"
+        return 0
+    fi
+
+    echo "[Entrypoint] OWASP CRS in volume (${volume_version:-pre-stamp version}) differs from image ($image_version) - refreshing ruleset..."
+
+    # Preserve an operator-tuned crs-setup.conf. NPG never writes this file;
+    # if it still matches the vendor example it is untouched and we take the
+    # new version's default instead.
+    local preserved_setup=""
+    if [ -f "$current_crs/crs-setup.conf" ]; then
+        if [ -f "$current_crs/crs-setup.conf.example" ] && cmp -s "$current_crs/crs-setup.conf" "$current_crs/crs-setup.conf.example"; then
+            : # untouched vendor default — replace with the new version's default
+        else
+            preserved_setup="/tmp/.npg-crs-setup.preserved"
+            cp -f "$current_crs/crs-setup.conf" "$preserved_setup"
+        fi
+    fi
+
+    # Stage the new ruleset next to the old one (same volume), then swap.
+    # If the container dies mid-swap the stamp check re-runs the refresh on
+    # the next boot, so this is self-healing.
+    rm -rf "$current_crs.new"
+    cp -a "$default_crs" "$current_crs.new"
+    rm -rf "$current_crs"
+    mv "$current_crs.new" "$current_crs"
+
+    if [ -n "$preserved_setup" ]; then
+        cp -f "$preserved_setup" "$current_crs/crs-setup.conf"
+        rm -f "$preserved_setup"
+        echo "[Entrypoint] Preserved operator-modified crs-setup.conf (new vendor default available at crs-setup.conf.example)"
+    fi
+
+    chown -R nginx:nginx "$current_crs" 2>/dev/null || true
+    echo "[Entrypoint] OWASP CRS refreshed to $image_version"
+}
+update_owasp_crs
+
 # Run GeoIP update if script exists and license key is provided
 if [ -x /scripts/geoip-update.sh ]; then
     echo "[Entrypoint] Running GeoIP database update..."

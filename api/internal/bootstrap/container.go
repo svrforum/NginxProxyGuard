@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"nginx-proxy-guard/internal/config"
 	"nginx-proxy-guard/internal/database"
@@ -11,6 +12,17 @@ import (
 	"nginx-proxy-guard/internal/nginx"
 	"nginx-proxy-guard/pkg/cache"
 )
+
+// startupTimeout bounds the whole boot reconciliation in Startup: nginx.conf
+// regen (own nginx -t), filter-subscription configs, SyncAllConfigs over every
+// host (N×repo queries + nginx -t + reload + auto-recovery), redirect hosts and
+// the default server. A single nginx -t alone is budgeted config.NginxTestTimeout
+// (60s), so the generic 30s config.ContextTimeout silently truncated the resync
+// on large installs — every step past the deadline failed with context-deadline
+// and was logged only as a warning. The budget must comfortably exceed the
+// slowest single operation it contains; SIGTERM still cancels early because the
+// context derives from main's root ctx.
+const startupTimeout = 5 * time.Minute
 
 // Container is the composition root.  It owns every long-lived dependency
 // (database, cache, nginx manager, repositories, services, handlers,
@@ -60,7 +72,7 @@ func NewContainer(cfg *config.Config) (*Container, error) {
 	repos := InitRepositories(db, redisCache)
 	svcs := InitServices(cfg, db, redisCache, nginxManager, repos)
 	wireServiceCallbacks(svcs, repos)
-	handlers := InitHandlers(repos, svcs, nginxManager, redisCache)
+	handlers := InitHandlers(repos, svcs, nginxManager, redisCache, db)
 	wirePipelineCanaryHealer(svcs, handlers)
 	schedulers := NewSchedulers(cfg, db, repos, svcs)
 
@@ -106,7 +118,7 @@ func wirePipelineCanaryHealer(svcs *Services, handlers *Handlers) {
 // returned — the auto-recovery code path already treats sync errors as
 // best-effort.
 func (c *Container) Startup(ctx context.Context) error {
-	startupCtx, cancel := context.WithTimeout(ctx, config.ContextTimeout)
+	startupCtx, cancel := context.WithTimeout(ctx, startupTimeout)
 	defer cancel()
 	if err := runStartup(startupCtx, c); err != nil {
 		return err
