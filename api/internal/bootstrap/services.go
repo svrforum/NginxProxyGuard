@@ -220,6 +220,21 @@ func wireServiceCallbacks(svcs *Services, repos *Repositories) {
 		return nil
 	})
 
+	// Certificate: guard Delete against removing a certificate whose files are
+	// still referenced by generated proxy/redirect host configs (the next
+	// nginx -t would fail system-wide).
+	svcs.Certificate.SetCertificateInUseChecker(func(ctx context.Context, certificateID string) (int, int, error) {
+		hosts, err := repos.ProxyHost.GetByCertificateID(ctx, certificateID)
+		if err != nil {
+			return 0, 0, err
+		}
+		redirectCount, err := repos.RedirectHost.CountByCertificateID(ctx, certificateID)
+		if err != nil {
+			return 0, 0, err
+		}
+		return len(hosts), redirectCount, nil
+	})
+
 	// Challenge: resolve system-settings lazily.
 	svcs.Challenge.SetSystemSettingsRepo(repos.SystemSettings)
 

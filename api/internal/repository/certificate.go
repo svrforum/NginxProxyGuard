@@ -542,6 +542,7 @@ func (r *CertificateRepository) GetExpiringSoon(ctx context.Context, days int) (
 	query := `
 		SELECT id, domain_names, dns_provider_id, status, provider, auto_renew,
 			expires_at, issued_at, certificate_path, private_key_path,
+			error_message, renewal_attempted_at,
 			created_at, updated_at
 		FROM certificates
 		WHERE status = 'issued'
@@ -560,8 +561,8 @@ func (r *CertificateRepository) GetExpiringSoon(ctx context.Context, days int) (
 	for rows.Next() {
 		var cert model.Certificate
 		var dnsProviderID sql.NullString
-		var expiresAt, issuedAt sql.NullTime
-		var certPath, keyPath sql.NullString
+		var expiresAt, issuedAt, renewalAttemptedAt sql.NullTime
+		var certPath, keyPath, errorMessage sql.NullString
 
 		err := rows.Scan(
 			&cert.ID,
@@ -574,6 +575,8 @@ func (r *CertificateRepository) GetExpiringSoon(ctx context.Context, days int) (
 			&issuedAt,
 			&certPath,
 			&keyPath,
+			&errorMessage,
+			&renewalAttemptedAt,
 			&cert.CreatedAt,
 			&cert.UpdatedAt,
 		)
@@ -586,11 +589,51 @@ func (r *CertificateRepository) GetExpiringSoon(ctx context.Context, days int) (
 		cert.IssuedAt = fromNullTime(issuedAt)
 		cert.CertificatePath = fromNullString(certPath)
 		cert.PrivateKeyPath = fromNullString(keyPath)
+		cert.ErrorMessage = fromNullString(errorMessage)
+		cert.RenewalAttemptedAt = fromNullTime(renewalAttemptedAt)
 
 		certs = append(certs, cert)
 	}
 
 	return certs, nil
+}
+
+// RecoverInterruptedStates resets certificates left in transient states by a
+// crash/restart. Issuance/renewal run in goroutines that die with the
+// process, so anything still 'pending'/'renewing' at boot is orphaned and —
+// because GetExpiringSoon only selects 'issued' — would otherwise silently
+// drop out of auto-renewal forever. A 'renewing' cert that has a previous PEM
+// is still valid on disk → back to 'issued'; a 'pending' cert (or 'renewing'
+// without a PEM) has nothing usable → 'error' so the user can retry.
+// Assumes a single API instance (the deployment model): at boot no goroutine
+// of this process can be mid-renewal.
+func (r *CertificateRepository) RecoverInterruptedStates(ctx context.Context) (recovered int64, failed int64, err error) {
+	res, err := r.db.ExecContext(ctx, `
+		UPDATE certificates
+		SET status = 'issued',
+			error_message = 'renewal interrupted by API restart; will retry on schedule',
+			updated_at = NOW()
+		WHERE status = 'renewing' AND certificate_pem IS NOT NULL AND certificate_pem != ''
+	`)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to recover interrupted renewals: %w", err)
+	}
+	recovered, _ = res.RowsAffected()
+
+	res, err = r.db.ExecContext(ctx, `
+		UPDATE certificates
+		SET status = 'error',
+			error_message = 'issuance interrupted by API restart; please retry',
+			updated_at = NOW()
+		WHERE status IN ('pending', 'renewing')
+			AND (certificate_pem IS NULL OR certificate_pem = '')
+	`)
+	if err != nil {
+		return recovered, 0, fmt.Errorf("failed to fail interrupted issuances: %w", err)
+	}
+	failed, _ = res.RowsAffected()
+
+	return recovered, failed, nil
 }
 
 // Helper functions

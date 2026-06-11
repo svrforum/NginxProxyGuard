@@ -85,6 +85,16 @@ func runStartup(ctx context.Context, c *Container) error {
 		}
 	}
 
+	// Recover certificates stranded in 'pending'/'renewing' by a previous
+	// crash/restart — their issuance goroutines died with the process and the
+	// renewal scheduler only selects 'issued' certs, so without this they
+	// silently drop out of auto-renewal forever.
+	if recovered, failed, err := c.Repositories.Certificate.RecoverInterruptedStates(ctx); err != nil {
+		log.Printf("[Startup] Warning: failed to recover interrupted certificates: %v", err)
+	} else if recovered > 0 || failed > 0 {
+		log.Printf("[Startup] Recovered interrupted certificates: %d back to issued (will re-renew on schedule), %d marked error (retry from UI)", recovered, failed)
+	}
+
 	// Sync proxy hosts (auto-recovery on failure).
 	log.Println("[Startup] Syncing all proxy host configs...")
 	if err := c.Services.ProxyHost.SyncAllConfigs(ctx); err != nil {

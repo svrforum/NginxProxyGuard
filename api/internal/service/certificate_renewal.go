@@ -133,14 +133,20 @@ func (s *CertificateService) renewLetsEncrypt(ctx context.Context, cert *model.C
 			result, renewErr = acmeService.RenewCertificate(cert.CertificatePEM, cert.PrivateKeyPEM, dnsProvider, &user)
 		}
 
-		// If renewal failed or no valid user, obtain new certificate
+		// If renewal failed or no valid user, obtain new certificate.
+		// Reuse the stored ACME account when we have one — registering a fresh
+		// account on every failed attempt burns Let's Encrypt rate limits.
 		if !hasValidUser || renewErr != nil {
+			var existingUser *acme.ACMEUser
+			if hasValidUser {
+				existingUser = &user
+			}
 			if renewErr != nil {
 				s.addCertLog(cert.ID, "warn", fmt.Sprintf("Renewal failed: %v, obtaining new certificate", renewErr), "acme")
 			} else {
 				s.addCertLog(cert.ID, "info", "No valid ACME account, obtaining new certificate", "acme")
 			}
-			result, newUser, renewErr = acmeService.ObtainCertificate(acmeEmail, []string(cert.DomainNames), dnsProvider, nil)
+			result, newUser, renewErr = acmeService.ObtainCertificate(acmeEmail, []string(cert.DomainNames), dnsProvider, existingUser)
 		}
 
 		if renewErr != nil {
@@ -157,14 +163,20 @@ func (s *CertificateService) renewLetsEncrypt(ctx context.Context, cert *model.C
 			result, renewErr = acmeService.RenewCertificateHTTP(cert.CertificatePEM, cert.PrivateKeyPEM, &user)
 		}
 
-		// If renewal failed or no valid user, obtain new certificate
+		// If renewal failed or no valid user, obtain new certificate.
+		// Reuse the stored ACME account when we have one — registering a fresh
+		// account on every failed attempt burns Let's Encrypt rate limits.
 		if !hasValidUser || renewErr != nil {
+			var existingUser *acme.ACMEUser
+			if hasValidUser {
+				existingUser = &user
+			}
 			if renewErr != nil {
 				s.addCertLog(cert.ID, "warn", fmt.Sprintf("Renewal failed: %v, obtaining new certificate", renewErr), "acme")
 			} else {
 				s.addCertLog(cert.ID, "info", "No valid ACME account, obtaining new certificate", "acme")
 			}
-			result, newUser, renewErr = acmeService.ObtainCertificateHTTP(acmeEmail, []string(cert.DomainNames), nil)
+			result, newUser, renewErr = acmeService.ObtainCertificateHTTP(acmeEmail, []string(cert.DomainNames), existingUser)
 		}
 
 		if renewErr != nil {

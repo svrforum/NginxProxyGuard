@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/lib/pq"
@@ -234,4 +235,16 @@ func (r *RedirectHostRepository) GetAllEnabled(ctx context.Context) ([]model.Red
 	}
 
 	return hosts, nil
+}
+
+// CountByCertificateID returns how many redirect hosts reference a certificate.
+func (r *RedirectHostRepository) CountByCertificateID(ctx context.Context, certificateID string) (int, error) {
+	var count int
+	err := r.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM redirect_hosts WHERE certificate_id = $1`, certificateID,
+	).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count redirect hosts by certificate: %w", err)
+	}
+	return count, nil
 }

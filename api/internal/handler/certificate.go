@@ -186,6 +186,9 @@ func (h *CertificateHandler) Delete(c echo.Context) error {
 		if err == model.ErrNotFound {
 			return notFoundError(c, "Certificate")
 		}
+		if errors.Is(err, model.ErrCertificateInUse) {
+			return conflictError(c, err.Error())
+		}
 		return internalError(c, "delete certificate", err)
 	}
 

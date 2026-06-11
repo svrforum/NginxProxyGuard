@@ -26,6 +26,16 @@ type CertificateService struct {
 	defaultACMEEmail    string
 	onCertReady         CertificateReadyCallback
 	redisCache          *cache.RedisClient
+	inUseChecker        CertificateInUseChecker
+}
+
+// CertificateInUseChecker reports how many proxy hosts and redirect hosts
+// currently reference a certificate. Wired in bootstrap to avoid circular deps.
+type CertificateInUseChecker func(ctx context.Context, certificateID string) (proxyHosts, redirectHosts int, err error)
+
+// SetCertificateInUseChecker sets the dependency checker used to guard Delete.
+func (s *CertificateService) SetCertificateInUseChecker(cb CertificateInUseChecker) {
+	s.inUseChecker = cb
 }
 
 const (
@@ -463,6 +473,21 @@ func (s *CertificateService) DeleteErrorCertificates(ctx context.Context) (int64
 
 // Delete removes a certificate
 func (s *CertificateService) Delete(ctx context.Context, id string) error {
+	// In-use guard: deleting a referenced certificate removes its files from
+	// disk while the generated nginx configs still point at them — the next
+	// nginx -t then fails system-wide. The FKs are ON DELETE SET NULL, so the
+	// DB would silently detach while the on-disk configs go stale.
+	if s.inUseChecker != nil {
+		proxyCount, redirectCount, err := s.inUseChecker(ctx, id)
+		if err != nil {
+			return fmt.Errorf("failed to check certificate usage: %w", err)
+		}
+		if proxyCount+redirectCount > 0 {
+			return fmt.Errorf("%w: referenced by %d proxy host(s) and %d redirect host(s); unassign it from those hosts first",
+				model.ErrCertificateInUse, proxyCount, redirectCount)
+		}
+	}
+
 	// Delete certificate files (use any ACME service instance, staging setting doesn't matter)
 	acmeService, _ := s.getACMEService(ctx)
 	if err := acmeService.DeleteCertificateFiles(id); err != nil {

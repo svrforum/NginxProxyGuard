@@ -113,6 +113,19 @@ func (s *RenewalScheduler) checkAndRenew() {
 			continue
 		}
 
+		// Back off failing renewals: when the last attempt errored within the
+		// past 24h, skip this cycle unless expiry is within 7 days. Without
+		// this, a permanently-failing cert (e.g. domain no longer resolving)
+		// hammers the ACME endpoint every cycle and burns Let's Encrypt rate
+		// limits. In the final week before expiry every cycle retries.
+		if cert.ErrorMessage != nil && *cert.ErrorMessage != "" &&
+			cert.RenewalAttemptedAt != nil && time.Since(*cert.RenewalAttemptedAt) < 24*time.Hour &&
+			cert.ExpiresAt != nil && time.Until(*cert.ExpiresAt) > 7*24*time.Hour {
+			log.Printf("[Scheduler] Certificate %s last renewal failed %.0fh ago, backing off (expires %s)",
+				cert.ID, time.Since(*cert.RenewalAttemptedAt).Hours(), cert.ExpiresAt.Format("2006-01-02"))
+			continue
+		}
+
 		// Attempt renewal
 		log.Printf("[Scheduler] Renewing certificate %s for domains: %v", cert.ID, cert.DomainNames)
 
