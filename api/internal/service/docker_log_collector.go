@@ -306,6 +306,28 @@ func (c *DockerLogCollector) processLogStream(ctx context.Context, container Con
 	buf := make([]byte, 0, 64*1024)
 	scanner.Buffer(buf, 1024*1024)
 
+	// scanner.Scan() blocks, so run it in a dedicated goroutine feeding a
+	// channel. With Scan() inline in the select's default arm (the previous
+	// shape) the flush ticker could only fire after a line arrived, so a
+	// partial batch from a container that went silent sat unflushed
+	// indefinitely — invisible in the system log viewer for hours.
+	lines := make(chan string)
+	go func() {
+		defer close(lines)
+		for scanner.Scan() {
+			select {
+			case lines <- scanner.Text():
+			case <-ctx.Done():
+				return
+			case <-c.stopCh:
+				return
+			}
+		}
+		if err := scanner.Err(); err != nil {
+			log.Printf("[DockerLogCollector] Scanner error for %s: %v", container.Name, err)
+		}
+	}()
+
 	batch := make([]repository.SystemLog, 0, 10)
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
@@ -323,16 +345,13 @@ func (c *DockerLogCollector) processLogStream(ctx context.Context, container Con
 				c.flushBatch(ctx, batch)
 				batch = batch[:0]
 			}
-		default:
-			if !scanner.Scan() {
-				if err := scanner.Err(); err != nil {
-					log.Printf("[DockerLogCollector] Scanner error for %s: %v", container.Name, err)
-				}
+		case line, ok := <-lines:
+			if !ok {
+				// Stream closed (container stopped or docker logs exited)
 				c.flushBatch(ctx, batch)
 				return
 			}
 
-			line := scanner.Text()
 			if line == "" {
 				continue
 			}

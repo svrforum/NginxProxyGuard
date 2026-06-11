@@ -5,7 +5,6 @@ import (
 	"log"
 	"net"
 	"sync"
-	"sync/atomic"
 
 	"github.com/oschwald/geoip2-golang"
 
@@ -23,13 +22,11 @@ type GeoIPInfo struct {
 
 // GeoIPService provides IP geolocation lookups
 type GeoIPService struct {
-	countryDB   *geoip2.Reader
-	asnDB       *geoip2.Reader
-	mu          sync.RWMutex
-	enabled     bool
-	redisCache  *cache.RedisClient
-	cacheHits   atomic.Int64
-	cacheMisses atomic.Int64
+	countryDB  *geoip2.Reader
+	asnDB      *geoip2.Reader
+	mu         sync.RWMutex
+	enabled    bool
+	redisCache *cache.RedisClient
 }
 
 // NewGeoIPService creates a new GeoIP service
@@ -121,17 +118,12 @@ func (s *GeoIPService) Lookup(ipStr string) *GeoIPInfo {
 	return s.LookupWithContext(context.Background(), ipStr)
 }
 
-// LookupWithContext returns GeoIP information for an IP address with context support for caching
+// LookupWithContext returns GeoIP information for an IP address.
+// The lookup reads the in-process mmap'd mmdb databases directly (~µs).
+// The old Valkey cache in front of it cost 1-2 network round trips plus two
+// JSON codec passes per log line — orders of magnitude slower than the lookup
+// it fronted — so it was removed (nothing else read or wrote that cache key).
 func (s *GeoIPService) LookupWithContext(ctx context.Context, ipStr string) *GeoIPInfo {
-	s.mu.RLock()
-	enabled := s.enabled
-	redisCache := s.redisCache
-	s.mu.RUnlock()
-
-	if !enabled {
-		return nil
-	}
-
 	ip := net.ParseIP(ipStr)
 	if ip == nil {
 		return nil
@@ -142,25 +134,13 @@ func (s *GeoIPService) LookupWithContext(ctx context.Context, ipStr string) *Geo
 		return nil
 	}
 
-	// Try to get from cache first
-	if redisCache != nil {
-		if cached, err := redisCache.GetGeoIPLookup(ctx, ipStr); err == nil {
-			s.cacheHits.Add(1)
-			return &GeoIPInfo{
-				Country:     cached.Country,
-				CountryCode: cached.CountryCode,
-				City:        cached.City,
-				ASN:         cached.ASN,
-				Org:         cached.Org,
-			}
-		}
-	}
-
-	s.cacheMisses.Add(1)
-
 	// Perform actual lookup
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
+	if !s.enabled {
+		return nil
+	}
 
 	info := &GeoIPInfo{}
 
@@ -194,23 +174,7 @@ func (s *GeoIPService) LookupWithContext(ctx context.Context, ipStr string) *Geo
 		return nil
 	}
 
-	// Cache the result
-	if redisCache != nil {
-		redisCache.SetGeoIPLookup(ctx, ipStr, &cache.GeoIPResult{
-			Country:     info.Country,
-			CountryCode: info.CountryCode,
-			City:        info.City,
-			ASN:         info.ASN,
-			Org:         info.Org,
-		})
-	}
-
 	return info
-}
-
-// GetCacheStats returns cache hit/miss statistics
-func (s *GeoIPService) GetCacheStats() (hits, misses int64) {
-	return s.cacheHits.Load(), s.cacheMisses.Load()
 }
 
 // isPrivateIP checks if an IP is private/local

@@ -175,7 +175,6 @@ type LogCollector struct {
 	flushMu         sync.Mutex // 동시 flush 방지
 	stopCh          chan struct{}
 	restartTail     chan struct{} // signals streamFileAccessLogs to re-resolve path + reopen
-	useRedisBuffer  bool         // Whether to use Redis for log buffering
 	lastFlushAt     atomic.Int64 // unix seconds of the last successful flush, for /health/detailed
 	accessLastFlush atomic.Int64 // unix sec of last access-log flush
 	modsecLastFlush atomic.Int64 // unix sec of last modsec flush
@@ -207,9 +206,6 @@ type LogCollector struct {
 }
 
 func NewLogCollector(logRepo *repository.LogRepository, nginxContainer string, accessLogPath string, geoIP *GeoIPService, redisCache *cache.RedisClient) *LogCollector {
-	// Use Redis buffer if available and ready
-	useRedis := redisCache != nil && redisCache.IsReady()
-
 	return &LogCollector{
 		logRepo:        logRepo,
 		geoIP:          geoIP,
@@ -223,9 +219,18 @@ func NewLogCollector(logRepo *repository.LogRepository, nginxContainer string, a
 		stopCh:         make(chan struct{}),
 		restartTail:    make(chan struct{}, 1),
 		domainCache:    make(map[string]string),
-		useRedisBuffer: useRedis,
 		debugLog:       os.Getenv("LOG_COLLECTOR_DEBUG") == "1",
 	}
+}
+
+// redisBufferReady reports whether the Redis log buffer is usable right now.
+// Evaluated at use time (per enqueue/flush) rather than latched at
+// construction: the Redis client connects in a background goroutine and is
+// almost never ready yet when NewLogCollector runs microseconds later, which
+// previously froze the collector in memory-buffer mode for the process
+// lifetime. IsReady() is a cheap RLock'd flag read.
+func (c *LogCollector) redisBufferReady() bool {
+	return c.redisCache != nil && c.redisCache.IsReady()
 }
 
 // SetProxyHostRepo sets the proxy host repository for domain lookups
@@ -378,11 +383,13 @@ func (c *LogCollector) Start(ctx context.Context) {
 	log.Println("Starting log collector...")
 	c.startedAt = time.Now()
 
-	// Check Redis buffer status
-	if c.useRedisBuffer {
+	// Check Redis buffer status (informational only — the buffer choice is
+	// re-evaluated per log line / flush, so a Redis that becomes ready after
+	// startup is picked up automatically)
+	if c.redisBufferReady() {
 		log.Println("[LogCollector] Redis buffer enabled for high-throughput log buffering")
 	} else {
-		log.Println("[LogCollector] Using in-memory buffer (Redis not available)")
+		log.Println("[LogCollector] Using in-memory buffer (Redis not ready; will switch automatically if it becomes available)")
 	}
 
 	// Start periodic flush
@@ -481,11 +488,14 @@ func (c *LogCollector) flushInner(ctx context.Context) {
 	var logs []model.CreateLogRequest
 
 	// Check Redis buffer first
-	if c.useRedisBuffer && c.redisCache != nil && c.redisCache.IsReady() {
+	if c.redisBufferReady() {
 		redisLogs, err := c.flushRedisBuffer(ctx)
 		if err != nil {
 			log.Printf("[LogCollector] Failed to flush Redis buffer: %v", err)
-		} else if len(redisLogs) > 0 {
+		}
+		// Keep whatever was drained even on error — those entries were already
+		// XDel'd from the stream, so dropping them here would lose them.
+		if len(redisLogs) > 0 {
 			logs = append(logs, redisLogs...)
 		}
 		if size, err := c.redisCache.GetLogBufferSize(ctx); err == nil {
@@ -499,21 +509,50 @@ func (c *LogCollector) flushInner(ctx context.Context) {
 		logs = append(logs, c.buffer...)
 		c.buffer = make([]model.CreateLogRequest, 0, c.batchSize)
 	}
+	c.bufferMu.Unlock()
+
+	if len(logs) > 0 {
+		if err := c.logRepo.CreateBatch(ctx, logs); err != nil {
+			// CreateBatch only errors when every row failed (its mini-batch and
+			// single-row fallbacks included), so nothing was inserted — re-queue
+			// the drained entries instead of dropping them. Redis-drained entries
+			// were already XDel'd from the stream, so the memory buffer is their
+			// only remaining home; the next flush tick retries.
+			log.Printf("[LogCollector] Failed to batch insert %d logs: %v (re-queueing for retry)", len(logs), err)
+			c.requeueLogs(logs)
+		} else {
+			log.Printf("[LogCollector] Flushed %d logs to database", len(logs))
+			c.recordFlushedByType(logs)
+			c.lastFlushAt.Store(time.Now().Unix())
+		}
+	}
+
+	// Report the real post-flush buffer depth (re-queued entries plus lines
+	// that arrived during the insert). Previously this was read after the
+	// buffer reset and always reported 0.
+	c.bufferMu.Lock()
 	memSize := len(c.buffer)
 	c.bufferMu.Unlock()
 	metrics.LogCollectorBufferSize.WithLabelValues("memory").Set(float64(memSize))
+}
 
-	if len(logs) == 0 {
-		return
-	}
+// maxRequeueBuffer caps the in-memory buffer when failed flushes are
+// re-queued. Matches the Redis stream's MaxLen (10000): a prolonged DB outage
+// holds at most ~10k entries (a few MB) before the oldest are dropped.
+const maxRequeueBuffer = 10000
 
-	if err := c.logRepo.CreateBatch(ctx, logs); err != nil {
-		log.Printf("[LogCollector] Failed to batch insert %d logs: %v", len(logs), err)
-	} else {
-		log.Printf("[LogCollector] Flushed %d logs to database", len(logs))
-		c.recordFlushedByType(logs)
-		c.lastFlushAt.Store(time.Now().Unix())
+// requeueLogs puts a failed flush batch back at the front of the memory
+// buffer (oldest-first order preserved) so the next flush retries it.
+// Entries beyond maxRequeueBuffer are dropped oldest-first to bound memory.
+func (c *LogCollector) requeueLogs(logs []model.CreateLogRequest) {
+	c.bufferMu.Lock()
+	defer c.bufferMu.Unlock()
+	combined := append(logs, c.buffer...)
+	if over := len(combined) - maxRequeueBuffer; over > 0 {
+		log.Printf("[LogCollector] Dropping %d oldest buffered logs (re-queue cap %d reached while DB inserts fail)", over, maxRequeueBuffer)
+		combined = combined[over:]
 	}
+	c.buffer = combined
 }
 
 // recordFlushedByType bumps the per-type Prometheus counter after a successful
@@ -659,7 +698,7 @@ func (c *LogCollector) addLog(logReq model.CreateLogRequest) {
 	logReq.RawLog = sanitizeString(logReq.RawLog)
 
 	// Try Redis buffer first (if available)
-	if c.useRedisBuffer && c.redisCache != nil && c.redisCache.IsReady() {
+	if c.redisBufferReady() {
 		entry := &cache.LogEntry{
 			LogType:              string(logReq.LogType),
 			Timestamp:            logReq.Timestamp,

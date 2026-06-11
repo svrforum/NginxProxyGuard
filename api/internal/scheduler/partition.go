@@ -87,13 +87,20 @@ func (s *PartitionScheduler) Stop() {
 // is unavailable so installs without the extension fall through to the
 // legacy native-partitioning code path.
 func (s *PartitionScheduler) isLogsHypertable(ctx context.Context) bool {
+	return s.isHypertable(ctx, "logs_partitioned")
+}
+
+// isHypertable reports whether the named table is a TimescaleDB hypertable.
+// Returns false when the timescaledb_information view is unavailable so
+// installs without the extension fall through to the legacy code paths.
+func (s *PartitionScheduler) isHypertable(ctx context.Context, table string) bool {
 	var isHT bool
 	err := s.db.QueryRowContext(ctx, `
 		SELECT EXISTS(
 			SELECT 1 FROM timescaledb_information.hypertables
-			WHERE hypertable_name = 'logs_partitioned'
+			WHERE hypertable_name = $1
 		)
-	`).Scan(&isHT)
+	`, table).Scan(&isHT)
 	if err != nil {
 		return false
 	}
@@ -361,12 +368,23 @@ func (s *PartitionScheduler) enforceRetention() {
 	}
 
 	// 2. Cleanup System Logs (table system_logs)
-	// Uses specific retention days from settings
-	deleted, err := s.systemLogRepo.Cleanup(ctx, settings.SystemLogRetentionDays)
-	if err != nil {
-		log.Printf("[PartitionScheduler] Failed to cleanup system logs: %v", err)
-	} else if deleted > 0 {
-		log.Printf("[PartitionScheduler] Cleaned up %d old system logs (retention: %d days)", deleted, settings.SystemLogRetentionDays)
+	// Uses specific retention days from settings.
+	// On TimescaleDB installs system_logs is a hypertable with compressed
+	// chunks: the row-level DELETE would decompress the boundary chunk daily
+	// only for dropOldChunks (below, same retention) to discard those rows
+	// wholesale moments later. Skip the redundant DELETE and let drop_chunks
+	// handle retention (chunk-granular is fine: retention is whole days and
+	// chunks are 1 day). The DELETE remains the non-TimescaleDB degraded path,
+	// and also runs when retention < 1 since dropOldChunks skips that case.
+	if settings.SystemLogRetentionDays >= 1 && s.isHypertable(ctx, "system_logs") {
+		log.Printf("[PartitionScheduler] system_logs is a TimescaleDB hypertable; retention handled by drop_chunks (skipping row-level DELETE)")
+	} else {
+		deleted, err := s.systemLogRepo.Cleanup(ctx, settings.SystemLogRetentionDays)
+		if err != nil {
+			log.Printf("[PartitionScheduler] Failed to cleanup system logs: %v", err)
+		} else if deleted > 0 {
+			log.Printf("[PartitionScheduler] Cleaned up %d old system logs (retention: %d days)", deleted, settings.SystemLogRetentionDays)
+		}
 	}
 
 	// 3. Drop old log partitions (logs_partitioned)
