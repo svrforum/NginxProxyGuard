@@ -60,6 +60,14 @@ services:
       context: ./api
       dockerfile: Dockerfile
     container_name: npg-test-api
+    # Mirror production hardening (docker-compose.yml) so e2e runs with the
+    # real deployment capability set.
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_OVERRIDE
     deploy:
       resources:
         limits:

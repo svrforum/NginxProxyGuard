@@ -47,6 +47,15 @@ services:
   api:
     image: svrforum/nginxproxyguard-api:${VERSION:-latest}
     container_name: release-test-host-api
+    # Mirror the production hardening from docker-compose.yml so the smoke test
+    # exercises the real deployment capability set (a cap_drop regression once
+    # shipped because this file ran with default caps).
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_OVERRIDE
     logging:
       driver: "json-file"
       options:
@@ -93,6 +102,10 @@ services:
     image: svrforum/nginxproxyguard-nginx:${VERSION:-latest}
     container_name: release-test-host-nginx
     network_mode: host
+    # Mirror production hardening (no cap_drop here — root master needs
+    # CHOWN/SETUID/SETGID; see docker-compose.yml).
+    security_opt:
+      - "no-new-privileges:true"
     logging:
       driver: "json-file"
       options:

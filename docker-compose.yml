@@ -63,7 +63,9 @@ services:
     # no-new-privileges blocks setuid privilege escalation even though the API
     # still runs as root (it needs docker.sock; see api/Dockerfile for why it is
     # not switched to a non-root user). cap_drop ALL removes every Linux
-    # capability — the API needs none of them for normal operation.
+    # capability; DAC_OVERRIDE is re-added because the shared /etc/nginx volume
+    # dirs (conf.d, stream.d, certs, modsec) are owned by the nginx user
+    # (uid 101, mode 755) — without it even root gets EACCES writing configs.
     #
     # FOLLOW-UP (larger change, tracked separately): front docker.sock with
     # tecnativa/docker-socket-proxy so the API can only LIST/INSPECT/EXEC the
@@ -78,6 +80,8 @@ services:
       - "no-new-privileges:true"
     cap_drop:
       - ALL
+    cap_add:
+      - DAC_OVERRIDE
     logging:
       driver: "json-file"
       options:
