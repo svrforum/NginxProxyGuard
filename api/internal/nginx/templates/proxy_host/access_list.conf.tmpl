@@ -1,11 +1,10 @@
-{{if or .BannedIPs .UseFilterSubscription}}
+{{if .BannedIPs}}
 # Banned IPs geo mapping for {{join .Host.DomainNames ", "}}
-# Values: 1 = manual ban, 2 = filter subscription, 0 = trusted (override)
+# Values: 1 = manual ban, 0 = trusted (override)
+# Filter subscription IPs are matched by the shared $filter_sub_ip geo
+# (conf.d/filter_sub_ips_geo.conf) - one radix tree for all hosts.
 geo $banned_ip_{{sanitizeID .Host.ID}} {
     default 0;
-{{if .UseFilterSubscription}}
-    include /etc/nginx/conf.d/includes/filter_sub_ips.conf;
-{{end}}
 {{range .BannedIPs}}
     {{.IPAddress}} 1; # {{.Reason}}
 {{end}}

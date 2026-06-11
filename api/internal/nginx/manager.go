@@ -524,6 +524,18 @@ func (m *Manager) GenerateConfigFull(ctx context.Context, data ProxyHostConfigDa
 		_ = m.RemoveCloudIPsInclude(data.Host.ID)
 	}
 
+	// Ensure shared include files exist BEFORE writing a host config that
+	// references them (fresh installs, volume wipes, resolver changes). Both
+	// are read+compare no-ops when already current.
+	if err := m.ensureHostCommonInclude(); err != nil {
+		return fmt.Errorf("failed to ensure host common include: %w", err)
+	}
+	if data.UseFilterSubscription {
+		if err := m.ensureFilterSubIPGeo(); err != nil {
+			return fmt.Errorf("failed to ensure filter subscription IP geo config: %w", err)
+		}
+	}
+
 	// Check if AdvancedConfig contains a custom location / block
 	// If so, skip generating the default location / block to avoid duplicates
 	if data.Host.AdvancedConfig != "" {

@@ -424,13 +424,24 @@
 {{end}}
 {{end}}
 
-{{if or .BannedIPs .UseFilterSubscription}}
-    # Banned IPs check (1 = manual ban, 2 = filter subscription)
+{{if .BannedIPs}}
+    # Banned IPs check (manual bans; trusted IPs override to 0 inside the geo)
     if ($banned_ip_{{sanitizeID .Host.ID}} = 1) {
         set $block_reason_var "banned_ip";
         return 403;
     }
-    if ($banned_ip_{{sanitizeID .Host.ID}} = 2) {
+{{end}}
+
+{{if .UseFilterSubscription}}
+    # Filter Subscription IP Blocking (shared geo block, one radix tree for all hosts)
+    set $filter_ip_check $filter_sub_ip;
+{{- if $.GlobalTrustedIPs}}
+    # Global trusted IPs bypass filter subscription IP blocking
+    if ($trusted_ip_{{sanitizeID $.Host.ID}} = 1) {
+        set $filter_ip_check 0;
+    }
+{{- end}}
+    if ($filter_ip_check = 2) {
         set $block_reason_var "filter_subscription";
         return 403;
     }
@@ -626,7 +637,7 @@
         {{if and $.Upstream $.Upstream.Servers}}proxy_pass {{upstreamScheme $.Upstream}}://{{$.Upstream.Name}};{{if eq (upstreamScheme $.Upstream) "https"}}
         proxy_ssl_server_name on;
         proxy_ssl_name $host;
-        proxy_ssl_verify off;{{end}}{{else}}proxy_pass {{$.Host.ForwardScheme}}://{{$.Host.ForwardHost}}:{{$.Host.ForwardPort}};{{end}}
+        proxy_ssl_verify off;{{end}}{{else}}proxy_pass {{$.Host.ForwardScheme}}://npg_direct_{{sanitizeID $.Host.ID}};{{end}}
         include /etc/nginx/includes/proxy_params.conf;
 {{else}}
         set $block_reason_var "uri_block";

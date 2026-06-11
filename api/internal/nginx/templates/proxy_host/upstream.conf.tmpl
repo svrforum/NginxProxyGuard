@@ -15,5 +15,16 @@ upstream {{.Upstream.Name}} {
     keepalive {{.Upstream.Keepalive}};
 {{end}}
 }
+{{else}}
+# Direct-forward upstream (keepalive connection pool to the backend)
+# proxy_params.conf already sets the prerequisites: proxy_http_version 1.1 +
+# empty Connection header. WebSocket hosts override Connection per-location
+# with $connection_upgrade and simply don't benefit from the pool.
+upstream npg_direct_{{sanitizeID .Host.ID}} {
+    server {{.Host.ForwardHost}}:{{.Host.ForwardPort}};
+    keepalive 32;
+    keepalive_requests 1000;
+    keepalive_timeout 60s;
+}
 {{end}}
 
