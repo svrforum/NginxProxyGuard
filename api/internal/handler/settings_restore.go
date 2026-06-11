@@ -15,7 +15,9 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	"nginx-proxy-guard/internal/config"
 	"nginx-proxy-guard/internal/model"
+	"nginx-proxy-guard/pkg/acme"
 )
 
 func (h *SettingsHandler) RestoreBackup(c echo.Context) error {
@@ -74,6 +76,7 @@ func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Back
 	// PHASE 1: Read and import database data FIRST
 	// This ensures DB is consistent before touching any files
 	var exportData *model.ExportData
+	var certIDMap map[string]string // old backup cert ID -> newly generated ID
 	if backup.IncludesDatabase {
 		data, err := h.extractExportJSON(backup.FilePath)
 		if err != nil {
@@ -89,13 +92,18 @@ func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Back
 				return result, fmt.Errorf("failed to parse export.json: %w", err)
 			}
 			// Import database data first - if this fails, no files are touched
-			if err := h.backupRepo.ImportAllData(ctx, exportData); err != nil {
+			certIDMap, err = h.backupRepo.ImportAllData(ctx, exportData)
+			if err != nil {
 				result.DatabaseError = err.Error()
 				result.DetermineStatus()
 				return result, fmt.Errorf("failed to import database data: %w", err)
 			}
 			result.DatabaseRestored = true
 			log.Printf("[Backup] Database import completed successfully")
+			// The raw-SQL import bypasses the repositories' per-write cache
+			// invalidation — flush Valkey caches so reads don't serve
+			// pre-restore data for the remainder of the cache TTL.
+			h.invalidateCachesAfterImport(ctx)
 		}
 	}
 
@@ -109,9 +117,49 @@ func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Back
 
 	// Regenerate nginx configs from restored database
 	if h.nginxManager != nil {
+		// Materialize certificate files from the PEMs carried in export.json.
+		// Database-only backups have no cert files in the archive, so without
+		// this every SSL host would silently fall back to HTTP-only on a
+		// fresh server even though the key material is in the database.
+		if exportData != nil && len(certIDMap) > 0 {
+			certsPath := h.nginxManager.GetCertsPath()
+			for _, cert := range exportData.Certificates {
+				if cert.Status != model.CertStatusIssued || cert.CertificatePEM == "" || cert.PrivateKeyPEM == "" {
+					continue
+				}
+				newID, ok := certIDMap[cert.ID]
+				if !ok {
+					continue
+				}
+				certDir, err := safeJoinUnderBase(certsPath, newID)
+				if err != nil {
+					log.Printf("[Backup] Warning: skipping cert file materialization for %s: %v", newID, err)
+					continue
+				}
+				fullchainPath := filepath.Join(certDir, "fullchain.pem")
+				if _, err := os.Stat(fullchainPath); err == nil {
+					continue // files already on disk (restored from the archive)
+				}
+				if err := os.MkdirAll(certDir, 0755); err != nil {
+					log.Printf("[Backup] Warning: failed to create cert directory for %s: %v", newID, err)
+					continue
+				}
+				fullchain := acme.BuildFullchain(cert.CertificatePEM, cert.IssuerCertificatePEM)
+				if err := os.WriteFile(fullchainPath, []byte(fullchain), 0644); err != nil {
+					log.Printf("[Backup] Warning: failed to write fullchain.pem for cert %s: %v", newID, err)
+					continue
+				}
+				if err := os.WriteFile(filepath.Join(certDir, "privkey.pem"), []byte(cert.PrivateKeyPEM), 0600); err != nil {
+					log.Printf("[Backup] Warning: failed to write privkey.pem for cert %s: %v", newID, err)
+					continue
+				}
+				log.Printf("[Backup] Materialized certificate files for %s from backup data", newID)
+			}
+		}
+
 		// Create certificate symlinks for new IDs pointing to existing cert files
 		if h.certificateRepo != nil {
-			certs, _, err := h.certificateRepo.List(ctx, 1, 1000, "", "", "", "", "")
+			certs, _, err := h.certificateRepo.List(ctx, 1, config.MaxWAFRulesLimit, "", "", "", "", "")
 			if err != nil {
 				log.Printf("[Backup] Warning: failed to list certificates: %v", err)
 			} else {
@@ -124,7 +172,14 @@ func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Back
 						if len(pathParts) >= 2 {
 							origID := pathParts[len(pathParts)-2]
 							newIDPath := filepath.Join(certsPath, cert.ID)
-							origIDPath := filepath.Join(certsPath, origID)
+							// certificate_path comes from untrusted backup JSON —
+							// enforce containment under certsPath (and reject
+							// segments like "..", "." or "") before symlinking.
+							origIDPath, pathErr := safeJoinUnderBase(certsPath, origID)
+							if pathErr != nil || origIDPath == filepath.Clean(certsPath) {
+								log.Printf("[Backup] Warning: skipping cert symlink for %s: unsafe path segment %q in backup", cert.ID, origID)
+								continue
+							}
 
 							// Create symlink if original path exists and new path doesn't
 							if origID != cert.ID {
@@ -142,9 +197,12 @@ func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Back
 			}
 		}
 
-		// Regenerate Proxy Host configs with safe error handling
+		// Regenerate Proxy Host configs with safe error handling.
+		// failedHosts keeps the full host structs so the -t failure cleanup
+		// below can derive the real (domain-based) config filenames.
+		var failedHosts []model.ProxyHost
 		if h.proxyHostRepo != nil {
-			proxyHosts, _, err := h.proxyHostRepo.List(ctx, 1, 1000, "", "", "")
+			proxyHosts, _, err := h.proxyHostRepo.List(ctx, 1, config.MaxWAFRulesLimit, "", "", "")
 			if err != nil {
 				log.Printf("[Backup] Warning: failed to list proxy hosts for config regeneration: %v", err)
 			} else {
@@ -156,11 +214,13 @@ func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Back
 					if err != nil {
 						log.Printf("[Backup] Warning: failed to load config data for host %s: %v", host.ID, err)
 						result.ProxyHostsFailed = append(result.ProxyHostsFailed, host.ID)
+						failedHosts = append(failedHosts, host)
 						continue
 					}
 					if err := h.nginxManager.GenerateConfigFull(ctx, configData); err != nil {
 						log.Printf("[Backup] Warning: failed to regenerate config for host %s: %v", host.ID, err)
 						result.ProxyHostsFailed = append(result.ProxyHostsFailed, host.ID)
+						failedHosts = append(failedHosts, host)
 						continue
 					}
 					// Generate WAF config if enabled
@@ -177,6 +237,7 @@ func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Back
 							// Remove the main config if WAF config fails
 							_ = h.nginxManager.RemoveConfig(ctx, &host)
 							result.ProxyHostsFailed = append(result.ProxyHostsFailed, host.ID)
+							failedHosts = append(failedHosts, host)
 							continue
 						}
 					}
@@ -187,7 +248,7 @@ func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Back
 
 		// Regenerate Redirect Host configs
 		if h.redirectHostRepo != nil {
-			redirectHosts, _, err := h.redirectHostRepo.List(ctx, 1, 1000)
+			redirectHosts, _, err := h.redirectHostRepo.List(ctx, 1, config.MaxWAFRulesLimit)
 			if err != nil {
 				log.Printf("[Backup] Warning: failed to list redirect hosts for config regeneration: %v", err)
 			} else {
@@ -210,11 +271,13 @@ func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Back
 			result.NginxConfigError = err.Error()
 			log.Printf("[Backup] Attempting to remove failed host configs and retry...")
 
-			// Remove configs for failed hosts
-			for _, hostID := range result.ProxyHostsFailed {
-				configFile := filepath.Join("/etc/nginx/conf.d", fmt.Sprintf("proxy_host_%s.conf", hostID))
-				if err := os.Remove(configFile); err != nil && !os.IsNotExist(err) {
-					log.Printf("[Backup] Warning: failed to remove config for host %s: %v", hostID, err)
+			// Remove configs for failed hosts. RemoveConfig derives the real
+			// (domain-based) config filename and also covers stream hosts and
+			// leftover WAF configs — an ID-based filename guess never matches
+			// the files actually written for normal hosts.
+			for i := range failedHosts {
+				if err := h.nginxManager.RemoveConfig(ctx, &failedHosts[i]); err != nil {
+					log.Printf("[Backup] Warning: failed to remove config for host %s: %v", failedHosts[i].ID, err)
 				}
 			}
 
@@ -339,4 +402,23 @@ func (h *SettingsHandler) UploadAndRestoreBackup(c echo.Context) error {
 		"backup":  backup,
 		"result":  result,
 	})
+}
+
+// invalidateCachesAfterImport flushes the Valkey caches that could otherwise
+// serve pre-restore data after ImportAllData's raw-SQL import (which bypasses
+// the repositories' per-write invalidation). Per-ID caches (certificate, geo,
+// bot filter) need no flush: import recreates every row with a new UUID, so
+// the stale entries are keyed by IDs nothing references anymore. Singleton
+// and namespace caches are the ones that go stale.
+func (h *SettingsHandler) invalidateCachesAfterImport(ctx context.Context) {
+	if h.redisCache == nil {
+		return
+	}
+	_ = h.redisCache.InvalidateSystemSettings(ctx)
+	_ = h.redisCache.InvalidateGlobalSettings(ctx)
+	_ = h.redisCache.InvalidateExploitRules(ctx)
+	_ = h.redisCache.InvalidateAllExploitExclusions(ctx)
+	_ = h.redisCache.InvalidateAllProxyHostConfigs(ctx)
+	_ = h.redisCache.InvalidateAllURIBlocks(ctx)
+	log.Printf("[Backup] Valkey caches invalidated after database import")
 }

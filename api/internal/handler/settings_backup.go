@@ -109,6 +109,7 @@ func (h *SettingsHandler) performBackup(backup *model.Backup) {
 			tarWriter.Close()
 			gzWriter.Close()
 			file.Close()
+			os.Remove(backup.FilePath)
 			h.backupRepo.UpdateStatus(ctx, backup.ID, "failed", err.Error())
 			return
 		}
@@ -120,8 +121,18 @@ func (h *SettingsHandler) performBackup(backup *model.Backup) {
 			Size:    int64(len(dataJSON)),
 			ModTime: time.Now(),
 		}
-		tarWriter.WriteHeader(header)
-		tarWriter.Write(dataJSON)
+		writeErr := tarWriter.WriteHeader(header)
+		if writeErr == nil {
+			_, writeErr = tarWriter.Write(dataJSON)
+		}
+		if writeErr != nil {
+			tarWriter.Close()
+			gzWriter.Close()
+			file.Close()
+			os.Remove(backup.FilePath)
+			h.backupRepo.UpdateStatus(ctx, backup.ID, "failed", fmt.Sprintf("failed to write export.json to archive: %v", writeErr))
+			return
+		}
 	}
 
 	// Add config files
@@ -134,10 +145,22 @@ func (h *SettingsHandler) performBackup(backup *model.Backup) {
 		h.addDirectoryToTar(tarWriter, "/etc/nginx/certs", "certs")
 	}
 
-	// Close writers in order to flush all data
-	tarWriter.Close()
-	gzWriter.Close()
-	file.Close()
+	// Close writers in order to flush all data. tar/gzip Close write the
+	// trailing blocks and file.Close surfaces deferred write errors (e.g.
+	// disk full) — ignoring them would record a truncated archive as a
+	// completed backup with a matching checksum, discovered only at restore.
+	closeErr := tarWriter.Close()
+	if err := gzWriter.Close(); err != nil && closeErr == nil {
+		closeErr = err
+	}
+	if err := file.Close(); err != nil && closeErr == nil {
+		closeErr = err
+	}
+	if closeErr != nil {
+		os.Remove(backup.FilePath)
+		h.backupRepo.UpdateStatus(ctx, backup.ID, "failed", fmt.Sprintf("failed to finalize backup archive: %v", closeErr))
+		return
+	}
 
 	// Calculate checksum from completed file
 	checksum := ""

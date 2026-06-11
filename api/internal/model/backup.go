@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // Backup represents a backup record
 type Backup struct {
@@ -186,6 +189,10 @@ type ExportData struct {
 	// Configuration
 	GlobalSettings *GlobalSettingsExport `json:"global_settings,omitempty"`
 	SystemSettings *SystemSettingsExport `json:"system_settings,omitempty"`
+
+	// Log Settings (log_settings table) — nil for backups created before
+	// this section existed; import keeps existing values when nil.
+	LogSettings *LogSettingsExport `json:"log_settings,omitempty"`
 
 	// Proxy hosts with all related data
 	ProxyHosts []ProxyHostExport `json:"proxy_hosts,omitempty"`
@@ -743,4 +750,33 @@ type SystemSettingsExport struct {
 
 	// DDNS Settings
 	DDNSCheckIntervalMinutes int `json:"ddns_check_interval_minutes"`
+
+	// Security (global trusted IPs / exploit exceptions) and UI/system-log
+	// columns. Pointer (or nil-able) types for old backup compatibility:
+	// backups created before these fields existed unmarshal to nil, and the
+	// import keeps the existing DB values (fresh-install defaults) instead of
+	// overwriting them with empty values — overwriting would silently revoke
+	// trusted IPs and wipe the default exploit-block exceptions.
+	GlobalTrustedIPs              *string `json:"global_trusted_ips,omitempty"`
+	GlobalBlockExploitsExceptions *string `json:"global_block_exploits_exceptions,omitempty"`
+
+	// UI Settings
+	UIFontFamily        *string `json:"ui_font_family,omitempty"`
+	UIErrorPageLanguage *string `json:"ui_error_page_language,omitempty"`
+
+	// System Log Filters (no omitempty on the arrays: an explicitly empty
+	// list is meaningful and must survive the round-trip; nil = old backup)
+	SystemLogsLevels          json.RawMessage `json:"system_logs_levels,omitempty"`
+	SystemLogsExcludePatterns []string        `json:"system_logs_exclude_patterns"`
+	SystemLogsStdoutExcluded  []string        `json:"system_logs_stdout_excluded"`
+}
+
+// LogSettingsExport represents the log_settings table for export. Only the
+// columns the application reads back (LogRepository.GetSettings) are
+// round-tripped; system_log_retention_days / enable_docker_logs /
+// filter_health_checks exist in the schema but are write-only defaults.
+type LogSettingsExport struct {
+	RetentionDays      int    `json:"retention_days"`
+	MaxLogsPerType     *int64 `json:"max_logs_per_type,omitempty"`
+	AutoCleanupEnabled bool   `json:"auto_cleanup_enabled"`
 }

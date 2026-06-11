@@ -29,6 +29,13 @@ func (r *BackupRepository) ExportAllData(ctx context.Context) (*model.ExportData
 	}
 	export.SystemSettings = systemSettings
 
+	// Export Log Settings (log retention / auto-cleanup)
+	logSettings, err := r.exportLogSettings(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to export log settings: %w", err)
+	}
+	export.LogSettings = logSettings
+
 	// Export Proxy Hosts with all related configurations
 	proxyHosts, err := r.exportProxyHosts(ctx)
 	if err != nil {

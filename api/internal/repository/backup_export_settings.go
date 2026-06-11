@@ -3,8 +3,10 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 
+	"github.com/lib/pq"
 	"nginx-proxy-guard/internal/model"
 )
 
@@ -89,7 +91,17 @@ func (r *BackupRepository) exportSystemSettings(ctx context.Context) (*model.Sys
 		       bot_list_bad_bots, bot_list_ai_bots, bot_list_search_engines, bot_list_suspicious_clients,
 		       waf_auto_ban_enabled, waf_auto_ban_threshold, waf_auto_ban_window, waf_auto_ban_duration,
 		       direct_ip_access_action, system_logs_enabled,
-		       COALESCE(ddns_check_interval_minutes, 5) as ddns_check_interval_minutes
+		       COALESCE(ddns_check_interval_minutes, 5) as ddns_check_interval_minutes,
+		       COALESCE(global_trusted_ips, '') as global_trusted_ips,
+		       COALESCE(global_block_exploits_exceptions, '^/wp-json/
+^/api/v1/challenge/
+^/wp-admin/admin-ajax.php
+^/webapi/') as global_block_exploits_exceptions,
+		       COALESCE(ui_font_family, 'system') as ui_font_family,
+		       COALESCE(ui_error_page_language, 'auto') as ui_error_page_language,
+		       COALESCE(system_logs_levels, '{"npg-proxy": "info", "npg-api": "info", "npg-db": "warn", "npg-ui": "warn"}'::jsonb) as system_logs_levels,
+		       COALESCE(system_logs_exclude_patterns, ARRAY['/health', '/nginx_status', '/.well-known/', 'HEAD /']) as system_logs_exclude_patterns,
+		       COALESCE(system_logs_stdout_excluded, ARRAY['npg-proxy']) as system_logs_stdout_excluded
 		FROM system_settings LIMIT 1
 	`
 
@@ -99,6 +111,9 @@ func (r *BackupRepository) exportSystemSettings(ctx context.Context) (*model.Sys
 	var maxmindAccountID, maxmindLicenseKey sql.NullString
 	var botFilterDefaultCustomBlockedAgents sql.NullString
 	var botListBadBots, botListAIBots, botListSearchEngines, botListSuspiciousClients sql.NullString
+	var globalTrustedIPs, globalBlockExploitsExceptions, uiFontFamily, uiErrorPageLanguage string
+	var systemLogsLevels []byte
+	var systemLogsExcludePatterns, systemLogsStdoutExcluded pq.StringArray
 
 	err := r.db.QueryRowContext(ctx, query).Scan(
 		&ss.GeoIPEnabled, &ss.GeoIPAutoUpdate, &geoipUpdateInterval,
@@ -120,6 +135,9 @@ func (r *BackupRepository) exportSystemSettings(ctx context.Context) (*model.Sys
 		&ss.WAFAutoBanEnabled, &ss.WAFAutoBanThreshold, &ss.WAFAutoBanWindow, &ss.WAFAutoBanDuration,
 		&directIPAccessAction, &ss.SystemLogsEnabled,
 		&ss.DDNSCheckIntervalMinutes,
+		&globalTrustedIPs, &globalBlockExploitsExceptions,
+		&uiFontFamily, &uiErrorPageLanguage,
+		&systemLogsLevels, &systemLogsExcludePatterns, &systemLogsStdoutExcluded,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -140,8 +158,42 @@ func (r *BackupRepository) exportSystemSettings(ctx context.Context) (*model.Sys
 	ss.BotListAIBots = botListAIBots.String
 	ss.BotListSearchEngines = botListSearchEngines.String
 	ss.BotListSuspiciousClients = botListSuspiciousClients.String
+	ss.GlobalTrustedIPs = &globalTrustedIPs
+	ss.GlobalBlockExploitsExceptions = &globalBlockExploitsExceptions
+	ss.UIFontFamily = &uiFontFamily
+	ss.UIErrorPageLanguage = &uiErrorPageLanguage
+	ss.SystemLogsLevels = json.RawMessage(systemLogsLevels)
+	ss.SystemLogsExcludePatterns = []string(systemLogsExcludePatterns)
+	ss.SystemLogsStdoutExcluded = []string(systemLogsStdoutExcluded)
 
 	return &ss, nil
+}
+
+// exportLogSettings exports the singleton log_settings row (log retention /
+// auto-cleanup). Returns nil when the row hasn't been created yet (it is
+// lazily created on first read), in which case nothing is exported.
+func (r *BackupRepository) exportLogSettings(ctx context.Context) (*model.LogSettingsExport, error) {
+	query := `
+		SELECT retention_days, max_logs_per_type, auto_cleanup_enabled
+		FROM log_settings LIMIT 1
+	`
+
+	var ls model.LogSettingsExport
+	var maxLogsPerType sql.NullInt64
+
+	err := r.db.QueryRowContext(ctx, query).Scan(&ls.RetentionDays, &maxLogsPerType, &ls.AutoCleanupEnabled)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	if maxLogsPerType.Valid {
+		ls.MaxLogsPerType = &maxLogsPerType.Int64
+	}
+
+	return &ls, nil
 }
 
 func (r *BackupRepository) exportFilterSubscriptions(ctx context.Context) ([]model.FilterSubscriptionExport, error) {

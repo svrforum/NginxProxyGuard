@@ -13,6 +13,11 @@ import (
 func (r *BackupRepository) importDNSProvider(ctx context.Context, tx *sql.Tx, dp *model.DNSProviderExport) (string, error) {
 	credentials, _ := json.Marshal(dp.Credentials)
 
+	// Note: no in-tx INSERT retry here — any statement error aborts the whole
+	// import transaction in Postgres, so a fallback statement could only fail
+	// with "current transaction is aborted". Duplicate defaults are demoted to
+	// is_default=false by the caller (ImportAllData) before insert; the ON
+	// CONFLICT clause remains as defense in case a default row pre-exists.
 	query := `
 		INSERT INTO dns_providers (name, provider_type, credentials, is_default)
 		VALUES ($1, $2, $3, $4)
@@ -24,15 +29,6 @@ func (r *BackupRepository) importDNSProvider(ctx context.Context, tx *sql.Tx, dp
 
 	var newID string
 	err := tx.QueryRowContext(ctx, query, dp.Name, dp.Type, credentials, dp.IsDefault).Scan(&newID)
-	if err != nil {
-		// Try without conflict handling
-		query = `
-			INSERT INTO dns_providers (name, provider_type, credentials, is_default)
-			VALUES ($1, $2, $3, false)
-			RETURNING id
-		`
-		err = tx.QueryRowContext(ctx, query, dp.Name, dp.Type, credentials).Scan(&newID)
-	}
 	return newID, err
 }
 

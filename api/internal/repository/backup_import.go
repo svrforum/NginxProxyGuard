@@ -8,17 +8,19 @@ import (
 	"nginx-proxy-guard/internal/model"
 )
 
-// ImportAllData imports all configuration data from backup
-func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.ExportData) error {
+// ImportAllData imports all configuration data from backup. It returns the
+// certificate ID mapping (old backup ID -> newly generated ID) so the caller
+// can materialize certificate files from the exported PEMs after the import.
+func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.ExportData) (map[string]string, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
 
 	// Clear existing data before import (in correct order for FK constraints)
 	if err := r.clearExistingData(ctx, tx); err != nil {
-		return fmt.Errorf("failed to clear existing data: %w", err)
+		return nil, fmt.Errorf("failed to clear existing data: %w", err)
 	}
 
 	// Create ID mappings for foreign key references
@@ -31,15 +33,25 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 	// Import Global Settings (update existing)
 	if data.GlobalSettings != nil {
 		if err := r.importGlobalSettings(ctx, tx, data.GlobalSettings); err != nil {
-			return fmt.Errorf("failed to import global settings: %w", err)
+			return nil, fmt.Errorf("failed to import global settings: %w", err)
 		}
 	}
 
-	// Import DNS Providers first (certificates depend on them)
+	// Import DNS Providers first (certificates depend on them).
+	// Postgres aborts the whole transaction on a unique violation, so a backup
+	// carrying two is_default=true providers cannot be repaired by an in-tx
+	// INSERT retry — demote duplicates to is_default=false here instead.
+	defaultDNSProviderSeen := false
 	for _, dp := range data.DNSProviders {
+		if dp.IsDefault {
+			if defaultDNSProviderSeen {
+				dp.IsDefault = false
+			}
+			defaultDNSProviderSeen = true
+		}
 		newID, err := r.importDNSProvider(ctx, tx, &dp)
 		if err != nil {
-			return fmt.Errorf("failed to import dns provider %s: %w", dp.Name, err)
+			return nil, fmt.Errorf("failed to import dns provider %s: %w", dp.Name, err)
 		}
 		dnsProviderIDMap[dp.ID] = newID
 	}
@@ -54,7 +66,7 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 		}
 		newID, err := r.importCertificate(ctx, tx, &cert)
 		if err != nil {
-			return fmt.Errorf("failed to import certificate %v: %w", cert.DomainNames, err)
+			return nil, fmt.Errorf("failed to import certificate %v: %w", cert.DomainNames, err)
 		}
 		certificateIDMap[cert.ID] = newID
 	}
@@ -63,7 +75,7 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 	for _, al := range data.AccessLists {
 		newID, err := r.importAccessList(ctx, tx, &al)
 		if err != nil {
-			return fmt.Errorf("failed to import access list %s: %w", al.AccessList.Name, err)
+			return nil, fmt.Errorf("failed to import access list %s: %w", al.AccessList.Name, err)
 		}
 		accessListIDMap[al.AccessList.ID] = newID
 	}
@@ -97,7 +109,7 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 
 		newID, err := r.importProxyHost(ctx, tx, &ph)
 		if err != nil {
-			return fmt.Errorf("failed to import proxy host %v: %w", ph.ProxyHost.DomainNames, err)
+			return nil, fmt.Errorf("failed to import proxy host %v: %w", ph.ProxyHost.DomainNames, err)
 		}
 		proxyHostIDMap[ph.ProxyHost.ID] = newID
 	}
@@ -111,7 +123,7 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 			}
 		}
 		if err := r.importRedirectHost(ctx, tx, &rh); err != nil {
-			return fmt.Errorf("failed to import redirect host %v: %w", rh.RedirectHost.DomainNames, err)
+			return nil, fmt.Errorf("failed to import redirect host %v: %w", rh.RedirectHost.DomainNames, err)
 		}
 	}
 
@@ -122,14 +134,21 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 			we.ProxyHostID = newID
 		}
 		if err := r.importWAFExclusion(ctx, tx, &we); err != nil {
-			return fmt.Errorf("failed to import waf exclusion for rule %d: %w", we.RuleID, err)
+			return nil, fmt.Errorf("failed to import waf exclusion for rule %d: %w", we.RuleID, err)
 		}
 	}
 
 	// Import System Settings (update existing)
 	if data.SystemSettings != nil {
 		if err := r.importSystemSettings(ctx, tx, data.SystemSettings); err != nil {
-			return fmt.Errorf("failed to import system settings: %w", err)
+			return nil, fmt.Errorf("failed to import system settings: %w", err)
+		}
+	}
+
+	// Import Log Settings (update existing; nil for old backups keeps current values)
+	if data.LogSettings != nil {
+		if err := r.importLogSettings(ctx, tx, data.LogSettings); err != nil {
+			return nil, fmt.Errorf("failed to import log settings: %w", err)
 		}
 	}
 
@@ -142,7 +161,7 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 			}
 		}
 		if err := r.importBannedIP(ctx, tx, &bip); err != nil {
-			return fmt.Errorf("failed to import banned ip %s: %w", bip.IPAddress, err)
+			return nil, fmt.Errorf("failed to import banned ip %s: %w", bip.IPAddress, err)
 		}
 	}
 
@@ -153,21 +172,21 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 			ub.ProxyHostID = newID
 		}
 		if err := r.importURIBlock(ctx, tx, &ub); err != nil {
-			return fmt.Errorf("failed to import uri block for proxy host %s: %w", ub.ProxyHostID, err)
+			return nil, fmt.Errorf("failed to import uri block for proxy host %s: %w", ub.ProxyHostID, err)
 		}
 	}
 
 	// Import Global URI Block
 	if data.GlobalURIBlock != nil {
 		if err := r.importGlobalURIBlock(ctx, tx, data.GlobalURIBlock); err != nil {
-			return fmt.Errorf("failed to import global uri block: %w", err)
+			return nil, fmt.Errorf("failed to import global uri block: %w", err)
 		}
 	}
 
 	// Import Cloud Providers
 	for _, cp := range data.CloudProviders {
 		if err := r.importCloudProvider(ctx, tx, &cp); err != nil {
-			return fmt.Errorf("failed to import cloud provider %s: %w", cp.Name, err)
+			return nil, fmt.Errorf("failed to import cloud provider %s: %w", cp.Name, err)
 		}
 	}
 
@@ -175,7 +194,7 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 	for _, rule := range data.ExploitBlockRules {
 		newID, err := r.importExploitBlockRule(ctx, tx, &rule)
 		if err != nil {
-			return fmt.Errorf("failed to import exploit block rule %s: %w", rule.Name, err)
+			return nil, fmt.Errorf("failed to import exploit block rule %s: %w", rule.Name, err)
 		}
 		if newID != "" {
 			exploitRuleIDMap[rule.ID] = newID
@@ -185,7 +204,7 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 	// Import Global WAF Exclusions
 	for _, we := range data.GlobalWAFExclusions {
 		if err := r.importGlobalWAFExclusion(ctx, tx, &we); err != nil {
-			return fmt.Errorf("failed to import global waf exclusion for rule %d: %w", we.RuleID, err)
+			return nil, fmt.Errorf("failed to import global waf exclusion for rule %d: %w", we.RuleID, err)
 		}
 	}
 
@@ -199,7 +218,7 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 			continue
 		}
 		if err := r.importGlobalExploitExclusion(ctx, tx, &ee); err != nil {
-			return fmt.Errorf("failed to import global exploit exclusion for rule %s: %w", ee.RuleID, err)
+			return nil, fmt.Errorf("failed to import global exploit exclusion for rule %s: %w", ee.RuleID, err)
 		}
 	}
 
@@ -217,21 +236,21 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 			continue
 		}
 		if err := r.importHostExploitExclusion(ctx, tx, &he); err != nil {
-			return fmt.Errorf("failed to import host exploit exclusion: %w", err)
+			return nil, fmt.Errorf("failed to import host exploit exclusion: %w", err)
 		}
 	}
 
 	// Import Global Challenge Config (CAPTCHA)
 	if data.GlobalChallengeConfig != nil {
 		if err := r.importGlobalChallengeConfig(ctx, tx, data.GlobalChallengeConfig); err != nil {
-			return fmt.Errorf("failed to import global challenge config: %w", err)
+			return nil, fmt.Errorf("failed to import global challenge config: %w", err)
 		}
 	}
 
 	// Import Filter Subscriptions
 	for _, fs := range data.FilterSubscriptions {
 		if err := r.importFilterSubscription(ctx, tx, &fs, proxyHostIDMap); err != nil {
-			return fmt.Errorf("failed to import filter subscription %s: %w", fs.Name, err)
+			return nil, fmt.Errorf("failed to import filter subscription %s: %w", fs.Name, err)
 		}
 	}
 
@@ -256,15 +275,15 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 			}
 		}
 		if err := r.importDDNSRecord(ctx, tx, &rec); err != nil {
-			return fmt.Errorf("failed to import ddns record %s: %w", rec.Hostname, err)
+			return nil, fmt.Errorf("failed to import ddns record %s: %w", rec.Hostname, err)
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	return nil
+	return certificateIDMap, nil
 }
 
 // clearExistingData removes existing configuration data in correct order for FK constraints

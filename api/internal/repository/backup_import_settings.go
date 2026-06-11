@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/lib/pq"
 	"nginx-proxy-guard/internal/model"
 )
 
@@ -80,6 +81,13 @@ func (r *BackupRepository) importSystemSettings(ctx context.Context, tx *sql.Tx,
 			waf_auto_ban_enabled = $42, waf_auto_ban_threshold = $43, waf_auto_ban_window = $44, waf_auto_ban_duration = $45,
 			direct_ip_access_action = $46, system_logs_enabled = $47,
 			ddns_check_interval_minutes = $48,
+			global_trusted_ips = COALESCE($49, global_trusted_ips),
+			global_block_exploits_exceptions = COALESCE($50, global_block_exploits_exceptions),
+			ui_font_family = COALESCE($51, ui_font_family),
+			ui_error_page_language = COALESCE($52, ui_error_page_language),
+			system_logs_levels = COALESCE($53::jsonb, system_logs_levels),
+			system_logs_exclude_patterns = COALESCE($54, system_logs_exclude_patterns),
+			system_logs_stdout_excluded = COALESCE($55, system_logs_stdout_excluded),
 			updated_at = NOW()
 	`
 
@@ -87,6 +95,23 @@ func (r *BackupRepository) importSystemSettings(ctx context.Context, tx *sql.Tx,
 	// 최소 제약(>=1)을 위반하지 않도록 기본값 5로 보정.
 	if ss.DDNSCheckIntervalMinutes < 1 {
 		ss.DDNSCheckIntervalMinutes = 5
+	}
+
+	// 하위 버전 백업 호환: $49-$55 컬럼은 구 버전 백업엔 없어 nil이 된다.
+	// nil이면 COALESCE가 기존 DB 값(신규 설치 기본값)을 유지한다 — 빈 값으로
+	// 덮어쓰면 trusted IP 우회가 풀리고 기본 익스플로잇 예외가 사라지는 등
+	// 동작이 조용히 바뀌기 때문. 새 백업은 항상 구체 값(빈 목록 포함)을 가진다.
+	var systemLogsLevels interface{}
+	if len(ss.SystemLogsLevels) > 0 {
+		// jsonb 컬럼엔 []byte(bytea 인코딩)가 아닌 string으로 전달해야 한다.
+		systemLogsLevels = string(ss.SystemLogsLevels)
+	}
+	var systemLogsExcludePatterns, systemLogsStdoutExcluded interface{}
+	if ss.SystemLogsExcludePatterns != nil {
+		systemLogsExcludePatterns = pq.Array(ss.SystemLogsExcludePatterns)
+	}
+	if ss.SystemLogsStdoutExcluded != nil {
+		systemLogsStdoutExcluded = pq.Array(ss.SystemLogsStdoutExcluded)
 	}
 
 	_, err := tx.ExecContext(ctx, query,
@@ -109,7 +134,42 @@ func (r *BackupRepository) importSystemSettings(ctx context.Context, tx *sql.Tx,
 		ss.WAFAutoBanEnabled, ss.WAFAutoBanThreshold, ss.WAFAutoBanWindow, ss.WAFAutoBanDuration,
 		ss.DirectIPAccessAction, ss.SystemLogsEnabled,
 		ss.DDNSCheckIntervalMinutes,
+		ss.GlobalTrustedIPs, ss.GlobalBlockExploitsExceptions,
+		ss.UIFontFamily, ss.UIErrorPageLanguage,
+		systemLogsLevels, systemLogsExcludePatterns, systemLogsStdoutExcluded,
 	)
+	return err
+}
+
+// importLogSettings updates the singleton log_settings row. Only called when
+// the backup contains the log_settings section; older backups (nil) keep the
+// existing/default values.
+func (r *BackupRepository) importLogSettings(ctx context.Context, tx *sql.Tx, ls *model.LogSettingsExport) error {
+	// 하위 버전/손상 백업 호환: retention_days 0은 모든 로그 즉시 삭제를
+	// 의미하게 되므로 기본값 30으로 보정.
+	if ls.RetentionDays < 1 {
+		ls.RetentionDays = 30
+	}
+
+	query := `
+		UPDATE log_settings SET
+			retention_days = $1, max_logs_per_type = $2, auto_cleanup_enabled = $3,
+			updated_at = NOW()
+	`
+	res, err := tx.ExecContext(ctx, query, ls.RetentionDays, ls.MaxLogsPerType, ls.AutoCleanupEnabled)
+	if err != nil {
+		return err
+	}
+
+	// Fresh installs may not have the singleton row yet (it is lazily created
+	// on first read) — insert it so the restored values are not lost.
+	if n, _ := res.RowsAffected(); n == 0 {
+		insertQuery := `
+			INSERT INTO log_settings (retention_days, max_logs_per_type, auto_cleanup_enabled)
+			VALUES ($1, $2, $3)
+		`
+		_, err = tx.ExecContext(ctx, insertQuery, ls.RetentionDays, ls.MaxLogsPerType, ls.AutoCleanupEnabled)
+	}
 	return err
 }
 
