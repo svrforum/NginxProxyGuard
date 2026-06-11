@@ -1,0 +1,41 @@
+version: 2
+updates:
+  # Go modules (API server)
+  - package-ecosystem: "gomod"
+    directory: "/api"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      go-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # npm (admin UI)
+  - package-ecosystem: "npm"
+    directory: "/ui"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # Dockerfiles (base images)
+  - package-ecosystem: "docker"
+    directory: "/api"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "docker"
+    directory: "/ui"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "docker"
+    directory: "/nginx"
+    schedule:
+      interval: "weekly"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

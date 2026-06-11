@@ -11,7 +11,7 @@
   <img src="./NPG_banner.png" alt="Nginx Proxy Guard" width="520">
 </picture>
 
-[![Version](https://img.shields.io/badge/Version-2.23.1-brightgreen?style=for-the-badge)](https://github.com/svrforum/NginxProxyGuard/releases)
+[![Version](https://img.shields.io/github/v/release/svrforum/NginxProxyGuard?style=for-the-badge&color=brightgreen&label=Version)](https://github.com/svrforum/NginxProxyGuard/releases)
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/svrforum/NginxProxyGuard?style=for-the-badge&logo=github&color=gold)](https://github.com/svrforum/NginxProxyGuard/stargazers)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://hub.docker.com/u/svrforum)
@@ -178,6 +178,11 @@ docker compose up -d
 | HTTPS 프록시 | https://localhost:443 |
 
 **기본 로그인**: `admin` / `admin` (첫 로그인 후 반드시 변경!)
+
+> **보안 안내**
+> - **v2.24.6**부터 기본 자격 증명을 변경하기 전까지 서버가 모든 보호 API를 차단합니다(초기 설정 게이트). 갓 설치된 인스턴스를 `admin`/`admin`으로 탈취할 수 없습니다.
+> - **관리 패널(81 포트)을 인터넷에 노출하지 마세요.** LAN/VPN 안에 두거나, 액세스 리스트 + 2FA로 보호된 프록시 호스트 뒤에 두는 것을 권장합니다.
+> - 취약점을 발견하셨나요? 공개 이슈 대신 비공개로 신고해주세요 — [SECURITY.md](./SECURITY.md) 참조.
 
 > **비밀번호 정책 (v2.2.0+)**: 새 비밀번호는 최소 10자 이상이며, 대문자, 소문자, 숫자, 특수문자를 포함해야 합니다. 흔한 비밀번호는 차단됩니다.
 

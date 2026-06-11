@@ -1,5 +1,9 @@
 # Changelog
 
+> **Current release notes live on [GitHub Releases](https://github.com/svrforum/NginxProxyGuard/releases).**
+> This file only records milestone entries with breaking changes; routine
+> releases are documented per-tag on the Releases page.
+
 ## v2.13.0 (2026-04-18)
 
 ### Breaking changes

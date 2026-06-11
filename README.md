@@ -11,7 +11,7 @@
   <img src="./NPG_banner.png" alt="Nginx Proxy Guard" width="520">
 </picture>
 
-[![Version](https://img.shields.io/badge/Version-2.23.1-brightgreen?style=for-the-badge)](https://github.com/svrforum/NginxProxyGuard/releases)
+[![Version](https://img.shields.io/github/v/release/svrforum/NginxProxyGuard?style=for-the-badge&color=brightgreen&label=Version)](https://github.com/svrforum/NginxProxyGuard/releases)
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/svrforum/NginxProxyGuard?style=for-the-badge&logo=github&color=gold)](https://github.com/svrforum/NginxProxyGuard/stargazers)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://hub.docker.com/u/svrforum)
@@ -178,6 +178,11 @@ docker compose up -d
 | HTTPS Proxy | https://localhost:443 |
 
 **Default Login**: `admin` / `admin` (Change immediately after first login!)
+
+> **Security notes**
+> - Since **v2.24.6** the server blocks every protected API until the default credentials are changed (initial-setup gate), so a freshly-installed instance cannot be hijacked via `admin`/`admin`.
+> - **Do not expose the Admin Panel (port 81) to the internet.** Keep it on your LAN/VPN, or front it with its own proxy host protected by access lists and 2FA.
+> - Found a vulnerability? Please report it privately — see [SECURITY.md](./SECURITY.md).
 
 > **Password Policy (v2.2.0+)**: New passwords must be at least 10 characters with uppercase, lowercase, digit, and special character. Common passwords are blocked.
 
