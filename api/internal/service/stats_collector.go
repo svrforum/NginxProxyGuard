@@ -26,13 +26,21 @@ import (
 // combinedLogPattern is precompiled regex for combined log format parsing
 var combinedLogPattern = regexp.MustCompile(`^(\S+) \S+ \S+ \[([^\]]+)\] "(\S+) (\S+)[^"]*" (\d+) (\d+)`)
 
+// nginxStatusHTTPClient bounds the stub_status fetch. The default http.Get
+// client has NO timeout, so a stalled host.docker.internal route (issue #146)
+// could wedge the collector goroutine indefinitely.
+var nginxStatusHTTPClient = &http.Client{Timeout: 5 * time.Second}
+
 type StatsCollector struct {
 	db              *sql.DB
 	nginxStatusURL  string
 	accessLogPath   string
 	lastLogPosition int64
-	mu              sync.Mutex
-	stopCh          chan struct{}
+	// mu guards only the nginx_status backoff state below. It is deliberately
+	// NOT held across network or DB work, so /health/detailed (which calls
+	// NginxStatusReachable) can never block behind a slow collection cycle.
+	mu     sync.Mutex
+	stopCh chan struct{}
 
 	// nginx_status fetch failure backoff state. Without this, a misconfigured
 	// host.docker.internal env (typical on plain Linux Docker without
@@ -140,9 +148,9 @@ func (sc *StatsCollector) NginxStatusReachable() bool {
 }
 
 func (sc *StatsCollector) collectStats() {
-	sc.mu.Lock()
-	defer sc.mu.Unlock()
-
+	// Only ever called from the single Start goroutine; the backoff state it
+	// shares with NginxStatusReachable is locked inside
+	// getNginxStatusWithBackoff, not across the whole (slow) collection.
 	log.Println("[StatsCollector] Collecting stats...")
 
 	// 1. Collect Nginx status — with backoff on repeated failure (issue #146).
@@ -173,10 +181,20 @@ func (sc *StatsCollector) collectStats() {
 // exponential backoff. On success it resets the failure counter so a brief
 // network blip doesn't permanently suppress logging. See issue #146.
 func (sc *StatsCollector) getNginxStatusWithBackoff() (NginxStatus, error) {
+	sc.mu.Lock()
 	if !sc.statusNextAttempt.IsZero() && time.Now().Before(sc.statusNextAttempt) {
-		return NginxStatus{}, fmt.Errorf("skipped (backoff until %s)", sc.statusNextAttempt.Format(time.RFC3339))
+		next := sc.statusNextAttempt
+		sc.mu.Unlock()
+		return NginxStatus{}, fmt.Errorf("skipped (backoff until %s)", next.Format(time.RFC3339))
 	}
+	sc.mu.Unlock()
+
+	// HTTP fetch happens outside the mutex (it has a 5s client timeout, but
+	// even that must not stall NginxStatusReachable / health checks).
 	status, err := sc.getNginxStatus()
+
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	if err == nil {
 		if sc.statusFailCount > 0 {
 			log.Printf("[StatsCollector] nginx_status recovered after %d failures", sc.statusFailCount)
@@ -203,7 +221,7 @@ func (sc *StatsCollector) getNginxStatusWithBackoff() (NginxStatus, error) {
 func (sc *StatsCollector) getNginxStatus() (NginxStatus, error) {
 	status := NginxStatus{}
 
-	resp, err := http.Get(sc.nginxStatusURL)
+	resp, err := nginxStatusHTTPClient.Get(sc.nginxStatusURL)
 	if err != nil {
 		return status, err
 	}

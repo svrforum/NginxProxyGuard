@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/shirou/gopsutil/v3/cpu"
@@ -13,6 +14,7 @@ import (
 	"github.com/shirou/gopsutil/v3/host"
 	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/shirou/gopsutil/v3/net"
+	"golang.org/x/sync/singleflight"
 
 	"nginx-proxy-guard/internal/config"
 	"nginx-proxy-guard/internal/model"
@@ -36,6 +38,20 @@ type SettingsService struct {
 	dockerStats        *DockerStatsService
 	redisCache         *cache.RedisClient
 	backupPath         string
+
+	// Dashboard summary in-process cache + singleflight (see GetDashboard).
+	// This layer protects Redis-less installs (graceful degradation) and
+	// keeps concurrent dashboard polls from each re-running the heavy 24h
+	// log aggregations.
+	dashSummaryMu     sync.Mutex
+	dashSummary       *model.DashboardSummary
+	dashSummaryExpiry time.Time
+	dashSummarySF     singleflight.Group
+
+	// Last non-blocking CPU sample served to the dashboard (see sampledCPUPercent).
+	cpuSampleMu  sync.Mutex
+	cpuSampleVal float64
+	cpuSampleAt  time.Time
 }
 
 func NewSettingsService(
@@ -234,41 +250,90 @@ func (s *SettingsService) ApplySettingsPreset(ctx context.Context, preset string
 
 // ---- Dashboard ----
 
+// dashboardSummaryTTL is how long a computed dashboard summary is reused.
+// It must sit comfortably above the UI poll interval (60s, Dashboard.tsx
+// refetchInterval) so successive polls hit the cache instead of re-running
+// the heavy 24h log aggregations (three GROUP BY scans over logs_partitioned)
+// on every poll.
+const dashboardSummaryTTL = 90 * time.Second
+
 func (s *SettingsService) GetDashboard(ctx context.Context) (*model.DashboardSummary, error) {
-	// Try to get from cache first
-	var summary *model.DashboardSummary
-	if s.redisCache != nil {
-		var cachedSummary model.DashboardSummary
-		if err := s.redisCache.GetDashboardSummary(ctx, &cachedSummary); err == nil {
-			summary = &cachedSummary
-		}
-	}
-
-	// If cache miss, fetch from database
+	summary := s.cachedDashboardSummary()
 	if summary == nil {
-		var err error
-		summary, err = s.dashboardRepo.GetSummary(ctx)
+		// Cache miss: compute once, shared by all concurrent pollers
+		// (singleflight), so N open dashboard tabs cost one aggregation run.
+		v, err, _ := s.dashSummarySF.Do("dashboard_summary", func() (interface{}, error) {
+			return s.fetchDashboardSummary(ctx)
+		})
 		if err != nil {
-			return nil, fmt.Errorf("failed to get dashboard summary: %w", err)
+			return nil, err
 		}
+		summary = v.(*model.DashboardSummary)
+	}
 
-		// Cache the summary
-		if s.redisCache != nil {
-			s.redisCache.SetDashboardSummary(ctx, summary)
+	// Work on a shallow copy: the cached struct is shared across requests and
+	// addLiveMetrics mutates SystemHealth fields (the slices stay read-only).
+	out := *summary
+	s.addLiveMetrics(&out)
+
+	return &out, nil
+}
+
+// cachedDashboardSummary returns the in-process cached summary, or nil when
+// absent or expired.
+func (s *SettingsService) cachedDashboardSummary() *model.DashboardSummary {
+	s.dashSummaryMu.Lock()
+	defer s.dashSummaryMu.Unlock()
+	if s.dashSummary != nil && time.Now().Before(s.dashSummaryExpiry) {
+		return s.dashSummary
+	}
+	return nil
+}
+
+func (s *SettingsService) storeDashboardSummary(summary *model.DashboardSummary) {
+	s.dashSummaryMu.Lock()
+	s.dashSummary = summary
+	s.dashSummaryExpiry = time.Now().Add(dashboardSummaryTTL)
+	s.dashSummaryMu.Unlock()
+}
+
+// fetchDashboardSummary loads the summary from Valkey (survives API restarts)
+// or recomputes it from the repository, then populates both cache layers.
+// It detaches from the caller's context because the result is shared by every
+// singleflight waiter — one client disconnect must not cancel it for the rest.
+// The timeout keeps a wedged query from pinning the singleflight slot forever.
+func (s *SettingsService) fetchDashboardSummary(ctx context.Context) (*model.DashboardSummary, error) {
+	fctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
+	defer cancel()
+
+	if s.redisCache != nil {
+		var cached model.DashboardSummary
+		if err := s.redisCache.GetDashboardSummary(fctx, &cached); err == nil {
+			s.storeDashboardSummary(&cached)
+			return &cached, nil
 		}
 	}
 
-	// Always add live host resource metrics (not cached)
-	s.addLiveMetrics(summary)
+	summary, err := s.dashboardRepo.GetSummary(fctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get dashboard summary: %w", err)
+	}
+
+	if s.redisCache != nil {
+		s.redisCache.SetDashboardSummary(fctx, summary)
+	}
+	s.storeDashboardSummary(summary)
 
 	return summary, nil
 }
 
 // addLiveMetrics populates live system metrics on the dashboard summary.
 func (s *SettingsService) addLiveMetrics(summary *model.DashboardSummary) {
-	// CPU usage
-	if cpuPercent, err := cpu.Percent(config.CPUSamplingDuration, false); err == nil && len(cpuPercent) > 0 {
-		summary.SystemHealth.CPUUsage = cpuPercent[0]
+	// CPU usage — non-blocking sample. cpu.Percent with a sampling interval
+	// sleeps for the whole interval (500ms), which used to put a hard latency
+	// floor on every /dashboard response, including cache hits.
+	if cpuPercent, ok := s.sampledCPUPercent(); ok {
+		summary.SystemHealth.CPUUsage = cpuPercent
 	}
 
 	// Memory stats
@@ -309,6 +374,26 @@ func (s *SettingsService) addLiveMetrics(summary *model.DashboardSummary) {
 		summary.SystemHealth.NetworkIn = netStats[0].BytesRecv
 		summary.SystemHealth.NetworkOut = netStats[0].BytesSent
 	}
+}
+
+// sampledCPUPercent returns a CPU usage figure without blocking the request
+// path. cpu.Percent(0, …) measures usage since the previous zero-interval call
+// (gopsutil seeds the baseline at process start) instead of sleeping
+// config.CPUSamplingDuration. The short reuse window keeps near-simultaneous
+// polls (e.g. multiple dashboard tabs) from re-measuring over a near-zero
+// interval, which is noisy. Returns ok=false until the first successful sample
+// so callers keep the previously-recorded value instead of showing 0.
+func (s *SettingsService) sampledCPUPercent() (float64, bool) {
+	s.cpuSampleMu.Lock()
+	defer s.cpuSampleMu.Unlock()
+	if !s.cpuSampleAt.IsZero() && time.Since(s.cpuSampleAt) < 5*time.Second {
+		return s.cpuSampleVal, true
+	}
+	if pcts, err := cpu.Percent(0, false); err == nil && len(pcts) > 0 {
+		s.cpuSampleVal = pcts[0]
+		s.cpuSampleAt = time.Now()
+	}
+	return s.cpuSampleVal, !s.cpuSampleAt.IsZero()
 }
 
 // readPlatformInfo reads the OS platform information from mounted files.

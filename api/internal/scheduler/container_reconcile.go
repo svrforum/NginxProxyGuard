@@ -25,6 +25,19 @@ type containerReconcileService interface {
 	UpdateForwardHostAndReload(ctx context.Context, id string, newIP string) error
 }
 
+// batchContainerResolver is the optional fast path satisfied by
+// *service.DockerStatsService: take ONE container snapshot per reconcile tick
+// (a single `docker ps` + a single batched `docker inspect`) and resolve every
+// container-backed host against it. Without this, every tick cost
+// hosts × (1 docker ps + 1 docker inspect per running container) subprocess
+// forks. Resolvers that implement only service.ContainerResolver (e.g. test
+// fakes) get the per-host path; resolution semantics (#150/#151 network
+// pinning) are identical on both paths.
+type batchContainerResolver interface {
+	ListContainersWithNetworks(ctx context.Context) ([]service.DockerContainerInfo, error)
+	ResolveContainerIPFromList(containers []service.DockerContainerInfo, name string, network string) (string, error)
+}
+
 // ContainerReconcileScheduler periodically re-resolves the IP of each
 // container-backed proxy host and regenerates that host's config (via the
 // existing fail-safe path) whenever the IP has changed. (#150)
@@ -101,12 +114,35 @@ func (s *ContainerReconcileScheduler) reconcileOnce(ctx context.Context) {
 		log.Printf("[ContainerReconcile] list failed: %v", err)
 		return
 	}
+
+	// One docker snapshot per tick, taken lazily on the first eligible host so
+	// ticks with no reconcilable hosts fork no docker subprocesses at all.
+	batch, canBatch := s.resolver.(batchContainerResolver)
+	var (
+		snapshot      []service.DockerContainerInfo
+		snapshotErr   error
+		snapshotTaken bool
+	)
+	resolveIP := func(name, network string) (string, error) {
+		if !canBatch {
+			return s.resolver.ResolveContainerIP(ctx, name, network)
+		}
+		if !snapshotTaken {
+			snapshot, snapshotErr = batch.ListContainersWithNetworks(ctx)
+			snapshotTaken = true
+		}
+		if snapshotErr != nil {
+			return "", snapshotErr
+		}
+		return batch.ResolveContainerIPFromList(snapshot, name, network)
+	}
+
 	for _, h := range hosts {
 		if h.ForwardContainerNetwork == nil || *h.ForwardContainerNetwork == "" {
 			log.Printf("[ContainerReconcile] WARN: host %s has container target %q without a stored network (legacy v2.20.0 row); re-select the container in the UI to enable auto-resolve. Skipping to prevent overriding the user IP.", h.ID, *h.ForwardContainerName)
 			continue
 		}
-		newIP, err := s.resolver.ResolveContainerIP(ctx, *h.ForwardContainerName, *h.ForwardContainerNetwork)
+		newIP, err := resolveIP(*h.ForwardContainerName, *h.ForwardContainerNetwork)
 		if err != nil {
 			log.Printf("[ContainerReconcile] WARN: resolve %q on network %q failed, keeping current config: %v", *h.ForwardContainerName, *h.ForwardContainerNetwork, err)
 			continue

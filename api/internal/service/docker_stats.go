@@ -7,7 +7,10 @@ import (
 	"os/exec"
 	"sort"
 	"strings"
+	"sync"
 	"time"
+
+	"golang.org/x/sync/singleflight"
 )
 
 // ContainerStats represents Docker container resource statistics
@@ -26,8 +29,30 @@ type ContainerStats struct {
 	Status        string  `json:"status"`
 }
 
+const (
+	// dockerStatsSummaryTTL bounds how often `docker stats --no-stream` (which
+	// blocks ~2s while dockerd samples CPU for every container on the host)
+	// can run. The dashboard polls every 60s; this mainly collapses multiple
+	// open tabs and rapid refreshes into one sample.
+	dockerStatsSummaryTTL = 15 * time.Second
+	// dockerVolumeStatsTTL bounds `docker system df -v`, which makes dockerd
+	// walk the disk usage of ALL images/containers/volumes on the host (the
+	// npg_ filter only applies after dockerd computed everything). Volume
+	// sizes change slowly, so refresh them on a much longer cadence.
+	dockerVolumeStatsTTL = 5 * time.Minute
+)
+
 // DockerStatsService provides Docker container statistics
-type DockerStatsService struct{}
+type DockerStatsService struct {
+	mu sync.Mutex // guards the cached results below
+	sf singleflight.Group
+
+	cachedSummary    *DockerStatsSummary
+	summaryExpiresAt time.Time
+
+	cachedVolumes    []VolumeStats
+	volumesExpiresAt time.Time
+}
 
 // NewDockerStatsService creates a new DockerStatsService
 func NewDockerStatsService() *DockerStatsService {
@@ -243,13 +268,56 @@ func (s *DockerStatsService) getVolumeSizesFromSystemDF(ctx context.Context) (ma
 	return sizes, nil
 }
 
-// GetVolumeStats retrieves Docker volume statistics for npg volumes
+// GetVolumeStats retrieves Docker volume statistics for npg volumes. Results
+// are cached (dockerVolumeStatsTTL) and recomputation is singleflight-protected
+// because the underlying `docker system df -v` is a host-wide dockerd disk walk
+// that the dashboard would otherwise trigger on every poll.
 func (s *DockerStatsService) GetVolumeStats(ctx context.Context) ([]VolumeStats, error) {
+	s.mu.Lock()
+	if !s.volumesExpiresAt.IsZero() && time.Now().Before(s.volumesExpiresAt) {
+		volumes := s.cachedVolumes
+		s.mu.Unlock()
+		return volumes, nil
+	}
+	s.mu.Unlock()
+
+	v, err, _ := s.sf.Do("volume_stats", func() (interface{}, error) {
+		// Detached context: the result is shared by all singleflight waiters,
+		// so one client disconnect must not cancel it. The timeout keeps a
+		// wedged dockerd from pinning the singleflight slot forever.
+		cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
+		defer cancel()
+
+		volumes, sizesOK, err := s.computeVolumeStats(cctx)
+		if err != nil {
+			return nil, err
+		}
+		ttl := dockerVolumeStatsTTL
+		if !sizesOK {
+			// docker system df failed (sizes missing): retry sooner so the
+			// degraded entry doesn't stick for the full long TTL.
+			ttl = dockerStatsSummaryTTL
+		}
+		s.mu.Lock()
+		s.cachedVolumes = volumes
+		s.volumesExpiresAt = time.Now().Add(ttl)
+		s.mu.Unlock()
+		return volumes, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return v.([]VolumeStats), nil
+}
+
+// computeVolumeStats does the actual docker CLI work for GetVolumeStats.
+// sizesOK reports whether volume sizes were obtained from docker system df.
+func (s *DockerStatsService) computeVolumeStats(ctx context.Context) (volumes []VolumeStats, sizesOK bool, err error) {
 	// Get list of npg_ volumes
 	cmd := exec.CommandContext(ctx, "docker", "volume", "ls", "--filter", "name=npg_", "--format", "{{.Name}}")
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("failed to list volumes: %w", err)
+		return nil, false, fmt.Errorf("failed to list volumes: %w", err)
 	}
 
 	names := strings.Split(strings.TrimSpace(string(output)), "\n")
@@ -261,7 +329,6 @@ func (s *DockerStatsService) GetVolumeStats(ctx context.Context) ([]VolumeStats,
 		volumeSizes = make(map[string]int64)
 	}
 
-	var volumes []VolumeStats
 	for _, name := range names {
 		if name == "" {
 			continue
@@ -281,7 +348,7 @@ func (s *DockerStatsService) GetVolumeStats(ctx context.Context) ([]VolumeStats,
 		volumes = append(volumes, vol)
 	}
 
-	return volumes, nil
+	return volumes, sizeErr == nil, nil
 }
 
 // formatBytes formats bytes to human readable string
@@ -298,8 +365,43 @@ func formatBytes(bytes int64) string {
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
-// GetStatsSummary returns a summary of all container stats
+// GetStatsSummary returns a summary of all container stats. Results are
+// cached (dockerStatsSummaryTTL) and recomputation is singleflight-protected:
+// the underlying `docker stats --no-stream` blocks ~2s per run, and the
+// dashboard polls this endpoint every 60s per open tab.
 func (s *DockerStatsService) GetStatsSummary(ctx context.Context) (*DockerStatsSummary, error) {
+	s.mu.Lock()
+	if s.cachedSummary != nil && time.Now().Before(s.summaryExpiresAt) {
+		summary := s.cachedSummary
+		s.mu.Unlock()
+		return summary, nil
+	}
+	s.mu.Unlock()
+
+	v, err, _ := s.sf.Do("stats_summary", func() (interface{}, error) {
+		// Detached context: the result is shared by all singleflight waiters
+		// (see GetVolumeStats for the rationale).
+		cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		defer cancel()
+
+		summary, err := s.computeStatsSummary(cctx)
+		if err != nil {
+			return nil, err
+		}
+		s.mu.Lock()
+		s.cachedSummary = summary
+		s.summaryExpiresAt = time.Now().Add(dockerStatsSummaryTTL)
+		s.mu.Unlock()
+		return summary, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return v.(*DockerStatsSummary), nil
+}
+
+// computeStatsSummary does the actual docker CLI work for GetStatsSummary.
+func (s *DockerStatsService) computeStatsSummary(ctx context.Context) (*DockerStatsSummary, error) {
 	stats, err := s.GetContainerStats(ctx)
 	if err != nil {
 		return nil, err
@@ -384,29 +486,35 @@ func (s *DockerStatsService) ListContainersWithNetworks(ctx context.Context) ([]
 		return nil, fmt.Errorf("failed to list containers: %w", err)
 	}
 
-	names := strings.Split(strings.TrimSpace(string(output)), "\n")
-	var containers []DockerContainerInfo
-
-	for _, name := range names {
+	var names []string
+	for _, name := range strings.Split(strings.TrimSpace(string(output)), "\n") {
 		name = strings.TrimSpace(name)
 		if isHiddenContainer(name) {
 			continue
 		}
+		names = append(names, name)
+	}
+	if len(names) == 0 {
+		return nil, nil
+	}
 
-		info, err := s.inspectContainer(ctx, name)
-		if err != nil {
-			continue
-		}
+	infos, err := s.inspectContainers(ctx, names)
+	if err != nil {
+		return nil, err
+	}
+
+	var containers []DockerContainerInfo
+	for i := range infos {
 		// Only include containers that have at least one network with an IP
 		hasIP := false
-		for _, net := range info.Networks {
+		for _, net := range infos[i].Networks {
 			if net.IPAddress != "" {
 				hasIP = true
 				break
 			}
 		}
 		if hasIP {
-			containers = append(containers, *info)
+			containers = append(containers, infos[i])
 		}
 	}
 
@@ -461,6 +569,15 @@ func (s *DockerStatsService) ResolveContainerIP(ctx context.Context, name string
 	return pickContainerIP(containers, name, network)
 }
 
+// ResolveContainerIPFromList resolves a container name to its current network
+// IP against an already-fetched container snapshot, with the same #150/#151
+// network-pinning semantics as ResolveContainerIP (see pickContainerIP). Used
+// by the container reconcile scheduler so one docker snapshot per tick serves
+// every container-backed host instead of re-listing per host.
+func (s *DockerStatsService) ResolveContainerIPFromList(containers []DockerContainerInfo, name string, network string) (string, error) {
+	return pickContainerIP(containers, name, network)
+}
+
 // sortContainerInfo orders a container's networks (by name) and ports (by port
 // number, then protocol) deterministically. Docker inspect returns these from
 // Go maps, so without this the UI reshuffles them on every refresh. (Issue #153)
@@ -483,29 +600,56 @@ func sortContainers(containers []DockerContainerInfo) {
 	})
 }
 
-// inspectContainer gets detailed network info for a single container
-func (s *DockerStatsService) inspectContainer(ctx context.Context, name string) (*DockerContainerInfo, error) {
-	cmd := exec.CommandContext(ctx, "docker", "inspect", "--format",
-		`{"image":"{{.Config.Image}}","state":"{{.State.Status}}","networks":{{json .NetworkSettings.Networks}},"ports":{{json .Config.ExposedPorts}}}`,
-		name)
+// inspectContainers gets detailed network info for the given containers in a
+// SINGLE `docker inspect` exec (docker inspect accepts multiple names). The
+// previous one-exec-per-container loop multiplied subprocess forks by the
+// running-container count for every caller — notably the 30s container
+// reconcile tick. A non-zero exit with partial output (a container vanished
+// between `docker ps` and the inspect) degrades to skipping the missing one,
+// matching the old per-container skip-on-error behavior.
+func (s *DockerStatsService) inspectContainers(ctx context.Context, names []string) ([]DockerContainerInfo, error) {
+	args := append([]string{"inspect", "--format",
+		`{"name":"{{.Name}}","image":"{{.Config.Image}}","state":"{{.State.Status}}","networks":{{json .NetworkSettings.Networks}},"ports":{{json .Config.ExposedPorts}}}`},
+		names...)
+	cmd := exec.CommandContext(ctx, "docker", args...)
 	output, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("failed to inspect container %s: %w", name, err)
+	trimmed := strings.TrimSpace(string(output))
+	if err != nil && trimmed == "" {
+		return nil, fmt.Errorf("failed to inspect containers: %w", err)
 	}
 
+	var infos []DockerContainerInfo
+	for _, line := range strings.Split(trimmed, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		info, err := parseInspectLine(line)
+		if err != nil {
+			continue
+		}
+		infos = append(infos, *info)
+	}
+	return infos, nil
+}
+
+// parseInspectLine parses one formatted line of `docker inspect` output into
+// a DockerContainerInfo.
+func parseInspectLine(line string) (*DockerContainerInfo, error) {
 	var raw struct {
+		Name     string                     `json:"name"`
 		Image    string                     `json:"image"`
 		State    string                     `json:"state"`
 		Networks map[string]json.RawMessage `json:"networks"`
 		Ports    map[string]json.RawMessage `json:"ports"`
 	}
 
-	if err := json.Unmarshal(output, &raw); err != nil {
-		return nil, fmt.Errorf("failed to parse inspect output for %s: %w", name, err)
+	if err := json.Unmarshal([]byte(line), &raw); err != nil {
+		return nil, fmt.Errorf("failed to parse inspect output: %w", err)
 	}
 
 	info := &DockerContainerInfo{
-		Name:     name,
+		Name:     strings.TrimPrefix(raw.Name, "/"), // docker inspect reports "/name"
 		Image:    raw.Image,
 		State:    raw.State,
 		Networks: []DockerContainerNetwork{},
