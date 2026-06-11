@@ -237,6 +237,42 @@ func (r *RedirectHostRepository) GetAllEnabled(ctx context.Context) ([]model.Red
 	return hosts, nil
 }
 
+// GetByCertificateID returns all redirect hosts referencing a certificate.
+// Used by the certificate-ready fan-out so a renewed cert that serves redirect
+// hosts (possibly only redirect hosts) still triggers a config regen + reload.
+func (r *RedirectHostRepository) GetByCertificateID(ctx context.Context, certificateID string) ([]model.RedirectHost, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, domain_names, forward_scheme, forward_domain_name, forward_path,
+			preserve_path, redirect_code, ssl_enabled, certificate_id,
+			ssl_force_https, enabled, block_exploits, meta, created_at, updated_at
+		FROM redirect_hosts WHERE certificate_id = $1
+	`, certificateID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get redirect hosts by certificate: %w", err)
+	}
+	defer rows.Close()
+
+	var hosts []model.RedirectHost
+	for rows.Next() {
+		var host model.RedirectHost
+		var domainNames pq.StringArray
+		var metaJSON []byte
+
+		if err := rows.Scan(
+			&host.ID, &domainNames, &host.ForwardScheme, &host.ForwardDomainName, &host.ForwardPath,
+			&host.PreservePath, &host.RedirectCode, &host.SSLEnabled, &host.CertificateID,
+			&host.SSLForceHTTPS, &host.Enabled, &host.BlockExploits, &metaJSON, &host.CreatedAt, &host.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		host.DomainNames = []string(domainNames)
+		json.Unmarshal(metaJSON, &host.Meta)
+		hosts = append(hosts, host)
+	}
+
+	return hosts, nil
+}
+
 // CountByCertificateID returns how many redirect hosts reference a certificate.
 func (r *RedirectHostRepository) CountByCertificateID(ctx context.Context, certificateID string) (int, error) {
 	var count int

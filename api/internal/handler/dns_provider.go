@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -114,6 +115,9 @@ func (h *DNSProviderHandler) Delete(c echo.Context) error {
 	if err != nil {
 		if err == model.ErrNotFound {
 			return notFoundError(c, "DNS provider")
+		}
+		if errors.Is(err, model.ErrDNSProviderInUse) {
+			return conflictError(c, err.Error())
 		}
 		return internalError(c, "delete DNS provider", err)
 	}

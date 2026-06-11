@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"nginx-proxy-guard/internal/model"
 )
@@ -107,7 +108,17 @@ func (m *Manager) hostRenderPaths(r HostConfigRender) []string {
 // failed nginx -t leaves invalid files on disk that wedge every subsequent
 // nginx operation system-wide.
 func (m *Manager) RegenerateConfigsAtomic(ctx context.Context, renders []HostConfigRender, reload bool) error {
-	if len(renders) == 0 {
+	return m.RegenerateConfigsAtomicWithRedirects(ctx, renders, nil, reload)
+}
+
+// RegenerateConfigsAtomicWithRedirects is RegenerateConfigsAtomic extended
+// with redirect hosts: their configs embed certificate file paths too, so the
+// certificate fan-out must regenerate them (and reload) under the same lock +
+// snapshot — otherwise a cert used only by redirect hosts is renewed on disk
+// but nginx keeps serving the old certificate from memory. Disabled redirect
+// hosts have their config removed (mirroring GenerateRedirectConfigAndReload).
+func (m *Manager) RegenerateConfigsAtomicWithRedirects(ctx context.Context, renders []HostConfigRender, redirectHosts []*model.RedirectHost, reload bool) error {
+	if len(renders) == 0 && len(redirectHosts) == 0 {
 		return nil
 	}
 	return m.executeWithLock(ctx, func() error {
@@ -117,9 +128,12 @@ func (m *Manager) RegenerateConfigsAtomic(ctx context.Context, renders []HostCon
 				snap.capture(p)
 			}
 		}
+		for _, rh := range redirectHosts {
+			snap.capture(filepath.Join(m.configPath, GetRedirectConfigFilename(rh)))
+		}
 
 		rollback := func(cause error) error {
-			log.Printf("[WARN] Bulk nginx regeneration failed (%d host(s)), rolling back: %v", len(renders), cause)
+			log.Printf("[WARN] Bulk nginx regeneration failed (%d host(s), %d redirect host(s)), rolling back: %v", len(renders), len(redirectHosts), cause)
 			m.restoreSnapshot(snap)
 			// Re-apply the restored last-known-good state so nginx is never
 			// left running (or about to pick up) a partial write set.
@@ -157,6 +171,16 @@ func (m *Manager) RegenerateConfigsAtomic(ctx context.Context, renders []HostCon
 				if err := m.RemoveHostWAFConfig(ctx, host.ID); err != nil {
 					log.Printf("[WARN] Failed to remove WAF config for host %s: %v", host.ID, err)
 				}
+			}
+		}
+
+		for _, rh := range redirectHosts {
+			if rh.Enabled {
+				if err := m.GenerateRedirectConfig(ctx, rh); err != nil {
+					return rollback(fmt.Errorf("failed to generate redirect config for host %s: %w", rh.ID, err))
+				}
+			} else if err := m.RemoveRedirectConfig(ctx, rh); err != nil {
+				return rollback(fmt.Errorf("failed to remove redirect config for host %s: %w", rh.ID, err))
 			}
 		}
 
@@ -208,4 +232,134 @@ func (m *Manager) GenerateRedirectConfigAndReload(ctx context.Context, host *mod
 		}
 		return nil
 	})
+}
+
+// RemoveOrphanedHostConfigs deletes proxy/stream host config files on disk
+// that no enabled host in the DB accounts for, plus their per-host WAF and
+// cloud-IP include files. Boot reconciliation (SyncAllConfigs) is otherwise
+// purely additive, so after a DB or volume restore the configs of deleted or
+// disabled hosts would keep serving traffic indefinitely (nginx includes
+// conf.d/*.conf wholesale). Only host-owned files are touched: filenames must
+// match proxy_host_*.conf (conf.d), stream_host_*.conf (stream.d),
+// host_*.conf (modsec) or includes/cloud_ips_*.conf — zzz_default.conf,
+// redirect_host_*.conf, includes/ and *.conf.disabled leftovers are never
+// removed. Best-effort: failures are logged, never fatal. Returns the removed
+// filenames.
+func (m *Manager) RemoveOrphanedHostConfigs(ctx context.Context, enabledHosts []model.ProxyHost) []string {
+	expectedHTTP := make(map[string]struct{})
+	expectedStream := make(map[string]struct{})
+	activeIDs := make(map[string]struct{})
+	for i := range enabledHosts {
+		host := &enabledHosts[i]
+		activeIDs[host.ID] = struct{}{}
+		if host.IsStream() {
+			expectedStream[GetStreamConfigFilename(host)] = struct{}{}
+		} else {
+			expectedHTTP[GetConfigFilename(host)] = struct{}{}
+		}
+	}
+
+	var removed []string
+	if err := m.executeWithLock(ctx, func() error {
+		httpRemoved, httpFailed := m.removeOrphanedConfFiles(m.configPath, "proxy_host_", expectedHTTP)
+		streamRemoved, streamFailed := m.removeOrphanedConfFiles(m.getStreamConfigPath(), "stream_host_", expectedStream)
+		removed = append(removed, httpRemoved...)
+		removed = append(removed, streamRemoved...)
+		// Only sweep the per-host includes when every orphaned conf file was
+		// removed: a leftover conf referencing a deleted include would fail
+		// nginx -t system-wide. (Includes are inert without a referencing conf.)
+		if httpFailed || streamFailed {
+			log.Printf("[WARN] Orphan sweep: skipping WAF/cloud include cleanup because some stale conf files could not be removed")
+		} else {
+			removed = append(removed, m.removeOrphanedHostIncludes(ctx, activeIDs)...)
+		}
+		return nil
+	}); err != nil {
+		log.Printf("[WARN] Orphaned host config sweep skipped: %v", err)
+	}
+	return removed
+}
+
+// removeOrphanedConfFiles removes prefix-matched .conf files in dir that are
+// not in the expected set. Subdirectories (e.g. conf.d/includes) are skipped.
+// anyFailed reports whether any matched orphan could not be removed.
+func (m *Manager) removeOrphanedConfFiles(dir, prefix string, expected map[string]struct{}) (removed []string, anyFailed bool) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			log.Printf("[WARN] Orphan sweep: failed to read %s: %v", dir, err)
+			return nil, true
+		}
+		return nil, false
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !strings.HasPrefix(name, prefix) || !strings.HasSuffix(name, ".conf") {
+			continue
+		}
+		if _, ok := expected[name]; ok {
+			continue
+		}
+		path := filepath.Join(dir, name)
+		if err := os.Remove(path); err != nil {
+			log.Printf("[WARN] Orphan sweep: failed to remove stale config %s: %v", path, err)
+			anyFailed = true
+			continue
+		}
+		log.Printf("[Sync] Removed stale nginx config %s (no enabled host in DB)", path)
+		removed = append(removed, name)
+	}
+	return removed, anyFailed
+}
+
+// removeOrphanedHostIncludes removes per-host WAF (modsec/host_<id>.conf) and
+// cloud-IP (includes/cloud_ips_<id>.conf) files whose host ID — derivable
+// directly from the filename — is not an enabled host. These files are inert
+// once the host config is gone, so removal is pure cleanup.
+func (m *Manager) removeOrphanedHostIncludes(ctx context.Context, activeIDs map[string]struct{}) []string {
+	var removed []string
+
+	if entries, err := os.ReadDir(m.modsecPath); err == nil {
+		for _, entry := range entries {
+			name := entry.Name()
+			if entry.IsDir() || !strings.HasPrefix(name, "host_") || !strings.HasSuffix(name, ".conf") {
+				continue
+			}
+			hostID := strings.TrimSuffix(strings.TrimPrefix(name, "host_"), ".conf")
+			if _, ok := activeIDs[hostID]; ok {
+				continue
+			}
+			if err := m.RemoveHostWAFConfig(ctx, hostID); err != nil {
+				log.Printf("[WARN] Orphan sweep: failed to remove stale WAF config %s: %v", name, err)
+				continue
+			}
+			log.Printf("[Sync] Removed stale WAF config %s (no enabled host in DB)", name)
+			removed = append(removed, name)
+		}
+	}
+
+	if entries, err := os.ReadDir(filepath.Join(m.configPath, "includes")); err == nil {
+		for _, entry := range entries {
+			name := entry.Name()
+			if entry.IsDir() || !strings.HasPrefix(name, "cloud_ips_") || !strings.HasSuffix(name, ".conf") {
+				continue
+			}
+			hostID := strings.TrimSuffix(strings.TrimPrefix(name, "cloud_ips_"), ".conf")
+			if _, ok := activeIDs[hostID]; ok {
+				continue
+			}
+			if err := m.RemoveCloudIPsInclude(hostID); err != nil {
+				log.Printf("[WARN] Orphan sweep: failed to remove stale cloud IPs include %s: %v", name, err)
+				continue
+			}
+			log.Printf("[Sync] Removed stale cloud IPs include %s (no enabled host in DB)", name)
+			removed = append(removed, name)
+		}
+	}
+
+	return removed
 }

@@ -20,12 +20,22 @@ type dnsProviderRepo interface {
 	TestConnection(ctx context.Context, providerType string, credentials json.RawMessage) error
 }
 
+// DNSProviderInUseChecker reports how many certificates currently reference a
+// DNS provider. Wired in bootstrap to avoid a cross-repo dependency here.
+type DNSProviderInUseChecker func(ctx context.Context, providerID string) (int, error)
+
 type DNSProviderService struct {
-	repo dnsProviderRepo
+	repo         dnsProviderRepo
+	inUseChecker DNSProviderInUseChecker
 }
 
 func NewDNSProviderService(repo *repository.DNSProviderRepository) *DNSProviderService {
 	return &DNSProviderService{repo: repo}
+}
+
+// SetInUseChecker sets the dependency checker used to guard Delete.
+func (s *DNSProviderService) SetInUseChecker(cb DNSProviderInUseChecker) {
+	s.inUseChecker = cb
 }
 
 // Create creates a new DNS provider
@@ -104,6 +114,19 @@ func (s *DNSProviderService) Update(ctx context.Context, id string, req *model.U
 
 // Delete removes a DNS provider
 func (s *DNSProviderService) Delete(ctx context.Context, id string) error {
+	// In-use guard: certificates.dns_provider_id is FK ON DELETE SET NULL, so
+	// deleting a referenced provider would silently switch dependent
+	// certificates to HTTP-01 renewal — which can never succeed for wildcard
+	// domains. Refuse instead of detaching silently.
+	if s.inUseChecker != nil {
+		count, err := s.inUseChecker(ctx, id)
+		if err != nil {
+			return fmt.Errorf("failed to check DNS provider usage: %w", err)
+		}
+		if count > 0 {
+			return fmt.Errorf("%w: referenced by %d certificate(s); reassign or delete those certificates first", model.ErrDNSProviderInUse, count)
+		}
+	}
 	return s.repo.Delete(ctx, id)
 }
 

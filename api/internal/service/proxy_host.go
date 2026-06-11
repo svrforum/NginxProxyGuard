@@ -29,6 +29,11 @@ type NginxManager interface {
 	RemoveConfigAndReload(ctx context.Context, host *model.ProxyHost) error
 	// Bulk atomic regeneration: one lock, snapshot + rollback on nginx -t failure
 	RegenerateConfigsAtomic(ctx context.Context, renders []nginx.HostConfigRender, reload bool) error
+	// Same, but additionally renders redirect host configs under the same lock
+	// (certificate fan-out: redirect host configs embed certificate paths too)
+	RegenerateConfigsAtomicWithRedirects(ctx context.Context, renders []nginx.HostConfigRender, redirectHosts []*model.RedirectHost, reload bool) error
+	// Boot drift detection: remove on-disk host configs no enabled host accounts for
+	RemoveOrphanedHostConfigs(ctx context.Context, enabledHosts []model.ProxyHost) []string
 	// Filter subscription shared config generation
 	GenerateFilterSubscriptionConfigs(ctx context.Context, ips []string, uas []string) error
 }
@@ -73,8 +78,9 @@ type ProxyHostService struct {
 	dnsProviderRepo        *repository.DNSProviderRepository // DDNS provider-type validation (#157)
 	ddnsSyncer             ddnsSyncer                        // optional: immediate first sync after opt-in (#157 follow-up)
 	nginx                  NginxManager
-	certService            CertificateCreator // Optional: for creating certificates during clone
-	containerResolver      ContainerResolver  // Optional: resolves docker container name → IP (#150)
+	certService            CertificateCreator         // Optional: for creating certificates during clone
+	containerResolver      ContainerResolver          // Optional: resolves docker container name → IP (#150)
+	redirectHostRepo       redirectHostsByCertificate // Optional: certificate fan-out to redirect hosts (wired in bootstrap)
 }
 
 func NewProxyHostService(

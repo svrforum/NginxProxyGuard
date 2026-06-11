@@ -24,6 +24,27 @@ func (s *CertificateService) Renew(ctx context.Context, id string) error {
 		return model.ErrNotFound
 	}
 
+	// Wildcard domains can only be validated via DNS-01: fail fast with an
+	// actionable error instead of attempting an HTTP-01 order that Let's
+	// Encrypt will always reject (e.g. after the cert's DNS provider was removed).
+	if cert.Provider == model.CertProviderLetsEncrypt && cert.DNSProviderID == nil && hasWildcardDomain(cert.DomainNames) {
+		return fmt.Errorf("%w: certificate contains wildcard domains, which require the DNS-01 challenge — assign a DNS provider to this certificate before renewing (HTTP-01 cannot issue wildcard certificates)", model.ErrInvalidInput)
+	}
+
+	// Refuse when the certificate is already mid-renewal/issuance. Stale
+	// states from a crashed process are reset at startup
+	// (RecoverInterruptedStates), so this cannot wedge permanently.
+	if cert.Status == model.CertStatusRenewing || cert.Status == model.CertStatusPending {
+		return fmt.Errorf("renewal already in progress for certificate %s", id)
+	}
+
+	// In-process concurrency guard — always applies, even when Valkey is
+	// absent (it is optional). The Redis lock below remains the
+	// cross-instance layer.
+	if _, loaded := s.renewalInflight.LoadOrStore(id, struct{}{}); loaded {
+		return fmt.Errorf("renewal already in progress for certificate %s", id)
+	}
+
 	// Try to acquire distributed lock to prevent concurrent renewals
 	lockKey := "cert:renewal:" + id
 	lockValue := uuid.New().String()
@@ -34,6 +55,7 @@ func (s *CertificateService) Renew(ctx context.Context, id string) error {
 			log.Printf("[Certificate] Warning: Failed to acquire lock for cert %s: %v", id, err)
 			// Continue without lock if Redis fails - single instance fallback
 		} else if !acquired {
+			s.renewalInflight.Delete(id)
 			log.Printf("[Certificate] Renewal already in progress for cert %s, skipping", id)
 			return fmt.Errorf("renewal already in progress for certificate %s", id)
 		}
@@ -44,10 +66,11 @@ func (s *CertificateService) Renew(ctx context.Context, id string) error {
 	now := time.Now()
 	cert.RenewalAttemptedAt = &now
 	if err := s.repo.Update(ctx, cert); err != nil {
-		// Release lock on failure
+		// Release locks on failure
 		if s.redisCache != nil && s.redisCache.IsReady() {
 			s.redisCache.ReleaseLock(ctx, lockKey, lockValue)
 		}
+		s.renewalInflight.Delete(id)
 		return fmt.Errorf("failed to update certificate status: %w", err)
 	}
 
@@ -63,6 +86,8 @@ func (s *CertificateService) Renew(ctx context.Context, id string) error {
 // renewCertificateWithLock wraps renewCertificate with lock release
 func (s *CertificateService) renewCertificateWithLock(cert *model.Certificate, lockKey, lockValue string) {
 	defer func() {
+		// Always release the in-process guard when done
+		s.renewalInflight.Delete(cert.ID)
 		// Always release the lock when done
 		if s.redisCache != nil && s.redisCache.IsReady() {
 			ctx := context.Background()

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
+	"sync"
 	"time"
 
 	"nginx-proxy-guard/internal/model"
@@ -19,14 +21,18 @@ import (
 type CertificateReadyCallback func(ctx context.Context, certificateID string) error
 
 type CertificateService struct {
-	repo                *repository.CertificateRepository
-	dnsRepo             *repository.DNSProviderRepository
-	systemSettingsRepo  *repository.SystemSettingsRepository
-	certsPath           string
-	defaultACMEEmail    string
-	onCertReady         CertificateReadyCallback
-	redisCache          *cache.RedisClient
-	inUseChecker        CertificateInUseChecker
+	repo               *repository.CertificateRepository
+	dnsRepo            *repository.DNSProviderRepository
+	systemSettingsRepo *repository.SystemSettingsRepository
+	certsPath          string
+	defaultACMEEmail   string
+	onCertReady        CertificateReadyCallback
+	redisCache         *cache.RedisClient
+	inUseChecker       CertificateInUseChecker
+	// renewalInflight tracks certificate IDs with an in-flight renewal in THIS
+	// process. It is the concurrency guard that always applies — the Redis
+	// lock in Renew only covers the cross-instance case and Valkey is optional.
+	renewalInflight sync.Map
 }
 
 // CertificateInUseChecker reports how many proxy hosts and redirect hosts
@@ -99,11 +105,29 @@ func (s *CertificateService) notifyCertificateReady(certID string) {
 	}
 }
 
+// hasWildcardDomain reports whether any domain name is a wildcard.
+// Wildcard certificates can only be validated via the DNS-01 challenge.
+func hasWildcardDomain(domains []string) bool {
+	for _, d := range domains {
+		if strings.Contains(d, "*") {
+			return true
+		}
+	}
+	return false
+}
+
 // Create initiates certificate creation based on provider type
 func (s *CertificateService) Create(ctx context.Context, req *model.CreateCertificateRequest) (*model.Certificate, error) {
 	// Set defaults
 	if req.Provider == "" {
 		req.Provider = model.CertProviderLetsEncrypt
+	}
+
+	// Wildcard domains require DNS-01 (Let's Encrypt cannot issue wildcards via
+	// HTTP-01): fail fast with an actionable error instead of accepting the
+	// request and letting the async ACME order fail later.
+	if req.Provider == model.CertProviderLetsEncrypt && req.DNSProviderID == nil && hasWildcardDomain(req.DomainNames) {
+		return nil, fmt.Errorf("%w: wildcard domains require the DNS-01 challenge — select a DNS provider for this certificate (HTTP-01 cannot issue wildcard certificates)", model.ErrInvalidInput)
 	}
 
 	cert := &model.Certificate{
@@ -500,4 +524,3 @@ func (s *CertificateService) Delete(ctx context.Context, id string) error {
 func (s *CertificateService) ClearError(ctx context.Context, id string) error {
 	return s.repo.ClearError(ctx, id)
 }
-

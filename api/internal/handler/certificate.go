@@ -91,6 +91,9 @@ func (h *CertificateHandler) Create(c echo.Context) error {
 
 	cert, err := h.service.Create(c.Request().Context(), &req)
 	if err != nil {
+		if errors.Is(err, model.ErrInvalidInput) {
+			return badRequestError(c, err.Error())
+		}
 		return internalError(c, "create certificate", err)
 	}
 
@@ -212,6 +215,9 @@ func (h *CertificateHandler) Renew(c echo.Context) error {
 	if err != nil {
 		if err == model.ErrNotFound {
 			return notFoundError(c, "Certificate")
+		}
+		if errors.Is(err, model.ErrInvalidInput) {
+			return badRequestError(c, err.Error())
 		}
 		return internalError(c, "renew certificate", err)
 	}

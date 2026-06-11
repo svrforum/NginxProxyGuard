@@ -40,16 +40,46 @@ func (s *ProxyHostService) buildHostRender(ctx context.Context, host *model.Prox
 	return render, nil
 }
 
-// RegenerateConfigsForCertificate regenerates nginx configs for all proxy hosts using the specified certificate
-// This should be called when a certificate is issued or renewed
+// redirectHostsByCertificate is the narrow redirect-host repo dependency used
+// by the certificate fan-out. Wired in bootstrap (SetRedirectHostRepo) to
+// avoid widening the ProxyHostService constructor.
+type redirectHostsByCertificate interface {
+	GetByCertificateID(ctx context.Context, certificateID string) ([]model.RedirectHost, error)
+}
+
+// SetRedirectHostRepo wires the redirect-host lookup used when a renewed
+// certificate is also (or only) referenced by redirect hosts.
+func (s *ProxyHostService) SetRedirectHostRepo(repo redirectHostsByCertificate) {
+	s.redirectHostRepo = repo
+}
+
+// RegenerateConfigsForCertificate regenerates nginx configs for all proxy and
+// redirect hosts using the specified certificate.
+// This should be called when a certificate is issued or renewed. Redirect
+// hosts matter even when no proxy host uses the cert: their configs embed the
+// cert file paths, and without a reload nginx keeps serving the old
+// certificate from memory until an unrelated reload happens.
 func (s *ProxyHostService) RegenerateConfigsForCertificate(ctx context.Context, certificateID string) error {
 	hosts, err := s.repo.GetByCertificateID(ctx, certificateID)
 	if err != nil {
 		return fmt.Errorf("failed to get proxy hosts for certificate %s: %w", certificateID, err)
 	}
 
-	if len(hosts) == 0 {
-		return nil // No proxy hosts use this certificate
+	var redirectHosts []*model.RedirectHost
+	if s.redirectHostRepo != nil {
+		rhosts, err := s.redirectHostRepo.GetByCertificateID(ctx, certificateID)
+		if err != nil {
+			return fmt.Errorf("failed to get redirect hosts for certificate %s: %w", certificateID, err)
+		}
+		for i := range rhosts {
+			if rhosts[i].Enabled {
+				redirectHosts = append(redirectHosts, &rhosts[i])
+			}
+		}
+	}
+
+	if len(hosts) == 0 && len(redirectHosts) == 0 {
+		return nil // Nothing references this certificate
 	}
 
 	var renders []nginx.HostConfigRender
@@ -65,7 +95,7 @@ func (s *ProxyHostService) RegenerateConfigsForCertificate(ctx context.Context, 
 	}
 
 	// Single lock acquisition: write all + test + reload, rollback on failure
-	return s.nginx.RegenerateConfigsAtomic(ctx, renders, true)
+	return s.nginx.RegenerateConfigsAtomicWithRedirects(ctx, renders, redirectHosts, true)
 }
 
 // RegenerateConfigsForAccessList regenerates nginx configs for all proxy hosts
@@ -228,6 +258,14 @@ func (s *ProxyHostService) SyncAllConfigsWithDetails(ctx context.Context) (*Sync
 
 		result.SuccessCount++
 		result.Hosts = append(result.Hosts, hostResult)
+	}
+
+	// Drift detection: configs may exist on disk for hosts that are deleted or
+	// disabled in the DB (e.g. after a DB or volume restore). Remove them
+	// before testing — nginx includes conf.d/*.conf wholesale, so leftovers
+	// would keep serving traffic indefinitely.
+	if removed := s.nginx.RemoveOrphanedHostConfigs(ctx, hosts); len(removed) > 0 {
+		log.Printf("[SyncConfigs] Removed %d stale host config file(s): %s", len(removed), strings.Join(removed, ", "))
 	}
 
 	// Test nginx config — on failure, run the auto-recovery loop that

@@ -535,15 +535,68 @@ func (s *Service) SaveCertificateFiles(certID string, certPEM, keyPEM, issuerPEM
 	// Write fullchain (cert + issuer) with deduplication
 	fullchain := BuildFullchain(certPEM, issuerPEM)
 
-	if err := os.WriteFile(certPath, []byte(fullchain), 0644); err != nil {
-		return "", "", fmt.Errorf("failed to write certificate file: %w", err)
-	}
-
-	if err := os.WriteFile(keyPath, []byte(keyPEM), 0600); err != nil {
+	// Write atomically (temp + fsync + rename) so a concurrent nginx -t never
+	// reads a torn/half-written PEM. Order: privkey.pem first, fullchain.pem
+	// last — lego renewals reuse the existing private key, so in the common
+	// renewal path the key write is byte-identical and the fullchain rename is
+	// the single observable transition; a reader can never see a new fullchain
+	// paired with a stale key.
+	if err := writeFileAtomic(keyPath, []byte(keyPEM), 0600); err != nil {
 		return "", "", fmt.Errorf("failed to write key file: %w", err)
 	}
 
+	if err := writeFileAtomic(certPath, []byte(fullchain), 0644); err != nil {
+		return "", "", fmt.Errorf("failed to write certificate file: %w", err)
+	}
+
 	return certPath, keyPath, nil
+}
+
+// writeFileAtomic writes data to a file atomically using temp file + fsync +
+// rename in the target directory, mirroring nginx.Manager.writeFileAtomic.
+// This ensures nginx -t / reload never reads a partially-written PEM file.
+func writeFileAtomic(filePath string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(filePath)
+
+	// Create temp file in the same directory (required for atomic rename)
+	tmpFile, err := os.CreateTemp(dir, ".tmp-*")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+
+	// Cleanup temp file on error
+	defer func() {
+		if tmpFile != nil {
+			tmpFile.Close()
+			os.Remove(tmpPath)
+		}
+	}()
+
+	if _, err := tmpFile.Write(data); err != nil {
+		return fmt.Errorf("failed to write to temp file: %w", err)
+	}
+
+	// Fsync to ensure data is on disk
+	if err := tmpFile.Sync(); err != nil {
+		return fmt.Errorf("failed to sync temp file: %w", err)
+	}
+
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temp file: %w", err)
+	}
+	tmpFile = nil // Mark as closed for defer cleanup
+
+	if err := os.Chmod(tmpPath, perm); err != nil {
+		return fmt.Errorf("failed to set permissions: %w", err)
+	}
+
+	// Atomic rename
+	if err := os.Rename(tmpPath, filePath); err != nil {
+		return fmt.Errorf("failed to rename temp file: %w", err)
+	}
+
+	return nil
 }
 
 // DeleteCertificateFiles removes certificate files
@@ -857,14 +910,16 @@ func (s *Service) BackupCertificateFiles(certID string) (restore func() error, c
 
 	restore = func() error {
 		var errs []string
-		if certExists {
-			if err := copyFile(certBak, certPath); err != nil {
-				errs = append(errs, fmt.Sprintf("restore fullchain.pem: %v", err))
+		// Restore atomically (the live paths are read by nginx) and key-first,
+		// matching the write ordering in SaveCertificateFiles.
+		if keyExists {
+			if err := copyFileAtomic(keyBak, keyPath); err != nil {
+				errs = append(errs, fmt.Sprintf("restore privkey.pem: %v", err))
 			}
 		}
-		if keyExists {
-			if err := copyFile(keyBak, keyPath); err != nil {
-				errs = append(errs, fmt.Sprintf("restore privkey.pem: %v", err))
+		if certExists {
+			if err := copyFileAtomic(certBak, certPath); err != nil {
+				errs = append(errs, fmt.Sprintf("restore fullchain.pem: %v", err))
 			}
 		}
 		// Remove backups after restore
@@ -887,6 +942,20 @@ func (s *Service) BackupCertificateFiles(certID string) (restore func() error, c
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+// copyFileAtomic copies src over dst via writeFileAtomic so a concurrent
+// reader (nginx -t / reload) never sees a partially-restored PEM file.
+func copyFileAtomic(src, dst string) error {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	return writeFileAtomic(dst, data, info.Mode())
 }
 
 func copyFile(src, dst string) error {

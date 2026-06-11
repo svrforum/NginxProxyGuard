@@ -198,6 +198,10 @@ func wireServiceCallbacks(svcs *Services, repos *Repositories) {
 	svcs.ProxyHost.SetContainerResolver(svcs.DockerStats)
 	// ProxyHost: immediate first DDNS sync after a host opts in (#157 follow-up).
 	svcs.ProxyHost.SetDDNSSyncer(svcs.DDNS)
+	// ProxyHost: certificate fan-out must also reach redirect hosts (their
+	// configs embed cert paths; a cert used only by redirect hosts would
+	// otherwise never trigger an nginx reload after renewal).
+	svcs.ProxyHost.SetRedirectHostRepo(repos.RedirectHost)
 
 	// Certificate: regenerate proxy-host configs after a cert is ready.
 	//
@@ -212,7 +216,7 @@ func wireServiceCallbacks(svcs *Services, repos *Repositories) {
 		go func(certID string) {
 			runCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 			defer cancel()
-			log.Printf("Certificate %s is ready, regenerating nginx configs for affected proxy hosts", certID)
+			log.Printf("Certificate %s is ready, regenerating nginx configs for affected proxy/redirect hosts", certID)
 			if err := svcs.ProxyHost.RegenerateConfigsForCertificate(runCtx, certID); err != nil {
 				log.Printf("Failed to regenerate configs for certificate %s: %v", certID, err)
 			}
@@ -233,6 +237,31 @@ func wireServiceCallbacks(svcs *Services, repos *Repositories) {
 			return 0, 0, err
 		}
 		return len(hosts), redirectCount, nil
+	})
+
+	// DNS provider: guard Delete while certificates still reference the
+	// provider. certificates.dns_provider_id is FK ON DELETE SET NULL, so an
+	// unguarded delete silently flips dependent certs to HTTP-01 renewal —
+	// which can never succeed for wildcard domains. The certificate List page
+	// query is lightweight (no PEM columns); paginate to cover all rows.
+	svcs.DNSProvider.SetInUseChecker(func(ctx context.Context, providerID string) (int, error) {
+		const perPage = 500
+		count := 0
+		for page := 1; ; page++ {
+			certs, total, err := repos.Certificate.List(ctx, page, perPage, "", "", "", "", "")
+			if err != nil {
+				return 0, err
+			}
+			for i := range certs {
+				if certs[i].DNSProviderID != nil && *certs[i].DNSProviderID == providerID {
+					count++
+				}
+			}
+			if len(certs) == 0 || page*perPage >= total {
+				break
+			}
+		}
+		return count, nil
 	})
 
 	// Challenge: resolve system-settings lazily.
