@@ -288,10 +288,24 @@ func (s *BackupScheduler) performBackup(ctx context.Context, backup *model.Backu
 		}
 	}
 
-	// Close writers in order to flush all data
-	tarWriter.Close()
-	gzWriter.Close()
-	file.Close()
+	// Close writers in order to flush all data. Close errors mean the archive
+	// is truncated/corrupt (gzip in particular flushes on Close) — fail the
+	// backup instead of recording a corrupt file as completed.
+	var closeErr error
+	if err := tarWriter.Close(); err != nil {
+		closeErr = fmt.Errorf("failed to finalize tar archive: %w", err)
+	}
+	if err := gzWriter.Close(); err != nil && closeErr == nil {
+		closeErr = fmt.Errorf("failed to finalize gzip stream: %w", err)
+	}
+	if err := file.Close(); err != nil && closeErr == nil {
+		closeErr = fmt.Errorf("failed to close backup file: %w", err)
+	}
+	if closeErr != nil {
+		_ = os.Remove(backup.FilePath)
+		_ = s.backupRepo.UpdateStatus(ctx, backup.ID, "failed", closeErr.Error())
+		return closeErr
+	}
 
 	// Calculate checksum from completed file
 	checksum := ""

@@ -142,3 +142,31 @@ func (u *cloudflareUpdater) Update(ctx context.Context, rec model.DDNSRecord, ra
 	_, err = u.do(ctx, http.MethodPost, fmt.Sprintf("%s/zones/%s/dns_records", u.apiBase, zone), c, body)
 	return err
 }
+
+// Delete removes the A record for rec.Hostname at Cloudflare (ddnsDeleter).
+// Missing records are treated as success — the goal state (no record) holds.
+func (u *cloudflareUpdater) Delete(ctx context.Context, rec model.DDNSRecord, rawCreds json.RawMessage) error {
+	var c model.CloudflareCredentials
+	if err := json.Unmarshal(rawCreds, &c); err != nil {
+		return fmt.Errorf("cloudflare: bad credentials: %w", err)
+	}
+	zone, err := u.resolveZoneID(ctx, c, rec.Hostname)
+	if err != nil {
+		return err
+	}
+
+	listURL := fmt.Sprintf("%s/zones/%s/dns_records?type=A&name=%s", u.apiBase, zone, url.QueryEscape(rec.Hostname))
+	cr, err := u.do(ctx, http.MethodGet, listURL, c, nil)
+	if err != nil {
+		return err
+	}
+	var recs []struct {
+		ID string `json:"id"`
+	}
+	_ = json.Unmarshal(cr.Result, &recs)
+	if len(recs) == 0 {
+		return nil // already gone
+	}
+	_, err = u.do(ctx, http.MethodDelete, fmt.Sprintf("%s/zones/%s/dns_records/%s", u.apiBase, zone, recs[0].ID), c, nil)
+	return err
+}

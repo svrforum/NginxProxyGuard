@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"nginx-proxy-guard/internal/database"
 	"nginx-proxy-guard/internal/handler"
 	"nginx-proxy-guard/internal/nginx"
 	"nginx-proxy-guard/pkg/cache"
@@ -41,6 +42,7 @@ func InitHandlers(
 	svcs *Services,
 	nginxManager *nginx.Manager,
 	redisCache *cache.RedisClient,
+	db *database.DB,
 ) *Handlers {
 	h := &Handlers{}
 
@@ -80,7 +82,7 @@ func InitHandlers(
 	h.FilterSubscription = handler.NewFilterSubscriptionHandler(svcs.FilterSubscription, svcs.Audit)
 	h.Swagger = handler.NewSwaggerHandler()
 	h.Metrics = handler.NewMetricsHandler()
-	h.HealthDetailed = handler.NewHealthDetailedHandler(repos.HealthDetailed, svcs.LogCollector, redisCache, repos.ProxyHost, repos.GlobalSettings, svcs.PipelineCanary, svcs.StatsCollector)
+	h.HealthDetailed = handler.NewHealthDetailedHandler(repos.HealthDetailed, svcs.LogCollector, redisCache, repos.ProxyHost, repos.GlobalSettings, svcs.PipelineCanary, svcs.StatsCollector, db)
 	h.DDNS = handler.NewDDNSHandler(svcs.DDNS, svcs.ProxyHost)
 
 	return h

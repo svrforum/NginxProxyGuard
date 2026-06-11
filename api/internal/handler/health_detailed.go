@@ -8,6 +8,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"nginx-proxy-guard/internal/config"
+	"nginx-proxy-guard/internal/database"
 	"nginx-proxy-guard/internal/repository"
 	"nginx-proxy-guard/internal/service"
 	"nginx-proxy-guard/pkg/cache"
@@ -27,6 +28,7 @@ type HealthDetailedHandler struct {
 	settingsRepo *repository.GlobalSettingsRepository
 	canary      *service.PipelineCanary
 	stats       *service.StatsCollector
+	db          *database.DB
 }
 
 func NewHealthDetailedHandler(
@@ -37,6 +39,7 @@ func NewHealthDetailedHandler(
 	settingsRepo *repository.GlobalSettingsRepository,
 	canary *service.PipelineCanary,
 	stats *service.StatsCollector,
+	db *database.DB,
 ) *HealthDetailedHandler {
 	return &HealthDetailedHandler{
 		startedAt:    time.Now(),
@@ -47,6 +50,7 @@ func NewHealthDetailedHandler(
 		settingsRepo: settingsRepo,
 		canary:       canary,
 		stats:        stats,
+		db:           db,
 	}
 }
 
@@ -80,6 +84,11 @@ type detailedDatabaseInfo struct {
 	AccessLogRows     int64                         `json:"access_log_rows_estimate"`
 	Hypertables       []repository.HypertableStats  `json:"hypertables"`
 	HypertablesError  string                        `json:"hypertables_error,omitempty"`
+	// Degraded-but-serving signal: upgrade migrations are warn-and-continue
+	// (a fail-fast boot would brick existing installs), so partial-migration
+	// state surfaces here instead of flipping the liveness probe.
+	MigrationFailures  int    `json:"migration_failures,omitempty"`
+	MigrationLastError string `json:"migration_last_error,omitempty"`
 }
 
 type detailedCacheInfo struct {
@@ -180,6 +189,13 @@ func (h *HealthDetailedHandler) dbInfo(ctx context.Context) *detailedDatabaseInf
 		info.HypertablesError = err.Error()
 	} else {
 		info.Hypertables = hyper
+	}
+
+	if h.db != nil {
+		if count, lastErr := h.db.MigrationHealth(); count > 0 {
+			info.MigrationFailures = count
+			info.MigrationLastError = lastErr
+		}
 	}
 
 	return info

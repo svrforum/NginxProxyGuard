@@ -15,6 +15,13 @@ type ddnsUpdater interface {
 	Update(ctx context.Context, rec model.DDNSRecord, creds json.RawMessage, ip string) error
 }
 
+// ddnsDeleter is implemented by updaters that can remove the provider-side
+// record (Cloudflare). DuckDNS has no record-deletion concept; providers
+// without this interface are skipped (DB-only delete).
+type ddnsDeleter interface {
+	Delete(ctx context.Context, rec model.DDNSRecord, creds json.RawMessage) error
+}
+
 // ddnsRecordRepo is the narrow record-repo dependency (interface for testability).
 type ddnsRecordRepo interface {
 	Create(ctx context.Context, req *model.CreateDDNSRecordRequest) (*model.DDNSRecord, error)
@@ -205,7 +212,37 @@ func (s *DDNSService) Update(ctx context.Context, id string, req *model.UpdateDD
 	return s.records.Update(ctx, id, req)
 }
 
-// Delete removes a DDNS record.
+// Delete removes a DDNS record. The provider-side DNS record is removed
+// best-effort first (Cloudflare) — failures only log, so local cleanup is
+// never blocked by a provider outage. Reconcile prunes and proxy-host
+// CASCADE deletions remain DB-only (documented limitation).
 func (s *DDNSService) Delete(ctx context.Context, id string) error {
+	if rec, err := s.records.GetByID(ctx, id); err == nil && rec != nil {
+		s.deleteProviderRecord(ctx, *rec)
+	}
 	return s.records.Delete(ctx, id)
+}
+
+// deleteProviderRecord best-effort removes the record at the DNS provider so
+// deleting in NPG doesn't leave an orphaned public DNS entry pointing at this
+// server.
+func (s *DDNSService) deleteProviderRecord(ctx context.Context, rec model.DDNSRecord) {
+	provider, err := s.providers.GetByID(ctx, rec.DNSProviderID)
+	if err != nil || provider == nil {
+		log.Printf("[DDNS] Warning: could not load provider for record %s; provider-side record not removed: %v", rec.Hostname, err)
+		return
+	}
+	updater, ok := s.updaters[provider.ProviderType]
+	if !ok {
+		return
+	}
+	deleter, ok := updater.(ddnsDeleter)
+	if !ok {
+		return // provider has no record-deletion concept (e.g. DuckDNS)
+	}
+	if err := deleter.Delete(ctx, rec, provider.Credentials); err != nil {
+		log.Printf("[DDNS] Warning: failed to delete provider-side record %s at %s: %v — remove it manually in the provider console", rec.Hostname, provider.ProviderType, err)
+		return
+	}
+	log.Printf("[DDNS] Deleted provider-side record %s at %s", rec.Hostname, provider.ProviderType)
 }
