@@ -27,6 +27,8 @@ type NginxManager interface {
 	GenerateConfigAndReload(ctx context.Context, data nginx.ProxyHostConfigData, wafExclusions []model.WAFRuleExclusion) error
 	GenerateConfigAndReloadWithCleanup(ctx context.Context, data nginx.ProxyHostConfigData, wafExclusions []model.WAFRuleExclusion, oldConfigFilename string) error
 	RemoveConfigAndReload(ctx context.Context, host *model.ProxyHost) error
+	// Bulk atomic regeneration: one lock, snapshot + rollback on nginx -t failure
+	RegenerateConfigsAtomic(ctx context.Context, renders []nginx.HostConfigRender, reload bool) error
 	// Filter subscription shared config generation
 	GenerateFilterSubscriptionConfigs(ctx context.Context, ips []string, uas []string) error
 }
@@ -624,7 +626,14 @@ func (s *ProxyHostService) Create(ctx context.Context, req *model.CreateProxyHos
 
 	// Generate nginx config if enabled (atomic operation with global locking)
 	if host.Enabled {
-		configData := s.getHostConfigData(ctx, host)
+		configData, err := s.getHostConfigData(ctx, host)
+		if err != nil {
+			// Rollback: Delete DB record since config generation won't proceed
+			if delErr := s.repo.Delete(ctx, host.ID); delErr != nil {
+				log.Printf("[ERROR] Rollback failed: could not delete host %s after config data error: %v", host.ID, delErr)
+			}
+			return nil, err
+		}
 
 		// Get WAF exclusions if WAF is enabled
 		var wafExclusions []model.WAFRuleExclusion
@@ -712,65 +721,35 @@ func (s *ProxyHostService) UpdateWithoutReload(ctx context.Context, id string, r
 		return nil, nil
 	}
 
-	// Regenerate nginx config (without reload)
-	newConfigFilename := ""
+	// Regenerate nginx config (without reload) via the bulk atomic primitive:
+	// one lock acquisition, file snapshot first, nginx -t after the writes and
+	// full rollback on failure — a failed -t must never leave an invalid file
+	// on disk (it would wedge every subsequent nginx operation system-wide).
 	if host.Enabled {
-		newConfigFilename = nginx.GetConfigFilename(host)
-		configData := s.getHostConfigData(ctx, host)
-
-		if err := s.nginx.GenerateConfigFull(ctx, configData); err != nil {
-			return nil, fmt.Errorf("failed to generate nginx config: %w", err)
+		render, err := s.buildHostRender(ctx, host)
+		if err != nil {
+			return nil, err
 		}
-
-		// Generate or remove WAF config based on WAF enabled status
-		if host.WAFEnabled && !host.IsStream() {
-			mergedExclusions, err := s.getMergedWAFExclusions(ctx, id)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get WAF exclusions: %w", err)
-			}
-			allowedIPs := s.getPriorityAllowIPs(ctx, id)
-			if err := s.nginx.GenerateHostWAFConfig(ctx, host, mergedExclusions, allowedIPs); err != nil {
-				return nil, fmt.Errorf("failed to generate WAF config: %w", err)
-			}
-		} else {
-			// Remove WAF config if WAF is disabled to prevent orphan files
-			if err := s.nginx.RemoveHostWAFConfig(ctx, host.ID); err != nil {
-				log.Printf("[WARN] Failed to remove WAF config for host %s: %v", host.ID, err)
-				// Non-fatal: continue
-			}
+		if oldConfigFilename != "" && oldConfigFilename != nginx.GetConfigFilename(host) {
+			// Remove old config BEFORE nginx test (prevents limit_req_zone
+			// duplication when the domain name / config filename changes)
+			render.RemoveOldFilename = oldConfigFilename
 		}
-
-		// Remove old config BEFORE nginx test (prevents zone duplication)
-		// When domain changes, both old and new config files exist with same zone names
-		// which causes limit_req_zone duplicate errors during nginx test
-		if oldConfigFilename != "" && oldConfigFilename != newConfigFilename {
-			if err := s.nginx.RemoveConfigByFilename(ctx, oldConfigFilename); err != nil {
-				log.Printf("[WARN] Failed to remove old config file %s: %v", oldConfigFilename, err)
-				// Non-fatal: continue with test
-			}
+		if err := s.nginx.RegenerateConfigsAtomic(ctx, []nginx.HostConfigRender{render}, false); err != nil {
+			return nil, fmt.Errorf("nginx config test failed: %w", err)
 		}
 	} else {
-		// Host is disabled - remove config
-		// When domain changed, old config file has different name than current
-		if oldConfigFilename != "" {
-			// Domain was changed - remove old config file (different filename)
-			if err := s.nginx.RemoveConfigByFilename(ctx, oldConfigFilename); err != nil {
-				log.Printf("[WARN] Failed to remove old config file %s: %v", oldConfigFilename, err)
-			}
+		// Host is disabled - remove config (old filename too when domain changed)
+		render := nginx.HostConfigRender{
+			Data:   nginx.ProxyHostConfigData{Host: host},
+			Remove: true,
 		}
-		// Also try to remove current config (may not exist if domain changed)
-		if err := s.nginx.RemoveConfig(ctx, host); err != nil {
-			// Only log if this is not the same file we just removed
-			currentFilename := nginx.GetConfigFilename(host)
-			if oldConfigFilename != currentFilename {
-				log.Printf("[WARN] Failed to remove current config file: %v", err)
-			}
+		if oldConfigFilename != "" && oldConfigFilename != nginx.GetConfigFilename(host) {
+			render.RemoveOldFilename = oldConfigFilename
 		}
-	}
-
-	// Test config but don't reload
-	if err := s.nginx.TestConfig(ctx); err != nil {
-		return nil, fmt.Errorf("nginx config test failed: %w", err)
+		if err := s.nginx.RegenerateConfigsAtomic(ctx, []nginx.HostConfigRender{render}, false); err != nil {
+			return nil, fmt.Errorf("nginx config test failed: %w", err)
+		}
 	}
 
 	return host, nil
@@ -807,7 +786,10 @@ func (s *ProxyHostService) Update(ctx context.Context, id string, req *model.Upd
 	// Regenerate nginx config (atomic operation with global locking)
 	if host.Enabled {
 		newConfigFilename := nginx.GetConfigFilename(host)
-		configData := s.getHostConfigData(ctx, host)
+		configData, err := s.getHostConfigData(ctx, host)
+		if err != nil {
+			return nil, err
+		}
 
 		// Get WAF exclusions if WAF is enabled
 		var wafExclusions []model.WAFRuleExclusion
@@ -926,11 +908,21 @@ func (s *ProxyHostService) Delete(ctx context.Context, id string) error {
 		return fmt.Errorf("proxy host not found")
 	}
 
-	// Store config data in case we need to restore after DB failure
+	// Store config data in case we need to restore after DB failure.
+	// Best-effort: this snapshot is only used to roll the config back if the
+	// DB delete fails. When the lookup itself fails we proceed with the
+	// delete but skip the (incomplete) restore — never write a config that is
+	// missing security sections.
 	var configData nginx.ProxyHostConfigData
+	var configDataOK bool
 	var wafExclusions []model.WAFRuleExclusion
 	if host.Enabled {
-		configData = s.getHostConfigData(ctx, host)
+		configData, err = s.getHostConfigData(ctx, host)
+		if err != nil {
+			log.Printf("[WARN] Failed to snapshot config data for host %s before delete (restore-on-failure disabled): %v", id, err)
+		} else {
+			configDataOK = true
+		}
 		if host.WAFEnabled && !host.IsStream() {
 			wafExclusions, _ = s.getMergedWAFExclusions(ctx, host.ID)
 		}
@@ -946,11 +938,13 @@ func (s *ProxyHostService) Delete(ctx context.Context, id string) error {
 	if err := s.repo.Delete(ctx, id); err != nil {
 		// DB deletion failed after nginx config was removed
 		// Try to restore nginx config to maintain consistency
-		if host.Enabled {
+		if host.Enabled && configDataOK {
 			log.Printf("[WARN] DB deletion failed for host %s, attempting to restore nginx config: %v", id, err)
 			if restoreErr := s.nginx.GenerateConfigAndReload(ctx, configData, wafExclusions); restoreErr != nil {
 				log.Printf("[ERROR] Failed to restore nginx config for host %s after DB deletion failure: %v", id, restoreErr)
 			}
+		} else if host.Enabled {
+			log.Printf("[WARN] DB deletion failed for host %s and no config snapshot is available — run Sync All to restore the config: %v", id, err)
 		}
 		return fmt.Errorf("failed to delete proxy host: %w", err)
 	}

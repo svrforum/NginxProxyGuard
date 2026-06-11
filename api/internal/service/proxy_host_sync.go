@@ -16,8 +16,28 @@ import (
 // BuildConfigData builds the full nginx configuration data for a proxy host.
 // This is useful for backup restore and other scenarios where the full config
 // data including GeoRestriction, RateLimit, BotFilter etc. is needed.
-func (s *ProxyHostService) BuildConfigData(ctx context.Context, host *model.ProxyHost) nginx.ProxyHostConfigData {
+// Fail-closed: returns an error when any security-relevant lookup fails.
+func (s *ProxyHostService) BuildConfigData(ctx context.Context, host *model.ProxyHost) (nginx.ProxyHostConfigData, error) {
 	return s.getHostConfigData(ctx, host)
+}
+
+// buildHostRender aggregates one host's config data + WAF inputs for a bulk
+// atomic regeneration (nginx.RegenerateConfigsAtomic).
+func (s *ProxyHostService) buildHostRender(ctx context.Context, host *model.ProxyHost) (nginx.HostConfigRender, error) {
+	configData, err := s.getHostConfigData(ctx, host)
+	if err != nil {
+		return nginx.HostConfigRender{}, err
+	}
+	render := nginx.HostConfigRender{Data: configData}
+	if host.WAFEnabled && !host.IsStream() {
+		mergedExclusions, err := s.getMergedWAFExclusions(ctx, host.ID)
+		if err != nil {
+			return render, fmt.Errorf("failed to get WAF exclusions for host %s: %w", host.ID, err)
+		}
+		render.WAFExclusions = mergedExclusions
+		render.WAFAllowedIPs = s.getPriorityAllowIPs(ctx, host.ID)
+	}
+	return render, nil
 }
 
 // RegenerateConfigsForCertificate regenerates nginx configs for all proxy hosts using the specified certificate
@@ -32,40 +52,84 @@ func (s *ProxyHostService) RegenerateConfigsForCertificate(ctx context.Context, 
 		return nil // No proxy hosts use this certificate
 	}
 
-	// Regenerate configs for all affected hosts
-	for _, host := range hosts {
-		if !host.Enabled {
+	var renders []nginx.HostConfigRender
+	for i := range hosts {
+		if !hosts[i].Enabled {
 			continue
 		}
-
-		configData := s.getHostConfigData(ctx, &host)
-		if err := s.nginx.GenerateConfigFull(ctx, configData); err != nil {
-			return fmt.Errorf("failed to generate config for host %s: %w", host.ID, err)
+		render, err := s.buildHostRender(ctx, &hosts[i])
+		if err != nil {
+			return err
 		}
+		renders = append(renders, render)
+	}
 
-		// Generate WAF config if WAF is enabled (includes global + host exclusions)
-		if host.WAFEnabled && !host.IsStream() {
-			mergedExclusions, err := s.getMergedWAFExclusions(ctx, host.ID)
-			if err != nil {
-				return fmt.Errorf("failed to get WAF exclusions for host %s: %w", host.ID, err)
-			}
-			allowedIPs := s.getPriorityAllowIPs(ctx, host.ID)
-			if err := s.nginx.GenerateHostWAFConfig(ctx, &host, mergedExclusions, allowedIPs); err != nil {
-				return fmt.Errorf("failed to generate WAF config for host %s: %w", host.ID, err)
-			}
+	// Single lock acquisition: write all + test + reload, rollback on failure
+	return s.nginx.RegenerateConfigsAtomic(ctx, renders, true)
+}
+
+// RegenerateConfigsForAccessList regenerates nginx configs for all proxy hosts
+// referencing the specified access list. Access list rules are rendered
+// statically into each dependent host config, so every item edit must fan out
+// here — otherwise nginx silently keeps enforcing the stale allow/deny rules.
+func (s *ProxyHostService) RegenerateConfigsForAccessList(ctx context.Context, accessListID string) error {
+	hosts, err := s.repo.GetByAccessListID(ctx, accessListID)
+	if err != nil {
+		return fmt.Errorf("failed to get proxy hosts for access list %s: %w", accessListID, err)
+	}
+	if len(hosts) == 0 {
+		return nil
+	}
+
+	var renders []nginx.HostConfigRender
+	for i := range hosts {
+		if !hosts[i].Enabled {
+			continue
 		}
+		render, err := s.buildHostRender(ctx, &hosts[i])
+		if err != nil {
+			return err
+		}
+		renders = append(renders, render)
 	}
 
-	// Test and reload nginx
-	if err := s.nginx.TestConfig(ctx); err != nil {
-		return fmt.Errorf("nginx config test failed: %w", err)
+	return s.nginx.RegenerateConfigsAtomic(ctx, renders, true)
+}
+
+// GetHostIDsByAccessList returns the IDs of proxy hosts referencing an access
+// list. Used to capture the dependent set before the list is deleted.
+func (s *ProxyHostService) GetHostIDsByAccessList(ctx context.Context, accessListID string) ([]string, error) {
+	hosts, err := s.repo.GetByAccessListID(ctx, accessListID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get proxy hosts for access list %s: %w", accessListID, err)
+	}
+	ids := make([]string, 0, len(hosts))
+	for i := range hosts {
+		ids = append(ids, hosts[i].ID)
+	}
+	return ids, nil
+}
+
+// RegenerateConfigsForHostIDs regenerates nginx configs for the specified
+// hosts (e.g. after an access list they referenced was deleted).
+func (s *ProxyHostService) RegenerateConfigsForHostIDs(ctx context.Context, hostIDs []string) error {
+	var renders []nginx.HostConfigRender
+	for _, hostID := range hostIDs {
+		host, err := s.repo.GetByID(ctx, hostID)
+		if err != nil {
+			return fmt.Errorf("failed to get proxy host %s: %w", hostID, err)
+		}
+		if host == nil || !host.Enabled {
+			continue
+		}
+		render, err := s.buildHostRender(ctx, host)
+		if err != nil {
+			return err
+		}
+		renders = append(renders, render)
 	}
 
-	if err := s.nginx.ReloadNginx(ctx); err != nil {
-		return fmt.Errorf("failed to reload nginx: %w", err)
-	}
-
-	return nil
+	return s.nginx.RegenerateConfigsAtomic(ctx, renders, true)
 }
 
 // SyncHostResult represents the result of syncing a single host
@@ -126,7 +190,14 @@ func (s *ProxyHostService) SyncAllConfigsWithDetails(ctx context.Context) (*Sync
 			Success:     true,
 		}
 
-		configData := s.getHostConfigData(ctx, &host)
+		configData, err := s.getHostConfigData(ctx, &host)
+		if err != nil {
+			hostResult.Success = false
+			hostResult.Error = fmt.Sprintf("failed to load config data: %v", err)
+			result.FailedCount++
+			result.Hosts = append(result.Hosts, hostResult)
+			continue
+		}
 		if err := s.nginx.GenerateConfigFull(ctx, configData); err != nil {
 			hostResult.Success = false
 			hostResult.Error = fmt.Sprintf("failed to generate config: %v", err)
@@ -235,7 +306,7 @@ func (s *ProxyHostService) RegenerateConfigsForCloudProviders(ctx context.Contex
 
 	log.Printf("[CloudProvider] Regenerating configs for %d proxy hosts", len(hostIDs))
 
-	// Regenerate configs for all affected hosts
+	var renders []nginx.HostConfigRender
 	for _, hostID := range hostIDs {
 		host, err := s.repo.GetByID(ctx, hostID)
 		if err != nil {
@@ -245,35 +316,19 @@ func (s *ProxyHostService) RegenerateConfigsForCloudProviders(ctx context.Contex
 		if host == nil || !host.Enabled {
 			continue
 		}
-
-		configData := s.getHostConfigData(ctx, host)
-		if err := s.nginx.GenerateConfigFull(ctx, configData); err != nil {
-			return fmt.Errorf("failed to generate config for host %s: %w", hostID, err)
+		render, err := s.buildHostRender(ctx, host)
+		if err != nil {
+			return err
 		}
-
-		// Generate WAF config if WAF is enabled (includes global + host exclusions)
-		if host.WAFEnabled && !host.IsStream() {
-			mergedExclusions, err := s.getMergedWAFExclusions(ctx, hostID)
-			if err != nil {
-				return fmt.Errorf("failed to get WAF exclusions for host %s: %w", hostID, err)
-			}
-			allowedIPs := s.getPriorityAllowIPs(ctx, hostID)
-			if err := s.nginx.GenerateHostWAFConfig(ctx, host, mergedExclusions, allowedIPs); err != nil {
-				return fmt.Errorf("failed to generate WAF config for host %s: %w", hostID, err)
-			}
-		}
+		renders = append(renders, render)
 	}
 
-	// Test and reload nginx
-	if err := s.nginx.TestConfig(ctx); err != nil {
-		return fmt.Errorf("nginx config test failed: %w", err)
+	// Single lock acquisition: write all + test + reload, rollback on failure
+	if err := s.nginx.RegenerateConfigsAtomic(ctx, renders, true); err != nil {
+		return err
 	}
 
-	if err := s.nginx.ReloadNginx(ctx); err != nil {
-		return fmt.Errorf("failed to reload nginx: %w", err)
-	}
-
-	log.Printf("[CloudProvider] Nginx configs regenerated and reloaded for %d hosts", len(hostIDs))
+	log.Printf("[CloudProvider] Nginx configs regenerated and reloaded for %d hosts", len(renders))
 	return nil
 }
 
@@ -300,32 +355,18 @@ func (s *ProxyHostService) RegenerateConfigsForExploitRules(ctx context.Context)
 
 	log.Printf("[ExploitRules] Regenerating nginx configs for %d hosts with block_exploits enabled", len(hostsToUpdate))
 
+	var renders []nginx.HostConfigRender
 	for _, host := range hostsToUpdate {
-		configData := s.getHostConfigData(ctx, host)
-		if err := s.nginx.GenerateConfigFull(ctx, configData); err != nil {
-			return fmt.Errorf("failed to generate config for host %s: %w", host.ID, err)
+		render, err := s.buildHostRender(ctx, host)
+		if err != nil {
+			return err
 		}
-
-		// Also regenerate WAF config if enabled
-		if host.WAFEnabled && !host.IsStream() {
-			mergedExclusions, err := s.getMergedWAFExclusions(ctx, host.ID)
-			if err != nil {
-				return fmt.Errorf("failed to get WAF exclusions for host %s: %w", host.ID, err)
-			}
-			allowedIPs := s.getPriorityAllowIPs(ctx, host.ID)
-			if err := s.nginx.GenerateHostWAFConfig(ctx, host, mergedExclusions, allowedIPs); err != nil {
-				return fmt.Errorf("failed to generate WAF config for host %s: %w", host.ID, err)
-			}
-		}
+		renders = append(renders, render)
 	}
 
-	// Test and reload nginx
-	if err := s.nginx.TestConfig(ctx); err != nil {
-		return fmt.Errorf("nginx config test failed: %w", err)
-	}
-
-	if err := s.nginx.ReloadNginx(ctx); err != nil {
-		return fmt.Errorf("failed to reload nginx: %w", err)
+	// Single lock acquisition: write all + test + reload, rollback on failure
+	if err := s.nginx.RegenerateConfigsAtomic(ctx, renders, true); err != nil {
+		return err
 	}
 
 	log.Printf("[ExploitRules] Nginx configs regenerated and reloaded for %d hosts", len(hostsToUpdate))
@@ -365,7 +406,10 @@ func (s *ProxyHostService) RegenerateConfigForHost(ctx context.Context, hostID s
 		return nil
 	}
 
-	configData := s.getHostConfigData(ctx, host)
+	configData, err := s.getHostConfigData(ctx, host)
+	if err != nil {
+		return fmt.Errorf("failed to load config data for host %s: %w", hostID, err)
+	}
 
 	// Get WAF exclusions if WAF is enabled
 	var wafExclusions []model.WAFRuleExclusion

@@ -152,7 +152,12 @@ func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Back
 				// Generate configs one by one so we can handle failures gracefully
 				for _, host := range proxyHosts {
 					// Use BuildConfigData to include all related settings (GeoRestriction, RateLimit, BotFilter, etc.)
-					configData := h.proxyHostService.BuildConfigData(ctx, &host)
+					configData, err := h.proxyHostService.BuildConfigData(ctx, &host)
+					if err != nil {
+						log.Printf("[Backup] Warning: failed to load config data for host %s: %v", host.ID, err)
+						result.ProxyHostsFailed = append(result.ProxyHostsFailed, host.ID)
+						continue
+					}
 					if err := h.nginxManager.GenerateConfigFull(ctx, configData); err != nil {
 						log.Printf("[Backup] Warning: failed to regenerate config for host %s: %v", host.ID, err)
 						result.ProxyHostsFailed = append(result.ProxyHostsFailed, host.ID)

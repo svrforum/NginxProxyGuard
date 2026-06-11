@@ -218,7 +218,23 @@ func (r *AccessListRepository) Update(ctx context.Context, id string, req *model
 }
 
 func (r *AccessListRepository) Delete(ctx context.Context, id string) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// Clear references first: proxy_hosts.access_list_id has no FK constraint,
+	// so deleting the list alone would leave dangling IDs that silently drop
+	// the access restriction at the next config generation.
+	if _, err := tx.ExecContext(ctx, `UPDATE proxy_hosts SET access_list_id = NULL WHERE access_list_id = $1`, id); err != nil {
+		return fmt.Errorf("failed to detach access list from proxy hosts: %w", err)
+	}
+
 	// Items will be deleted by CASCADE
-	_, err := r.db.ExecContext(ctx, `DELETE FROM access_lists WHERE id = $1`, id)
-	return err
+	if _, err := tx.ExecContext(ctx, `DELETE FROM access_lists WHERE id = $1`, id); err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }

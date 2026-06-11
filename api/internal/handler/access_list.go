@@ -8,14 +8,16 @@ import (
 
 	"nginx-proxy-guard/internal/model"
 	"nginx-proxy-guard/internal/repository"
+	"nginx-proxy-guard/internal/service"
 )
 
 type AccessListHandler struct {
-	repo *repository.AccessListRepository
+	repo       *repository.AccessListRepository
+	proxyHosts *service.ProxyHostService
 }
 
-func NewAccessListHandler(repo *repository.AccessListRepository) *AccessListHandler {
-	return &AccessListHandler{repo: repo}
+func NewAccessListHandler(repo *repository.AccessListRepository, proxyHosts *service.ProxyHostService) *AccessListHandler {
+	return &AccessListHandler{repo: repo, proxyHosts: proxyHosts}
 }
 
 // List returns a paginated list of access lists.
@@ -98,14 +100,39 @@ func (h *AccessListHandler) Update(c echo.Context) error {
 		return notFoundError(c, "Access list")
 	}
 
+	// Access list rules are rendered statically into each dependent host's
+	// nginx config, so the edit must fan out to every referencing host —
+	// otherwise nginx silently keeps enforcing the stale allow/deny rules.
+	if err := h.proxyHosts.RegenerateConfigsForAccessList(c.Request().Context(), id); err != nil {
+		return internalError(c, "apply access list changes to nginx", err)
+	}
+
 	return c.JSON(http.StatusOK, list)
 }
 
 // Delete removes an access list by ID.
 func (h *AccessListHandler) Delete(c echo.Context) error {
 	id := c.Param("id")
-	if err := h.repo.Delete(c.Request().Context(), id); err != nil {
+	ctx := c.Request().Context()
+
+	// Capture dependents BEFORE the delete detaches them (the repo clears
+	// proxy_hosts.access_list_id in the same transaction).
+	hostIDs, err := h.proxyHosts.GetHostIDsByAccessList(ctx, id)
+	if err != nil {
+		return databaseError(c, "list access list dependents", err)
+	}
+
+	if err := h.repo.Delete(ctx, id); err != nil {
 		return databaseError(c, "delete access list", err)
 	}
+
+	// Regenerate dependent host configs so the deleted allow/deny rules stop
+	// being enforced by the running nginx.
+	if len(hostIDs) > 0 {
+		if err := h.proxyHosts.RegenerateConfigsForHostIDs(ctx, hostIDs); err != nil {
+			return internalError(c, "apply access list deletion to nginx", err)
+		}
+	}
+
 	return noContentResponse(c)
 }

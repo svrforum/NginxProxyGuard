@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -66,8 +67,15 @@ func (s *ProxyHostService) getPriorityAllowIPs(ctx context.Context, hostID strin
 	return geo.AllowedIPs
 }
 
-// getHostConfigData fetches all Phase 6 configuration data for a host
-func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.ProxyHost) nginx.ProxyHostConfigData {
+// getHostConfigData fetches all Phase 6 configuration data for a host.
+//
+// FAIL-CLOSED: any repository error aborts with a non-nil error instead of
+// silently rendering the config without that section. A transient DB error
+// must never produce (and reload) a config that is missing access lists,
+// banned IPs, geo/cloud/bot/URI blocking or rate limits — callers surface the
+// error and nginx keeps running the previous known-good config. "Not found"
+// (nil result, no error) is a legitimate state and simply skips the section.
+func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.ProxyHost) (nginx.ProxyHostConfigData, error) {
 	data := nginx.ProxyHostConfigData{
 		Host: host,
 	}
@@ -75,6 +83,14 @@ func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.Pr
 	// Use goroutines to fetch all config data in parallel
 	var wg sync.WaitGroup
 	var mu sync.Mutex
+	var fetchErr error
+	fail := func(what string, err error) {
+		mu.Lock()
+		if fetchErr == nil {
+			fetchErr = fmt.Errorf("failed to load %s for host %s: %w", what, host.ID, err)
+		}
+		mu.Unlock()
+	}
 
 	// Fetch access list if assigned
 	if host.AccessListID != nil && *host.AccessListID != "" && s.accessListRepo != nil {
@@ -82,7 +98,11 @@ func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.Pr
 		go func() {
 			defer wg.Done()
 			al, err := s.accessListRepo.GetByID(ctx, *host.AccessListID)
-			if err == nil && al != nil {
+			if err != nil {
+				fail("access list", err)
+				return
+			}
+			if al != nil {
 				mu.Lock()
 				data.AccessList = al
 				mu.Unlock()
@@ -97,7 +117,11 @@ func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.Pr
 		go func() {
 			defer wg.Done()
 			geo, err := s.geoRepo.GetByProxyHostID(ctx, host.ID)
-			if err == nil && geo != nil && (geo.Enabled || len(geo.AllowedIPs) > 0) {
+			if err != nil {
+				fail("geo restriction", err)
+				return
+			}
+			if geo != nil && (geo.Enabled || len(geo.AllowedIPs) > 0) {
 				mu.Lock()
 				data.GeoRestriction = geo
 				mu.Unlock()
@@ -111,7 +135,11 @@ func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.Pr
 		go func() {
 			defer wg.Done()
 			rl, err := s.rateLimitRepo.GetByProxyHostID(ctx, host.ID)
-			if err == nil && rl != nil && rl.Enabled {
+			if err != nil {
+				fail("rate limit", err)
+				return
+			}
+			if rl != nil && rl.Enabled {
 				mu.Lock()
 				data.RateLimit = rl
 				mu.Unlock()
@@ -125,7 +153,11 @@ func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.Pr
 		go func() {
 			defer wg.Done()
 			sh, err := s.securityHeadersRepo.GetByProxyHostID(ctx, host.ID)
-			if err == nil && sh != nil && sh.Enabled {
+			if err != nil {
+				fail("security headers", err)
+				return
+			}
+			if sh != nil && sh.Enabled {
 				mu.Lock()
 				data.SecurityHeaders = sh
 				mu.Unlock()
@@ -139,7 +171,11 @@ func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.Pr
 		go func() {
 			defer wg.Done()
 			bf, err := s.botFilterRepo.GetByProxyHostID(ctx, host.ID)
-			if err == nil && bf != nil && bf.Enabled {
+			if err != nil {
+				fail("bot filter", err)
+				return
+			}
+			if bf != nil && bf.Enabled {
 				mu.Lock()
 				data.BotFilter = bf
 				mu.Unlock()
@@ -153,7 +189,11 @@ func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.Pr
 		go func() {
 			defer wg.Done()
 			up, err := s.upstreamRepo.GetByProxyHostID(ctx, host.ID)
-			if err == nil && up != nil && len(up.Servers) > 0 {
+			if err != nil {
+				fail("upstream", err)
+				return
+			}
+			if up != nil && len(up.Servers) > 0 {
 				mu.Lock()
 				data.Upstream = up
 				mu.Unlock()
@@ -169,13 +209,17 @@ func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.Pr
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			var bannedIPs []model.BannedIP
-			if hostBans, err := s.rateLimitRepo.GetActiveBansForHost(ctx, host.ID); err == nil {
-				bannedIPs = hostBans
+			hostBans, err := s.rateLimitRepo.GetActiveBansForHost(ctx, host.ID)
+			if err != nil {
+				fail("banned IPs", err)
+				return
 			}
-			if globalBans, err := s.rateLimitRepo.GetActiveGlobalBans(ctx); err == nil {
-				bannedIPs = append(bannedIPs, globalBans...)
+			globalBans, err := s.rateLimitRepo.GetActiveGlobalBans(ctx)
+			if err != nil {
+				fail("global banned IPs", err)
+				return
 			}
+			bannedIPs := append(hostBans, globalBans...)
 			// Deduplicate by IP address (same IP can exist in both host-specific and global bans)
 			if len(bannedIPs) > 0 {
 				seen := make(map[string]bool, len(bannedIPs))
@@ -200,9 +244,17 @@ func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.Pr
 		go func() {
 			defer wg.Done()
 			settings, err := s.cloudProviderRepo.GetCloudProviderBlockingSettings(ctx, host.ID)
-			if err == nil && len(settings.BlockedProviders) > 0 {
+			if err != nil {
+				fail("cloud provider blocking settings", err)
+				return
+			}
+			if len(settings.BlockedProviders) > 0 {
 				ipRanges, err := s.cloudProviderRepo.GetIPRangesForProviders(ctx, settings.BlockedProviders)
-				if err == nil && len(ipRanges) > 0 {
+				if err != nil {
+					fail("cloud provider IP ranges", err)
+					return
+				}
+				if len(ipRanges) > 0 {
 					mu.Lock()
 					data.BlockedCloudIPRanges = ipRanges
 					data.CloudProviderChallengeMode = settings.ChallengeMode
@@ -219,9 +271,17 @@ func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.Pr
 		go func() {
 			defer wg.Done()
 			// Get global URI block rules
-			globalUB, _ := s.uriBlockRepo.GetGlobalURIBlock(ctx)
+			globalUB, err := s.uriBlockRepo.GetGlobalURIBlock(ctx)
+			if err != nil {
+				fail("global URI block rules", err)
+				return
+			}
 			// Get host-specific URI block rules
-			hostUB, _ := s.uriBlockRepo.GetByProxyHostID(ctx, host.ID)
+			hostUB, err := s.uriBlockRepo.GetByProxyHostID(ctx, host.ID)
+			if err != nil {
+				fail("URI block rules", err)
+				return
+			}
 
 			// Merge global and host-specific rules
 			mergedUB := mergeURIBlocks(globalUB, hostUB)
@@ -243,12 +303,17 @@ func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.Pr
 		go func() {
 			defer wg.Done()
 			enabledCount, err := s.filterSubscriptionRepo.CountEnabledSubscriptions(ctx)
-			if err != nil || enabledCount == 0 {
+			if err != nil {
+				fail("filter subscriptions", err)
+				return
+			}
+			if enabledCount == 0 {
 				return
 			}
 			// Check if host is excluded from ALL subscriptions
 			exclCount, err := s.filterSubscriptionRepo.CountExclusionsForHost(ctx, host.ID)
 			if err != nil {
+				fail("filter subscription exclusions", err)
 				return
 			}
 			if exclCount < enabledCount {
@@ -258,20 +323,28 @@ func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.Pr
 
 				// Fetch filter subscription IPs for deduplication with manual banned IPs
 				ips, err := s.filterSubscriptionRepo.GetAllEnabledEntriesByType(ctx, "ip")
-				if err == nil {
-					cidrs, err := s.filterSubscriptionRepo.GetAllEnabledEntriesByType(ctx, "cidr")
-					if err == nil {
-						mu.Lock()
-						filterSubIPs = append(ips, cidrs...)
-						mu.Unlock()
-					}
+				if err != nil {
+					fail("filter subscription IP entries", err)
+					return
 				}
+				cidrs, err := s.filterSubscriptionRepo.GetAllEnabledEntriesByType(ctx, "cidr")
+				if err != nil {
+					fail("filter subscription CIDR entries", err)
+					return
+				}
+				mu.Lock()
+				filterSubIPs = append(ips, cidrs...)
+				mu.Unlock()
 			}
 		}()
 	}
 
 	// Wait for all goroutines to complete
 	wg.Wait()
+
+	if fetchErr != nil {
+		return data, fetchErr
+	}
 
 	// Remove banned IPs that already exist in filter subscription to prevent
 	// nginx "duplicate network" errors in geo blocks (Issue #92)
@@ -320,7 +393,10 @@ func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.Pr
 	// Fetch global settings for proxy timeouts, client body size, etc.
 	if s.globalSettingsRepo != nil {
 		gs, err := s.globalSettingsRepo.Get(ctx)
-		if err == nil && gs != nil {
+		if err != nil {
+			return data, fmt.Errorf("failed to load global settings for host %s: %w", host.ID, err)
+		}
+		if gs != nil {
 			data.GlobalSettings = gs
 		}
 	}
@@ -328,7 +404,10 @@ func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.Pr
 	// Fetch global trusted IPs and block_exploits exceptions from system settings
 	if s.systemSettingsRepo != nil {
 		settings, err := s.systemSettingsRepo.Get(ctx)
-		if err == nil && settings != nil {
+		if err != nil {
+			return data, fmt.Errorf("failed to load system settings for host %s: %w", host.ID, err)
+		}
+		if settings != nil {
 			if host.BlockExploits {
 				data.GlobalBlockExploitsExceptions = settings.GlobalBlockExploitsExceptions
 			}
@@ -348,24 +427,28 @@ func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.Pr
 	// are per-rule regex patterns that allow bypassing specific rules on specific paths.
 	if host.BlockExploits && s.exploitBlockRuleRepo != nil {
 		rules, err := s.exploitBlockRuleRepo.GetEnabledForHost(ctx, host.ID)
-		if err == nil {
-			uriExclusions, exErr := s.exploitBlockRuleRepo.GetURIExclusionsForHost(ctx, host.ID)
-			if exErr != nil {
-				// Graceful degradation: proceed with no URI-scoped exclusions rather than
-				// failing the whole config regeneration.
-				uriExclusions = map[string][]string{}
-			}
-			rendered := make([]model.ExploitBlockRuleForRender, 0, len(rules))
-			for _, r := range rules {
-				rendered = append(rendered, model.ExploitBlockRuleForRender{
-					ExploitBlockRule: r,
-					URIExclusions:    uriExclusions[r.ID],
-					IDSanitized:      strings.ReplaceAll(r.ID, "-", "_"),
-				})
-			}
-			data.ExploitBlockRules = rendered
+		if err != nil {
+			// Fail-closed: rendering without the exploit rules would silently
+			// drop all of them from the running config.
+			return data, fmt.Errorf("failed to load exploit block rules for host %s: %w", host.ID, err)
 		}
+		uriExclusions, exErr := s.exploitBlockRuleRepo.GetURIExclusionsForHost(ctx, host.ID)
+		if exErr != nil {
+			// Graceful degradation: proceed with no URI-scoped exclusions rather than
+			// failing the whole config regeneration. (Dropping exclusions only makes
+			// the config stricter — the fail-closed direction.)
+			uriExclusions = map[string][]string{}
+		}
+		rendered := make([]model.ExploitBlockRuleForRender, 0, len(rules))
+		for _, r := range rules {
+			rendered = append(rendered, model.ExploitBlockRuleForRender{
+				ExploitBlockRule: r,
+				URIExclusions:    uriExclusions[r.ID],
+				IDSanitized:      strings.ReplaceAll(r.ID, "-", "_"),
+			})
+		}
+		data.ExploitBlockRules = rendered
 	}
 
-	return data
+	return data, nil
 }

@@ -61,17 +61,10 @@ func (h *RedirectHostHandler) Create(c echo.Context) error {
 		return databaseError(c, "create redirect host", err)
 	}
 
-	// Generate nginx config
+	// Generate nginx config (atomic: snapshot + test + reload, rollback on failure)
 	if host.Enabled {
-		if err := h.nginxManager.GenerateRedirectConfig(c.Request().Context(), host); err != nil {
-			return internalError(c, "generate redirect nginx config", err)
-		}
-		if err := h.nginxManager.TestConfig(c.Request().Context()); err != nil {
-			_ = h.nginxManager.RemoveRedirectConfig(c.Request().Context(), host)
-			return internalError(c, "test nginx config for redirect", err)
-		}
-		if err := h.nginxManager.ReloadNginx(c.Request().Context()); err != nil {
-			return internalError(c, "reload nginx for redirect", err)
+		if err := h.nginxManager.GenerateRedirectConfigAndReload(c.Request().Context(), host); err != nil {
+			return internalError(c, "apply redirect nginx config", err)
 		}
 	}
 
@@ -109,22 +102,11 @@ func (h *RedirectHostHandler) Update(c echo.Context) error {
 		return notFoundError(c, "Redirect host")
 	}
 
-	// Regenerate nginx config
-	if host.Enabled {
-		if err := h.nginxManager.GenerateRedirectConfig(c.Request().Context(), host); err != nil {
-			return internalError(c, "generate redirect nginx config", err)
-		}
-	} else {
-		if err := h.nginxManager.RemoveRedirectConfig(c.Request().Context(), host); err != nil {
-			return internalError(c, "remove redirect nginx config", err)
-		}
-	}
-
-	if err := h.nginxManager.TestConfig(c.Request().Context()); err != nil {
-		return internalError(c, "test nginx config", err)
-	}
-	if err := h.nginxManager.ReloadNginx(c.Request().Context()); err != nil {
-		return internalError(c, "reload nginx", err)
+	// Regenerate nginx config (atomic: snapshot + test + reload, rollback on
+	// failure — a failed -t must not leave the invalid file on disk; handles
+	// the disabled case by removing the config)
+	if err := h.nginxManager.GenerateRedirectConfigAndReload(c.Request().Context(), host); err != nil {
+		return internalError(c, "apply redirect nginx config", err)
 	}
 
 	// Audit log

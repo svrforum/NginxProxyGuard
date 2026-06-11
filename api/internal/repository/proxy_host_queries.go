@@ -552,6 +552,18 @@ func (r *ProxyHostRepository) GetEnabledContainerBacked(ctx context.Context) ([]
 
 // GetByCertificateID returns all proxy hosts using the specified certificate
 func (r *ProxyHostRepository) GetByCertificateID(ctx context.Context, certificateID string) ([]model.ProxyHost, error) {
+	return r.getByReferenceColumn(ctx, "certificate_id", certificateID)
+}
+
+// GetByAccessListID returns all proxy hosts referencing the specified access list
+func (r *ProxyHostRepository) GetByAccessListID(ctx context.Context, accessListID string) ([]model.ProxyHost, error) {
+	return r.getByReferenceColumn(ctx, "access_list_id", accessListID)
+}
+
+// getByReferenceColumn returns all proxy hosts whose given reference column
+// matches the value. column is always a fixed identifier from the callers
+// above — never user input.
+func (r *ProxyHostRepository) getByReferenceColumn(ctx context.Context, column, value string) ([]model.ProxyHost, error) {
 	query := `
 		SELECT id, COALESCE(proxy_type, 'http') as proxy_type, domain_names, forward_scheme, forward_host, forward_container_name, forward_container_network, forward_port,
 			COALESCE(stream_listen_host, '') as stream_listen_host,
@@ -579,13 +591,13 @@ func (r *ProxyHostRepository) GetByCertificateID(ctx context.Context, certificat
 			COALESCE(proxy_max_temp_file_size, '') as proxy_max_temp_file_size,
 			access_list_id, enabled, is_favorite, COALESCE(config_status, 'ok') as config_status, COALESCE(config_error, '') as config_error, ddns_enabled, ddns_provider_id, ddns_proxied, meta, created_at, updated_at
 		FROM proxy_hosts
-		WHERE certificate_id = $1
+		WHERE ` + column + ` = $1
 		ORDER BY created_at ASC
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, certificateID)
+	rows, err := r.db.QueryContext(ctx, query, value)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get proxy hosts by certificate: %w", err)
+		return nil, fmt.Errorf("failed to get proxy hosts by %s: %w", column, err)
 	}
 	defer rows.Close()
 
