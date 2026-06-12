@@ -21,7 +21,7 @@ ARG OWASP_CRS_VERSION=4.26.0
 # =============================================================================
 # Stage 1: Build Stage
 # =============================================================================
-FROM alpine:3.23 AS builder
+FROM alpine:3.24 AS builder
 
 ARG NGINX_VERSION
 ARG MODSECURITY_VERSION
@@ -173,7 +173,7 @@ RUN echo "Downloading OWASP CRS ${OWASP_CRS_VERSION}..." \
 # =============================================================================
 # Stage 2: Runtime Stage
 # =============================================================================
-FROM alpine:3.23
+FROM alpine:3.24
 
 ARG TARGETARCH
 
