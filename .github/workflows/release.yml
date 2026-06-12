@@ -532,7 +532,7 @@ jobs:
           echo "contributors=$CONTRIBUTORS" >> $GITHUB_OUTPUT
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: v${{ needs.detect.outputs.version }}
           body: |
