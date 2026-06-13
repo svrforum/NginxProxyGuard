@@ -88,6 +88,7 @@ func (r *BackupRepository) importSystemSettings(ctx context.Context, tx *sql.Tx,
 			system_logs_levels = COALESCE($53::jsonb, system_logs_levels),
 			system_logs_exclude_patterns = COALESCE($54, system_logs_exclude_patterns),
 			system_logs_stdout_excluded = COALESCE($55, system_logs_stdout_excluded),
+			global_trusted_ips_bypass_waf = COALESCE($56, global_trusted_ips_bypass_waf),
 			updated_at = NOW()
 	`
 
@@ -97,7 +98,7 @@ func (r *BackupRepository) importSystemSettings(ctx context.Context, tx *sql.Tx,
 		ss.DDNSCheckIntervalMinutes = 5
 	}
 
-	// 하위 버전 백업 호환: $49-$55 컬럼은 구 버전 백업엔 없어 nil이 된다.
+	// 하위 버전 백업 호환: $49-$56 컬럼은 구 버전 백업엔 없어 nil이 된다.
 	// nil이면 COALESCE가 기존 DB 값(신규 설치 기본값)을 유지한다 — 빈 값으로
 	// 덮어쓰면 trusted IP 우회가 풀리고 기본 익스플로잇 예외가 사라지는 등
 	// 동작이 조용히 바뀌기 때문. 새 백업은 항상 구체 값(빈 목록 포함)을 가진다.
@@ -137,6 +138,7 @@ func (r *BackupRepository) importSystemSettings(ctx context.Context, tx *sql.Tx,
 		ss.GlobalTrustedIPs, ss.GlobalBlockExploitsExceptions,
 		ss.UIFontFamily, ss.UIErrorPageLanguage,
 		systemLogsLevels, systemLogsExcludePatterns, systemLogsStdoutExcluded,
+		ss.GlobalTrustedIPsBypassWAF,
 	)
 	return err
 }

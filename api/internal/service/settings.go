@@ -104,6 +104,19 @@ func (s *SettingsService) loadGlobalTrustedIPs(ctx context.Context) []string {
 	return ParseGlobalTrustedIPs(sys.GlobalTrustedIPs)
 }
 
+// loadGlobalTrustedIPsBypassWAF reports whether trusted IPs should also bypass
+// the WAF (ModSecurity), the opt-in #166 flag. Defaults false on any error.
+func (s *SettingsService) loadGlobalTrustedIPsBypassWAF(ctx context.Context) bool {
+	if s.systemSettingsRepo == nil {
+		return false
+	}
+	sys, err := s.systemSettingsRepo.Get(ctx)
+	if err != nil || sys == nil {
+		return false
+	}
+	return sys.GlobalTrustedIPsBypassWAF
+}
+
 // ---- Global Settings ----
 
 func (s *SettingsService) GetGlobalSettings(ctx context.Context) (*model.GlobalSettings, error) {
@@ -112,6 +125,23 @@ func (s *SettingsService) GetGlobalSettings(ctx context.Context) (*model.GlobalS
 		return nil, fmt.Errorf("failed to get global settings: %w", err)
 	}
 	return settings, nil
+}
+
+// RegenerateMainNginxConfig re-renders /etc/nginx/nginx.conf from the current DB
+// global + system settings, including the global trusted-IP list and the #166
+// WAF-bypass flag. It does NOT reload nginx — the caller runs its own test+reload.
+//
+// Needed by the backup restore path: restore writes settings back to the DB but
+// nginx.conf is the ONLY place the http-level trusted-IP limit_conn/limit_req
+// zones (#130) and the trusted-IP WAF-bypass rule (#166) are emitted, so without
+// this an imported config would silently not reach live nginx until the next
+// container restart re-ran startup regeneration.
+func (s *SettingsService) RegenerateMainNginxConfig(ctx context.Context) error {
+	settings, err := s.GetGlobalSettings(ctx)
+	if err != nil {
+		return err
+	}
+	return s.nginxManager.GenerateMainNginxConfig(ctx, settings, s.loadGlobalTrustedIPs(ctx), s.loadGlobalTrustedIPsBypassWAF(ctx))
 }
 
 func (s *SettingsService) UpdateGlobalSettings(ctx context.Context, req *model.UpdateGlobalSettingsRequest) (*model.GlobalSettings, error) {
@@ -130,7 +160,7 @@ func (s *SettingsService) UpdateGlobalSettings(ctx context.Context, req *model.U
 	// learns their input was rejected (otherwise they see "200 OK" and wonder
 	// why nothing changed). The DB retains the saved value; the operator can
 	// reopen the form and fix it.
-	if err := s.nginxManager.GenerateMainNginxConfig(ctx, settings, s.loadGlobalTrustedIPs(ctx)); err != nil {
+	if err := s.nginxManager.GenerateMainNginxConfig(ctx, settings, s.loadGlobalTrustedIPs(ctx), s.loadGlobalTrustedIPsBypassWAF(ctx)); err != nil {
 		log.Printf("[SettingsService] nginx.conf regeneration rejected: %v", err)
 		return settings, fmt.Errorf("settings saved but nginx rejected the new config: %w", err)
 	}
@@ -184,7 +214,7 @@ func (s *SettingsService) ResetGlobalSettings(ctx context.Context) (*model.Globa
 	}
 
 	// Regenerate main nginx.conf so the reset defaults actually hit nginx.
-	if err := s.nginxManager.GenerateMainNginxConfig(ctx, settings, s.loadGlobalTrustedIPs(ctx)); err != nil {
+	if err := s.nginxManager.GenerateMainNginxConfig(ctx, settings, s.loadGlobalTrustedIPs(ctx), s.loadGlobalTrustedIPsBypassWAF(ctx)); err != nil {
 		log.Printf("[SettingsService] Warning: failed to regenerate nginx.conf after reset: %v", err)
 	}
 

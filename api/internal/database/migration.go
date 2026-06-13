@@ -529,6 +529,10 @@ END $$`,
 			desc: "v2.7.3: system_settings.global_trusted_ips",
 			sql:  `ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS global_trusted_ips text DEFAULT ''`,
 		},
+		{
+			desc: "v2.26.0: system_settings.global_trusted_ips_bypass_waf — opt-in WAF bypass for trusted IPs (#166)",
+			sql:  `ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS global_trusted_ips_bypass_waf boolean DEFAULT false NOT NULL`,
+		},
 
 		// -----------------------------------------------------------------------
 		// DB Performance: composite indexes for logs_partitioned (v2.8.0+)

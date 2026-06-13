@@ -160,8 +160,12 @@ func (h *SystemSettingsHandler) UpdateSystemSettings(c echo.Context) error {
 	//   2. nginx.conf http-level limit_conn / limit_req zones — must be
 	//      regenerated explicitly (issue #130: trusted IPs were only honored
 	//      per-host, so global rate limits ignored the whitelist).
-	if req.GlobalTrustedIPs != nil {
+	// Also regenerate when only the WAF-bypass flag (#166) toggles — the
+	// http-level ctl:ruleEngine=Off rule lives in nginx.conf, so a flag change
+	// with unchanged trusted-IP list must still re-render the main config.
+	if req.GlobalTrustedIPs != nil || req.GlobalTrustedIPsBypassWAF != nil {
 		trustedIPs := service.ParseGlobalTrustedIPs(settings.GlobalTrustedIPs)
+		bypassWAF := settings.GlobalTrustedIPsBypassWAF
 		// One ORDERED background worker: nginx.conf first, then per-host
 		// configs, then a single reload via SyncAllConfigs. The previous two
 		// unsynchronized goroutines could interleave their writes/reloads, and
@@ -176,7 +180,7 @@ func (h *SystemSettingsHandler) UpdateSystemSettings(c echo.Context) error {
 					log.Printf("[SystemSettings] ERROR: trusted IPs change NOT fully applied — failed to load global settings for nginx.conf regen: %v (run Sync All to retry)", err)
 					return
 				}
-				if err := h.nginxManager.GenerateMainNginxConfig(bgCtx, gs, trustedIPs); err != nil {
+				if err := h.nginxManager.GenerateMainNginxConfig(bgCtx, gs, trustedIPs, bypassWAF); err != nil {
 					log.Printf("[SystemSettings] ERROR: trusted IPs change NOT fully applied — nginx.conf regeneration failed: %v (run Sync All to retry)", err)
 					return
 				}

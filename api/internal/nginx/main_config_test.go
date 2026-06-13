@@ -22,7 +22,7 @@ func renderOnly(t *testing.T, s *model.GlobalSettings) string {
 	if err := os.MkdirAll(m.configPath, 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := m.GenerateMainNginxConfig(context.Background(), s, nil); err != nil {
+	if err := m.GenerateMainNginxConfig(context.Background(), s, nil, false); err != nil {
 		t.Fatalf("GenerateMainNginxConfig: %v", err)
 	}
 	b, err := os.ReadFile(filepath.Join(dir, "nginx.conf"))
@@ -210,7 +210,7 @@ func TestMainConfig_RollsBackOnNginxTestFailure(t *testing.T) {
 
 	m := &Manager{configPath: confDir, cli: &fakeFailingCLI{}}
 
-	err := m.GenerateMainNginxConfig(context.Background(), baselineSettings(), nil)
+	err := m.GenerateMainNginxConfig(context.Background(), baselineSettings(), nil, false)
 	if err == nil {
 		t.Fatal("expected GenerateMainNginxConfig to return an error when nginx -t fails")
 	}
@@ -271,7 +271,7 @@ func TestMainConfig_GlobalTrustedIPsBypassRateLimit(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 	trusted := []string{"192.168.0.0/16", "10.0.0.5"}
-	if err := m.GenerateMainNginxConfig(context.Background(), s, trusted); err != nil {
+	if err := m.GenerateMainNginxConfig(context.Background(), s, trusted, false); err != nil {
 		t.Fatalf("GenerateMainNginxConfig: %v", err)
 	}
 	b, err := os.ReadFile(filepath.Join(dir, "nginx.conf"))
@@ -295,5 +295,54 @@ func TestMainConfig_GlobalTrustedIPsBypassRateLimit(t *testing.T) {
 	}
 	if !strings.Contains(out, "limit_req_zone $global_req_key") {
 		t.Errorf("expected limit_req_zone keyed off $global_req_key when trusted IPs set; got:\n%s", out)
+	}
+}
+
+// #166: when system_settings.global_trusted_ips_bypass_waf is ON and trusted IPs
+// exist, the http-level ModSecurity bypass rule (id:9000001, ctl:ruleEngine=Off)
+// must be emitted with the trusted-IP CSV so those clients skip the WAF. It must
+// be ABSENT when the flag is OFF, and ABSENT when the flag is ON but no trusted
+// IPs exist — an empty @ipMatch would be invalid nginx AND a silent all-IP
+// bypass. This is the load-bearing branch for the feature; guard it directly.
+func TestMainConfig_GlobalTrustedIPsBypassWAF(t *testing.T) {
+	render := func(t *testing.T, trusted []string, bypass bool) string {
+		t.Helper()
+		m := &Manager{}
+		dir := t.TempDir()
+		m.configPath = filepath.Join(dir, "conf.d")
+		if err := os.MkdirAll(m.configPath, 0755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := m.GenerateMainNginxConfig(context.Background(), baselineSettings(), trusted, bypass); err != nil {
+			t.Fatalf("GenerateMainNginxConfig: %v", err)
+		}
+		b, err := os.ReadFile(filepath.Join(dir, "nginx.conf"))
+		if err != nil {
+			t.Fatalf("read generated nginx.conf: %v", err)
+		}
+		return string(b)
+	}
+
+	// Flag ON + trusted IPs -> bypass rule rendered with the exact CSV.
+	on := render(t, []string{"203.0.113.7", "198.51.100.0/24"}, true)
+	if !strings.Contains(on, "id:9000001") {
+		t.Errorf("expected ModSecurity bypass rule id:9000001 when flag ON + IPs; got:\n%s", on)
+	}
+	if !strings.Contains(on, "ctl:ruleEngine=Off") {
+		t.Errorf("expected ctl:ruleEngine=Off in the bypass rule; got:\n%s", on)
+	}
+	if !strings.Contains(on, `@ipMatch 203.0.113.7,198.51.100.0/24`) {
+		t.Errorf("expected the bypass rule to @ipMatch the trusted-IP CSV; got:\n%s", on)
+	}
+
+	// Flag OFF (even with IPs present) -> no WAF bypass rule.
+	if off := render(t, []string{"203.0.113.7"}, false); strings.Contains(off, "id:9000001") {
+		t.Errorf("did not expect a WAF bypass rule when flag OFF; got:\n%s", off)
+	}
+
+	// Flag ON but no trusted IPs -> no rule (empty @ipMatch is invalid nginx and
+	// would silently bypass every client).
+	if onEmpty := render(t, nil, true); strings.Contains(onEmpty, "id:9000001") {
+		t.Errorf("did not expect a WAF bypass rule when flag ON but no trusted IPs; got:\n%s", onEmpty)
 	}
 }

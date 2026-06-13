@@ -82,6 +82,12 @@ type SystemSettings struct {
 	// Global Trusted IPs (bypass all security: fail2ban, WAF auto-ban, banned IPs, bot filter, rate limit)
 	GlobalTrustedIPs string `json:"global_trusted_ips" db:"global_trusted_ips"` // Newline-separated IP addresses or CIDRs that bypass all security features
 
+	// GlobalTrustedIPsBypassWAF, when true, ALSO exempts the global trusted IPs
+	// from ModSecurity/WAF (CRS) inspection — an opt-in "advanced" mode (#166).
+	// Default false: by default trusted IPs bypass only perimeter controls, NOT
+	// the WAF, so a compromised trusted host cannot proxy attacks to the backend.
+	GlobalTrustedIPsBypassWAF bool `json:"global_trusted_ips_bypass_waf" db:"global_trusted_ips_bypass_waf"`
+
 	// Global Block Exploits Exceptions
 	GlobalBlockExploitsExceptions string `json:"global_block_exploits_exceptions" db:"global_block_exploits_exceptions"` // Line-separated regex patterns for URI paths that bypass RFI/exploit blocking globally
 
@@ -178,7 +184,8 @@ type SystemSettingsResponse struct {
 	WAFAutoBanDuration  int  `json:"waf_auto_ban_duration"`
 
 	// Global Trusted IPs
-	GlobalTrustedIPs string `json:"global_trusted_ips"`
+	GlobalTrustedIPs          string `json:"global_trusted_ips"`
+	GlobalTrustedIPsBypassWAF bool   `json:"global_trusted_ips_bypass_waf"`
 
 	// Global Block Exploits Exceptions
 	GlobalBlockExploitsExceptions string `json:"global_block_exploits_exceptions"`
@@ -252,6 +259,7 @@ func (s *SystemSettings) ToResponse() *SystemSettingsResponse {
 		WAFAutoBanWindow:                       s.WAFAutoBanWindow,
 		WAFAutoBanDuration:                     s.WAFAutoBanDuration,
 		GlobalTrustedIPs:                       s.GlobalTrustedIPs,
+		GlobalTrustedIPsBypassWAF:              s.GlobalTrustedIPsBypassWAF,
 		GlobalBlockExploitsExceptions:          s.GlobalBlockExploitsExceptions,
 
 		DirectIPAccessAction:      s.DirectIPAccessAction,
@@ -365,7 +373,8 @@ type UpdateSystemSettingsRequest struct {
 	WAFAutoBanDuration  *int  `json:"waf_auto_ban_duration,omitempty"`
 
 	// Global Trusted IPs
-	GlobalTrustedIPs *string `json:"global_trusted_ips,omitempty"`
+	GlobalTrustedIPs          *string `json:"global_trusted_ips,omitempty"`
+	GlobalTrustedIPsBypassWAF *bool   `json:"global_trusted_ips_bypass_waf,omitempty"`
 
 	// Global Block Exploits Exceptions
 	GlobalBlockExploitsExceptions *string `json:"global_block_exploits_exceptions,omitempty"`

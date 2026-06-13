@@ -64,10 +64,12 @@ func runStartup(ctx context.Context, c *Container) error {
 		// Pull global trusted IPs so the http-level limit_conn / limit_req
 		// zones honor the same whitelist the per-host configs already use.
 		var trustedIPs []string
+		var trustedBypassWAF bool
 		if sys, err := c.Repositories.SystemSettings.Get(ctx); err == nil && sys != nil {
 			trustedIPs = service.ParseGlobalTrustedIPs(sys.GlobalTrustedIPs)
+			trustedBypassWAF = sys.GlobalTrustedIPsBypassWAF
 		}
-		if err := c.Nginx.GenerateMainNginxConfig(ctx, settings, trustedIPs); err != nil {
+		if err := c.Nginx.GenerateMainNginxConfig(ctx, settings, trustedIPs, trustedBypassWAF); err != nil {
 			log.Printf("[Startup] Warning: failed to regenerate nginx.conf: %v", err)
 		} else {
 			log.Println("[Startup] nginx.conf regenerated successfully")

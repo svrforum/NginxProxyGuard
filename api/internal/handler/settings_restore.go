@@ -308,6 +308,20 @@ func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Back
 			result.NginxConfigError = ""
 		}
 
+		// Regenerate the main nginx.conf from the restored DB. The http-level
+		// trusted-IP rate-limit zones (#130) and the trusted-IP WAF-bypass rule
+		// (#166) live ONLY in nginx.conf, which the per-host regen above never
+		// touches — so without this the restored values silently would not reach
+		// live nginx until the next container restart. Done after the conf.d tree
+		// is known-valid so its internal nginx -t tests a consistent tree; on a
+		// bad render it rolls nginx.conf back to the last-good copy and logs.
+		// (Note: ModSecurity rule changes additionally need a proxy restart to
+		// take effect — this still fixes the file/DB divergence and the #130
+		// rate-limit zones, which do apply on reload.)
+		if err := h.settingsService.RegenerateMainNginxConfig(ctx); err != nil {
+			log.Printf("[Backup] Warning: failed to regenerate main nginx.conf after restore: %v", err)
+		}
+
 		// Reload nginx only if config test passes
 		if err := h.nginxManager.ReloadNginx(ctx); err != nil {
 			log.Printf("[Backup] Warning: failed to reload nginx after restore: %v", err)

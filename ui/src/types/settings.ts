@@ -407,6 +407,7 @@ export interface SystemSettings {
 
   // Global Trusted IPs
   global_trusted_ips: string;
+  global_trusted_ips_bypass_waf: boolean;
 
   // Global Block Exploits Exceptions
   global_block_exploits_exceptions: string;
@@ -493,6 +494,7 @@ export interface UpdateSystemSettingsRequest {
 
   // Global Trusted IPs
   global_trusted_ips?: string;
+  global_trusted_ips_bypass_waf?: boolean;
 
   // Global Block Exploits Exceptions
   global_block_exploits_exceptions?: string;

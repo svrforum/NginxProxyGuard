@@ -258,6 +258,40 @@ export default function WAFAutoBanSettings() {
             {t('system.waf.trustedIps.format')}
           </p>
         </div>
+
+        {/* Opt-in: also bypass ModSecurity/WAF for trusted IPs */}
+        <div className={`mt-4 p-4 rounded-lg border ${getValue('global_trusted_ips_bypass_waf')
+          ? 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800'
+          : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700'
+          }`}>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <h4 className="text-sm font-semibold text-slate-800 dark:text-white">
+                  {t('system.waf.trustedIps.bypassWaf.label')}
+                </h4>
+                <HelpTip content={t('system.waf.trustedIps.bypassWaf.help')} />
+              </div>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                {t('system.waf.trustedIps.bypassWaf.description')}
+              </p>
+              {getValue('global_trusted_ips_bypass_waf') ? (
+                <p className="mt-2 text-xs font-medium text-red-700 dark:text-red-400">
+                  ⚠ {t('system.waf.trustedIps.bypassWaf.warning')}
+                </p>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              onClick={() => handleChange('global_trusted_ips_bypass_waf', !getValue('global_trusted_ips_bypass_waf'))}
+              className={`relative w-12 h-6 rounded-full transition-colors shrink-0 ${getValue('global_trusted_ips_bypass_waf') ? 'bg-red-500' : 'bg-slate-300 dark:bg-slate-600'
+                }`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${getValue('global_trusted_ips_bypass_waf') ? 'translate-x-6' : ''
+                }`}></span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

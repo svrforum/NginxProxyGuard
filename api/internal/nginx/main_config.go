@@ -259,6 +259,19 @@ http {
     # ==========================================================================
     modsecurity on;
     modsecurity_rules_file /etc/nginx/modsec/crs-global.conf;
+{{if .GlobalTrustedIPsBypassWAFCSV}}    # Global trusted IPs — ALSO bypass ModSecurity/WAF for these source IPs
+    # across ALL hosts (opt-in advanced mode, #166; default OFF). Phase-1
+    # ctl:ruleEngine=Off disables CRS for the matching request before the
+    # blocking-evaluation phase, the same mechanism per-host Priority Allow IPs
+    # use. NOTE: this exempts the WAF (CRS) only — nginx-level exploit/scanner
+    # blocking still applies. Anti-spoof: REMOTE_ADDR is nginx's post-real_ip
+    # client address — resolved from X-Forwarded-For ONLY when the TCP peer is
+    # within set_real_ip_from (trusted proxy ranges), otherwise the raw peer IP.
+    # A direct public client cannot forge it; operators must keep set_real_ip_from
+    # limited to genuinely trusted fronting proxies. Same trust model as the
+    # per-host Priority Allow rule (id:900900).
+    modsecurity_rules 'SecRule REMOTE_ADDR "@ipMatch {{.GlobalTrustedIPsBypassWAFCSV}}" "id:9000001,phase:1,t:none,nolog,pass,ctl:ruleEngine=Off"';
+{{end}}
 
 {{if and .GlobalTrustedIPs (or .LimitConnEnabled .LimitReqEnabled)}}    # ==========================================================================
     # Global trusted IPs — bypass http-level limit_conn / limit_req zones.
@@ -411,6 +424,12 @@ type MainConfigData struct {
 	// configured; the template only emits the geo+map blocks when this is set.
 	GlobalTrustedIPs []string
 
+	// GlobalTrustedIPsBypassWAFCSV is the comma-joined trusted IP list, set ONLY
+	// when the opt-in global_trusted_ips_bypass_waf flag is on AND there are
+	// trusted IPs (#166). Empty string disables the http-level WAF-bypass rule.
+	// Pre-joined in Go because the main nginx template has no func map.
+	GlobalTrustedIPsBypassWAFCSV string
+
 	CustomHTTPConfig   string
 	CustomStreamConfig string
 }
@@ -430,7 +449,7 @@ var validErrorLogLevels = map[string]bool{
 // individual entries) and are wired into the http-level limit_conn / limit_req
 // zones so whitelisted IPs bypass DDoS limits the same way they bypass per-host
 // rate limits and bot/WAF checks. Pass nil when no whitelist applies.
-func buildMainConfigData(s *model.GlobalSettings, trustedIPs []string) MainConfigData {
+func buildMainConfigData(s *model.GlobalSettings, trustedIPs []string, trustedBypassWAF bool) MainConfigData {
 	d := MainConfigData{
 		WorkerConnections:        s.WorkerConnections,
 		MultiAccept:              s.MultiAccept,
@@ -505,6 +524,11 @@ func buildMainConfigData(s *model.GlobalSettings, trustedIPs []string) MainConfi
 		CustomStreamConfig:       strings.TrimSpace(s.CustomStreamConfig),
 		GlobalTrustedIPs:         trustedIPs,
 	}
+	// Opt-in WAF bypass (#166): only emit the http-level ctl:ruleEngine=Off rule
+	// when the flag is on AND there are trusted IPs to match.
+	if trustedBypassWAF && len(trustedIPs) > 0 {
+		d.GlobalTrustedIPsBypassWAFCSV = strings.Join(trustedIPs, ",")
+	}
 	if s.WorkerProcesses <= 0 {
 		d.WorkerProcessesStr = "auto"
 	} else {
@@ -532,7 +556,7 @@ func buildMainConfigData(s *model.GlobalSettings, trustedIPs []string) MainConfi
 //
 // Call from startup and from SettingsService.UpdateGlobalSettings, and also
 // from SystemSettingsHandler when global_trusted_ips changes.
-func (m *Manager) GenerateMainNginxConfig(ctx context.Context, s *model.GlobalSettings, trustedIPs []string) error {
+func (m *Manager) GenerateMainNginxConfig(ctx context.Context, s *model.GlobalSettings, trustedIPs []string, trustedBypassWAF bool) error {
 	if s == nil {
 		return fmt.Errorf("global settings are nil")
 	}
@@ -543,7 +567,7 @@ func (m *Manager) GenerateMainNginxConfig(ctx context.Context, s *model.GlobalSe
 	}
 
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, buildMainConfigData(s, trustedIPs)); err != nil {
+	if err := tmpl.Execute(&buf, buildMainConfigData(s, trustedIPs, trustedBypassWAF)); err != nil {
 		return fmt.Errorf("execute main nginx template: %w", err)
 	}
 
@@ -551,19 +575,22 @@ func (m *Manager) GenerateMainNginxConfig(ctx context.Context, s *model.GlobalSe
 	nginxRoot := filepath.Dir(m.configPath)
 	target := filepath.Join(nginxRoot, "nginx.conf")
 
-	// Back up the existing file so a bad template render can be undone.
-	// On the very first boot no backup exists yet — that's fine; a template
-	// failure there just means nginx stays on whatever the image seeded.
-	var backup []byte
-	backupExists := false
-	if b, err := os.ReadFile(target); err == nil {
-		backup = b
-		backupExists = true
-	}
-
 	// All nginx file ops share globalNginxMutex; other writers must not
 	// interleave a reload while we swap nginx.conf and validate it.
 	return m.executeWithLock(ctx, func() error {
+		// Back up the existing file so a bad template render can be undone.
+		// Captured INSIDE the lock so the snapshot reflects the last committed
+		// on-disk state — capturing it before the lock let a concurrent writer's
+		// just-validated nginx.conf get clobbered by our rollback to a staler copy.
+		// On the very first boot no backup exists yet — that's fine; a template
+		// failure there just means nginx stays on whatever the image seeded.
+		var backup []byte
+		backupExists := false
+		if b, err := os.ReadFile(target); err == nil {
+			backup = b
+			backupExists = true
+		}
+
 		if err := os.MkdirAll(filepath.Join(nginxRoot, "stream.d"), 0755); err != nil {
 			return fmt.Errorf("create stream.d: %w", err)
 		}

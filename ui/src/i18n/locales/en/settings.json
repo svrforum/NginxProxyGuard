@@ -370,10 +370,16 @@
       },
       "trustedIps": {
         "title": "Global Trusted IPs",
-        "description": "IPs that bypass per-host perimeter controls (geo restriction, access lists, bot filter, rate limiting) and are never automatically banned (Fail2ban, WAF Auto-Ban, IP bans). They do NOT bypass WAF rules or exploit/scanner blocking.",
-        "help": "Add internal network ranges, monitoring systems, or trusted service IPs. These addresses bypass per-host perimeter controls (geo restriction, access lists, bot filter, rate limiting), are excluded from automatic banning (Fail2ban, WAF Auto-Ban), and are removed from the banned IP list in nginx configs. For safety they still pass through WAF rules and exploit/scanner detection, so a compromised trusted host cannot proxy attacks to the backend. Supports IPv4, IPv6, and CIDR notation.",
+        "description": "IPs that bypass per-host perimeter controls (geo restriction, access lists, bot filter, rate limiting) and are never automatically banned (Fail2ban, WAF Auto-Ban, IP bans). By default they do NOT bypass WAF rules or exploit/scanner blocking, but the option below lets you also bypass the WAF (ModSecurity).",
+        "help": "Add internal network ranges, monitoring systems, or trusted service IPs. These addresses bypass per-host perimeter controls (geo restriction, access lists, bot filter, rate limiting), are excluded from automatic banning (Fail2ban, WAF Auto-Ban), and are removed from the banned IP list in nginx configs. By default they still pass through WAF rules and exploit/scanner detection, so a compromised trusted host cannot proxy attacks to the backend. If needed, the option below also disables WAF (ModSecurity) inspection for these IPs. Supports IPv4, IPv6, and CIDR notation.",
         "placeholder": "# Internal network\n192.168.1.0/24\n10.0.0.0/8\n# Monitoring server\n203.0.113.50",
-        "format": "One IP or CIDR per line. Lines starting with # are comments. Supports IPv4, IPv6, and CIDR. Invalid entries are silently ignored."
+        "format": "One IP or CIDR per line. Lines starting with # are comments. Supports IPv4, IPv6, and CIDR. Invalid entries are silently ignored.",
+        "bypassWaf": {
+          "label": "Trusted IPs also bypass the WAF (ModSecurity)",
+          "description": "When enabled, requests from the trusted IPs above skip ModSecurity / OWASP CRS WAF inspection entirely. Off by default.",
+          "help": "Advanced option. When enabled, the ModSecurity rule engine is turned off for all requests from the trusted IPs above (the full WAF is skipped). Use this only when legitimate traffic from a trusted host is being blocked by WAF false positives. It does not affect nginx-level rules such as exploit/scanner blocking (block_exploits) or the bot filter.",
+          "warning": "WAF protection is fully disabled for these IPs. Only add addresses you truly trust — if such a host is compromised, attacks can reach your backend without WAF inspection."
+        }
       }
     },
     "maintenance": {

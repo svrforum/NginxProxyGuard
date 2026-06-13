@@ -758,6 +758,7 @@ type SystemSettingsExport struct {
 	// overwriting them with empty values — overwriting would silently revoke
 	// trusted IPs and wipe the default exploit-block exceptions.
 	GlobalTrustedIPs              *string `json:"global_trusted_ips,omitempty"`
+	GlobalTrustedIPsBypassWAF     *bool   `json:"global_trusted_ips_bypass_waf,omitempty"`
 	GlobalBlockExploitsExceptions *string `json:"global_block_exploits_exceptions,omitempty"`
 
 	// UI Settings
