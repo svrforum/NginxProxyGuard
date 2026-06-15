@@ -12,6 +12,7 @@ import { ProxyHostTable } from './proxy-host-list/ProxyHostTable'
 import { ProxyHostFilters, type SortBy, type SortOrder } from './proxy-host-list/ProxyHostFilters'
 import { ProxyHostBulkActions } from './proxy-host-list/ProxyHostBulkActions'
 import { ToggleConfirmDialog } from './proxy-host-list/ProxyHostRow'
+import { EmptyState } from './common/listui'
 
 interface ProxyHostListProps {
   onEdit: (host: ProxyHost, tab?: TabType) => void
@@ -322,8 +323,8 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
+      <div className="flex items-center justify-center p-12">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-indigo-600 dark:border-slate-700 dark:border-t-indigo-400" />
       </div>
     )
   }
@@ -349,31 +350,32 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
       />
 
       {hosts.length === 0 ? (
-        <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-8 text-center border border-dashed border-slate-200 dark:border-slate-700">
-          <div className="w-12 h-12 bg-slate-200 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <EmptyState
+          icon={
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               {searchInput ? (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               ) : (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
               )}
             </svg>
-          </div>
-          <h3 className="text-slate-600 dark:text-slate-300 font-medium mb-1">
+          }
+        >
+          <span className="block font-medium text-slate-600 dark:text-slate-300">
             {searchInput ? t('list.noResults') : t('list.empty')}
-          </h3>
-          <p className="text-slate-400 text-sm">
+          </span>
+          <span className="mt-1 block text-slate-400">
             {searchInput ? t('list.noResultsDescription', { query: searchInput }) : t('list.emptyDescription')}
-          </p>
+          </span>
           {searchInput && (
             <button
               onClick={handleClearSearch}
-              className="mt-3 text-sm text-primary-600 hover:text-primary-700 font-medium"
+              className="mt-3 text-sm font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
             >
               {t('list.clearSearch')}
             </button>
           )}
-        </div>
+        </EmptyState>
       ) : (
         <ProxyHostTable
           hosts={hosts}

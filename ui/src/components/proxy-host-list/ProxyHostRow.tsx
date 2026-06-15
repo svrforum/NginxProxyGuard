@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ProxyHost } from '../../types/proxy-host';
 import type { TabType } from '../proxy-host/types';
+import { IconButton, PencilIcon, TrashIcon } from '../common/listui';
 
 // ProxyHostRow.tsx - houses the per-row toggle confirmation dialog and the
 // memoized table row body. Splitting the row out lets `React.memo` skip
@@ -273,43 +274,25 @@ function ProxyHostRowImpl({
 
       {/* Actions */}
       <td className="px-4 py-3 text-right">
-        <div className="flex justify-end gap-1">
-          <button
-            onClick={() => onTestConfig(host)}
-            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 dark:hover:text-blue-400 rounded transition-colors"
-            title={t('actions.testConfig')}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="flex items-center justify-end gap-0.5">
+          <IconButton onClick={() => onTestConfig(host)} title={t('actions.testConfig')}>
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-          </button>
-          <button
-            onClick={() => onEdit(host)}
-            className="p-1.5 text-slate-400 hover:text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/30 dark:hover:text-primary-400 rounded transition-colors"
-            title={t('actions.edit')}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-          </button>
-          <button
-            onClick={() => onClone(host)}
-            className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 dark:hover:text-emerald-400 rounded transition-colors"
-            title={t('actions.clone')}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          </IconButton>
+          <IconButton onClick={() => onEdit(host)} title={t('actions.edit')}>
+            <PencilIcon />
+          </IconButton>
+          <IconButton onClick={() => onClone(host)} title={t('actions.clone')}>
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
             </svg>
-          </button>
-          <button
-            onClick={() => onDelete(host.id)}
-            className="p-1.5 ml-1 pl-2 border-l border-slate-200 dark:border-slate-600 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 dark:hover:text-red-400 rounded-r transition-colors"
-            title={t('actions.delete')}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          </button>
+          </IconButton>
+          <span className="ml-1 border-l border-slate-200 pl-1 dark:border-slate-600">
+            <IconButton onClick={() => onDelete(host.id)} title={t('actions.delete')} variant="danger">
+              <TrashIcon />
+            </IconButton>
+          </span>
         </div>
       </td>
     </tr>
