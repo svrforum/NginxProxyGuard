@@ -9,6 +9,7 @@ import { BanHistoryTab } from './banned-ip/BanHistoryTab'
 import { BulkActionBar } from './banned-ip/BulkActionBar'
 import { AddBanModal } from './banned-ip/AddBanModal'
 import { useUnbanAll } from './banned-ip/useUnbanAll'
+import { IconButton, AddButton, EmptyState, EntityCard, TrashIcon, EyeIcon } from './common/listui'
 
 function formatDate(dateStr: string, locale?: string): string {
   return new Date(dateStr).toLocaleString(locale || 'ko-KR')
@@ -74,6 +75,88 @@ function getReasonCategory(reason?: string): string {
   if (lowerReason.includes('bot')) return 'bot'
   if (lowerReason.includes('auto')) return 'auto'
   return 'manual'
+}
+
+type TFn = (key: string, options?: Record<string, unknown>) => string
+
+interface BanCardProps {
+  ban: BannedIP
+  hostName: string | null
+  selected: boolean
+  isUnbanning: boolean
+  locale: string
+  t: TFn
+  onToggleSelect: () => void
+  onView: () => void
+  onUnban: () => void
+}
+
+function BanCard({ ban, hostName, selected, isUnbanning, locale, t, onToggleSelect, onView, onUnban }: BanCardProps) {
+  const timeRemaining = ban.is_permanent ? null : getTimeRemaining(ban.expires_at, t)
+
+  return (
+    <EntityCard active={selected}>
+      <div className="flex items-center gap-3 px-4 py-3.5 sm:px-5">
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={onToggleSelect}
+          aria-label={ban.ip_address}
+          className="w-4 h-4 shrink-0 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+        />
+
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-300">
+          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+          </svg>
+        </span>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={onView}
+              className="font-mono text-sm font-semibold text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 hover:underline"
+            >
+              {ban.ip_address}
+            </button>
+            <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium ${hostName ? 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300' : 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'}`}>
+              {hostName || t('bannedIp.global', { defaultValue: '전역' })}
+            </span>
+            <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium ${ban.is_auto_banned ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}>
+              {ban.is_auto_banned ? t('bannedIp.type.auto', { defaultValue: '자동' }) : t('bannedIp.type.manual', { defaultValue: '수동' })}
+            </span>
+          </div>
+          <p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400" title={ban.reason}>
+            {ban.reason || '-'}
+          </p>
+        </div>
+
+        <div className="hidden shrink-0 text-right sm:block">
+          <p className="text-xs text-slate-500 dark:text-slate-400" title={formatDate(ban.banned_at, locale)}>
+            {formatRelativeTime(ban.banned_at, t)}
+          </p>
+          {ban.is_permanent ? (
+            <span className="mt-1 inline-flex items-center rounded-full bg-red-100 dark:bg-red-900/30 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-300">
+              {t('bannedIp.status.permanent')}
+            </span>
+          ) : timeRemaining ? (
+            <p className={`mt-0.5 text-xs ${timeRemaining.color}`}>{timeRemaining.text}</p>
+          ) : (
+            <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-600">-</p>
+          )}
+        </div>
+
+        <div className="flex shrink-0 items-center gap-0.5">
+          <IconButton onClick={onView} title={t('bannedIp.logs.title')}>
+            <EyeIcon />
+          </IconButton>
+          <IconButton onClick={onUnban} disabled={isUnbanning} variant="danger" title={t('bannedIp.actions.unban')}>
+            <TrashIcon />
+          </IconButton>
+        </div>
+      </div>
+    </EntityCard>
+  )
 }
 
 export function BannedIPList() {
@@ -246,15 +329,7 @@ export function BannedIPList() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            {t('bannedIp.addBan')}
-          </button>
+          <AddButton onClick={() => setShowAddModal(true)}>{t('bannedIp.addBan')}</AddButton>
         </div>
       </div>
 
@@ -421,12 +496,15 @@ export function BannedIPList() {
           {t('bannedIp.fetchError')}
         </div>
       ) : filteredBannedIPs.length === 0 ? (
-        <div className="text-center py-12 text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
-          <svg className="w-16 h-16 mx-auto mb-4 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-          </svg>
-          <p>{t('bannedIp.noBans')}</p>
-        </div>
+        <EmptyState
+          icon={
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+          }
+        >
+          {t('bannedIp.noBans')}
+        </EmptyState>
       ) : (
         <div className="space-y-3">
           <BulkActionBar
@@ -435,112 +513,34 @@ export function BannedIPList() {
             onClear={() => setSelectedIds(new Set())}
             onUnban={handleBulkUnban}
           />
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700">
-              <tr>
-                <th className="px-4 py-3 w-10">
-                  <input
-                    type="checkbox"
-                    checked={filteredBannedIPs.length > 0 && selectedIds.size === filteredBannedIPs.length}
-                    onChange={handleToggleAll}
-                    aria-label={t('bannedIp.bulk.selectAll', { defaultValue: '모두 선택' })}
-                    className="w-4 h-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-                  />
-                </th>
-                <th className="text-left px-4 py-3 text-sm font-medium text-slate-600 dark:text-slate-300">{t('bannedIp.table.ip')}</th>
-                <th className="text-left px-4 py-3 text-sm font-medium text-slate-600 dark:text-slate-300">{t('bannedIp.table.host', { defaultValue: '호스트' })}</th>
-                <th className="text-left px-4 py-3 text-sm font-medium text-slate-600 dark:text-slate-300">{t('bannedIp.table.reason')}</th>
-                <th className="text-left px-4 py-3 text-sm font-medium text-slate-600 dark:text-slate-300">{t('bannedIp.table.type', { defaultValue: '유형' })}</th>
-                <th className="text-left px-4 py-3 text-sm font-medium text-slate-600 dark:text-slate-300">{t('bannedIp.table.banTime')}</th>
-                <th className="text-left px-4 py-3 text-sm font-medium text-slate-600 dark:text-slate-300">{t('bannedIp.table.expires')}</th>
-                <th className="text-right px-4 py-3 text-sm font-medium text-slate-600 dark:text-slate-300">{t('bannedIp.table.actions')}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-              {filteredBannedIPs.map((ban) => {
-                const timeRemaining = ban.is_permanent ? null : getTimeRemaining(ban.expires_at, t)
-                const hostName = ban.proxy_host_id ? hostMap[ban.proxy_host_id] : null
-
-                return (
-                  <tr key={ban.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                    <td className="px-4 py-3">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(ban.id)}
-                        onChange={() => handleToggleSelect(ban.id)}
-                        aria-label={ban.ip_address}
-                        className="w-4 h-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                      <button
-                        onClick={() => setSelectedIP(ban)}
-                        className="font-mono text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 hover:underline"
-                      >
-                        {ban.ip_address}
-                      </button>
-                    </td>
-                    <td className="px-4 py-3">
-                      {hostName ? (
-                        <span className="text-sm text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded">
-                          {hostName}
-                        </span>
-                      ) : (
-                        <span className="text-sm text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded font-medium">
-                          {t('bannedIp.global', { defaultValue: '전역' })}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-sm text-slate-600 dark:text-slate-300 max-w-[200px] truncate block" title={ban.reason}>
-                        {ban.reason || '-'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      {ban.is_auto_banned ? (
-                        <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-xs font-medium rounded">
-                          {t('bannedIp.type.auto', { defaultValue: '자동' })}
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-medium rounded">
-                          {t('bannedIp.type.manual', { defaultValue: '수동' })}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-sm text-slate-500 dark:text-slate-400" title={formatDate(ban.banned_at, i18n.language)}>
-                        {formatRelativeTime(ban.banned_at, t)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      {ban.is_permanent ? (
-                        <span className="px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-xs font-medium rounded-full">
-                          {t('bannedIp.status.permanent')}
-                        </span>
-                      ) : timeRemaining ? (
-                        <span className={`text-sm ${timeRemaining.color}`}>
-                          {timeRemaining.text}
-                        </span>
-                      ) : (
-                        <span className="text-sm text-slate-400 dark:text-slate-600">-</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => handleUnban(ban.id, ban.ip_address)}
-                        disabled={unbanMutation.isPending}
-                        className="px-3 py-1.5 text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
-                      >
-                        {t('bannedIp.actions.unban')}
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+          <div className="flex items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              checked={filteredBannedIPs.length > 0 && selectedIds.size === filteredBannedIPs.length}
+              onChange={handleToggleAll}
+              aria-label={t('bannedIp.bulk.selectAll', { defaultValue: '모두 선택' })}
+              className="w-4 h-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+            />
+            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+              {t('bannedIp.bulk.selectAll', { defaultValue: '모두 선택' })}
+            </span>
+          </div>
+          <div className="space-y-3">
+            {filteredBannedIPs.map((ban) => (
+              <BanCard
+                key={ban.id}
+                ban={ban}
+                hostName={ban.proxy_host_id ? hostMap[ban.proxy_host_id] : null}
+                selected={selectedIds.has(ban.id)}
+                isUnbanning={unbanMutation.isPending}
+                locale={i18n.language}
+                t={t}
+                onToggleSelect={() => handleToggleSelect(ban.id)}
+                onView={() => setSelectedIP(ban)}
+                onUnban={() => handleUnban(ban.id, ban.ip_address)}
+              />
+            ))}
+          </div>
         </div>
       )}
 

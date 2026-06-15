@@ -7,6 +7,7 @@ import type { ProxyHost } from '../types/proxy-host';
 import type { CreateFail2banRequest } from '../types/security';
 import { Link } from 'react-router-dom';
 import { ModalShell } from './common/ModalShell';
+import { EntityCard, IconButton, EmptyState, StatusPill, PencilIcon } from './common/listui';
 
 export function Fail2banManagement() {
   const { t } = useTranslation('fail2ban');
@@ -58,25 +59,25 @@ export function Fail2banManagement() {
       </div>
 
       {/* Host List */}
-      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-        <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
-          <h2 className="text-sm font-medium text-slate-900 dark:text-white">{t('hostList.title')}</h2>
-        </div>
+      <div className="space-y-3">
+        <h2 className="text-sm font-medium text-slate-900 dark:text-white">{t('hostList.title')}</h2>
 
         {hostsQuery.isLoading ? (
-          <div className="p-8 text-center text-slate-500 dark:text-slate-400">
-            <svg className="w-8 h-8 animate-spin mx-auto mb-2" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            {t('common:status.loading')}
+          <div className="flex justify-center items-center py-14">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
           </div>
         ) : hosts.length === 0 ? (
-          <div className="p-8 text-center text-slate-500 dark:text-slate-400">
+          <EmptyState
+            icon={
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+              </svg>
+            }
+          >
             {t('hostList.empty')}
-          </div>
+          </EmptyState>
         ) : (
-          <div className="divide-y divide-slate-200 dark:divide-slate-700">
+          <div className="space-y-3">
             {hosts.map((host) => (
               <HostFail2banRow
                 key={host.id}
@@ -159,65 +160,59 @@ function HostFail2banRow({
   };
 
   return (
-    <div className="px-4 py-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
-      <div className="flex items-center gap-3 min-w-0">
-        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isEnabled ? 'bg-red-100 dark:bg-red-900/30' : 'bg-slate-100 dark:bg-slate-700'}`}>
-          <svg className={`w-5 h-5 ${isEnabled ? 'text-red-600 dark:text-red-400' : 'text-slate-400 dark:text-slate-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+    <EntityCard active={isEnabled}>
+      <div className="flex items-center gap-3 px-4 py-3.5 sm:px-5">
+        <span
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+            isEnabled
+              ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-300'
+              : 'bg-slate-100 text-slate-400 dark:bg-slate-700 dark:text-slate-500'
+          }`}
+        >
+          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
           </svg>
-        </div>
-        <div className="min-w-0">
-          <div className="font-medium text-slate-900 dark:text-white truncate">
+        </span>
+
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-semibold text-slate-900 dark:text-white">
             {host.domain_names?.[0] || host.id}
           </div>
-          <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
-            {isEnabled ? (
-              <>
-                <span className="text-red-600 dark:text-red-400">{t('status.enabled')}</span>
-                <span>•</span>
-                <span>{t('settings.maxRetries')}: {settings?.max_retries}</span>
-                <span>•</span>
-                <span>{t('settings.banTime')}: {settings?.ban_time}s</span>
-              </>
-            ) : (
-              <span className="text-slate-400">{t('status.disabled')}</span>
-            )}
-          </div>
+          {isEnabled && (
+            <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+              <span>{t('settings.maxRetries')}: {settings?.max_retries}</span>
+              <span>•</span>
+              <span>{t('settings.banTime')}: {settings?.ban_time}s</span>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {settingsQuery.isLoading ? (
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-slate-400 mx-2"></div>
+          ) : (
+            <>
+              <StatusPill active={isEnabled}>
+                {isEnabled ? t('status.enabled') : t('status.disabled')}
+              </StatusPill>
+              <IconButton onClick={handleEdit} title={t('actions.configure')}>
+                <PencilIcon />
+              </IconButton>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isEnabled}
+                  onChange={(e) => toggleMutation.mutate(e.target.checked)}
+                  disabled={toggleMutation.isPending}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 dark:peer-focus:ring-red-800 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-red-600"></div>
+              </label>
+            </>
+          )}
         </div>
       </div>
-
-      <div className="flex items-center gap-2">
-        {settingsQuery.isLoading ? (
-          <svg className="w-5 h-5 animate-spin text-slate-400" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-        ) : (
-          <>
-            <button
-              onClick={handleEdit}
-              className="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-              title={t('actions.configure')}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </button>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={isEnabled}
-                onChange={(e) => toggleMutation.mutate(e.target.checked)}
-                disabled={toggleMutation.isPending}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 dark:peer-focus:ring-red-800 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-red-600"></div>
-            </label>
-          </>
-        )}
-      </div>
-    </div>
+    </EntityCard>
   );
 }
 
