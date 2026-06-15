@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import type { Log } from '../../../types/log';
 import { LogTypeBadge } from '../badges';
+import { IconButton, XIcon } from '../../common/listui';
 
 interface LogDetailHeaderProps {
   log: Log;
@@ -18,14 +19,9 @@ export function LogDetailHeader({ log, onClose, onBanClick }: LogDetailHeaderPro
           <LogTypeBadge type={log.log_type} />
           <h2 className="text-lg font-semibold text-slate-900 dark:text-white">{t('detail.title')}</h2>
         </div>
-        <button
-          onClick={onClose}
-          className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-        >
-          <svg className="w-5 h-5 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
+        <IconButton onClick={onClose} title={t('detail.close', 'Close')}>
+          <XIcon className="h-5 w-5" />
+        </IconButton>
       </div>
 
       <div className="grid grid-cols-2 gap-4 mb-4 px-4 pt-4">

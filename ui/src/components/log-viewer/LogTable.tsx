@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import type { Log, LogFilter, LogListResponse } from '../../types/log';
 import type { UseQueryResult } from '@tanstack/react-query';
 import { LogRowTyped, type AccessColumnKey } from './index';
+import { EmptyState } from '../common/listui';
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
 
@@ -169,11 +170,16 @@ export function LogTable({
               if (logsQuery.isLoading) {
                 return (
                   <tr>
-                    <td
-                      colSpan={emptyColSpan}
-                      className="px-4 py-8 text-center text-slate-500 dark:text-slate-400"
-                    >
-                      {t('table.loading')}
+                    <td colSpan={emptyColSpan} className="p-4">
+                      <EmptyState
+                        icon={
+                          <svg className="h-5 w-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                        }
+                      >
+                        {t('table.loading')}
+                      </EmptyState>
                     </td>
                   </tr>
                 );
@@ -181,15 +187,20 @@ export function LogTable({
               if (logsQuery.data?.data?.length === 0) {
                 return (
                   <tr>
-                    <td
-                      colSpan={emptyColSpan}
-                      className="px-4 py-8 text-center text-slate-500 dark:text-slate-400"
-                    >
-                      {logType === 'modsec'
-                        ? t('table.noWafEvents')
-                        : logType === 'error'
-                          ? t('table.noErrors')
-                          : t('table.noLogs')}
+                    <td colSpan={emptyColSpan} className="p-4">
+                      <EmptyState
+                        icon={
+                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        }
+                      >
+                        {logType === 'modsec'
+                          ? t('table.noWafEvents')
+                          : logType === 'error'
+                            ? t('table.noErrors')
+                            : t('table.noLogs')}
+                      </EmptyState>
                     </td>
                   </tr>
                 );
@@ -227,7 +238,7 @@ export function LogTable({
               <select
                 value={perPage}
                 onChange={(e) => changePerPage(parseInt(e.target.value))}
-                className="px-2 py-1 border border-slate-300 dark:border-slate-600 rounded text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                className="px-2 py-1 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 {PAGE_SIZE_OPTIONS.map((size) => (
                   <option key={size} value={size}>

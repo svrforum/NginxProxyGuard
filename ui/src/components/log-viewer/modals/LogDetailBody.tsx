@@ -70,7 +70,7 @@ export function BanIPForm({
             value={banReason}
             onChange={(e) => setBanReason(e.target.value)}
             placeholder={t('banIP.reasonPlaceholder')}
-            className="w-full px-3 py-2 border border-red-300 dark:border-red-700 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+            className="w-full px-3 py-2 border border-red-300 dark:border-red-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
           />
         </div>
         <div>
@@ -80,7 +80,7 @@ export function BanIPForm({
           <select
             value={banDuration ?? ''}
             onChange={(e) => setBanDuration(e.target.value ? parseInt(e.target.value) : undefined)}
-            className="w-full px-3 py-2 border border-red-300 dark:border-red-700 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+            className="w-full px-3 py-2 border border-red-300 dark:border-red-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
           >
             <option value="">{t('banIP.permanent')}</option>
             <option value="3600">{t('banIP.duration1h')}</option>
@@ -150,7 +150,7 @@ export function BlockURIForm({
           <select
             value={uriMatchType}
             onChange={(e) => setURIMatchType(e.target.value as URIMatchType)}
-            className="w-full px-3 py-2 border border-purple-300 dark:border-purple-700 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+            className="w-full px-3 py-2 border border-purple-300 dark:border-purple-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
           >
             <option value="exact">{t('blockURI.matchTypes.exact')}</option>
             <option value="prefix">{t('blockURI.matchTypes.prefix')}</option>
@@ -166,7 +166,7 @@ export function BlockURIForm({
             value={uriDescription}
             onChange={(e) => setURIDescription(e.target.value)}
             placeholder={t('blockURI.descriptionPlaceholder')}
-            className="w-full px-3 py-2 border border-purple-300 dark:border-purple-700 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+            className="w-full px-3 py-2 border border-purple-300 dark:border-purple-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
           />
         </div>
         <div className="flex gap-2">
@@ -257,7 +257,7 @@ export function DisableRuleForm({
           value={disableReason}
           onChange={(e) => setDisableReason(e.target.value)}
           placeholder={t('disableRule.reasonPlaceholder')}
-          className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+          className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
         />
       </div>
       <div className="flex gap-2">
@@ -487,7 +487,7 @@ export function ModsecLogBody({ log }: { log: Log }) {
       {log.rule_message && (
         <div className="mb-4">
           <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">{t('detail.ruleMsg')}</label>
-          <p className="text-sm text-orange-700 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/30 p-3 rounded">{log.rule_message}</p>
+          <p className="text-sm text-orange-700 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/30 p-3 rounded-lg">{log.rule_message}</p>
         </div>
       )}
       {log.attack_type && (

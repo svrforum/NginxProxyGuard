@@ -14,7 +14,7 @@ export default function LogsPage({ subTab }: { subTab: 'access' | 'waf-events' |
   return (
     <div className="space-y-6">
       {/* Sub-tabs for logs */}
-      <div className="border-b border-slate-200 overflow-x-auto scrollbar-hide">
+      <div className="border-b border-slate-200 dark:border-slate-700 overflow-x-auto scrollbar-hide">
         <div className="flex gap-2 lg:gap-4 min-w-max">
           <button
             onClick={() => navigate('/logs/access')}

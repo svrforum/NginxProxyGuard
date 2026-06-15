@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEscapeKey } from '../../../hooks/useEscapeKey';
 import { updateLogSettings, cleanupLogs } from '../../../api/logs';
 import type { LogSettings } from '../../../types/log';
+import { IconButton, XIcon } from '../../common/listui';
 
 interface SettingsModalProps {
   settings: LogSettings;
@@ -47,14 +48,9 @@ export function SettingsModal({ settings, onClose }: SettingsModalProps) {
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-md w-full">
         <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700">
           <h2 className="text-lg font-semibold text-slate-900 dark:text-white">{t('settings.title')}</h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-          >
-            <svg className="w-5 h-5 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          <IconButton onClick={onClose} title={t('settings.cancel')}>
+            <XIcon className="h-5 w-5" />
+          </IconButton>
         </div>
 
         <div className="p-4 space-y-4">
@@ -68,7 +64,7 @@ export function SettingsModal({ settings, onClose }: SettingsModalProps) {
               onChange={(e) => setRetentionDays(parseInt(e.target.value) || 30)}
               min={1}
               max={365}
-              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
             />
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
               {t('settings.retentionDesc')}
@@ -110,14 +106,14 @@ export function SettingsModal({ settings, onClose }: SettingsModalProps) {
         <div className="flex gap-3 p-4 border-t border-slate-200 dark:border-slate-700">
           <button
             onClick={onClose}
-            className="flex-1 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg transition-colors"
+            className="flex-1 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400 dark:focus:ring-slate-500"
           >
             {t('settings.cancel')}
           </button>
           <button
             onClick={handleSave}
             disabled={updateMutation.isPending}
-            className="flex-1 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors"
+            className="flex-1 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-slate-800"
           >
             {updateMutation.isPending ? t('settings.saving') : t('settings.save')}
           </button>
