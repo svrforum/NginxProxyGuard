@@ -71,13 +71,11 @@ export function ModalShell({
       onMouseDown={(e) => {
         if (closeOnBackdrop && e.target === e.currentTarget) onClose();
       }}
-      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-200 motion-reduce:transition-none ${
-        visible ? 'opacity-100' : 'opacity-0'
-      }`}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
     >
       <div
         onMouseDown={(e) => e.stopPropagation()}
-        className={`m-4 w-full ${panelClassName} max-h-[90vh] overflow-y-auto rounded-lg border bg-white shadow-xl transition-all duration-200 dark:border-slate-700 dark:bg-slate-800 motion-reduce:transition-none motion-reduce:transform-none ${
+        className={`m-4 w-full ${panelClassName} max-h-[90vh] overflow-y-auto rounded-lg border bg-white shadow-xl transition-[transform,opacity] duration-200 will-change-transform dark:border-slate-700 dark:bg-slate-800 motion-reduce:transition-none motion-reduce:transform-none ${
           visible ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
         }`}
       >
