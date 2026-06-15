@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { getCertificateHistory } from '../api/certificates'
 import { ModalShell } from './common/ModalShell'
+import { EntityCard, EmptyState, IconButton, EyeIcon } from './common/listui'
 import type { CertificateHistory, CertificateLog } from '../types/certificate'
 
 interface CertificateHistoryLogModalProps {
@@ -246,76 +247,57 @@ export default function CertificateHistoryList() {
         </h2>
       </div>
 
-      <div className="bg-white dark:bg-slate-800 shadow overflow-hidden overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
-        <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
-          <thead className="bg-slate-50 dark:bg-slate-900/50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t('certificates:history.domains', 'Domains')}
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t('certificates:history.action', 'Action')}
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t('certificates:history.provider', 'Provider')}
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t('certificates:history.date', 'Date')}
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t('certificates:history.message', 'Message')}
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t('certificates:list.actions', 'Actions')}
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
-            {data?.data?.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
-                  {t('certificates:history.empty', 'No certificate history found')}
-                </td>
-              </tr>
-            ) : (
-              data?.data?.map((h: CertificateHistory) => (
-                <tr key={h.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="text-sm font-medium text-slate-900 dark:text-white">
+      {data?.data?.length === 0 ? (
+        <EmptyState
+          icon={
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          }
+        >
+          {t('certificates:history.empty', 'No certificate history found')}
+        </EmptyState>
+      ) : (
+        <div className="space-y-3">
+          {data?.data?.map((h: CertificateHistory) => (
+            <EntityCard key={h.id}>
+              <div className="flex items-center gap-3 px-4 py-3.5 sm:px-5">
+                <div className="flex min-w-0 flex-1 flex-col gap-2">
+                  <div className="min-w-0">
+                    <span className="block truncate text-sm font-semibold text-slate-900 dark:text-white">
                       {h.domain_names[0]}
-                    </div>
+                    </span>
                     {h.domain_names.length > 1 && (
-                      <div className="text-xs text-slate-500 dark:text-slate-400">
+                      <span className="block truncate text-xs text-slate-500 dark:text-slate-400">
                         {t('certificates:list.more', { count: h.domain_names.length - 1 })}
-                      </div>
+                      </span>
                     )}
-                  </td>
-                  <td className="px-6 py-4">
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
                     {getActionBadge(h.action, h.status)}
-                  </td>
-                  <td className="px-6 py-4">
                     {getProviderBadge(h.provider)}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                    {formatDate(h.created_at)}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-slate-500 dark:text-slate-400 max-w-xs truncate" title={h.message}>
-                    {h.message || '-'}
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <button
-                      onClick={() => setSelectedHistory(h)}
-                      className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm font-medium"
-                    >
-                      {t('certificates:history.viewLogs', 'View Logs')}
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+                    <span className="text-xs text-slate-400 dark:text-slate-500">
+                      {formatDate(h.created_at)}
+                    </span>
+                  </div>
+                  {h.message && (
+                    <p className="truncate text-xs text-slate-500 dark:text-slate-400" title={h.message}>
+                      {h.message}
+                    </p>
+                  )}
+                </div>
+
+                <IconButton
+                  onClick={() => setSelectedHistory(h)}
+                  title={t('certificates:history.viewLogs', 'View Logs')}
+                >
+                  <EyeIcon />
+                </IconButton>
+              </div>
+            </EntityCard>
+          ))}
+        </div>
+      )}
 
       {/* Pagination */}
       {data && data.total_pages > 1 && (

@@ -7,27 +7,115 @@ import { getSystemSettings, updateSystemSettings } from '../../api/settings'
 import type { DDNSRecord } from '../../types/ddns'
 import DDNSRecordForm from './DDNSRecordForm'
 import DDNSImportFromHostsModal from './DDNSImportFromHostsModal'
+import { AddButton, EmptyState, EntityCard, IconButton, PencilIcon, TrashIcon, RenewIcon } from '../common/listui'
 
+/** Rounded status pill with a leading dot. DDNS has 3 states (ok / error / never)
+ *  so this stays local rather than using the 2-state shared StatusPill. */
 function StatusBadge({ status }: { status: string }) {
   const { t } = useTranslation('ddns')
-  if (status === 'ok') {
-    return (
-      <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300">
-        {t('statusOk')}
-      </span>
-    )
+  const map: Record<string, { cls: string; dot: string; label: string }> = {
+    ok: {
+      cls: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300',
+      dot: 'bg-emerald-500',
+      label: t('statusOk'),
+    },
+    error: {
+      cls: 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300',
+      dot: 'bg-red-500',
+      label: t('statusError'),
+    },
   }
-  if (status === 'error') {
-    return (
-      <span className="px-2 py-1 text-xs font-medium rounded-full bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300">
-        {t('statusError')}
-      </span>
-    )
+  const s = map[status] || {
+    cls: 'bg-slate-100 text-slate-500 dark:bg-slate-700/50 dark:text-slate-400',
+    dot: 'bg-slate-400',
+    label: t('statusNever'),
   }
   return (
-    <span className="px-2 py-1 text-xs font-medium rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-      {t('statusNever')}
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${s.cls}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
+      {s.label}
     </span>
+  )
+}
+
+interface RecordCardProps {
+  record: DDNSRecord
+  providerName: string
+  formatDate: (iso?: string) => string
+  onSync: (id: string) => void
+  onEdit: (record: DDNSRecord) => void
+  onDelete: (id: string) => void
+  syncing: boolean
+  deleting: boolean
+}
+
+function RecordCard({ record, providerName, formatDate, onSync, onEdit, onDelete, syncing, deleting }: RecordCardProps) {
+  const { t } = useTranslation('ddns')
+  const isManaged = !!record.proxy_host_id
+
+  return (
+    <EntityCard active={record.last_status === 'error'}>
+      <div className="flex items-center gap-3 px-4 py-3.5 sm:px-5">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300">
+          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </span>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="truncate text-sm font-semibold text-slate-900 dark:text-white">{record.hostname}</span>
+            {isManaged && (
+              <span
+                className="inline-flex items-center rounded-md bg-cyan-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-cyan-700 dark:bg-cyan-900/20 dark:text-cyan-300"
+                title={t('managedHint')}
+              >
+                {t('managedBadge')}
+              </span>
+            )}
+            {!record.enabled && (
+              <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-700/50 dark:text-slate-400">
+                {t('disabledBadge')}
+              </span>
+            )}
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+            <span>{providerName}</span>
+            <span className="text-slate-300 dark:text-slate-600">·</span>
+            <span className="font-mono text-slate-600 dark:text-slate-300">{record.last_ip || '-'}</span>
+            <span className="text-slate-300 dark:text-slate-600">·</span>
+            <span title={t('lastSynced')}>{formatDate(record.last_synced_at)}</span>
+          </div>
+          {record.last_status === 'error' && record.last_error && (
+            <p className="mt-1.5 max-w-xl break-words text-xs text-red-600 dark:text-red-400" title={record.last_error}>
+              {record.last_error}
+            </p>
+          )}
+        </div>
+
+        <StatusBadge status={record.last_status} />
+
+        <div className="flex items-center gap-0.5">
+          <IconButton onClick={() => onSync(record.id)} disabled={syncing} title={t('syncNow')}>
+            <RenewIcon />
+          </IconButton>
+          <IconButton
+            onClick={() => onEdit(record)}
+            title={isManaged ? t('managedFieldsLocked') : t('edit')}
+          >
+            <PencilIcon />
+          </IconButton>
+          <IconButton
+            onClick={() => onDelete(record.id)}
+            disabled={deleting || isManaged}
+            title={isManaged ? t('managedHint') : t('delete')}
+            variant="danger"
+          >
+            <TrashIcon />
+          </IconButton>
+        </div>
+      </div>
+    </EntityCard>
   )
 }
 
@@ -147,16 +235,11 @@ export default function DDNSRecordList() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowImport(true)}
-            className="px-4 py-2 bg-cyan-600 text-white rounded-md hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-colors"
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900"
           >
             {t('importFromHosts')}
           </button>
-          <button
-            onClick={() => setShowForm(true)}
-            className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors"
-          >
-            + {t('addRecord')}
-          </button>
+          <AddButton onClick={() => setShowForm(true)}>{t('addRecord')}</AddButton>
         </div>
       </div>
 
@@ -212,106 +295,33 @@ export default function DDNSRecordList() {
         />
       )}
 
-      <div className="bg-white dark:bg-slate-800 shadow overflow-hidden overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
-        <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
-          <thead className="bg-slate-50 dark:bg-slate-900/50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t('hostname')}
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t('provider')}
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t('lastIp')}
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t('lastSynced')}
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t('status')}
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t('actions')}
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
-            {data?.data?.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
-                  {t('emptyState')}
-                </td>
-              </tr>
-            ) : (
-              data?.data?.map((record) => {
-                const isManaged = !!record.proxy_host_id
-                return (
-                <tr key={record.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-slate-900 dark:text-white">{record.hostname}</span>
-                      {isManaged && (
-                        <span
-                          className="px-2 py-0.5 text-xs font-medium rounded-full bg-cyan-100 dark:bg-cyan-900/30 text-cyan-800 dark:text-cyan-300"
-                          title={t('managedHint')}
-                        >
-                          {t('managedBadge')}
-                        </span>
-                      )}
-                    </div>
-                    {!record.enabled && (
-                      <span className="text-xs text-slate-400 dark:text-slate-500">{t('disabledBadge')}</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-slate-700 dark:text-slate-300">{providerName(record.dns_provider_id)}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm font-mono text-slate-700 dark:text-slate-300">{record.last_ip || '-'}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-slate-500 dark:text-slate-400">{formatDate(record.last_synced_at)}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <StatusBadge status={record.last_status} />
-                    {record.last_status === 'error' && record.last_error && (
-                      <p className="mt-1 text-xs text-red-600 dark:text-red-400 max-w-xs break-words" title={record.last_error}>
-                        {record.last_error}
-                      </p>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-right space-x-2 whitespace-nowrap">
-                    <button
-                      onClick={() => syncMutation.mutate(record.id)}
-                      disabled={syncMutation.isPending}
-                      className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 text-sm font-medium disabled:opacity-50"
-                    >
-                      {t('syncNow')}
-                    </button>
-                    <button
-                      onClick={() => handleEdit(record)}
-                      title={isManaged ? t('managedFieldsLocked') : undefined}
-                      className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm font-medium"
-                    >
-                      {t('edit')}
-                    </button>
-                    <button
-                      onClick={() => handleDelete(record.id)}
-                      disabled={deleteMutation.isPending || isManaged}
-                      title={isManaged ? t('managedHint') : undefined}
-                      className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-red-600"
-                    >
-                      {t('delete')}
-                    </button>
-                  </td>
-                </tr>
-                )
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+      {!data?.data?.length ? (
+        <EmptyState
+          icon={
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          }
+        >
+          {t('emptyState')}
+        </EmptyState>
+      ) : (
+        <div className="space-y-3">
+          {data?.data?.map((record) => (
+            <RecordCard
+              key={record.id}
+              record={record}
+              providerName={providerName(record.dns_provider_id)}
+              formatDate={formatDate}
+              onSync={(id) => syncMutation.mutate(id)}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              syncing={syncMutation.isPending}
+              deleting={deleteMutation.isPending}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Pagination (#162: list was capped at the first page of 20) */}
       {(data?.total_pages || 1) > 1 && (

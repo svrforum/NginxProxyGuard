@@ -4,21 +4,84 @@ import { listDNSProviders, deleteDNSProvider } from '../api/dns-providers';
 import { useTranslation } from 'react-i18next';
 import type { DNSProvider } from '../types/certificate';
 import DNSProviderForm from './DNSProviderForm';
+import { AddButton, EmptyState, EntityCard, IconButton, PencilIcon, StatusPill, TrashIcon } from './common/listui';
 
-function ProviderTypeBadge({ type }: { type: DNSProvider['provider_type'] }) {
+// Per-type accent classes. Full static strings (Tailwind JIT can't see interpolated names).
+const ACCENT: Record<DNSProvider['provider_type'], { icon: string; chip: string }> = {
+  cloudflare: {
+    icon: 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-300',
+    chip: 'bg-orange-50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-300',
+  },
+  route53: {
+    icon: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300',
+    chip: 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300',
+  },
+  duckdns: {
+    icon: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+    chip: 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300',
+  },
+  dynu: {
+    icon: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300',
+    chip: 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300',
+  },
+  manual: {
+    icon: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
+    chip: 'bg-slate-100 text-slate-600 dark:bg-slate-700/50 dark:text-slate-300',
+  },
+};
+
+interface ProviderCardProps {
+  provider: DNSProvider;
+  onEdit: (provider: DNSProvider) => void;
+  onDelete: (id: string) => void;
+  deleting: boolean;
+}
+
+function ProviderCard({ provider, onEdit, onDelete, deleting }: ProviderCardProps) {
   const { t } = useTranslation('certificates');
-  const colors: Record<DNSProvider['provider_type'], string> = {
-    cloudflare: 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300',
-    route53: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300',
-    duckdns: 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300',
-    dynu: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300',
-    manual: 'bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-300',
-  };
+  const accent = ACCENT[provider.provider_type] || ACCENT.manual;
 
   return (
-    <span className={`px-2 py-1 text-xs font-medium rounded-full ${colors[type]}`}>
-      {t(`dnsProviders.types.${type}`)}
-    </span>
+    <EntityCard active={provider.is_default}>
+      <div className="flex items-center gap-3 px-4 py-3.5 sm:px-5">
+        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${accent.icon}`}>
+          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </span>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="truncate text-sm font-semibold text-slate-900 dark:text-white">{provider.name}</span>
+            {provider.is_default && <StatusPill active>{t('dnsProviders.default')}</StatusPill>}
+          </div>
+          <div className="mt-0.5 flex items-center gap-2 text-xs">
+            <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${accent.chip}`}>
+              {t(`dnsProviders.types.${provider.provider_type}`)}
+            </span>
+            {provider.has_credentials ? (
+              <span className="text-emerald-600 dark:text-emerald-400">{t('dnsProviders.configured')}</span>
+            ) : (
+              <span className="text-amber-600 dark:text-amber-400">{t('dnsProviders.notConfigured')}</span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-0.5">
+          <IconButton onClick={() => onEdit(provider)} title={t('dnsProviders.edit')}>
+            <PencilIcon />
+          </IconButton>
+          <IconButton
+            onClick={() => onDelete(provider.id)}
+            disabled={deleting}
+            title={t('dnsProviders.delete')}
+            variant="danger"
+          >
+            <TrashIcon />
+          </IconButton>
+        </div>
+      </div>
+    </EntityCard>
   );
 }
 
@@ -77,12 +140,7 @@ export default function DNSProviderList() {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-semibold text-slate-900 dark:text-white">{t('dnsProviders.title')}</h2>
-        <button
-          onClick={() => setShowForm(true)}
-          className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors"
-        >
-          + {t('dnsProviders.add')}
-        </button>
+        <AddButton onClick={() => setShowForm(true)}>{t('dnsProviders.add')}</AddButton>
       </div>
 
       {showForm && (
@@ -96,80 +154,29 @@ export default function DNSProviderList() {
         />
       )}
 
-      <div className="bg-white dark:bg-slate-800 shadow overflow-hidden overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
-        <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
-          <thead className="bg-slate-50 dark:bg-slate-900/50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t('dnsProviders.name')}
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t('dnsProviders.type')}
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t('dnsProviders.default')}
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t('dnsProviders.credentials')}
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t('dnsProviders.actions')}
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
-            {data?.data?.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
-                  {t('dnsProviders.empty')}
-                </td>
-              </tr>
-            ) : (
-              data?.data?.map((provider) => (
-                <tr key={provider.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="text-sm font-medium text-slate-900 dark:text-white">{provider.name}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <ProviderTypeBadge type={provider.provider_type} />
-                  </td>
-                  <td className="px-6 py-4">
-                    {provider.is_default ? (
-                      <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300">
-                        {t('dnsProviders.default')}
-                      </span>
-                    ) : (
-                      <span className="text-slate-400 text-sm">-</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    {provider.has_credentials ? (
-                      <span className="text-green-600 dark:text-green-400 text-sm">{t('dnsProviders.configured')}</span>
-                    ) : (
-                      <span className="text-yellow-600 dark:text-yellow-400 text-sm">{t('dnsProviders.notConfigured')}</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-right space-x-2">
-                    <button
-                      onClick={() => handleEdit(provider)}
-                      className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm font-medium"
-                    >
-                      {t('dnsProviders.edit')}
-                    </button>
-                    <button
-                      onClick={() => handleDelete(provider.id)}
-                      disabled={deleteMutation.isPending}
-                      className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium"
-                    >
-                      {t('dnsProviders.delete')}
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      {!data?.data?.length ? (
+        <EmptyState
+          icon={
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          }
+        >
+          {t('dnsProviders.empty')}
+        </EmptyState>
+      ) : (
+        <div className="space-y-3">
+          {data?.data?.map((provider) => (
+            <ProviderCard
+              key={provider.id}
+              provider={provider}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              deleting={deleteMutation.isPending}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Pagination (#162: list was capped at the first page of 20) */}
       {(data?.total_pages || 1) > 1 && (
