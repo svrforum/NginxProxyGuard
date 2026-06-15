@@ -398,21 +398,34 @@ function AppContent({ user, onLogout }: AppContentProps) {
         </Suspense>
       </main>
 
-      {/* Form Modal */}
+      {/* Form Modal — local Suspense so the lazy chunk's first-load doesn't
+          bubble to the root fallback (which blanks the whole app white). */}
       {showForm && (
-        <ProxyHostForm
-          host={editingHost}
-          initialTab={initialFormTab}
-          onClose={handleCloseForm}
-        />
+        <Suspense fallback={
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+          </div>
+        }>
+          <ProxyHostForm
+            host={editingHost}
+            initialTab={initialFormTab}
+            onClose={handleCloseForm}
+          />
+        </Suspense>
       )}
 
       {/* Account Settings Modal */}
       {showAccountSettings && (
-        <AccountSettings
-          onClose={() => setShowAccountSettings(false)}
-          onLogout={handleLogout}
-        />
+        <Suspense fallback={
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+          </div>
+        }>
+          <AccountSettings
+            onClose={() => setShowAccountSettings(false)}
+            onLogout={handleLogout}
+          />
+        </Suspense>
       )}
 
       {/* Sync Progress Modal */}

@@ -25,6 +25,12 @@ interface HealthStatus {
 export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
   const { t } = useTranslation('proxyHost')
   const queryClient = useQueryClient()
+
+  // Warm the lazy ProxyHostForm chunk in the background while the list is shown,
+  // so the first "edit"/"add" click opens instantly instead of flashing a loader.
+  useEffect(() => {
+    import('./ProxyHostForm')
+  }, [])
   const [healthStatus, setHealthStatus] = useState<HealthStatus>({})
   const [testingHost, setTestingHost] = useState<ProxyHost | null>(null)
   const [testResult, setTestResult] = useState<ProxyHostTestResult | null>(null)
