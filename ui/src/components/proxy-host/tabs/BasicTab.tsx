@@ -80,6 +80,8 @@ export function BasicTabContent({
           block_exploits: false,
           waf_enabled: false,
           access_list_id: undefined,
+          auth_provider_id: undefined,
+          auth_bypass_paths: [],
         }
       }
       return {

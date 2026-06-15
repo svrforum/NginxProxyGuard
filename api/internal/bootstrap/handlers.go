@@ -17,6 +17,7 @@ type Handlers struct {
 	WAF                *handler.WAFHandler
 	ExploitBlockRule   *handler.ExploitBlockRuleHandler
 	AccessList         *handler.AccessListHandler
+	AuthProvider       *handler.AuthProviderHandler
 	RedirectHost       *handler.RedirectHostHandler
 	Geo                *handler.GeoHandler
 	Security           *handler.SecurityHandler
@@ -54,6 +55,7 @@ func InitHandlers(
 	h.WAF = handler.NewWAFHandler(repos.WAF, repos.ProxyHost, repos.Geo, nginxManager)
 	h.ExploitBlockRule = handler.NewExploitBlockRuleHandler(repos.ExploitBlockRule, repos.ProxyHost, svcs.ProxyHost)
 	h.AccessList = handler.NewAccessListHandler(repos.AccessList, svcs.ProxyHost)
+	h.AuthProvider = handler.NewAuthProviderHandler(svcs.AuthProvider)
 	h.RedirectHost = handler.NewRedirectHostHandler(repos.RedirectHost, nginxManager, svcs.Audit)
 	h.Geo = handler.NewGeoHandler(
 		repos.Geo,

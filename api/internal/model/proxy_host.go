@@ -443,6 +443,10 @@ type ProxyHost struct {
 	// Access list
 	AccessListID *string `json:"access_list_id,omitempty"`
 
+	// ForwardAuth (external auth_request provider)
+	AuthProviderID  *string        `json:"auth_provider_id,omitempty"`
+	AuthBypassPaths pq.StringArray `json:"auth_bypass_paths,omitempty"`
+
 	// Status
 	Enabled      bool   `json:"enabled"`
 	IsFavorite   bool   `json:"is_favorite"`
@@ -500,6 +504,8 @@ type CreateProxyHostRequest struct {
 	WAFParanoiaLevel          int      `json:"waf_paranoia_level"`
 	WAFAnomalyThreshold       int      `json:"waf_anomaly_threshold"`
 	AccessListID              *string  `json:"access_list_id,omitempty"`
+	AuthProviderID            *string  `json:"auth_provider_id,omitempty"`
+	AuthBypassPaths           []string `json:"auth_bypass_paths,omitempty"`
 	AdvancedConfig            string   `json:"advanced_config,omitempty"`
 	ProxyConnectTimeout       int      `json:"proxy_connect_timeout,omitempty"`
 	ProxySendTimeout          int      `json:"proxy_send_timeout,omitempty"`
@@ -546,6 +552,8 @@ type UpdateProxyHostRequest struct {
 	WAFParanoiaLevel          *int     `json:"waf_paranoia_level,omitempty"`
 	WAFAnomalyThreshold       *int     `json:"waf_anomaly_threshold,omitempty"`
 	AccessListID              *string  `json:"access_list_id,omitempty"`
+	AuthProviderID            *string  `json:"auth_provider_id,omitempty"`
+	AuthBypassPaths           []string `json:"auth_bypass_paths,omitempty"`
 	AdvancedConfig            *string  `json:"advanced_config,omitempty"`
 	ProxyConnectTimeout       *int     `json:"proxy_connect_timeout,omitempty"`
 	ProxySendTimeout          *int     `json:"proxy_send_timeout,omitempty"`

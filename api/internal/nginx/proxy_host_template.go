@@ -31,6 +31,7 @@ var proxyHostTemplateSectionOrder = []string{
 	"access_list.conf.tmpl",
 	"upstream.conf.tmpl",
 	"_security.conf.tmpl",
+	"auth_request.conf.tmpl",
 	"base.conf.tmpl",
 	"waf.conf.tmpl",
 	"ssl.conf.tmpl",
@@ -60,6 +61,7 @@ func mustLoadProxyHostTemplate() string {
 type ProxyHostConfigData struct {
 	Host                          *model.ProxyHost
 	AccessList                    *model.AccessList
+	AuthProvider                  *model.AuthProvider // ForwardAuth provider (#179); nil if none / stream
 	GeoRestriction                *model.GeoRestriction
 	RateLimit                     *model.RateLimit
 	SecurityHeaders               *model.SecurityHeaders

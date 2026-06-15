@@ -203,6 +203,9 @@ type ExportData struct {
 	// Access Lists
 	AccessLists []AccessListExport `json:"access_lists,omitempty"`
 
+	// Auth Providers (#179)
+	AuthProviders []AuthProviderExport `json:"auth_providers,omitempty"`
+
 	// Redirect Hosts
 	RedirectHosts []RedirectHostExport `json:"redirect_hosts,omitempty"`
 
@@ -387,6 +390,8 @@ type ProxyHostData struct {
 	DDNSEnabled               bool                   `json:"ddns_enabled,omitempty"`
 	DDNSProviderID            string                 `json:"ddns_provider_id,omitempty"`
 	DDNSProxied               bool                   `json:"ddns_proxied,omitempty"`
+	AuthProviderID            string                 `json:"auth_provider_id,omitempty"`
+	AuthBypassPaths           []string               `json:"auth_bypass_paths,omitempty"`
 	Meta                      map[string]interface{} `json:"meta,omitempty"`
 }
 
@@ -509,6 +514,22 @@ type AccessListItemData struct {
 // AccessListExport represents an access list for export
 type AccessListExport struct {
 	AccessList AccessListData `json:"access_list"`
+}
+
+// AuthProviderExport represents a ForwardAuth provider for export (#179)
+type AuthProviderExport struct {
+	AuthProvider AuthProviderData `json:"auth_provider"`
+}
+
+// AuthProviderData is the exported shape of an auth provider (#179)
+type AuthProviderData struct {
+	ID          string             `json:"id"`
+	Name        string             `json:"name"`
+	Type        string             `json:"type"`
+	ProviderURL string             `json:"provider_url"`
+	Config      AuthProviderConfig `json:"config"`
+	TimeoutMs   int                `json:"timeout_ms"`
+	Enabled     bool               `json:"enabled"`
 }
 
 // RedirectHostData represents redirect host data for export

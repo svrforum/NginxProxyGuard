@@ -132,6 +132,46 @@ func (s *ProxyHostService) RegenerateConfigsForAccessList(ctx context.Context, a
 	return s.nginx.RegenerateConfigsAtomic(ctx, renders, true)
 }
 
+// RegenerateConfigsForAuthProvider rewrites configs for every host referencing the
+// given auth provider (called when the provider is updated/deleted). (#179)
+func (s *ProxyHostService) RegenerateConfigsForAuthProvider(ctx context.Context, authProviderID string) error {
+	hosts, err := s.repo.GetByAuthProviderID(ctx, authProviderID)
+	if err != nil {
+		return fmt.Errorf("failed to get proxy hosts for auth provider %s: %w", authProviderID, err)
+	}
+	if len(hosts) == 0 {
+		return nil
+	}
+
+	var renders []nginx.HostConfigRender
+	for i := range hosts {
+		if !hosts[i].Enabled {
+			continue
+		}
+		render, err := s.buildHostRender(ctx, &hosts[i])
+		if err != nil {
+			return err
+		}
+		renders = append(renders, render)
+	}
+
+	return s.nginx.RegenerateConfigsAtomic(ctx, renders, true)
+}
+
+// GetHostIDsByAuthProvider returns the IDs of proxy hosts referencing an auth
+// provider. Used to capture the dependent set before the provider is deleted. (#179)
+func (s *ProxyHostService) GetHostIDsByAuthProvider(ctx context.Context, authProviderID string) ([]string, error) {
+	hosts, err := s.repo.GetByAuthProviderID(ctx, authProviderID)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(hosts))
+	for i := range hosts {
+		ids = append(ids, hosts[i].ID)
+	}
+	return ids, nil
+}
+
 // GetHostIDsByAccessList returns the IDs of proxy hosts referencing an access
 // list. Used to capture the dependent set before the list is deleted.
 func (s *ProxyHostService) GetHostIDsByAccessList(ctx context.Context, accessListID string) ([]string, error) {

@@ -10,6 +10,8 @@
     "access": "Access",
     "accessControl": "Access Control",
     "accessLists": "Access Lists",
+    "authProviders": "Auth Providers",
+    "authProvidersShort": "Auth",
     "certificates": "Certificates",
     "sslCerts": "SSL Certs",
     "logs": "Logs",

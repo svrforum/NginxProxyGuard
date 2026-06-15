@@ -9,6 +9,28 @@ import (
 	"nginx-proxy-guard/internal/model"
 )
 
+// importAuthProvider imports a ForwardAuth provider, returning the new ID (#179)
+func (r *BackupRepository) importAuthProvider(ctx context.Context, tx *sql.Tx, ap *model.AuthProviderExport) (string, error) {
+	cfgJSON, err := json.Marshal(ap.AuthProvider.Config)
+	if err != nil {
+		return "", err
+	}
+	timeout := ap.AuthProvider.TimeoutMs
+	if timeout <= 0 {
+		timeout = 5000 // older/zero-value backups
+	}
+	var newID string
+	err = tx.QueryRowContext(ctx, `
+		INSERT INTO auth_providers (name, type, provider_url, config, timeout_ms, enabled)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id
+	`, ap.AuthProvider.Name, ap.AuthProvider.Type, ap.AuthProvider.ProviderURL, cfgJSON, timeout, ap.AuthProvider.Enabled).Scan(&newID)
+	if err != nil {
+		return "", err
+	}
+	return newID, nil
+}
+
 func (r *BackupRepository) importAccessList(ctx context.Context, tx *sql.Tx, al *model.AccessListExport) (string, error) {
 	query := `
 		INSERT INTO access_lists (name, description, satisfy_any, pass_auth)

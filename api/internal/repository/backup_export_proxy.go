@@ -41,6 +41,7 @@ func (r *BackupRepository) exportProxyHosts(ctx context.Context) ([]model.ProxyH
 		       COALESCE(client_max_body_size, '') as client_max_body_size,
 		       COALESCE(proxy_max_temp_file_size, '') as proxy_max_temp_file_size,
 		       COALESCE(ddns_enabled, false) as ddns_enabled, ddns_provider_id, COALESCE(ddns_proxied, false) as ddns_proxied,
+		       auth_provider_id, COALESCE(auth_bypass_paths, '{}') as auth_bypass_paths,
 		       meta
 		FROM proxy_hosts ORDER BY created_at
 	`
@@ -59,6 +60,7 @@ func (r *BackupRepository) exportProxyHosts(ctx context.Context) ([]model.ProxyH
 		var advancedConfig sql.NullString
 		var forwardContainerName, forwardContainerNetwork sql.NullString
 		var ddnsProviderID sql.NullString
+		var authProviderID sql.NullString
 
 		err := rows.Scan(
 			&ph.ID, &ph.ProxyType, pq.Array(&ph.DomainNames), &ph.ForwardScheme, &ph.ForwardHost, &forwardContainerName, &forwardContainerNetwork, &ph.ForwardPort,
@@ -75,6 +77,7 @@ func (r *BackupRepository) exportProxyHosts(ctx context.Context) ([]model.ProxyH
 			&ph.ProxyConnectTimeout, &ph.ProxySendTimeout, &ph.ProxyReadTimeout,
 			&ph.ProxyBuffering, &ph.ProxyRequestBuffering, &ph.ClientMaxBodySize, &ph.ProxyMaxTempFileSize,
 			&ph.DDNSEnabled, &ddnsProviderID, &ph.DDNSProxied,
+			&authProviderID, pq.Array(&ph.AuthBypassPaths),
 			&meta,
 		)
 		if err != nil {
@@ -87,6 +90,7 @@ func (r *BackupRepository) exportProxyHosts(ctx context.Context) ([]model.ProxyH
 		ph.CertificateID = certID.String
 		ph.AccessListID = accessListID.String
 		ph.DDNSProviderID = ddnsProviderID.String
+		ph.AuthProviderID = authProviderID.String
 		ph.AdvancedConfig = advancedConfig.String
 		if forwardContainerName.Valid {
 			ph.ForwardContainerName = &forwardContainerName.String

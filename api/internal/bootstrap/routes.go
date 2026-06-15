@@ -215,6 +215,7 @@ func registerTokenProtectedRoutes(v1 *echo.Group, c *Container) {
 	registerWAFRoutes(v1, c.Handlers.WAF)
 	registerExploitRuleRoutes(v1, c.Handlers.ExploitBlockRule)
 	registerAccessListRoutes(v1, c.Handlers.AccessList)
+	registerAuthProviderRoutes(v1, c.Handlers.AuthProvider)
 	registerRedirectHostRoutes(v1, c.Handlers.RedirectHost)
 	registerGeoRoutes(v1, c.Handlers.Geo)
 	registerSecurityRoutes(v1, c.Handlers.Security)
@@ -397,6 +398,21 @@ func registerAccessListRoutes(v1 *echo.Group, h *handler.AccessListHandler) {
 	proxyDelete := authMiddleware.RequireAPIPermission(model.PermissionProxyDelete)
 
 	g := v1.Group("/access-lists")
+	g.GET("", h.List, proxyRead)
+	g.POST("", h.Create, proxyWrite)
+	g.GET("/:id", h.Get, proxyRead)
+	g.PUT("/:id", h.Update, proxyWrite)
+	g.DELETE("/:id", h.Delete, proxyDelete)
+}
+
+// registerAuthProviderRoutes wires the ForwardAuth provider CRUD (#179). Auth
+// providers gate proxy hosts → proxy scopes.
+func registerAuthProviderRoutes(v1 *echo.Group, h *handler.AuthProviderHandler) {
+	proxyRead := authMiddleware.RequireAPIPermission(model.PermissionProxyRead)
+	proxyWrite := authMiddleware.RequireAPIPermission(model.PermissionProxyWrite)
+	proxyDelete := authMiddleware.RequireAPIPermission(model.PermissionProxyDelete)
+
+	g := v1.Group("/auth-providers")
 	g.GET("", h.List, proxyRead)
 	g.POST("", h.Create, proxyWrite)
 	g.GET("/:id", h.Get, proxyRead)

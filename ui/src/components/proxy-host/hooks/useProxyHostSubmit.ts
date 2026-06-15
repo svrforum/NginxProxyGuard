@@ -230,6 +230,8 @@ export function useProxyHostSubmit({
       domain_names: domains,
       forward_port: parseInt(state.portInput) || 80,
       certificate_id: certificateId,
+      auth_provider_id: state.formData.auth_provider_id,
+      auth_bypass_paths: state.formData.auth_bypass_paths,
     }
 
     if (data.proxy_type === 'stream') {
@@ -249,6 +251,8 @@ export function useProxyHostSubmit({
       data.block_exploits = false
       data.waf_enabled = false
       data.access_list_id = undefined
+      data.auth_provider_id = undefined
+      data.auth_bypass_paths = []
       if (protocol === 'udp') {
         data.stream_ssl_preread = false
         data.stream_accept_proxy_protocol = false

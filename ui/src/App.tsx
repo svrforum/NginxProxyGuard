@@ -18,6 +18,7 @@ const ProxyHostList = lazy(() => import('./components/ProxyHostList').then(m => 
 const ProxyHostForm = lazy(() => import('./components/ProxyHostForm').then(m => ({ default: m.ProxyHostForm })))
 const RedirectHostManager = lazy(() => import('./components/RedirectHostManager'))
 const AccessListManager = lazy(() => import('./components/AccessListManager'))
+const AuthProviderManager = lazy(() => import('./components/AuthProviderManager'))
 const AccountSettings = lazy(() => import('./components/AccountSettings'))
 const CertificatesPage = lazy(() => import('./pages/CertificatesPage'))
 const WAFPage = lazy(() => import('./pages/WAFPage'))
@@ -37,7 +38,7 @@ async function fetchHealth(): Promise<HealthResponse> {
 }
 
 
-type Tab = 'dashboard' | 'proxy-hosts' | 'redirects' | 'waf' | 'access' | 'certificates' | 'logs' | 'settings'
+type Tab = 'dashboard' | 'proxy-hosts' | 'redirects' | 'waf' | 'access' | 'auth-providers' | 'certificates' | 'logs' | 'settings'
 
 interface AppContentProps {
   user: User
@@ -55,6 +56,7 @@ function AppContent({ user, onLogout }: AppContentProps) {
     const path = location.pathname
     if (path.startsWith('/redirects')) return 'redirects'
     if (path.startsWith('/waf')) return 'waf'
+    if (path.startsWith('/auth-providers')) return 'auth-providers'
     if (path.startsWith('/access')) return 'access'
     if (path.startsWith('/certificates')) return 'certificates'
     if (path.startsWith('/logs')) return 'logs'
@@ -158,6 +160,9 @@ function AppContent({ user, onLogout }: AppContentProps) {
         break
       case 'access':
         navigate('/access/lists')
+        break
+      case 'auth-providers':
+        navigate('/auth-providers')
         break
       case 'certificates':
         navigate('/certificates')
@@ -302,6 +307,16 @@ function AppContent({ user, onLogout }: AppContentProps) {
               <span className="lg:hidden">{t('menu.access')}</span>
             </button>
             <button
+              onClick={() => handleTabClick('auth-providers')}
+              className={`py-3 px-2 lg:px-1 text-xs lg:text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'auth-providers'
+                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+            >
+              <span className="hidden lg:inline">{t('menu.authProviders')}</span>
+              <span className="lg:hidden">{t('menu.authProvidersShort')}</span>
+            </button>
+            <button
               onClick={() => handleTabClick('certificates')}
               className={`py-3 px-2 lg:px-1 text-xs lg:text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'certificates'
                 ? 'border-primary-600 text-primary-600 dark:text-primary-400'
@@ -359,6 +374,7 @@ function AppContent({ user, onLogout }: AppContentProps) {
           <Route path="/waf/fail2ban" element={<WAFPage subTab="fail2ban" />} />
           <Route path="/access" element={<Navigate to="/access/lists" replace />} />
           <Route path="/access/lists" element={<AccessListManager />} />
+          <Route path="/auth-providers" element={<AuthProviderManager />} />
           <Route path="/logs" element={<Navigate to="/logs/access" replace />} />
           <Route path="/logs/access" element={<LogsPage subTab="access" />} />
           <Route path="/logs/waf-events" element={<LogsPage subTab="waf-events" />} />

@@ -110,6 +110,24 @@ func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.Pr
 		}()
 	}
 
+	// Fetch auth provider if assigned (HTTP hosts only — auth_request is invalid in stream{}) (#179)
+	if host.ProxyType != model.ProxyTypeStream && host.AuthProviderID != nil && *host.AuthProviderID != "" && s.authProviderRepo != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ap, err := s.authProviderRepo.GetByID(ctx, *host.AuthProviderID)
+			if err != nil {
+				fail("auth provider", err)
+				return
+			}
+			if ap != nil && ap.Enabled {
+				mu.Lock()
+				data.AuthProvider = ap
+				mu.Unlock()
+			}
+		}()
+	}
+
 	// Fetch geo restriction if exists
 	// Load if enabled OR if has AllowedIPs (priority allow IPs are used for cloud blocking too)
 	if s.geoRepo != nil {

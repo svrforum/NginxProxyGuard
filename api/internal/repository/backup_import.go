@@ -26,6 +26,7 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 	// Create ID mappings for foreign key references
 	certificateIDMap := make(map[string]string) // old ID -> new ID
 	accessListIDMap := make(map[string]string)  // old ID -> new ID
+	authProviderIDMap := make(map[string]string) // old ID -> new ID (#179)
 	dnsProviderIDMap := make(map[string]string) // old ID -> new ID
 	proxyHostIDMap := make(map[string]string)   // old ID -> new ID
 	exploitRuleIDMap := make(map[string]string) // old ID -> new ID
@@ -80,6 +81,15 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 		accessListIDMap[al.AccessList.ID] = newID
 	}
 
+	// Import Auth Providers (proxy hosts depend on them) (#179)
+	for _, ap := range data.AuthProviders {
+		newID, err := r.importAuthProvider(ctx, tx, &ap)
+		if err != nil {
+			return nil, fmt.Errorf("failed to import auth provider %s: %w", ap.AuthProvider.Name, err)
+		}
+		authProviderIDMap[ap.AuthProvider.ID] = newID
+	}
+
 	// Import Proxy Hosts with all related configurations
 	for _, ph := range data.ProxyHosts {
 		// Remap certificate ID
@@ -92,6 +102,14 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 		if ph.ProxyHost.AccessListID != "" {
 			if newID, ok := accessListIDMap[ph.ProxyHost.AccessListID]; ok {
 				ph.ProxyHost.AccessListID = newID
+			}
+		}
+		// Remap auth provider ID (#179). Drop the link if the provider wasn't imported.
+		if ph.ProxyHost.AuthProviderID != "" {
+			if newID, ok := authProviderIDMap[ph.ProxyHost.AuthProviderID]; ok {
+				ph.ProxyHost.AuthProviderID = newID
+			} else {
+				ph.ProxyHost.AuthProviderID = ""
 			}
 		}
 		// Remap DDNS provider ID (#157). If the provider wasn't imported, drop the
@@ -312,6 +330,7 @@ func (r *BackupRepository) clearExistingData(ctx context.Context, tx *sql.Tx) er
 		"proxy_hosts",       // references certificates and access_lists; ddns_provider_id -> dns_providers
 		"access_list_items", // references access_lists
 		"access_lists",
+		"auth_providers",    // referenced by proxy_hosts.auth_provider_id (deleted above) (#179)
 		"certificates", // references dns_providers
 		"dns_providers",
 		"global_uri_blocks",              // standalone table

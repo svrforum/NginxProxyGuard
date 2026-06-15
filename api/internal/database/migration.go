@@ -919,6 +919,27 @@ DO $$ BEGIN ALTER TABLE public.ddns_records ADD CONSTRAINT ddns_records_proxy_ho
 			desc: "v2.23.0: system_settings.ddns_check_interval_minutes (#157)",
 			sql:  `ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS ddns_check_interval_minutes integer DEFAULT 5 NOT NULL;`,
 		},
+		{
+			desc: "v2.27.0: auth_providers table (#179)",
+			sql: `CREATE TABLE IF NOT EXISTS public.auth_providers (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    name character varying(255) NOT NULL,
+    type character varying(20) DEFAULT 'custom'::character varying NOT NULL,
+    provider_url text NOT NULL,
+    config jsonb DEFAULT '{}'::jsonb NOT NULL,
+    timeout_ms integer DEFAULT 5000 NOT NULL,
+    enabled boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT auth_providers_type_check CHECK (((type)::text = ANY ((ARRAY['authelia'::character varying, 'authentik'::character varying, 'custom'::character varying])::text[])))
+);`,
+		},
+		{
+			desc: "v2.27.0: proxy_hosts.auth_provider_id/auth_bypass_paths (#179)",
+			sql: `ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS auth_provider_id uuid;
+ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS auth_bypass_paths text[] DEFAULT '{}'::text[];
+DO $$ BEGIN ALTER TABLE public.proxy_hosts ADD CONSTRAINT proxy_hosts_auth_provider_id_fkey FOREIGN KEY (auth_provider_id) REFERENCES public.auth_providers(id) ON DELETE SET NULL; EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

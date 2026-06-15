@@ -17,6 +17,7 @@ type Repositories struct {
 	Log                *repository.LogRepository
 	WAF                *repository.WAFRepository
 	AccessList         *repository.AccessListRepository
+	AuthProvider       *repository.AuthProviderRepository
 	RedirectHost       *repository.RedirectHostRepository
 	Geo                *repository.GeoRepository
 	RateLimit          *repository.RateLimitRepository
@@ -52,6 +53,7 @@ func InitRepositories(db *database.DB, redisCache *cache.RedisClient) *Repositor
 		Log:                repository.NewLogRepository(db),
 		WAF:                repository.NewWAFRepository(db),
 		AccessList:         repository.NewAccessListRepository(db),
+		AuthProvider:       repository.NewAuthProviderRepository(db),
 		RedirectHost:       repository.NewRedirectHostRepository(db),
 		Geo:                repository.NewGeoRepository(db),
 		RateLimit:          repository.NewRateLimitRepository(db.DB),

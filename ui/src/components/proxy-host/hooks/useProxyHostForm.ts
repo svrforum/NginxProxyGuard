@@ -88,6 +88,7 @@ export function useProxyHostForm(host: ProxyHost | null | undefined, onClose: ()
     availableCerts: state.availableCerts,
     pendingCerts: state.pendingCerts,
     availableAccessLists: state.availableAccessLists,
+    availableAuthProviders: state.availableAuthProviders,
     dnsProviders: state.dnsProviders,
     geoipStatus: state.geoipStatus,
     countryCodes: state.countryCodes,

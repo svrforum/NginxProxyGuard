@@ -10,6 +10,8 @@
     "access": "접근",
     "accessControl": "접근 제어",
     "accessLists": "접근 목록",
+    "authProviders": "인증 제공자",
+    "authProvidersShort": "인증",
     "certificates": "인증서",
     "sslCerts": "SSL 인증서",
     "logs": "로그",

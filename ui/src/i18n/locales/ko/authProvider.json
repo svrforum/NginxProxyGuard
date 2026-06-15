@@ -1,0 +1,23 @@
+{
+  "title": "인증 제공자 (ForwardAuth)",
+  "actions": { "add": "인증 제공자 추가", "edit": "편집", "delete": "삭제", "cancel": "취소", "update": "업데이트", "create": "생성", "save": "저장 중..." },
+  "form": {
+    "newTitle": "새 인증 제공자", "editTitle": "인증 제공자 편집",
+    "name": "이름", "namePlaceholder": "예: 홈 Authelia",
+    "type": "유형", "providerUrl": "인증 서비스 URL", "providerUrlPlaceholder": "http://127.0.0.1:9091",
+    "verifyPath": "검증 경로", "signinMode": "로그인 리다이렉트 방식", "signinRedirect": "로그인 리다이렉트 URL",
+    "signinModeLocationHeader": "Location 헤더 (검증기가 리다이렉트 제공)", "signinModeRedirectTemplate": "리다이렉트 템플릿 (사용자 지정 URL)",
+    "cookiePassthrough": "Set-Cookie 전달", "largeBuffers": "대용량 헤더 버퍼",
+    "bypassPaths": "우회 경로 (한 줄에 하나씩)",
+    "typeAuthelia": "Authelia", "typeAuthentik": "Authentik", "typeCustom": "사용자 정의 (ForwardAuth)"
+  },
+  "list": { "title": "인증 제공자", "name": "이름", "type": "유형", "url": "URL", "actions": "작업", "empty": "인증 제공자가 없습니다. Authelia/Authentik으로 호스트를 보호하려면 생성하세요." },
+  "messages": { "deleteConfirm": "이 인증 제공자를 삭제하시겠습니까? 사용 중인 호스트는 보호가 해제됩니다.", "loadError": "인증 제공자를 불러오지 못했습니다", "saveError": "인증 제공자 저장 실패" },
+  "help": {
+    "authelia": "Authelia 4.37 이상. 세션 쿠키 도메인은 모든 보호 호스트와 포털의 상위 도메인이어야 합니다.",
+    "authentik": "outpost URL을 입력하세요 (임베디드 outpost = authentik 서버 host:9000).",
+    "custom": "auth_request 호환 검증기(oauth2-proxy 등)의 검증 경로와 로그인 리다이렉트를 입력하세요.",
+    "providerUrl": "프록시 컨테이너에서 접근 가능한 주소를 사용하세요 (host 네트워크 설치: 호스트 IP:포트, bridge 네트워크: 서비스 이름).",
+    "challengeConflict": "ForwardAuth 제공자를 사용하려면 CAPTCHA/지역 챌린지 모드를 비활성화하세요."
+  }
+}

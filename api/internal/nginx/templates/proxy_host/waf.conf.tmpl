@@ -59,6 +59,7 @@
         error_page 401 = @challenge_redirect;
         error_page 500 502 503 504 = @api_fallback;
 {{end}}{{end}}
+{{if .AuthProvider}}{{template "_auth_gate" .}}{{end}}
         {{if and .Upstream .Upstream.Servers}}proxy_pass {{upstreamScheme .Upstream}}://{{.Upstream.Name}};{{if eq (upstreamScheme .Upstream) "https"}}
         proxy_ssl_server_name on;
         proxy_ssl_name $host;
@@ -187,6 +188,7 @@
         error_page 401 = @challenge_redirect;
         error_page 500 502 503 504 = @api_fallback;
 {{end}}{{end}}
+{{if .AuthProvider}}{{template "_auth_gate" .}}{{end}}
         {{if and .Upstream .Upstream.Servers}}proxy_pass {{upstreamScheme .Upstream}}://{{.Upstream.Name}};{{if eq (upstreamScheme .Upstream) "https"}}
         proxy_ssl_server_name on;
         proxy_ssl_name $host;

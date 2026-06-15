@@ -8,6 +8,7 @@ import { BotFilterSettings } from './security/BotFilterSettings'
 import { GeoIPSettings } from './security/GeoIPSettings'
 import { PriorityAllowIPs } from './security/PriorityAllowIPs'
 import { CloudProviderBlocking } from './security/CloudProviderBlocking'
+import { AuthProviderSettings } from './security/AuthProviderSettings'
 import { CollapsibleSection } from './security/CollapsibleSection'
 import { useTranslation } from 'react-i18next'
 import { HelpTip } from '../../common/HelpTip'
@@ -37,6 +38,11 @@ interface SecurityTabProps {
     name: string
     satisfy_any: boolean
   }>
+  availableAuthProviders: Array<{
+    id: string
+    name: string
+    type: string
+  }>
   geoipStatus: { status: string } | undefined
   countryCodes: Record<string, string> | undefined
 }
@@ -60,11 +66,34 @@ export function SecurityTabContent({
   cloudProviderAllowSearchBots,
   setCloudProviderAllowSearchBots,
   availableAccessLists,
+  availableAuthProviders,
   geoipStatus,
   countryCodes,
 }: SecurityTabProps) {
   const { t } = useTranslation('proxyHost')
   const queryClient = useQueryClient()
+
+  // ForwardAuth and managed challenges (geo/cloud CAPTCHA) both emit an
+  // auth_request in `location /`; nginx allows only one. Enforce mutual
+  // exclusion: when a provider is selected the challenge toggles are
+  // disabled; when a challenge is enabled the provider is cleared.
+  const challengeActive = geoData.challenge_mode || cloudProviderChallengeMode
+
+  const clearAuthProvider = () =>
+    setFormData((prev) => ({ ...prev, auth_provider_id: undefined, auth_bypass_paths: [] }))
+
+  const setGeoDataWithLock: React.Dispatch<React.SetStateAction<GeoDataState>> = (value) => {
+    setGeoData((prev) => {
+      const next = typeof value === 'function' ? (value as (p: GeoDataState) => GeoDataState)(prev) : value
+      if (next.challenge_mode && !prev.challenge_mode) clearAuthProvider()
+      return next
+    })
+  }
+
+  const setCloudChallengeWithLock = (enabled: boolean) => {
+    if (enabled) clearAuthProvider()
+    setCloudProviderChallengeMode(enabled)
+  }
 
   // Fail2ban state management
   const [fail2banEnabled, setFail2banEnabled] = useState(false)
@@ -284,6 +313,22 @@ export function SecurityTabContent({
       </div>
       </CollapsibleSection>
 
+      {/* Auth Provider (ForwardAuth / SSO) */}
+      <CollapsibleSection title={t('form.security.authProvider', 'Auth Provider (SSO)')}>
+        <AuthProviderSettings
+          availableAuthProviders={availableAuthProviders}
+          selectedProviderId={formData.auth_provider_id || ''}
+          bypassPaths={formData.auth_bypass_paths || []}
+          challengeActive={challengeActive}
+          onSelect={(id) =>
+            setFormData((prev) => ({ ...prev, auth_provider_id: id || undefined }))
+          }
+          onBypassChange={(paths) =>
+            setFormData((prev) => ({ ...prev, auth_bypass_paths: paths }))
+          }
+        />
+      </CollapsibleSection>
+
       {/* Bot Filter Settings */}
       <CollapsibleSection title={t('form.security.botFilter.title')}>
         <BotFilterSettings botFilterData={botFilterData} setBotFilterData={setBotFilterData} />
@@ -293,7 +338,7 @@ export function SecurityTabContent({
       <CollapsibleSection title={t('form.security.geoip.title')}>
         <GeoIPSettings
           geoData={geoData}
-          setGeoData={setGeoData}
+          setGeoData={setGeoDataWithLock}
           geoSearchTerm={geoSearchTerm}
           setGeoSearchTerm={setGeoSearchTerm}
           geoipStatus={geoipStatus}
@@ -307,7 +352,7 @@ export function SecurityTabContent({
           blockedProviders={blockedCloudProviders}
           setBlockedProviders={setBlockedCloudProviders}
           challengeMode={cloudProviderChallengeMode}
-          setChallengeMode={setCloudProviderChallengeMode}
+          setChallengeMode={setCloudChallengeWithLock}
           allowSearchBots={cloudProviderAllowSearchBots}
           setAllowSearchBots={setCloudProviderAllowSearchBots}
         />

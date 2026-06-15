@@ -63,6 +63,7 @@ type ProxyHostService struct {
 	repo                   *repository.ProxyHostRepository
 	wafRepo                *repository.WAFRepository
 	accessListRepo         *repository.AccessListRepository
+	authProviderRepo       *repository.AuthProviderRepository // ForwardAuth provider (#179)
 	geoRepo                *repository.GeoRepository
 	rateLimitRepo          *repository.RateLimitRepository
 	securityHeadersRepo    *repository.SecurityHeadersRepository
@@ -89,6 +90,7 @@ func NewProxyHostService(
 	repo *repository.ProxyHostRepository,
 	wafRepo *repository.WAFRepository,
 	accessListRepo *repository.AccessListRepository,
+	authProviderRepo *repository.AuthProviderRepository,
 	geoRepo *repository.GeoRepository,
 	rateLimitRepo *repository.RateLimitRepository,
 	securityHeadersRepo *repository.SecurityHeadersRepository,
@@ -109,6 +111,7 @@ func NewProxyHostService(
 		repo:                 repo,
 		wafRepo:              wafRepo,
 		accessListRepo:       accessListRepo,
+		authProviderRepo:     authProviderRepo,
 		geoRepo:              geoRepo,
 		rateLimitRepo:        rateLimitRepo,
 		securityHeadersRepo:  securityHeadersRepo,
@@ -300,7 +303,37 @@ func applyUpdateCandidate(existing *model.ProxyHost, req *model.UpdateProxyHostR
 			candidate.DDNSProviderID = req.DDNSProviderID
 		}
 	}
+	if req.AuthProviderID != nil {
+		if *req.AuthProviderID == "" {
+			candidate.AuthProviderID = nil
+		} else {
+			candidate.AuthProviderID = req.AuthProviderID
+		}
+	}
+	if req.AuthBypassPaths != nil {
+		candidate.AuthBypassPaths = req.AuthBypassPaths
+	}
 	return candidate
+}
+
+// validateAuthProviderConflict rejects a ForwardAuth assignment that would create a
+// duplicate auth_request (geo challenge mode) or land on an uninjectable custom
+// "location /". Errors are "conflict:"-prefixed so the handler maps them to HTTP 409.
+// Must be called from Create, Update AND UpdateDBOnly (UI saves via UpdateDBOnly).
+func (s *ProxyHostService) validateAuthProviderConflict(ctx context.Context, hostID string, authProviderID *string, proxyType, advancedConfig string) error {
+	if authProviderID == nil || *authProviderID == "" || proxyType == model.ProxyTypeStream {
+		return nil
+	}
+	if nginx.HasCustomLocationRootInConfig(advancedConfig) {
+		return fmt.Errorf("conflict: auth provider cannot be combined with a custom \"location /\" block in advanced config")
+	}
+	if s.geoRepo != nil && hostID != "" {
+		geo, err := s.geoRepo.GetByProxyHostID(ctx, hostID)
+		if err == nil && geo != nil && geo.ChallengeMode {
+			return fmt.Errorf("conflict: auth provider cannot be combined with geo challenge (CAPTCHA) mode on the same host")
+		}
+	}
+	return nil
 }
 
 func normalizeUpdateProxyHostRequest(existing *model.ProxyHost, req *model.UpdateProxyHostRequest) (*model.ProxyHost, error) {
@@ -438,6 +471,24 @@ func (s *ProxyHostService) prepareUpdateProxyHostRequest(ctx context.Context, id
 		if err := model.ValidateAdvancedConfig(*req.AdvancedConfig); err != nil {
 			return "", nil, fmt.Errorf("invalid advanced config: %w", err)
 		}
+	}
+
+	// ForwardAuth conflict validation (geo challenge / custom location). Runs on the
+	// shared update path so it covers Update AND UpdateDBOnly (UI saves via UpdateDBOnly). (#179)
+	effAuthProviderID := existingHost.AuthProviderID
+	if req.AuthProviderID != nil {
+		effAuthProviderID = req.AuthProviderID
+	}
+	effAdvancedConfig := existingHost.AdvancedConfig
+	if req.AdvancedConfig != nil {
+		effAdvancedConfig = *req.AdvancedConfig
+	}
+	effProxyType := existingHost.ProxyType
+	if req.ProxyType != "" {
+		effProxyType = req.ProxyType
+	}
+	if err := s.validateAuthProviderConflict(ctx, id, effAuthProviderID, effProxyType, effAdvancedConfig); err != nil {
+		return "", nil, err
 	}
 
 	candidate, err := normalizeUpdateProxyHostRequest(existingHost, req)
@@ -625,6 +676,11 @@ func (s *ProxyHostService) Create(ctx context.Context, req *model.CreateProxyHos
 		return nil, err
 	}
 	req.ForwardHost = resolvedForwardHost
+
+	// ForwardAuth conflict validation (custom location; geo challenge can't exist on a new host) (#179)
+	if err := s.validateAuthProviderConflict(ctx, "", req.AuthProviderID, req.ProxyType, req.AdvancedConfig); err != nil {
+		return nil, err
+	}
 
 	// Create in database
 	host, err := s.repo.Create(ctx, req)

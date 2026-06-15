@@ -45,6 +45,8 @@ export interface ProxyHost {
   waf_paranoia_level: number
   waf_anomaly_threshold: number
   access_list_id?: string
+  auth_provider_id?: string
+  auth_bypass_paths?: string[]
   ddns_enabled?: boolean
   ddns_provider_id?: string
   ddns_proxied?: boolean
@@ -79,6 +81,8 @@ export interface CreateProxyHostRequest {
   ssl_http3?: boolean
   certificate_id?: string
   access_list_id?: string
+  auth_provider_id?: string
+  auth_bypass_paths?: string[]
   allow_websocket_upgrade?: boolean
   cache_enabled?: boolean
   cache_static_only?: boolean
@@ -144,6 +148,8 @@ export interface UpdateProxyHostRequest {
   waf_paranoia_level?: number
   waf_anomaly_threshold?: number
   access_list_id?: string
+  auth_provider_id?: string
+  auth_bypass_paths?: string[]
   advanced_config?: string
   ddns_enabled?: boolean
   ddns_provider_id?: string

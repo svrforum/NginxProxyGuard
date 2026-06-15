@@ -9,6 +9,30 @@ import (
 	"nginx-proxy-guard/internal/model"
 )
 
+// exportAuthProviders exports ForwardAuth providers (#179)
+func (r *BackupRepository) exportAuthProviders(ctx context.Context) ([]model.AuthProviderExport, error) {
+	query := `SELECT id, name, type, provider_url, config, timeout_ms, enabled FROM auth_providers ORDER BY created_at`
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var exports []model.AuthProviderExport
+	for rows.Next() {
+		var ap model.AuthProviderData
+		var cfgRaw []byte
+		if err := rows.Scan(&ap.ID, &ap.Name, &ap.Type, &ap.ProviderURL, &cfgRaw, &ap.TimeoutMs, &ap.Enabled); err != nil {
+			return nil, err
+		}
+		if len(cfgRaw) > 0 {
+			_ = json.Unmarshal(cfgRaw, &ap.Config)
+		}
+		exports = append(exports, model.AuthProviderExport{AuthProvider: ap})
+	}
+	return exports, nil
+}
+
 func (r *BackupRepository) exportAccessLists(ctx context.Context) ([]model.AccessListExport, error) {
 	query := `SELECT id, name, description, satisfy_any, pass_auth FROM access_lists ORDER BY created_at`
 

@@ -63,6 +63,7 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
     availableCerts,
     pendingCerts,
     availableAccessLists,
+    availableAuthProviders,
     dnsProviders,
     geoipStatus,
     countryCodes,
@@ -296,6 +297,7 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
                 cloudProviderAllowSearchBots={cloudProviderAllowSearchBots}
                 setCloudProviderAllowSearchBots={setCloudProviderAllowSearchBots}
                 availableAccessLists={availableAccessLists}
+                availableAuthProviders={availableAuthProviders}
                 geoipStatus={geoipStatus}
                 countryCodes={countryCodes}
               />

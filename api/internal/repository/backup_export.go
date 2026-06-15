@@ -57,6 +57,13 @@ func (r *BackupRepository) ExportAllData(ctx context.Context) (*model.ExportData
 	}
 	export.AccessLists = accessLists
 
+	// Export Auth Providers (#179)
+	authProviders, err := r.exportAuthProviders(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to export auth providers: %w", err)
+	}
+	export.AuthProviders = authProviders
+
 	// Export DNS Providers (without sensitive credentials)
 	dnsProviders, err := r.exportDNSProviders(ctx)
 	if err != nil {

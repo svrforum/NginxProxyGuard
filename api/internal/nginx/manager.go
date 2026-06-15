@@ -454,6 +454,19 @@ func (m *Manager) GenerateConfigWithAccessControl(ctx context.Context, host *mod
 	})
 }
 
+// customLocationRootRe matches a custom "location / { ... }" block in advanced config.
+var customLocationRootRe = regexp.MustCompile(`(?m)^\s*location\s+/\s*\{`)
+
+// HasCustomLocationRootInConfig reports whether advancedConfig contains a custom
+// "location / { ... }" block. Such a block prevents NPG from injecting auth_request
+// into the default location / (#179), so callers reject ForwardAuth in that case.
+func HasCustomLocationRootInConfig(advancedConfig string) bool {
+	if advancedConfig == "" {
+		return false
+	}
+	return customLocationRootRe.MatchString(advancedConfig)
+}
+
 // GenerateConfigFull generates nginx config with all Phase 6 features support
 func (m *Manager) GenerateConfigFull(ctx context.Context, data ProxyHostConfigData) error {
 	start := time.Now()
@@ -540,8 +553,7 @@ func (m *Manager) GenerateConfigFull(ctx context.Context, data ProxyHostConfigDa
 	// If so, skip generating the default location / block to avoid duplicates
 	if data.Host.AdvancedConfig != "" {
 		// Check for location / { pattern (with flexible whitespace)
-		locationPattern := regexp.MustCompile(`(?m)^\s*location\s+/\s*\{`)
-		data.HasCustomLocationRoot = locationPattern.MatchString(data.Host.AdvancedConfig)
+		data.HasCustomLocationRoot = HasCustomLocationRootInConfig(data.Host.AdvancedConfig)
 
 		// Check if AdvancedConfig contains ANY location directive
 		// If so, we cannot inject it inside location / block (would cause nested location error)

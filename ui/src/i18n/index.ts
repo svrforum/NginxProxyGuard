@@ -29,6 +29,7 @@ const LAZY_NAMESPACES = [
   'auth',
   'dashboard',
   'accessControl',
+  'authProvider',
   'proxyHost',
   'settings',
   'waf',

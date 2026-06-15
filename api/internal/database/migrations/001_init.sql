@@ -216,6 +216,18 @@ CREATE TABLE IF NOT EXISTS public.access_lists (
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now()
 );
+CREATE TABLE IF NOT EXISTS public.auth_providers (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    name character varying(255) NOT NULL,
+    type character varying(20) DEFAULT 'custom'::character varying NOT NULL,
+    provider_url text NOT NULL,
+    config jsonb DEFAULT '{}'::jsonb NOT NULL,
+    timeout_ms integer DEFAULT 5000 NOT NULL,
+    enabled boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT auth_providers_type_check CHECK (((type)::text = ANY ((ARRAY['authelia'::character varying, 'authentik'::character varying, 'custom'::character varying])::text[])))
+);
 CREATE TABLE IF NOT EXISTS public.api_token_usage (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     token_id uuid NOT NULL,
@@ -1920,6 +1932,8 @@ CREATE TABLE IF NOT EXISTS public.proxy_hosts (
     waf_enabled boolean DEFAULT false NOT NULL,
     waf_mode character varying(20) DEFAULT 'detection'::character varying,
     access_list_id uuid,
+    auth_provider_id uuid,
+    auth_bypass_paths text[] DEFAULT '{}'::text[],
     enabled boolean DEFAULT true NOT NULL,
     meta jsonb DEFAULT '{}'::jsonb,
     created_at timestamp with time zone DEFAULT now(),
@@ -2501,6 +2515,8 @@ ALTER TABLE ONLY public.access_list_items
     ADD CONSTRAINT access_list_items_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.access_lists
     ADD CONSTRAINT access_lists_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.auth_providers
+    ADD CONSTRAINT auth_providers_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.api_token_usage
     ADD CONSTRAINT api_token_usage_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.api_tokens
@@ -3211,6 +3227,8 @@ ALTER TABLE ONLY public.proxy_hosts
     ADD CONSTRAINT proxy_hosts_certificate_id_fkey FOREIGN KEY (certificate_id) REFERENCES public.certificates(id) ON DELETE SET NULL;
 ALTER TABLE ONLY public.proxy_hosts
     ADD CONSTRAINT proxy_hosts_ddns_provider_id_fkey FOREIGN KEY (ddns_provider_id) REFERENCES public.dns_providers(id) ON DELETE SET NULL;
+ALTER TABLE ONLY public.proxy_hosts
+    ADD CONSTRAINT proxy_hosts_auth_provider_id_fkey FOREIGN KEY (auth_provider_id) REFERENCES public.auth_providers(id) ON DELETE SET NULL;
 ALTER TABLE ONLY public.rate_limits
     ADD CONSTRAINT rate_limits_proxy_host_id_fkey FOREIGN KEY (proxy_host_id) REFERENCES public.proxy_hosts(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.redirect_hosts

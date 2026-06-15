@@ -79,3 +79,9 @@ server {
     }
 {{end}}{{end}}
 
+{{if .AuthProvider}}{{if not .Host.SSLForceHTTPS}}
+{{template "_auth_verify_location" .}}
+{{template "_auth_signin_location" .}}
+{{template "_auth_bypass_locations" .}}
+{{end}}{{end}}
+

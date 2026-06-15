@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { listCertificates } from '../../../api/certificates'
 import { listDNSProviders } from '../../../api/dns-providers'
 import { getAccessLists, getCountryCodes, getGeoRestriction } from '../../../api/access'
+import { getAuthProviders } from '../../../api/auth-provider'
 import { getBotFilter } from '../../../api/security'
 import { getGeoIPStatus } from '../../../api/settings'
 import { api } from '../../../api/client'
@@ -44,6 +45,8 @@ export function useProxyHostFormState(host: ProxyHost | null | undefined) {
     ssl_http3: false,
     certificate_id: undefined,
     access_list_id: undefined,
+    auth_provider_id: undefined,
+    auth_bypass_paths: [],
     allow_websocket_upgrade: true,
     cache_enabled: false,
     cache_static_only: true,
@@ -122,6 +125,11 @@ export function useProxyHostFormState(host: ProxyHost | null | undefined) {
     queryFn: () => getAccessLists(1, 100),
   })
 
+  const { data: authProvidersData } = useQuery({
+    queryKey: ['authProviders'],
+    queryFn: () => getAuthProviders(1, 100),
+  })
+
   const { data: dnsProvidersData } = useQuery({
     queryKey: ['dnsProviders'],
     queryFn: () => listDNSProviders(1, 100),
@@ -177,6 +185,7 @@ export function useProxyHostFormState(host: ProxyHost | null | undefined) {
   const availableCerts = certificatesData?.data?.filter((c) => c.status === 'issued') || []
   const pendingCerts = certificatesData?.data?.filter((c) => c.status === 'pending') || []
   const availableAccessLists = accessListsData?.data || []
+  const availableAuthProviders = authProvidersData?.data || []
   const dnsProviders = dnsProvidersData?.data || []
 
   // ───── Effects: hydrate form state from server data ──────────────────
@@ -249,6 +258,8 @@ export function useProxyHostFormState(host: ProxyHost | null | undefined) {
         ssl_http3: host.ssl_http3,
         certificate_id: host.certificate_id,
         access_list_id: host.access_list_id,
+        auth_provider_id: host.auth_provider_id,
+        auth_bypass_paths: host.auth_bypass_paths || [],
         allow_websocket_upgrade: host.allow_websocket_upgrade,
         cache_enabled: host.cache_enabled,
         cache_static_only: host.cache_static_only ?? true,
@@ -312,6 +323,7 @@ export function useProxyHostFormState(host: ProxyHost | null | undefined) {
     availableCerts,
     pendingCerts,
     availableAccessLists,
+    availableAuthProviders,
     dnsProviders,
     geoipStatus,
     countryCodes,

@@ -47,6 +47,8 @@
     }
 {{end}}
 
+{{if .AuthProvider}}{{template "_auth_verify_location" .}}{{end}}
+
 {{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}{{if .HasCustomLocationRoot}}
     # Server-level challenge redirect for custom location / configurations.
     # When AdvancedConfig contains a custom "location / { ... }", the default
@@ -105,6 +107,7 @@
         error_page 401 = @challenge_redirect;
         error_page 500 502 503 504 = @api_fallback;
 {{end}}{{end}}
+{{if .AuthProvider}}{{template "_auth_gate" .}}{{end}}
         {{if and .Upstream .Upstream.Servers}}proxy_pass {{upstreamScheme .Upstream}}://{{.Upstream.Name}};{{if eq (upstreamScheme .Upstream) "https"}}
         proxy_ssl_server_name on;
         proxy_ssl_name $host;
@@ -210,4 +213,5 @@
         return 302 /api/v1/challenge/page?host={{.Host.ID}}&reason=geo_restriction&return=$scheme://$host$request_uri;
     }
 {{end}}{{end}}
+{{if .AuthProvider}}{{template "_auth_signin_location" .}}{{template "_auth_bypass_locations" .}}{{end}}
 {{end}}

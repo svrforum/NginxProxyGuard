@@ -17,6 +17,7 @@ import (
 // the container can shut them down cleanly.
 type Services struct {
 	ProxyHost          *service.ProxyHostService
+	AuthProvider       *service.AuthProviderService
 	DNSProvider        *service.DNSProviderService
 	Certificate        *service.CertificateService
 	NginxReloader      *service.NginxReloader
@@ -55,6 +56,7 @@ func InitServices(
 		repos.ProxyHost,
 		repos.WAF,
 		repos.AccessList,
+		repos.AuthProvider,
 		repos.Geo,
 		repos.RateLimit,
 		repos.SecurityHeaders,
@@ -71,6 +73,8 @@ func InitServices(
 		repos.DNSProvider,
 		nginxManager,
 	)
+
+	svcs.AuthProvider = service.NewAuthProviderService(repos.AuthProvider, svcs.ProxyHost)
 
 	svcs.DNSProvider = service.NewDNSProviderService(repos.DNSProvider)
 

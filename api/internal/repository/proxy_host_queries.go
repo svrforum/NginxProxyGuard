@@ -80,7 +80,7 @@ func (r *ProxyHostRepository) List(ctx context.Context, page, perPage int, searc
 			COALESCE(proxy_request_buffering, '') as proxy_request_buffering,
 			COALESCE(client_max_body_size, '') as client_max_body_size,
 			COALESCE(proxy_max_temp_file_size, '') as proxy_max_temp_file_size,
-			access_list_id, enabled, is_favorite, COALESCE(config_status, 'ok') as config_status, COALESCE(config_error, '') as config_error, ddns_enabled, ddns_provider_id, ddns_proxied, meta, created_at, updated_at
+			access_list_id, enabled, is_favorite, COALESCE(config_status, 'ok') as config_status, COALESCE(config_error, '') as config_error, ddns_enabled, ddns_provider_id, ddns_proxied, auth_provider_id, COALESCE(auth_bypass_paths, '{}') as auth_bypass_paths, meta, created_at, updated_at
 		FROM proxy_hosts
 		%s
 		ORDER BY %s
@@ -100,6 +100,7 @@ func (r *ProxyHostRepository) List(ctx context.Context, page, perPage int, searc
 		var certificateID, accessListID sql.NullString
 		var forwardContainerName, forwardContainerNetwork sql.NullString
 		var ddnsProviderID sql.NullString
+		var authProviderID sql.NullString
 		var customLocations, meta []byte
 
 		err := rows.Scan(
@@ -151,6 +152,8 @@ func (r *ProxyHostRepository) List(ctx context.Context, page, perPage int, searc
 			&host.DDNSEnabled,
 			&ddnsProviderID,
 			&host.DDNSProxied,
+			&authProviderID,
+			&host.AuthBypassPaths,
 			&meta,
 			&host.CreatedAt,
 			&host.UpdatedAt,
@@ -173,6 +176,9 @@ func (r *ProxyHostRepository) List(ctx context.Context, page, perPage int, searc
 		}
 		if ddnsProviderID.Valid {
 			host.DDNSProviderID = &ddnsProviderID.String
+		}
+		if authProviderID.Valid {
+			host.AuthProviderID = &authProviderID.String
 		}
 		host.CustomLocations = json.RawMessage(customLocations)
 		host.Meta = json.RawMessage(meta)
@@ -314,7 +320,7 @@ func (r *ProxyHostRepository) GetAllEnabled(ctx context.Context) ([]model.ProxyH
 			COALESCE(proxy_request_buffering, '') as proxy_request_buffering,
 			COALESCE(client_max_body_size, '') as client_max_body_size,
 			COALESCE(proxy_max_temp_file_size, '') as proxy_max_temp_file_size,
-			access_list_id, enabled, is_favorite, COALESCE(config_status, 'ok') as config_status, COALESCE(config_error, '') as config_error, ddns_enabled, ddns_provider_id, ddns_proxied, meta, created_at, updated_at
+			access_list_id, enabled, is_favorite, COALESCE(config_status, 'ok') as config_status, COALESCE(config_error, '') as config_error, ddns_enabled, ddns_provider_id, ddns_proxied, auth_provider_id, COALESCE(auth_bypass_paths, '{}') as auth_bypass_paths, meta, created_at, updated_at
 		FROM proxy_hosts
 		WHERE enabled = true
 		ORDER BY created_at ASC
@@ -332,6 +338,7 @@ func (r *ProxyHostRepository) GetAllEnabled(ctx context.Context) ([]model.ProxyH
 		var certificateID, accessListID sql.NullString
 		var forwardContainerName, forwardContainerNetwork sql.NullString
 		var ddnsProviderID sql.NullString
+		var authProviderID sql.NullString
 		var customLocations, meta []byte
 
 		err := rows.Scan(
@@ -383,6 +390,8 @@ func (r *ProxyHostRepository) GetAllEnabled(ctx context.Context) ([]model.ProxyH
 			&host.DDNSEnabled,
 			&ddnsProviderID,
 			&host.DDNSProxied,
+			&authProviderID,
+			&host.AuthBypassPaths,
 			&meta,
 			&host.CreatedAt,
 			&host.UpdatedAt,
@@ -405,6 +414,9 @@ func (r *ProxyHostRepository) GetAllEnabled(ctx context.Context) ([]model.ProxyH
 		}
 		if ddnsProviderID.Valid {
 			host.DDNSProviderID = &ddnsProviderID.String
+		}
+		if authProviderID.Valid {
+			host.AuthProviderID = &authProviderID.String
 		}
 		host.CustomLocations = json.RawMessage(customLocations)
 		host.Meta = json.RawMessage(meta)
@@ -445,7 +457,7 @@ func (r *ProxyHostRepository) GetEnabledContainerBacked(ctx context.Context) ([]
 			COALESCE(proxy_request_buffering, '') as proxy_request_buffering,
 			COALESCE(client_max_body_size, '') as client_max_body_size,
 			COALESCE(proxy_max_temp_file_size, '') as proxy_max_temp_file_size,
-			access_list_id, enabled, is_favorite, COALESCE(config_status, 'ok') as config_status, COALESCE(config_error, '') as config_error, ddns_enabled, ddns_provider_id, ddns_proxied, meta, created_at, updated_at
+			access_list_id, enabled, is_favorite, COALESCE(config_status, 'ok') as config_status, COALESCE(config_error, '') as config_error, ddns_enabled, ddns_provider_id, ddns_proxied, auth_provider_id, COALESCE(auth_bypass_paths, '{}') as auth_bypass_paths, meta, created_at, updated_at
 		FROM proxy_hosts
 		WHERE enabled = true AND forward_container_name IS NOT NULL
 		ORDER BY created_at ASC
@@ -463,6 +475,7 @@ func (r *ProxyHostRepository) GetEnabledContainerBacked(ctx context.Context) ([]
 		var certificateID, accessListID sql.NullString
 		var forwardContainerName, forwardContainerNetwork sql.NullString
 		var ddnsProviderID sql.NullString
+		var authProviderID sql.NullString
 		var customLocations, meta []byte
 
 		err := rows.Scan(
@@ -514,6 +527,8 @@ func (r *ProxyHostRepository) GetEnabledContainerBacked(ctx context.Context) ([]
 			&host.DDNSEnabled,
 			&ddnsProviderID,
 			&host.DDNSProxied,
+			&authProviderID,
+			&host.AuthBypassPaths,
 			&meta,
 			&host.CreatedAt,
 			&host.UpdatedAt,
@@ -537,6 +552,9 @@ func (r *ProxyHostRepository) GetEnabledContainerBacked(ctx context.Context) ([]
 		if ddnsProviderID.Valid {
 			host.DDNSProviderID = &ddnsProviderID.String
 		}
+		if authProviderID.Valid {
+			host.AuthProviderID = &authProviderID.String
+		}
 		host.CustomLocations = json.RawMessage(customLocations)
 		host.Meta = json.RawMessage(meta)
 
@@ -558,6 +576,11 @@ func (r *ProxyHostRepository) GetByCertificateID(ctx context.Context, certificat
 // GetByAccessListID returns all proxy hosts referencing the specified access list
 func (r *ProxyHostRepository) GetByAccessListID(ctx context.Context, accessListID string) ([]model.ProxyHost, error) {
 	return r.getByReferenceColumn(ctx, "access_list_id", accessListID)
+}
+
+// GetByAuthProviderID returns all proxy hosts referencing the specified auth provider (#179)
+func (r *ProxyHostRepository) GetByAuthProviderID(ctx context.Context, authProviderID string) ([]model.ProxyHost, error) {
+	return r.getByReferenceColumn(ctx, "auth_provider_id", authProviderID)
 }
 
 // getByReferenceColumn returns all proxy hosts whose given reference column
@@ -589,7 +612,7 @@ func (r *ProxyHostRepository) getByReferenceColumn(ctx context.Context, column, 
 			COALESCE(proxy_request_buffering, '') as proxy_request_buffering,
 			COALESCE(client_max_body_size, '') as client_max_body_size,
 			COALESCE(proxy_max_temp_file_size, '') as proxy_max_temp_file_size,
-			access_list_id, enabled, is_favorite, COALESCE(config_status, 'ok') as config_status, COALESCE(config_error, '') as config_error, ddns_enabled, ddns_provider_id, ddns_proxied, meta, created_at, updated_at
+			access_list_id, enabled, is_favorite, COALESCE(config_status, 'ok') as config_status, COALESCE(config_error, '') as config_error, ddns_enabled, ddns_provider_id, ddns_proxied, auth_provider_id, COALESCE(auth_bypass_paths, '{}') as auth_bypass_paths, meta, created_at, updated_at
 		FROM proxy_hosts
 		WHERE ` + column + ` = $1
 		ORDER BY created_at ASC
@@ -607,6 +630,7 @@ func (r *ProxyHostRepository) getByReferenceColumn(ctx context.Context, column, 
 		var certificateID, accessListID sql.NullString
 		var forwardContainerName, forwardContainerNetwork sql.NullString
 		var ddnsProviderID sql.NullString
+		var authProviderID sql.NullString
 		var customLocations, meta []byte
 
 		err := rows.Scan(
@@ -658,6 +682,8 @@ func (r *ProxyHostRepository) getByReferenceColumn(ctx context.Context, column, 
 			&host.DDNSEnabled,
 			&ddnsProviderID,
 			&host.DDNSProxied,
+			&authProviderID,
+			&host.AuthBypassPaths,
 			&meta,
 			&host.CreatedAt,
 			&host.UpdatedAt,
@@ -680,6 +706,9 @@ func (r *ProxyHostRepository) getByReferenceColumn(ctx context.Context, column, 
 		}
 		if ddnsProviderID.Valid {
 			host.DDNSProviderID = &ddnsProviderID.String
+		}
+		if authProviderID.Valid {
+			host.AuthProviderID = &authProviderID.String
 		}
 		host.CustomLocations = json.RawMessage(customLocations)
 		host.Meta = json.RawMessage(meta)

@@ -147,14 +147,15 @@ func (r *BackupRepository) importProxyHost(ctx context.Context, tx *sql.Tx, ph *
 		                         proxy_connect_timeout, proxy_send_timeout, proxy_read_timeout,
 		                         proxy_buffering, proxy_request_buffering, client_max_body_size, proxy_max_temp_file_size, meta,
 		                         forward_container_name, forward_container_network,
-		                         ddns_enabled, ddns_provider_id, ddns_proxied)
+		                         ddns_enabled, ddns_provider_id, ddns_proxied,
+		                         auth_provider_id, auth_bypass_paths)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19,
 		        $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36,
-		        $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50)
+		        $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52)
 		RETURNING id
 	`
 
-	var certID, accessListID, ddnsProviderID interface{}
+	var certID, accessListID, ddnsProviderID, authProviderID interface{}
 	if ph.ProxyHost.CertificateID != "" {
 		certID = ph.ProxyHost.CertificateID
 	}
@@ -163,6 +164,9 @@ func (r *BackupRepository) importProxyHost(ctx context.Context, tx *sql.Tx, ph *
 	}
 	if ph.ProxyHost.DDNSProviderID != "" {
 		ddnsProviderID = ph.ProxyHost.DDNSProviderID
+	}
+	if ph.ProxyHost.AuthProviderID != "" {
+		authProviderID = ph.ProxyHost.AuthProviderID
 	}
 
 	var newID string
@@ -182,6 +186,7 @@ func (r *BackupRepository) importProxyHost(ctx context.Context, tx *sql.Tx, ph *
 		ph.ProxyHost.ProxyBuffering, ph.ProxyHost.ProxyRequestBuffering, ph.ProxyHost.ClientMaxBodySize, ph.ProxyHost.ProxyMaxTempFileSize, meta,
 		ph.ProxyHost.ForwardContainerName, ph.ProxyHost.ForwardContainerNetwork,
 		ph.ProxyHost.DDNSEnabled, ddnsProviderID, ph.ProxyHost.DDNSProxied,
+		authProviderID, pq.Array(ph.ProxyHost.AuthBypassPaths),
 	).Scan(&newID)
 	if err != nil {
 		return "", err
