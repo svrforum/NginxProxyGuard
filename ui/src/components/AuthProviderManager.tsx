@@ -260,6 +260,15 @@ export default function AuthProviderManager() {
         </button>
       </div>
 
+      <div className="rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/20 px-4 py-3 text-sm text-indigo-900 dark:text-indigo-200">
+        <p className="font-semibold mb-1">{t('usage.title')}</p>
+        <ol className="list-decimal list-inside space-y-0.5 text-indigo-800 dark:text-indigo-300">
+          <li>{t('usage.step1')}</li>
+          <li>{t('usage.step2')}</li>
+        </ol>
+        <p className="mt-1 text-xs text-indigo-700 dark:text-indigo-400">{t('usage.note')}</p>
+      </div>
+
       {showForm && (
         <AuthProviderForm
           provider={editing}

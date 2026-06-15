@@ -11,6 +11,12 @@
     "bypassPaths": "Bypass paths (one per line)",
     "typeAuthelia": "Authelia", "typeAuthentik": "Authentik", "typeCustom": "Custom (ForwardAuth)"
   },
+  "usage": {
+    "title": "How to use",
+    "step1": "Create an auth provider here (Authelia, Authentik, or custom).",
+    "step2": "Apply it to a host in Proxy Hosts → edit → Security tab → \"Auth Provider\". Per-host bypass paths are set there too.",
+    "note": "The protected host must use HTTPS — Authelia/Authentik reject http targets."
+  },
   "list": { "title": "Auth Providers", "name": "Name", "type": "Type", "url": "URL", "actions": "Actions", "empty": "No auth providers. Create one to protect hosts with Authelia/Authentik." },
   "messages": { "deleteConfirm": "Delete this auth provider? Hosts using it will lose protection.", "loadError": "Error loading auth providers", "saveError": "Failed to save auth provider" },
   "help": {

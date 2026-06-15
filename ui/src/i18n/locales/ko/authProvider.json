@@ -11,6 +11,12 @@
     "bypassPaths": "우회 경로 (한 줄에 하나씩)",
     "typeAuthelia": "Authelia", "typeAuthentik": "Authentik", "typeCustom": "사용자 정의 (ForwardAuth)"
   },
+  "usage": {
+    "title": "사용 방법",
+    "step1": "여기서 인증 제공자를 만듭니다 (Authelia · Authentik · 사용자 정의).",
+    "step2": "프록시 호스트 → 편집 → 보안 탭 → \"인증 제공자\"에서 호스트에 적용합니다. 예외 경로도 거기서 지정합니다.",
+    "note": "보호 대상 호스트는 HTTPS여야 합니다 — Authelia/Authentik은 http 대상을 거부합니다."
+  },
   "list": { "title": "인증 제공자", "name": "이름", "type": "유형", "url": "URL", "actions": "작업", "empty": "인증 제공자가 없습니다. Authelia/Authentik으로 호스트를 보호하려면 생성하세요." },
   "messages": { "deleteConfirm": "이 인증 제공자를 삭제하시겠습니까? 사용 중인 호스트는 보호가 해제됩니다.", "loadError": "인증 제공자를 불러오지 못했습니다", "saveError": "인증 제공자 저장 실패" },
   "help": {
