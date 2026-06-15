@@ -253,7 +253,7 @@ function SecurityHeadersSection({ hostId }: { hostId: string }) {
               <select
                 value={formData.x_frame_options}
                 onChange={(e) => setFormData((prev) => ({ ...prev, x_frame_options: e.target.value }))}
-                className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white"
+                className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white"
               >
                 <option value="DENY">DENY</option>
                 <option value="SAMEORIGIN">SAMEORIGIN</option>
@@ -268,7 +268,7 @@ function SecurityHeadersSection({ hostId }: { hostId: string }) {
               <select
                 value={formData.referrer_policy}
                 onChange={(e) => setFormData((prev) => ({ ...prev, referrer_policy: e.target.value }))}
-                className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white"
+                className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white"
               >
                 <option value="no-referrer">no-referrer</option>
                 <option value="strict-origin">strict-origin</option>
@@ -420,7 +420,7 @@ function RateLimitSection({ hostId }: { hostId: string }) {
                 type="number"
                 value={formData.requests_per_second}
                 onChange={(e) => setFormData((prev) => ({ ...prev, requests_per_second: Number(e.target.value) }))}
-                className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white"
+                className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white"
               />
             </div>
             <div>
@@ -429,7 +429,7 @@ function RateLimitSection({ hostId }: { hostId: string }) {
                 type="number"
                 value={formData.burst_size}
                 onChange={(e) => setFormData((prev) => ({ ...prev, burst_size: Number(e.target.value) }))}
-                className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white"
+                className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white"
               />
             </div>
             <div>
@@ -437,7 +437,7 @@ function RateLimitSection({ hostId }: { hostId: string }) {
               <select
                 value={formData.limit_by}
                 onChange={(e) => setFormData((prev) => ({ ...prev, limit_by: e.target.value }))}
-                className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white"
+                className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white"
               >
                 <option value="ip">{t('form.protection.rateLimit.limitByOptions.ip')}</option>
                 <option value="uri">{t('form.protection.rateLimit.limitByOptions.uri')}</option>
@@ -449,7 +449,7 @@ function RateLimitSection({ hostId }: { hostId: string }) {
               <select
                 value={formData.limit_response}
                 onChange={(e) => setFormData((prev) => ({ ...prev, limit_response: Number(e.target.value) }))}
-                className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white"
+                className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white"
               >
                 <option value={429}>429 Too Many Requests</option>
                 <option value={503}>503 Service Unavailable</option>
@@ -464,7 +464,7 @@ function RateLimitSection({ hostId }: { hostId: string }) {
               value={formData.whitelist_ips}
               onChange={(e) => setFormData((prev) => ({ ...prev, whitelist_ips: e.target.value }))}
               placeholder="192.168.1.1, 10.0.0.0/8"
-              className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
+              className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
             />
           </div>
 

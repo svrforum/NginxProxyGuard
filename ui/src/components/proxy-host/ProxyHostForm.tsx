@@ -412,7 +412,7 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
                         }
                       }}
                       disabled={certCreating || mutation.isPending}
-                      className="bg-primary-600 hover:bg-primary-700 disabled:bg-primary-400 text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors"
+                      className="bg-primary-600 hover:bg-primary-700 disabled:bg-primary-400 text-white px-6 py-2 rounded-lg shadow-sm text-sm font-medium transition-colors"
                     >
                       {t('common:buttons.next')}
                     </button>
@@ -425,7 +425,7 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
                 <button
                   type="submit"
                   disabled={certCreating || mutation.isPending}
-                  className="bg-primary-600 hover:bg-primary-700 disabled:bg-primary-400 text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                  className="bg-primary-600 hover:bg-primary-700 disabled:bg-primary-400 text-white px-6 py-2 rounded-lg shadow-sm text-sm font-medium transition-colors flex items-center gap-2"
                 >
                   {(certCreating || mutation.isPending) && (
                     <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">

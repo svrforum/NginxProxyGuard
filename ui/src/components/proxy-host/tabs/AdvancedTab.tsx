@@ -23,7 +23,7 @@ export function AdvancedTabContent({ formData, setFormData }: AdvancedTabProps) 
             setFormData((prev) => ({ ...prev, advanced_config: e.target.value }))
           }
           rows={10}
-          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
+          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm font-mono focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
           placeholder={t('form.advanced.config.placeholder')}
         />
         <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">

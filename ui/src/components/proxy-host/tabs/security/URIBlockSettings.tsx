@@ -224,12 +224,12 @@ export function URIBlockSettings({ uriBlockData, setURIBlockData }: URIBlockSett
                   value={newPattern}
                   onChange={(e) => setNewPattern(e.target.value)}
                   placeholder={t('form.security.uriBlock.patternPlaceholder')}
-                  className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-rose-500 focus:border-rose-500 dark:bg-slate-700 dark:text-white"
+                  className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm font-mono focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors dark:bg-slate-700 dark:text-white"
                 />
                 <select
                   value={newMatchType}
                   onChange={(e) => setNewMatchType(e.target.value as URIMatchType)}
-                  className="rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:ring-2 focus:ring-rose-500 focus:border-rose-500 dark:bg-slate-700 dark:text-white"
+                  className="rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors dark:bg-slate-700 dark:text-white"
                 >
                   <option value="exact">{t('form.security.uriBlock.matchTypes.exact')}</option>
                   <option value="prefix">{t('form.security.uriBlock.matchTypes.prefix')}</option>
@@ -242,7 +242,7 @@ export function URIBlockSettings({ uriBlockData, setURIBlockData }: URIBlockSett
                   value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
                   placeholder={t('form.security.uriBlock.descriptionPlaceholder')}
-                  className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:ring-2 focus:ring-rose-500 focus:border-rose-500 dark:bg-slate-700 dark:text-white"
+                  className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors dark:bg-slate-700 dark:text-white"
                 />
                 <button
                   type="button"
@@ -329,7 +329,7 @@ export function URIBlockSettings({ uriBlockData, setURIBlockData }: URIBlockSett
               onChange={(e) => updateExceptionIPs(e.target.value)}
               placeholder={t('form.security.uriBlock.exceptionIPsPlaceholder')}
               rows={3}
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-rose-500 focus:border-rose-500 dark:bg-slate-700 dark:text-white"
+              className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm font-mono focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors dark:bg-slate-700 dark:text-white"
             />
           </div>
 

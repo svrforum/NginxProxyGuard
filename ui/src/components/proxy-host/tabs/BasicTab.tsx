@@ -216,7 +216,7 @@ export function BasicTabContent({
                 value={domain}
                 onChange={(e) => updateDomain(index, e.target.value)}
                 placeholder={sourcePlaceholder}
-                className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
+                className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
               />
               {formData.domain_names.length > 1 && (
                 <button
@@ -274,7 +274,7 @@ export function BasicTabContent({
               <select
                 value={streamProtocol}
                 onChange={(e) => updateStreamProtocol(e.target.value as StreamProtocol)}
-                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 dark:text-white font-medium"
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white font-medium"
               >
                 <option value="tcp">TCP</option>
                 <option value="udp">UDP</option>
@@ -289,7 +289,7 @@ export function BasicTabContent({
                 value={formData.stream_listen_host || ''}
                 onChange={(e) => setFormData((prev) => ({ ...prev, stream_listen_host: e.target.value }))}
                 placeholder="0.0.0.0"
-                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
               />
             </div>
             <div className="col-span-12 sm:col-span-3">
@@ -303,7 +303,7 @@ export function BasicTabContent({
                 onChange={(e) => updateNumberField('stream_listen_port', e.target.value)}
                 onBlur={validateListenPort}
                 placeholder="5432"
-                className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400 text-center font-mono ${errors.stream_listen_port ? 'border-red-300 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'}`}
+                className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400 text-center font-mono ${errors.stream_listen_port ? 'border-red-300 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'}`}
               />
               {errors.stream_listen_port && (
                 <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.stream_listen_port}</p>
@@ -319,7 +319,7 @@ export function BasicTabContent({
               value={streamTlsMode}
               disabled={streamProtocol === 'udp'}
               onChange={(e) => setStreamTlsMode(e.target.value as 'none' | 'passthrough' | 'terminate')}
-              className={`w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 dark:text-white font-medium ${streamProtocol === 'udp' ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white font-medium ${streamProtocol === 'udp' ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               <option value="none">{t('form.stream.tlsMode.none')}</option>
               <option value="passthrough">{t('form.stream.tlsMode.passthrough')}</option>
@@ -340,7 +340,7 @@ export function BasicTabContent({
                       certificate_id: e.target.value || undefined,
                     }))
                   }
-                  className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 dark:text-white ${errors.certificate_id ? 'border-red-300 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'}`}
+                  className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white ${errors.certificate_id ? 'border-red-300 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'}`}
                 >
                   <option value="">{t('form.ssl.selectCertificate')}...</option>
                   {availableCerts.map((cert) => (
@@ -404,7 +404,7 @@ export function BasicTabContent({
                 value={formData.stream_proxy_connect_timeout || ''}
                 onChange={(e) => updateNumberField('stream_proxy_connect_timeout', e.target.value)}
                 placeholder="default"
-                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
               />
             </div>
             <div>
@@ -417,7 +417,7 @@ export function BasicTabContent({
                 value={formData.stream_proxy_timeout || ''}
                 onChange={(e) => updateNumberField('stream_proxy_timeout', e.target.value)}
                 placeholder="default"
-                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
               />
             </div>
           </div>
@@ -465,7 +465,7 @@ export function BasicTabContent({
                     forward_scheme: e.target.value as 'http' | 'https',
                   }))
                 }
-                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 dark:text-white font-medium"
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white font-medium"
               >
                 <option value="http">http://</option>
                 <option value="https">https://</option>
@@ -495,7 +495,7 @@ export function BasicTabContent({
                   }))
                 }
                 placeholder={t('form.basic.forwardHostPlaceholder')}
-                className={`flex-1 rounded-lg border px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400 ${errors.forward_host ? 'border-red-300 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'}`}
+                className={`flex-1 rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400 ${errors.forward_host ? 'border-red-300 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'}`}
               />
               <button
                 type="button"
@@ -548,7 +548,7 @@ export function BasicTabContent({
                 }
               }}
               placeholder="80"
-              className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400 text-center font-mono ${errors.forward_port ? 'border-red-300 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'}`}
+              className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400 text-center font-mono ${errors.forward_port ? 'border-red-300 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'}`}
             />
             {errors.forward_port && (
               <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.forward_port}</p>
@@ -630,7 +630,7 @@ export function BasicTabContent({
                 }
               }}
               disabled={ddnsProviders.length === 0}
-              className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 dark:text-white ${errors.ddns_provider_id ? 'border-red-300 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'} ${ddnsProviders.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white ${errors.ddns_provider_id ? 'border-red-300 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'} ${ddnsProviders.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               <option value="">{t('form.basic.ddnsSelectProvider')}</option>
               {ddnsProviders.map((p) => (

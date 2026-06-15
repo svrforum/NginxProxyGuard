@@ -165,7 +165,7 @@ export function UpstreamTabContent({ hostId }: UpstreamTabProps) {
         <select
           value={scheme}
           onChange={(e) => setScheme(e.target.value === 'https' ? 'https' : 'http')}
-          className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+          className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
         >
           <option value="http">HTTP</option>
           <option value="https">HTTPS</option>
@@ -183,7 +183,7 @@ export function UpstreamTabContent({ hostId }: UpstreamTabProps) {
         <select
           value={loadBalance}
           onChange={(e) => setLoadBalance(e.target.value)}
-          className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+          className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
         >
           <option value="round_robin">{t('upstream.methods.roundRobin')}</option>
           <option value="least_conn">{t('upstream.methods.leastConn')}</option>
@@ -202,7 +202,7 @@ export function UpstreamTabContent({ hostId }: UpstreamTabProps) {
           min={0}
           value={keepalive}
           onChange={(e) => setKeepalive(parseInt(e.target.value) || 0)}
-          className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+          className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
         />
       </div>
 
@@ -235,7 +235,7 @@ export function UpstreamTabContent({ hostId }: UpstreamTabProps) {
                   value={server.address}
                   onChange={(e) => updateServer(index, 'address', e.target.value)}
                   placeholder={t('upstream.addressPlaceholder')}
-                  className="flex-1 min-w-0 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
+                  className="flex-1 min-w-0 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
                 />
                 {/* Port */}
                 <div className="flex items-center gap-1">
@@ -246,7 +246,7 @@ export function UpstreamTabContent({ hostId }: UpstreamTabProps) {
                     max={65535}
                     value={server.port}
                     onChange={(e) => updateServer(index, 'port', parseInt(e.target.value) || 80)}
-                    className="w-20 px-2 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
+                    className="w-20 px-2 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
                   />
                 </div>
                 {/* Weight */}
@@ -258,7 +258,7 @@ export function UpstreamTabContent({ hostId }: UpstreamTabProps) {
                     max={100}
                     value={server.weight}
                     onChange={(e) => updateServer(index, 'weight', parseInt(e.target.value) || 1)}
-                    className="w-16 px-2 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
+                    className="w-16 px-2 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
                   />
                 </div>
                 {/* Backup toggle */}
@@ -331,7 +331,7 @@ export function UpstreamTabContent({ hostId }: UpstreamTabProps) {
                   min={5}
                   value={healthCheckInterval}
                   onChange={(e) => setHealthCheckInterval(parseInt(e.target.value) || 30)}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
                 />
               </div>
               <div>
@@ -343,7 +343,7 @@ export function UpstreamTabContent({ hostId }: UpstreamTabProps) {
                   min={1}
                   value={healthCheckTimeout}
                   onChange={(e) => setHealthCheckTimeout(parseInt(e.target.value) || 5)}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
                 />
               </div>
             </div>
@@ -356,7 +356,7 @@ export function UpstreamTabContent({ hostId }: UpstreamTabProps) {
                 value={healthCheckPath}
                 onChange={(e) => setHealthCheckPath(e.target.value)}
                 placeholder="/"
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
               />
             </div>
             <div>
@@ -369,7 +369,7 @@ export function UpstreamTabContent({ hostId }: UpstreamTabProps) {
                 max={599}
                 value={healthCheckExpectedStatus}
                 onChange={(e) => setHealthCheckExpectedStatus(parseInt(e.target.value) || 200)}
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
               />
             </div>
           </div>
@@ -421,7 +421,7 @@ export function UpstreamTabContent({ hostId }: UpstreamTabProps) {
           type="button"
           onClick={handleSave}
           disabled={saveMutation.isPending}
-          className="bg-primary-600 hover:bg-primary-700 disabled:bg-primary-400 text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+          className="bg-primary-600 hover:bg-primary-700 disabled:bg-primary-400 text-white px-6 py-2 rounded-lg shadow-sm text-sm font-medium transition-colors flex items-center gap-2"
         >
           {saveMutation.isPending && (
             <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">

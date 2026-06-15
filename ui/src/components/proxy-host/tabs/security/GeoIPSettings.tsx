@@ -219,7 +219,7 @@ export function GeoIPSettings({
                 value={geoSearchTerm}
                 onChange={(e) => setGeoSearchTerm(e.target.value)}
                 placeholder="Search by name or code..."
-                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400"
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400"
               />
 
               {/* Quick Presets */}

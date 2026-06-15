@@ -298,7 +298,7 @@ export function SecurityTabContent({
               access_list_id: e.target.value || '',
             }))
           }
-          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
         >
           <option value="">{t('form.security.noAccessList')}</option>
           {availableAccessLists.map((list) => (

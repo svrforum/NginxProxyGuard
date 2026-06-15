@@ -79,7 +79,7 @@ export function PerformanceTabContent({ formData, setFormData }: PerformanceTabP
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, cache_ttl: e.target.value }))
                 }
-                className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors"
               >
                 <option value="30m">{t('form.performance.cache.ttl30m', '30 minutes')}</option>
                 <option value="1h">{t('form.performance.cache.ttl1h', '1 hour')}</option>
@@ -173,7 +173,7 @@ export function PerformanceTabContent({ formData, setFormData }: PerformanceTabP
                   setFormData((prev) => ({ ...prev, client_max_body_size: e.target.value }))
                 }
                 placeholder={t('form.performance.proxySettings.useGlobal', 'Use global setting')}
-                className="flex-1 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                className="flex-1 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors"
               />
               <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
                 {t('form.performance.proxySettings.example', 'e.g.')} 100m, 1g, 0
@@ -198,7 +198,7 @@ export function PerformanceTabContent({ formData, setFormData }: PerformanceTabP
                   setFormData((prev) => ({ ...prev, proxy_max_temp_file_size: e.target.value }))
                 }
                 placeholder={t('form.performance.proxySettings.useGlobal', 'Use global setting')}
-                className="flex-1 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                className="flex-1 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors"
               />
               <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
                 {t('form.performance.proxySettings.example', 'e.g.')} 1024m, 0
@@ -220,7 +220,7 @@ export function PerformanceTabContent({ formData, setFormData }: PerformanceTabP
               onChange={(e) =>
                 setFormData((prev) => ({ ...prev, proxy_buffering: e.target.value }))
               }
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors"
             >
               <option value="">{t('form.performance.proxySettings.useGlobal', 'Use global setting')}</option>
               <option value="on">{t('form.performance.proxySettings.bufferingOn', 'On (buffer responses)')}</option>
@@ -242,7 +242,7 @@ export function PerformanceTabContent({ formData, setFormData }: PerformanceTabP
               onChange={(e) =>
                 setFormData((prev) => ({ ...prev, proxy_request_buffering: e.target.value }))
               }
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors"
             >
               <option value="">{t('form.performance.proxySettings.useGlobal', 'Use global setting')}</option>
               <option value="on">{t('form.performance.proxySettings.requestBufferingOn', 'On (buffer entire request)')}</option>
