@@ -235,7 +235,7 @@ export default function CertificateForm({ onClose, onSuccess }: CertificateFormP
               onChange={(e) => setDomainNames(e.target.value)}
               placeholder={t('form.domainsPlaceholder')}
               rows={3}
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-3 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 placeholder:text-slate-400 bg-white dark:bg-slate-700 dark:text-white"
+              className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors placeholder:text-slate-400 bg-white dark:bg-slate-700 dark:text-white"
               required
             />
             <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
@@ -245,9 +245,9 @@ export default function CertificateForm({ onClose, onSuccess }: CertificateFormP
 
           {/* Let's Encrypt specific options */}
           {provider === 'letsencrypt' && (
-            <div className="space-y-4 bg-slate-50 dark:bg-slate-700/50 rounded-xl p-5 border border-slate-200 dark:border-slate-600">
-              <h3 className="text-sm font-medium text-slate-700 dark:text-slate-200 flex items-center gap-2">
-                <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="space-y-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/40 p-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                 </svg>
                 {t('form.letsEncryptSettings')}
@@ -304,7 +304,7 @@ export default function CertificateForm({ onClose, onSuccess }: CertificateFormP
                   <select
                     value={dnsProviderId}
                     onChange={(e) => setDnsProviderId(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 dark:text-white"
+                    className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white"
                     required
                   >
                     <option value="">{t('form.selectDnsProvider')}</option>
@@ -349,9 +349,9 @@ export default function CertificateForm({ onClose, onSuccess }: CertificateFormP
 
           {/* Self-signed specific options */}
           {provider === 'selfsigned' && (
-            <div className="space-y-4 bg-slate-50 dark:bg-slate-700/50 rounded-xl p-5 border border-slate-200 dark:border-slate-600">
-              <h3 className="text-sm font-medium text-slate-700 dark:text-slate-200 flex items-center gap-2">
-                <svg className="w-5 h-5 text-slate-600 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="space-y-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/40 p-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                <svg className="w-4 h-4 text-slate-600 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 {t('form.selfSignedSettings')}
@@ -365,7 +365,7 @@ export default function CertificateForm({ onClose, onSuccess }: CertificateFormP
                 <select
                   value={validityDays}
                   onChange={(e) => setValidityDays(parseInt(e.target.value))}
-                  className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 dark:text-white"
+                  className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white"
                 >
                   <option value={30}>{t('form.daysOption', { count: 30 })}</option>
                   <option value={90}>{t('form.daysOption', { count: 90 })}</option>
@@ -380,9 +380,9 @@ export default function CertificateForm({ onClose, onSuccess }: CertificateFormP
 
           {/* Custom certificate upload */}
           {provider === 'custom' && (
-            <div className="space-y-4 bg-slate-50 dark:bg-slate-700/50 rounded-xl p-5 border border-slate-200 dark:border-slate-600">
-              <h3 className="text-sm font-medium text-slate-700 dark:text-slate-200 flex items-center gap-2">
-                <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="space-y-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/40 p-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                <svg className="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
                 {t('form.uploadTitle')}
@@ -397,7 +397,7 @@ export default function CertificateForm({ onClose, onSuccess }: CertificateFormP
                   onChange={(e) => setCertificatePem(e.target.value)}
                   placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
                   rows={5}
-                  className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-3 text-xs font-mono focus:ring-2 focus:ring-primary-500 focus:border-primary-500 placeholder:text-slate-400 bg-white dark:bg-slate-700 dark:text-white"
+                  className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-3 text-xs font-mono focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors placeholder:text-slate-400 bg-white dark:bg-slate-700 dark:text-white"
                   required
                 />
               </div>
@@ -411,7 +411,7 @@ export default function CertificateForm({ onClose, onSuccess }: CertificateFormP
                   onChange={(e) => setPrivateKeyPem(e.target.value)}
                   placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"
                   rows={5}
-                  className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-3 text-xs font-mono focus:ring-2 focus:ring-primary-500 focus:border-primary-500 placeholder:text-slate-400 bg-white dark:bg-slate-700 dark:text-white"
+                  className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-3 text-xs font-mono focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors placeholder:text-slate-400 bg-white dark:bg-slate-700 dark:text-white"
                   required
                 />
               </div>
@@ -425,7 +425,7 @@ export default function CertificateForm({ onClose, onSuccess }: CertificateFormP
                   onChange={(e) => setIssuerPem(e.target.value)}
                   placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
                   rows={4}
-                  className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-3 text-xs font-mono focus:ring-2 focus:ring-primary-500 focus:border-primary-500 placeholder:text-slate-400 bg-white dark:bg-slate-700 dark:text-white"
+                  className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-3 text-xs font-mono focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors placeholder:text-slate-400 bg-white dark:bg-slate-700 dark:text-white"
                 />
 
                 <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
@@ -448,7 +448,7 @@ export default function CertificateForm({ onClose, onSuccess }: CertificateFormP
             <button
               type="submit"
               disabled={isPending || (provider === 'letsencrypt' && challengeType === 'dns' && !dnsProviderId)}
-              className="bg-primary-600 hover:bg-primary-700 disabled:bg-primary-400 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+              className="bg-primary-600 hover:bg-primary-700 disabled:bg-primary-400 text-white px-4 py-2 rounded-lg shadow-sm text-sm font-medium transition-colors flex items-center gap-2"
             >
               {isPending && (
                 <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">

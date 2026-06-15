@@ -147,7 +147,7 @@ export default function DDNSImportFromHostsModal({ onClose, onSuccess }: DDNSImp
             <select
               value={dnsProviderId}
               onChange={(e) => setDnsProviderId(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 dark:text-white"
+              className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white"
             >
               <option value="">{t('selectProvider')}</option>
               {supportedProviders.map((p) => (
@@ -175,7 +175,7 @@ export default function DDNSImportFromHostsModal({ onClose, onSuccess }: DDNSImp
             <button
               type="submit"
               disabled={isPending}
-              className="bg-primary-600 hover:bg-primary-700 disabled:bg-primary-400 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+              className="bg-primary-600 hover:bg-primary-700 disabled:bg-primary-400 text-white px-4 py-2 rounded-lg shadow-sm text-sm font-medium transition-colors flex items-center gap-2"
             >
               {isPending && (
                 <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">

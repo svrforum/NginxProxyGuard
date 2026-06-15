@@ -72,7 +72,7 @@ function AuthProviderForm({ provider, onClose, onSuccess }: AuthProviderFormProp
     }
   };
 
-  const inputClass = 'w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400';
+  const inputClass = 'w-full px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400';
   const labelClass = 'block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1';
 
   const helpKey = type === 'authelia' ? 'help.authelia' : type === 'authentik' ? 'help.authentik' : 'help.custom';
@@ -167,7 +167,7 @@ function AuthProviderForm({ provider, onClose, onSuccess }: AuthProviderFormProp
                   />
                 </div>
               )}
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/40 px-4 py-3">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
@@ -194,14 +194,14 @@ function AuthProviderForm({ provider, onClose, onSuccess }: AuthProviderFormProp
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+              className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
             >
               {t('actions.cancel')}
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+              className="px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg shadow-sm hover:bg-indigo-700 disabled:opacity-50 transition-colors"
             >
               {isSubmitting ? t('actions.save') : provider ? t('actions.update') : t('actions.create')}
             </button>

@@ -110,7 +110,7 @@ function AccessListForm({ accessList, onClose, onSuccess }: AccessListFormProps)
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
+                  className="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
                   placeholder={t('form.namePlaceholder')}
                 />
               </div>
@@ -123,13 +123,13 @@ function AccessListForm({ accessList, onClose, onSuccess }: AccessListFormProps)
                   type="text"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
+                  className="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
                   placeholder={t('form.descriptionPlaceholder')}
                 />
               </div>
             </div>
 
-            <div className="flex gap-6">
+            <div className="flex flex-wrap gap-6 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/40 px-4 py-3">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -156,12 +156,12 @@ function AccessListForm({ accessList, onClose, onSuccess }: AccessListFormProps)
               </label>
             </div>
 
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/40 p-4">
+              <div className="flex justify-between items-center mb-3">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
                   {t('form.accessRules')}
                   <HelpTip contentKey="help.accessRules" ns="accessControl" />
-                </label>
+                </h4>
                 <button
                   type="button"
                   onClick={handleAddItem}
@@ -177,7 +177,7 @@ function AccessListForm({ accessList, onClose, onSuccess }: AccessListFormProps)
                     <select
                       value={item.directive}
                       onChange={(e) => handleItemChange(index, 'directive', e.target.value)}
-                      className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-700 dark:text-white"
+                      className="px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white"
                     >
                       <option value="allow">{t('form.allow')}</option>
                       <option value="deny">{t('form.deny')}</option>
@@ -186,14 +186,14 @@ function AccessListForm({ accessList, onClose, onSuccess }: AccessListFormProps)
                       type="text"
                       value={item.address}
                       onChange={(e) => handleItemChange(index, 'address', e.target.value)}
-                      className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
+                      className="flex-1 px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
                       placeholder={t('form.ipPlaceholder')}
                     />
                     <input
                       type="text"
                       value={item.description || ''}
                       onChange={(e) => handleItemChange(index, 'description', e.target.value)}
-                      className="w-40 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
+                      className="w-40 px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
                       placeholder={t('form.ruleDescription')}
                     />
                     {items.length > 1 && (
@@ -218,14 +218,14 @@ function AccessListForm({ accessList, onClose, onSuccess }: AccessListFormProps)
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
               >
                 {t('actions.cancel')}
               </button>
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                className="px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg shadow-sm hover:bg-indigo-700 disabled:opacity-50 transition-colors"
               >
                 {isSubmitting ? t('actions.save') : accessList ? t('actions.update') : t('actions.create')}
               </button>

@@ -136,7 +136,7 @@ export default function DDNSRecordForm({ record, onClose, onSuccess }: DDNSRecor
               onChange={(e) => setHostname(e.target.value)}
               placeholder={t('hostnamePlaceholder')}
               disabled={isManaged}
-              className={`w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 placeholder:text-slate-400 ${isManaged ? 'bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400' : 'bg-white dark:bg-slate-700 dark:text-white'}`}
+              className={`w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors placeholder:text-slate-400 ${isManaged ? 'bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400' : 'bg-white dark:bg-slate-700 dark:text-white'}`}
               required
             />
           </div>
@@ -150,7 +150,7 @@ export default function DDNSRecordForm({ record, onClose, onSuccess }: DDNSRecor
               value={dnsProviderId}
               onChange={(e) => setDnsProviderId(e.target.value)}
               disabled={isManaged}
-              className={`w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${isManaged ? 'bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400' : 'bg-white dark:bg-slate-700 dark:text-white'}`}
+              className={`w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors ${isManaged ? 'bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400' : 'bg-white dark:bg-slate-700 dark:text-white'}`}
             >
               <option value="">{t('selectProvider')}</option>
               {supportedProviders.map((p) => (
@@ -183,7 +183,7 @@ export default function DDNSRecordForm({ record, onClose, onSuccess }: DDNSRecor
 
           {/* Cloudflare-only: proxied + ttl */}
           {isCloudflare && (
-            <div className="space-y-4 bg-slate-50 dark:bg-slate-700/50 rounded-xl p-5 border border-slate-200 dark:border-slate-600">
+            <div className="space-y-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/40 p-4">
               <div className="flex items-center justify-between">
                 <div>
                   <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
@@ -212,14 +212,14 @@ export default function DDNSRecordForm({ record, onClose, onSuccess }: DDNSRecor
                   min={1}
                   value={ttl}
                   onChange={(e) => setTtl(Number(e.target.value) || 1)}
-                  className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-slate-700 dark:text-white"
+                  className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white"
                 />
               </div>
             </div>
           )}
 
           {/* Enabled Toggle */}
-          <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-700/50 rounded-xl border border-transparent dark:border-slate-700">
+          <div className="flex items-center justify-between rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/40 p-4">
             <div>
               <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('enabled')}</h4>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('enabledDesc')}</p>
@@ -248,7 +248,7 @@ export default function DDNSRecordForm({ record, onClose, onSuccess }: DDNSRecor
             <button
               type="submit"
               disabled={isPending}
-              className="bg-primary-600 hover:bg-primary-700 disabled:bg-primary-400 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+              className="bg-primary-600 hover:bg-primary-700 disabled:bg-primary-400 text-white px-4 py-2 rounded-lg shadow-sm text-sm font-medium transition-colors flex items-center gap-2"
             >
               {isPending && (
                 <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
