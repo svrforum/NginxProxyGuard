@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ModalShell } from './common/ModalShell';
@@ -7,6 +7,22 @@ import { getAuthProviders, createAuthProvider, updateAuthProvider, deleteAuthPro
 import { fetchProxyHosts } from '../api/proxy-hosts';
 import type { ProxyHost } from '../types/proxy-host';
 import { AuthProviderHosts } from './auth-provider/AuthProviderHosts';
+
+// Per-type accent classes. Full static strings (Tailwind JIT can't see interpolated names).
+const ACCENT: Record<string, { icon: string; chip: string }> = {
+  authelia: {
+    icon: 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300',
+    chip: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-300',
+  },
+  authentik: {
+    icon: 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-300',
+    chip: 'bg-orange-50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-300',
+  },
+  custom: {
+    icon: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
+    chip: 'bg-slate-100 text-slate-600 dark:bg-slate-700/50 dark:text-slate-300',
+  },
+};
 
 interface AuthProviderFormProps {
   provider: AuthProvider | null;
@@ -265,9 +281,10 @@ export default function AuthProviderManager() {
         <h2 className="text-xl font-semibold text-slate-900 dark:text-white">{t('title')}</h2>
         <button
           onClick={() => setShowForm(true)}
-          className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg shadow-sm hover:bg-indigo-700 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900"
         >
-          + {t('actions.add')}
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+          {t('actions.add')}
         </button>
       </div>
 
@@ -288,81 +305,84 @@ export default function AuthProviderManager() {
         />
       )}
 
-      <div className="bg-white dark:bg-slate-800 shadow overflow-hidden overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
-        <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
-          <thead className="bg-slate-50 dark:bg-slate-900/50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t('list.name')}
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t('list.type')}
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t('list.url')}
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t('list.actions')}
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
-            {data?.data?.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
-                  {t('list.empty')}
-                </td>
-              </tr>
-            ) : (
-              data?.data?.map((provider) => (
-                <Fragment key={provider.id}>
-                  <tr className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="text-sm font-medium text-slate-900 dark:text-white">{provider.name}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="px-2 py-0.5 text-xs font-medium rounded bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300">
-                        {provider.type}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="font-mono text-sm text-slate-700 dark:text-slate-300">{provider.provider_url}</span>
-                    </td>
-                    <td className="px-6 py-4 text-right space-x-2">
-                      <button
-                        onClick={() => setExpandedId(expandedId === provider.id ? null : provider.id)}
-                        className="text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white text-sm font-medium"
-                      >
-                        {t('hosts.manage')} ({allHosts.filter((h) => h.auth_provider_id === provider.id).length}) {expandedId === provider.id ? '▲' : '▼'}
-                      </button>
-                      <button
-                        onClick={() => handleEdit(provider)}
-                        className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm font-medium"
-                      >
-                        {t('actions.edit')}
-                      </button>
-                      <button
-                        onClick={() => handleDelete(provider.id)}
-                        disabled={deleteMutation.isPending}
-                        className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium"
-                      >
-                        {t('actions.delete')}
-                      </button>
-                    </td>
-                  </tr>
-                  {expandedId === provider.id && (
-                    <tr>
-                      <td colSpan={4} className="p-0">
-                        <AuthProviderHosts providerId={provider.id} hosts={allHosts} />
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      {!data?.data?.length ? (
+        <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/30 px-6 py-14 text-center">
+          <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400">
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+          </div>
+          <p className="text-sm text-slate-500 dark:text-slate-400">{t('list.empty')}</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {data?.data?.map((provider) => {
+            const count = allHosts.filter((h) => h.auth_provider_id === provider.id).length;
+            const isOpen = expandedId === provider.id;
+            const accent = ACCENT[provider.type] || ACCENT.custom;
+            return (
+              <div
+                key={provider.id}
+                className={`group rounded-xl border bg-white dark:bg-slate-800 transition-all ${isOpen ? 'border-indigo-300 dark:border-indigo-700 shadow-sm' : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'}`}
+              >
+                <div className="flex items-center gap-3 px-4 py-3.5 sm:px-5">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedId(isOpen ? null : provider.id)}
+                    aria-expanded={isOpen}
+                    className="flex flex-1 items-center gap-3 min-w-0 text-left focus:outline-none"
+                  >
+                    <svg className={`h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M9 5l7 7-7 7" /></svg>
+                    <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${accent.icon}`}>
+                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold text-slate-900 dark:text-white">{provider.name}</span>
+                      <span className="block truncate font-mono text-xs text-slate-400 dark:text-slate-500">{provider.provider_url}</span>
+                    </span>
+                  </button>
+
+                  <span className={`hidden sm:inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${accent.chip}`}>{provider.type}</span>
+
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${count > 0 ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-700/50 dark:text-slate-400'}`}
+                    title={t('hosts.applied')}
+                  >
+                    <span className={`h-1.5 w-1.5 rounded-full ${count > 0 ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                    {count}
+                  </span>
+
+                  <div className="flex items-center gap-0.5">
+                    <button
+                      onClick={() => handleEdit(provider)}
+                      title={t('actions.edit')}
+                      aria-label={t('actions.edit')}
+                      className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-indigo-600 dark:hover:bg-slate-700/60 dark:hover:text-indigo-400 transition-colors"
+                    >
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                    </button>
+                    <button
+                      onClick={() => handleDelete(provider.id)}
+                      disabled={deleteMutation.isPending}
+                      title={t('actions.delete')}
+                      aria-label={t('actions.delete')}
+                      className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400 transition-colors disabled:opacity-50"
+                    >
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
+                  </div>
+                </div>
+
+                <div className={`grid transition-[grid-template-rows] duration-200 ease-out ${isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+                  <div className="overflow-hidden">
+                    <div className="border-t border-slate-100 dark:border-slate-700/60">
+                      <AuthProviderHosts providerId={provider.id} hosts={allHosts} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

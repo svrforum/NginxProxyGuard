@@ -47,70 +47,76 @@ export function AuthProviderHosts({ providerId, hosts }: AuthProviderHostsProps)
   const busy = attachMutation.isPending || detachMutation.isPending;
 
   return (
-    <div className="space-y-3 px-6 py-4 bg-slate-50 dark:bg-slate-900/30">
+    <div className="space-y-4 px-4 py-4 sm:px-5 bg-slate-50/60 dark:bg-slate-900/20">
       {error && (
-        <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-3 py-2 rounded text-sm">
-          {error}
+        <div className="flex items-start gap-2 rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-3 py-2 text-sm">
+          <svg className="h-4 w-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
+          <span>{error}</span>
         </div>
       )}
 
       <div>
-        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
-          {t('hosts.applied')} ({applied.length})
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+          {t('hosts.applied')} · {applied.length}
         </p>
         {applied.length === 0 ? (
-          <p className="text-sm text-slate-500 dark:text-slate-400">{t('hosts.noneApplied')}</p>
+          <p className="text-sm text-slate-400 dark:text-slate-500">{t('hosts.noneApplied')}</p>
         ) : (
-          <ul className="space-y-1">
+          <div className="flex flex-wrap gap-2">
             {applied.map((h) => (
-              <li
+              <span
                 key={h.id}
-                className="flex items-center justify-between bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700 px-3 py-1.5"
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 pl-3 pr-1.5 py-1"
               >
-                <span className="font-mono text-sm text-slate-700 dark:text-slate-300">
-                  {h.domain_names.join(', ')}
-                </span>
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                <span className="font-mono text-xs text-slate-700 dark:text-slate-300">{h.domain_names.join(', ')}</span>
                 <button
                   onClick={() => detachMutation.mutate(h.id)}
                   disabled={busy}
-                  className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 text-xs font-medium disabled:opacity-50"
+                  title={t('hosts.detach')}
+                  aria-label={t('hosts.detach')}
+                  className="flex h-5 w-5 items-center justify-center rounded-full text-slate-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400 transition-colors disabled:opacity-50"
                 >
-                  {t('hosts.detach')}
+                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
-              </li>
+              </span>
             ))}
-          </ul>
+          </div>
         )}
       </div>
 
       <div>
-        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
           {t('hosts.attachTitle')}
         </p>
         {attachable.length === 0 ? (
-          <p className="text-sm text-slate-500 dark:text-slate-400">{t('hosts.noAttachable')}</p>
+          <p className="text-sm text-slate-400 dark:text-slate-500">{t('hosts.noAttachable')}</p>
         ) : (
           <div className="flex items-center gap-2">
-            <select
-              value={selectedHostId}
-              onChange={(e) => setSelectedHostId(e.target.value)}
-              className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
-            >
-              <option value="">{t('hosts.selectHost')}</option>
-              {attachable.map((h) => (
-                <option key={h.id} value={h.id}>{h.domain_names.join(', ')}</option>
-              ))}
-            </select>
+            <div className="relative flex-1">
+              <select
+                value={selectedHostId}
+                onChange={(e) => setSelectedHostId(e.target.value)}
+                className="w-full appearance-none rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 pl-3 pr-9 py-2 text-sm text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 focus:outline-none"
+              >
+                <option value="">{t('hosts.selectHost')}</option>
+                {attachable.map((h) => (
+                  <option key={h.id} value={h.id}>{h.domain_names.join(', ')}</option>
+                ))}
+              </select>
+              <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+            </div>
             <button
               onClick={() => selectedHostId && attachMutation.mutate(selectedHostId)}
               disabled={!selectedHostId || busy}
-              className="px-3 py-2 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
             >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5m6.328-1.828a4 4 0 010-5.656l3-3a4 4 0 015.656 5.656l-1.5 1.5" /></svg>
               {t('hosts.attach')}
             </button>
           </div>
         )}
-        <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{t('hosts.attachHint')}</p>
+        <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">{t('hosts.attachHint')}</p>
       </div>
     </div>
   );
