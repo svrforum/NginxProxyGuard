@@ -1,6 +1,87 @@
 package model
 
-import "time"
+import (
+	"fmt"
+	"regexp"
+	"strings"
+	"time"
+)
+
+// Validation for ForwardAuth fields that get interpolated into nginx directives.
+// Defense-in-depth (nginx -t also gates before reload): reject anything that could
+// break out of the intended directive and inject config. (#179 security review)
+var (
+	// chars that terminate / open an nginx directive or comment
+	nginxUnsafeChars = regexp.MustCompile(`[;{}#\n\r]`)
+	// a location/URL path: starts with /, no whitespace or nginx-breaking chars
+	nginxPathRe = regexp.MustCompile(`^/[^\s;{}#]*$`)
+	// HTTP header name
+	httpHeaderNameRe = regexp.MustCompile(`^[A-Za-z0-9-]+$`)
+	// nginx variable / upstream-header token
+	nginxVarRe = regexp.MustCompile(`^[A-Za-z0-9_]+$`)
+)
+
+// ValidateProviderURL rejects provider URLs that aren't plain http(s) targets or
+// that contain characters which would break the generated proxy_pass directive.
+func ValidateProviderURL(u string) error {
+	u = strings.TrimSpace(u)
+	if u == "" {
+		return fmt.Errorf("invalid: provider_url is required")
+	}
+	if !strings.HasPrefix(u, "http://") && !strings.HasPrefix(u, "https://") {
+		return fmt.Errorf("invalid: provider_url must start with http:// or https://")
+	}
+	if strings.ContainsAny(u, " \t") || nginxUnsafeChars.MatchString(u) {
+		return fmt.Errorf("invalid: provider_url contains unsafe characters")
+	}
+	return nil
+}
+
+// Validate checks custom-provider config fields that are templated into nginx.
+// Presets (authelia/authentik) ignore these fields (directives are hardcoded), so
+// only the custom type needs field validation.
+func (c *AuthProviderConfig) Validate(providerType string) error {
+	if providerType != "custom" {
+		return nil
+	}
+	if c.VerifyPath != "" && !nginxPathRe.MatchString(c.VerifyPath) {
+		return fmt.Errorf("invalid: verify_path must be a URL path (e.g. /oauth2/auth)")
+	}
+	for _, p := range c.PublicPaths {
+		if !nginxPathRe.MatchString(p) {
+			return fmt.Errorf("invalid: public path %q must be a URL path", p)
+		}
+	}
+	for _, h := range c.RequestHeaders {
+		if !httpHeaderNameRe.MatchString(h.Name) {
+			return fmt.Errorf("invalid: request header name %q", h.Name)
+		}
+		if nginxUnsafeChars.MatchString(h.Value) {
+			return fmt.Errorf("invalid: request header value for %q contains unsafe characters", h.Name)
+		}
+	}
+	for _, h := range c.ResponseHeaders {
+		if !nginxVarRe.MatchString(h.Var) || !nginxVarRe.MatchString(h.Upstream) {
+			return fmt.Errorf("invalid: response header var/upstream must be alphanumeric/underscore")
+		}
+		if !httpHeaderNameRe.MatchString(h.Forward) {
+			return fmt.Errorf("invalid: response forward header %q", h.Forward)
+		}
+	}
+	if c.SigninRedirect != "" && nginxUnsafeChars.MatchString(c.SigninRedirect) {
+		return fmt.Errorf("invalid: signin_redirect contains unsafe characters")
+	}
+	return nil
+}
+
+// ValidateAuthBypassPath checks a per-host bypass path that is templated into a
+// `location <path> { ... }` block.
+func ValidateAuthBypassPath(p string) error {
+	if !nginxPathRe.MatchString(p) {
+		return fmt.Errorf("invalid: auth bypass path %q must be a URL path (e.g. /api)", p)
+	}
+	return nil
+}
 
 // AuthProvider is a reusable external ForwardAuth verifier (Authelia / Authentik
 // / custom) that proxy hosts can reference to gate traffic via nginx auth_request.

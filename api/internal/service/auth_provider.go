@@ -25,6 +25,14 @@ func normalizeAuthProviderURL(u string) string { return strings.TrimRight(string
 
 func (s *AuthProviderService) Create(ctx context.Context, req *model.CreateAuthProviderRequest) (*model.AuthProvider, error) {
 	req.ProviderURL = normalizeAuthProviderURL(req.ProviderURL)
+	if err := model.ValidateProviderURL(req.ProviderURL); err != nil {
+		return nil, err
+	}
+	if req.Config != nil {
+		if err := req.Config.Validate(req.Type); err != nil {
+			return nil, err
+		}
+	}
 	return s.repo.Create(ctx, req)
 }
 
@@ -40,6 +48,20 @@ func (s *AuthProviderService) Update(ctx context.Context, id string, req *model.
 	if req.ProviderURL != nil {
 		u := normalizeAuthProviderURL(*req.ProviderURL)
 		req.ProviderURL = &u
+		if err := model.ValidateProviderURL(u); err != nil {
+			return nil, err
+		}
+	}
+	if req.Config != nil {
+		typ := ""
+		if req.Type != nil {
+			typ = *req.Type
+		} else if cur, _ := s.repo.GetByID(ctx, id); cur != nil {
+			typ = cur.Type
+		}
+		if err := req.Config.Validate(typ); err != nil {
+			return nil, err
+		}
 	}
 	ap, err := s.repo.Update(ctx, id, req)
 	if err != nil || ap == nil {

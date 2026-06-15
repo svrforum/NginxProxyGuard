@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 
@@ -58,6 +59,9 @@ func (h *AuthProviderHandler) Create(c echo.Context) error {
 	}
 	ap, err := h.service.Create(c.Request().Context(), &req)
 	if err != nil {
+		if strings.Contains(err.Error(), "invalid") {
+			return badRequestError(c, err.Error())
+		}
 		return internalError(c, "create auth provider", err)
 	}
 	return c.JSON(http.StatusCreated, ap)
@@ -70,6 +74,9 @@ func (h *AuthProviderHandler) Update(c echo.Context) error {
 	}
 	ap, err := h.service.Update(c.Request().Context(), c.Param("id"), &req)
 	if err != nil {
+		if strings.Contains(err.Error(), "invalid") {
+			return badRequestError(c, err.Error())
+		}
 		return internalError(c, "update auth provider", err)
 	}
 	if ap == nil {

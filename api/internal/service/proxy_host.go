@@ -318,9 +318,11 @@ func applyUpdateCandidate(existing *model.ProxyHost, req *model.UpdateProxyHostR
 
 // validateAuthProviderConflict rejects a ForwardAuth assignment that would create a
 // duplicate auth_request (geo challenge mode) or land on an uninjectable custom
-// "location /". Errors are "conflict:"-prefixed so the handler maps them to HTTP 409.
-// Must be called from Create, Update AND UpdateDBOnly (UI saves via UpdateDBOnly).
-func (s *ProxyHostService) validateAuthProviderConflict(ctx context.Context, hostID string, authProviderID *string, proxyType, advancedConfig string) error {
+// "location /" ("conflict:"-prefixed → HTTP 409), and validates that the per-host
+// bypass paths are safe to template into a `location <path>` block ("invalid:"-prefixed
+// → HTTP 400). Must be called from Create, Update AND UpdateDBOnly (UI saves via
+// UpdateDBOnly). (#179)
+func (s *ProxyHostService) validateAuthProviderConflict(ctx context.Context, hostID string, authProviderID *string, proxyType, advancedConfig string, bypassPaths []string) error {
 	if authProviderID == nil || *authProviderID == "" || proxyType == model.ProxyTypeStream {
 		return nil
 	}
@@ -331,6 +333,11 @@ func (s *ProxyHostService) validateAuthProviderConflict(ctx context.Context, hos
 		geo, err := s.geoRepo.GetByProxyHostID(ctx, hostID)
 		if err == nil && geo != nil && geo.ChallengeMode {
 			return fmt.Errorf("conflict: auth provider cannot be combined with geo challenge (CAPTCHA) mode on the same host")
+		}
+	}
+	for _, p := range bypassPaths {
+		if err := model.ValidateAuthBypassPath(p); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -487,7 +494,11 @@ func (s *ProxyHostService) prepareUpdateProxyHostRequest(ctx context.Context, id
 	if req.ProxyType != "" {
 		effProxyType = req.ProxyType
 	}
-	if err := s.validateAuthProviderConflict(ctx, id, effAuthProviderID, effProxyType, effAdvancedConfig); err != nil {
+	effBypassPaths := []string(existingHost.AuthBypassPaths)
+	if req.AuthBypassPaths != nil {
+		effBypassPaths = req.AuthBypassPaths
+	}
+	if err := s.validateAuthProviderConflict(ctx, id, effAuthProviderID, effProxyType, effAdvancedConfig, effBypassPaths); err != nil {
 		return "", nil, err
 	}
 
@@ -678,7 +689,7 @@ func (s *ProxyHostService) Create(ctx context.Context, req *model.CreateProxyHos
 	req.ForwardHost = resolvedForwardHost
 
 	// ForwardAuth conflict validation (custom location; geo challenge can't exist on a new host) (#179)
-	if err := s.validateAuthProviderConflict(ctx, "", req.AuthProviderID, req.ProxyType, req.AdvancedConfig); err != nil {
+	if err := s.validateAuthProviderConflict(ctx, "", req.AuthProviderID, req.ProxyType, req.AdvancedConfig, req.AuthBypassPaths); err != nil {
 		return nil, err
 	}
 
