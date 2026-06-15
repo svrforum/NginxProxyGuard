@@ -17,6 +17,19 @@
     "step2": "Apply it to a host in Proxy Hosts → edit → Security tab → \"Auth Provider\". Per-host bypass paths are set there too.",
     "note": "The protected host must use HTTPS — Authelia/Authentik reject http targets."
   },
+  "hosts": {
+    "manage": "Hosts",
+    "applied": "Applied hosts",
+    "noneApplied": "No hosts use this provider yet.",
+    "attachTitle": "Attach a host",
+    "selectHost": "Select a host…",
+    "attach": "Attach",
+    "detach": "Detach",
+    "noAttachable": "No attachable hosts (only unassigned HTTP hosts can be attached here).",
+    "attachHint": "Only unassigned HTTP hosts are listed. Hosts with challenge mode or a custom \"location /\" are rejected — set those from the host's Security tab.",
+    "attachError": "Failed to attach host",
+    "detachError": "Failed to detach host"
+  },
   "list": { "title": "Auth Providers", "name": "Name", "type": "Type", "url": "URL", "actions": "Actions", "empty": "No auth providers. Create one to protect hosts with Authelia/Authentik." },
   "messages": { "deleteConfirm": "Delete this auth provider? Hosts using it will lose protection.", "loadError": "Error loading auth providers", "saveError": "Failed to save auth provider" },
   "help": {

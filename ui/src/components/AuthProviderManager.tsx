@@ -4,6 +4,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ModalShell } from './common/ModalShell';
 import { AuthProvider, AuthProviderType, CreateAuthProviderRequest } from '../types/auth-provider';
 import { getAuthProviders, createAuthProvider, updateAuthProvider, deleteAuthProvider } from '../api/auth-provider';
+import { fetchProxyHosts } from '../api/proxy-hosts';
+import type { ProxyHost } from '../types/proxy-host';
+import { AuthProviderHosts } from './auth-provider/AuthProviderHosts';
 
 interface AuthProviderFormProps {
   provider: AuthProvider | null;
@@ -198,11 +201,19 @@ export default function AuthProviderManager() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<AuthProvider | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['auth-providers'],
     queryFn: () => getAuthProviders(),
   });
+
+  // All proxy hosts, grouped client-side by auth_provider_id for the expand panel.
+  const { data: hostsData } = useQuery({
+    queryKey: ['proxy-hosts', 'for-auth-providers'],
+    queryFn: () => fetchProxyHosts(1, 500),
+  });
+  const allHosts: ProxyHost[] = hostsData?.data || [];
 
   const deleteMutation = useMutation({
     mutationFn: deleteAuthProvider,
@@ -319,6 +330,12 @@ export default function AuthProviderManager() {
                     </td>
                     <td className="px-6 py-4 text-right space-x-2">
                       <button
+                        onClick={() => setExpandedId(expandedId === provider.id ? null : provider.id)}
+                        className="text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white text-sm font-medium"
+                      >
+                        {t('hosts.manage')} ({allHosts.filter((h) => h.auth_provider_id === provider.id).length}) {expandedId === provider.id ? '▲' : '▼'}
+                      </button>
+                      <button
                         onClick={() => handleEdit(provider)}
                         className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm font-medium"
                       >
@@ -333,6 +350,13 @@ export default function AuthProviderManager() {
                       </button>
                     </td>
                   </tr>
+                  {expandedId === provider.id && (
+                    <tr>
+                      <td colSpan={4} className="p-0">
+                        <AuthProviderHosts providerId={provider.id} hosts={allHosts} />
+                      </td>
+                    </tr>
+                  )}
                 </Fragment>
               ))
             )}
