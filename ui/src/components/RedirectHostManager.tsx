@@ -6,6 +6,16 @@ import type { RedirectHost, CreateRedirectHostRequest } from '../types/access';
 import { useTranslation } from 'react-i18next';
 import { HelpTip } from './common/HelpTip';
 import { ModalShell } from './common/ModalShell';
+import {
+  IconButton,
+  AddButton,
+  EmptyState,
+  StatusPill,
+  EntityCard,
+  PencilIcon,
+  TrashIcon,
+  ChevronRightIcon,
+} from './common/listui';
 
 interface RedirectHostFormProps {
   redirectHost: RedirectHost | null;
@@ -286,13 +296,60 @@ function RedirectCodeBadge({ code }: { code: number }) {
   );
 }
 
-function StatusBadge({ enabled }: { enabled: boolean }) {
+interface RedirectCardProps {
+  host: RedirectHost;
+  targetUrl: string;
+  onEdit: () => void;
+  onDelete: () => void;
+  deleting: boolean;
+}
+
+function RedirectCard({ host, targetUrl, onEdit, onDelete, deleting }: RedirectCardProps) {
   const { t } = useTranslation('redirectHost');
   return (
-    <span className={`px-2 py-0.5 text-xs font-medium rounded ${enabled ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300'
-      }`}>
-      {enabled ? t('badges.active') : t('badges.disabled')}
-    </span>
+    <EntityCard>
+      <div className="flex items-center gap-3 px-4 py-3.5 sm:px-5">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300">
+          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
+        </span>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="truncate text-sm font-semibold text-slate-900 dark:text-white">
+              {host.domain_names?.join(', ')}
+            </span>
+            <RedirectCodeBadge code={host.redirect_code} />
+            {host.ssl_enabled && (
+              <span className="inline-flex items-center rounded-md bg-green-50 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-green-700 dark:bg-green-900/20 dark:text-green-300">
+                SSL
+              </span>
+            )}
+            {host.block_exploits && (
+              <span className="inline-flex items-center rounded-md bg-orange-50 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-orange-700 dark:bg-orange-900/20 dark:text-orange-300">
+                WAF
+              </span>
+            )}
+          </div>
+          <div className="mt-1 flex items-center gap-1.5 min-w-0">
+            <ChevronRightIcon className="h-3.5 w-3.5 shrink-0 text-slate-300 dark:text-slate-600" />
+            <span className="truncate font-mono text-xs text-slate-500 dark:text-slate-400">{targetUrl}</span>
+          </div>
+        </div>
+
+        <StatusPill active={host.enabled}>
+          {host.enabled ? t('badges.active') : t('badges.disabled')}
+        </StatusPill>
+
+        <div className="flex items-center gap-0.5">
+          <IconButton onClick={onEdit} title={t('list.edit')}>
+            <PencilIcon />
+          </IconButton>
+          <IconButton onClick={onDelete} title={t('list.delete')} variant="danger" disabled={deleting}>
+            <TrashIcon />
+          </IconButton>
+        </div>
+      </div>
+    </EntityCard>
   );
 }
 
@@ -359,12 +416,7 @@ export default function RedirectHostManager() {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-semibold text-slate-900 dark:text-white">{t('list.title')}</h2>
-        <button
-          onClick={() => setShowForm(true)}
-          className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        >
-          + {t('list.addNew')}
-        </button>
+        <AddButton onClick={() => setShowForm(true)}>{t('list.addNew')}</AddButton>
       </div>
 
       {showForm && (
@@ -378,86 +430,28 @@ export default function RedirectHostManager() {
         />
       )}
 
-      <div className="bg-white dark:bg-slate-800 shadow overflow-hidden overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
-        <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
-          <thead className="bg-slate-50 dark:bg-slate-900/50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t('list.columns.source')}
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t('list.columns.target')}
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t('list.columns.code')}
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t('list.columns.status')}
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t('list.columns.actions')}
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
-            {data?.data?.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
-                  {t('list.empty')}. {t('list.emptyDescription')}
-                </td>
-              </tr>
-            ) : (
-              data?.data?.map((host) => (
-                <tr key={host.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="text-sm font-medium text-slate-900 dark:text-white">
-                      {host.domain_names?.join(', ')}
-                    </div>
-                    <div className="flex gap-1 mt-1">
-                      {host.ssl_enabled && (
-                        <span className="px-1.5 py-0.5 text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded">
-                          SSL
-                        </span>
-                      )}
-                      {host.block_exploits && (
-                        <span className="px-1.5 py-0.5 text-xs bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 rounded">
-                          WAF
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-slate-700 dark:text-slate-300 font-mono">
-                      {buildRedirectUrl(host)}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <RedirectCodeBadge code={host.redirect_code} />
-                  </td>
-                  <td className="px-6 py-4">
-                    <StatusBadge enabled={host.enabled} />
-                  </td>
-                  <td className="px-6 py-4 text-right space-x-2">
-                    <button
-                      onClick={() => handleEdit(host)}
-                      className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm font-medium"
-                    >
-                      {t('list.edit')}
-                    </button>
-                    <button
-                      onClick={() => handleDelete(host.id)}
-                      disabled={deleteMutation.isPending}
-                      className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium"
-                    >
-                      {t('list.delete')}
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      {!data?.data?.length ? (
+        <EmptyState
+          icon={
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
+          }
+        >
+          {t('list.empty')}. {t('list.emptyDescription')}
+        </EmptyState>
+      ) : (
+        <div className="space-y-3">
+          {data?.data?.map((host) => (
+            <RedirectCard
+              key={host.id}
+              host={host}
+              targetUrl={buildRedirectUrl(host)}
+              onEdit={() => handleEdit(host)}
+              onDelete={() => handleDelete(host.id)}
+              deleting={deleteMutation.isPending}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

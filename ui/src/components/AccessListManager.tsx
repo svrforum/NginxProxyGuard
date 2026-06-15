@@ -1,10 +1,19 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Fragment, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getAccessLists, createAccessList, updateAccessList, deleteAccessList } from '../api/access';
 import type { AccessList, AccessListItem, CreateAccessListRequest } from '../types/access';
 import { HelpTip } from './common/HelpTip';
 import { ModalShell } from './common/ModalShell';
+import {
+  AddButton,
+  EmptyState,
+  EntityCard,
+  IconButton,
+  PencilIcon,
+  TrashIcon,
+  ChevronRightIcon,
+} from './common/listui';
 
 interface AccessListFormProps {
   accessList: AccessList | null;
@@ -293,12 +302,7 @@ export default function AccessListManager() {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-semibold text-slate-900 dark:text-white">{t('list.title')}</h2>
-        <button
-          onClick={() => setShowForm(true)}
-          className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        >
-          + {t('actions.add')}
-        </button>
+        <AddButton onClick={() => setShowForm(true)}>{t('actions.add')}</AddButton>
       </div>
 
       {showForm && (
@@ -312,102 +316,125 @@ export default function AccessListManager() {
         />
       )}
 
-      <div className="bg-white dark:bg-slate-800 shadow overflow-hidden overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
-        <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
-          <thead className="bg-slate-50 dark:bg-slate-900/50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t('list.name')}
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t('list.rules')}
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t('list.options')}
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t('list.actions')}
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
-            {data?.data?.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
-                  {t('list.empty')}
-                </td>
-              </tr>
-            ) : (
-              data?.data?.map((list) => (
-                <Fragment key={list.id}>
-                  <tr className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="text-sm font-medium text-slate-900 dark:text-white">{list.name}</div>
-                      {list.description && (
-                        <div className="text-sm text-slate-500 dark:text-slate-400">{list.description}</div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <button
-                        onClick={() => setExpandedId(expandedId === list.id ? null : list.id)}
-                        className="text-sm text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300"
-                      >
-                        {t('list.rulesCount', { count: list.items?.length || 0 })} {expandedId === list.id ? t('list.collapse') : t('list.expand')}
-                      </button>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex gap-2">
-                        {list.satisfy_any && (
-                          <span className="px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded">
-                            {t('list.satisfyAny')}
-                          </span>
-                        )}
-                        {list.pass_auth && (
-                          <span className="px-2 py-0.5 text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 rounded">
-                            {t('list.passAuth')}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-right space-x-2">
-                      <button
-                        onClick={() => handleEdit(list)}
-                        className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm font-medium"
-                      >
-                        {t('actions.edit')}
-                      </button>
-                      <button
-                        onClick={() => handleDelete(list.id)}
-                        disabled={deleteMutation.isPending}
-                        className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium"
-                      >
-                        {t('actions.delete')}
-                      </button>
-                    </td>
-                  </tr>
-                  {expandedId === list.id && list.items && list.items.length > 0 && (
-                    <tr>
-                      <td colSpan={4} className="px-6 py-3 bg-slate-50 dark:bg-slate-900/30">
-                        <div className="space-y-1">
-                          {list.items.map((item, index) => (
-                            <div key={item.id || index} className="flex items-center gap-2 text-sm">
-                              <DirectiveBadge directive={item.directive} />
-                              <span className="font-mono text-slate-700 dark:text-slate-300">{item.address}</span>
-                              {item.description && (
-                                <span className="text-slate-500 dark:text-slate-400">- {item.description}</span>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      {!data?.data?.length ? (
+        <EmptyState
+          icon={
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          }
+        >
+          {t('list.empty')}
+        </EmptyState>
+      ) : (
+        <div className="space-y-3">
+          {data.data.map((list) => (
+            <AccessListCard
+              key={list.id}
+              list={list}
+              isOpen={expandedId === list.id}
+              onToggle={() => setExpandedId(expandedId === list.id ? null : list.id)}
+              onEdit={() => handleEdit(list)}
+              onDelete={() => handleDelete(list.id)}
+              deleting={deleteMutation.isPending}
+              t={t}
+            />
+          ))}
+        </div>
+      )}
     </div>
+  );
+}
+
+interface AccessListCardProps {
+  list: AccessList;
+  isOpen: boolean;
+  onToggle: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  deleting: boolean;
+  t: (key: string, opts?: Record<string, unknown>) => string;
+}
+
+function AccessListCard({ list, isOpen, onToggle, onEdit, onDelete, deleting, t }: AccessListCardProps) {
+  const ruleCount = list.items?.length || 0;
+  return (
+    <EntityCard active={isOpen}>
+      <div className="flex items-center gap-3 px-4 py-3.5 sm:px-5">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={isOpen}
+          className="flex flex-1 items-center gap-3 min-w-0 text-left focus:outline-none"
+        >
+          <ChevronRightIcon
+            className={`h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`}
+          />
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300">
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-semibold text-slate-900 dark:text-white">{list.name}</span>
+            {list.description && (
+              <span className="block truncate text-xs text-slate-400 dark:text-slate-500">{list.description}</span>
+            )}
+          </span>
+        </button>
+
+        <div className="hidden sm:flex items-center gap-1.5">
+          {list.satisfy_any && (
+            <span className="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">
+              {t('list.satisfyAny')}
+            </span>
+          )}
+          {list.pass_auth && (
+            <span className="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-300">
+              {t('list.passAuth')}
+            </span>
+          )}
+        </div>
+
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${ruleCount > 0 ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-700/50 dark:text-slate-400'}`}
+          title={t('list.rules')}
+        >
+          <span className={`h-1.5 w-1.5 rounded-full ${ruleCount > 0 ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+          {ruleCount}
+        </span>
+
+        <div className="flex items-center gap-0.5">
+          <IconButton onClick={onEdit} title={t('actions.edit')}>
+            <PencilIcon />
+          </IconButton>
+          <IconButton onClick={onDelete} title={t('actions.delete')} disabled={deleting} variant="danger">
+            <TrashIcon />
+          </IconButton>
+        </div>
+      </div>
+
+      <div className={`grid transition-[grid-template-rows] duration-200 ease-out ${isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+        <div className="overflow-hidden">
+          <div className="border-t border-slate-100 dark:border-slate-700/60 px-4 py-4 sm:px-5 bg-slate-50/60 dark:bg-slate-900/20">
+            {ruleCount === 0 ? (
+              <p className="text-sm text-slate-400 dark:text-slate-500">{t('list.rulesCount', { count: 0 })}</p>
+            ) : (
+              <div className="space-y-1.5">
+                {list.items.map((item, index) => (
+                  <div key={item.id || index} className="flex items-center gap-2 text-sm">
+                    <DirectiveBadge directive={item.directive} />
+                    <span className="font-mono text-slate-700 dark:text-slate-300">{item.address}</span>
+                    {item.description && (
+                      <span className="text-slate-500 dark:text-slate-400">- {item.description}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </EntityCard>
   );
 }
