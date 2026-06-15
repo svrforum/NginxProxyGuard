@@ -12,7 +12,12 @@
         internal;
         proxy_pass {{.AuthProvider.ProviderURL}}/api/authz/auth-request;
         proxy_set_header X-Original-Method $request_method;
-        proxy_set_header X-Original-URL $scheme://$host$request_uri;
+        # Authelia derives the protected URL's scheme from X-Original-URL (it ignores
+        # X-Forwarded-Proto at the auth-request endpoint) and rejects an http scheme
+        # because session cookies are Secure. Pin https for SSL hosts so the verify
+        # subrequest is accepted even when it runs in the HTTP/80 block or behind a
+        # TLS-terminating proxy that reaches NPG over http. (#180)
+        proxy_set_header X-Original-URL {{if .Host.SSLEnabled}}https{{else}}$scheme{{end}}://$host$request_uri;
         proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header Content-Length "";
         proxy_pass_request_body off;
@@ -25,7 +30,8 @@
     location /outpost.goauthentik.io {
         proxy_pass {{.AuthProvider.ProviderURL}}/outpost.goauthentik.io;
         proxy_set_header Host $host;
-        proxy_set_header X-Original-URL $scheme://$http_host$request_uri;
+        # Pin https for SSL hosts — same scheme rule as Authelia above. (#180)
+        proxy_set_header X-Original-URL {{if .Host.SSLEnabled}}https{{else}}$scheme{{end}}://$http_host$request_uri;
         auth_request_set $auth_cookie $upstream_http_set_cookie;
         add_header Set-Cookie $auth_cookie;
         proxy_pass_request_body off;
@@ -108,7 +114,7 @@
     location @forwardauth_signin {
         internal;
         add_header Set-Cookie $auth_cookie;
-        return 302 /outpost.goauthentik.io/start?rd=$scheme://$http_host$request_uri;
+        return 302 /outpost.goauthentik.io/start?rd={{if .Host.SSLEnabled}}https{{else}}$scheme{{end}}://$http_host$request_uri;
     }
 {{- else if and (eq .AuthProvider.Type "custom") (ne .AuthProvider.Config.SigninMode "location_header")}}
     location @forwardauth_signin {

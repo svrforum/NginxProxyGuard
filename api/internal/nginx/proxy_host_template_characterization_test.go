@@ -739,6 +739,66 @@ func goldenCases() []goldenCase {
 		})
 	}
 
+	// 10) authelia_ssl — pins #180: the ForwardAuth verify location must emit
+	// X-Original-URL with an https scheme for an SSL host, because Authelia derives
+	// the protected URL's scheme from X-Original-URL and rejects http. SSLForceHTTPS
+	// is OFF so the verify/gate render in BOTH the HTTP/80 and HTTPS/443 blocks,
+	// proving the scheme is pinned https regardless of which listener served it.
+	{
+		host := goldenBaseHost("00000000-0000-0000-0000-000000000a0a", "authelia.example.com")
+		host.SSLEnabled = true
+		host.SSLForceHTTPS = false
+		certID := "00000000-0000-0000-0000-0000000000ce"
+		host.CertificateID = &certID
+		apID := "00000000-0000-0000-0000-0000000000f1"
+		host.AuthProviderID = &apID
+		cases = append(cases, goldenCase{
+			name: "authelia_ssl",
+			data: ProxyHostConfigData{
+				Host:           host,
+				GlobalSettings: baseGlobalSettings(),
+				AuthProvider: &model.AuthProvider{
+					ID:          apID,
+					Name:        "authelia",
+					Type:        "authelia",
+					ProviderURL: "http://127.0.0.1:9091",
+					TimeoutMs:   5000,
+					Enabled:     true,
+					CreatedAt:   fixtureNow,
+					UpdatedAt:   fixtureNow,
+				},
+			},
+		})
+	}
+
+	// 11) authentik_ssl — same #180 https-scheme guard for the Authentik provider.
+	{
+		host := goldenBaseHost("00000000-0000-0000-0000-000000000a0b", "authentik.example.com")
+		host.SSLEnabled = true
+		host.SSLForceHTTPS = false
+		certID := "00000000-0000-0000-0000-0000000000ce"
+		host.CertificateID = &certID
+		apID := "00000000-0000-0000-0000-0000000000f2"
+		host.AuthProviderID = &apID
+		cases = append(cases, goldenCase{
+			name: "authentik_ssl",
+			data: ProxyHostConfigData{
+				Host:           host,
+				GlobalSettings: baseGlobalSettings(),
+				AuthProvider: &model.AuthProvider{
+					ID:          apID,
+					Name:        "authentik",
+					Type:        "authentik",
+					ProviderURL: "http://127.0.0.1:9000",
+					TimeoutMs:   5000,
+					Enabled:     true,
+					CreatedAt:   fixtureNow,
+					UpdatedAt:   fixtureNow,
+				},
+			},
+		})
+	}
+
 	return cases
 }
 
