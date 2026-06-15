@@ -106,7 +106,7 @@ function RedirectHostForm({ redirectHost, onClose, onSuccess }: RedirectHostForm
                 onChange={(e) => setDomainNames(e.target.value)}
                 required
                 rows={3}
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
+                className="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
                 placeholder="example.com&#10;www.example.com"
               />
             </div>
@@ -120,7 +120,7 @@ function RedirectHostForm({ redirectHost, onClose, onSuccess }: RedirectHostForm
                 <select
                   value={forwardScheme}
                   onChange={(e) => setForwardScheme(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-700 dark:text-white"
+                  className="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white"
                 >
                   <option value="auto">{t('form.schemeAuto')}</option>
                   <option value="http">HTTP</option>
@@ -137,7 +137,7 @@ function RedirectHostForm({ redirectHost, onClose, onSuccess }: RedirectHostForm
                   value={forwardDomainName}
                   onChange={(e) => setForwardDomainName(e.target.value)}
                   required
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
+                  className="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
                   placeholder="target.example.com"
                 />
               </div>
@@ -146,7 +146,7 @@ function RedirectHostForm({ redirectHost, onClose, onSuccess }: RedirectHostForm
                 <select
                   value={redirectCode}
                   onChange={(e) => setRedirectCode(Number(e.target.value))}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-700 dark:text-white"
+                  className="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white"
                 >
                   <option value={301}>301 ({t('form.redirectCodePermanent')})</option>
                   <option value={302}>302 ({t('form.redirectCodeFound')})</option>
@@ -166,7 +166,7 @@ function RedirectHostForm({ redirectHost, onClose, onSuccess }: RedirectHostForm
                   type="text"
                   value={forwardPath}
                   onChange={(e) => setForwardPath(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
+                  className="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
                   placeholder="/optional/path"
                 />
               </div>
@@ -186,8 +186,8 @@ function RedirectHostForm({ redirectHost, onClose, onSuccess }: RedirectHostForm
               </div>
             </div>
 
-            <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
-              <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">{t('form.sslConfig')}</h4>
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/40 p-4">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">{t('form.sslConfig')}</h4>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="flex items-center gap-2 mb-2 cursor-pointer">
@@ -206,7 +206,7 @@ function RedirectHostForm({ redirectHost, onClose, onSuccess }: RedirectHostForm
                     <select
                       value={certificateId}
                       onChange={(e) => setCertificateId(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-700 dark:text-white"
+                      className="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white"
                     >
                       <option value="">{t('form.selectCertificate')}</option>
                       {certificates?.data?.map((cert) => (
@@ -235,7 +235,7 @@ function RedirectHostForm({ redirectHost, onClose, onSuccess }: RedirectHostForm
               </div>
             </div>
 
-            <div className="flex gap-6">
+            <div className="flex flex-wrap gap-6 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/40 px-4 py-3">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -263,14 +263,14 @@ function RedirectHostForm({ redirectHost, onClose, onSuccess }: RedirectHostForm
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
               >
                 {t('form.cancel')}
               </button>
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                className="px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg shadow-sm hover:bg-indigo-700 disabled:opacity-50 transition-colors"
               >
                 {isSubmitting ? t('form.saving') : redirectHost ? t('form.update') : t('form.create')}
               </button>
