@@ -156,7 +156,15 @@ func (s *AuthProviderService) ReconcileContainerProvider(ctx context.Context, p 
 	if err := s.repo.UpdateProviderURL(ctx, p.ID, newURL); err != nil {
 		return false, err
 	}
-	return true, s.proxyHostSvc.RegenerateConfigsForAuthProvider(ctx, p.ID)
+	// If config regen fails (e.g. nginx -t), the file snapshot rolls back but the DB now
+	// holds newURL — the next tick would see newURL==stored and never retry, leaving the
+	// DB and nginx permanently split (DB=new IP, nginx=old). Revert provider_url so the
+	// next tick re-detects the change and retries. (#181 adversarial review)
+	if rerr := s.proxyHostSvc.RegenerateConfigsForAuthProvider(ctx, p.ID); rerr != nil {
+		_ = s.repo.UpdateProviderURL(ctx, p.ID, p.ProviderURL)
+		return false, rerr
+	}
+	return true, nil
 }
 
 func (s *AuthProviderService) Delete(ctx context.Context, id string) error {

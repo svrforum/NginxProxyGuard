@@ -317,12 +317,12 @@ func applyUpdateCandidate(existing *model.ProxyHost, req *model.UpdateProxyHostR
 }
 
 // validateAuthProviderConflict rejects a ForwardAuth assignment that would create a
-// duplicate auth_request (geo challenge mode) or land on an uninjectable custom
-// "location /" ("conflict:"-prefixed → HTTP 409), and validates that the per-host
-// bypass paths are safe to template into a `location <path>` block ("invalid:"-prefixed
-// → HTTP 400). Must be called from Create, Update AND UpdateDBOnly (UI saves via
-// UpdateDBOnly). (#179)
-func (s *ProxyHostService) validateAuthProviderConflict(ctx context.Context, hostID string, authProviderID *string, proxyType, advancedConfig string, bypassPaths []string) error {
+// duplicate auth_request (geo challenge mode), land on an uninjectable custom
+// "location /", or attach a cookie-secure provider (Authelia/Authentik) to a non-SSL
+// host ("conflict:"-prefixed → HTTP 409), and validates that the per-host bypass paths
+// are safe to template into a `location <path>` block ("invalid:"-prefixed → HTTP 400).
+// Must be called from Create, Update AND UpdateDBOnly (UI saves via UpdateDBOnly). (#179, #181)
+func (s *ProxyHostService) validateAuthProviderConflict(ctx context.Context, hostID string, authProviderID *string, proxyType, advancedConfig string, bypassPaths []string, sslEnabled bool) error {
 	if authProviderID == nil || *authProviderID == "" || proxyType == model.ProxyTypeStream {
 		return nil
 	}
@@ -333,6 +333,14 @@ func (s *ProxyHostService) validateAuthProviderConflict(ctx context.Context, hos
 		geo, err := s.geoRepo.GetByProxyHostID(ctx, hostID)
 		if err == nil && geo != nil && geo.ChallengeMode {
 			return fmt.Errorf("conflict: auth provider cannot be combined with geo challenge (CAPTCHA) mode on the same host")
+		}
+	}
+	// Authelia/Authentik set Secure session cookies and reject a non-https protected
+	// URL — attaching them to a non-SSL host produces auth that silently never
+	// succeeds. Reject early with a clear message instead. (#181 adversarial review)
+	if !sslEnabled && s.authProviderRepo != nil {
+		if ap, err := s.authProviderRepo.GetByID(ctx, *authProviderID); err == nil && ap != nil && (ap.Type == "authelia" || ap.Type == "authentik") {
+			return fmt.Errorf("conflict: %s requires the proxy host to have SSL enabled (it sets secure cookies and rejects non-https hosts); enable SSL for this host first", ap.Type)
 		}
 	}
 	for _, p := range bypassPaths {
@@ -498,7 +506,11 @@ func (s *ProxyHostService) prepareUpdateProxyHostRequest(ctx context.Context, id
 	if req.AuthBypassPaths != nil {
 		effBypassPaths = req.AuthBypassPaths
 	}
-	if err := s.validateAuthProviderConflict(ctx, id, effAuthProviderID, effProxyType, effAdvancedConfig, effBypassPaths); err != nil {
+	effSSLEnabled := existingHost.SSLEnabled
+	if req.SSLEnabled != nil {
+		effSSLEnabled = *req.SSLEnabled
+	}
+	if err := s.validateAuthProviderConflict(ctx, id, effAuthProviderID, effProxyType, effAdvancedConfig, effBypassPaths, effSSLEnabled); err != nil {
 		return "", nil, err
 	}
 
@@ -689,7 +701,7 @@ func (s *ProxyHostService) Create(ctx context.Context, req *model.CreateProxyHos
 	req.ForwardHost = resolvedForwardHost
 
 	// ForwardAuth conflict validation (custom location; geo challenge can't exist on a new host) (#179)
-	if err := s.validateAuthProviderConflict(ctx, "", req.AuthProviderID, req.ProxyType, req.AdvancedConfig, req.AuthBypassPaths); err != nil {
+	if err := s.validateAuthProviderConflict(ctx, "", req.AuthProviderID, req.ProxyType, req.AdvancedConfig, req.AuthBypassPaths, req.SSLEnabled); err != nil {
 		return nil, err
 	}
 

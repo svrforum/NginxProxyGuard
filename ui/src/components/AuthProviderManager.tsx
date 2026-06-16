@@ -64,6 +64,9 @@ function AuthProviderForm({ provider, onClose, onSuccess }: AuthProviderFormProp
     setContainerName('');
     setContainerNetwork('');
     setContainerPort(undefined);
+    // Drop the resolved container IP too, so unbinding forces the operator to enter a
+    // real manual address instead of silently saving a now-stale container IP. (#181)
+    setProviderUrl('');
   };
 
   // Rebuild the displayed URL with a new scheme, preserving the resolved host:port.
