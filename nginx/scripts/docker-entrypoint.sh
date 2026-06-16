@@ -391,6 +391,21 @@ update_owasp_crs() {
 }
 update_owasp_crs
 
+# Prune non-runtime CRS files from the volume on every boot (idempotent). The CRS
+# regression tests carry sample attack payloads (webshells etc.) that antivirus flags
+# on the host disk (Windows Defender: Backdoor:PHP/Chopper — #182). Only crs-setup.conf
+# + rules/*.conf are loaded, so this is safe; doing it unconditionally (not just on a
+# version-change refresh) also cleans EXISTING volumes that predate the image-side strip.
+prune_owasp_crs_nonruntime() {
+    local crs="$NGINX_DIR/owasp-crs"
+    [ -d "$crs" ] || return 0
+    if [ -d "$crs/tests" ] || [ -d "$crs/util" ] || [ -d "$crs/docs" ] || [ -d "$crs/.github" ]; then
+        rm -rf "$crs/tests" "$crs/util" "$crs/docs" "$crs/.github" 2>/dev/null || true
+        echo "[Entrypoint] Pruned non-runtime OWASP CRS files (tests/util/docs) from the volume (#182)"
+    fi
+}
+prune_owasp_crs_nonruntime
+
 # Run GeoIP update if script exists and license key is provided
 if [ -x /scripts/geoip-update.sh ]; then
     echo "[Entrypoint] Running GeoIP database update..."

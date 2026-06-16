@@ -163,6 +163,11 @@ RUN echo "Downloading OWASP CRS ${OWASP_CRS_VERSION}..." \
     && wget -q https://github.com/coreruleset/coreruleset/archive/refs/tags/v${OWASP_CRS_VERSION}.tar.gz \
     && tar -xzf v${OWASP_CRS_VERSION}.tar.gz \
     && mv coreruleset-${OWASP_CRS_VERSION} /etc/nginx/owasp-crs \
+    # Strip non-runtime CRS dirs. The regression tests ship sample attack payloads
+    # (webshells etc.) that antivirus flags as malware on the host disk (e.g. Windows
+    # Defender: Backdoor:PHP/Chopper, #182). Only crs-setup.conf + rules/*.conf are
+    # loaded at runtime, so removing tests/util/docs is safe and avoids the false positive.
+    && rm -rf /etc/nginx/owasp-crs/tests /etc/nginx/owasp-crs/util /etc/nginx/owasp-crs/docs /etc/nginx/owasp-crs/.github \
     && cp /etc/nginx/owasp-crs/crs-setup.conf.example /etc/nginx/owasp-crs/crs-setup.conf \
     # Version stamp consumed by docker-entrypoint.sh update_owasp_crs(): on
     # boot, if the stamp in the nginx_data volume differs from this one, the
