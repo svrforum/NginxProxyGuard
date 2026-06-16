@@ -71,7 +71,7 @@ func containerReconcileInterval() time.Duration {
 
 // NewSchedulers constructs (but does not start) each scheduler.
 func NewSchedulers(cfg *config.Config, db *database.DB, repos *Repositories, svcs *Services) *Schedulers {
-	return &Schedulers{
+	s := &Schedulers{
 		Renewal: scheduler.NewRenewalScheduler(
 			repos.Certificate,
 			svcs.Certificate,
@@ -95,6 +95,10 @@ func NewSchedulers(cfg *config.Config, db *database.DB, repos *Repositories, svc
 		),
 		DDNS: scheduler.NewDDNSScheduler(svcs.DDNS, ddnsIntervalFn(repos.SystemSettings)),
 	}
+	// Surface container-reconcile events (auth provider IP change / container down) to
+	// the Logs view, not just container stdout. (#181 follow-up)
+	s.ContainerReconcile.SetSystemLogRepo(repos.SystemLog)
+	return s
 }
 
 // Start launches every scheduler.

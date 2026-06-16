@@ -20,7 +20,9 @@ func NewAuthProviderRepository(db *database.DB) *AuthProviderRepository {
 
 // authProviderColumns is the canonical SELECT column order consumed by scanAuthProvider.
 const authProviderColumns = `id, name, type, provider_url, config, timeout_ms, enabled,
-	container_name, container_network, container_port, container_scheme, created_at, updated_at`
+	container_name, container_network, container_port, container_scheme,
+	last_resolved_ip, last_reconcile_at, last_reconcile_status, last_reconcile_error, reconcile_fail_count,
+	created_at, updated_at`
 
 type rowScanner interface{ Scan(dest ...any) error }
 
@@ -31,8 +33,12 @@ func scanAuthProvider(s rowScanner) (*model.AuthProvider, error) {
 	var cfgRaw []byte
 	var cName, cNetwork, cScheme sql.NullString
 	var cPort sql.NullInt64
+	var lastIP, lastStatus, lastErr sql.NullString
+	var lastAt sql.NullTime
 	if err := s.Scan(&ap.ID, &ap.Name, &ap.Type, &ap.ProviderURL, &cfgRaw, &ap.TimeoutMs, &ap.Enabled,
-		&cName, &cNetwork, &cPort, &cScheme, &ap.CreatedAt, &ap.UpdatedAt); err != nil {
+		&cName, &cNetwork, &cPort, &cScheme,
+		&lastIP, &lastAt, &lastStatus, &lastErr, &ap.ReconcileFailCount,
+		&ap.CreatedAt, &ap.UpdatedAt); err != nil {
 		return nil, err
 	}
 	if len(cfgRaw) > 0 {
@@ -54,7 +60,34 @@ func scanAuthProvider(s rowScanner) (*model.AuthProvider, error) {
 		v := int(cPort.Int64)
 		ap.ContainerPort = &v
 	}
+	if lastIP.Valid && lastIP.String != "" {
+		v := lastIP.String
+		ap.LastResolvedIP = &v
+	}
+	if lastAt.Valid {
+		t := lastAt.Time
+		ap.LastReconcileAt = &t
+	}
+	ap.LastReconcileStatus = lastStatus.String
+	ap.LastReconcileError = lastErr.String
 	return &ap, nil
+}
+
+// UpdateReconcileStatus records the latest container-reconcile health for a provider
+// (#181 follow-up). status "ok" resets the failure counter; any other status increments
+// it. last_resolved_ip is only overwritten when a non-empty ip is supplied (keep the
+// last-known-good on a failed resolve).
+func (r *AuthProviderRepository) UpdateReconcileStatus(ctx context.Context, id, status, ip, errMsg string) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE auth_providers SET
+			last_reconcile_status = $2,
+			last_reconcile_error  = $3,
+			last_reconcile_at     = now(),
+			last_resolved_ip      = CASE WHEN $4 <> '' THEN $4 ELSE last_resolved_ip END,
+			reconcile_fail_count  = CASE WHEN $2 = 'ok' THEN 0 ELSE reconcile_fail_count + 1 END
+		WHERE id = $1
+	`, id, status, errMsg, ip)
+	return err
 }
 
 func (r *AuthProviderRepository) Create(ctx context.Context, req *model.CreateAuthProviderRequest) (*model.AuthProvider, error) {

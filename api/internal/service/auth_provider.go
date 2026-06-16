@@ -145,6 +145,11 @@ func (s *AuthProviderService) ListContainerBacked(ctx context.Context) ([]model.
 	return s.repo.ListContainerBacked(ctx)
 }
 
+// RecordReconcileStatus persists the latest container-reconcile health (#181 follow-up).
+func (s *AuthProviderService) RecordReconcileStatus(ctx context.Context, id, status, ip, errMsg string) error {
+	return s.repo.UpdateReconcileStatus(ctx, id, status, ip, errMsg)
+}
+
 // ReconcileContainerProvider recomputes the verify URL from a freshly-resolved IP and,
 // if it changed, persists it and regenerates every dependent host's config via the
 // fail-safe path. Returns whether the URL changed. (#181)

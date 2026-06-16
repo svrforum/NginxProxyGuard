@@ -96,12 +96,19 @@ type AuthProvider struct {
 	// Optional Docker-container target for the verify endpoint (#181). When set,
 	// ProviderURL is derived as ContainerScheme://<resolved IP>:ContainerPort and
 	// re-resolved on container IP change (mirrors proxy_hosts #150/#151). Nil = manual URL.
-	ContainerName    *string   `json:"container_name,omitempty"`
-	ContainerNetwork *string   `json:"container_network,omitempty"`
-	ContainerPort    *int      `json:"container_port,omitempty"`
-	ContainerScheme  *string   `json:"container_scheme,omitempty"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ContainerName    *string `json:"container_name,omitempty"`
+	ContainerNetwork *string `json:"container_network,omitempty"`
+	ContainerPort    *int    `json:"container_port,omitempty"`
+	ContainerScheme  *string `json:"container_scheme,omitempty"`
+	// Read-only container-reconcile health (#181 follow-up). Populated by the scheduler;
+	// transient runtime state (not config, not backed up). Empty for manual-URL providers.
+	LastResolvedIP      *string    `json:"last_resolved_ip,omitempty"`
+	LastReconcileAt     *time.Time `json:"last_reconcile_at,omitempty"`
+	LastReconcileStatus string     `json:"last_reconcile_status,omitempty"` // "ok" | "failed"
+	LastReconcileError  string     `json:"last_reconcile_error,omitempty"`
+	ReconcileFailCount  int        `json:"reconcile_fail_count"`
+	CreatedAt           time.Time  `json:"created_at"`
+	UpdatedAt           time.Time  `json:"updated_at"`
 }
 
 // AuthProviderConfig holds custom-provider knobs (ignored for authelia/authentik,

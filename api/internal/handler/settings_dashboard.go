@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -140,8 +142,15 @@ func (h *SettingsHandler) GetDockerStats(c echo.Context) error {
 
 // ListDockerContainers returns all running Docker containers with their network info
 func (h *SettingsHandler) ListDockerContainers(c echo.Context) error {
-	containers, err := h.settingsService.ListDockerContainers(c.Request().Context())
+	// Cap the docker call so a slow/unresponsive docker socket can't hang the request
+	// (and the container picker) indefinitely — return 503 instead. (#181 follow-up)
+	ctx, cancel := context.WithTimeout(c.Request().Context(), 10*time.Second)
+	defer cancel()
+	containers, err := h.settingsService.ListDockerContainers(ctx)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) || ctx.Err() == context.DeadlineExceeded {
+			return c.JSON(http.StatusServiceUnavailable, map[string]string{"error": "Docker is not responding (timed out)"})
+		}
 		if err.Error() == "docker stats service not available" {
 			return c.JSON(http.StatusServiceUnavailable, map[string]string{"error": "Docker stats service not available"})
 		}

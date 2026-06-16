@@ -10,6 +10,7 @@
     "signinModeLocationHeader": "Location header (verifier provides redirect)", "signinModeRedirectTemplate": "Redirect template (custom URL)",
     "cookiePassthrough": "Forward Set-Cookie", "largeBuffers": "Large header buffers",
     "bypassPaths": "Bypass paths (one per line)",
+    "bypassPathsInvalid": "Invalid path(s): {{paths}} — must start with '/' and contain no spaces or ;{}# characters",
     "typeAuthelia": "Authelia", "typeAuthentik": "Authentik", "typeCustom": "Custom (ForwardAuth)"
   },
   "usage": {
@@ -32,7 +33,8 @@
     "detachError": "Failed to detach host"
   },
   "list": { "title": "Auth Providers", "name": "Name", "type": "Type", "url": "URL", "actions": "Actions", "empty": "No auth providers. Create one to protect hosts with Authelia/Authentik.", "none": "Not used" },
-  "messages": { "deleteConfirm": "Delete this auth provider? Hosts using it will lose protection.", "loadError": "Error loading auth providers", "saveError": "Failed to save auth provider" },
+  "messages": { "deleteConfirm": "Delete this auth provider? Hosts using it will lose protection.", "deleteConfirmWithHosts": "This auth provider protects {{count}} host(s). Deleting it removes their authentication protection. Continue?", "loadError": "Error loading auth providers", "saveError": "Failed to save auth provider" },
+  "reconcile": { "down": "Container unreachable", "synced": "Synced", "syncedTitle": "Container IP auto-synced" },
   "help": {
     "authelia": "Authelia ≥ 4.37. The session cookie domain must be a parent of every protected host and the portal.",
     "authentik": "Use the outpost URL (embedded outpost = the authentik server host:9000).",

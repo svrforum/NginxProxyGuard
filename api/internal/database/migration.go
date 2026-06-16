@@ -947,6 +947,14 @@ ALTER TABLE public.auth_providers ADD COLUMN IF NOT EXISTS container_network tex
 ALTER TABLE public.auth_providers ADD COLUMN IF NOT EXISTS container_port integer;
 ALTER TABLE public.auth_providers ADD COLUMN IF NOT EXISTS container_scheme text;`,
 		},
+		{
+			desc: "v2.28.0: auth_providers container-reconcile health/status (#181 follow-up)",
+			sql: `ALTER TABLE public.auth_providers ADD COLUMN IF NOT EXISTS last_resolved_ip text;
+ALTER TABLE public.auth_providers ADD COLUMN IF NOT EXISTS last_reconcile_at timestamp with time zone;
+ALTER TABLE public.auth_providers ADD COLUMN IF NOT EXISTS last_reconcile_status text;
+ALTER TABLE public.auth_providers ADD COLUMN IF NOT EXISTS last_reconcile_error text;
+ALTER TABLE public.auth_providers ADD COLUMN IF NOT EXISTS reconcile_fail_count integer DEFAULT 0 NOT NULL;`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

@@ -228,6 +228,11 @@ CREATE TABLE IF NOT EXISTS public.auth_providers (
     container_network text,
     container_port integer,
     container_scheme text,
+    last_resolved_ip text,
+    last_reconcile_at timestamp with time zone,
+    last_reconcile_status text,
+    last_reconcile_error text,
+    reconcile_fail_count integer DEFAULT 0 NOT NULL,
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now(),
     CONSTRAINT auth_providers_type_check CHECK (((type)::text = ANY ((ARRAY['authelia'::character varying, 'authentik'::character varying, 'custom'::character varying])::text[])))
@@ -3394,6 +3399,13 @@ ALTER TABLE public.auth_providers ADD COLUMN IF NOT EXISTS container_name text;
 ALTER TABLE public.auth_providers ADD COLUMN IF NOT EXISTS container_network text;
 ALTER TABLE public.auth_providers ADD COLUMN IF NOT EXISTS container_port integer;
 ALTER TABLE public.auth_providers ADD COLUMN IF NOT EXISTS container_scheme text;
+-- v2.28.0: container-reconcile health/status (observability; #181 follow-up). Runtime
+-- state (NOT config) → excluded from backup export/import; repopulated by the scheduler.
+ALTER TABLE public.auth_providers ADD COLUMN IF NOT EXISTS last_resolved_ip text;
+ALTER TABLE public.auth_providers ADD COLUMN IF NOT EXISTS last_reconcile_at timestamp with time zone;
+ALTER TABLE public.auth_providers ADD COLUMN IF NOT EXISTS last_reconcile_status text;
+ALTER TABLE public.auth_providers ADD COLUMN IF NOT EXISTS last_reconcile_error text;
+ALTER TABLE public.auth_providers ADD COLUMN IF NOT EXISTS reconcile_fail_count integer DEFAULT 0 NOT NULL;
 
 -- DDNS records (#154): keep registered hostnames' A records pointed at the server's public IPv4.
 CREATE TABLE IF NOT EXISTS public.ddns_records (

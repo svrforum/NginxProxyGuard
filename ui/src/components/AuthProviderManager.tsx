@@ -318,6 +318,7 @@ export default function AuthProviderManager() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['auth-providers'],
     queryFn: () => getAuthProviders(),
+    refetchInterval: 30000, // keep the container-reconcile health badge fresh (#181)
   });
 
   // All proxy hosts, grouped client-side by auth_provider_id for the expand panel.
@@ -331,11 +332,17 @@ export default function AuthProviderManager() {
     mutationFn: deleteAuthProvider,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['auth-providers'] });
+      // Dependent hosts were detached (FK SET NULL) and their configs regenerated —
+      // refresh the proxy-host views so they reflect the lost protection. (#181)
+      queryClient.invalidateQueries({ queryKey: ['proxy-hosts'] });
     },
   });
 
   const handleDelete = (id: string) => {
-    if (confirm(t('messages.deleteConfirm'))) {
+    // Warn up-front how many hosts will lose ForwardAuth protection.
+    const affected = allHosts.filter((h) => h.auth_provider_id === id).length;
+    const msg = affected > 0 ? t('messages.deleteConfirmWithHosts', { count: affected }) : t('messages.deleteConfirm');
+    if (confirm(msg)) {
       deleteMutation.mutate(id);
     }
   };
@@ -437,6 +444,20 @@ export default function AuthProviderManager() {
                   </button>
 
                   <span className={`hidden sm:inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${accent.chip}`}>{provider.type}</span>
+
+                  {provider.container_name && (
+                    <span
+                      className={`hidden md:inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-medium ${provider.last_reconcile_status === 'failed' ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300' : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300'}`}
+                      title={provider.last_reconcile_status === 'failed'
+                        ? (provider.last_reconcile_error || t('reconcile.down'))
+                        : `${t('reconcile.syncedTitle')}${provider.last_resolved_ip ? ' · ' + provider.last_resolved_ip : ''}${provider.last_reconcile_at ? ' · ' + new Date(provider.last_reconcile_at).toLocaleString() : ''}`}
+                    >
+                      <span className={`h-1.5 w-1.5 rounded-full ${provider.last_reconcile_status === 'failed' ? 'bg-red-500' : 'bg-emerald-500'}`} />
+                      {provider.last_reconcile_status === 'failed'
+                        ? t('reconcile.down')
+                        : (provider.last_resolved_ip || t('reconcile.synced'))}
+                    </span>
+                  )}
 
                   <span
                     className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${count > 0 ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-700/50 dark:text-slate-400'}`}

@@ -11,7 +11,8 @@ import (
 // GetTemplateFuncMap returns the common template function map used across all config generators
 func GetTemplateFuncMap(apiHost string) template.FuncMap {
 	return template.FuncMap{
-		"join": strings.Join,
+		"join":      strings.Join,
+		"hasPrefix": strings.HasPrefix,
 		"now": func() string {
 			return "auto-generated"
 		},

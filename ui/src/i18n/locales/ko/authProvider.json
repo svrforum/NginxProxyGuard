@@ -10,6 +10,7 @@
     "signinModeLocationHeader": "Location 헤더 (검증기가 리다이렉트 제공)", "signinModeRedirectTemplate": "리다이렉트 템플릿 (사용자 지정 URL)",
     "cookiePassthrough": "Set-Cookie 전달", "largeBuffers": "대용량 헤더 버퍼",
     "bypassPaths": "우회 경로 (한 줄에 하나씩)",
+    "bypassPathsInvalid": "잘못된 경로: {{paths}} — '/'로 시작하고 공백·;{}# 문자가 없어야 합니다",
     "typeAuthelia": "Authelia", "typeAuthentik": "Authentik", "typeCustom": "사용자 정의 (ForwardAuth)"
   },
   "usage": {
@@ -32,7 +33,8 @@
     "detachError": "호스트 해제 실패"
   },
   "list": { "title": "인증 제공자", "name": "이름", "type": "유형", "url": "URL", "actions": "작업", "empty": "인증 제공자가 없습니다. Authelia/Authentik으로 호스트를 보호하려면 생성하세요.", "none": "사용 안 함" },
-  "messages": { "deleteConfirm": "이 인증 제공자를 삭제하시겠습니까? 사용 중인 호스트는 보호가 해제됩니다.", "loadError": "인증 제공자를 불러오지 못했습니다", "saveError": "인증 제공자 저장 실패" },
+  "messages": { "deleteConfirm": "이 인증 제공자를 삭제하시겠습니까? 사용 중인 호스트는 보호가 해제됩니다.", "deleteConfirmWithHosts": "이 인증 제공자는 {{count}}개 호스트를 보호 중입니다. 삭제하면 해당 호스트의 인증 보호가 해제됩니다. 계속할까요?", "loadError": "인증 제공자를 불러오지 못했습니다", "saveError": "인증 제공자 저장 실패" },
+  "reconcile": { "down": "컨테이너 못 찾음", "synced": "동기화됨", "syncedTitle": "컨테이너 IP 자동 동기화됨" },
   "help": {
     "authelia": "Authelia 4.37 이상. 세션 쿠키 도메인은 모든 보호 호스트와 포털의 상위 도메인이어야 합니다.",
     "authentik": "outpost URL을 입력하세요 (임베디드 outpost = authentik 서버 host:9000).",

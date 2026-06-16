@@ -269,6 +269,7 @@ type fakeAuthProviderReconcile struct {
 	providers      []model.AuthProvider
 	listErr        error
 	reconcileCalls []reconcileCall
+	statusCalls    []statusCall
 	changed        bool
 	reconcileErr   error
 }
@@ -278,6 +279,10 @@ type reconcileCall struct {
 	newIP string
 }
 
+type statusCall struct {
+	id, status, ip, errMsg string
+}
+
 func (f *fakeAuthProviderReconcile) ListContainerBacked(ctx context.Context) ([]model.AuthProvider, error) {
 	return f.providers, f.listErr
 }
@@ -285,6 +290,11 @@ func (f *fakeAuthProviderReconcile) ListContainerBacked(ctx context.Context) ([]
 func (f *fakeAuthProviderReconcile) ReconcileContainerProvider(ctx context.Context, p model.AuthProvider, newIP string) (bool, error) {
 	f.reconcileCalls = append(f.reconcileCalls, reconcileCall{id: p.ID, newIP: newIP})
 	return f.changed, f.reconcileErr
+}
+
+func (f *fakeAuthProviderReconcile) RecordReconcileStatus(ctx context.Context, id, status, ip, errMsg string) error {
+	f.statusCalls = append(f.statusCalls, statusCall{id: id, status: status, ip: ip, errMsg: errMsg})
+	return nil
 }
 
 // TestReconcileAuthProvidersSkipsNoNetwork: #151 safe-mode applies to auth
@@ -344,6 +354,41 @@ func TestReconcileAuthProvidersHappyPath(t *testing.T) {
 	}
 	if len(ap.reconcileCalls) != 1 || ap.reconcileCalls[0].id != "ap-1" || ap.reconcileCalls[0].newIP != "172.19.0.42" {
 		t.Fatalf("expected one reconcile for ap-1 with newIP 172.19.0.42, got %+v", ap.reconcileCalls)
+	}
+}
+
+// TestReconcileAuthProvidersRecordsStatus: the scheduler must persist reconcile
+// health each tick — 'ok' with the resolved IP on success, 'failed' on a no-network
+// skip and on a resolve failure (#181 follow-up observability).
+func TestReconcileAuthProvidersRecordsStatus(t *testing.T) {
+	// success → ok
+	apOK := &fakeAuthProviderReconcile{
+		providers: []model.AuthProvider{{ID: "ap-ok", ContainerName: strPtr("authelia"), ContainerNetwork: strPtr("net"), ContainerPort: intPtr(9091)}},
+	}
+	sOK := &ContainerReconcileScheduler{proxyHostService: &fakeReconcileService{}, authProviders: apOK, resolver: &fakeNetworkAwareResolver{ip: "172.19.0.5"}}
+	sOK.reconcileOnce(context.Background())
+	if len(apOK.statusCalls) != 1 || apOK.statusCalls[0].status != "ok" || apOK.statusCalls[0].ip != "172.19.0.5" {
+		t.Fatalf("success must record status=ok with the resolved IP, got %+v", apOK.statusCalls)
+	}
+
+	// no stored network → failed (before any resolver call)
+	apNoNet := &fakeAuthProviderReconcile{
+		providers: []model.AuthProvider{{ID: "ap-nonet", ContainerName: strPtr("authelia")}},
+	}
+	sNoNet := &ContainerReconcileScheduler{proxyHostService: &fakeReconcileService{}, authProviders: apNoNet, resolver: &fakeNetworkAwareResolver{ip: "172.19.0.5"}}
+	sNoNet.reconcileOnce(context.Background())
+	if len(apNoNet.statusCalls) != 1 || apNoNet.statusCalls[0].status != "failed" {
+		t.Fatalf("no-network provider must record status=failed, got %+v", apNoNet.statusCalls)
+	}
+
+	// resolve failure → failed
+	apFail := &fakeAuthProviderReconcile{
+		providers: []model.AuthProvider{{ID: "ap-fail", ContainerName: strPtr("authelia"), ContainerNetwork: strPtr("net")}},
+	}
+	sFail := &ContainerReconcileScheduler{proxyHostService: &fakeReconcileService{}, authProviders: apFail, resolver: &fakeNetworkAwareResolver{err: errors.New("container gone")}}
+	sFail.reconcileOnce(context.Background())
+	if len(apFail.statusCalls) != 1 || apFail.statusCalls[0].status != "failed" {
+		t.Fatalf("resolve failure must record status=failed, got %+v", apFail.statusCalls)
 	}
 }
 

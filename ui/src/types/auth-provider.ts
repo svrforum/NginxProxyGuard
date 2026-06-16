@@ -23,7 +23,16 @@ export interface AuthProviderContainerTarget {
   container_scheme?: string;
 }
 
-export interface AuthProvider extends AuthProviderContainerTarget {
+// Read-only container-reconcile health (#181 follow-up). Set by the backend scheduler.
+export interface AuthProviderReconcileStatus {
+  last_resolved_ip?: string;
+  last_reconcile_at?: string;
+  last_reconcile_status?: 'ok' | 'failed';
+  last_reconcile_error?: string;
+  reconcile_fail_count?: number;
+}
+
+export interface AuthProvider extends AuthProviderContainerTarget, AuthProviderReconcileStatus {
   id: string;
   name: string;
   type: AuthProviderType;

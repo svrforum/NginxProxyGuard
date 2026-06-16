@@ -11,6 +11,11 @@
     location = /internal/forwardauth/verify {
         internal;
         proxy_pass {{.AuthProvider.ProviderURL}}/api/authz/auth-request;
+{{- if hasPrefix .AuthProvider.ProviderURL "https"}}
+        proxy_ssl_server_name on;
+        proxy_ssl_name $host;
+        proxy_ssl_verify off;
+{{- end}}
         proxy_set_header X-Original-Method $request_method;
         # Authelia derives the protected URL's scheme from X-Original-URL (it ignores
         # X-Forwarded-Proto at the auth-request endpoint) and rejects an http scheme
@@ -29,6 +34,11 @@
     # Public outpost location (NOT auth-gated): serves /auth/nginx, /start, /callback
     location /outpost.goauthentik.io {
         proxy_pass {{.AuthProvider.ProviderURL}}/outpost.goauthentik.io;
+{{- if hasPrefix .AuthProvider.ProviderURL "https"}}
+        proxy_ssl_server_name on;
+        proxy_ssl_name $host;
+        proxy_ssl_verify off;
+{{- end}}
         proxy_set_header Host $host;
         # Pin https for SSL hosts — same scheme rule as Authelia above. (#180)
         proxy_set_header X-Original-URL {{if .Host.SSLEnabled}}https{{else}}$scheme{{end}}://$http_host$request_uri;
@@ -42,6 +52,11 @@
     location = /internal/forwardauth/verify {
         internal;
         proxy_pass {{.AuthProvider.ProviderURL}}{{.AuthProvider.Config.VerifyPath}};
+{{- if hasPrefix .AuthProvider.ProviderURL "https"}}
+        proxy_ssl_server_name on;
+        proxy_ssl_name $host;
+        proxy_ssl_verify off;
+{{- end}}
 {{- range .AuthProvider.Config.RequestHeaders}}
         proxy_set_header {{.Name}} {{.Value}};
 {{- end}}

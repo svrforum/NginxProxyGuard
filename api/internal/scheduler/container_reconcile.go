@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"nginx-proxy-guard/internal/model"
+	"nginx-proxy-guard/internal/repository"
 	"nginx-proxy-guard/internal/service"
 )
 
@@ -44,6 +45,7 @@ type batchContainerResolver interface {
 type authProviderReconcileService interface {
 	ListContainerBacked(ctx context.Context) ([]model.AuthProvider, error)
 	ReconcileContainerProvider(ctx context.Context, p model.AuthProvider, newIP string) (bool, error)
+	RecordReconcileStatus(ctx context.Context, id, status, ip, errMsg string) error
 }
 
 // ContainerReconcileScheduler periodically re-resolves the IP of each
@@ -52,10 +54,31 @@ type authProviderReconcileService interface {
 type ContainerReconcileScheduler struct {
 	proxyHostService containerReconcileService
 	authProviders    authProviderReconcileService // optional (#181)
+	systemLog        *repository.SystemLogRepository // optional: surface reconcile events to the Logs view (#181 follow-up)
 	resolver         service.ContainerResolver
 	interval         time.Duration
 	stopChan         chan struct{}
 	running          bool
+}
+
+// SetSystemLogRepo enables writing reconcile state changes (IP change, container
+// unreachable) to the system log so operators see them in the Logs view, not just
+// container stdout. Optional. (#181 follow-up)
+func (s *ContainerReconcileScheduler) SetSystemLogRepo(r *repository.SystemLogRepository) {
+	s.systemLog = r
+}
+
+// logSystem writes a reconcile event to the system log (no-op if not wired).
+func (s *ContainerReconcileScheduler) logSystem(ctx context.Context, level repository.SystemLogLevel, msg string) {
+	if s.systemLog == nil {
+		return
+	}
+	_ = s.systemLog.Create(ctx, &repository.SystemLog{
+		Source:    repository.SourceScheduler,
+		Level:     level,
+		Message:   msg,
+		Component: "container-reconcile",
+	})
 }
 
 // NewContainerReconcileScheduler constructs (but does not start) the scheduler.
@@ -190,25 +213,43 @@ func (s *ContainerReconcileScheduler) reconcileAuthProviders(ctx context.Context
 		if p.ContainerName == nil || *p.ContainerName == "" {
 			continue
 		}
+		prevStatus := p.LastReconcileStatus
+		// record persists reconcile health and emits a system-log line only on a
+		// TRANSITION into failure (avoids logging every 30s while a container is down).
+		record := func(status, ip, errMsg string) {
+			if rerr := s.authProviders.RecordReconcileStatus(ctx, p.ID, status, ip, errMsg); rerr != nil {
+				log.Printf("[ContainerReconcile] auth provider %s status write failed: %v", p.ID, rerr)
+			}
+			if status == "failed" && prevStatus != "failed" {
+				s.logSystem(ctx, repository.LevelWarn, "ForwardAuth provider \""+p.Name+"\": "+errMsg+" — host stays protected; auth will fail until resolved")
+			}
+		}
+
 		if p.ContainerNetwork == nil || *p.ContainerNetwork == "" {
 			log.Printf("[ContainerReconcile] WARN: auth provider %s has container target %q without a stored network; re-select the container in the UI to enable auto-resolve. Skipping.", p.ID, *p.ContainerName)
+			record("failed", "", "container \""+*p.ContainerName+"\" has no stored network — re-select the container in the UI")
 			continue
 		}
 		newIP, err := resolveIP(*p.ContainerName, *p.ContainerNetwork)
 		if err != nil {
 			log.Printf("[ContainerReconcile] WARN: auth provider %s resolve %q on network %q failed, keeping current URL: %v", p.ID, *p.ContainerName, *p.ContainerNetwork, err)
+			record("failed", "", "could not resolve container \""+*p.ContainerName+"\" on network \""+*p.ContainerNetwork+"\" (stopped or removed?)")
 			continue
 		}
 		if newIP == "" {
-			continue // resolution failed — keep last-known-good
+			record("failed", "", "container \""+*p.ContainerName+"\" not found on network \""+*p.ContainerNetwork+"\"")
+			continue
 		}
 		changed, err := s.authProviders.ReconcileContainerProvider(ctx, p, newIP)
 		if err != nil {
 			log.Printf("[ContainerReconcile] auth provider %s regen failed: %v (config unchanged)", p.ID, err)
+			record("failed", newIP, "nginx config regeneration failed; kept previous config")
 			continue
 		}
+		record("ok", newIP, "")
 		if changed {
 			log.Printf("[ContainerReconcile] auth provider %s: container %q (network %q) IP -> %s; regenerated dependent hosts", p.ID, *p.ContainerName, *p.ContainerNetwork, newIP)
+			s.logSystem(ctx, repository.LevelInfo, "ForwardAuth provider \""+p.Name+"\": container \""+*p.ContainerName+"\" IP updated to "+newIP+"; dependent hosts regenerated")
 		}
 	}
 }
