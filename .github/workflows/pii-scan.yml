@@ -1,0 +1,73 @@
+name: PII Scan
+
+# Fail any push/PR that introduces personal PII into this PUBLIC repo. This is the
+# machine-independent backstop for the local .git/hooks/pre-commit hook (which only
+# runs on the machine where it was installed). It catches the class of leak that
+# actually happened once: a personal email committed into a tracked file.
+#
+# NOTE: this workflow contains ONLY generic patterns + an allow-list (example.*,
+# *.noreply.github.com, reserved TLDs). It deliberately hard-codes NO specific
+# banned address/domain, so the public workflow file itself leaks nothing.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pii-scan:
+    name: 🔒 PII Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan tracked files for non-allowlisted emails
+        run: |
+          set -euo pipefail
+          # All tracked text files (-I skips binaries). Any RFC-5321-ish email whose
+          # domain is NOT an allowed example/doc/reserved/noreply domain is a finding.
+          EMAIL_RE='[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}'
+          # Allowed (NOT PII): documentation domains, reserved TLDs, GitHub noreply.
+          ALLOW='example\.(com|org|net)|\.example([^a-z]|$)|\.test([^a-z]|$)|\.local([^a-z]|$)|\.invalid([^a-z]|$)|users\.noreply\.github\.com|noreply@'
+          hits="$(git grep -InE "$EMAIL_RE" -- . | grep -ivE "$ALLOW" || true)"
+          if [ -n "$hits" ]; then
+            echo "::error::Non-allowlisted email address(es) found in tracked files (possible PII leak):"
+            echo "$hits"
+            echo ""
+            echo "If this is a legitimate placeholder, use an example.com / .test / .local address."
+            exit 1
+          fi
+          echo "✓ No non-allowlisted email addresses in tracked files."
+
+      - name: Check commit author identity (must be GitHub noreply)
+        env:
+          # GitHub-controlled SHAs / event name passed via env (never interpolated
+          # straight into the script) per Actions injection-safety guidance.
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # The new commits in this push/PR must be authored with a *.noreply.github.com
+          # address — a personal email in commit metadata is also a leak. Range is
+          # computed from the event; falls back to the last commit for new branches.
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            RANGE="${PR_BASE_SHA}..${PR_HEAD_SHA}"
+          else
+            if [ -z "$PUSH_BEFORE" ] || echo "$PUSH_BEFORE" | grep -qE '^0+$'; then
+              RANGE="HEAD~1..HEAD"
+            else
+              RANGE="${PUSH_BEFORE}..${PUSH_SHA}"
+            fi
+          fi
+          bad="$(git log --format='%an <%ae>' "$RANGE" 2>/dev/null | grep -ivE 'noreply\.github\.com' || true)"
+          if [ -n "$bad" ]; then
+            echo "::error::Commit author(s) not using a GitHub noreply address:"
+            echo "$bad"
+            exit 1
+          fi
+          echo "✓ All new commit authors use a GitHub noreply address."
