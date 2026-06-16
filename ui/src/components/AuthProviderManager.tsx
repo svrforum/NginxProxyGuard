@@ -7,6 +7,7 @@ import { getAuthProviders, createAuthProvider, updateAuthProvider, deleteAuthPro
 import { fetchProxyHosts } from '../api/proxy-hosts';
 import type { ProxyHost } from '../types/proxy-host';
 import { AuthProviderHosts } from './auth-provider/AuthProviderHosts';
+import { DockerContainerSelector } from './proxy-host/DockerContainerSelector';
 
 // Per-type accent classes. Full static strings (Tailwind JIT can't see interpolated names).
 const ACCENT: Record<string, { icon: string; chip: string }> = {
@@ -40,8 +41,37 @@ function AuthProviderForm({ provider, onClose, onSuccess }: AuthProviderFormProp
   const [signinRedirect, setSigninRedirect] = useState(provider?.config?.signin_redirect || '');
   const [cookiePassthrough, setCookiePassthrough] = useState(provider?.config?.cookie_passthrough ?? false);
   const [largeBuffers, setLargeBuffers] = useState(provider?.config?.large_buffers ?? false);
+  // Docker-container target (#181). When containerName is set, provider_url is the
+  // resolved scheme://ip:port and is auto-re-resolved on IP change by the backend.
+  const [containerName, setContainerName] = useState(provider?.container_name || '');
+  const [containerNetwork, setContainerNetwork] = useState(provider?.container_network || '');
+  const [containerPort, setContainerPort] = useState<number | undefined>(provider?.container_port);
+  const [containerScheme, setContainerScheme] = useState(provider?.container_scheme || 'http');
+  const [showDockerSelector, setShowDockerSelector] = useState(false);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const isContainer = !!containerName;
+
+  const handlePickContainer = (host: string, port: number, name: string, network: string) => {
+    setContainerName(name);
+    setContainerNetwork(network);
+    setContainerPort(port);
+    setProviderUrl(`${containerScheme}://${host}:${port}`);
+  };
+
+  const handleClearContainer = () => {
+    setContainerName('');
+    setContainerNetwork('');
+    setContainerPort(undefined);
+  };
+
+  // Rebuild the displayed URL with a new scheme, preserving the resolved host:port.
+  const handleSchemeChange = (scheme: string) => {
+    setContainerScheme(scheme);
+    const hostPort = providerUrl.replace(/^[a-z]+:\/\//i, '');
+    setProviderUrl(`${scheme}://${hostPort}`);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,6 +82,12 @@ function AuthProviderForm({ provider, onClose, onSuccess }: AuthProviderFormProp
         name,
         type,
         provider_url: providerUrl,
+        // Container target: send the binding when set; send "" to clear a previously
+        // container-backed provider (the backend treats empty name as "unbind").
+        container_name: isContainer ? containerName : (provider?.container_name ? '' : undefined),
+        container_network: isContainer ? containerNetwork : undefined,
+        container_port: isContainer ? containerPort : undefined,
+        container_scheme: isContainer ? containerScheme : undefined,
         config: type === 'custom'
           ? {
             verify_path: verifyPath || undefined,
@@ -116,17 +152,74 @@ function AuthProviderForm({ provider, onClose, onSuccess }: AuthProviderFormProp
           </div>
 
           <div>
-            <label className={labelClass}>{t('form.providerUrl')}</label>
-            <input
-              type="text"
-              value={providerUrl}
-              onChange={(e) => setProviderUrl(e.target.value)}
-              required
-              className={inputClass}
-              placeholder={t('form.providerUrlPlaceholder')}
-            />
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t('help.providerUrl')}</p>
+            <div className="flex items-center justify-between mb-1">
+              <label className={labelClass + ' mb-0'}>{t('form.providerUrl')}</label>
+              {!isContainer && (
+                <button
+                  type="button"
+                  onClick={() => setShowDockerSelector(true)}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                  </svg>
+                  {t('form.pickContainer')}
+                </button>
+              )}
+            </div>
+            {isContainer ? (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/20 px-3 py-2">
+                  <div className="min-w-0 text-xs">
+                    <span className="font-medium text-indigo-700 dark:text-indigo-300">🐳 {containerName}</span>
+                    <span className="text-indigo-500 dark:text-indigo-400"> · {containerNetwork || '—'}{containerPort ? ` · :${containerPort}` : ''}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleClearContainer}
+                    className="flex-shrink-0 text-xs font-medium text-slate-500 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400"
+                  >
+                    {t('form.unbindContainer')}
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={containerScheme}
+                    onChange={(e) => handleSchemeChange(e.target.value)}
+                    className="px-2 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 dark:text-white"
+                  >
+                    <option value="http">http</option>
+                    <option value="https">https</option>
+                  </select>
+                  <input
+                    type="text"
+                    value={providerUrl}
+                    readOnly
+                    className={inputClass + ' font-mono text-xs opacity-80 cursor-not-allowed'}
+                  />
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">{t('help.containerUrl')}</p>
+              </div>
+            ) : (
+              <>
+                <input
+                  type="text"
+                  value={providerUrl}
+                  onChange={(e) => setProviderUrl(e.target.value)}
+                  required
+                  className={inputClass}
+                  placeholder={t('form.providerUrlPlaceholder')}
+                />
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t('help.providerUrl')}</p>
+              </>
+            )}
           </div>
+
+          <DockerContainerSelector
+            isOpen={showDockerSelector}
+            onClose={() => setShowDockerSelector(false)}
+            onSelect={handlePickContainer}
+          />
 
           <div className="bg-slate-50 dark:bg-slate-900/30 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-2 text-xs text-slate-600 dark:text-slate-400">
             {t(helpKey)}

@@ -89,12 +89,19 @@ type AuthProvider struct {
 	ID          string             `json:"id"`
 	Name        string             `json:"name"`
 	Type        string             `json:"type"`         // "authelia" | "authentik" | "custom"
-	ProviderURL string             `json:"provider_url"` // base URL, e.g. http://127.0.0.1:9091
+	ProviderURL string             `json:"provider_url"` // base URL, e.g. http://127.0.0.1:9091 (resolved value when container-backed)
 	Config      AuthProviderConfig `json:"config"`       // custom-only knobs; empty for presets
 	TimeoutMs   int                `json:"timeout_ms"`
 	Enabled     bool               `json:"enabled"`
-	CreatedAt   time.Time          `json:"created_at"`
-	UpdatedAt   time.Time          `json:"updated_at"`
+	// Optional Docker-container target for the verify endpoint (#181). When set,
+	// ProviderURL is derived as ContainerScheme://<resolved IP>:ContainerPort and
+	// re-resolved on container IP change (mirrors proxy_hosts #150/#151). Nil = manual URL.
+	ContainerName    *string   `json:"container_name,omitempty"`
+	ContainerNetwork *string   `json:"container_network,omitempty"`
+	ContainerPort    *int      `json:"container_port,omitempty"`
+	ContainerScheme  *string   `json:"container_scheme,omitempty"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 // AuthProviderConfig holds custom-provider knobs (ignored for authelia/authentik,
@@ -124,14 +131,22 @@ type AuthResponseHeader struct {
 	Forward  string `json:"forward"`  // header sent to backend, e.g. "X-User"
 }
 
-// CreateAuthProviderRequest is the create payload.
+// CreateAuthProviderRequest is the create payload. ProviderURL may be omitted when
+// a container target is supplied (the service resolves it); validation is enforced
+// after resolution in the service layer.
 type CreateAuthProviderRequest struct {
 	Name        string              `json:"name" validate:"required,min=1,max=255"`
 	Type        string              `json:"type" validate:"required,oneof=authelia authentik custom"`
-	ProviderURL string              `json:"provider_url" validate:"required,url"`
+	ProviderURL string              `json:"provider_url"`
 	Config      *AuthProviderConfig `json:"config,omitempty"`
 	TimeoutMs   *int                `json:"timeout_ms,omitempty"`
 	Enabled     *bool               `json:"enabled,omitempty"`
+	// Docker-container target (#181); when ContainerName is set the service resolves
+	// ProviderURL from the container's IP.
+	ContainerName    *string `json:"container_name,omitempty"`
+	ContainerNetwork *string `json:"container_network,omitempty"`
+	ContainerPort    *int    `json:"container_port,omitempty"`
+	ContainerScheme  *string `json:"container_scheme,omitempty"`
 }
 
 // UpdateAuthProviderRequest is a partial update payload.
@@ -142,6 +157,12 @@ type UpdateAuthProviderRequest struct {
 	Config      *AuthProviderConfig `json:"config,omitempty"`
 	TimeoutMs   *int                `json:"timeout_ms,omitempty"`
 	Enabled     *bool               `json:"enabled,omitempty"`
+	// Docker-container target (#181). A nil pointer leaves the field unchanged; an
+	// explicit empty ContainerName clears the container binding (back to manual URL).
+	ContainerName    *string `json:"container_name,omitempty"`
+	ContainerNetwork *string `json:"container_network,omitempty"`
+	ContainerPort    *int    `json:"container_port,omitempty"`
+	ContainerScheme  *string `json:"container_scheme,omitempty"`
 }
 
 // AuthProviderListResponse is the paginated list response.

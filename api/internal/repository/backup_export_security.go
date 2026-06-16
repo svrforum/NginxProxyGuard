@@ -11,7 +11,9 @@ import (
 
 // exportAuthProviders exports ForwardAuth providers (#179)
 func (r *BackupRepository) exportAuthProviders(ctx context.Context) ([]model.AuthProviderExport, error) {
-	query := `SELECT id, name, type, provider_url, config, timeout_ms, enabled FROM auth_providers ORDER BY created_at`
+	query := `SELECT id, name, type, provider_url, config, timeout_ms, enabled,
+		container_name, container_network, container_port, container_scheme
+		FROM auth_providers ORDER BY created_at`
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
@@ -22,11 +24,30 @@ func (r *BackupRepository) exportAuthProviders(ctx context.Context) ([]model.Aut
 	for rows.Next() {
 		var ap model.AuthProviderData
 		var cfgRaw []byte
-		if err := rows.Scan(&ap.ID, &ap.Name, &ap.Type, &ap.ProviderURL, &cfgRaw, &ap.TimeoutMs, &ap.Enabled); err != nil {
+		var cName, cNetwork, cScheme sql.NullString
+		var cPort sql.NullInt64
+		if err := rows.Scan(&ap.ID, &ap.Name, &ap.Type, &ap.ProviderURL, &cfgRaw, &ap.TimeoutMs, &ap.Enabled,
+			&cName, &cNetwork, &cPort, &cScheme); err != nil {
 			return nil, err
 		}
 		if len(cfgRaw) > 0 {
 			_ = json.Unmarshal(cfgRaw, &ap.Config)
+		}
+		if cName.Valid && cName.String != "" {
+			v := cName.String
+			ap.ContainerName = &v
+		}
+		if cNetwork.Valid && cNetwork.String != "" {
+			v := cNetwork.String
+			ap.ContainerNetwork = &v
+		}
+		if cScheme.Valid && cScheme.String != "" {
+			v := cScheme.String
+			ap.ContainerScheme = &v
+		}
+		if cPort.Valid {
+			v := int(cPort.Int64)
+			ap.ContainerPort = &v
 		}
 		exports = append(exports, model.AuthProviderExport{AuthProvider: ap})
 	}

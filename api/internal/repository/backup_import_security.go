@@ -21,10 +21,12 @@ func (r *BackupRepository) importAuthProvider(ctx context.Context, tx *sql.Tx, a
 	}
 	var newID string
 	err = tx.QueryRowContext(ctx, `
-		INSERT INTO auth_providers (name, type, provider_url, config, timeout_ms, enabled)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO auth_providers (name, type, provider_url, config, timeout_ms, enabled,
+			container_name, container_network, container_port, container_scheme)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING id
-	`, ap.AuthProvider.Name, ap.AuthProvider.Type, ap.AuthProvider.ProviderURL, cfgJSON, timeout, ap.AuthProvider.Enabled).Scan(&newID)
+	`, ap.AuthProvider.Name, ap.AuthProvider.Type, ap.AuthProvider.ProviderURL, cfgJSON, timeout, ap.AuthProvider.Enabled,
+		ap.AuthProvider.ContainerName, ap.AuthProvider.ContainerNetwork, ap.AuthProvider.ContainerPort, ap.AuthProvider.ContainerScheme).Scan(&newID)
 	if err != nil {
 		return "", err
 	}

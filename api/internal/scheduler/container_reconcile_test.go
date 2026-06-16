@@ -262,6 +262,126 @@ func TestReconcileOnceBatchSnapshotLazy(t *testing.T) {
 	}
 }
 
+func intPtr(i int) *int { return &i }
+
+// fakeAuthProviderReconcile implements authProviderReconcileService (#181).
+type fakeAuthProviderReconcile struct {
+	providers      []model.AuthProvider
+	listErr        error
+	reconcileCalls []reconcileCall
+	changed        bool
+	reconcileErr   error
+}
+
+type reconcileCall struct {
+	id    string
+	newIP string
+}
+
+func (f *fakeAuthProviderReconcile) ListContainerBacked(ctx context.Context) ([]model.AuthProvider, error) {
+	return f.providers, f.listErr
+}
+
+func (f *fakeAuthProviderReconcile) ReconcileContainerProvider(ctx context.Context, p model.AuthProvider, newIP string) (bool, error) {
+	f.reconcileCalls = append(f.reconcileCalls, reconcileCall{id: p.ID, newIP: newIP})
+	return f.changed, f.reconcileErr
+}
+
+// TestReconcileAuthProvidersSkipsNoNetwork: #151 safe-mode applies to auth
+// providers too — a container-backed provider with no stored network must be
+// skipped before any resolver call or reconcile.
+func TestReconcileAuthProvidersSkipsNoNetwork(t *testing.T) {
+	ap := &fakeAuthProviderReconcile{
+		providers: []model.AuthProvider{
+			{ID: "ap-legacy", ContainerName: strPtr("authelia"), ProviderURL: "http://172.19.0.7:9091"},
+			// ContainerNetwork nil → skip
+		},
+	}
+	resolver := &fakeNetworkAwareResolver{ip: "172.19.0.99"}
+	s := &ContainerReconcileScheduler{
+		proxyHostService: &fakeReconcileService{},
+		authProviders:    ap,
+		resolver:         resolver,
+	}
+
+	s.reconcileOnce(context.Background())
+
+	if resolver.callCount != 0 {
+		t.Fatalf("no-network provider must NOT trigger resolver call; got %d", resolver.callCount)
+	}
+	if len(ap.reconcileCalls) != 0 {
+		t.Fatalf("no-network provider must NOT trigger reconcile; got %d", len(ap.reconcileCalls))
+	}
+}
+
+// TestReconcileAuthProvidersHappyPath: a provider WITH a stored network is
+// resolved against that network and reconciled with the new IP.
+func TestReconcileAuthProvidersHappyPath(t *testing.T) {
+	ap := &fakeAuthProviderReconcile{
+		providers: []model.AuthProvider{
+			{
+				ID:               "ap-1",
+				ContainerName:    strPtr("authelia"),
+				ContainerNetwork: strPtr("fa-net"),
+				ContainerPort:    intPtr(9091),
+				ContainerScheme:  strPtr("http"),
+				ProviderURL:      "http://172.19.0.7:9091",
+			},
+		},
+		changed: true,
+	}
+	resolver := &fakeNetworkAwareResolver{ip: "172.19.0.42"}
+	s := &ContainerReconcileScheduler{
+		proxyHostService: &fakeReconcileService{},
+		authProviders:    ap,
+		resolver:         resolver,
+	}
+
+	s.reconcileOnce(context.Background())
+
+	if resolver.callCount != 1 || resolver.gotNet != "fa-net" {
+		t.Fatalf("expected 1 resolve on network 'fa-net', got count=%d net=%q", resolver.callCount, resolver.gotNet)
+	}
+	if len(ap.reconcileCalls) != 1 || ap.reconcileCalls[0].id != "ap-1" || ap.reconcileCalls[0].newIP != "172.19.0.42" {
+		t.Fatalf("expected one reconcile for ap-1 with newIP 172.19.0.42, got %+v", ap.reconcileCalls)
+	}
+}
+
+// TestReconcileSharesSnapshotAcrossHostsAndProviders: on the batch path, hosts
+// and auth providers resolve against ONE docker snapshot per tick.
+func TestReconcileSharesSnapshotAcrossHostsAndProviders(t *testing.T) {
+	hostSvc := &fakeReconcileService{
+		hosts: []*model.ProxyHost{
+			{ID: "host-a", ForwardHost: "172.24.0.4", ForwardContainerName: strPtr("app-a"), ForwardContainerNetwork: strPtr("net-a")},
+		},
+	}
+	ap := &fakeAuthProviderReconcile{
+		providers: []model.AuthProvider{
+			{ID: "ap-1", ContainerName: strPtr("authelia"), ContainerNetwork: strPtr("net-a"), ContainerPort: intPtr(9091), ProviderURL: "http://x:9091"},
+		},
+		changed: true,
+	}
+	resolver := &fakeBatchResolver{
+		containers: []service.DockerContainerInfo{
+			{Name: "app-a", Networks: []service.DockerContainerNetwork{{Name: "net-a", IPAddress: "172.24.0.5"}}},
+			{Name: "authelia", Networks: []service.DockerContainerNetwork{{Name: "net-a", IPAddress: "172.24.0.6"}}},
+		},
+	}
+	s := &ContainerReconcileScheduler{proxyHostService: hostSvc, authProviders: ap, resolver: resolver}
+
+	s.reconcileOnce(context.Background())
+
+	if resolver.listCalls != 1 {
+		t.Fatalf("expected ONE shared snapshot for hosts+providers, got %d", resolver.listCalls)
+	}
+	if len(hostSvc.updateCalls) != 1 || len(ap.reconcileCalls) != 1 {
+		t.Fatalf("expected 1 host regen and 1 provider reconcile, got hosts=%d providers=%d", len(hostSvc.updateCalls), len(ap.reconcileCalls))
+	}
+	if ap.reconcileCalls[0].newIP != "172.24.0.6" {
+		t.Fatalf("provider should resolve to 172.24.0.6 from the shared snapshot, got %s", ap.reconcileCalls[0].newIP)
+	}
+}
+
 // TestReconcileOnceResolverErrorKeepsConfig: when the network-aware resolver
 // fails (e.g. container temporarily off the network), keep last-known-good —
 // no regen.

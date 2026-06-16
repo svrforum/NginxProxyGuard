@@ -530,6 +530,11 @@ type AuthProviderData struct {
 	Config      AuthProviderConfig `json:"config"`
 	TimeoutMs   int                `json:"timeout_ms"`
 	Enabled     bool               `json:"enabled"`
+	// Docker-container target for the verify endpoint (#181). Nil for manual-URL providers.
+	ContainerName    *string `json:"container_name,omitempty"`
+	ContainerNetwork *string `json:"container_network,omitempty"`
+	ContainerPort    *int    `json:"container_port,omitempty"`
+	ContainerScheme  *string `json:"container_scheme,omitempty"`
 }
 
 // RedirectHostData represents redirect host data for export

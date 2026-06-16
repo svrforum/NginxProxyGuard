@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"nginx-proxy-guard/internal/model"
@@ -11,19 +12,72 @@ import (
 // AuthProviderService manages reusable ForwardAuth providers and triggers a config
 // regen of all referencing hosts when a provider changes. (#179)
 type AuthProviderService struct {
-	repo         *repository.AuthProviderRepository
-	proxyHostSvc *ProxyHostService
+	repo              *repository.AuthProviderRepository
+	proxyHostSvc      *ProxyHostService
+	containerResolver ContainerResolver // Optional: resolves docker container name → IP (#181)
 }
 
 func NewAuthProviderService(repo *repository.AuthProviderRepository, proxyHostSvc *ProxyHostService) *AuthProviderService {
 	return &AuthProviderService{repo: repo, proxyHostSvc: proxyHostSvc}
 }
 
+// SetContainerResolver injects the docker container → IP resolver, enabling
+// container-backed verify endpoints (#181). Mirrors ProxyHostService.
+func (s *AuthProviderService) SetContainerResolver(r ContainerResolver) {
+	s.containerResolver = r
+}
+
 // normalizeAuthProviderURL strips a trailing slash so template proxy_pass
 // concatenation (ProviderURL + "/api/authz/auth-request") never doubles the slash.
 func normalizeAuthProviderURL(u string) string { return strings.TrimRight(strings.TrimSpace(u), "/") }
 
+// buildProviderURL composes scheme://ip:port for a container-backed provider.
+// Returns "" when the inputs are insufficient (no IP or no port).
+func buildProviderURL(scheme *string, ip string, port *int) string {
+	if ip == "" || port == nil || *port <= 0 {
+		return ""
+	}
+	sch := "http"
+	if scheme != nil && *scheme != "" {
+		sch = *scheme
+	}
+	return fmt.Sprintf("%s://%s:%d", sch, ip, *port)
+}
+
+// resolveContainerURL resolves a container target to its current verify URL. Returns
+// ("", nil) when no container is specified (caller keeps the manual provider_url).
+// Resolution/validation failures are "invalid:"-prefixed → HTTP 400.
+func (s *AuthProviderService) resolveContainerURL(ctx context.Context, name, network *string, port *int, scheme *string) (string, error) {
+	if name == nil || *name == "" {
+		return "", nil
+	}
+	if s.containerResolver == nil {
+		return "", fmt.Errorf("invalid: container targets unavailable (no docker access)")
+	}
+	if port == nil || *port <= 0 {
+		return "", fmt.Errorf("invalid: container_port is required for a container target")
+	}
+	net := ""
+	if network != nil {
+		net = *network
+	}
+	ip, err := s.containerResolver.ResolveContainerIP(ctx, *name, net)
+	if err != nil {
+		return "", fmt.Errorf("invalid auth provider container %q: %w", *name, err)
+	}
+	url := buildProviderURL(scheme, ip, port)
+	if url == "" {
+		return "", fmt.Errorf("invalid: could not resolve container %q to a usable address", *name)
+	}
+	return url, nil
+}
+
 func (s *AuthProviderService) Create(ctx context.Context, req *model.CreateAuthProviderRequest) (*model.AuthProvider, error) {
+	if url, err := s.resolveContainerURL(ctx, req.ContainerName, req.ContainerNetwork, req.ContainerPort, req.ContainerScheme); err != nil {
+		return nil, err
+	} else if url != "" {
+		req.ProviderURL = url
+	}
 	req.ProviderURL = normalizeAuthProviderURL(req.ProviderURL)
 	if err := model.ValidateProviderURL(req.ProviderURL); err != nil {
 		return nil, err
@@ -45,10 +99,21 @@ func (s *AuthProviderService) List(ctx context.Context, page, perPage int) ([]mo
 }
 
 func (s *AuthProviderService) Update(ctx context.Context, id string, req *model.UpdateAuthProviderRequest) (*model.AuthProvider, error) {
-	if req.ProviderURL != nil {
+	// Container target set → re-resolve and overwrite provider_url. An explicit
+	// empty ContainerName clears the binding and keeps whatever manual URL was sent.
+	if req.ContainerName != nil && *req.ContainerName != "" {
+		url, err := s.resolveContainerURL(ctx, req.ContainerName, req.ContainerNetwork, req.ContainerPort, req.ContainerScheme)
+		if err != nil {
+			return nil, err
+		}
+		u := normalizeAuthProviderURL(url)
+		req.ProviderURL = &u
+	} else if req.ProviderURL != nil {
 		u := normalizeAuthProviderURL(*req.ProviderURL)
 		req.ProviderURL = &u
-		if err := model.ValidateProviderURL(u); err != nil {
+	}
+	if req.ProviderURL != nil {
+		if err := model.ValidateProviderURL(*req.ProviderURL); err != nil {
 			return nil, err
 		}
 	}
@@ -72,6 +137,26 @@ func (s *AuthProviderService) Update(ctx context.Context, id string, req *model.
 		return ap, rerr
 	}
 	return ap, nil
+}
+
+// ListContainerBacked returns providers whose verify endpoint is a container target,
+// for the reconcile scheduler (#181).
+func (s *AuthProviderService) ListContainerBacked(ctx context.Context) ([]model.AuthProvider, error) {
+	return s.repo.ListContainerBacked(ctx)
+}
+
+// ReconcileContainerProvider recomputes the verify URL from a freshly-resolved IP and,
+// if it changed, persists it and regenerates every dependent host's config via the
+// fail-safe path. Returns whether the URL changed. (#181)
+func (s *AuthProviderService) ReconcileContainerProvider(ctx context.Context, p model.AuthProvider, newIP string) (bool, error) {
+	newURL := normalizeAuthProviderURL(buildProviderURL(p.ContainerScheme, newIP, p.ContainerPort))
+	if newURL == "" || newURL == p.ProviderURL {
+		return false, nil
+	}
+	if err := s.repo.UpdateProviderURL(ctx, p.ID, newURL); err != nil {
+		return false, err
+	}
+	return true, s.proxyHostSvc.RegenerateConfigsForAuthProvider(ctx, p.ID)
 }
 
 func (s *AuthProviderService) Delete(ctx context.Context, id string) error {

@@ -5,6 +5,7 @@
     "newTitle": "New Auth Provider", "editTitle": "Edit Auth Provider",
     "name": "Name", "namePlaceholder": "e.g., Home Authelia",
     "type": "Type", "providerUrl": "Auth Service URL", "providerUrlPlaceholder": "http://127.0.0.1:9091",
+    "pickContainer": "Pick from Docker", "unbindContainer": "Unbind",
     "verifyPath": "Verify Path", "signinMode": "Sign-in Redirect", "signinRedirect": "Sign-in Redirect URL",
     "signinModeLocationHeader": "Location header (verifier provides redirect)", "signinModeRedirectTemplate": "Redirect template (custom URL)",
     "cookiePassthrough": "Forward Set-Cookie", "largeBuffers": "Large header buffers",
@@ -30,13 +31,14 @@
     "attachError": "Failed to attach host",
     "detachError": "Failed to detach host"
   },
-  "list": { "title": "Auth Providers", "name": "Name", "type": "Type", "url": "URL", "actions": "Actions", "empty": "No auth providers. Create one to protect hosts with Authelia/Authentik." },
+  "list": { "title": "Auth Providers", "name": "Name", "type": "Type", "url": "URL", "actions": "Actions", "empty": "No auth providers. Create one to protect hosts with Authelia/Authentik.", "none": "Not used" },
   "messages": { "deleteConfirm": "Delete this auth provider? Hosts using it will lose protection.", "loadError": "Error loading auth providers", "saveError": "Failed to save auth provider" },
   "help": {
     "authelia": "Authelia ≥ 4.37. The session cookie domain must be a parent of every protected host and the portal.",
     "authentik": "Use the outpost URL (embedded outpost = the authentik server host:9000).",
     "custom": "Provide the verify path and sign-in redirect for any auth_request-compatible verifier (e.g. oauth2-proxy).",
     "providerUrl": "Use an address reachable from the proxy container (host-network installs: host IP:port; bridge-network: service name).",
+    "containerUrl": "Auto-filled from the container's current IP. If the container IP changes, it is re-resolved and updated automatically.",
     "challengeConflict": "Disable CAPTCHA/geo challenge mode to use a ForwardAuth provider."
   }
 }

@@ -89,6 +89,7 @@ func NewSchedulers(cfg *config.Config, db *database.DB, repos *Repositories, svc
 		FilterRefresh: scheduler.NewFilterRefreshScheduler(svcs.FilterSubscription),
 		ContainerReconcile: scheduler.NewContainerReconcileScheduler(
 			svcs.ProxyHost,
+			svcs.AuthProvider,
 			svcs.DockerStats,
 			containerReconcileInterval(),
 		),

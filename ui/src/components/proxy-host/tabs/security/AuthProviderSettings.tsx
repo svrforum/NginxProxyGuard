@@ -23,7 +23,7 @@ export function AuthProviderSettings({ availableAuthProviders, selectedProviderI
         onChange={(e) => onSelect(e.target.value)}
         className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white disabled:opacity-50"
       >
-        <option value="">{t('list.empty')}</option>
+        <option value="">{availableAuthProviders.length === 0 ? t('list.empty') : t('list.none')}</option>
         {availableAuthProviders.map((p) => (
           <option key={p.id} value={p.id}>{p.name} ({p.type})</option>
         ))}

@@ -14,7 +14,16 @@ export interface AuthProviderConfig {
   large_buffers?: boolean;
 }
 
-export interface AuthProvider {
+// Docker-container target for the verify endpoint (#181). When container_name is
+// set, provider_url is the resolved scheme://ip:port and is re-resolved on IP change.
+export interface AuthProviderContainerTarget {
+  container_name?: string;
+  container_network?: string;
+  container_port?: number;
+  container_scheme?: string;
+}
+
+export interface AuthProvider extends AuthProviderContainerTarget {
   id: string;
   name: string;
   type: AuthProviderType;
@@ -26,7 +35,7 @@ export interface AuthProvider {
   updated_at: string;
 }
 
-export interface CreateAuthProviderRequest {
+export interface CreateAuthProviderRequest extends AuthProviderContainerTarget {
   name: string;
   type: AuthProviderType;
   provider_url: string;

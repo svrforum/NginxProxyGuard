@@ -224,6 +224,10 @@ CREATE TABLE IF NOT EXISTS public.auth_providers (
     config jsonb DEFAULT '{}'::jsonb NOT NULL,
     timeout_ms integer DEFAULT 5000 NOT NULL,
     enabled boolean DEFAULT true NOT NULL,
+    container_name text,
+    container_network text,
+    container_port integer,
+    container_scheme text,
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now(),
     CONSTRAINT auth_providers_type_check CHECK (((type)::text = ANY ((ARRAY['authelia'::character varying, 'authentik'::character varying, 'custom'::character varying])::text[])))
@@ -3381,6 +3385,15 @@ ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS ddns_enabled boolean DEF
 ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS ddns_provider_id uuid;
 -- v2.24.5: default Cloudflare proxied for this host's managed DDNS records (#160)
 ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS ddns_proxied boolean DEFAULT false NOT NULL;
+
+-- auth_providers table upgrades
+-- v2.28.0: Docker container target for the verify endpoint (#181). Mirrors the
+-- proxy_hosts container pattern (#150/#151): provider_url stays the resolved
+-- scheme://ip:port; these columns are the re-resolution reference. NULL = manual URL.
+ALTER TABLE public.auth_providers ADD COLUMN IF NOT EXISTS container_name text;
+ALTER TABLE public.auth_providers ADD COLUMN IF NOT EXISTS container_network text;
+ALTER TABLE public.auth_providers ADD COLUMN IF NOT EXISTS container_port integer;
+ALTER TABLE public.auth_providers ADD COLUMN IF NOT EXISTS container_scheme text;
 
 -- DDNS records (#154): keep registered hostnames' A records pointed at the server's public IPv4.
 CREATE TABLE IF NOT EXISTS public.ddns_records (

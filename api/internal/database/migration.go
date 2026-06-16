@@ -940,6 +940,13 @@ DO $$ BEGIN ALTER TABLE public.ddns_records ADD CONSTRAINT ddns_records_proxy_ho
 ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS auth_bypass_paths text[] DEFAULT '{}'::text[];
 DO $$ BEGIN ALTER TABLE public.proxy_hosts ADD CONSTRAINT proxy_hosts_auth_provider_id_fkey FOREIGN KEY (auth_provider_id) REFERENCES public.auth_providers(id) ON DELETE SET NULL; EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
 		},
+		{
+			desc: "v2.28.0: auth_providers docker-container target columns (#181)",
+			sql: `ALTER TABLE public.auth_providers ADD COLUMN IF NOT EXISTS container_name text;
+ALTER TABLE public.auth_providers ADD COLUMN IF NOT EXISTS container_network text;
+ALTER TABLE public.auth_providers ADD COLUMN IF NOT EXISTS container_port integer;
+ALTER TABLE public.auth_providers ADD COLUMN IF NOT EXISTS container_scheme text;`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {
