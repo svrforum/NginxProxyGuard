@@ -7,12 +7,59 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"nginx-proxy-guard/internal/model"
 	"nginx-proxy-guard/internal/repository"
 )
+
+// ValidMaxMindAccountID reports whether s is a usable MaxMind account ID. geoipupdate
+// 7.x requires a positive numeric AccountID alongside the LicenseKey — a blank/0/non-numeric
+// value silently fails auth, which users mistake for a bad license key. (#184)
+func ValidMaxMindAccountID(s string) bool {
+	n, err := strconv.Atoi(strings.TrimSpace(s))
+	return err == nil && n > 0
+}
+
+// ExtractGeoIPUpdateError pulls the meaningful failure reason out of geoipupdate's
+// verbose output. `geoipupdate -v` prints a "geoipupdate version X.Y.Z (...)" banner on
+// the first line, so the raw output is useless in the UI's truncated detail column —
+// surface the actual error line(s) instead. (#184)
+func ExtractGeoIPUpdateError(output string, exitErr error) string {
+	var errLines []string
+	var lastNonEmpty string
+	for _, raw := range strings.Split(output, "\n") {
+		ln := strings.TrimSpace(raw)
+		if ln == "" || strings.HasPrefix(ln, "geoipupdate version") {
+			continue
+		}
+		lastNonEmpty = ln
+		low := strings.ToLower(ln)
+		for _, kw := range []string{"error", "unauthorized", "invalid", "forbidden", "denied", "unexpected", "failed"} {
+			if strings.Contains(low, kw) {
+				errLines = append(errLines, ln)
+				break
+			}
+		}
+	}
+	msg := strings.Join(errLines, "; ")
+	if msg == "" {
+		msg = lastNonEmpty
+	}
+	if msg == "" && exitErr != nil {
+		msg = exitErr.Error()
+	}
+	if msg == "" {
+		msg = "geoipupdate produced no output"
+	}
+	if len(msg) > 500 {
+		msg = msg[:500] + "…"
+	}
+	return msg
+}
 
 // GeoIPScheduler handles automatic GeoIP database updates
 type GeoIPScheduler struct {
@@ -193,6 +240,13 @@ func (s *GeoIPScheduler) runGeoIPUpdate(ctx context.Context, licenseKey, account
 	geoipPath := "/etc/nginx/geoip"
 	confPath := filepath.Join(geoipPath, "GeoIP.conf")
 
+	// geoipupdate 7.x needs BOTH a numeric AccountID and a LicenseKey; a missing/0/
+	// non-numeric account ID is the most common cause of "update failed" and is not
+	// fixed by re-issuing the license key. Fail with a clear, actionable message. (#184)
+	if !ValidMaxMindAccountID(accountID) {
+		return fmt.Errorf("MaxMind Account ID is missing or invalid (must be the numeric account ID, not just a license key); set it in System Settings → GeoIP")
+	}
+
 	// Create directory if not exists
 	if err := os.MkdirAll(geoipPath, 0755); err != nil {
 		return fmt.Errorf("failed to create geoip directory: %w", err)
@@ -216,7 +270,7 @@ DatabaseDirectory %s
 	cmd := exec.CommandContext(ctx, "geoipupdate", "-f", confPath, "-v")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("geoipupdate failed: %s - %w", string(output), err)
+		return fmt.Errorf("geoipupdate failed: %s", ExtractGeoIPUpdateError(string(output), err))
 	}
 
 	log.Printf("[GeoIP Scheduler] geoipupdate output: %s", string(output))

@@ -473,6 +473,13 @@ func (h *SystemSettingsHandler) UpdateGeoIPDatabases(c echo.Context) error {
 			"error": "MaxMind license key not configured. Please set it in System Settings.",
 		})
 	}
+	// geoipupdate 7.x requires a numeric Account ID too — reject early with a clear
+	// message so a missing/invalid Account ID isn't mistaken for a bad license key. (#184)
+	if !service.ValidMaxMindAccountID(accountID) {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "MaxMind Account ID is missing or invalid. geoipupdate needs both a numeric Account ID and a License Key — set the Account ID in System Settings → GeoIP.",
+		})
+	}
 
 	// Run GeoIP update in background using scheduler
 	// Cloud provider seeding is now handled by the scheduler's RunUpdate
@@ -566,7 +573,7 @@ DatabaseDirectory %s
 	cmd := exec.CommandContext(ctx, "geoipupdate", "-f", confPath, "-v")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("geoipupdate failed: %s - %w", string(output), err)
+		return fmt.Errorf("geoipupdate failed: %s", service.ExtractGeoIPUpdateError(string(output), err))
 	}
 
 	// Update the symlink to use the enabled config
