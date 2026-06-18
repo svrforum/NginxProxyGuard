@@ -420,7 +420,7 @@ function AccessListCard({ list, isOpen, onToggle, onEdit, onDelete, deleting, t 
             {ruleCount === 0 ? (
               <p className="text-sm text-slate-400 dark:text-slate-500">{t('list.rulesCount', { count: 0 })}</p>
             ) : (
-              <div className="space-y-1.5">
+              <div className="max-h-64 space-y-1.5 overflow-y-auto pr-1">
                 {list.items.map((item, index) => (
                   <div key={item.id || index} className="flex items-center gap-2 text-sm">
                     <DirectiveBadge directive={item.directive} />

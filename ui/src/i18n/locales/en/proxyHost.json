@@ -20,6 +20,8 @@
     "empty": "No proxy hosts",
     "emptyDescription": "Add your first proxy host",
     "search": "Search hosts...",
+    "domainsMore": "+{{count}} more",
+    "domainsCollapse": "Collapse",
     "filter": {
       "all": "All",
       "enabled": "Enabled",

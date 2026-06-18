@@ -20,6 +20,8 @@
     "empty": "프록시 호스트가 없습니다",
     "emptyDescription": "첫 번째 프록시 호스트를 추가하세요",
     "search": "호스트 검색...",
+    "domainsMore": "+{{count}}개 더보기",
+    "domainsCollapse": "접기",
     "filter": {
       "all": "전체",
       "enabled": "활성화",

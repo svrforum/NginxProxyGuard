@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ProxyHost } from '../../types/proxy-host';
 import type { TabType } from '../proxy-host/types';
@@ -27,6 +27,11 @@ interface ProxyHostRowProps {
 function getDomainUrl(domain: string, sslEnabled: boolean) {
   return `${sslEnabled ? 'https' : 'http'}://${domain}`;
 }
+
+// Cap the per-row domain list so a multi-domain host (wildcard/SAN cert can
+// front a dozen+ subdomains) doesn't tower the row and break the table's
+// vertical rhythm. Mirrors the +N more / collapse toggle used on cert cards.
+const MAX_VISIBLE_DOMAINS = 3;
 
 function isStreamHost(host: ProxyHost) {
   return host.proxy_type === 'stream';
@@ -71,6 +76,21 @@ function ProxyHostRowImpl({
 }: ProxyHostRowProps) {
   const { t } = useTranslation('proxyHost');
   const isStream = isStreamHost(host);
+  const [domainsExpanded, setDomainsExpanded] = useState(false);
+
+  const visibleDomains = domainsExpanded
+    ? host.domain_names
+    : host.domain_names.slice(0, MAX_VISIBLE_DOMAINS);
+  const hiddenDomainCount = host.domain_names.length - visibleDomains.length;
+  const domainToggle = (host.domain_names.length > MAX_VISIBLE_DOMAINS) && (
+    <button
+      type="button"
+      onClick={() => setDomainsExpanded((v) => !v)}
+      className="self-start text-[11px] font-medium text-primary-600 dark:text-primary-400 hover:underline"
+    >
+      {domainsExpanded ? t('list.domainsCollapse') : t('list.domainsMore', { count: hiddenDomainCount })}
+    </button>
+  );
 
   return (
     <tr className={`hover:bg-slate-50 dark:hover:bg-slate-700/50 ${!host.enabled ? 'opacity-50' : ''}`}>
@@ -96,16 +116,17 @@ function ProxyHostRowImpl({
                 {streamSource(host)}
               </code>
               <div className="flex flex-wrap gap-1">
-                {host.domain_names.map((domain, idx) => (
+                {visibleDomains.map((domain, idx) => (
                   <span key={idx} className="inline-flex rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-600 dark:bg-slate-700 dark:text-slate-300">
                     {domain}
                   </span>
                 ))}
               </div>
+              {domainToggle}
             </div>
           ) : (
             <div className="flex flex-col gap-1">
-              {host.domain_names.map((domain, idx) => (
+              {visibleDomains.map((domain, idx) => (
                 <a
                   key={idx}
                   href={getDomainUrl(domain, host.ssl_enabled)}
@@ -124,6 +145,7 @@ function ProxyHostRowImpl({
                   </svg>
                 </a>
               ))}
+              {domainToggle}
             </div>
           )}
         </div>
