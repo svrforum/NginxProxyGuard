@@ -56,7 +56,7 @@ func (r *AccessListRepository) Create(ctx context.Context, req *model.CreateAcce
 func (r *AccessListRepository) GetByID(ctx context.Context, id string) (*model.AccessList, error) {
 	var list model.AccessList
 	err := r.db.QueryRowContext(ctx, `
-		SELECT id, name, description, satisfy_any, pass_auth, created_at, updated_at
+		SELECT id, name, COALESCE(description, '') AS description, satisfy_any, pass_auth, created_at, updated_at
 		FROM access_lists WHERE id = $1
 	`, id).Scan(&list.ID, &list.Name, &list.Description, &list.SatisfyAny, &list.PassAuth, &list.CreatedAt, &list.UpdatedAt)
 	if err == sql.ErrNoRows {
@@ -68,7 +68,7 @@ func (r *AccessListRepository) GetByID(ctx context.Context, id string) (*model.A
 
 	// Get items
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, access_list_id, directive, address, description, sort_order, created_at
+		SELECT id, access_list_id, directive, address, COALESCE(description, '') AS description, sort_order, created_at
 		FROM access_list_items WHERE access_list_id = $1
 		ORDER BY sort_order, created_at
 	`, id)
@@ -100,7 +100,7 @@ func (r *AccessListRepository) List(ctx context.Context, page, perPage int) ([]m
 
 	offset := (page - 1) * perPage
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, name, description, satisfy_any, pass_auth, created_at, updated_at
+		SELECT id, name, COALESCE(description, '') AS description, satisfy_any, pass_auth, created_at, updated_at
 		FROM access_lists
 		ORDER BY created_at DESC
 		LIMIT $1 OFFSET $2
@@ -125,7 +125,7 @@ func (r *AccessListRepository) List(ctx context.Context, page, perPage int) ([]m
 	// Get items for each list
 	for i := range lists {
 		itemRows, err := r.db.QueryContext(ctx, `
-			SELECT id, access_list_id, directive, address, description, sort_order, created_at
+			SELECT id, access_list_id, directive, address, COALESCE(description, '') AS description, sort_order, created_at
 			FROM access_list_items WHERE access_list_id = $1
 			ORDER BY sort_order, created_at
 		`, lists[i].ID)
