@@ -69,18 +69,45 @@ export function DomainCell({ domains }: { domains: string[] }) {
   );
 }
 
+const LINKED_HOSTS_VISIBLE = 3;
+
 export function LinkedHostsCell({ hosts }: { hosts?: LinkedHost[] }) {
+  const { t } = useTranslation('certificates');
+  const [expanded, setExpanded] = useState(false);
+
   if (!hosts?.length) {
     return <span className="text-xs text-slate-400">-</span>;
   }
+
+  const visible = expanded ? hosts : hosts.slice(0, LINKED_HOSTS_VISIBLE);
+  const hiddenCount = hosts.length - visible.length;
+
   return (
-    <div className="space-y-0.5">
-      {hosts.map((h, i) => (
-        <div key={i} className="flex items-center gap-1.5">
-          <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${h.enabled ? 'bg-green-500' : 'bg-slate-400'}`} />
+    <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-0.5">
+      {visible.map((h, i) => (
+        <span key={i} className="inline-flex items-center gap-1">
+          <span className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${h.enabled ? 'bg-green-500' : 'bg-slate-400'}`} />
           <span className="text-xs text-slate-600 dark:text-slate-400 truncate max-w-[140px]" title={h.domain}>{h.domain}</span>
-        </div>
+        </span>
       ))}
-    </div>
+      {hiddenCount > 0 && (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+        >
+          {t('list.more', { count: hiddenCount })}
+        </button>
+      )}
+      {expanded && hosts.length > LINKED_HOSTS_VISIBLE && (
+        <button
+          type="button"
+          onClick={() => setExpanded(false)}
+          className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+        >
+          {t('list.collapse')}
+        </button>
+      )}
+    </span>
   );
 }
