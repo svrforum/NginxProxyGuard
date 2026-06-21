@@ -35,8 +35,9 @@
 </p>
 
 <p align="center">
-  <em>이 프로젝트가 마음에 드신다면, 커피 한 잔이 큰 힘이 됩니다 ↓</em><br/>
-  <a href="https://buymeacoffee.com/svrforum" target="_blank"><img src="https://img.shields.io/badge/%E2%98%95%20%ED%9B%84%EC%9B%90%ED%95%98%EA%B8%B0-Buy%20Me%20a%20Coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Nginx Proxy Guard 후원하기"></a>
+  <em>이 프로젝트가 마음에 드신다면, 후원이 큰 힘이 됩니다 ↓</em><br/>
+  <a href="https://github.com/sponsors/svrforum" target="_blank"><img src="https://img.shields.io/badge/%ED%9B%84%EC%9B%90-GitHub%20Sponsors-EA4AAA?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="GitHub Sponsors로 Nginx Proxy Guard 후원하기"></a>
+  <a href="https://buymeacoffee.com/svrforum" target="_blank"><img src="https://img.shields.io/badge/%E2%98%95%20Buy%20Me%20a%20Coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy Me a Coffee"></a>
 </p>
 
 ---
@@ -282,8 +283,9 @@ https://localhost:81/api/v1/swagger
 
 ## ☕ 후원
 
-Nginx Proxy Guard가 유용하셨다면, 프로젝트를 후원해주세요!
+Nginx Proxy Guard가 유용하셨다면, 프로젝트를 후원해주세요! [GitHub Sponsors](https://github.com/sponsors/svrforum)는 플랫폼 수수료가 없어 개발에 가장 직접적인 도움이 됩니다.
 
+<a href="https://github.com/sponsors/svrforum" target="_blank"><img src="https://img.shields.io/badge/%E2%9D%A4%20GitHub%20Sponsors%EB%A1%9C%20%ED%9B%84%EC%9B%90-EA4AAA?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="GitHub Sponsors로 후원하기" height="50"></a>
 <a href="https://buymeacoffee.com/svrforum" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="50"></a>
 
 ---
@@ -294,8 +296,10 @@ Nginx Proxy Guard가 유용하셨다면, 프로젝트를 후원해주세요!
 
 ## 💬 지원
 
+- [웹사이트](https://nginxproxyguard.com) - 문서 및 가이드
 - [GitHub Issues](https://github.com/svrforum/nginxproxyguard/issues) - 버그 리포트 및 기능 요청
 - [Discussions](https://github.com/svrforum/nginxproxyguard/discussions) - 질문 및 커뮤니티
+- [GitHub Sponsors](https://github.com/sponsors/svrforum) - 프로젝트 후원 (수수료 없음)
 - [Buy Me a Coffee](https://buymeacoffee.com/svrforum) - 프로젝트 후원
 
 ---

@@ -35,8 +35,9 @@
 </p>
 
 <p align="center">
-  <em>Love this project? A coffee keeps it going ↓</em><br/>
-  <a href="https://buymeacoffee.com/svrforum" target="_blank"><img src="https://img.shields.io/badge/%E2%98%95%20Sponsor%20this%20project-Buy%20Me%20a%20Coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Sponsor Nginx Proxy Guard"></a>
+  <em>Love this project? Your sponsorship keeps it going ↓</em><br/>
+  <a href="https://github.com/sponsors/svrforum" target="_blank"><img src="https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-EA4AAA?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Sponsor Nginx Proxy Guard on GitHub Sponsors"></a>
+  <a href="https://buymeacoffee.com/svrforum" target="_blank"><img src="https://img.shields.io/badge/%E2%98%95%20Buy%20Me%20a%20Coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy Me a Coffee"></a>
 </p>
 
 ---
@@ -282,8 +283,9 @@ https://localhost:81/api/v1/swagger
 
 ## ☕ Sponsor
 
-If you find Nginx Proxy Guard useful, consider supporting the project!
+If you find Nginx Proxy Guard useful, consider supporting the project! [GitHub Sponsors](https://github.com/sponsors/svrforum) is the best way to help — it goes directly to development with zero platform fees.
 
+<a href="https://github.com/sponsors/svrforum" target="_blank"><img src="https://img.shields.io/badge/%E2%9D%A4%20Sponsor%20on%20GitHub-EA4AAA?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Sponsor on GitHub Sponsors" height="50"></a>
 <a href="https://buymeacoffee.com/svrforum" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="50"></a>
 
 ---
@@ -294,8 +296,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 💬 Support
 
+- [Website](https://nginxproxyguard.com) - Documentation and guides
 - [GitHub Issues](https://github.com/svrforum/nginxproxyguard/issues) - Bug reports and feature requests
 - [Discussions](https://github.com/svrforum/nginxproxyguard/discussions) - Questions and community
+- [GitHub Sponsors](https://github.com/sponsors/svrforum) - Support the project (zero fees)
 - [Buy Me a Coffee](https://buymeacoffee.com/svrforum) - Support the project
 
 ---
