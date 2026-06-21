@@ -4,7 +4,12 @@
 {{- define "_auth_verify_location" -}}
     # --- ForwardAuth ({{.AuthProvider.Type}}) verify endpoint ---
 {{- if or (eq .AuthProvider.Type "authentik") .AuthProvider.Config.LargeBuffers}}
-    proxy_buffers 8 16k;
+    # Authentik (and large-buffer custom providers) send big auth response headers
+    # (JWTs, groups, entitlements). Bump only proxy_buffer_size — the first buffer
+    # that holds the response head. Do NOT shrink proxy_buffers here: overriding it
+    # below the inherited global proxy_busy_buffers_size (128k) makes nginx reject
+    # the config ("proxy_busy_buffers_size must be less than ... minus one buffer").
+    # The global proxy_buffers (8 32k = 256k) already covers the body. (#189)
     proxy_buffer_size 32k;
 {{- end}}
 {{- if eq .AuthProvider.Type "authelia"}}
