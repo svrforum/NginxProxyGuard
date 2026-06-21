@@ -16,7 +16,7 @@
 [![GitHub stars](https://img.shields.io/github/stars/svrforum/NginxProxyGuard?style=for-the-badge&logo=github&color=gold)](https://github.com/svrforum/NginxProxyGuard/stargazers)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://hub.docker.com/u/svrforum)
 
-[![Nginx](https://img.shields.io/badge/Nginx-1.30.1-009639?style=for-the-badge&logo=nginx&logoColor=white)](https://nginx.org/)
+[![Nginx](https://img.shields.io/badge/Nginx-1.30.2-009639?style=for-the-badge&logo=nginx&logoColor=white)](https://nginx.org/)
 [![ModSecurity](https://img.shields.io/badge/ModSecurity-v3.0.15-red?style=for-the-badge)](https://modsecurity.org/)
 [![OWASP CRS](https://img.shields.io/badge/OWASP_CRS-v4.26.0-orange?style=for-the-badge)](https://coreruleset.org/)
 [![HTTP/3](https://img.shields.io/badge/HTTP/3-QUIC-blue?style=for-the-badge)]()
@@ -132,7 +132,7 @@ Built-in DDNS keeps your domains pointed at your home server as your public IP c
 
 | Technology | Purpose |
 |------------|---------|
-| **Nginx 1.30.1** | High-performance HTTP and stream reverse proxy core with HTTP/3 & QUIC support |
+| **Nginx 1.30.2** | High-performance HTTP and stream reverse proxy core with HTTP/3 & QUIC support |
 | **TimescaleDB (PostgreSQL 17)** | Time-series-optimized database with automatic log compression |
 | **Valkey 9** | Redis-compatible high-speed caching and session management (optional) |
 | **Go 1.26 (Echo v4)** | Backend API with efficient resource management and concurrency |

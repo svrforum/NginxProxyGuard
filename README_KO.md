@@ -16,7 +16,7 @@
 [![GitHub stars](https://img.shields.io/github/stars/svrforum/NginxProxyGuard?style=for-the-badge&logo=github&color=gold)](https://github.com/svrforum/NginxProxyGuard/stargazers)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://hub.docker.com/u/svrforum)
 
-[![Nginx](https://img.shields.io/badge/Nginx-1.30.1-009639?style=for-the-badge&logo=nginx&logoColor=white)](https://nginx.org/)
+[![Nginx](https://img.shields.io/badge/Nginx-1.30.2-009639?style=for-the-badge&logo=nginx&logoColor=white)](https://nginx.org/)
 [![ModSecurity](https://img.shields.io/badge/ModSecurity-v3.0.15-red?style=for-the-badge)](https://modsecurity.org/)
 [![OWASP CRS](https://img.shields.io/badge/OWASP_CRS-v4.26.0-orange?style=for-the-badge)](https://coreruleset.org/)
 [![HTTP/3](https://img.shields.io/badge/HTTP/3-QUIC-blue?style=for-the-badge)]()
@@ -132,7 +132,7 @@ UDP를 통한 더 빠르고 안정적인 연결을 위한 최신 프로토콜 �
 
 | 기술 | 용도 |
 |------|------|
-| **Nginx 1.30.1** | HTTP/3 & QUIC을 지원하는 고성능 HTTP 및 stream 리버스 프록시 코어 |
+| **Nginx 1.30.2** | HTTP/3 & QUIC을 지원하는 고성능 HTTP 및 stream 리버스 프록시 코어 |
 | **TimescaleDB (PostgreSQL 17)** | 로그 자동 압축을 위한 시계열 최적화 데이터베이스 |
 | **Valkey 9** | Redis 호환 고속 캐싱 및 세션 관리 (선택) |
 | **Go 1.26 (Echo v4)** | 효율적인 리소스 관리와 동시성 처리 백엔드 API |

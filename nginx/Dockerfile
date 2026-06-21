@@ -1,11 +1,11 @@
 # nginx-proxy-guard proxy with HTTP/3, ModSecurity v3, and OWASP CRS
 # Built from source for full control and latest features
 #
-# Versions (2025):
-# - nginx: 1.30.0 (stable with HTTP/3 QUIC support)
-# - ModSecurity: 3.0.14
+# Versions (2026):
+# - nginx: 1.30.2 (stable with HTTP/3 QUIC support; CVE-2026-9256 rewrite-module fix)
+# - ModSecurity: 3.0.15
 # - ModSecurity-nginx: 1.0.4
-# - OWASP CRS: 4.25.0
+# - OWASP CRS: 4.26.0
 #
 # References:
 # - https://nginx.org/en/docs/quic.html
@@ -13,7 +13,7 @@
 # - https://github.com/owasp-modsecurity/ModSecurity-nginx
 # - https://github.com/coreruleset/coreruleset
 
-ARG NGINX_VERSION=1.30.1
+ARG NGINX_VERSION=1.30.2
 ARG MODSECURITY_VERSION=3.0.15
 ARG MODSECURITY_NGINX_VERSION=1.0.4
 ARG OWASP_CRS_VERSION=4.26.0
