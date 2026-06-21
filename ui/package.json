@@ -42,6 +42,7 @@
     "vite": "^8.0.16"
   },
   "overrides": {
-    "d3-color": "^3.1.0"
+    "d3-color": "^3.1.0",
+    "@babel/core": "^7.29.6"
   }
 }
