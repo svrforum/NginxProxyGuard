@@ -193,6 +193,7 @@ func (r *LogRepository) GetDistinctCountries(ctx context.Context) ([]model.Count
 		FROM logs_partitioned
 		WHERE geo_country_code IS NOT NULL AND geo_country_code != ''
 		  AND created_at >= NOW() - INTERVAL '7 days'
+		  AND ` + canaryURIExclusion + `
 		GROUP BY geo_country_code, geo_country
 		ORDER BY count DESC
 		LIMIT 50

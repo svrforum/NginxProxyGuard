@@ -18,6 +18,18 @@ import (
 	"github.com/google/uuid"
 )
 
+// canaryURIExclusion drops internal PipelineCanary self-test rows
+// (/__npg_canary?n=<nonce>) from any read over logs_partitioned. The rows must
+// stay in the table (CanaryRowExists validates the pipeline against them), so
+// every user-facing read/aggregation must filter them on read. Adding this to a
+// shared const — instead of re-typing the literal per query — is deliberate: the
+// exclusion was previously hand-wired into only some paths, so new aggregations
+// silently counted canary traffic (#191). Use this everywhere logs_partitioned
+// is read for users/stats. NOTE: the `__` are SQL LIKE single-char wildcards, not
+// literals — harmless (they still match the literal "__") and kept identical to
+// the original exclusion so the golden/grep tests stay consistent.
+const canaryURIExclusion = "(request_uri NOT LIKE '/__npg_canary%' OR request_uri IS NULL)"
+
 // logCursor encodes the (created_at, id) of the last row from a previous page
 // so the next page can be served via WHERE (created_at, id) < ($1, $2) instead
 // of OFFSET N. created_at is the hypertable partition key, so ordering/keyset on
@@ -374,7 +386,7 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 
 	// Always exclude canary self-test rows (internal pipeline diagnostics) from
 	// the user-facing logs list, regardless of any user filters.
-	conditions = append(conditions, "(request_uri NOT LIKE '/__npg_canary%' OR request_uri IS NULL)")
+	conditions = append(conditions, canaryURIExclusion)
 
 	if filter != nil {
 		if filter.LogType != nil {

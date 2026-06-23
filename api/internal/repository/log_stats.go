@@ -44,8 +44,9 @@ func (r *LogRepository) GetStatsWithFilter(ctx context.Context, filter *model.Lo
 
 	stats := &model.LogStats{}
 
-	// Build WHERE clause from filter
-	whereClause := "1=1"
+	// Build WHERE clause from filter. The canary exclusion is part of the base so
+	// it applies to every stat aggregation built on this whereClause (#191).
+	whereClause := "1=1 AND " + canaryURIExclusion
 	args := []interface{}{}
 	argIndex := 1
 

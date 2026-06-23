@@ -88,6 +88,7 @@ func (r *DashboardRepository) GetSummary(ctx context.Context) (*model.DashboardS
 		row = r.db.QueryRowContext(ctx, `
 			SELECT COUNT(*) FROM logs_partitioned
 			WHERE created_at >= $1 AND log_type = 'access'
+			  AND `+canaryURIExclusion+`
 		`, last24h)
 		row.Scan(&summary.TotalRequests24h)
 	}
@@ -240,7 +241,8 @@ func (r *DashboardRepository) getTopHosts(ctx context.Context, since time.Time) 
 		  AND host != ''
 		  AND host NOT IN ('nginx', 'localhost', '_', '0.0.0.0')
 		  AND host !~ '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'
-		GROUP BY proxy_host_id, host
+		AND ` + canaryURIExclusion + `
+			GROUP BY proxy_host_id, host
 		ORDER BY total DESC
 		LIMIT 10
 	`, since)
@@ -329,7 +331,8 @@ func (r *DashboardRepository) GetGeoIPStats(ctx context.Context, since time.Time
 		AND created_at >= $1
 		AND geo_country_code IS NOT NULL
 		AND geo_country_code != ''
-		GROUP BY geo_country_code
+		AND ` + canaryURIExclusion + `
+			GROUP BY geo_country_code
 		ORDER BY request_count DESC
 		LIMIT 50
 	`, since)
@@ -434,7 +437,8 @@ func (r *DashboardRepository) getTopUserAgents(ctx context.Context, since time.T
 		  AND http_user_agent IS NOT NULL
 		  AND http_user_agent != ''
 		  AND http_user_agent != '-'
-		GROUP BY http_user_agent
+		AND ` + canaryURIExclusion + `
+			GROUP BY http_user_agent
 		ORDER BY total DESC
 		LIMIT 10
 	`, since)
