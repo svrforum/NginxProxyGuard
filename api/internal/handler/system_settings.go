@@ -36,6 +36,7 @@ type SystemSettingsHandler struct {
 	geoipScheduler       *service.GeoIPScheduler
 	cloudProviderService *service.CloudProviderService
 	proxyHostService     *service.ProxyHostService
+	updateChecker        *service.UpdateChecker
 }
 
 func NewSystemSettingsHandler(
@@ -59,6 +60,7 @@ func NewSystemSettingsHandler(
 		geoipScheduler:       geoipScheduler,
 		cloudProviderService: cloudProviderService,
 		proxyHostService:     proxyHostService,
+		updateChecker:        service.NewUpdateChecker(),
 	}
 
 	// Initialize raw log settings on startup
@@ -453,6 +455,16 @@ func (h *SystemSettingsHandler) GetGeoIPStatus(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, status)
+}
+
+// CheckUpdate reports whether a newer NginxProxyGuard release is available (#190).
+// Display + guidance only — NPG does not update itself. Pass ?force=true to bypass
+// the cache (manual re-check). Always returns 200; fetch failures are conveyed via
+// the check_failed flag so the UI degrades gracefully.
+func (h *SystemSettingsHandler) CheckUpdate(c echo.Context) error {
+	force := c.QueryParam("force") == "true"
+	info := h.updateChecker.Check(c.Request().Context(), force)
+	return c.JSON(http.StatusOK, info)
 }
 
 // UpdateGeoIPDatabases triggers a GeoIP database update

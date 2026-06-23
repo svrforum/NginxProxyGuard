@@ -495,7 +495,14 @@
       "latestVersion": "Latest Version",
       "checkUpdate": "Check for Updates",
       "updateAvailable": "Update Available",
-      "upToDate": "Up to date"
+      "upToDate": "Up to date",
+      "description": "Compares your installed version with the latest release. Updates are applied manually (no auto-update).",
+      "newVersionAvailable": "New version {{version}} available",
+      "releaseNotes": "View release notes",
+      "guidance": "To update, run this on your server:",
+      "checkFailed": "Update check failed — please try again later",
+      "checking": "Checking...",
+      "lastChecked": "Last checked"
     }
   },
   "backup": {

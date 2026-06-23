@@ -148,3 +148,13 @@ const (
 	// DDNSCheckInterval is how often the DDNS scheduler re-checks the public IP. (#154)
 	DDNSCheckInterval = 5 * time.Minute
 )
+
+// Update-check constants (#190). Display + guidance only — NPG never updates itself.
+const (
+	GitHubLatestReleaseURL = "https://api.github.com/repos/svrforum/NginxProxyGuard/releases/latest"
+	UpdateCheckTimeout     = 10 * time.Second
+	UpdateCheckCacheTTL    = 1 * time.Hour
+	// UpdateForceMinInterval throttles forced re-checks so a settings:read caller
+	// can't loop ?force=true and exhaust GitHub's 60/h unauthenticated limit.
+	UpdateForceMinInterval = 60 * time.Second
+)

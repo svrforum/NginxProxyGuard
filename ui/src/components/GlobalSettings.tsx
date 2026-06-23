@@ -16,6 +16,7 @@ import CompressionTab from './global-settings/CompressionTab';
 import SSLTab from './global-settings/SSLTab';
 import TimeoutTab from './global-settings/TimeoutTab';
 import AdvancedTab from './global-settings/AdvancedTab';
+import UpdateCheckCard from './UpdateCheckCard';
 
 export default function GlobalSettings() {
   const { t } = useTranslation('settings');
@@ -126,6 +127,9 @@ export default function GlobalSettings() {
 
   return (
     <div className="space-y-6">
+      {/* Update check (#190) */}
+      <UpdateCheckCard />
+
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>

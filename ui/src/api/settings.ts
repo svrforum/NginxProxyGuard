@@ -243,6 +243,25 @@ export async function runSelfCheck(): Promise<SelfCheckResult> {
   return res.json();
 }
 
+// Update check (#190) — display + guidance only; NPG does not update itself.
+export interface UpdateInfo {
+  current_version: string;
+  latest_version: string;
+  update_available: boolean;
+  release_url: string;
+  published_at: string;
+  checked_at: string;
+  check_failed: boolean;
+}
+
+export async function checkUpdate(force = false): Promise<UpdateInfo> {
+  const res = await fetch(`${API_BASE}/system-settings/update/check${force ? '?force=true' : ''}`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) throw new Error('Failed to check for updates');
+  return res.json();
+}
+
 // System Settings API (GeoIP, ACME, etc.)
 export async function getSystemSettings(): Promise<SystemSettings> {
   const res = await fetch(`${API_BASE}/system-settings`, {

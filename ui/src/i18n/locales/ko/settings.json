@@ -499,7 +499,14 @@
       "latestVersion": "최신 버전",
       "checkUpdate": "업데이트 확인",
       "updateAvailable": "업데이트 가능",
-      "upToDate": "최신 버전입니다"
+      "upToDate": "최신 버전입니다",
+      "description": "설치된 버전과 최신 릴리즈를 비교합니다. 업데이트는 직접 적용해야 합니다 (자동 업데이트 없음).",
+      "newVersionAvailable": "새 버전 {{version}} 사용 가능",
+      "releaseNotes": "릴리즈 노트 보기",
+      "guidance": "업데이트하려면 서버에서 다음을 실행하세요:",
+      "checkFailed": "업데이트 확인 실패 — 잠시 후 다시 시도하세요",
+      "checking": "확인 중...",
+      "lastChecked": "마지막 확인"
     }
   },
   "backup": {

@@ -570,6 +570,7 @@ func registerSystemSettingsRoutes(v1 *echo.Group, h *handler.SystemSettingsHandl
 	g.GET("/geoip/status", h.GetGeoIPStatus, settingsRead)
 	g.POST("/geoip/update", h.UpdateGeoIPDatabases, settingsWrite)
 	g.GET("/geoip/history", h.GetGeoIPHistory, settingsRead)
+	g.GET("/update/check", h.CheckUpdate, settingsRead)
 	g.POST("/acme/test", h.TestACME, settingsWrite)
 
 	g.GET("/log-files", h.ListLogFiles, settingsRead)
