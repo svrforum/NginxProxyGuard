@@ -49,7 +49,7 @@ func (r *GlobalSettingsRepository) getFromDB(ctx context.Context) (*model.Global
 		       ssl_protocols, ssl_ciphers, ssl_prefer_server_ciphers, ssl_session_cache, ssl_session_timeout,
 		       ssl_session_tickets, ssl_stapling, ssl_stapling_verify,
 		       COALESCE(ssl_ecdh_curve, 'X25519MLKEM768:X25519:secp256r1:secp384r1') as ssl_ecdh_curve,
-		       access_log_enabled, error_log_level, resolver, resolver_timeout,
+		       access_log_enabled, COALESCE(access_log_strip_query, false) as access_log_strip_query, error_log_level, resolver, resolver_timeout,
 		       custom_http_config, custom_stream_config,
 		       COALESCE(direct_ip_access_action, 'allow') as direct_ip_access_action,
 		       COALESCE(enable_ipv6, true) as enable_ipv6,
@@ -98,7 +98,7 @@ func (r *GlobalSettingsRepository) getFromDB(ctx context.Context) (*model.Global
 		&s.SSLProtocols, &s.SSLCiphers, &s.SSLPreferServerCiphers, &s.SSLSessionCache, &s.SSLSessionTimeout,
 		&s.SSLSessionTickets, &s.SSLStapling, &s.SSLStaplingVerify,
 		&s.SSLECDHCurve,
-		&s.AccessLogEnabled, &s.ErrorLogLevel, &resolver, &resolverTimeout,
+		&s.AccessLogEnabled, &s.AccessLogStripQuery, &s.ErrorLogLevel, &resolver, &resolverTimeout,
 		&customHTTP, &customStream,
 		&s.DirectIPAccessAction,
 		&s.EnableIPv6,
@@ -160,6 +160,7 @@ func (r *GlobalSettingsRepository) getFromDB(ctx context.Context) (*model.Global
 			SSLStaplingVerify:        true,
 			SSLECDHCurve:             "X25519MLKEM768:X25519:secp256r1:secp384r1",
 			AccessLogEnabled:         true,
+			AccessLogStripQuery:      false,
 			ErrorLogLevel:            "warn",
 			Resolver:                 "8.8.8.8 8.8.4.4 valid=300s",
 			ResolverTimeout:          "5s",
@@ -293,6 +294,7 @@ func (r *GlobalSettingsRepository) Update(ctx context.Context, req *model.Update
 			proxy_request_buffering = CASE WHEN $66 != '' THEN $66 ELSE proxy_request_buffering END,
 			ssl_ecdh_curve = CASE WHEN $67 != '' THEN $67 ELSE ssl_ecdh_curve END,
 			enable_ipv6 = COALESCE($68, enable_ipv6),
+			access_log_strip_query = COALESCE($69, access_log_strip_query),
 			updated_at = NOW()
 	`
 
@@ -336,6 +338,7 @@ func (r *GlobalSettingsRepository) Update(ctx context.Context, req *model.Update
 		req.ProxyBuffering, req.ProxyRequestBuffering,
 		req.SSLECDHCurve,
 		req.EnableIPv6,
+		req.AccessLogStripQuery,
 	)
 	if err != nil {
 		return nil, err

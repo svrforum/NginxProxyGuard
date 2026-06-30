@@ -86,8 +86,9 @@ type GlobalSettings struct {
 	SSLECDHCurve            string `json:"ssl_ecdh_curve" db:"ssl_ecdh_curve"`
 
 	// Logging settings
-	AccessLogEnabled bool   `json:"access_log_enabled" db:"access_log_enabled"`
-	ErrorLogLevel    string `json:"error_log_level" db:"error_log_level"`
+	AccessLogEnabled    bool   `json:"access_log_enabled" db:"access_log_enabled"`
+	AccessLogStripQuery bool   `json:"access_log_strip_query" db:"access_log_strip_query"` // #195: drop query string from access logs (secrets in ?apiKey=…)
+	ErrorLogLevel       string `json:"error_log_level" db:"error_log_level"`
 
 	// Resolver settings
 	Resolver        string `json:"resolver,omitempty" db:"resolver"`
@@ -207,8 +208,9 @@ type UpdateGlobalSettingsRequest struct {
 	SSLECDHCurve           string `json:"ssl_ecdh_curve,omitempty"`
 
 	// Logging settings
-	AccessLogEnabled *bool  `json:"access_log_enabled,omitempty"`
-	ErrorLogLevel    string `json:"error_log_level,omitempty"`
+	AccessLogEnabled    *bool  `json:"access_log_enabled,omitempty"`
+	AccessLogStripQuery *bool  `json:"access_log_strip_query,omitempty"`
+	ErrorLogLevel       string `json:"error_log_level,omitempty"`
 
 	// Resolver settings
 	Resolver        string `json:"resolver,omitempty"`

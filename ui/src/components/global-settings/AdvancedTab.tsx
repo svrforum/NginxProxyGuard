@@ -158,6 +158,13 @@ export default function AdvancedTab({ getStringValue, getNumberValue, getBoolVal
           checked={getBoolValue('access_log_enabled')}
           onChange={(checked) => handleChange('access_log_enabled', checked)}
         />
+        <div className="mt-4">
+          <CheckboxField
+            settingKey="access_log_strip_query"
+            checked={getBoolValue('access_log_strip_query')}
+            onChange={(checked) => handleChange('access_log_strip_query', checked)}
+          />
+        </div>
       </div>
       <SettingField settingKey="custom_http_config">
         <textarea

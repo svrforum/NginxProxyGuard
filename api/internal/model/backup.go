@@ -323,8 +323,9 @@ type GlobalSettingsExport struct {
 	SSLECDHCurve           string `json:"ssl_ecdh_curve"`
 
 	// Logging settings
-	AccessLogEnabled bool   `json:"access_log_enabled"`
-	ErrorLogLevel    string `json:"error_log_level"`
+	AccessLogEnabled    bool   `json:"access_log_enabled"`
+	AccessLogStripQuery bool   `json:"access_log_strip_query"`
+	ErrorLogLevel       string `json:"error_log_level"`
 
 	// Resolver settings
 	Resolver        string `json:"resolver,omitempty"`

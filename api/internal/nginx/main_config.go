@@ -84,8 +84,19 @@ http {
     map $uri $bot_category_var  { default "-"; }
     map $uri $exploit_rule_var  { default "-"; }
 
+    # Access-log request field. With access_log_strip_query (#195) the query
+    # string is dropped so secrets passed as query params (?apiKey=, ?access_token=)
+    # never land in access_raw.log / rotated archives. The PipelineCanary nonce
+    # travels in the query ("/__npg_canary?n=<nonce>"), so the canary path is
+    # exempted here — its full request is kept so CanaryRowExists still works.
+    map $request_uri $npg_log_request {
+{{if .AccessLogStripQuery}}        ~^/__npg_canary  "$request";
+        default          "$request_method $uri $server_protocol";
+{{else}}        default          "$request";
+{{end}}    }
+
     log_format main '$remote_addr - $remote_user [$time_local] "$host" '
-                    '"$request" $status $body_bytes_sent '
+                    '"$npg_log_request" $status $body_bytes_sent '
                     '"$http_referer" "$http_user_agent" "$http_x_forwarded_for" '
                     'rt=$request_time uct="$upstream_connect_time" '
                     'uht="$upstream_header_time" urt="$upstream_response_time" '
@@ -408,7 +419,8 @@ type MainConfigData struct {
 	Resolver        string
 	ResolverTimeout string
 
-	AccessLogEnabled bool
+	AccessLogEnabled    bool
+	AccessLogStripQuery bool // #195: log $request_method $uri $proto (no query) instead of $request
 
 	LimitConnEnabled  bool
 	LimitConnZoneSize string
@@ -513,6 +525,7 @@ func buildMainConfigData(s *model.GlobalSettings, trustedIPs []string, trustedBy
 		Resolver:                 s.Resolver,
 		ResolverTimeout:          s.ResolverTimeout,
 		AccessLogEnabled:         s.AccessLogEnabled,
+		AccessLogStripQuery:      s.AccessLogStripQuery,
 		LimitConnEnabled:         s.LimitConnEnabled,
 		LimitConnZoneSize:        s.LimitConnZoneSize,
 		LimitConnPerIP:           s.LimitConnPerIP,

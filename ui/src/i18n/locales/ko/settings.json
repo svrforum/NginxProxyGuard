@@ -828,6 +828,10 @@
         "label": "접속 로그 활성화",
         "description": "모든 요청을 로그에 기록합니다. 트래픽이 많으면 디스크 사용량이 증가할 수 있습니다."
       },
+      "access_log_strip_query": {
+        "label": "접속 로그에서 쿼리스트링 제외",
+        "description": "경로만 기록하고 쿼리스트링(?apiKey=…, ?access_token=…)은 빼서, 쿼리로 전달되는 API 키·토큰·웹훅 시크릿이 access_raw.log나 압축 아카이브에 남지 않게 합니다. 기본값은 끄기(현행 유지)."
+      },
       "custom_http_config": {
         "label": "커스텀 HTTP 설정",
         "description": "추가 nginx 설정을 직접 입력할 수 있습니다. 고급 사용자용입니다."

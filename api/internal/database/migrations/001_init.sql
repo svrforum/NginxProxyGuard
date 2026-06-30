@@ -643,6 +643,7 @@ CREATE TABLE IF NOT EXISTS public.global_settings (
     ssl_stapling_verify boolean DEFAULT true NOT NULL,
     ssl_ecdh_curve character varying(255) DEFAULT 'X25519MLKEM768:X25519:secp256r1:secp384r1'::character varying NOT NULL,
     access_log_enabled boolean DEFAULT true NOT NULL,
+    access_log_strip_query boolean DEFAULT false NOT NULL,
     error_log_level character varying(20) DEFAULT 'warn'::character varying NOT NULL,
     resolver character varying(255) DEFAULT '1.1.1.1 8.8.8.8 valid=300s'::character varying,
     resolver_timeout character varying(20) DEFAULT '5s'::character varying,
@@ -3841,6 +3842,11 @@ ALTER TABLE public.global_settings ALTER COLUMN keepalive_requests SET DEFAULT 1
 -- execution lives in migration.go upgrades slice.
 UPDATE public.system_settings SET raw_log_enabled = true WHERE raw_log_enabled = false;
 ALTER TABLE public.system_settings ALTER COLUMN raw_log_enabled SET DEFAULT true;
+
+-- v2.30.0 (#195): opt-in to strip query strings from access logs (secrets in
+-- ?apiKey=/?access_token= shouldn't land in access_raw.log / rotated archives).
+-- Default off for back-compat. Canonical execution in migration.go upgrades.
+ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS access_log_strip_query boolean DEFAULT false NOT NULL;
 
 -- Stream proxy: enforce listener uniqueness at the DB level so two concurrent
 -- creates cannot both succeed when they target the same (host, port, protocol).

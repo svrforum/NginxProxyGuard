@@ -955,6 +955,15 @@ ALTER TABLE public.auth_providers ADD COLUMN IF NOT EXISTS last_reconcile_status
 ALTER TABLE public.auth_providers ADD COLUMN IF NOT EXISTS last_reconcile_error text;
 ALTER TABLE public.auth_providers ADD COLUMN IF NOT EXISTS reconcile_fail_count integer DEFAULT 0 NOT NULL;`,
 		},
+		// -----------------------------------------------------------------------
+		// v2.30.0: opt-in to strip query strings from access logs so secrets
+		// passed as query params (apiKey/access_token/webhook secret) don't land
+		// in access_raw.log or rotated archives (#195). Default off (back-compat).
+		// -----------------------------------------------------------------------
+		{
+			desc: "v2.30.0: global_settings.access_log_strip_query",
+			sql:  `ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS access_log_strip_query boolean DEFAULT false NOT NULL`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

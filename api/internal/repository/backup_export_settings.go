@@ -23,7 +23,7 @@ func (r *BackupRepository) exportGlobalSettings(ctx context.Context) (*model.Glo
 		       ssl_protocols, ssl_ciphers, ssl_prefer_server_ciphers, ssl_session_cache,
 		       ssl_session_timeout, ssl_session_tickets, ssl_stapling, ssl_stapling_verify,
 		       COALESCE(ssl_ecdh_curve, 'X25519MLKEM768:X25519:secp256r1:secp384r1') as ssl_ecdh_curve,
-		       access_log_enabled, error_log_level, resolver, resolver_timeout,
+		       access_log_enabled, COALESCE(access_log_strip_query, false) as access_log_strip_query, error_log_level, resolver, resolver_timeout,
 		       custom_http_config, custom_stream_config,
 		       COALESCE(enable_ipv6, true) as enable_ipv6
 		FROM global_settings LIMIT 1
@@ -46,7 +46,7 @@ func (r *BackupRepository) exportGlobalSettings(ctx context.Context) (*model.Glo
 		&gs.SSLProtocols, &gs.SSLCiphers, &gs.SSLPreferServerCiphers, &gs.SSLSessionCache,
 		&gs.SSLSessionTimeout, &gs.SSLSessionTickets, &gs.SSLStapling, &gs.SSLStaplingVerify,
 		&gs.SSLECDHCurve,
-		&gs.AccessLogEnabled, &gs.ErrorLogLevel, &resolver, &resolverTimeout,
+		&gs.AccessLogEnabled, &gs.AccessLogStripQuery, &gs.ErrorLogLevel, &resolver, &resolverTimeout,
 		&customHttp, &customStream,
 		&enableIPv6,
 	)

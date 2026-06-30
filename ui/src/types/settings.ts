@@ -83,6 +83,7 @@ export interface GlobalSettings {
 
   // Logging settings
   access_log_enabled: boolean;
+  access_log_strip_query: boolean;
   error_log_level: string;
 
   // Resolver settings

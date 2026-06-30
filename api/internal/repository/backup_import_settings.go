@@ -37,7 +37,7 @@ func (r *BackupRepository) importGlobalSettings(ctx context.Context, tx *sql.Tx,
 			ssl_ecdh_curve = $39,
 			access_log_enabled = $40, error_log_level = $41, resolver = $42, resolver_timeout = $43,
 			custom_http_config = $44, custom_stream_config = $45,
-			enable_ipv6 = $46, updated_at = NOW()
+			enable_ipv6 = $46, access_log_strip_query = $47, updated_at = NOW()
 	`
 
 	_, err := tx.ExecContext(ctx, query,
@@ -55,6 +55,7 @@ func (r *BackupRepository) importGlobalSettings(ctx context.Context, tx *sql.Tx,
 		gs.AccessLogEnabled, gs.ErrorLogLevel, gs.Resolver, gs.ResolverTimeout,
 		gs.CustomHTTPConfig, gs.CustomStreamConfig,
 		enableIPv6,
+		gs.AccessLogStripQuery,
 	)
 	return err
 }

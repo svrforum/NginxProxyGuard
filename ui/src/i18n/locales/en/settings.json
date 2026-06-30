@@ -824,6 +824,10 @@
         "label": "Enable Access Log",
         "description": "Log all requests. High traffic may increase disk usage."
       },
+      "access_log_strip_query": {
+        "label": "Strip query string from access log",
+        "description": "Log only the path, dropping the query string (?apiKey=…, ?access_token=…), so secrets passed as query params don't land in access_raw.log or rotated archives. Default off (current behavior)."
+      },
       "custom_http_config": {
         "label": "Custom HTTP Config",
         "description": "Directly input additional Nginx configuration. For advanced users."
