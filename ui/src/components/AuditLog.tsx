@@ -284,7 +284,7 @@ export default function AuditLog() {
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="text-sm text-slate-900 dark:text-white font-medium">{log.action_label}</div>
+                    <div className="text-sm text-slate-900 dark:text-white font-medium">{t(`audit.actions.${log.action}`, { defaultValue: log.action_label })}</div>
                     <ActionBadge action={log.action} />
                   </td>
                   <td className="px-4 py-3">
