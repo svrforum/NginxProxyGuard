@@ -490,6 +490,9 @@ func registerSecurityRoutes(v1 *echo.Group, h *handler.SecurityHandler) {
 	// Global bot filter default (#198) — settings-scoped singleton.
 	settingsRead := authMiddleware.RequireAPIPermission(model.PermissionSettingsRead)
 	settingsWrite := authMiddleware.RequireAPIPermission(model.PermissionSettingsWrite)
+	// Global rate-limit default (#198 slice 5) — settings-scoped singleton.
+	v1.GET("/settings/global-rate-limit", h.GetGlobalRateLimit, settingsRead)
+	v1.PUT("/settings/global-rate-limit", h.UpdateGlobalRateLimit, settingsWrite)
 	v1.GET("/settings/global-bot-filter", h.GetGlobalBotFilter, settingsRead)
 	v1.PUT("/settings/global-bot-filter", h.UpdateGlobalBotFilter, settingsWrite)
 

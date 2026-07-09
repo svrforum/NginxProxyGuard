@@ -13,12 +13,43 @@ type RateLimit struct {
 	LimitBy           string    `json:"limit_by"` // ip, uri, ip_uri
 	LimitResponse     int       `json:"limit_response"`
 	WhitelistIPs      string    `json:"whitelist_ips,omitempty"`
+	// DisableGlobal opts this host out of the global rate-limit default when it
+	// is not running its own (enabled=false). Tri-state with Enabled (#198 slice 5).
+	DisableGlobal     bool      `json:"disable_global"`
 	CreatedAt         time.Time `json:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at"`
 }
 
 // CreateRateLimitRequest is the request to create/update rate limit config
 type CreateRateLimitRequest struct {
+	Enabled           *bool  `json:"enabled,omitempty"`
+	RequestsPerSecond int    `json:"requests_per_second,omitempty"`
+	BurstSize         int    `json:"burst_size,omitempty"`
+	ZoneSize          string `json:"zone_size,omitempty"`
+	LimitBy           string `json:"limit_by,omitempty"`
+	LimitResponse     int    `json:"limit_response,omitempty"`
+	WhitelistIPs      string `json:"whitelist_ips,omitempty"`
+	DisableGlobal     *bool  `json:"disable_global,omitempty"`
+}
+
+// GlobalRateLimit is the singleton global rate-limit default hosts inherit
+// unless they override or opt out (#198 slice 5). The nginx limit_req zone
+// stays per-host; only these values are inherited.
+type GlobalRateLimit struct {
+	ID                string    `json:"id"`
+	Enabled           bool      `json:"enabled"`
+	RequestsPerSecond int       `json:"requests_per_second"`
+	BurstSize         int       `json:"burst_size"`
+	ZoneSize          string    `json:"zone_size"`
+	LimitBy           string    `json:"limit_by"`
+	LimitResponse     int       `json:"limit_response"`
+	WhitelistIPs      string    `json:"whitelist_ips,omitempty"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+}
+
+// UpdateGlobalRateLimitRequest is the partial-update request for the singleton.
+type UpdateGlobalRateLimitRequest struct {
 	Enabled           *bool  `json:"enabled,omitempty"`
 	RequestsPerSecond int    `json:"requests_per_second,omitempty"`
 	BurstSize         int    `json:"burst_size,omitempty"`

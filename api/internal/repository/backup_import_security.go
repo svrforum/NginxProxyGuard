@@ -209,6 +209,20 @@ func (r *BackupRepository) importGlobalCloudProviders(ctx context.Context, tx *s
 	return err
 }
 
+// importGlobalRateLimit restores the singleton global rate-limit default
+// (#198 slice 5). Delete-then-insert so the singleton stays unique.
+func (r *BackupRepository) importGlobalRateLimit(ctx context.Context, tx *sql.Tx, g *model.GlobalRateLimitExport) error {
+	_, _ = tx.ExecContext(ctx, "DELETE FROM global_rate_limits")
+
+	whitelist := sql.NullString{String: g.WhitelistIPs, Valid: g.WhitelistIPs != ""}
+	query := `
+		INSERT INTO global_rate_limits (enabled, requests_per_second, burst_size, zone_size, limit_by, limit_response, whitelist_ips)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`
+	_, err := tx.ExecContext(ctx, query, g.Enabled, g.RequestsPerSecond, g.BurstSize, g.ZoneSize, g.LimitBy, g.LimitResponse, whitelist)
+	return err
+}
+
 func (r *BackupRepository) importCloudProvider(ctx context.Context, tx *sql.Tx, cp *model.CloudProviderExport) error {
 	query := `
 		INSERT INTO cloud_providers (name, slug, description, region, ip_ranges_url, enabled)

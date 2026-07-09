@@ -1042,6 +1042,23 @@ ALTER TABLE public.security_headers ADD COLUMN IF NOT EXISTS disable_global bool
 CREATE UNIQUE INDEX IF NOT EXISTS idx_global_cloud_providers_singleton ON public.global_cloud_providers USING btree ((true));
 ALTER TABLE public.geo_restrictions ADD COLUMN IF NOT EXISTS cloud_disable_global boolean DEFAULT false NOT NULL;`,
 		},
+		{
+			desc: "v2.31.0: global_rate_limits singleton + rate_limits.disable_global (#198 slice 5)",
+			sql: `CREATE TABLE IF NOT EXISTS public.global_rate_limits (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    enabled boolean DEFAULT false,
+    requests_per_second integer DEFAULT 50,
+    burst_size integer DEFAULT 100,
+    zone_size character varying(10) DEFAULT '10m'::character varying,
+    limit_by character varying(20) DEFAULT 'ip'::character varying,
+    limit_response integer DEFAULT 429,
+    whitelist_ips text,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_global_rate_limits_singleton ON public.global_rate_limits USING btree ((true));
+ALTER TABLE public.rate_limits ADD COLUMN IF NOT EXISTS disable_global boolean DEFAULT false NOT NULL;`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

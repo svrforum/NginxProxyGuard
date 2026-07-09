@@ -222,11 +222,12 @@ type ExportData struct {
 	URIBlocks []URIBlockExport `json:"uri_blocks,omitempty"`
 
 	// Security: Global URI Blocks
-	GlobalURIBlock *GlobalURIBlockExport `json:"global_uri_block,omitempty"`
-	GlobalGeoRestriction *GlobalGeoRestrictionExport `json:"global_geo_restriction,omitempty"`
-	GlobalBotFilter      *GlobalBotFilterExport      `json:"global_bot_filter,omitempty"`
+	GlobalURIBlock        *GlobalURIBlockExport        `json:"global_uri_block,omitempty"`
+	GlobalGeoRestriction  *GlobalGeoRestrictionExport  `json:"global_geo_restriction,omitempty"`
+	GlobalBotFilter       *GlobalBotFilterExport       `json:"global_bot_filter,omitempty"`
 	GlobalSecurityHeaders *GlobalSecurityHeadersExport `json:"global_security_headers,omitempty"`
 	GlobalCloudProviders  *GlobalCloudProvidersExport  `json:"global_cloud_providers,omitempty"`
+	GlobalRateLimit       *GlobalRateLimitExport       `json:"global_rate_limit,omitempty"`
 
 	// Cloud Providers
 	CloudProviders []CloudProviderExport `json:"cloud_providers,omitempty"`
@@ -421,6 +422,7 @@ type RateLimitExport struct {
 	LimitBy           string `json:"limit_by"`
 	LimitResponse     int    `json:"limit_response"`
 	WhitelistIPs      string `json:"whitelist_ips,omitempty"`
+	DisableGlobal     bool   `json:"disable_global"`
 }
 
 // Fail2banExport represents fail2ban config for export
@@ -512,6 +514,17 @@ type GlobalCloudProvidersExport struct {
 	BlockedProviders []string `json:"blocked_providers"`
 	ChallengeMode    bool     `json:"challenge_mode"`
 	AllowSearchBots  bool     `json:"allow_search_bots"`
+}
+
+// GlobalRateLimitExport represents the singleton global rate-limit default (#198 slice 5).
+type GlobalRateLimitExport struct {
+	Enabled           bool   `json:"enabled"`
+	RequestsPerSecond int    `json:"requests_per_second"`
+	BurstSize         int    `json:"burst_size"`
+	ZoneSize          string `json:"zone_size"`
+	LimitBy           string `json:"limit_by"`
+	LimitResponse     int    `json:"limit_response"`
+	WhitelistIPs      string `json:"whitelist_ips,omitempty"`
 }
 
 // GlobalGeoRestrictionExport represents the singleton global geo default (#198).

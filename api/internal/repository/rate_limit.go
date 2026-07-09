@@ -61,7 +61,7 @@ func (r *RateLimitRepository) invalidateBans(ctx context.Context, proxyHostID *s
 func (r *RateLimitRepository) GetByProxyHostID(ctx context.Context, proxyHostID string) (*model.RateLimit, error) {
 	query := `
 		SELECT id, proxy_host_id, enabled, requests_per_second, burst_size,
-		       zone_size, limit_by, limit_response, whitelist_ips, created_at, updated_at
+		       zone_size, limit_by, limit_response, whitelist_ips, COALESCE(disable_global, false), created_at, updated_at
 		FROM rate_limits
 		WHERE proxy_host_id = $1
 	`
@@ -71,7 +71,7 @@ func (r *RateLimitRepository) GetByProxyHostID(ctx context.Context, proxyHostID 
 
 	err := r.db.QueryRowContext(ctx, query, proxyHostID).Scan(
 		&rl.ID, &rl.ProxyHostID, &rl.Enabled, &rl.RequestsPerSecond, &rl.BurstSize,
-		&rl.ZoneSize, &rl.LimitBy, &rl.LimitResponse, &whitelistIPs, &rl.CreatedAt, &rl.UpdatedAt,
+		&rl.ZoneSize, &rl.LimitBy, &rl.LimitResponse, &whitelistIPs, &rl.DisableGlobal, &rl.CreatedAt, &rl.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -87,9 +87,9 @@ func (r *RateLimitRepository) GetByProxyHostID(ctx context.Context, proxyHostID 
 func (r *RateLimitRepository) Upsert(ctx context.Context, proxyHostID string, req *model.CreateRateLimitRequest) (*model.RateLimit, error) {
 	query := `
 		INSERT INTO rate_limits (proxy_host_id, enabled, requests_per_second, burst_size,
-		                         zone_size, limit_by, limit_response, whitelist_ips)
+		                         zone_size, limit_by, limit_response, whitelist_ips, disable_global)
 		VALUES ($1, COALESCE($2, TRUE), COALESCE(NULLIF($3, 0), 50), COALESCE(NULLIF($4, 0), 100),
-		        COALESCE(NULLIF($5, ''), '10m'), COALESCE(NULLIF($6, ''), 'ip'), COALESCE(NULLIF($7, 0), 429), $8)
+		        COALESCE(NULLIF($5, ''), '10m'), COALESCE(NULLIF($6, ''), 'ip'), COALESCE(NULLIF($7, 0), 429), $8, COALESCE($9, FALSE))
 		ON CONFLICT (proxy_host_id) DO UPDATE SET
 			enabled = COALESCE($2, rate_limits.enabled),
 			requests_per_second = CASE WHEN $3 > 0 THEN $3 ELSE rate_limits.requests_per_second END,
@@ -98,9 +98,10 @@ func (r *RateLimitRepository) Upsert(ctx context.Context, proxyHostID string, re
 			limit_by = CASE WHEN $6 != '' THEN $6 ELSE rate_limits.limit_by END,
 			limit_response = CASE WHEN $7 > 0 THEN $7 ELSE rate_limits.limit_response END,
 			whitelist_ips = COALESCE($8, rate_limits.whitelist_ips),
+			disable_global = COALESCE($9, rate_limits.disable_global),
 			updated_at = NOW()
 		RETURNING id, proxy_host_id, enabled, requests_per_second, burst_size,
-		          zone_size, limit_by, limit_response, whitelist_ips, created_at, updated_at
+		          zone_size, limit_by, limit_response, whitelist_ips, disable_global, created_at, updated_at
 	`
 
 	var rl model.RateLimit
@@ -109,9 +110,10 @@ func (r *RateLimitRepository) Upsert(ctx context.Context, proxyHostID string, re
 	err := r.db.QueryRowContext(ctx, query,
 		proxyHostID, req.Enabled, req.RequestsPerSecond, req.BurstSize,
 		req.ZoneSize, req.LimitBy, req.LimitResponse, sql.NullString{String: req.WhitelistIPs, Valid: req.WhitelistIPs != ""},
+		req.DisableGlobal,
 	).Scan(
 		&rl.ID, &rl.ProxyHostID, &rl.Enabled, &rl.RequestsPerSecond, &rl.BurstSize,
-		&rl.ZoneSize, &rl.LimitBy, &rl.LimitResponse, &whitelistIPs, &rl.CreatedAt, &rl.UpdatedAt,
+		&rl.ZoneSize, &rl.LimitBy, &rl.LimitResponse, &whitelistIPs, &rl.DisableGlobal, &rl.CreatedAt, &rl.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err

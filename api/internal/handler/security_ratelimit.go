@@ -274,3 +274,31 @@ func (h *SecurityHandler) GetIPBanHistoryStats(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, stats)
 }
+
+// GetGlobalRateLimit returns the singleton global rate-limit default (#198 slice 5).
+func (h *SecurityHandler) GetGlobalRateLimit(c echo.Context) error {
+	g, err := h.securityService.GetGlobalRateLimit(c.Request().Context())
+	if err != nil {
+		return databaseError(c, "get global rate limit", err)
+	}
+	return c.JSON(http.StatusOK, g)
+}
+
+// UpdateGlobalRateLimit updates the global rate-limit default and regenerates
+// inheriting hosts (#198 slice 5).
+func (h *SecurityHandler) UpdateGlobalRateLimit(c echo.Context) error {
+	var req model.UpdateGlobalRateLimitRequest
+	if err := c.Bind(&req); err != nil {
+		return badRequestError(c, "Invalid request body")
+	}
+
+	g, err := h.securityService.UpdateGlobalRateLimit(c.Request().Context(), &req)
+	if err != nil {
+		return internalError(c, "update global rate limit", err)
+	}
+
+	auditCtx := service.ContextWithAudit(c.Request().Context(), c)
+	h.audit.LogGlobalRateLimitUpdate(auditCtx)
+
+	return c.JSON(http.StatusOK, g)
+}

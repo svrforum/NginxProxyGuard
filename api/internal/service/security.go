@@ -31,6 +31,7 @@ type SecurityService struct {
 	// bootstrap call site) stays unchanged.
 	globalBotFilterRepo  *repository.GlobalBotFilterRepository
 	globalSecHeadersRepo *repository.GlobalSecurityHeadersRepository // global security-headers default (#198 slice 3)
+	globalRateLimitRepo  *repository.GlobalRateLimitRepository       // global rate-limit default (#198 slice 5)
 }
 
 // SetGlobalBotFilterRepo wires the global bot-filter default repository (#198).
@@ -41,6 +42,11 @@ func (s *SecurityService) SetGlobalBotFilterRepo(repo *repository.GlobalBotFilte
 // SetGlobalSecHeadersRepo wires the global security-headers default repository (#198).
 func (s *SecurityService) SetGlobalSecHeadersRepo(repo *repository.GlobalSecurityHeadersRepository) {
 	s.globalSecHeadersRepo = repo
+}
+
+// SetGlobalRateLimitRepo wires the global rate-limit default repository (#198).
+func (s *SecurityService) SetGlobalRateLimitRepo(repo *repository.GlobalRateLimitRepository) {
+	s.globalRateLimitRepo = repo
 }
 
 func NewSecurityService(
@@ -766,6 +772,35 @@ func (s *SecurityService) UpdateGlobalSecurityHeaders(ctx context.Context, req *
 	return g, nil
 }
 
+// GetGlobalRateLimit returns the singleton global rate-limit default (#198 slice 5).
+func (s *SecurityService) GetGlobalRateLimit(ctx context.Context) (*model.GlobalRateLimit, error) {
+	if s.globalRateLimitRepo == nil {
+		return &model.GlobalRateLimit{
+			Enabled: false, RequestsPerSecond: 50, BurstSize: 100,
+			ZoneSize: "10m", LimitBy: "ip", LimitResponse: 429,
+		}, nil
+	}
+	return s.globalRateLimitRepo.GetGlobal(ctx)
+}
+
+// UpdateGlobalRateLimit updates the global rate-limit default and regenerates
+// every inheriting host so the new default takes effect (#198 slice 5).
+func (s *SecurityService) UpdateGlobalRateLimit(ctx context.Context, req *model.UpdateGlobalRateLimitRequest) (*model.GlobalRateLimit, error) {
+	if s.globalRateLimitRepo == nil {
+		return nil, fmt.Errorf("global rate limit is not available")
+	}
+	g, err := s.globalRateLimitRepo.Upsert(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update global rate limit: %w", err)
+	}
+	if s.proxyHostService != nil {
+		if err := s.proxyHostService.SyncAllConfigs(ctx); err != nil {
+			return nil, fmt.Errorf("failed to regenerate configs: %w", err)
+		}
+	}
+	return g, nil
+}
+
 func (s *SecurityService) ApplySecurityHeaderPreset(ctx context.Context, proxyHostID string, preset string) (*model.SecurityHeaders, error) {
 	presetConfig, ok := model.SecurityHeaderPresets[preset]
 	if !ok {
@@ -791,4 +826,3 @@ func (s *SecurityService) ApplySecurityHeaderPreset(ctx context.Context, proxyHo
 	}
 	return headers, nil
 }
-

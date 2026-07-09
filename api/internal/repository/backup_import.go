@@ -229,6 +229,13 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 		}
 	}
 
+	// Import Global Rate Limit default (#198 slice 5)
+	if data.GlobalRateLimit != nil {
+		if err := r.importGlobalRateLimit(ctx, tx, data.GlobalRateLimit); err != nil {
+			return nil, fmt.Errorf("failed to import global rate limit: %w", err)
+		}
+	}
+
 	// Import Cloud Providers
 	for _, cp := range data.CloudProviders {
 		if err := r.importCloudProvider(ctx, tx, &cp); err != nil {

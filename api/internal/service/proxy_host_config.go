@@ -159,19 +159,29 @@ func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.Pr
 		}()
 	}
 
-	// Fetch rate limit if exists
+	// Fetch rate limit and resolve against the global default (#198 slice 5).
+	// The nginx limit_req zone stays per-host; an inheriting host gets the
+	// global values under its own zone name.
 	if s.rateLimitRepo != nil {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			rl, err := s.rateLimitRepo.GetByProxyHostID(ctx, host.ID)
+			hostRL, err := s.rateLimitRepo.GetByProxyHostID(ctx, host.ID)
 			if err != nil {
 				fail("rate limit", err)
 				return
 			}
-			if rl != nil && rl.Enabled {
+			var globalRL *model.GlobalRateLimit
+			if s.globalRateLimitRepo != nil {
+				globalRL, err = s.globalRateLimitRepo.GetGlobal(ctx)
+				if err != nil {
+					fail("global rate limit", err)
+					return
+				}
+			}
+			if effective := resolveRateLimit(globalRL, hostRL, host.ID); effective != nil {
 				mu.Lock()
-				data.RateLimit = rl
+				data.RateLimit = effective
 				mu.Unlock()
 			}
 		}()

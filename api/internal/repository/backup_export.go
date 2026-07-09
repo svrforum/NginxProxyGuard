@@ -134,6 +134,13 @@ func (r *BackupRepository) ExportAllData(ctx context.Context) (*model.ExportData
 	}
 	export.GlobalCloudProviders = globalCloud
 
+	// Export Global Rate Limit default (#198 slice 5)
+	globalRateLimit, err := r.exportGlobalRateLimit(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to export global rate limit: %w", err)
+	}
+	export.GlobalRateLimit = globalRateLimit
+
 	// Export Cloud Providers
 	cloudProviders, err := r.exportCloudProviders(ctx)
 	if err != nil {

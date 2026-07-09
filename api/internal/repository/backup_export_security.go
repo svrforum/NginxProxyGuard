@@ -324,6 +324,29 @@ func (r *BackupRepository) exportGlobalCloudProviders(ctx context.Context) (*mod
 	return &g, nil
 }
 
+// exportGlobalRateLimit exports the singleton global rate-limit default
+// (#198 slice 5). Returns nil when no row exists.
+func (r *BackupRepository) exportGlobalRateLimit(ctx context.Context) (*model.GlobalRateLimitExport, error) {
+	query := `
+		SELECT enabled, requests_per_second, burst_size, zone_size, limit_by, limit_response, whitelist_ips
+		FROM global_rate_limits LIMIT 1
+	`
+	var g model.GlobalRateLimitExport
+	var whitelistIPs sql.NullString
+	err := r.db.QueryRowContext(ctx, query).Scan(
+		&g.Enabled, &g.RequestsPerSecond, &g.BurstSize, &g.ZoneSize,
+		&g.LimitBy, &g.LimitResponse, &whitelistIPs,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	g.WhitelistIPs = whitelistIPs.String
+	return &g, nil
+}
+
 func (r *BackupRepository) exportGlobalURIBlock(ctx context.Context) (*model.GlobalURIBlockExport, error) {
 	query := `
 		SELECT enabled, rules, COALESCE(exception_ips, '{}'), COALESCE(allow_private_ips, true)

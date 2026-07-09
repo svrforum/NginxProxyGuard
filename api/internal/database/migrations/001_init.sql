@@ -2042,9 +2042,23 @@ CREATE TABLE IF NOT EXISTS public.rate_limits (
     limit_by character varying(20) DEFAULT 'ip'::character varying,
     limit_response integer DEFAULT 429,
     whitelist_ips text,
+    disable_global boolean DEFAULT false NOT NULL,
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now()
 );
+CREATE TABLE IF NOT EXISTS public.global_rate_limits (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    enabled boolean DEFAULT false,
+    requests_per_second integer DEFAULT 50,
+    burst_size integer DEFAULT 100,
+    zone_size character varying(10) DEFAULT '10m'::character varying,
+    limit_by character varying(20) DEFAULT 'ip'::character varying,
+    limit_response integer DEFAULT 429,
+    whitelist_ips text,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_global_rate_limits_singleton ON public.global_rate_limits USING btree ((true));
 CREATE TABLE IF NOT EXISTS public.redirect_hosts (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     domain_names text[] DEFAULT '{}'::text[] NOT NULL,
@@ -3988,6 +4002,26 @@ CREATE TABLE IF NOT EXISTS public.global_cloud_providers (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_global_cloud_providers_singleton ON public.global_cloud_providers USING btree ((true));
 ALTER TABLE public.geo_restrictions ADD COLUMN IF NOT EXISTS cloud_disable_global boolean DEFAULT false NOT NULL;
+
+-- Slice 5 (Rate Limit): singleton global_rate_limits (enabled OFF by default →
+-- zero behavior change on upgrade) + rate_limits.disable_global. The nginx
+-- limit_req zone stays per-host (unique zone name per host); the global default
+-- only supplies the RPS/burst/etc values an inheriting host's zone uses.
+-- Service-layer resolution, templates unchanged. Canonical in migration.go.
+CREATE TABLE IF NOT EXISTS public.global_rate_limits (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    enabled boolean DEFAULT false,
+    requests_per_second integer DEFAULT 50,
+    burst_size integer DEFAULT 100,
+    zone_size character varying(10) DEFAULT '10m'::character varying,
+    limit_by character varying(20) DEFAULT 'ip'::character varying,
+    limit_response integer DEFAULT 429,
+    whitelist_ips text,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_global_rate_limits_singleton ON public.global_rate_limits USING btree ((true));
+ALTER TABLE public.rate_limits ADD COLUMN IF NOT EXISTS disable_global boolean DEFAULT false NOT NULL;
 
 -- Stream proxy: enforce listener uniqueness at the DB level so two concurrent
 -- creates cannot both succeed when they target the same (host, port, protocol).

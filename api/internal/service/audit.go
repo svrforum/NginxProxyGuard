@@ -281,6 +281,11 @@ func (s *AuditService) LogGlobalCloudProvidersUpdate(ctx context.Context) error 
 	return s.logEntry(ctx, "global_cloud_providers_updated", "settings", "", "Global Cloud Provider Blocking", nil)
 }
 
+// LogGlobalRateLimitUpdate logs a change to the global rate-limit default (#198 slice 5).
+func (s *AuditService) LogGlobalRateLimitUpdate(ctx context.Context) error {
+	return s.logEntry(ctx, "global_rate_limit_updated", "settings", "", "Global Rate Limit", nil)
+}
+
 // LogSecurityFeatureUpdate logs security feature changes
 func (s *AuditService) LogSecurityFeatureUpdate(ctx context.Context, resource string, hostDomain string, enabled bool, details map[string]interface{}) error {
 	if details == nil {

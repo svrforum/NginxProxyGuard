@@ -124,14 +124,15 @@ func (r *BackupRepository) exportProxyHosts(ctx context.Context) ([]model.ProxyH
 
 func (r *BackupRepository) getProxyHostRateLimit(ctx context.Context, proxyHostID string) (*model.RateLimitExport, error) {
 	query := `
-		SELECT enabled, requests_per_second, burst_size, zone_size, limit_by, limit_response, whitelist_ips
+		SELECT enabled, requests_per_second, burst_size, zone_size, limit_by, limit_response, whitelist_ips,
+		       COALESCE(disable_global, false)
 		FROM rate_limits WHERE proxy_host_id = $1
 	`
 	var rl model.RateLimitExport
 	var whitelistIPs sql.NullString
 	err := r.db.QueryRowContext(ctx, query, proxyHostID).Scan(
 		&rl.Enabled, &rl.RequestsPerSecond, &rl.BurstSize, &rl.ZoneSize,
-		&rl.LimitBy, &rl.LimitResponse, &whitelistIPs,
+		&rl.LimitBy, &rl.LimitResponse, &whitelistIPs, &rl.DisableGlobal,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil

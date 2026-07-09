@@ -241,11 +241,11 @@ func (r *BackupRepository) importProxyHost(ctx context.Context, tx *sql.Tx, ph *
 func (r *BackupRepository) importRateLimit(ctx context.Context, tx *sql.Tx, proxyHostID string, rl *model.RateLimitExport) error {
 	query := `
 		INSERT INTO rate_limits (proxy_host_id, enabled, requests_per_second, burst_size, zone_size,
-		                         limit_by, limit_response, whitelist_ips)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		                         limit_by, limit_response, whitelist_ips, disable_global)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
 	_, err := tx.ExecContext(ctx, query, proxyHostID, rl.Enabled, rl.RequestsPerSecond, rl.BurstSize,
-		rl.ZoneSize, rl.LimitBy, rl.LimitResponse, rl.WhitelistIPs)
+		rl.ZoneSize, rl.LimitBy, rl.LimitResponse, rl.WhitelistIPs, rl.DisableGlobal)
 	return err
 }
 
