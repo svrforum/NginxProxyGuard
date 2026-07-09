@@ -288,8 +288,8 @@ func (r *BackupRepository) importSecurityHeaders(ctx context.Context, tx *sql.Tx
 func (r *BackupRepository) importGeoRestriction(ctx context.Context, tx *sql.Tx, proxyHostID string, gr *model.GeoRestrictionExport) error {
 	query := `
 		INSERT INTO geo_restrictions (proxy_host_id, mode, countries, enabled, challenge_mode, allow_private_ips, allow_search_bots,
-		                              allowed_ips, blocked_cloud_providers, challenge_cloud_providers, allow_search_bots_cloud_providers)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		                              allowed_ips, blocked_cloud_providers, challenge_cloud_providers, allow_search_bots_cloud_providers, disable_global)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		ON CONFLICT (proxy_host_id) DO UPDATE SET
 			mode = EXCLUDED.mode,
 			countries = EXCLUDED.countries,
@@ -301,6 +301,7 @@ func (r *BackupRepository) importGeoRestriction(ctx context.Context, tx *sql.Tx,
 			blocked_cloud_providers = EXCLUDED.blocked_cloud_providers,
 			challenge_cloud_providers = EXCLUDED.challenge_cloud_providers,
 			allow_search_bots_cloud_providers = EXCLUDED.allow_search_bots_cloud_providers,
+			disable_global = EXCLUDED.disable_global,
 			updated_at = NOW()
 	`
 	// Ensure arrays are not nil for postgres
@@ -315,7 +316,7 @@ func (r *BackupRepository) importGeoRestriction(ctx context.Context, tx *sql.Tx,
 	_, err := tx.ExecContext(ctx, query, proxyHostID, gr.Mode, pq.Array(gr.Countries), gr.Enabled,
 		gr.ChallengeMode, gr.AllowPrivateIPs, gr.AllowSearchBots,
 		pq.Array(allowedIPs), pq.Array(blockedCloudProviders),
-		gr.ChallengeCloudProviders, gr.AllowSearchBotsCloudProviders)
+		gr.ChallengeCloudProviders, gr.AllowSearchBotsCloudProviders, gr.DisableGlobal)
 	return err
 }
 

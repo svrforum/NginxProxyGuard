@@ -106,6 +106,13 @@ func (r *BackupRepository) ExportAllData(ctx context.Context) (*model.ExportData
 	}
 	export.GlobalURIBlock = globalURIBlock
 
+	// Export Global Geo default (#198)
+	globalGeo, err := r.exportGlobalGeo(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to export global geo restriction: %w", err)
+	}
+	export.GlobalGeoRestriction = globalGeo
+
 	// Export Cloud Providers
 	cloudProviders, err := r.exportCloudProviders(ctx)
 	if err != nil {

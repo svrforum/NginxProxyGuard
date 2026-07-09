@@ -201,6 +201,13 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 		}
 	}
 
+	// Import Global Geo default (#198)
+	if data.GlobalGeoRestriction != nil {
+		if err := r.importGlobalGeo(ctx, tx, data.GlobalGeoRestriction); err != nil {
+			return nil, fmt.Errorf("failed to import global geo restriction: %w", err)
+		}
+	}
+
 	// Import Cloud Providers
 	for _, cp := range data.CloudProviders {
 		if err := r.importCloudProvider(ctx, tx, &cp); err != nil {

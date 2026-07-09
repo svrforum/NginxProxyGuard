@@ -221,6 +221,32 @@ func (r *BackupRepository) exportURIBlocks(ctx context.Context) ([]model.URIBloc
 	return exports, nil
 }
 
+// exportGlobalGeo exports the singleton global geo default (#198). Returns nil
+// when no row exists (older installs / never configured).
+func (r *BackupRepository) exportGlobalGeo(ctx context.Context) (*model.GlobalGeoRestrictionExport, error) {
+	query := `
+		SELECT enabled, mode, countries, COALESCE(allowed_ips, '{}'), allow_private_ips, allow_search_bots, challenge_mode
+		FROM global_geo_restrictions LIMIT 1
+	`
+	var g model.GlobalGeoRestrictionExport
+	err := r.db.QueryRowContext(ctx, query).Scan(
+		&g.Enabled, &g.Mode, pq.Array(&g.Countries), pq.Array(&g.AllowedIPs), &g.AllowPrivateIPs, &g.AllowSearchBots, &g.ChallengeMode,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if g.Countries == nil {
+		g.Countries = []string{}
+	}
+	if g.AllowedIPs == nil {
+		g.AllowedIPs = []string{}
+	}
+	return &g, nil
+}
+
 func (r *BackupRepository) exportGlobalURIBlock(ctx context.Context) (*model.GlobalURIBlockExport, error) {
 	query := `
 		SELECT enabled, rules, COALESCE(exception_ips, '{}'), COALESCE(allow_private_ips, true)

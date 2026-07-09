@@ -215,7 +215,8 @@ func (r *BackupRepository) getProxyHostGeoRestriction(ctx context.Context, proxy
 	query := `
 		SELECT mode, countries, enabled, challenge_mode, allow_private_ips, allow_search_bots,
 		       COALESCE(allowed_ips, '{}'), COALESCE(blocked_cloud_providers, '{}'),
-		       COALESCE(challenge_cloud_providers, false), COALESCE(allow_search_bots_cloud_providers, false)
+		       COALESCE(challenge_cloud_providers, false), COALESCE(allow_search_bots_cloud_providers, false),
+		       COALESCE(disable_global, false)
 		FROM geo_restrictions WHERE proxy_host_id = $1
 	`
 	var gr model.GeoRestrictionExport
@@ -224,6 +225,7 @@ func (r *BackupRepository) getProxyHostGeoRestriction(ctx context.Context, proxy
 		&gr.ChallengeMode, &gr.AllowPrivateIPs, &gr.AllowSearchBots,
 		pq.Array(&gr.AllowedIPs), pq.Array(&gr.BlockedCloudProviders),
 		&gr.ChallengeCloudProviders, &gr.AllowSearchBotsCloudProviders,
+		&gr.DisableGlobal,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil

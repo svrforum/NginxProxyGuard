@@ -141,6 +141,23 @@ func (r *BackupRepository) importGlobalURIBlock(ctx context.Context, tx *sql.Tx,
 	return err
 }
 
+// importGlobalGeo restores the singleton global geo default (#198). Delete-then-
+// insert so the singleton stays unique.
+func (r *BackupRepository) importGlobalGeo(ctx context.Context, tx *sql.Tx, g *model.GlobalGeoRestrictionExport) error {
+	_, _ = tx.ExecContext(ctx, "DELETE FROM global_geo_restrictions")
+
+	mode := g.Mode
+	if mode != "whitelist" && mode != "blacklist" {
+		mode = "blacklist"
+	}
+	query := `
+		INSERT INTO global_geo_restrictions (enabled, mode, countries, allowed_ips, allow_private_ips, allow_search_bots, challenge_mode)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`
+	_, err := tx.ExecContext(ctx, query, g.Enabled, mode, pq.Array(g.Countries), pq.Array(g.AllowedIPs), g.AllowPrivateIPs, g.AllowSearchBots, g.ChallengeMode)
+	return err
+}
+
 func (r *BackupRepository) importCloudProvider(ctx context.Context, tx *sql.Tx, cp *model.CloudProviderExport) error {
 	query := `
 		INSERT INTO cloud_providers (name, slug, description, region, ip_ranges_url, enabled)
