@@ -13,20 +13,64 @@ import (
 
 type GeoHandler struct {
 	geoRepo          *repository.GeoRepository
+	globalGeoRepo    *repository.GlobalGeoRepository
 	proxyHostRepo    *repository.ProxyHostRepository
 	proxyHostService *service.ProxyHostService
+	audit            *service.AuditService
 }
 
 func NewGeoHandler(
 	geoRepo *repository.GeoRepository,
+	globalGeoRepo *repository.GlobalGeoRepository,
 	proxyHostRepo *repository.ProxyHostRepository,
 	proxyHostService *service.ProxyHostService,
+	audit *service.AuditService,
 ) *GeoHandler {
 	return &GeoHandler{
 		geoRepo:          geoRepo,
+		globalGeoRepo:    globalGeoRepo,
 		proxyHostRepo:    proxyHostRepo,
 		proxyHostService: proxyHostService,
+		audit:            audit,
 	}
+}
+
+// GetGlobal returns the singleton global geo default (#198).
+func (h *GeoHandler) GetGlobal(c echo.Context) error {
+	g, err := h.globalGeoRepo.GetGlobal(c.Request().Context())
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	return c.JSON(http.StatusOK, g)
+}
+
+// UpdateGlobal updates the global geo default and regenerates every inheriting
+// host so the new default takes effect (#198).
+func (h *GeoHandler) UpdateGlobal(c echo.Context) error {
+	var req model.UpdateGlobalGeoRestrictionRequest
+	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
+	}
+	if req.Mode != nil && *req.Mode != "whitelist" && *req.Mode != "blacklist" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Mode must be 'whitelist' or 'blacklist'"})
+	}
+
+	g, err := h.globalGeoRepo.Upsert(c.Request().Context(), &req)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+
+	// Regenerate all hosts so inheriting hosts pick up the new default.
+	if err := h.proxyHostService.SyncAllConfigs(c.Request().Context()); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to regenerate configs: " + err.Error()})
+	}
+
+	if h.audit != nil {
+		auditCtx := service.ContextWithAudit(c.Request().Context(), c)
+		h.audit.LogGlobalGeoUpdate(auditCtx)
+	}
+
+	return c.JSON(http.StatusOK, g)
 }
 
 // GetByProxyHost returns geo restriction settings for a proxy host

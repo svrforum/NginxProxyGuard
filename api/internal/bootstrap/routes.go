@@ -440,7 +440,12 @@ func registerGeoRoutes(v1 *echo.Group, h *handler.GeoHandler) {
 	proxyRead := authMiddleware.RequireAPIPermission(model.PermissionProxyRead)
 	proxyWrite := authMiddleware.RequireAPIPermission(model.PermissionProxyWrite)
 	proxyDelete := authMiddleware.RequireAPIPermission(model.PermissionProxyDelete)
+	settingsRead := authMiddleware.RequireAPIPermission(model.PermissionSettingsRead)
+	settingsWrite := authMiddleware.RequireAPIPermission(model.PermissionSettingsWrite)
 
+	// Global geo default (#198) — settings-scoped singleton.
+	v1.GET("/settings/global-geo", h.GetGlobal, settingsRead)
+	v1.PUT("/settings/global-geo", h.UpdateGlobal, settingsWrite)
 	v1.GET("/proxy-hosts/:id/geo", h.GetByProxyHost, proxyRead)
 	v1.POST("/proxy-hosts/:id/geo", h.SetForProxyHost, proxyWrite)
 	v1.PUT("/proxy-hosts/:id/geo", h.UpdateForProxyHost, proxyWrite)

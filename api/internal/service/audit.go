@@ -261,6 +261,11 @@ func (s *AuditService) LogSettingsUpdate(ctx context.Context, settingName string
 	return s.logEntry(ctx, "settings_updated", "settings", "", settingName, details)
 }
 
+// LogGlobalGeoUpdate logs a change to the global geo restriction default (#198).
+func (s *AuditService) LogGlobalGeoUpdate(ctx context.Context) error {
+	return s.logEntry(ctx, "global_geo_updated", "settings", "", "Global Geo Restriction", nil)
+}
+
 // LogSecurityFeatureUpdate logs security feature changes
 func (s *AuditService) LogSecurityFeatureUpdate(ctx context.Context, resource string, hostDomain string, enabled bool, details map[string]interface{}) error {
 	if details == nil {

@@ -224,6 +224,7 @@ func formatActionLabel(action string) string {
 		"waf_disabled":             "WAF 비활성화",
 		"waf_rules_updated":        "WAF 규칙 수정",
 		"settings_updated":         "설정 변경",
+		"global_geo_updated":       "전역 지역 제한 수정",
 		"user_login":               "로그인",
 		"user_logout":              "로그아웃",
 		"user_created":             "사용자 생성",

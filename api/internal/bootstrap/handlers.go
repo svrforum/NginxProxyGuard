@@ -59,8 +59,10 @@ func InitHandlers(
 	h.RedirectHost = handler.NewRedirectHostHandler(repos.RedirectHost, nginxManager, svcs.Audit)
 	h.Geo = handler.NewGeoHandler(
 		repos.Geo,
+		repos.GlobalGeo,
 		repos.ProxyHost,
 		svcs.ProxyHost,
+		svcs.Audit,
 	)
 	h.Security = handler.NewSecurityHandler(svcs.Security, svcs.Audit)
 	h.Settings = handler.NewSettingsHandler(svcs.Settings, svcs.Audit)
