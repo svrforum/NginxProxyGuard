@@ -94,6 +94,7 @@ export function useProxyHostFormState(host: ProxyHost | null | undefined) {
     custom_blocked_agents: '',
     custom_allowed_agents: '',
     challenge_suspicious: false,
+    disableGlobal: false,
   })
 
   // GeoIP state
@@ -201,6 +202,7 @@ export function useProxyHostFormState(host: ProxyHost | null | undefined) {
         custom_blocked_agents: existingBotFilter.custom_blocked_agents || '',
         custom_allowed_agents: existingBotFilter.custom_allowed_agents || '',
         challenge_suspicious: existingBotFilter.challenge_suspicious,
+        disableGlobal: existingBotFilter.disable_global ?? false,
       })
     }
   }, [existingBotFilter])

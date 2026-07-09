@@ -57,7 +57,8 @@
       "exploitRules": "취약점 차단 관리",
       "fail2ban": "Fail2ban",
       "tester": "WAF 테스터",
-      "globalGeo": "전역 GeoIP 기본값"
+      "globalGeo": "전역 GeoIP 기본값",
+      "globalBotFilter": "전역 봇 필터 기본값"
     },
     "logs": {
       "access": "접근 로그",

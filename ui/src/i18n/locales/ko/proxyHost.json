@@ -220,7 +220,9 @@
         "customAllowed": "사용자 정의 예외 목록",
         "customAllowedDescription": "이 목록의 User-Agent는 모든 봇 필터 차단을 우회합니다",
         "customAllowedPlaceholder": "허용할 User-Agent를 한 줄에 하나씩 입력",
-        "settingsLink": "봇 목록은 <1>설정 &rarr; Bot Filter</1>에서 관리할 수 있습니다"
+        "settingsLink": "봇 목록은 <1>설정 &rarr; Bot Filter</1>에서 관리할 수 있습니다",
+        "inheritHint": "이 호스트는 전역 봇 필터 기본값을 사용합니다.",
+        "disableHint": "이 호스트에는 봇 필터가 적용되지 않습니다(전역 기본값도 무시)."
       },
       "geoip": {
         "title": "GeoIP 제한",

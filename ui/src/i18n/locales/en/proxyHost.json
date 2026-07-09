@@ -218,7 +218,9 @@
         "customAllowed": "Custom Allow List",
         "customAllowedDescription": "User-Agents in this list will bypass all bot filter blocks",
         "customAllowedPlaceholder": "Enter User-Agents to allow, one per line",
-        "settingsLink": "Bot lists can be customized in <1>Settings &rarr; Bot Filter</1>"
+        "settingsLink": "Bot lists can be customized in <1>Settings &rarr; Bot Filter</1>",
+        "inheritHint": "This host uses the global bot filter default.",
+        "disableHint": "This host gets no bot filter (the global default is ignored too)."
       },
       "geoip": {
         "title": "GeoIP Restriction",

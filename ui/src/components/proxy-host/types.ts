@@ -22,6 +22,12 @@ export interface CertificateState {
 
 export interface BotFilterState extends CreateBotFilterRequest {
   enabled: boolean
+  /**
+   * UI-only tri-state flag. When true (and enabled is false) the host opts
+   * OUT of the global bot-filter default entirely. Threaded to the API as
+   * `disable_global`. Mirrors GeoDataState.disableGlobal.
+   */
+  disableGlobal?: boolean
 }
 
 export interface GeoDataState extends CreateGeoRestrictionRequest {

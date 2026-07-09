@@ -141,6 +141,7 @@ export interface BotFilter {
   custom_blocked_agents?: string;
   custom_allowed_agents?: string;
   challenge_suspicious: boolean;
+  disable_global?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -154,6 +155,7 @@ export interface CreateBotFilterRequest {
   custom_blocked_agents?: string;
   custom_allowed_agents?: string;
   challenge_suspicious?: boolean;
+  disable_global?: boolean;
 }
 
 export interface KnownBots {

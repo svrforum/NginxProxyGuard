@@ -57,7 +57,8 @@
       "exploitRules": "Exploit Block Rules",
       "fail2ban": "Fail2ban",
       "tester": "WAF Tester",
-      "globalGeo": "Global GeoIP"
+      "globalGeo": "Global GeoIP",
+      "globalBotFilter": "Global Bot Filter"
     },
     "logs": {
       "access": "Access Logs",

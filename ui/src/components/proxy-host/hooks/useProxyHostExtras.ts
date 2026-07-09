@@ -2,7 +2,18 @@ import { useQueryClient } from '@tanstack/react-query'
 import { deleteGeoRestriction, getGeoRestriction, setGeoRestriction } from '../../../api/access'
 import { updateBotFilter } from '../../../api/security'
 import { api } from '../../../api/client'
+import type { CreateBotFilterRequest } from '../../../types/security'
 import type { BotFilterState, GeoDataState } from '../types'
+
+/**
+ * Maps the UI-only `disableGlobal` tri-state flag onto the API's
+ * `disable_global` field and drops the UI-only key. Mirrors how the geo
+ * restriction payload threads its own disable_global (#198).
+ */
+function botFilterPayload(data: BotFilterState): CreateBotFilterRequest {
+  const { disableGlobal, ...rest } = data
+  return { ...rest, disable_global: disableGlobal === true }
+}
 
 /** Arguments required by {@link ProxyHostExtras.saveExtrasForCreate}. */
 interface SaveExtrasCreateArgs {
@@ -60,10 +71,11 @@ export function useProxyHostExtras() {
     if (
       botFilterData.enabled ||
       botFilterData.custom_blocked_agents ||
-      botFilterData.custom_allowed_agents
+      botFilterData.custom_allowed_agents ||
+      botFilterData.disableGlobal === true
     ) {
       promises.push(
-        updateBotFilter(hostId, botFilterData, true).catch((err) =>
+        updateBotFilter(hostId, botFilterPayload(botFilterData), true).catch((err) =>
           console.error('Failed to save bot filter:', err),
         ),
       )
@@ -132,7 +144,7 @@ export function useProxyHostExtras() {
   }: SaveExtrasUpdateArgs): Promise<void> {
     const promises = [
       // Bot filter (skip reload)
-      updateBotFilter(hostId, botFilterData, true)
+      updateBotFilter(hostId, botFilterPayload(botFilterData), true)
         .then(() => queryClient.invalidateQueries({ queryKey: ['botFilter', hostId] }))
         .catch((err) => console.error('Failed to save bot filter:', err)),
 
