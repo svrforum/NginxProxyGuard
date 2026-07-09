@@ -620,5 +620,16 @@
     "saveSuccess": "Global cloud blocking default saved and applied to inheriting hosts",
     "saveFailed": "Failed to save global cloud blocking default",
     "unsavedChanges": "You have unsaved changes"
+  },
+  "globalRateLimit": {
+    "title": "Global Rate Limit Default",
+    "subtitle": "Request rate limiting applied by default to all proxy hosts. Each host can inherit, override, or disable it.",
+    "enableTitle": "Global Rate Limit",
+    "enableDescription": "When enabled, this default applies to every host set to inherit.",
+    "infoTitle": "How the Global Rate Limit Default Works",
+    "infoDesc": "This default applies to all proxy hosts that leave the rate limit set to \"Inherit\". Each host keeps its own nginx limit_req zone — only the values are inherited. A host set to \"Override\" uses its own configuration, and one set to \"Disable\" gets no rate limit at all. Saving regenerates all inheriting hosts automatically.",
+    "saveSuccess": "Global rate limit default saved and applied to inheriting hosts",
+    "saveFailed": "Failed to save global rate limit default",
+    "unsavedChanges": "You have unsaved changes"
   }
 }

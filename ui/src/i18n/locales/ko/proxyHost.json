@@ -322,7 +322,9 @@
         "responseCode": "응답 코드",
         "whitelistIPs": "화이트리스트 IP",
         "banDuration": "차단 시간",
-        "banDurationDescription": "제한 초과 시 차단 시간 (초)"
+        "banDurationDescription": "제한 초과 시 차단 시간 (초)",
+        "inheritHint": "이 호스트는 전역 레이트 리밋 기본값을 사용합니다.",
+        "disableHint": "이 호스트에는 레이트 리밋이 적용되지 않습니다(전역 기본값도 무시)."
       },
       "fail2ban": {
         "title": "Fail2ban",

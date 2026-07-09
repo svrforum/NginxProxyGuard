@@ -58,6 +58,7 @@ import {
 } from '../../../api/security'
 import { InheritOverrideControl, type InheritOverrideValue } from '../../common/InheritOverrideControl'
 import { SecurityHeadersFields } from './security/SecurityHeadersFields'
+import { RateLimitFields } from './security/RateLimitFields'
 
 interface ProtectionTabProps {
   hostId: string
@@ -274,6 +275,7 @@ function RateLimitSection({ hostId }: { hostId: string }) {
     limit_by: 'ip',
     limit_response: 429,
     whitelist_ips: '',
+    disable_global: false,
   })
 
   const [initialized, setInitialized] = useState(false)
@@ -288,6 +290,7 @@ function RateLimitSection({ hostId }: { hostId: string }) {
         limit_by: data.limit_by,
         limit_response: data.limit_response,
         whitelist_ips: data.whitelist_ips || '',
+        disable_global: data.disable_global ?? false,
       })
       setInitialized(true)
     } else if (error && !initialized) {
@@ -311,89 +314,66 @@ function RateLimitSection({ hostId }: { hostId: string }) {
 
   if (isLoading) return <div className="text-center py-4 text-sm text-slate-500">{t('common:status.loading')}</div>
 
+  // Tri-state (mirrors SecurityHeadersSection/BotFilterSettings):
+  //   enabled=true       → override (host uses its own rate limit)
+  //   disable_global=true→ disable  (host has no rate limit at all)
+  //   otherwise          → inherit  (host uses the global default)
+  const mode: InheritOverrideValue = formData.enabled
+    ? 'override'
+    : formData.disable_global
+      ? 'disable'
+      : 'inherit'
+
+  const handleModeChange = (value: InheritOverrideValue) => {
+    if (value === 'override') {
+      setFormData((prev) => ({ ...prev, enabled: true, disable_global: false }))
+    } else if (value === 'disable') {
+      setFormData((prev) => ({ ...prev, enabled: false, disable_global: true }))
+    } else {
+      setFormData((prev) => ({ ...prev, enabled: false, disable_global: false }))
+    }
+  }
+
   return (
     <div className={`p-4 rounded-lg border-2 transition-colors ${formData.enabled ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700'}`}>
-      <label className="flex items-center justify-between cursor-pointer">
-        <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${formData.enabled ? 'bg-amber-100 dark:bg-amber-900/40' : 'bg-slate-200 dark:bg-slate-700'}`}>
-            <svg className={`w-5 h-5 ${formData.enabled ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400 dark:text-slate-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-slate-900 dark:text-white flex items-center gap-2">
-                {t('form.protection.rateLimit.title')}
-                <HelpTip contentKey="help.protection.rateLimit" />
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400">{t('form.protection.rateLimit.description')}</p>
-          </div>
+      <div className="flex items-center gap-3 mb-3">
+        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${formData.enabled ? 'bg-amber-100 dark:bg-amber-900/40' : 'bg-slate-200 dark:bg-slate-700'}`}>
+          <svg className={`w-5 h-5 ${formData.enabled ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400 dark:text-slate-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
         </div>
-        <input
-          type="checkbox"
-          checked={formData.enabled}
-          onChange={(e) => setFormData((prev) => ({ ...prev, enabled: e.target.checked }))}
-          className="rounded border-slate-300 dark:border-slate-600 text-amber-600 focus:ring-amber-500 h-5 w-5 dark:bg-slate-700"
-        />
-      </label>
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-slate-900 dark:text-white flex items-center gap-2">
+              {t('form.protection.rateLimit.title')}
+              <HelpTip contentKey="help.protection.rateLimit" />
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400">{t('form.protection.rateLimit.description')}</p>
+        </div>
+      </div>
 
-      {formData.enabled && (
+      <InheritOverrideControl value={mode} onChange={handleModeChange} />
+
+      {mode === 'inherit' && (
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{t('form.protection.rateLimit.inheritHint')}</p>
+      )}
+      {mode === 'disable' && (
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{t('form.protection.rateLimit.disableHint')}</p>
+      )}
+
+      {mode === 'override' && (
         <div className="mt-4 ml-13 pl-4 border-l-2 border-amber-200 dark:border-amber-800 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{t('form.protection.rateLimit.requestsPerSecond')}</label>
-              <input
-                type="number"
-                value={formData.requests_per_second}
-                onChange={(e) => setFormData((prev) => ({ ...prev, requests_per_second: Number(e.target.value) }))}
-                className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{t('form.protection.rateLimit.burst')}</label>
-              <input
-                type="number"
-                value={formData.burst_size}
-                onChange={(e) => setFormData((prev) => ({ ...prev, burst_size: Number(e.target.value) }))}
-                className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{t('form.protection.rateLimit.limitBy')}</label>
-              <select
-                value={formData.limit_by}
-                onChange={(e) => setFormData((prev) => ({ ...prev, limit_by: e.target.value }))}
-                className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white"
-              >
-                <option value="ip">{t('form.protection.rateLimit.limitByOptions.ip')}</option>
-                <option value="uri">{t('form.protection.rateLimit.limitByOptions.uri')}</option>
-                <option value="ip_uri">{t('form.protection.rateLimit.limitByOptions.ipUri')}</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{t('form.protection.rateLimit.responseCode')}</label>
-              <select
-                value={formData.limit_response}
-                onChange={(e) => setFormData((prev) => ({ ...prev, limit_response: Number(e.target.value) }))}
-                className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white"
-              >
-                <option value={429}>429 Too Many Requests</option>
-                <option value={503}>503 Service Unavailable</option>
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{t('form.protection.rateLimit.whitelistIPs')}</label>
-            <input
-              type="text"
-              value={formData.whitelist_ips}
-              onChange={(e) => setFormData((prev) => ({ ...prev, whitelist_ips: e.target.value }))}
-              placeholder="192.168.1.1, 10.0.0.0/8"
-              className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
-            />
-          </div>
+          <RateLimitFields
+            values={{
+              requests_per_second: formData.requests_per_second ?? 50,
+              burst_size: formData.burst_size ?? 100,
+              limit_by: formData.limit_by ?? 'ip',
+              limit_response: formData.limit_response ?? 429,
+              whitelist_ips: formData.whitelist_ips ?? '',
+            }}
+            onChange={(patch) => setFormData((prev) => ({ ...prev, ...patch }))}
+          />
 
           {mutation.isPending && (
             <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">

@@ -373,6 +373,7 @@ function AppContent({ user, onLogout }: AppContentProps) {
           <Route path="/waf/global-bot-filter" element={<WAFPage subTab="global-bot-filter" />} />
           <Route path="/waf/global-security-headers" element={<WAFPage subTab="global-security-headers" />} />
           <Route path="/waf/global-cloud" element={<WAFPage subTab="global-cloud" />} />
+          <Route path="/waf/global-rate-limit" element={<WAFPage subTab="global-rate-limit" />} />
           <Route path="/waf/tester" element={<WAFPage subTab="tester" />} />
           <Route path="/waf/exploit-rules" element={<WAFPage subTab="exploit-rules" />} />
           <Route path="/waf/fail2ban" element={<WAFPage subTab="fail2ban" />} />

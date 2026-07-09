@@ -320,7 +320,9 @@
         "responseCode": "Response Code",
         "whitelistIPs": "Whitelist IPs",
         "banDuration": "Ban Duration",
-        "banDurationDescription": "Ban duration when limit exceeded (seconds)"
+        "banDurationDescription": "Ban duration when limit exceeded (seconds)",
+        "inheritHint": "This host uses the global rate limit default.",
+        "disableHint": "This host has no rate limit at all (global default ignored)."
       },
       "fail2ban": {
         "title": "Fail2ban",

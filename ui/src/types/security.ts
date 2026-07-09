@@ -9,11 +9,34 @@ export interface RateLimit {
   limit_by: 'ip' | 'uri' | 'ip_uri';
   limit_response: number;
   whitelist_ips?: string;
+  disable_global?: boolean;
   created_at: string;
   updated_at: string;
 }
 
 export interface CreateRateLimitRequest {
+  enabled?: boolean;
+  requests_per_second?: number;
+  burst_size?: number;
+  zone_size?: string;
+  limit_by?: string;
+  limit_response?: number;
+  whitelist_ips?: string;
+  disable_global?: boolean;
+}
+
+// Global rate-limit default (#198 slice 5) — singleton settings row.
+export interface GlobalRateLimit {
+  enabled: boolean;
+  requests_per_second: number;
+  burst_size: number;
+  zone_size: string;
+  limit_by: string;
+  limit_response: number;
+  whitelist_ips?: string;
+}
+
+export interface UpdateGlobalRateLimitRequest {
   enabled?: boolean;
   requests_per_second?: number;
   burst_size?: number;
