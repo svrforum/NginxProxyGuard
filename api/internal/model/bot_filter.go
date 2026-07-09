@@ -14,6 +14,7 @@ type BotFilter struct {
 	CustomBlockedAgents     string    `json:"custom_blocked_agents,omitempty"`
 	CustomAllowedAgents     string    `json:"custom_allowed_agents,omitempty"`
 	ChallengeSuspicious     bool      `json:"challenge_suspicious"`
+	DisableGlobal           bool      `json:"disable_global"` // opt out of global bot filter default (#198)
 	CreatedAt               time.Time `json:"created_at"`
 	UpdatedAt               time.Time `json:"updated_at"`
 }
@@ -28,6 +29,35 @@ type CreateBotFilterRequest struct {
 	CustomBlockedAgents     string `json:"custom_blocked_agents,omitempty"`
 	CustomAllowedAgents     string `json:"custom_allowed_agents,omitempty"`
 	ChallengeSuspicious     *bool  `json:"challenge_suspicious,omitempty"`
+	DisableGlobal           *bool  `json:"disable_global,omitempty"`
+}
+
+// GlobalBotFilter is the singleton global bot-filter default inherited by hosts
+// that don't override or disable (#198).
+type GlobalBotFilter struct {
+	ID                     string    `json:"id"`
+	Enabled                bool      `json:"enabled"`
+	BlockBadBots           bool      `json:"block_bad_bots"`
+	BlockAIBots            bool      `json:"block_ai_bots"`
+	AllowSearchEngines     bool      `json:"allow_search_engines"`
+	BlockSuspiciousClients bool      `json:"block_suspicious_clients"`
+	CustomBlockedAgents    string    `json:"custom_blocked_agents,omitempty"`
+	CustomAllowedAgents    string    `json:"custom_allowed_agents,omitempty"`
+	ChallengeSuspicious    bool      `json:"challenge_suspicious"`
+	CreatedAt              time.Time `json:"created_at"`
+	UpdatedAt              time.Time `json:"updated_at"`
+}
+
+// UpdateGlobalBotFilterRequest is a partial update for the global bot-filter singleton.
+type UpdateGlobalBotFilterRequest struct {
+	Enabled                *bool   `json:"enabled,omitempty"`
+	BlockBadBots           *bool   `json:"block_bad_bots,omitempty"`
+	BlockAIBots            *bool   `json:"block_ai_bots,omitempty"`
+	AllowSearchEngines     *bool   `json:"allow_search_engines,omitempty"`
+	BlockSuspiciousClients *bool   `json:"block_suspicious_clients,omitempty"`
+	CustomBlockedAgents    *string `json:"custom_blocked_agents,omitempty"`
+	CustomAllowedAgents    *string `json:"custom_allowed_agents,omitempty"`
+	ChallengeSuspicious    *bool   `json:"challenge_suspicious,omitempty"`
 }
 
 // Known bad bots user agent patterns (Updated: December 2025)

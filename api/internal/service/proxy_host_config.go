@@ -195,19 +195,27 @@ func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.Pr
 		}()
 	}
 
-	// Fetch bot filter if exists
+	// Fetch bot filter and resolve against the global default (#198).
 	if s.botFilterRepo != nil {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			bf, err := s.botFilterRepo.GetByProxyHostID(ctx, host.ID)
+			hostBF, err := s.botFilterRepo.GetByProxyHostID(ctx, host.ID)
 			if err != nil {
 				fail("bot filter", err)
 				return
 			}
-			if bf != nil && bf.Enabled {
+			var globalBF *model.GlobalBotFilter
+			if s.globalBotFilterRepo != nil {
+				globalBF, err = s.globalBotFilterRepo.GetGlobal(ctx)
+				if err != nil {
+					fail("global bot filter", err)
+					return
+				}
+			}
+			if effective := resolveBotFilter(globalBF, hostBF); effective != nil {
 				mu.Lock()
-				data.BotFilter = bf
+				data.BotFilter = effective
 				mu.Unlock()
 			}
 		}()

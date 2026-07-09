@@ -330,8 +330,23 @@ CREATE TABLE IF NOT EXISTS public.bot_filters (
     challenge_suspicious boolean DEFAULT false,
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now(),
-    block_suspicious_clients boolean DEFAULT false
+    block_suspicious_clients boolean DEFAULT false,
+    disable_global boolean DEFAULT false NOT NULL
 );
+CREATE TABLE IF NOT EXISTS public.global_bot_filters (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    enabled boolean DEFAULT false,
+    block_bad_bots boolean DEFAULT true,
+    block_ai_bots boolean DEFAULT false,
+    allow_search_engines boolean DEFAULT true,
+    block_suspicious_clients boolean DEFAULT false,
+    custom_blocked_agents text,
+    custom_allowed_agents text,
+    challenge_suspicious boolean DEFAULT false,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_global_bot_filters_singleton ON public.global_bot_filters USING btree ((true));
 CREATE TABLE IF NOT EXISTS public.certificates (
     id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
     domain_names text[] NOT NULL,

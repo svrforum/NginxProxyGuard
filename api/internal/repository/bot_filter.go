@@ -57,7 +57,8 @@ func (r *BotFilterRepository) GetByProxyHostID(ctx context.Context, proxyHostID 
 	query := `
 		SELECT id, proxy_host_id, enabled, block_bad_bots, block_ai_bots, allow_search_engines,
 		       COALESCE(block_suspicious_clients, FALSE) as block_suspicious_clients,
-		       custom_blocked_agents, custom_allowed_agents, challenge_suspicious, created_at, updated_at
+		       custom_blocked_agents, custom_allowed_agents, challenge_suspicious,
+		       COALESCE(disable_global, FALSE) as disable_global, created_at, updated_at
 		FROM bot_filters
 		WHERE proxy_host_id = $1
 	`
@@ -67,7 +68,7 @@ func (r *BotFilterRepository) GetByProxyHostID(ctx context.Context, proxyHostID 
 
 	err := r.db.QueryRowContext(ctx, query, proxyHostID).Scan(
 		&bf.ID, &bf.ProxyHostID, &bf.Enabled, &bf.BlockBadBots, &bf.BlockAIBots, &bf.AllowSearchEngines,
-		&bf.BlockSuspiciousClients, &customBlocked, &customAllowed, &bf.ChallengeSuspicious, &bf.CreatedAt, &bf.UpdatedAt,
+		&bf.BlockSuspiciousClients, &customBlocked, &customAllowed, &bf.ChallengeSuspicious, &bf.DisableGlobal, &bf.CreatedAt, &bf.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		if r.cache != nil {
@@ -93,9 +94,9 @@ func (r *BotFilterRepository) GetByProxyHostID(ctx context.Context, proxyHostID 
 func (r *BotFilterRepository) Upsert(ctx context.Context, proxyHostID string, req *model.CreateBotFilterRequest) (*model.BotFilter, error) {
 	query := `
 		INSERT INTO bot_filters (proxy_host_id, enabled, block_bad_bots, block_ai_bots, allow_search_engines,
-		                         block_suspicious_clients, custom_blocked_agents, custom_allowed_agents, challenge_suspicious)
+		                         block_suspicious_clients, custom_blocked_agents, custom_allowed_agents, challenge_suspicious, disable_global)
 		VALUES ($1, COALESCE($2, TRUE), COALESCE($3, TRUE), COALESCE($4, FALSE), COALESCE($5, TRUE),
-		        COALESCE($6, FALSE), $7, $8, COALESCE($9, FALSE))
+		        COALESCE($6, FALSE), $7, $8, COALESCE($9, FALSE), COALESCE($10, FALSE))
 		ON CONFLICT (proxy_host_id) DO UPDATE SET
 			enabled = COALESCE($2, bot_filters.enabled),
 			block_bad_bots = COALESCE($3, bot_filters.block_bad_bots),
@@ -105,10 +106,12 @@ func (r *BotFilterRepository) Upsert(ctx context.Context, proxyHostID string, re
 			custom_blocked_agents = $7,
 			custom_allowed_agents = $8,
 			challenge_suspicious = COALESCE($9, bot_filters.challenge_suspicious),
+			disable_global = COALESCE($10, bot_filters.disable_global),
 			updated_at = NOW()
 		RETURNING id, proxy_host_id, enabled, block_bad_bots, block_ai_bots, allow_search_engines,
 		          COALESCE(block_suspicious_clients, FALSE) as block_suspicious_clients,
-		          custom_blocked_agents, custom_allowed_agents, challenge_suspicious, created_at, updated_at
+		          custom_blocked_agents, custom_allowed_agents, challenge_suspicious,
+		          COALESCE(disable_global, FALSE) as disable_global, created_at, updated_at
 	`
 
 	var bf model.BotFilter
@@ -120,9 +123,10 @@ func (r *BotFilterRepository) Upsert(ctx context.Context, proxyHostID string, re
 		req.CustomBlockedAgents,
 		req.CustomAllowedAgents,
 		req.ChallengeSuspicious,
+		req.DisableGlobal,
 	).Scan(
 		&bf.ID, &bf.ProxyHostID, &bf.Enabled, &bf.BlockBadBots, &bf.BlockAIBots, &bf.AllowSearchEngines,
-		&bf.BlockSuspiciousClients, &customBlocked, &customAllowed, &bf.ChallengeSuspicious, &bf.CreatedAt, &bf.UpdatedAt,
+		&bf.BlockSuspiciousClients, &customBlocked, &customAllowed, &bf.ChallengeSuspicious, &bf.DisableGlobal, &bf.CreatedAt, &bf.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err

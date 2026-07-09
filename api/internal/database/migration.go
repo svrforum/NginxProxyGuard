@@ -989,6 +989,24 @@ ALTER TABLE public.auth_providers ADD COLUMN IF NOT EXISTS reconcile_fail_count 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_global_geo_restrictions_singleton ON public.global_geo_restrictions USING btree ((true));
 ALTER TABLE public.geo_restrictions ADD COLUMN IF NOT EXISTS disable_global boolean DEFAULT false NOT NULL;`,
 		},
+		{
+			desc: "v2.31.0: global_bot_filters singleton + bot_filters.disable_global (#198 slice 2)",
+			sql: `CREATE TABLE IF NOT EXISTS public.global_bot_filters (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    enabled boolean DEFAULT false,
+    block_bad_bots boolean DEFAULT true,
+    block_ai_bots boolean DEFAULT false,
+    allow_search_engines boolean DEFAULT true,
+    block_suspicious_clients boolean DEFAULT false,
+    custom_blocked_agents text,
+    custom_allowed_agents text,
+    challenge_suspicious boolean DEFAULT false,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_global_bot_filters_singleton ON public.global_bot_filters USING btree ((true));
+ALTER TABLE public.bot_filters ADD COLUMN IF NOT EXISTS disable_global boolean DEFAULT false NOT NULL;`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {
