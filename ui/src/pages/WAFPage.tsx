@@ -5,9 +5,10 @@ import { ExploitBlockRules } from '../components/ExploitBlockRules'
 import { Fail2banManagement } from '../components/Fail2banManagement'
 import { BannedIPList } from '../components/BannedIPList'
 import { URIBlockManager } from '../components/URIBlockManager'
+import { GlobalGeoManager } from '../components/GlobalGeoManager'
 import { WAFTester } from '../components/WAFTester'
 
-export default function WAFPage({ subTab }: { subTab: 'settings' | 'tester' | 'banned-ips' | 'uri-blocks' | 'exploit-rules' | 'fail2ban' }) {
+export default function WAFPage({ subTab }: { subTab: 'settings' | 'tester' | 'banned-ips' | 'uri-blocks' | 'global-geo' | 'exploit-rules' | 'fail2ban' }) {
   const { t } = useTranslation('navigation')
   const navigate = useNavigate()
 
@@ -44,6 +45,15 @@ export default function WAFPage({ subTab }: { subTab: 'settings' | 'tester' | 'b
             {t('subTabs.waf.uriBlocks')}
           </button>
           <button
+            onClick={() => navigate('/waf/global-geo')}
+            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors ${subTab === 'global-geo'
+              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
+              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+          >
+            {t('subTabs.waf.globalGeo')}
+          </button>
+          <button
             onClick={() => navigate('/waf/exploit-rules')}
             className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors ${subTab === 'exploit-rules'
               ? 'border-amber-600 text-amber-600 dark:text-amber-400'
@@ -76,6 +86,7 @@ export default function WAFPage({ subTab }: { subTab: 'settings' | 'tester' | 'b
       {subTab === 'settings' && <WAFSettings />}
       {subTab === 'banned-ips' && <BannedIPList />}
       {subTab === 'uri-blocks' && <URIBlockManager />}
+      {subTab === 'global-geo' && <GlobalGeoManager />}
       {subTab === 'exploit-rules' && <ExploitBlockRules />}
       {subTab === 'fail2ban' && <Fail2banManagement />}
       {subTab === 'tester' && <WAFTester />}

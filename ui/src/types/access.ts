@@ -73,6 +73,7 @@ export interface GeoRestriction {
   allow_search_bots: boolean;
   enabled: boolean;
   challenge_mode: boolean;
+  disable_global: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -85,4 +86,5 @@ export interface CreateGeoRestrictionRequest {
   allow_search_bots?: boolean;
   enabled?: boolean;
   challenge_mode?: boolean;
+  disable_global?: boolean;
 }

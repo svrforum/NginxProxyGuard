@@ -26,6 +26,12 @@ export interface BotFilterState extends CreateBotFilterRequest {
 
 export interface GeoDataState extends CreateGeoRestrictionRequest {
   enabled: boolean
+  /**
+   * UI-only tri-state flag. When true (and enabled is false) the host opts
+   * OUT of the global GeoIP default entirely (no geo restriction). Threaded
+   * to the API as `disable_global`.
+   */
+  disableGlobal?: boolean
 }
 
 export interface URIBlockState extends CreateURIBlockRequest {

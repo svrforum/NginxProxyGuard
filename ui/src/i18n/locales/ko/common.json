@@ -207,5 +207,10 @@
     "nginxTest": "Nginx 설정 테스트",
     "nginxReload": "Nginx 리로드",
     "hostDetails": "호스트별 상세"
+  },
+  "inheritOverride": {
+    "inherit": "상속",
+    "override": "재정의",
+    "disable": "비활성화"
   }
 }

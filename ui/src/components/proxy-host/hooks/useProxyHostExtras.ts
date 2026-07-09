@@ -71,7 +71,8 @@ export function useProxyHostExtras() {
 
     if (
       (geoData.enabled && geoData.countries.length > 0) ||
-      (geoData.allowed_ips?.length ?? 0) > 0
+      (geoData.allowed_ips?.length ?? 0) > 0 ||
+      geoData.disableGlobal === true
     ) {
       promises.push(
         setGeoRestriction(
@@ -84,6 +85,7 @@ export function useProxyHostExtras() {
             allow_search_bots: geoData.allow_search_bots,
             enabled: geoData.enabled && geoData.countries.length > 0,
             challenge_mode: geoData.challenge_mode,
+            disable_global: geoData.disableGlobal === true,
           },
           true,
         ).catch((err) => console.error('Failed to save geo restriction:', err)),
@@ -139,8 +141,12 @@ export function useProxyHostExtras() {
         try {
           const hasGeoBlocking = geoData.enabled && geoData.countries.length > 0
           const hasPriorityAllowIPs = (geoData.allowed_ips?.length ?? 0) > 0
+          const isDisableGlobal = geoData.disableGlobal === true
 
-          if (hasGeoBlocking || hasPriorityAllowIPs) {
+          if (hasGeoBlocking || hasPriorityAllowIPs || isDisableGlobal) {
+            // Persist a record for override (hasGeoBlocking), priority-allow
+            // IPs, or an explicit "disable global" opt-out. Deleting instead
+            // would fall back to inherit, so "disable" must be stored.
             await setGeoRestriction(
               hostId,
               {
@@ -151,10 +157,13 @@ export function useProxyHostExtras() {
                 allow_search_bots: geoData.allow_search_bots,
                 enabled: hasGeoBlocking,
                 challenge_mode: geoData.challenge_mode,
+                disable_global: isDisableGlobal,
               },
               true,
             )
           } else if (existingGeoRestriction) {
+            // Inherit: no local geo, no opt-out → drop the record so the host
+            // falls back to the global default.
             await deleteGeoRestriction(hostId, true)
           }
           queryClient.invalidateQueries({ queryKey: ['geoRestriction', hostId] })

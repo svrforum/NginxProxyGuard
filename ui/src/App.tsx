@@ -369,6 +369,7 @@ function AppContent({ user, onLogout }: AppContentProps) {
           <Route path="/waf/settings" element={<WAFPage subTab="settings" />} />
           <Route path="/waf/banned-ips" element={<WAFPage subTab="banned-ips" />} />
           <Route path="/waf/uri-blocks" element={<WAFPage subTab="uri-blocks" />} />
+          <Route path="/waf/global-geo" element={<WAFPage subTab="global-geo" />} />
           <Route path="/waf/tester" element={<WAFPage subTab="tester" />} />
           <Route path="/waf/exploit-rules" element={<WAFPage subTab="exploit-rules" />} />
           <Route path="/waf/fail2ban" element={<WAFPage subTab="fail2ban" />} />

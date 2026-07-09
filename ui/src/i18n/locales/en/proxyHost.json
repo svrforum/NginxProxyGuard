@@ -247,7 +247,9 @@
         "euCountries": "EU Countries",
         "asiaPacific": "Asia Pacific",
         "korea": "South Korea",
-        "noCountries": "No countries found"
+        "noCountries": "No countries found",
+        "inheritHint": "This host uses the global GeoIP default.",
+        "disableHint": "This host has no GeoIP restriction (the global default is ignored)."
       },
       "cloudProvider": {
         "title": "Cloud Provider Blocking",

@@ -56,7 +56,8 @@
       "uriBlocks": "차단 URI 관리",
       "exploitRules": "취약점 차단 관리",
       "fail2ban": "Fail2ban",
-      "tester": "WAF 테스터"
+      "tester": "WAF 테스터",
+      "globalGeo": "전역 GeoIP 기본값"
     },
     "logs": {
       "access": "접근 로그",

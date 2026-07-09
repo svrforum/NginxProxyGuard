@@ -105,6 +105,7 @@ export function useProxyHostFormState(host: ProxyHost | null | undefined) {
     allow_private_ips: true,
     allow_search_bots: false,
     challenge_mode: false,
+    disableGlobal: false,
   })
   const [geoSearchTerm, setGeoSearchTerm] = useState('')
   const [allowedIPsInput, setAllowedIPsInput] = useState('')
@@ -214,6 +215,7 @@ export function useProxyHostFormState(host: ProxyHost | null | undefined) {
         allow_private_ips: existingGeoRestriction.allow_private_ips ?? true,
         allow_search_bots: existingGeoRestriction.allow_search_bots ?? false,
         challenge_mode: existingGeoRestriction.challenge_mode || false,
+        disableGlobal: existingGeoRestriction.disable_global ?? false,
       })
       setAllowedIPsInput((existingGeoRestriction.allowed_ips || []).join('\n'))
     }

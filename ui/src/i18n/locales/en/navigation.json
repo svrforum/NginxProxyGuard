@@ -56,7 +56,8 @@
       "uriBlocks": "URI Block Management",
       "exploitRules": "Exploit Block Rules",
       "fail2ban": "Fail2ban",
-      "tester": "WAF Tester"
+      "tester": "WAF Tester",
+      "globalGeo": "Global GeoIP"
     },
     "logs": {
       "access": "Access Logs",

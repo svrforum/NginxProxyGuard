@@ -576,5 +576,18 @@
   "pagination": {
     "prev": "Previous",
     "next": "Next"
+  },
+  "globalGeo": {
+    "title": "Global GeoIP Default",
+    "subtitle": "GeoIP restriction applied by default to all proxy hosts. Each host can inherit, override, or disable it.",
+    "enableTitle": "Global GeoIP Restriction",
+    "enableDescription": "When enabled, this default applies to every host set to inherit.",
+    "infoTitle": "How the Global GeoIP Default Works",
+    "infoDesc": "This default applies to all proxy hosts that leave GeoIP set to \"Inherit\". A host set to \"Override\" uses its own configuration, and one set to \"Disable\" gets no GeoIP restriction at all. Saving regenerates all inheriting hosts automatically.",
+    "saveSuccess": "Global GeoIP default saved and applied to inheriting hosts",
+    "saveFailed": "Failed to save global GeoIP default",
+    "unsavedChanges": "You have unsaved changes",
+    "notAvailable": "GeoIP Not Available",
+    "notAvailableDescription": "Configure MaxMind GeoIP in Settings → GeoIP"
   }
 }
