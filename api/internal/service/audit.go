@@ -276,6 +276,11 @@ func (s *AuditService) LogGlobalSecurityHeadersUpdate(ctx context.Context) error
 	return s.logEntry(ctx, "global_security_headers_updated", "settings", "", "Global Security Headers", nil)
 }
 
+// LogGlobalCloudProvidersUpdate logs a change to the global cloud-provider default (#198).
+func (s *AuditService) LogGlobalCloudProvidersUpdate(ctx context.Context) error {
+	return s.logEntry(ctx, "global_cloud_providers_updated", "settings", "", "Global Cloud Provider Blocking", nil)
+}
+
 // LogSecurityFeatureUpdate logs security feature changes
 func (s *AuditService) LogSecurityFeatureUpdate(ctx context.Context, resource string, hostDomain string, enabled bool, details map[string]interface{}) error {
 	if details == nil {

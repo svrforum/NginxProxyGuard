@@ -284,16 +284,27 @@ func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.Pr
 		}()
 	}
 
-	// Fetch blocked cloud provider IP ranges and challenge mode setting
+	// Fetch blocked cloud provider IP ranges and resolve against the global
+	// default (#198 slice 4). resolveCloudProviders collapses global + host into
+	// the effective blocking settings (3-state: inherit/override/disable).
 	if s.cloudProviderRepo != nil {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			settings, err := s.cloudProviderRepo.GetCloudProviderBlockingSettings(ctx, host.ID)
+			hostSettings, err := s.cloudProviderRepo.GetCloudProviderBlockingSettings(ctx, host.ID)
 			if err != nil {
 				fail("cloud provider blocking settings", err)
 				return
 			}
+			var global *model.GlobalCloudProviders
+			if s.globalCloudRepo != nil {
+				global, err = s.globalCloudRepo.GetGlobal(ctx)
+				if err != nil {
+					fail("global cloud provider blocking", err)
+					return
+				}
+			}
+			settings := resolveCloudProviders(global, hostSettings)
 			if len(settings.BlockedProviders) > 0 {
 				ipRanges, err := s.cloudProviderRepo.GetIPRangesForProviders(ctx, settings.BlockedProviders)
 				if err != nil {

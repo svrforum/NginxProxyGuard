@@ -127,6 +127,13 @@ func (r *BackupRepository) ExportAllData(ctx context.Context) (*model.ExportData
 	}
 	export.GlobalSecurityHeaders = globalSecHeaders
 
+	// Export Global Cloud Provider default (#198)
+	globalCloud, err := r.exportGlobalCloudProviders(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to export global cloud providers: %w", err)
+	}
+	export.GlobalCloudProviders = globalCloud
+
 	// Export Cloud Providers
 	cloudProviders, err := r.exportCloudProviders(ctx)
 	if err != nil {

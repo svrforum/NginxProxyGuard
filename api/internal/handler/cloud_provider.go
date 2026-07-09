@@ -12,20 +12,54 @@ import (
 
 type CloudProviderHandler struct {
 	repo             *repository.CloudProviderRepository
+	globalRepo       *repository.GlobalCloudProvidersRepository
 	proxyHostService *service.ProxyHostService
 	audit            *service.AuditService
 }
 
 func NewCloudProviderHandler(
 	repo *repository.CloudProviderRepository,
+	globalRepo *repository.GlobalCloudProvidersRepository,
 	proxyHostService *service.ProxyHostService,
 	audit *service.AuditService,
 ) *CloudProviderHandler {
 	return &CloudProviderHandler{
 		repo:             repo,
+		globalRepo:       globalRepo,
 		proxyHostService: proxyHostService,
 		audit:            audit,
 	}
+}
+
+// GetGlobal returns the singleton global cloud-provider blocking default (#198).
+func (h *CloudProviderHandler) GetGlobal(c echo.Context) error {
+	g, err := h.globalRepo.GetGlobal(c.Request().Context())
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	return c.JSON(http.StatusOK, g)
+}
+
+// UpdateGlobal updates the global cloud-provider blocking default and
+// regenerates every inheriting host (#198).
+func (h *CloudProviderHandler) UpdateGlobal(c echo.Context) error {
+	var req model.UpdateGlobalCloudProvidersRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
+	}
+	ctx := c.Request().Context()
+	g, err := h.globalRepo.Upsert(ctx, &req)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	if h.proxyHostService != nil {
+		if err := h.proxyHostService.SyncAllConfigs(ctx); err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to regenerate configs: " + err.Error()})
+		}
+	}
+	auditCtx := service.ContextWithAudit(ctx, c)
+	h.audit.LogGlobalCloudProvidersUpdate(auditCtx)
+	return c.JSON(http.StatusOK, g)
 }
 
 // ListProviders returns all cloud providers
@@ -137,9 +171,10 @@ func (h *CloudProviderHandler) GetBlockedProviders(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"blocked_providers":  settings.BlockedProviders,
-		"challenge_mode":     settings.ChallengeMode,
-		"allow_search_bots":  settings.AllowSearchBots,
+		"blocked_providers":    settings.BlockedProviders,
+		"challenge_mode":       settings.ChallengeMode,
+		"allow_search_bots":    settings.AllowSearchBots,
+		"cloud_disable_global": settings.CloudDisableGlobal,
 	})
 }
 
@@ -156,9 +191,10 @@ func (h *CloudProviderHandler) SetBlockedProviders(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	settings := &repository.CloudProviderBlockingSettings{
-		BlockedProviders: req.BlockedProviders,
-		ChallengeMode:    req.ChallengeMode,
-		AllowSearchBots:  req.AllowSearchBots,
+		BlockedProviders:   req.BlockedProviders,
+		ChallengeMode:      req.ChallengeMode,
+		AllowSearchBots:    req.AllowSearchBots,
+		CloudDisableGlobal: req.CloudDisableGlobal,
 	}
 
 	if err := h.repo.SetCloudProviderBlockingSettings(ctx, proxyHostID, settings); err != nil {

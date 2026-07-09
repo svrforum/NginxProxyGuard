@@ -23,6 +23,7 @@ type Repositories struct {
 	GlobalGeo          *repository.GlobalGeoRepository
 	GlobalBotFilter    *repository.GlobalBotFilterRepository
 	GlobalSecHeaders   *repository.GlobalSecurityHeadersRepository
+	GlobalCloud        *repository.GlobalCloudProvidersRepository
 	RateLimit          *repository.RateLimitRepository
 	IPBanHistory       *repository.IPBanHistoryRepository
 	BotFilter          *repository.BotFilterRepository
@@ -66,6 +67,7 @@ func InitRepositories(db *database.DB, redisCache *cache.RedisClient) *Repositor
 		GlobalBotFilter:    repository.NewGlobalBotFilterRepository(db.DB),
 		SecurityHeaders:    repository.NewSecurityHeadersRepository(db.DB),
 		GlobalSecHeaders:   repository.NewGlobalSecurityHeadersRepository(db.DB),
+		GlobalCloud:        repository.NewGlobalCloudProvidersRepository(db.DB),
 		Upstream:           repository.NewUpstreamRepository(db.DB),
 		GlobalSettings:     repository.NewGlobalSettingsRepository(db.DB),
 		Dashboard:          repository.NewDashboardRepository(db.DB),

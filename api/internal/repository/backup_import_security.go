@@ -192,6 +192,23 @@ func (r *BackupRepository) importGlobalSecurityHeaders(ctx context.Context, tx *
 	return err
 }
 
+// importGlobalCloudProviders restores the singleton global cloud-provider
+// default (#198 slice 4). Delete-then-insert so the singleton stays unique.
+func (r *BackupRepository) importGlobalCloudProviders(ctx context.Context, tx *sql.Tx, g *model.GlobalCloudProvidersExport) error {
+	_, _ = tx.ExecContext(ctx, "DELETE FROM global_cloud_providers")
+
+	providers := g.BlockedProviders
+	if providers == nil {
+		providers = []string{}
+	}
+	query := `
+		INSERT INTO global_cloud_providers (blocked_providers, challenge_mode, allow_search_bots)
+		VALUES ($1, $2, $3)
+	`
+	_, err := tx.ExecContext(ctx, query, pq.Array(providers), g.ChallengeMode, g.AllowSearchBots)
+	return err
+}
+
 func (r *BackupRepository) importCloudProvider(ctx context.Context, tx *sql.Tx, cp *model.CloudProviderExport) error {
 	query := `
 		INSERT INTO cloud_providers (name, slug, description, region, ip_ranges_url, enabled)

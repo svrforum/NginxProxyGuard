@@ -591,11 +591,22 @@ CREATE TABLE IF NOT EXISTS public.geo_restrictions (
     allow_private_ips boolean DEFAULT true,
     allow_search_bots boolean DEFAULT false,
     disable_global boolean DEFAULT false NOT NULL,
+    cloud_disable_global boolean DEFAULT false NOT NULL,
     CONSTRAINT geo_restrictions_mode_check CHECK (((mode)::text = ANY ((ARRAY['whitelist'::character varying, 'blacklist'::character varying])::text[])))
 );
 COMMENT ON COLUMN public.geo_restrictions.allowed_ips IS 'IP addresses or CIDR ranges that bypass geo restrictions (priority override)';
 COMMENT ON COLUMN public.geo_restrictions.challenge_cloud_providers IS 'If true, show challenge (CAPTCHA) instead of blocking cloud provider IPs';
 COMMENT ON COLUMN public.geo_restrictions.disable_global IS 'Host opts out of the global geo default (3-state: inherit/override/disable). See global_geo_restrictions.';
+COMMENT ON COLUMN public.geo_restrictions.cloud_disable_global IS 'Host opts out of the global cloud-provider blocking default (separate from disable_global). See global_cloud_providers.';
+CREATE TABLE IF NOT EXISTS public.global_cloud_providers (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    blocked_providers text[] DEFAULT '{}'::text[] NOT NULL,
+    challenge_mode boolean DEFAULT false,
+    allow_search_bots boolean DEFAULT false,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_global_cloud_providers_singleton ON public.global_cloud_providers USING btree ((true));
 CREATE TABLE IF NOT EXISTS public.global_geo_restrictions (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     enabled boolean DEFAULT false,
@@ -3961,6 +3972,22 @@ CREATE TABLE IF NOT EXISTS public.global_security_headers (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_global_security_headers_singleton ON public.global_security_headers USING btree ((true));
 ALTER TABLE public.security_headers ADD COLUMN IF NOT EXISTS disable_global boolean DEFAULT false NOT NULL;
+
+-- Slice 4 (Cloud Provider): singleton global_cloud_providers (empty blocked list
+-- by default → zero behavior change on upgrade) + geo_restrictions.cloud_disable_global
+-- (SEPARATE from geo disable_global — a host can inherit geo yet override cloud).
+-- No explicit enabled flag: the global default is "active" when blocked_providers
+-- is non-empty. Service-layer resolution, templates unchanged. Canonical in migration.go.
+CREATE TABLE IF NOT EXISTS public.global_cloud_providers (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    blocked_providers text[] DEFAULT '{}'::text[] NOT NULL,
+    challenge_mode boolean DEFAULT false,
+    allow_search_bots boolean DEFAULT false,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_global_cloud_providers_singleton ON public.global_cloud_providers USING btree ((true));
+ALTER TABLE public.geo_restrictions ADD COLUMN IF NOT EXISTS cloud_disable_global boolean DEFAULT false NOT NULL;
 
 -- Stream proxy: enforce listener uniqueness at the DB level so two concurrent
 -- creates cannot both succeed when they target the same (host, port, protocol).

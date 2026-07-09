@@ -222,6 +222,13 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 		}
 	}
 
+	// Import Global Cloud Provider default (#198)
+	if data.GlobalCloudProviders != nil {
+		if err := r.importGlobalCloudProviders(ctx, tx, data.GlobalCloudProviders); err != nil {
+			return nil, fmt.Errorf("failed to import global cloud providers: %w", err)
+		}
+	}
+
 	// Import Cloud Providers
 	for _, cp := range data.CloudProviders {
 		if err := r.importCloudProvider(ctx, tx, &cp); err != nil {

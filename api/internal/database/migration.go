@@ -1029,6 +1029,19 @@ ALTER TABLE public.bot_filters ADD COLUMN IF NOT EXISTS disable_global boolean D
 CREATE UNIQUE INDEX IF NOT EXISTS idx_global_security_headers_singleton ON public.global_security_headers USING btree ((true));
 ALTER TABLE public.security_headers ADD COLUMN IF NOT EXISTS disable_global boolean DEFAULT false NOT NULL;`,
 		},
+		{
+			desc: "v2.31.0: global_cloud_providers singleton + geo_restrictions.cloud_disable_global (#198 slice 4)",
+			sql: `CREATE TABLE IF NOT EXISTS public.global_cloud_providers (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    blocked_providers text[] DEFAULT '{}'::text[] NOT NULL,
+    challenge_mode boolean DEFAULT false,
+    allow_search_bots boolean DEFAULT false,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_global_cloud_providers_singleton ON public.global_cloud_providers USING btree ((true));
+ALTER TABLE public.geo_restrictions ADD COLUMN IF NOT EXISTS cloud_disable_global boolean DEFAULT false NOT NULL;`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

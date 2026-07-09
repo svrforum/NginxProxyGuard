@@ -82,7 +82,7 @@ func InitHandlers(
 	h.APIToken = handler.NewAPITokenHandler(repos.APIToken, repos.AuditLog)
 	h.AuditLog = handler.NewAuditLogHandler(repos.AuditLog, repos.APIToken)
 	h.Challenge = handler.NewChallengeHandler(svcs.Challenge, svcs.Audit)
-	h.CloudProvider = handler.NewCloudProviderHandler(repos.CloudProvider, svcs.ProxyHost, svcs.Audit)
+	h.CloudProvider = handler.NewCloudProviderHandler(repos.CloudProvider, repos.GlobalCloud, svcs.ProxyHost, svcs.Audit)
 	h.FilterSubscription = handler.NewFilterSubscriptionHandler(svcs.FilterSubscription, svcs.Audit)
 	h.Swagger = handler.NewSwaggerHandler()
 	h.Metrics = handler.NewMetricsHandler()

@@ -636,6 +636,10 @@ func registerCloudProviderRoutes(v1 *echo.Group, h *handler.CloudProviderHandler
 	proxyRead := authMiddleware.RequireAPIPermission(model.PermissionProxyRead)
 	proxyWrite := authMiddleware.RequireAPIPermission(model.PermissionProxyWrite)
 
+	// Global cloud-provider blocking default (#198 slice 4) — settings-scoped singleton.
+	v1.GET("/settings/global-cloud-providers", h.GetGlobal, settingsRead)
+	v1.PUT("/settings/global-cloud-providers", h.UpdateGlobal, settingsWrite)
+
 	g := v1.Group("/cloud-providers")
 	g.GET("", h.ListProviders, settingsRead)
 	g.GET("/by-region", h.ListProvidersByRegion, settingsRead)

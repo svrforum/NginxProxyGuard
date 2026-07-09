@@ -303,6 +303,27 @@ func (r *BackupRepository) exportGlobalSecurityHeaders(ctx context.Context) (*mo
 	return &g, nil
 }
 
+// exportGlobalCloudProviders exports the singleton global cloud-provider default
+// (#198 slice 4). Returns nil when no row exists.
+func (r *BackupRepository) exportGlobalCloudProviders(ctx context.Context) (*model.GlobalCloudProvidersExport, error) {
+	query := `
+		SELECT COALESCE(blocked_providers, '{}'), challenge_mode, allow_search_bots
+		FROM global_cloud_providers LIMIT 1
+	`
+	var g model.GlobalCloudProvidersExport
+	err := r.db.QueryRowContext(ctx, query).Scan(pq.Array(&g.BlockedProviders), &g.ChallengeMode, &g.AllowSearchBots)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if g.BlockedProviders == nil {
+		g.BlockedProviders = []string{}
+	}
+	return &g, nil
+}
+
 func (r *BackupRepository) exportGlobalURIBlock(ctx context.Context) (*model.GlobalURIBlockExport, error) {
 	query := `
 		SELECT enabled, rules, COALESCE(exception_ips, '{}'), COALESCE(allow_private_ips, true)

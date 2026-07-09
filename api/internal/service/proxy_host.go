@@ -68,6 +68,7 @@ type ProxyHostService struct {
 	globalGeoRepo          *repository.GlobalGeoRepository // global geo default (#198); set via SetGlobalGeoRepo
 	globalBotFilterRepo    *repository.GlobalBotFilterRepository // global bot-filter default (#198 slice 2)
 	globalSecHeadersRepo   *repository.GlobalSecurityHeadersRepository // global security-headers default (#198 slice 3)
+	globalCloudRepo        *repository.GlobalCloudProvidersRepository // global cloud-provider default (#198 slice 4)
 	rateLimitRepo          *repository.RateLimitRepository
 	securityHeadersRepo    *repository.SecurityHeadersRepository
 	botFilterRepo          *repository.BotFilterRepository
@@ -159,6 +160,11 @@ func (s *ProxyHostService) SetGlobalBotFilterRepo(repo *repository.GlobalBotFilt
 // SetGlobalSecHeadersRepo wires the global security-headers default repository (#198).
 func (s *ProxyHostService) SetGlobalSecHeadersRepo(repo *repository.GlobalSecurityHeadersRepository) {
 	s.globalSecHeadersRepo = repo
+}
+
+// SetGlobalCloudRepo wires the global cloud-provider default repository (#198).
+func (s *ProxyHostService) SetGlobalCloudRepo(repo *repository.GlobalCloudProvidersRepository) {
+	s.globalCloudRepo = repo
 }
 
 // SetContainerResolver injects the docker container → IP resolver. (#150)

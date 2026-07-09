@@ -58,9 +58,29 @@ type CreateCloudProviderRequest struct {
 
 // BlockedCloudProvidersRequest for updating blocked providers on a proxy host
 type BlockedCloudProvidersRequest struct {
-	BlockedProviders  []string `json:"blocked_providers"`   // List of provider slugs
-	ChallengeMode     bool     `json:"challenge_mode"`      // Show challenge instead of blocking
-	AllowSearchBots   bool     `json:"allow_search_bots"`   // Allow search engine bots to bypass cloud blocking
+	BlockedProviders   []string `json:"blocked_providers"`    // List of provider slugs
+	ChallengeMode      bool     `json:"challenge_mode"`       // Show challenge instead of blocking
+	AllowSearchBots    bool     `json:"allow_search_bots"`    // Allow search engine bots to bypass cloud blocking
+	CloudDisableGlobal bool     `json:"cloud_disable_global"` // Host opts out of the global cloud default (#198 slice 4)
+}
+
+// GlobalCloudProviders is the singleton global cloud-provider blocking default
+// inherited by hosts that don't override or disable (#198 slice 4). It has no
+// explicit enabled flag: it is "active" when BlockedProviders is non-empty.
+type GlobalCloudProviders struct {
+	ID               string    `json:"id"`
+	BlockedProviders []string  `json:"blocked_providers"`
+	ChallengeMode    bool      `json:"challenge_mode"`
+	AllowSearchBots  bool      `json:"allow_search_bots"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+}
+
+// UpdateGlobalCloudProvidersRequest is a full update for the singleton.
+type UpdateGlobalCloudProvidersRequest struct {
+	BlockedProviders []string `json:"blocked_providers"`
+	ChallengeMode    bool     `json:"challenge_mode"`
+	AllowSearchBots  bool     `json:"allow_search_bots"`
 }
 
 // RegionInfo provides metadata about regions

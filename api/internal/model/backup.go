@@ -226,6 +226,7 @@ type ExportData struct {
 	GlobalGeoRestriction *GlobalGeoRestrictionExport `json:"global_geo_restriction,omitempty"`
 	GlobalBotFilter      *GlobalBotFilterExport      `json:"global_bot_filter,omitempty"`
 	GlobalSecurityHeaders *GlobalSecurityHeadersExport `json:"global_security_headers,omitempty"`
+	GlobalCloudProviders  *GlobalCloudProvidersExport  `json:"global_cloud_providers,omitempty"`
 
 	// Cloud Providers
 	CloudProviders []CloudProviderExport `json:"cloud_providers,omitempty"`
@@ -503,6 +504,14 @@ type GeoRestrictionExport struct {
 	ChallengeCloudProviders       bool     `json:"challenge_cloud_providers"`
 	AllowSearchBotsCloudProviders bool     `json:"allow_search_bots_cloud_providers"`
 	DisableGlobal                 bool     `json:"disable_global"`
+	CloudDisableGlobal            bool     `json:"cloud_disable_global"`
+}
+
+// GlobalCloudProvidersExport represents the singleton global cloud-provider default (#198).
+type GlobalCloudProvidersExport struct {
+	BlockedProviders []string `json:"blocked_providers"`
+	ChallengeMode    bool     `json:"challenge_mode"`
+	AllowSearchBots  bool     `json:"allow_search_bots"`
 }
 
 // GlobalGeoRestrictionExport represents the singleton global geo default (#198).
