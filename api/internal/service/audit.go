@@ -266,6 +266,11 @@ func (s *AuditService) LogGlobalGeoUpdate(ctx context.Context) error {
 	return s.logEntry(ctx, "global_geo_updated", "settings", "", "Global Geo Restriction", nil)
 }
 
+// LogGlobalBotFilterUpdate logs a change to the global bot-filter default (#198).
+func (s *AuditService) LogGlobalBotFilterUpdate(ctx context.Context) error {
+	return s.logEntry(ctx, "global_bot_filter_updated", "settings", "", "Global Bot Filter", nil)
+}
+
 // LogSecurityFeatureUpdate logs security feature changes
 func (s *AuditService) LogSecurityFeatureUpdate(ctx context.Context, resource string, hostDomain string, enabled bool, details map[string]interface{}) error {
 	if details == nil {

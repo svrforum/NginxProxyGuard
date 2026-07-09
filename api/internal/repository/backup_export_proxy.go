@@ -162,7 +162,8 @@ func (r *BackupRepository) getProxyHostBotFilter(ctx context.Context, proxyHostI
 	query := `
 		SELECT enabled, block_bad_bots, block_ai_bots, allow_search_engines,
 		       COALESCE(block_suspicious_clients, FALSE) as block_suspicious_clients,
-		       custom_blocked_agents, custom_allowed_agents, challenge_suspicious
+		       custom_blocked_agents, custom_allowed_agents, challenge_suspicious,
+		       COALESCE(disable_global, FALSE) as disable_global
 		FROM bot_filters WHERE proxy_host_id = $1
 	`
 	var bf model.BotFilterExport
@@ -170,6 +171,7 @@ func (r *BackupRepository) getProxyHostBotFilter(ctx context.Context, proxyHostI
 	err := r.db.QueryRowContext(ctx, query, proxyHostID).Scan(
 		&bf.Enabled, &bf.BlockBadBots, &bf.BlockAIBots, &bf.AllowSearchEngines,
 		&bf.BlockSuspiciousClients, &blockedAgents, &allowedAgents, &bf.ChallengeSuspicious,
+		&bf.DisableGlobal,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil

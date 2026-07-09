@@ -158,6 +158,19 @@ func (r *BackupRepository) importGlobalGeo(ctx context.Context, tx *sql.Tx, g *m
 	return err
 }
 
+// importGlobalBotFilter restores the singleton global bot-filter default (#198).
+// Delete-then-insert so the singleton stays unique.
+func (r *BackupRepository) importGlobalBotFilter(ctx context.Context, tx *sql.Tx, g *model.GlobalBotFilterExport) error {
+	_, _ = tx.ExecContext(ctx, "DELETE FROM global_bot_filters")
+
+	query := `
+		INSERT INTO global_bot_filters (enabled, block_bad_bots, block_ai_bots, allow_search_engines, block_suspicious_clients, custom_blocked_agents, custom_allowed_agents, challenge_suspicious)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	`
+	_, err := tx.ExecContext(ctx, query, g.Enabled, g.BlockBadBots, g.BlockAIBots, g.AllowSearchEngines, g.BlockSuspiciousClients, g.CustomBlockedAgents, g.CustomAllowedAgents, g.ChallengeSuspicious)
+	return err
+}
+
 func (r *BackupRepository) importCloudProvider(ctx context.Context, tx *sql.Tx, cp *model.CloudProviderExport) error {
 	query := `
 		INSERT INTO cloud_providers (name, slug, description, region, ip_ranges_url, enabled)

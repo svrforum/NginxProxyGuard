@@ -63,6 +63,34 @@ func (h *SecurityHandler) DeleteBotFilter(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
+// GetGlobalBotFilter returns the singleton global bot-filter default (#198).
+func (h *SecurityHandler) GetGlobalBotFilter(c echo.Context) error {
+	g, err := h.securityService.GetGlobalBotFilter(c.Request().Context())
+	if err != nil {
+		return databaseError(c, "get global bot filter", err)
+	}
+	return c.JSON(http.StatusOK, g)
+}
+
+// UpdateGlobalBotFilter updates the global bot-filter default and regenerates
+// inheriting hosts (#198).
+func (h *SecurityHandler) UpdateGlobalBotFilter(c echo.Context) error {
+	var req model.UpdateGlobalBotFilterRequest
+	if err := c.Bind(&req); err != nil {
+		return badRequestError(c, "Invalid request body")
+	}
+
+	g, err := h.securityService.UpdateGlobalBotFilter(c.Request().Context(), &req)
+	if err != nil {
+		return internalError(c, "update global bot filter", err)
+	}
+
+	auditCtx := service.ContextWithAudit(c.Request().Context(), c)
+	h.audit.LogGlobalBotFilterUpdate(auditCtx)
+
+	return c.JSON(http.StatusOK, g)
+}
+
 func (h *SecurityHandler) GetKnownBots(c echo.Context) error {
 	response := map[string]interface{}{
 		"bad_bots":           model.KnownBadBots,

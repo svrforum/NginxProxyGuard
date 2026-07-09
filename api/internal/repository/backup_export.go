@@ -113,6 +113,13 @@ func (r *BackupRepository) ExportAllData(ctx context.Context) (*model.ExportData
 	}
 	export.GlobalGeoRestriction = globalGeo
 
+	// Export Global Bot Filter default (#198)
+	globalBotFilter, err := r.exportGlobalBotFilter(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to export global bot filter: %w", err)
+	}
+	export.GlobalBotFilter = globalBotFilter
+
 	// Export Cloud Providers
 	cloudProviders, err := r.exportCloudProviders(ctx)
 	if err != nil {

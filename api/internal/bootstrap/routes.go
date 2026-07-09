@@ -487,6 +487,12 @@ func registerSecurityRoutes(v1 *echo.Group, h *handler.SecurityHandler) {
 	v1.DELETE("/proxy-hosts/:proxyHostId/bot-filter", h.DeleteBotFilter, proxyDelete)
 	v1.GET("/bots/known", h.GetKnownBots, proxyRead)
 
+	// Global bot filter default (#198) — settings-scoped singleton.
+	settingsRead := authMiddleware.RequireAPIPermission(model.PermissionSettingsRead)
+	settingsWrite := authMiddleware.RequireAPIPermission(model.PermissionSettingsWrite)
+	v1.GET("/settings/global-bot-filter", h.GetGlobalBotFilter, settingsRead)
+	v1.PUT("/settings/global-bot-filter", h.UpdateGlobalBotFilter, settingsWrite)
+
 	// URI block (per proxy host)
 	v1.GET("/uri-blocks", h.ListAllURIBlocks, proxyRead)
 	v1.POST("/uri-blocks/bulk-add-rule", h.BulkAddURIBlockRule, proxyWrite)

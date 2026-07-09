@@ -247,6 +247,31 @@ func (r *BackupRepository) exportGlobalGeo(ctx context.Context) (*model.GlobalGe
 	return &g, nil
 }
 
+// exportGlobalBotFilter exports the singleton global bot-filter default (#198).
+// Returns nil when no row exists (older installs / never configured).
+func (r *BackupRepository) exportGlobalBotFilter(ctx context.Context) (*model.GlobalBotFilterExport, error) {
+	query := `
+		SELECT enabled, block_bad_bots, block_ai_bots, allow_search_engines,
+		       COALESCE(block_suspicious_clients, FALSE), custom_blocked_agents, custom_allowed_agents, challenge_suspicious
+		FROM global_bot_filters LIMIT 1
+	`
+	var g model.GlobalBotFilterExport
+	var blockedAgents, allowedAgents sql.NullString
+	err := r.db.QueryRowContext(ctx, query).Scan(
+		&g.Enabled, &g.BlockBadBots, &g.BlockAIBots, &g.AllowSearchEngines,
+		&g.BlockSuspiciousClients, &blockedAgents, &allowedAgents, &g.ChallengeSuspicious,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	g.CustomBlockedAgents = blockedAgents.String
+	g.CustomAllowedAgents = allowedAgents.String
+	return &g, nil
+}
+
 func (r *BackupRepository) exportGlobalURIBlock(ctx context.Context) (*model.GlobalURIBlockExport, error) {
 	query := `
 		SELECT enabled, rules, COALESCE(exception_ips, '{}'), COALESCE(allow_private_ips, true)

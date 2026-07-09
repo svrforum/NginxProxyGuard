@@ -25,6 +25,16 @@ type SecurityService struct {
 	uriBlockRepo     *repository.URIBlockRepository
 	redisCache       *cache.RedisClient
 	nginxReloader    *NginxReloader
+
+	// globalBotFilterRepo backs the singleton global bot-filter default (#198).
+	// Injected via SetGlobalBotFilterRepo so the constructor signature (and its
+	// bootstrap call site) stays unchanged.
+	globalBotFilterRepo *repository.GlobalBotFilterRepository
+}
+
+// SetGlobalBotFilterRepo wires the global bot-filter default repository (#198).
+func (s *SecurityService) SetGlobalBotFilterRepo(repo *repository.GlobalBotFilterRepository) {
+	s.globalBotFilterRepo = repo
 }
 
 func NewSecurityService(
@@ -653,6 +663,32 @@ func (s *SecurityService) DeleteBotFilter(ctx context.Context, proxyHostID strin
 		return fmt.Errorf("failed to delete bot filter: %w", err)
 	}
 	return nil
+}
+
+// GetGlobalBotFilter returns the singleton global bot-filter default (#198).
+func (s *SecurityService) GetGlobalBotFilter(ctx context.Context) (*model.GlobalBotFilter, error) {
+	if s.globalBotFilterRepo == nil {
+		return &model.GlobalBotFilter{Enabled: false, BlockBadBots: true, AllowSearchEngines: true}, nil
+	}
+	return s.globalBotFilterRepo.GetGlobal(ctx)
+}
+
+// UpdateGlobalBotFilter updates the global bot-filter default and regenerates
+// every inheriting host so the new default takes effect (#198).
+func (s *SecurityService) UpdateGlobalBotFilter(ctx context.Context, req *model.UpdateGlobalBotFilterRequest) (*model.GlobalBotFilter, error) {
+	if s.globalBotFilterRepo == nil {
+		return nil, fmt.Errorf("global bot filter is not available")
+	}
+	g, err := s.globalBotFilterRepo.Upsert(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update global bot filter: %w", err)
+	}
+	if s.proxyHostService != nil {
+		if err := s.proxyHostService.SyncAllConfigs(ctx); err != nil {
+			return nil, fmt.Errorf("failed to regenerate configs: %w", err)
+		}
+	}
+	return g, nil
 }
 
 // ---- Security Headers ----

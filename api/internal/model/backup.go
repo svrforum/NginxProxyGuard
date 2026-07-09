@@ -224,6 +224,7 @@ type ExportData struct {
 	// Security: Global URI Blocks
 	GlobalURIBlock *GlobalURIBlockExport `json:"global_uri_block,omitempty"`
 	GlobalGeoRestriction *GlobalGeoRestrictionExport `json:"global_geo_restriction,omitempty"`
+	GlobalBotFilter      *GlobalBotFilterExport      `json:"global_bot_filter,omitempty"`
 
 	// Cloud Providers
 	CloudProviders []CloudProviderExport `json:"cloud_providers,omitempty"`
@@ -432,6 +433,19 @@ type Fail2banExport struct {
 
 // BotFilterExport represents bot filter config for export
 type BotFilterExport struct {
+	Enabled                bool   `json:"enabled"`
+	BlockBadBots           bool   `json:"block_bad_bots"`
+	BlockAIBots            bool   `json:"block_ai_bots"`
+	AllowSearchEngines     bool   `json:"allow_search_engines"`
+	BlockSuspiciousClients bool   `json:"block_suspicious_clients"`
+	CustomBlockedAgents    string `json:"custom_blocked_agents,omitempty"`
+	CustomAllowedAgents    string `json:"custom_allowed_agents,omitempty"`
+	ChallengeSuspicious    bool   `json:"challenge_suspicious"`
+	DisableGlobal          bool   `json:"disable_global"`
+}
+
+// GlobalBotFilterExport represents the singleton global bot-filter default (#198).
+type GlobalBotFilterExport struct {
 	Enabled                bool   `json:"enabled"`
 	BlockBadBots           bool   `json:"block_bad_bots"`
 	BlockAIBots            bool   `json:"block_ai_bots"`
