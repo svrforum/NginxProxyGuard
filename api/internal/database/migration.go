@@ -964,6 +964,31 @@ ALTER TABLE public.auth_providers ADD COLUMN IF NOT EXISTS reconcile_fail_count 
 			desc: "v2.30.0: global_settings.access_log_strip_query",
 			sql:  `ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS access_log_strip_query boolean DEFAULT false NOT NULL`,
 		},
+		// -----------------------------------------------------------------------
+		// v2.31.0: global default + per-host override for security options (#198).
+		// Slice 1 (GeoIP): singleton global_geo_restrictions (enabled OFF by
+		// default → zero behavior change on upgrade) + geo_restrictions.disable_global
+		// for the per-host 3-state (inherit/override/disable). Resolution is
+		// service-layer; nginx templates unchanged.
+		// -----------------------------------------------------------------------
+		{
+			desc: "v2.31.0: global_geo_restrictions singleton + geo_restrictions.disable_global (#198)",
+			sql: `CREATE TABLE IF NOT EXISTS public.global_geo_restrictions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    enabled boolean DEFAULT false,
+    mode character varying(20) DEFAULT 'blacklist'::character varying NOT NULL,
+    countries text[] DEFAULT '{}'::text[] NOT NULL,
+    allowed_ips text[] DEFAULT '{}'::text[],
+    allow_private_ips boolean DEFAULT true,
+    allow_search_bots boolean DEFAULT false,
+    challenge_mode boolean DEFAULT false,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT global_geo_restrictions_mode_check CHECK (((mode)::text = ANY ((ARRAY['whitelist'::character varying, 'blacklist'::character varying])::text[])))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_global_geo_restrictions_singleton ON public.global_geo_restrictions USING btree ((true));
+ALTER TABLE public.geo_restrictions ADD COLUMN IF NOT EXISTS disable_global boolean DEFAULT false NOT NULL;`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

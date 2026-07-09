@@ -128,20 +128,32 @@ func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.Pr
 		}()
 	}
 
-	// Fetch geo restriction if exists
-	// Load if enabled OR if has AllowedIPs (priority allow IPs are used for cloud blocking too)
+	// Fetch geo restriction and resolve it against the global default (#198).
+	// resolveGeo collapses global + host into the single effective object the
+	// template consumes (3-state: inherit/override/disable). It preserves the
+	// host's AllowedIPs (priority-allow IPs used by cloud/bot sections) in every
+	// state, so the pre-#198 "load if enabled OR has AllowedIPs" behavior is kept
+	// while a global default now applies to inheriting hosts.
 	if s.geoRepo != nil {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			geo, err := s.geoRepo.GetByProxyHostID(ctx, host.ID)
+			hostGeo, err := s.geoRepo.GetByProxyHostID(ctx, host.ID)
 			if err != nil {
 				fail("geo restriction", err)
 				return
 			}
-			if geo != nil && (geo.Enabled || len(geo.AllowedIPs) > 0) {
+			var globalGeo *model.GlobalGeoRestriction
+			if s.globalGeoRepo != nil {
+				globalGeo, err = s.globalGeoRepo.GetGlobal(ctx)
+				if err != nil {
+					fail("global geo restriction", err)
+					return
+				}
+			}
+			if effective := resolveGeo(globalGeo, hostGeo); effective != nil {
 				mu.Lock()
-				data.GeoRestriction = geo
+				data.GeoRestriction = effective
 				mu.Unlock()
 			}
 		}()

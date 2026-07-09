@@ -20,6 +20,7 @@ type Repositories struct {
 	AuthProvider       *repository.AuthProviderRepository
 	RedirectHost       *repository.RedirectHostRepository
 	Geo                *repository.GeoRepository
+	GlobalGeo          *repository.GlobalGeoRepository
 	RateLimit          *repository.RateLimitRepository
 	IPBanHistory       *repository.IPBanHistoryRepository
 	BotFilter          *repository.BotFilterRepository
@@ -56,6 +57,7 @@ func InitRepositories(db *database.DB, redisCache *cache.RedisClient) *Repositor
 		AuthProvider:       repository.NewAuthProviderRepository(db),
 		RedirectHost:       repository.NewRedirectHostRepository(db),
 		Geo:                repository.NewGeoRepository(db),
+		GlobalGeo:          repository.NewGlobalGeoRepository(db),
 		RateLimit:          repository.NewRateLimitRepository(db.DB),
 		IPBanHistory:       repository.NewIPBanHistoryRepository(db.DB),
 		BotFilter:          repository.NewBotFilterRepository(db.DB),

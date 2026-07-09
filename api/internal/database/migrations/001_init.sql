@@ -575,10 +575,26 @@ CREATE TABLE IF NOT EXISTS public.geo_restrictions (
     allow_search_bots_cloud_providers boolean DEFAULT false,
     allow_private_ips boolean DEFAULT true,
     allow_search_bots boolean DEFAULT false,
+    disable_global boolean DEFAULT false NOT NULL,
     CONSTRAINT geo_restrictions_mode_check CHECK (((mode)::text = ANY ((ARRAY['whitelist'::character varying, 'blacklist'::character varying])::text[])))
 );
 COMMENT ON COLUMN public.geo_restrictions.allowed_ips IS 'IP addresses or CIDR ranges that bypass geo restrictions (priority override)';
 COMMENT ON COLUMN public.geo_restrictions.challenge_cloud_providers IS 'If true, show challenge (CAPTCHA) instead of blocking cloud provider IPs';
+COMMENT ON COLUMN public.geo_restrictions.disable_global IS 'Host opts out of the global geo default (3-state: inherit/override/disable). See global_geo_restrictions.';
+CREATE TABLE IF NOT EXISTS public.global_geo_restrictions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    enabled boolean DEFAULT false,
+    mode character varying(20) DEFAULT 'blacklist'::character varying NOT NULL,
+    countries text[] DEFAULT '{}'::text[] NOT NULL,
+    allowed_ips text[] DEFAULT '{}'::text[],
+    allow_private_ips boolean DEFAULT true,
+    allow_search_bots boolean DEFAULT false,
+    challenge_mode boolean DEFAULT false,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT global_geo_restrictions_mode_check CHECK (((mode)::text = ANY ((ARRAY['whitelist'::character varying, 'blacklist'::character varying])::text[])))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_global_geo_restrictions_singleton ON public.global_geo_restrictions USING btree ((true));
 CREATE TABLE IF NOT EXISTS public.geoip_update_history (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     status character varying(20) DEFAULT 'pending'::character varying NOT NULL,
@@ -3847,6 +3863,27 @@ ALTER TABLE public.system_settings ALTER COLUMN raw_log_enabled SET DEFAULT true
 -- ?apiKey=/?access_token= shouldn't land in access_raw.log / rotated archives).
 -- Default off for back-compat. Canonical execution in migration.go upgrades.
 ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS access_log_strip_query boolean DEFAULT false NOT NULL;
+
+-- v2.31.0 (#198): global default + per-host override for security options.
+-- Slice 1 (GeoIP): singleton global_geo_restrictions (enabled OFF by default →
+-- zero behavior change on upgrade) + geo_restrictions.disable_global for the
+-- per-host 3-state (inherit/override/disable). Resolution is service-layer;
+-- nginx templates are unchanged. Canonical execution in migration.go upgrades.
+CREATE TABLE IF NOT EXISTS public.global_geo_restrictions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    enabled boolean DEFAULT false,
+    mode character varying(20) DEFAULT 'blacklist'::character varying NOT NULL,
+    countries text[] DEFAULT '{}'::text[] NOT NULL,
+    allowed_ips text[] DEFAULT '{}'::text[],
+    allow_private_ips boolean DEFAULT true,
+    allow_search_bots boolean DEFAULT false,
+    challenge_mode boolean DEFAULT false,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT global_geo_restrictions_mode_check CHECK (((mode)::text = ANY ((ARRAY['whitelist'::character varying, 'blacklist'::character varying])::text[])))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_global_geo_restrictions_singleton ON public.global_geo_restrictions USING btree ((true));
+ALTER TABLE public.geo_restrictions ADD COLUMN IF NOT EXISTS disable_global boolean DEFAULT false NOT NULL;
 
 -- Stream proxy: enforce listener uniqueness at the DB level so two concurrent
 -- creates cannot both succeed when they target the same (host, port, protocol).

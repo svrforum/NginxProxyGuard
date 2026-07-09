@@ -13,8 +13,36 @@ type GeoRestriction struct {
 	AllowSearchBots bool      `json:"allow_search_bots"` // Allow search engine bots (Googlebot, Bingbot, etc.)
 	Enabled         bool      `json:"enabled"`
 	ChallengeMode   bool      `json:"challenge_mode"`    // Show CAPTCHA instead of blocking
+	DisableGlobal   bool      `json:"disable_global"`    // Host opts out of the global geo default (3-state: inherit/override/disable)
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+// GlobalGeoRestriction is the singleton global default inherited by hosts that
+// neither override (own enabled geo) nor disable (disable_global=true).
+type GlobalGeoRestriction struct {
+	ID              string    `json:"id"`
+	Enabled         bool      `json:"enabled"`
+	Mode            string    `json:"mode"`
+	Countries       []string  `json:"countries"`
+	AllowedIPs      []string  `json:"allowed_ips"`
+	AllowPrivateIPs bool      `json:"allow_private_ips"`
+	AllowSearchBots bool      `json:"allow_search_bots"`
+	ChallengeMode   bool      `json:"challenge_mode"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+// UpdateGlobalGeoRestrictionRequest is a partial update (pointer fields) for the
+// global geo singleton.
+type UpdateGlobalGeoRestrictionRequest struct {
+	Enabled         *bool    `json:"enabled,omitempty"`
+	Mode            *string  `json:"mode,omitempty" validate:"omitempty,oneof=whitelist blacklist"`
+	Countries       []string `json:"countries,omitempty"`
+	AllowedIPs      []string `json:"allowed_ips,omitempty"`
+	AllowPrivateIPs *bool    `json:"allow_private_ips,omitempty"`
+	AllowSearchBots *bool    `json:"allow_search_bots,omitempty"`
+	ChallengeMode   *bool    `json:"challenge_mode,omitempty"`
 }
 
 // CreateGeoRestrictionRequest is the request to create/update geo restriction
@@ -26,6 +54,7 @@ type CreateGeoRestrictionRequest struct {
 	AllowSearchBots *bool    `json:"allow_search_bots,omitempty"` // Allow search engine bots
 	Enabled         *bool    `json:"enabled,omitempty"`
 	ChallengeMode   *bool    `json:"challenge_mode,omitempty"`    // Show CAPTCHA instead of blocking
+	DisableGlobal   *bool    `json:"disable_global,omitempty"`    // Opt out of global geo default
 }
 
 // UpdateGeoRestrictionRequest is the request to update geo restriction
@@ -37,6 +66,7 @@ type UpdateGeoRestrictionRequest struct {
 	AllowSearchBots *bool    `json:"allow_search_bots,omitempty"` // Allow search engine bots
 	Enabled         *bool    `json:"enabled,omitempty"`
 	ChallengeMode   *bool    `json:"challenge_mode,omitempty"`    // Show CAPTCHA instead of blocking
+	DisableGlobal   *bool    `json:"disable_global,omitempty"`    // Opt out of global geo default
 }
 
 // CommonCountryCodes contains all ISO 3166-1 alpha-2 country codes (249 entries)

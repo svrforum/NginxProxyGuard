@@ -61,15 +61,16 @@ func (r *GeoRepository) fetchByProxyHostID(ctx context.Context, proxyHostID stri
 	var challengeMode sql.NullBool
 	var allowPrivateIPs sql.NullBool
 	var allowSearchBots sql.NullBool
+	var disableGlobal sql.NullBool
 
 	err := r.db.QueryRowContext(ctx, `
 		SELECT id, proxy_host_id, mode, countries, COALESCE(allowed_ips, '{}'), enabled,
 		       COALESCE(challenge_mode, false), COALESCE(allow_private_ips, true),
-		       COALESCE(allow_search_bots, false), created_at, updated_at
+		       COALESCE(allow_search_bots, false), COALESCE(disable_global, false), created_at, updated_at
 		FROM geo_restrictions WHERE proxy_host_id = $1
 	`, proxyHostID).Scan(
 		&geo.ID, &geo.ProxyHostID, &geo.Mode, &countries, &allowedIPs, &geo.Enabled,
-		&challengeMode, &allowPrivateIPs, &allowSearchBots, &geo.CreatedAt, &geo.UpdatedAt,
+		&challengeMode, &allowPrivateIPs, &allowSearchBots, &disableGlobal, &geo.CreatedAt, &geo.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -82,6 +83,7 @@ func (r *GeoRepository) fetchByProxyHostID(ctx context.Context, proxyHostID stri
 	geo.ChallengeMode = challengeMode.Bool
 	geo.AllowPrivateIPs = allowPrivateIPs.Bool
 	geo.AllowSearchBots = allowSearchBots.Bool
+	geo.DisableGlobal = disableGlobal.Bool
 	return &geo, nil
 }
 
@@ -103,15 +105,16 @@ func (r *GeoRepository) GetByProxyHostID(ctx context.Context, proxyHostID string
 	var challengeMode sql.NullBool
 	var allowPrivateIPs sql.NullBool
 	var allowSearchBots sql.NullBool
+	var disableGlobal sql.NullBool
 
 	err := r.db.QueryRowContext(ctx, `
 		SELECT id, proxy_host_id, mode, countries, COALESCE(allowed_ips, '{}'), enabled,
 		       COALESCE(challenge_mode, false), COALESCE(allow_private_ips, true),
-		       COALESCE(allow_search_bots, false), created_at, updated_at
+		       COALESCE(allow_search_bots, false), COALESCE(disable_global, false), created_at, updated_at
 		FROM geo_restrictions WHERE proxy_host_id = $1
 	`, proxyHostID).Scan(
 		&geo.ID, &geo.ProxyHostID, &geo.Mode, &countries, &allowedIPs, &geo.Enabled,
-		&challengeMode, &allowPrivateIPs, &allowSearchBots, &geo.CreatedAt, &geo.UpdatedAt,
+		&challengeMode, &allowPrivateIPs, &allowSearchBots, &disableGlobal, &geo.CreatedAt, &geo.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		if r.cache != nil {
@@ -130,6 +133,7 @@ func (r *GeoRepository) GetByProxyHostID(ctx context.Context, proxyHostID string
 	geo.ChallengeMode = challengeMode.Bool
 	geo.AllowPrivateIPs = allowPrivateIPs.Bool
 	geo.AllowSearchBots = allowSearchBots.Bool
+	geo.DisableGlobal = disableGlobal.Bool
 
 	if r.cache != nil {
 		if err := r.cache.Set(ctx, key, geo, geoCacheTTL); err != nil {
@@ -160,6 +164,11 @@ func (r *GeoRepository) Upsert(ctx context.Context, proxyHostID string, req *mod
 		allowSearchBots = *req.AllowSearchBots
 	}
 
+	disableGlobal := false
+	if req.DisableGlobal != nil {
+		disableGlobal = *req.DisableGlobal
+	}
+
 	allowedIPs := req.AllowedIPs
 	if allowedIPs == nil {
 		allowedIPs = []string{}
@@ -167,8 +176,8 @@ func (r *GeoRepository) Upsert(ctx context.Context, proxyHostID string, req *mod
 
 	var id string
 	err := r.db.QueryRowContext(ctx, `
-		INSERT INTO geo_restrictions (proxy_host_id, mode, countries, allowed_ips, enabled, challenge_mode, allow_private_ips, allow_search_bots)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO geo_restrictions (proxy_host_id, mode, countries, allowed_ips, enabled, challenge_mode, allow_private_ips, allow_search_bots, disable_global)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		ON CONFLICT (proxy_host_id) DO UPDATE SET
 			mode = EXCLUDED.mode,
 			countries = EXCLUDED.countries,
@@ -177,9 +186,10 @@ func (r *GeoRepository) Upsert(ctx context.Context, proxyHostID string, req *mod
 			challenge_mode = EXCLUDED.challenge_mode,
 			allow_private_ips = EXCLUDED.allow_private_ips,
 			allow_search_bots = EXCLUDED.allow_search_bots,
+			disable_global = EXCLUDED.disable_global,
 			updated_at = NOW()
 		RETURNING id
-	`, proxyHostID, req.Mode, pq.Array(req.Countries), pq.Array(allowedIPs), enabled, challengeMode, allowPrivateIPs, allowSearchBots).Scan(&id)
+	`, proxyHostID, req.Mode, pq.Array(req.Countries), pq.Array(allowedIPs), enabled, challengeMode, allowPrivateIPs, allowSearchBots, disableGlobal).Scan(&id)
 	if err != nil {
 		return nil, err
 	}
@@ -224,12 +234,15 @@ func (r *GeoRepository) Update(ctx context.Context, proxyHostID string, req *mod
 	if req.ChallengeMode != nil {
 		existing.ChallengeMode = *req.ChallengeMode
 	}
+	if req.DisableGlobal != nil {
+		existing.DisableGlobal = *req.DisableGlobal
+	}
 
 	_, err = r.db.ExecContext(ctx, `
 		UPDATE geo_restrictions SET
-			mode = $1, countries = $2, allowed_ips = $3, enabled = $4, challenge_mode = $5, allow_private_ips = $6, allow_search_bots = $7, updated_at = $8
-		WHERE proxy_host_id = $9
-	`, existing.Mode, pq.Array(existing.Countries), pq.Array(existing.AllowedIPs), existing.Enabled, existing.ChallengeMode, existing.AllowPrivateIPs, existing.AllowSearchBots, time.Now(), proxyHostID)
+			mode = $1, countries = $2, allowed_ips = $3, enabled = $4, challenge_mode = $5, allow_private_ips = $6, allow_search_bots = $7, disable_global = $8, updated_at = $9
+		WHERE proxy_host_id = $10
+	`, existing.Mode, pq.Array(existing.Countries), pq.Array(existing.AllowedIPs), existing.Enabled, existing.ChallengeMode, existing.AllowPrivateIPs, existing.AllowSearchBots, existing.DisableGlobal, time.Now(), proxyHostID)
 	if err != nil {
 		return nil, err
 	}

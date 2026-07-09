@@ -198,6 +198,7 @@ func wireServiceCallbacks(svcs *Services, repos *Repositories) {
 	// ProxyHost: enable clone and filter-subscription-aware config generation.
 	svcs.ProxyHost.SetCertificateService(svcs.Certificate)
 	svcs.ProxyHost.SetFilterSubscriptionRepo(repos.FilterSubscription)
+	svcs.ProxyHost.SetGlobalGeoRepo(repos.GlobalGeo)
 	// ProxyHost: resolve docker container-name targets to their current IP (#150).
 	svcs.ProxyHost.SetContainerResolver(svcs.DockerStats)
 	// AuthProvider: same resolver for container-backed verify endpoints (#181).
