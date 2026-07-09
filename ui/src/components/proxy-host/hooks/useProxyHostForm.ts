@@ -83,6 +83,8 @@ export function useProxyHostForm(host: ProxyHost | null | undefined, onClose: ()
     setCloudProviderChallengeMode: state.setCloudProviderChallengeMode,
     cloudProviderAllowSearchBots: state.cloudProviderAllowSearchBots,
     setCloudProviderAllowSearchBots: state.setCloudProviderAllowSearchBots,
+    cloudDisableGlobal: state.cloudDisableGlobal,
+    setCloudDisableGlobal: state.setCloudDisableGlobal,
 
     // External data
     availableCerts: state.availableCerts,

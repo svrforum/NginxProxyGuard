@@ -115,6 +115,7 @@ export function useProxyHostFormState(host: ProxyHost | null | undefined) {
   const [blockedCloudProviders, setBlockedCloudProviders] = useState<string[]>([])
   const [cloudProviderChallengeMode, setCloudProviderChallengeMode] = useState(false)
   const [cloudProviderAllowSearchBots, setCloudProviderAllowSearchBots] = useState(false)
+  const [cloudDisableGlobal, setCloudDisableGlobal] = useState(false)
 
   // ───── Queries ────────────────────────────────────────────────────────
   const { data: certificatesData } = useQuery({
@@ -173,11 +174,13 @@ export function useProxyHostFormState(host: ProxyHost | null | undefined) {
         blocked_providers: string[]
         challenge_mode: boolean
         allow_search_bots: boolean
+        cloud_disable_global: boolean
       }>(`/api/v1/proxy-hosts/${host!.id}/blocked-cloud-providers`)
       return {
         blocked_providers: response.blocked_providers || [],
         challenge_mode: response.challenge_mode || false,
         allow_search_bots: response.allow_search_bots || false,
+        cloud_disable_global: response.cloud_disable_global || false,
       }
     },
     enabled: !!host?.id,
@@ -228,6 +231,7 @@ export function useProxyHostFormState(host: ProxyHost | null | undefined) {
       setBlockedCloudProviders(existingCloudProviderSettings.blocked_providers)
       setCloudProviderChallengeMode(existingCloudProviderSettings.challenge_mode)
       setCloudProviderAllowSearchBots(existingCloudProviderSettings.allow_search_bots || false)
+      setCloudDisableGlobal(existingCloudProviderSettings.cloud_disable_global || false)
     }
   }, [existingCloudProviderSettings])
 
@@ -322,6 +326,8 @@ export function useProxyHostFormState(host: ProxyHost | null | undefined) {
     setCloudProviderChallengeMode,
     cloudProviderAllowSearchBots,
     setCloudProviderAllowSearchBots,
+    cloudDisableGlobal,
+    setCloudDisableGlobal,
 
     // External data
     availableCerts,

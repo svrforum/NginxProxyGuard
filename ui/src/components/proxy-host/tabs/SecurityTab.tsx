@@ -33,6 +33,8 @@ interface SecurityTabProps {
   setCloudProviderChallengeMode: (enabled: boolean) => void
   cloudProviderAllowSearchBots: boolean
   setCloudProviderAllowSearchBots: (enabled: boolean) => void
+  cloudDisableGlobal: boolean
+  setCloudDisableGlobal: (disabled: boolean) => void
   availableAccessLists: Array<{
     id: string
     name: string
@@ -65,6 +67,8 @@ export function SecurityTabContent({
   setCloudProviderChallengeMode,
   cloudProviderAllowSearchBots,
   setCloudProviderAllowSearchBots,
+  cloudDisableGlobal,
+  setCloudDisableGlobal,
   availableAccessLists,
   availableAuthProviders,
   geoipStatus,
@@ -355,6 +359,8 @@ export function SecurityTabContent({
           setChallengeMode={setCloudChallengeWithLock}
           allowSearchBots={cloudProviderAllowSearchBots}
           setAllowSearchBots={setCloudProviderAllowSearchBots}
+          cloudDisableGlobal={cloudDisableGlobal}
+          setCloudDisableGlobal={setCloudDisableGlobal}
         />
       </CollapsibleSection>
     </div>

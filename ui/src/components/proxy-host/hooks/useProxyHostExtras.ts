@@ -23,6 +23,7 @@ interface SaveExtrasCreateArgs {
   blockedCloudProviders: string[]
   cloudProviderChallengeMode: boolean
   cloudProviderAllowSearchBots: boolean
+  cloudDisableGlobal: boolean
 }
 
 /** Arguments required by {@link ProxyHostExtras.saveExtrasForUpdate}. */
@@ -65,6 +66,7 @@ export function useProxyHostExtras() {
     blockedCloudProviders,
     cloudProviderChallengeMode,
     cloudProviderAllowSearchBots,
+    cloudDisableGlobal,
   }: SaveExtrasCreateArgs): Promise<boolean> {
     const promises: Promise<unknown>[] = []
 
@@ -107,7 +109,8 @@ export function useProxyHostExtras() {
     if (
       blockedCloudProviders.length > 0 ||
       cloudProviderChallengeMode ||
-      cloudProviderAllowSearchBots
+      cloudProviderAllowSearchBots ||
+      cloudDisableGlobal
     ) {
       promises.push(
         api
@@ -115,6 +118,7 @@ export function useProxyHostExtras() {
             blocked_providers: blockedCloudProviders,
             challenge_mode: cloudProviderChallengeMode,
             allow_search_bots: cloudProviderAllowSearchBots,
+            cloud_disable_global: cloudDisableGlobal,
           })
           .catch((err) => console.error('Failed to save blocked cloud providers:', err)),
       )
@@ -140,6 +144,7 @@ export function useProxyHostExtras() {
     blockedCloudProviders,
     cloudProviderChallengeMode,
     cloudProviderAllowSearchBots,
+    cloudDisableGlobal,
     existingGeoRestriction,
   }: SaveExtrasUpdateArgs): Promise<void> {
     const promises = [
@@ -190,6 +195,7 @@ export function useProxyHostExtras() {
           blocked_providers: blockedCloudProviders,
           challenge_mode: cloudProviderChallengeMode,
           allow_search_bots: cloudProviderAllowSearchBots,
+          cloud_disable_global: cloudDisableGlobal,
         })
         .then(() =>
           queryClient.invalidateQueries({ queryKey: ['blockedCloudProviders', hostId] }),

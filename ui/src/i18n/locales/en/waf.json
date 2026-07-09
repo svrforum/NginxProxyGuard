@@ -611,5 +611,14 @@
     "saveSuccess": "Global security headers default saved and applied to inheriting hosts",
     "saveFailed": "Failed to save global security headers default",
     "unsavedChanges": "You have unsaved changes"
+  },
+  "globalCloudProviders": {
+    "title": "Global Cloud Blocking Default",
+    "subtitle": "Cloud provider blocking applied by default to all proxy hosts. Each host can inherit, override, or disable it.",
+    "infoTitle": "How the Global Cloud Blocking Default Works",
+    "infoDesc": "Providers selected here are blocked on every proxy host that leaves cloud blocking set to \"Inherit\". A host that selects its own providers \"Overrides\" with that list, and one set to \"Disable\" gets no cloud blocking at all. Saving regenerates all inheriting hosts automatically.",
+    "saveSuccess": "Global cloud blocking default saved and applied to inheriting hosts",
+    "saveFailed": "Failed to save global cloud blocking default",
+    "unsavedChanges": "You have unsaved changes"
   }
 }

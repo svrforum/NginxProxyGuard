@@ -274,7 +274,9 @@
           "eu": "Europe",
           "cn": "China",
           "kr": "South Korea"
-        }
+        },
+        "inheritHint": "This host uses the global cloud blocking default.",
+        "disableHint": "This host gets no cloud blocking (the global default is ignored too)."
       },
       "uriBlock": {
         "title": "URI Path Blocking",

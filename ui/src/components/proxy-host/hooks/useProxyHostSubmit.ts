@@ -102,6 +102,7 @@ export function useProxyHostSubmit({
           blockedCloudProviders: state.blockedCloudProviders,
           cloudProviderChallengeMode: state.cloudProviderChallengeMode,
           cloudProviderAllowSearchBots: state.cloudProviderAllowSearchBots,
+          cloudDisableGlobal: state.cloudDisableGlobal,
         })
 
       if (savedAny) {
@@ -150,6 +151,7 @@ export function useProxyHostSubmit({
           blockedCloudProviders: state.blockedCloudProviders,
           cloudProviderChallengeMode: state.cloudProviderChallengeMode,
           cloudProviderAllowSearchBots: state.cloudProviderAllowSearchBots,
+          cloudDisableGlobal: state.cloudDisableGlobal,
           existingGeoRestriction: state.existingGeoRestriction,
         })
       }
