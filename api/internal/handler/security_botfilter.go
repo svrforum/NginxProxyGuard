@@ -152,6 +152,34 @@ func (h *SecurityHandler) DeleteSecurityHeaders(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
+// GetGlobalSecurityHeaders returns the singleton global security-headers default (#198).
+func (h *SecurityHandler) GetGlobalSecurityHeaders(c echo.Context) error {
+	g, err := h.securityService.GetGlobalSecurityHeaders(c.Request().Context())
+	if err != nil {
+		return databaseError(c, "get global security headers", err)
+	}
+	return c.JSON(http.StatusOK, g)
+}
+
+// UpdateGlobalSecurityHeaders updates the global security-headers default and
+// regenerates inheriting hosts (#198).
+func (h *SecurityHandler) UpdateGlobalSecurityHeaders(c echo.Context) error {
+	var req model.UpdateGlobalSecurityHeadersRequest
+	if err := c.Bind(&req); err != nil {
+		return badRequestError(c, "Invalid request body")
+	}
+
+	g, err := h.securityService.UpdateGlobalSecurityHeaders(c.Request().Context(), &req)
+	if err != nil {
+		return internalError(c, "update global security headers", err)
+	}
+
+	auditCtx := service.ContextWithAudit(c.Request().Context(), c)
+	h.audit.LogGlobalSecurityHeadersUpdate(auditCtx)
+
+	return c.JSON(http.StatusOK, g)
+}
+
 func (h *SecurityHandler) GetSecurityHeaderPresets(c echo.Context) error {
 	return c.JSON(http.StatusOK, model.SecurityHeaderPresets)
 }

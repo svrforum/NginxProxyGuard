@@ -177,19 +177,27 @@ func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.Pr
 		}()
 	}
 
-	// Fetch security headers if exists
+	// Fetch security headers and resolve against the global default (#198).
 	if s.securityHeadersRepo != nil {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			sh, err := s.securityHeadersRepo.GetByProxyHostID(ctx, host.ID)
+			hostSH, err := s.securityHeadersRepo.GetByProxyHostID(ctx, host.ID)
 			if err != nil {
 				fail("security headers", err)
 				return
 			}
-			if sh != nil && sh.Enabled {
+			var globalSH *model.GlobalSecurityHeaders
+			if s.globalSecHeadersRepo != nil {
+				globalSH, err = s.globalSecHeadersRepo.GetGlobal(ctx)
+				if err != nil {
+					fail("global security headers", err)
+					return
+				}
+			}
+			if effective := resolveSecurityHeaders(globalSH, hostSH); effective != nil {
 				mu.Lock()
-				data.SecurityHeaders = sh
+				data.SecurityHeaders = effective
 				mu.Unlock()
 			}
 		}()

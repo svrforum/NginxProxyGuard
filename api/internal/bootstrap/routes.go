@@ -515,6 +515,10 @@ func registerSecurityRoutes(v1 *echo.Group, h *handler.SecurityHandler) {
 	v1.GET("/security-headers/presets", h.GetSecurityHeaderPresets, proxyRead)
 	v1.POST("/proxy-hosts/:proxyHostId/security-headers/preset/:preset", h.ApplySecurityHeaderPreset, proxyWrite)
 
+	// Global security headers default (#198 slice 3) — settings-scoped singleton.
+	v1.GET("/settings/global-security-headers", h.GetGlobalSecurityHeaders, settingsRead)
+	v1.PUT("/settings/global-security-headers", h.UpdateGlobalSecurityHeaders, settingsWrite)
+
 	// Upstream (per proxy host)
 	v1.GET("/proxy-hosts/:proxyHostId/upstream", h.GetUpstream, proxyRead)
 	v1.PUT("/proxy-hosts/:proxyHostId/upstream", h.UpsertUpstream, proxyWrite)

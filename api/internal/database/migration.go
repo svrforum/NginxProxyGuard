@@ -1007,6 +1007,28 @@ ALTER TABLE public.geo_restrictions ADD COLUMN IF NOT EXISTS disable_global bool
 CREATE UNIQUE INDEX IF NOT EXISTS idx_global_bot_filters_singleton ON public.global_bot_filters USING btree ((true));
 ALTER TABLE public.bot_filters ADD COLUMN IF NOT EXISTS disable_global boolean DEFAULT false NOT NULL;`,
 		},
+		{
+			desc: "v2.31.0: global_security_headers singleton + security_headers.disable_global (#198 slice 3)",
+			sql: `CREATE TABLE IF NOT EXISTS public.global_security_headers (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    enabled boolean DEFAULT false,
+    hsts_enabled boolean DEFAULT true,
+    hsts_max_age integer DEFAULT 31536000,
+    hsts_include_subdomains boolean DEFAULT true,
+    hsts_preload boolean DEFAULT false,
+    x_frame_options character varying(50) DEFAULT 'SAMEORIGIN'::character varying,
+    x_content_type_options boolean DEFAULT true,
+    x_xss_protection boolean DEFAULT true,
+    referrer_policy character varying(100) DEFAULT 'strict-origin-when-cross-origin'::character varying,
+    content_security_policy text,
+    permissions_policy text,
+    custom_headers jsonb DEFAULT '{}'::jsonb,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_global_security_headers_singleton ON public.global_security_headers USING btree ((true));
+ALTER TABLE public.security_headers ADD COLUMN IF NOT EXISTS disable_global boolean DEFAULT false NOT NULL;`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

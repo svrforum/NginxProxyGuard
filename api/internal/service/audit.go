@@ -271,6 +271,11 @@ func (s *AuditService) LogGlobalBotFilterUpdate(ctx context.Context) error {
 	return s.logEntry(ctx, "global_bot_filter_updated", "settings", "", "Global Bot Filter", nil)
 }
 
+// LogGlobalSecurityHeadersUpdate logs a change to the global security-headers default (#198).
+func (s *AuditService) LogGlobalSecurityHeadersUpdate(ctx context.Context) error {
+	return s.logEntry(ctx, "global_security_headers_updated", "settings", "", "Global Security Headers", nil)
+}
+
 // LogSecurityFeatureUpdate logs security feature changes
 func (s *AuditService) LogSecurityFeatureUpdate(ctx context.Context, resource string, hostDomain string, enabled bool, details map[string]interface{}) error {
 	if details == nil {

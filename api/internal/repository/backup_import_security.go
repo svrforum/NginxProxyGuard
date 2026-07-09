@@ -171,6 +171,27 @@ func (r *BackupRepository) importGlobalBotFilter(ctx context.Context, tx *sql.Tx
 	return err
 }
 
+// importGlobalSecurityHeaders restores the singleton global security-headers
+// default (#198). Delete-then-insert so the singleton stays unique.
+func (r *BackupRepository) importGlobalSecurityHeaders(ctx context.Context, tx *sql.Tx, g *model.GlobalSecurityHeadersExport) error {
+	_, _ = tx.ExecContext(ctx, "DELETE FROM global_security_headers")
+
+	customHeaders, _ := json.Marshal(g.CustomHeaders)
+	if len(g.CustomHeaders) == 0 {
+		customHeaders = []byte("{}")
+	}
+	query := `
+		INSERT INTO global_security_headers (enabled, hsts_enabled, hsts_max_age, hsts_include_subdomains, hsts_preload,
+		                                     x_frame_options, x_content_type_options, x_xss_protection, referrer_policy,
+		                                     content_security_policy, permissions_policy, custom_headers)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+	`
+	_, err := tx.ExecContext(ctx, query, g.Enabled, g.HSTSEnabled, g.HSTSMaxAge, g.HSTSIncludeSubdomains, g.HSTSPreload,
+		g.XFrameOptions, g.XContentTypeOptions, g.XXSSProtection, g.ReferrerPolicy,
+		g.ContentSecurityPolicy, g.PermissionsPolicy, customHeaders)
+	return err
+}
+
 func (r *BackupRepository) importCloudProvider(ctx context.Context, tx *sql.Tx, cp *model.CloudProviderExport) error {
 	query := `
 		INSERT INTO cloud_providers (name, slug, description, region, ip_ranges_url, enabled)

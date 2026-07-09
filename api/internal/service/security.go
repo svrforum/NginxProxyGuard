@@ -29,12 +29,18 @@ type SecurityService struct {
 	// globalBotFilterRepo backs the singleton global bot-filter default (#198).
 	// Injected via SetGlobalBotFilterRepo so the constructor signature (and its
 	// bootstrap call site) stays unchanged.
-	globalBotFilterRepo *repository.GlobalBotFilterRepository
+	globalBotFilterRepo  *repository.GlobalBotFilterRepository
+	globalSecHeadersRepo *repository.GlobalSecurityHeadersRepository // global security-headers default (#198 slice 3)
 }
 
 // SetGlobalBotFilterRepo wires the global bot-filter default repository (#198).
 func (s *SecurityService) SetGlobalBotFilterRepo(repo *repository.GlobalBotFilterRepository) {
 	s.globalBotFilterRepo = repo
+}
+
+// SetGlobalSecHeadersRepo wires the global security-headers default repository (#198).
+func (s *SecurityService) SetGlobalSecHeadersRepo(repo *repository.GlobalSecurityHeadersRepository) {
+	s.globalSecHeadersRepo = repo
 }
 
 func NewSecurityService(
@@ -728,6 +734,36 @@ func (s *SecurityService) DeleteSecurityHeaders(ctx context.Context, proxyHostID
 		return fmt.Errorf("failed to delete security headers: %w", err)
 	}
 	return nil
+}
+
+// GetGlobalSecurityHeaders returns the singleton global security-headers default (#198).
+func (s *SecurityService) GetGlobalSecurityHeaders(ctx context.Context) (*model.GlobalSecurityHeaders, error) {
+	if s.globalSecHeadersRepo == nil {
+		return &model.GlobalSecurityHeaders{
+			Enabled: false, HSTSEnabled: true, HSTSMaxAge: 31536000, HSTSIncludeSubdomains: true,
+			XFrameOptions: "SAMEORIGIN", XContentTypeOptions: true, XXSSProtection: true,
+			ReferrerPolicy: "strict-origin-when-cross-origin",
+		}, nil
+	}
+	return s.globalSecHeadersRepo.GetGlobal(ctx)
+}
+
+// UpdateGlobalSecurityHeaders updates the global security-headers default and
+// regenerates every inheriting host so the new default takes effect (#198).
+func (s *SecurityService) UpdateGlobalSecurityHeaders(ctx context.Context, req *model.UpdateGlobalSecurityHeadersRequest) (*model.GlobalSecurityHeaders, error) {
+	if s.globalSecHeadersRepo == nil {
+		return nil, fmt.Errorf("global security headers is not available")
+	}
+	g, err := s.globalSecHeadersRepo.Upsert(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update global security headers: %w", err)
+	}
+	if s.proxyHostService != nil {
+		if err := s.proxyHostService.SyncAllConfigs(ctx); err != nil {
+			return nil, fmt.Errorf("failed to regenerate configs: %w", err)
+		}
+	}
+	return g, nil
 }
 
 func (s *SecurityService) ApplySecurityHeaderPreset(ctx context.Context, proxyHostID string, preset string) (*model.SecurityHeaders, error) {

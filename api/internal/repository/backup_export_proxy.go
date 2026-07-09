@@ -188,7 +188,7 @@ func (r *BackupRepository) getProxyHostSecurityHeaders(ctx context.Context, prox
 	query := `
 		SELECT enabled, hsts_enabled, hsts_max_age, hsts_include_subdomains, hsts_preload,
 		       x_frame_options, x_content_type_options, x_xss_protection, referrer_policy,
-		       content_security_policy, permissions_policy, custom_headers
+		       content_security_policy, permissions_policy, custom_headers, COALESCE(disable_global, false)
 		FROM security_headers WHERE proxy_host_id = $1
 	`
 	var sh model.SecurityHeadersExport
@@ -197,7 +197,7 @@ func (r *BackupRepository) getProxyHostSecurityHeaders(ctx context.Context, prox
 	err := r.db.QueryRowContext(ctx, query, proxyHostID).Scan(
 		&sh.Enabled, &sh.HSTSEnabled, &sh.HSTSMaxAge, &sh.HSTSIncludeSubdomains, &sh.HSTSPreload,
 		&sh.XFrameOptions, &sh.XContentTypeOptions, &sh.XXSSProtection, &sh.ReferrerPolicy,
-		&csp, &pp, &customHeaders,
+		&csp, &pp, &customHeaders, &sh.DisableGlobal,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil

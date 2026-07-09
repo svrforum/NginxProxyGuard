@@ -18,12 +18,50 @@ type SecurityHeaders struct {
 	ContentSecurityPolicy string            `json:"content_security_policy,omitempty"`
 	PermissionsPolicy     string            `json:"permissions_policy,omitempty"`
 	CustomHeaders         map[string]string `json:"custom_headers,omitempty"`
+	DisableGlobal         bool              `json:"disable_global"` // opt out of global security-headers default (#198)
 	CreatedAt             time.Time         `json:"created_at"`
 	UpdatedAt             time.Time         `json:"updated_at"`
 }
 
 // CreateSecurityHeadersRequest is the request to create/update security headers config
 type CreateSecurityHeadersRequest struct {
+	Enabled               *bool             `json:"enabled,omitempty"`
+	HSTSEnabled           *bool             `json:"hsts_enabled,omitempty"`
+	HSTSMaxAge            int               `json:"hsts_max_age,omitempty"`
+	HSTSIncludeSubdomains *bool             `json:"hsts_include_subdomains,omitempty"`
+	HSTSPreload           *bool             `json:"hsts_preload,omitempty"`
+	XFrameOptions         string            `json:"x_frame_options,omitempty"`
+	XContentTypeOptions   *bool             `json:"x_content_type_options,omitempty"`
+	XXSSProtection        *bool             `json:"x_xss_protection,omitempty"`
+	ReferrerPolicy        string            `json:"referrer_policy,omitempty"`
+	ContentSecurityPolicy string            `json:"content_security_policy,omitempty"`
+	PermissionsPolicy     string            `json:"permissions_policy,omitempty"`
+	CustomHeaders         map[string]string `json:"custom_headers,omitempty"`
+	DisableGlobal         *bool             `json:"disable_global,omitempty"`
+}
+
+// GlobalSecurityHeaders is the singleton global security-headers default inherited
+// by hosts that don't override or disable (#198).
+type GlobalSecurityHeaders struct {
+	ID                    string            `json:"id"`
+	Enabled               bool              `json:"enabled"`
+	HSTSEnabled           bool              `json:"hsts_enabled"`
+	HSTSMaxAge            int               `json:"hsts_max_age"`
+	HSTSIncludeSubdomains bool              `json:"hsts_include_subdomains"`
+	HSTSPreload           bool              `json:"hsts_preload"`
+	XFrameOptions         string            `json:"x_frame_options"`
+	XContentTypeOptions   bool              `json:"x_content_type_options"`
+	XXSSProtection        bool              `json:"x_xss_protection"`
+	ReferrerPolicy        string            `json:"referrer_policy"`
+	ContentSecurityPolicy string            `json:"content_security_policy,omitempty"`
+	PermissionsPolicy     string            `json:"permissions_policy,omitempty"`
+	CustomHeaders         map[string]string `json:"custom_headers,omitempty"`
+	CreatedAt             time.Time         `json:"created_at"`
+	UpdatedAt             time.Time         `json:"updated_at"`
+}
+
+// UpdateGlobalSecurityHeadersRequest is a partial update for the singleton.
+type UpdateGlobalSecurityHeadersRequest struct {
 	Enabled               *bool             `json:"enabled,omitempty"`
 	HSTSEnabled           *bool             `json:"hsts_enabled,omitempty"`
 	HSTSMaxAge            int               `json:"hsts_max_age,omitempty"`

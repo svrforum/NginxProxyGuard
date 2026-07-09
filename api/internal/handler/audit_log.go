@@ -226,6 +226,7 @@ func formatActionLabel(action string) string {
 		"settings_updated":         "설정 변경",
 		"global_geo_updated":       "전역 지역 제한 수정",
 		"global_bot_filter_updated": "전역 봇 필터 수정",
+		"global_security_headers_updated": "전역 보안 헤더 수정",
 		"user_login":               "로그인",
 		"user_logout":              "로그아웃",
 		"user_created":             "사용자 생성",

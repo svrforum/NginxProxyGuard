@@ -225,6 +225,7 @@ type ExportData struct {
 	GlobalURIBlock *GlobalURIBlockExport `json:"global_uri_block,omitempty"`
 	GlobalGeoRestriction *GlobalGeoRestrictionExport `json:"global_geo_restriction,omitempty"`
 	GlobalBotFilter      *GlobalBotFilterExport      `json:"global_bot_filter,omitempty"`
+	GlobalSecurityHeaders *GlobalSecurityHeadersExport `json:"global_security_headers,omitempty"`
 
 	// Cloud Providers
 	CloudProviders []CloudProviderExport `json:"cloud_providers,omitempty"`
@@ -458,6 +459,23 @@ type GlobalBotFilterExport struct {
 
 // SecurityHeadersExport represents security headers config for export
 type SecurityHeadersExport struct {
+	Enabled               bool                   `json:"enabled"`
+	HSTSEnabled           bool                   `json:"hsts_enabled"`
+	HSTSMaxAge            int                    `json:"hsts_max_age"`
+	HSTSIncludeSubdomains bool                   `json:"hsts_include_subdomains"`
+	HSTSPreload           bool                   `json:"hsts_preload"`
+	XFrameOptions         string                 `json:"x_frame_options"`
+	XContentTypeOptions   bool                   `json:"x_content_type_options"`
+	XXSSProtection        bool                   `json:"x_xss_protection"`
+	ReferrerPolicy        string                 `json:"referrer_policy"`
+	ContentSecurityPolicy string                 `json:"content_security_policy,omitempty"`
+	PermissionsPolicy     string                 `json:"permissions_policy,omitempty"`
+	CustomHeaders         map[string]interface{} `json:"custom_headers,omitempty"`
+	DisableGlobal         bool                   `json:"disable_global"`
+}
+
+// GlobalSecurityHeadersExport represents the singleton global security-headers default (#198).
+type GlobalSecurityHeadersExport struct {
 	Enabled               bool                   `json:"enabled"`
 	HSTSEnabled           bool                   `json:"hsts_enabled"`
 	HSTSMaxAge            int                    `json:"hsts_max_age"`

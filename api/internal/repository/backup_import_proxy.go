@@ -276,12 +276,12 @@ func (r *BackupRepository) importSecurityHeaders(ctx context.Context, tx *sql.Tx
 		INSERT INTO security_headers (proxy_host_id, enabled, hsts_enabled, hsts_max_age,
 		                              hsts_include_subdomains, hsts_preload, x_frame_options,
 		                              x_content_type_options, x_xss_protection, referrer_policy,
-		                              content_security_policy, permissions_policy, custom_headers)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		                              content_security_policy, permissions_policy, custom_headers, disable_global)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 	`
 	_, err := tx.ExecContext(ctx, query, proxyHostID, sh.Enabled, sh.HSTSEnabled, sh.HSTSMaxAge,
 		sh.HSTSIncludeSubdomains, sh.HSTSPreload, sh.XFrameOptions, sh.XContentTypeOptions,
-		sh.XXSSProtection, sh.ReferrerPolicy, sh.ContentSecurityPolicy, sh.PermissionsPolicy, customHeaders)
+		sh.XXSSProtection, sh.ReferrerPolicy, sh.ContentSecurityPolicy, sh.PermissionsPolicy, customHeaders, sh.DisableGlobal)
 	return err
 }
 

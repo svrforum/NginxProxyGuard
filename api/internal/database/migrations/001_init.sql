@@ -2068,9 +2068,28 @@ CREATE TABLE IF NOT EXISTS public.security_headers (
     content_security_policy text,
     permissions_policy text,
     custom_headers jsonb,
+    disable_global boolean DEFAULT false NOT NULL,
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now()
 );
+CREATE TABLE IF NOT EXISTS public.global_security_headers (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    enabled boolean DEFAULT false,
+    hsts_enabled boolean DEFAULT true,
+    hsts_max_age integer DEFAULT 31536000,
+    hsts_include_subdomains boolean DEFAULT true,
+    hsts_preload boolean DEFAULT false,
+    x_frame_options character varying(50) DEFAULT 'SAMEORIGIN'::character varying,
+    x_content_type_options boolean DEFAULT true,
+    x_xss_protection boolean DEFAULT true,
+    referrer_policy character varying(100) DEFAULT 'strict-origin-when-cross-origin'::character varying,
+    content_security_policy text,
+    permissions_policy text,
+    custom_headers jsonb DEFAULT '{}'::jsonb,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_global_security_headers_singleton ON public.global_security_headers USING btree ((true));
 CREATE TABLE IF NOT EXISTS public.settings (
     key character varying(255) NOT NULL,
     value jsonb NOT NULL,
@@ -3899,6 +3918,49 @@ CREATE TABLE IF NOT EXISTS public.global_geo_restrictions (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_global_geo_restrictions_singleton ON public.global_geo_restrictions USING btree ((true));
 ALTER TABLE public.geo_restrictions ADD COLUMN IF NOT EXISTS disable_global boolean DEFAULT false NOT NULL;
+
+-- Slice 2 (Bot Filter): singleton global_bot_filters (enabled OFF by default →
+-- zero behavior change on upgrade) + bot_filters.disable_global. Same 3-state,
+-- service-layer resolution, templates unchanged. Canonical execution in migration.go.
+CREATE TABLE IF NOT EXISTS public.global_bot_filters (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    enabled boolean DEFAULT false,
+    block_bad_bots boolean DEFAULT true,
+    block_ai_bots boolean DEFAULT false,
+    allow_search_engines boolean DEFAULT true,
+    block_suspicious_clients boolean DEFAULT false,
+    custom_blocked_agents text,
+    custom_allowed_agents text,
+    challenge_suspicious boolean DEFAULT false,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_global_bot_filters_singleton ON public.global_bot_filters USING btree ((true));
+ALTER TABLE public.bot_filters ADD COLUMN IF NOT EXISTS disable_global boolean DEFAULT false NOT NULL;
+
+-- Slice 3 (Security Headers): singleton global_security_headers (enabled OFF by
+-- default → zero behavior change on upgrade) + security_headers.disable_global.
+-- Same 3-state, service-layer resolution, templates unchanged. Canonical execution
+-- in migration.go.
+CREATE TABLE IF NOT EXISTS public.global_security_headers (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    enabled boolean DEFAULT false,
+    hsts_enabled boolean DEFAULT true,
+    hsts_max_age integer DEFAULT 31536000,
+    hsts_include_subdomains boolean DEFAULT true,
+    hsts_preload boolean DEFAULT false,
+    x_frame_options character varying(50) DEFAULT 'SAMEORIGIN'::character varying,
+    x_content_type_options boolean DEFAULT true,
+    x_xss_protection boolean DEFAULT true,
+    referrer_policy character varying(100) DEFAULT 'strict-origin-when-cross-origin'::character varying,
+    content_security_policy text,
+    permissions_policy text,
+    custom_headers jsonb DEFAULT '{}'::jsonb,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_global_security_headers_singleton ON public.global_security_headers USING btree ((true));
+ALTER TABLE public.security_headers ADD COLUMN IF NOT EXISTS disable_global boolean DEFAULT false NOT NULL;
 
 -- Stream proxy: enforce listener uniqueness at the DB level so two concurrent
 -- creates cannot both succeed when they target the same (host, port, protocol).

@@ -20,7 +20,7 @@ func (r *SecurityHeadersRepository) GetByProxyHostID(ctx context.Context, proxyH
 	query := `
 		SELECT id, proxy_host_id, enabled, hsts_enabled, hsts_max_age, hsts_include_subdomains, hsts_preload,
 		       x_frame_options, x_content_type_options, x_xss_protection, referrer_policy,
-		       content_security_policy, permissions_policy, custom_headers, created_at, updated_at
+		       content_security_policy, permissions_policy, custom_headers, COALESCE(disable_global, false), created_at, updated_at
 		FROM security_headers
 		WHERE proxy_host_id = $1
 	`
@@ -32,7 +32,7 @@ func (r *SecurityHeadersRepository) GetByProxyHostID(ctx context.Context, proxyH
 	err := r.db.QueryRowContext(ctx, query, proxyHostID).Scan(
 		&sh.ID, &sh.ProxyHostID, &sh.Enabled, &sh.HSTSEnabled, &sh.HSTSMaxAge, &sh.HSTSIncludeSubdomains, &sh.HSTSPreload,
 		&sh.XFrameOptions, &sh.XContentTypeOptions, &sh.XXSSProtection, &sh.ReferrerPolicy,
-		&csp, &permPolicy, &customHeaders, &sh.CreatedAt, &sh.UpdatedAt,
+		&csp, &permPolicy, &customHeaders, &sh.DisableGlobal, &sh.CreatedAt, &sh.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -60,10 +60,10 @@ func (r *SecurityHeadersRepository) Upsert(ctx context.Context, proxyHostID stri
 	query := `
 		INSERT INTO security_headers (proxy_host_id, enabled, hsts_enabled, hsts_max_age, hsts_include_subdomains, hsts_preload,
 		                              x_frame_options, x_content_type_options, x_xss_protection, referrer_policy,
-		                              content_security_policy, permissions_policy, custom_headers)
+		                              content_security_policy, permissions_policy, custom_headers, disable_global)
 		VALUES ($1, COALESCE($2, TRUE), COALESCE($3, TRUE), COALESCE(NULLIF($4, 0), 31536000), COALESCE($5, TRUE), COALESCE($6, FALSE),
 		        COALESCE(NULLIF($7, ''), 'SAMEORIGIN'), COALESCE($8, TRUE), COALESCE($9, TRUE),
-		        COALESCE(NULLIF($10, ''), 'strict-origin-when-cross-origin'), $11, $12, $13)
+		        COALESCE(NULLIF($10, ''), 'strict-origin-when-cross-origin'), $11, $12, $13, COALESCE($14, FALSE))
 		ON CONFLICT (proxy_host_id) DO UPDATE SET
 			enabled = COALESCE($2, security_headers.enabled),
 			hsts_enabled = COALESCE($3, security_headers.hsts_enabled),
@@ -77,10 +77,11 @@ func (r *SecurityHeadersRepository) Upsert(ctx context.Context, proxyHostID stri
 			content_security_policy = $11,
 			permissions_policy = $12,
 			custom_headers = COALESCE($13, security_headers.custom_headers),
+			disable_global = COALESCE($14, security_headers.disable_global),
 			updated_at = NOW()
 		RETURNING id, proxy_host_id, enabled, hsts_enabled, hsts_max_age, hsts_include_subdomains, hsts_preload,
 		          x_frame_options, x_content_type_options, x_xss_protection, referrer_policy,
-		          content_security_policy, permissions_policy, custom_headers, created_at, updated_at
+		          content_security_policy, permissions_policy, custom_headers, disable_global, created_at, updated_at
 	`
 
 	var sh model.SecurityHeaders
@@ -93,10 +94,11 @@ func (r *SecurityHeadersRepository) Upsert(ctx context.Context, proxyHostID stri
 		req.ContentSecurityPolicy,
 		req.PermissionsPolicy,
 		customHeadersJSON,
+		req.DisableGlobal,
 	).Scan(
 		&sh.ID, &sh.ProxyHostID, &sh.Enabled, &sh.HSTSEnabled, &sh.HSTSMaxAge, &sh.HSTSIncludeSubdomains, &sh.HSTSPreload,
 		&sh.XFrameOptions, &sh.XContentTypeOptions, &sh.XXSSProtection, &sh.ReferrerPolicy,
-		&csp, &permPolicy, &customHeaders, &sh.CreatedAt, &sh.UpdatedAt,
+		&csp, &permPolicy, &customHeaders, &sh.DisableGlobal, &sh.CreatedAt, &sh.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err

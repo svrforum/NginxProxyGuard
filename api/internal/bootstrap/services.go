@@ -200,7 +200,9 @@ func wireServiceCallbacks(svcs *Services, repos *Repositories) {
 	svcs.ProxyHost.SetFilterSubscriptionRepo(repos.FilterSubscription)
 	svcs.ProxyHost.SetGlobalGeoRepo(repos.GlobalGeo)
 	svcs.ProxyHost.SetGlobalBotFilterRepo(repos.GlobalBotFilter)
+	svcs.ProxyHost.SetGlobalSecHeadersRepo(repos.GlobalSecHeaders)
 	svcs.Security.SetGlobalBotFilterRepo(repos.GlobalBotFilter)
+	svcs.Security.SetGlobalSecHeadersRepo(repos.GlobalSecHeaders)
 	// ProxyHost: resolve docker container-name targets to their current IP (#150).
 	svcs.ProxyHost.SetContainerResolver(svcs.DockerStats)
 	// AuthProvider: same resolver for container-backed verify endpoints (#181).

@@ -215,6 +215,13 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 		}
 	}
 
+	// Import Global Security Headers default (#198)
+	if data.GlobalSecurityHeaders != nil {
+		if err := r.importGlobalSecurityHeaders(ctx, tx, data.GlobalSecurityHeaders); err != nil {
+			return nil, fmt.Errorf("failed to import global security headers: %w", err)
+		}
+	}
+
 	// Import Cloud Providers
 	for _, cp := range data.CloudProviders {
 		if err := r.importCloudProvider(ctx, tx, &cp); err != nil {

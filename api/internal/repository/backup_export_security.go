@@ -272,6 +272,37 @@ func (r *BackupRepository) exportGlobalBotFilter(ctx context.Context) (*model.Gl
 	return &g, nil
 }
 
+// exportGlobalSecurityHeaders exports the singleton global security-headers
+// default (#198). Returns nil when no row exists.
+func (r *BackupRepository) exportGlobalSecurityHeaders(ctx context.Context) (*model.GlobalSecurityHeadersExport, error) {
+	query := `
+		SELECT enabled, hsts_enabled, hsts_max_age, hsts_include_subdomains, hsts_preload,
+		       x_frame_options, x_content_type_options, x_xss_protection, referrer_policy,
+		       content_security_policy, permissions_policy, custom_headers
+		FROM global_security_headers LIMIT 1
+	`
+	var g model.GlobalSecurityHeadersExport
+	var csp, pp sql.NullString
+	var customHeaders []byte
+	err := r.db.QueryRowContext(ctx, query).Scan(
+		&g.Enabled, &g.HSTSEnabled, &g.HSTSMaxAge, &g.HSTSIncludeSubdomains, &g.HSTSPreload,
+		&g.XFrameOptions, &g.XContentTypeOptions, &g.XXSSProtection, &g.ReferrerPolicy,
+		&csp, &pp, &customHeaders,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	g.ContentSecurityPolicy = csp.String
+	g.PermissionsPolicy = pp.String
+	if len(customHeaders) > 0 {
+		json.Unmarshal(customHeaders, &g.CustomHeaders)
+	}
+	return &g, nil
+}
+
 func (r *BackupRepository) exportGlobalURIBlock(ctx context.Context) (*model.GlobalURIBlockExport, error) {
 	query := `
 		SELECT enabled, rules, COALESCE(exception_ips, '{}'), COALESCE(allow_private_ips, true)

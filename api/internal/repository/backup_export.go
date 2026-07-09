@@ -120,6 +120,13 @@ func (r *BackupRepository) ExportAllData(ctx context.Context) (*model.ExportData
 	}
 	export.GlobalBotFilter = globalBotFilter
 
+	// Export Global Security Headers default (#198)
+	globalSecHeaders, err := r.exportGlobalSecurityHeaders(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to export global security headers: %w", err)
+	}
+	export.GlobalSecurityHeaders = globalSecHeaders
+
 	// Export Cloud Providers
 	cloudProviders, err := r.exportCloudProviders(ctx)
 	if err != nil {
