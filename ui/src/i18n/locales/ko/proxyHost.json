@@ -474,7 +474,19 @@
       "paranoiaLevel": "민감도 수준",
       "paranoiaLevelDescription": "높을수록 더 민감하게 탐지합니다 (1-4)",
       "anomalyThreshold": "이상 임계값",
-      "anomalyThresholdDescription": "차단하기 위한 최소 점수"
+      "anomalyThresholdDescription": "차단하기 위한 최소 점수",
+      "inheritHint": "이 호스트는 전역 WAF 기본값을 사용합니다.",
+      "disableHint": "이 호스트에는 WAF가 적용되지 않습니다(전역 기본값도 무시).",
+      "paranoiaLabels": {
+        "standard": "표준",
+        "medium": "중간",
+        "high": "높음",
+        "max": "최대"
+      },
+      "paranoiaHint": "PL1: 일반 사이트 권장 | PL2: 보안 중요 | PL3: 금융/의료 | PL4: 전문가 전용",
+      "thresholdStrict": "엄격 (3)",
+      "thresholdStandard": "표준 (5)",
+      "thresholdLenient": "관대 (10+)"
     },
     "upstream": {
       "createFirstTitle": "로드 밸런싱은 호스트 저장 후 설정할 수 있어요",

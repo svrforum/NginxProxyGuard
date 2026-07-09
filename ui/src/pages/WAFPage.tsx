@@ -10,9 +10,10 @@ import { GlobalBotFilterManager } from '../components/GlobalBotFilterManager'
 import { GlobalSecurityHeadersManager } from '../components/GlobalSecurityHeadersManager'
 import { GlobalCloudProviderManager } from '../components/GlobalCloudProviderManager'
 import { GlobalRateLimitManager } from '../components/GlobalRateLimitManager'
+import { GlobalWAFManager } from '../components/GlobalWAFManager'
 import { WAFTester } from '../components/WAFTester'
 
-export default function WAFPage({ subTab }: { subTab: 'settings' | 'tester' | 'banned-ips' | 'uri-blocks' | 'global-geo' | 'global-bot-filter' | 'global-security-headers' | 'global-cloud' | 'global-rate-limit' | 'exploit-rules' | 'fail2ban' }) {
+export default function WAFPage({ subTab }: { subTab: 'settings' | 'tester' | 'banned-ips' | 'uri-blocks' | 'global-geo' | 'global-bot-filter' | 'global-security-headers' | 'global-cloud' | 'global-rate-limit' | 'global-waf' | 'exploit-rules' | 'fail2ban' }) {
   const { t } = useTranslation('navigation')
   const navigate = useNavigate()
 
@@ -94,6 +95,15 @@ export default function WAFPage({ subTab }: { subTab: 'settings' | 'tester' | 'b
             {t('subTabs.waf.globalRateLimit')}
           </button>
           <button
+            onClick={() => navigate('/waf/global-waf')}
+            className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors ${subTab === 'global-waf'
+              ? 'border-purple-600 text-purple-600 dark:text-purple-400'
+              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+          >
+            {t('subTabs.waf.globalWAF')}
+          </button>
+          <button
             onClick={() => navigate('/waf/exploit-rules')}
             className={`pb-2 text-[13px] font-semibold border-b-2 transition-colors ${subTab === 'exploit-rules'
               ? 'border-amber-600 text-amber-600 dark:text-amber-400'
@@ -131,6 +141,7 @@ export default function WAFPage({ subTab }: { subTab: 'settings' | 'tester' | 'b
       {subTab === 'global-security-headers' && <GlobalSecurityHeadersManager />}
       {subTab === 'global-cloud' && <GlobalCloudProviderManager />}
       {subTab === 'global-rate-limit' && <GlobalRateLimitManager />}
+      {subTab === 'global-waf' && <GlobalWAFManager />}
       {subTab === 'exploit-rules' && <ExploitBlockRules />}
       {subTab === 'fail2ban' && <Fail2banManagement />}
       {subTab === 'tester' && <WAFTester />}

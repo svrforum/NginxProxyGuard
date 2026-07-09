@@ -61,7 +61,8 @@
       "globalBotFilter": "전역 봇 필터 기본값",
       "globalSecurityHeaders": "전역 보안 헤더",
       "globalCloud": "전역 클라우드 차단",
-      "globalRateLimit": "전역 레이트 리밋"
+      "globalRateLimit": "전역 레이트 리밋",
+      "globalWAF": "전역 WAF"
     },
     "logs": {
       "access": "접근 로그",

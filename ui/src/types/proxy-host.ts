@@ -44,6 +44,7 @@ export interface ProxyHost {
   waf_mode: string
   waf_paranoia_level: number
   waf_anomaly_threshold: number
+  waf_use_global: boolean
   access_list_id?: string
   auth_provider_id?: string
   auth_bypass_paths?: string[]
@@ -101,6 +102,7 @@ export interface CreateProxyHostRequest {
   waf_mode?: 'blocking' | 'detection'
   waf_paranoia_level?: number
   waf_anomaly_threshold?: number
+  waf_use_global?: boolean
   advanced_config?: string
   ddns_enabled?: boolean
   ddns_provider_id?: string
@@ -147,6 +149,7 @@ export interface UpdateProxyHostRequest {
   waf_mode?: 'blocking' | 'detection'
   waf_paranoia_level?: number
   waf_anomaly_threshold?: number
+  waf_use_global?: boolean
   access_list_id?: string
   auth_provider_id?: string
   auth_bypass_paths?: string[]

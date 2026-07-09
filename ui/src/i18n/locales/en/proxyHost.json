@@ -472,7 +472,19 @@
       "paranoiaLevel": "Paranoia Level",
       "paranoiaLevelDescription": "Higher values are more sensitive (1-4)",
       "anomalyThreshold": "Anomaly Threshold",
-      "anomalyThresholdDescription": "Minimum score to block request"
+      "anomalyThresholdDescription": "Minimum score to block request",
+      "inheritHint": "This host uses the global WAF default.",
+      "disableHint": "This host has no WAF at all (global default ignored).",
+      "paranoiaLabels": {
+        "standard": "Standard",
+        "medium": "Medium",
+        "high": "High",
+        "max": "Max"
+      },
+      "paranoiaHint": "PL1: general sites | PL2: security-sensitive | PL3: finance/health | PL4: experts only",
+      "thresholdStrict": "Strict (3)",
+      "thresholdStandard": "Standard (5)",
+      "thresholdLenient": "Lenient (10+)"
     },
     "upstream": {
       "createFirstTitle": "Load balancing is configured after saving the host",

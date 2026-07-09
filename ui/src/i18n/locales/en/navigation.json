@@ -61,7 +61,8 @@
       "globalBotFilter": "Global Bot Filter",
       "globalSecurityHeaders": "Global Security Headers",
       "globalCloud": "Global Cloud Blocking",
-      "globalRateLimit": "Global Rate Limit"
+      "globalRateLimit": "Global Rate Limit",
+      "globalWAF": "Global WAF"
     },
     "logs": {
       "access": "Access Logs",

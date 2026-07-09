@@ -631,5 +631,17 @@
     "saveSuccess": "Global rate limit default saved and applied to inheriting hosts",
     "saveFailed": "Failed to save global rate limit default",
     "unsavedChanges": "You have unsaved changes"
+  },
+  "globalWAF": {
+    "title": "Global WAF Default",
+    "subtitle": "WAF (ModSecurity) mode, paranoia level and anomaly threshold applied by default to all proxy hosts. Each host can inherit, override, or disable it.",
+    "restartNote": "WAF/ModSecurity rule changes are not picked up by a reload. Inheriting hosts' config files are regenerated immediately, but the change only takes effect after a proxy container restart (docker restart npg-proxy).",
+    "enableTitle": "Global WAF",
+    "enableDescription": "When enabled, this default applies to every host set to inherit.",
+    "infoTitle": "How the Global WAF Default Works",
+    "infoDesc": "This default applies to all proxy hosts that leave WAF set to \"Inherit\" (they use the global enabled flag plus its mode/paranoia/threshold). A host set to \"Override\" uses its own configuration, and one set to \"Disable\" turns WAF off regardless of the global default. Saving regenerates all inheriting hosts automatically.",
+    "saveSuccess": "Global WAF default saved and applied to inheriting hosts (effective after restart)",
+    "saveFailed": "Failed to save global WAF default",
+    "unsavedChanges": "You have unsaved changes"
   }
 }
