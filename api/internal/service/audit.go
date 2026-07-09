@@ -286,6 +286,11 @@ func (s *AuditService) LogGlobalRateLimitUpdate(ctx context.Context) error {
 	return s.logEntry(ctx, "global_rate_limit_updated", "settings", "", "Global Rate Limit", nil)
 }
 
+// LogGlobalWAFUpdate logs a change to the global WAF default (#198 slice 6).
+func (s *AuditService) LogGlobalWAFUpdate(ctx context.Context) error {
+	return s.logEntry(ctx, "global_waf_updated", "settings", "", "Global WAF", nil)
+}
+
 // LogSecurityFeatureUpdate logs security feature changes
 func (s *AuditService) LogSecurityFeatureUpdate(ctx context.Context, resource string, hostDomain string, enabled bool, details map[string]interface{}) error {
 	if details == nil {

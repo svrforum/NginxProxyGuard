@@ -32,6 +32,7 @@ type SecurityService struct {
 	globalBotFilterRepo  *repository.GlobalBotFilterRepository
 	globalSecHeadersRepo *repository.GlobalSecurityHeadersRepository // global security-headers default (#198 slice 3)
 	globalRateLimitRepo  *repository.GlobalRateLimitRepository       // global rate-limit default (#198 slice 5)
+	globalWAFRepo        *repository.GlobalWAFRepository             // global WAF default (#198 slice 6)
 }
 
 // SetGlobalBotFilterRepo wires the global bot-filter default repository (#198).
@@ -47,6 +48,11 @@ func (s *SecurityService) SetGlobalSecHeadersRepo(repo *repository.GlobalSecurit
 // SetGlobalRateLimitRepo wires the global rate-limit default repository (#198).
 func (s *SecurityService) SetGlobalRateLimitRepo(repo *repository.GlobalRateLimitRepository) {
 	s.globalRateLimitRepo = repo
+}
+
+// SetGlobalWAFRepo wires the global WAF default repository (#198 slice 6).
+func (s *SecurityService) SetGlobalWAFRepo(repo *repository.GlobalWAFRepository) {
+	s.globalWAFRepo = repo
 }
 
 func NewSecurityService(
@@ -792,6 +798,35 @@ func (s *SecurityService) UpdateGlobalRateLimit(ctx context.Context, req *model.
 	g, err := s.globalRateLimitRepo.Upsert(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update global rate limit: %w", err)
+	}
+	if s.proxyHostService != nil {
+		if err := s.proxyHostService.SyncAllConfigs(ctx); err != nil {
+			return nil, fmt.Errorf("failed to regenerate configs: %w", err)
+		}
+	}
+	return g, nil
+}
+
+// GetGlobalWAF returns the singleton global WAF default (#198 slice 6).
+func (s *SecurityService) GetGlobalWAF(ctx context.Context) (*model.GlobalWAF, error) {
+	if s.globalWAFRepo == nil {
+		return &model.GlobalWAF{Enabled: false, Mode: "detection", ParanoiaLevel: 1, AnomalyThreshold: 5}, nil
+	}
+	return s.globalWAFRepo.GetGlobal(ctx)
+}
+
+// UpdateGlobalWAF updates the global WAF default and regenerates every
+// inheriting host so the new default takes effect (#198 slice 6). Note: WAF/
+// ModSecurity changes only apply after a proxy container restart (reload does
+// not reparse ModSec rules) — the regenerated host_{id}.conf files are correct,
+// but the running WAF picks them up on the next restart.
+func (s *SecurityService) UpdateGlobalWAF(ctx context.Context, req *model.UpdateGlobalWAFRequest) (*model.GlobalWAF, error) {
+	if s.globalWAFRepo == nil {
+		return nil, fmt.Errorf("global WAF is not available")
+	}
+	g, err := s.globalWAFRepo.Upsert(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update global WAF: %w", err)
 	}
 	if s.proxyHostService != nil {
 		if err := s.proxyHostService.SyncAllConfigs(ctx); err != nil {

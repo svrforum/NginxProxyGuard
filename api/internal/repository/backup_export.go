@@ -141,6 +141,13 @@ func (r *BackupRepository) ExportAllData(ctx context.Context) (*model.ExportData
 	}
 	export.GlobalRateLimit = globalRateLimit
 
+	// Export Global WAF default (#198 slice 6)
+	globalWAF, err := r.exportGlobalWAF(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to export global WAF: %w", err)
+	}
+	export.GlobalWAF = globalWAF
+
 	// Export Cloud Providers
 	cloudProviders, err := r.exportCloudProviders(ctx)
 	if err != nil {

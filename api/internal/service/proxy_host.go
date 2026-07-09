@@ -70,6 +70,7 @@ type ProxyHostService struct {
 	globalSecHeadersRepo   *repository.GlobalSecurityHeadersRepository // global security-headers default (#198 slice 3)
 	globalCloudRepo        *repository.GlobalCloudProvidersRepository  // global cloud-provider default (#198 slice 4)
 	globalRateLimitRepo    *repository.GlobalRateLimitRepository       // global rate-limit default (#198 slice 5)
+	globalWAFRepo          *repository.GlobalWAFRepository             // global WAF default (#198 slice 6)
 	rateLimitRepo          *repository.RateLimitRepository
 	securityHeadersRepo    *repository.SecurityHeadersRepository
 	botFilterRepo          *repository.BotFilterRepository
@@ -171,6 +172,11 @@ func (s *ProxyHostService) SetGlobalCloudRepo(repo *repository.GlobalCloudProvid
 // SetGlobalRateLimitRepo wires the global rate-limit default repository (#198).
 func (s *ProxyHostService) SetGlobalRateLimitRepo(repo *repository.GlobalRateLimitRepository) {
 	s.globalRateLimitRepo = repo
+}
+
+// SetGlobalWAFRepo wires the global WAF default repository (#198 slice 6).
+func (s *ProxyHostService) SetGlobalWAFRepo(repo *repository.GlobalWAFRepository) {
+	s.globalWAFRepo = repo
 }
 
 // SetContainerResolver injects the docker container → IP resolver. (#150)

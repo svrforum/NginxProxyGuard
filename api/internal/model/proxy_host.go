@@ -439,6 +439,9 @@ type ProxyHost struct {
 	WAFMode             string `json:"waf_mode"`
 	WAFParanoiaLevel    int    `json:"waf_paranoia_level"`
 	WAFAnomalyThreshold int    `json:"waf_anomaly_threshold"`
+	// WAFUseGlobal makes this host inherit the global WAF default (enabled +
+	// mode/paranoia/threshold) instead of its own WAF columns (#198 slice 6).
+	WAFUseGlobal bool `json:"waf_use_global"`
 
 	// Access list
 	AccessListID *string `json:"access_list_id,omitempty"`
@@ -503,6 +506,7 @@ type CreateProxyHostRequest struct {
 	WAFMode                   string   `json:"waf_mode"`
 	WAFParanoiaLevel          int      `json:"waf_paranoia_level"`
 	WAFAnomalyThreshold       int      `json:"waf_anomaly_threshold"`
+	WAFUseGlobal              bool     `json:"waf_use_global"`
 	AccessListID              *string  `json:"access_list_id,omitempty"`
 	AuthProviderID            *string  `json:"auth_provider_id,omitempty"`
 	AuthBypassPaths           []string `json:"auth_bypass_paths,omitempty"`
@@ -551,6 +555,7 @@ type UpdateProxyHostRequest struct {
 	WAFMode                   *string  `json:"waf_mode,omitempty"`
 	WAFParanoiaLevel          *int     `json:"waf_paranoia_level,omitempty"`
 	WAFAnomalyThreshold       *int     `json:"waf_anomaly_threshold,omitempty"`
+	WAFUseGlobal              *bool    `json:"waf_use_global,omitempty"`
 	AccessListID              *string  `json:"access_list_id,omitempty"`
 	AuthProviderID            *string  `json:"auth_provider_id,omitempty"`
 	AuthBypassPaths           []string `json:"auth_bypass_paths,omitempty"`

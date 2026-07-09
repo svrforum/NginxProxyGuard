@@ -239,6 +239,26 @@ func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.Pr
 		}()
 	}
 
+	// Fetch the global WAF default (#198 slice 6). Applied after wg.Wait so the
+	// effective WAF fields (mode/paranoia/threshold/enabled) are resolved onto a
+	// host copy the config/manager layer reads. WAF settings live on the host
+	// struct, so resolveWAF returns a copy rather than a separate data field.
+	var globalWAF *model.GlobalWAF
+	if s.globalWAFRepo != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			g, err := s.globalWAFRepo.GetGlobal(ctx)
+			if err != nil {
+				fail("global WAF", err)
+				return
+			}
+			mu.Lock()
+			globalWAF = g
+			mu.Unlock()
+		}()
+	}
+
 	// Fetch upstream if exists
 	if s.upstreamRepo != nil {
 		wg.Add(1)
@@ -412,6 +432,13 @@ func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.Pr
 	if fetchErr != nil {
 		return data, fetchErr
 	}
+
+	// Resolve WAF against the global default (#198 slice 6). For an inheriting
+	// host (waf_use_global=true) this swaps data.Host for a copy carrying the
+	// global mode/paranoia/threshold/enabled; every downstream WAF read
+	// (GenerateHostWAFConfig, the WAFEnabled gate) uses data.Host, so this single
+	// point covers both the per-host and bulk regeneration paths.
+	data.Host = resolveWAF(globalWAF, host)
 
 	// Remove banned IPs that already exist in filter subscription to prevent
 	// nginx "duplicate network" errors in geo blocks (Issue #92)

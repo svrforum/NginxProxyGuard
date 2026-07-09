@@ -1059,6 +1059,22 @@ ALTER TABLE public.geo_restrictions ADD COLUMN IF NOT EXISTS cloud_disable_globa
 CREATE UNIQUE INDEX IF NOT EXISTS idx_global_rate_limits_singleton ON public.global_rate_limits USING btree ((true));
 ALTER TABLE public.rate_limits ADD COLUMN IF NOT EXISTS disable_global boolean DEFAULT false NOT NULL;`,
 		},
+		{
+			desc: "v2.31.0: global_waf singleton + proxy_hosts.waf_use_global (#198 slice 6)",
+			sql: `CREATE TABLE IF NOT EXISTS public.global_waf (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    enabled boolean DEFAULT false,
+    mode character varying(20) DEFAULT 'detection'::character varying,
+    paranoia_level integer DEFAULT 1,
+    anomaly_threshold integer DEFAULT 5,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT chk_global_waf_anomaly_threshold CHECK (((anomaly_threshold >= 1) AND (anomaly_threshold <= 100))),
+    CONSTRAINT chk_global_waf_paranoia_level CHECK (((paranoia_level >= 1) AND (paranoia_level <= 4)))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_global_waf_singleton ON public.global_waf USING btree ((true));
+ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS waf_use_global boolean DEFAULT false NOT NULL;`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

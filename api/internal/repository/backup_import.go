@@ -236,6 +236,13 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 		}
 	}
 
+	// Import Global WAF default (#198 slice 6)
+	if data.GlobalWAF != nil {
+		if err := r.importGlobalWAF(ctx, tx, data.GlobalWAF); err != nil {
+			return nil, fmt.Errorf("failed to import global WAF: %w", err)
+		}
+	}
+
 	// Import Cloud Providers
 	for _, cp := range data.CloudProviders {
 		if err := r.importCloudProvider(ctx, tx, &cp); err != nil {

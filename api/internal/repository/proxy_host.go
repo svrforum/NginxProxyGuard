@@ -61,8 +61,8 @@ func (r *ProxyHostRepository) Create(ctx context.Context, req *model.CreateProxy
 			advanced_config, proxy_connect_timeout, proxy_send_timeout, proxy_read_timeout,
 			proxy_buffering, proxy_request_buffering, client_max_body_size, proxy_max_temp_file_size, access_list_id, enabled,
 			ddns_enabled, ddns_provider_id, ddns_proxied,
-			auth_provider_id, auth_bypass_paths
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45)
+			auth_provider_id, auth_bypass_paths, waf_use_global
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46)
 		RETURNING id, COALESCE(proxy_type, 'http') as proxy_type, domain_names, forward_scheme, forward_host, forward_container_name, forward_container_network, forward_port,
 			COALESCE(stream_listen_host, '') as stream_listen_host,
 			COALESCE(stream_listen_port, 0) as stream_listen_port,
@@ -76,7 +76,7 @@ func (r *ProxyHostRepository) Create(ctx context.Context, req *model.CreateProxy
 			allow_websocket_upgrade, cache_enabled, cache_static_only, cache_ttl,
 			block_exploits, block_exploits_exceptions,
 			custom_locations, advanced_config, waf_enabled, waf_mode,
-			waf_paranoia_level, waf_anomaly_threshold,
+			waf_paranoia_level, waf_anomaly_threshold, waf_use_global,
 			proxy_connect_timeout, proxy_send_timeout, proxy_read_timeout,
 			proxy_buffering, COALESCE(proxy_request_buffering, '') as proxy_request_buffering,
 			client_max_body_size, COALESCE(proxy_max_temp_file_size, '') as proxy_max_temp_file_size,
@@ -189,6 +189,7 @@ func (r *ProxyHostRepository) Create(ctx context.Context, req *model.CreateProxy
 		req.DDNSProxied,
 		authProviderIDParam,
 		pq.Array(req.AuthBypassPaths),
+		req.WAFUseGlobal,
 	).Scan(
 		&host.ID,
 		&host.ProxyType,
@@ -223,6 +224,7 @@ func (r *ProxyHostRepository) Create(ctx context.Context, req *model.CreateProxy
 		&host.WAFMode,
 		&host.WAFParanoiaLevel,
 		&host.WAFAnomalyThreshold,
+		&host.WAFUseGlobal,
 		&host.ProxyConnectTimeout,
 		&host.ProxySendTimeout,
 		&host.ProxyReadTimeout,
@@ -305,7 +307,7 @@ func (r *ProxyHostRepository) GetByID(ctx context.Context, id string) (*model.Pr
 			block_exploits,
 			COALESCE(block_exploits_exceptions, '') as block_exploits_exceptions,
 			custom_locations, advanced_config, waf_enabled, waf_mode,
-			waf_paranoia_level, waf_anomaly_threshold,
+			waf_paranoia_level, waf_anomaly_threshold, waf_use_global,
 			COALESCE(proxy_connect_timeout, 0) as proxy_connect_timeout,
 			COALESCE(proxy_send_timeout, 0) as proxy_send_timeout,
 			COALESCE(proxy_read_timeout, 0) as proxy_read_timeout,
@@ -358,6 +360,7 @@ func (r *ProxyHostRepository) GetByID(ctx context.Context, id string) (*model.Pr
 		&host.WAFMode,
 		&host.WAFParanoiaLevel,
 		&host.WAFAnomalyThreshold,
+		&host.WAFUseGlobal,
 		&host.ProxyConnectTimeout,
 		&host.ProxySendTimeout,
 		&host.ProxyReadTimeout,
@@ -531,6 +534,9 @@ func (r *ProxyHostRepository) Update(ctx context.Context, id string, req *model.
 	if req.WAFAnomalyThreshold != nil {
 		existing.WAFAnomalyThreshold = *req.WAFAnomalyThreshold
 	}
+	if req.WAFUseGlobal != nil {
+		existing.WAFUseGlobal = *req.WAFUseGlobal
+	}
 	if req.AdvancedConfig != nil {
 		existing.AdvancedConfig = *req.AdvancedConfig
 	}
@@ -635,7 +641,8 @@ func (r *ProxyHostRepository) Update(ctx context.Context, id string, req *model.
 			ddns_provider_id = $42,
 			ddns_proxied = $44,
 			auth_provider_id = $45,
-			auth_bypass_paths = $46
+			auth_bypass_paths = $46,
+			waf_use_global = $47
 		WHERE id = $43
 		RETURNING updated_at
 	`
@@ -711,6 +718,7 @@ func (r *ProxyHostRepository) Update(ctx context.Context, id string, req *model.
 		existing.DDNSProxied,
 		authProviderIDParam,
 		pq.Array(existing.AuthBypassPaths),
+		existing.WAFUseGlobal,
 	).Scan(&existing.UpdatedAt)
 
 	if err != nil {
@@ -773,7 +781,7 @@ func (r *ProxyHostRepository) GetByDomain(ctx context.Context, domain string) (*
 			block_exploits,
 			COALESCE(block_exploits_exceptions, '') as block_exploits_exceptions,
 			custom_locations, advanced_config, waf_enabled, waf_mode,
-			waf_paranoia_level, waf_anomaly_threshold,
+			waf_paranoia_level, waf_anomaly_threshold, waf_use_global,
 			COALESCE(proxy_connect_timeout, 0) as proxy_connect_timeout,
 			COALESCE(proxy_send_timeout, 0) as proxy_send_timeout,
 			COALESCE(proxy_read_timeout, 0) as proxy_read_timeout,
@@ -827,6 +835,7 @@ func (r *ProxyHostRepository) GetByDomain(ctx context.Context, domain string) (*
 		&host.WAFMode,
 		&host.WAFParanoiaLevel,
 		&host.WAFAnomalyThreshold,
+		&host.WAFUseGlobal,
 		&host.ProxyConnectTimeout,
 		&host.ProxySendTimeout,
 		&host.ProxyReadTimeout,

@@ -223,6 +223,32 @@ func (r *BackupRepository) importGlobalRateLimit(ctx context.Context, tx *sql.Tx
 	return err
 }
 
+// importGlobalWAF restores the singleton global WAF default (#198 slice 6).
+// Delete-then-insert so the singleton stays unique. Clamps paranoia/threshold to
+// the column CHECK ranges so a malformed or zero-value backup cannot fail import.
+func (r *BackupRepository) importGlobalWAF(ctx context.Context, tx *sql.Tx, g *model.GlobalWAFExport) error {
+	_, _ = tx.ExecContext(ctx, "DELETE FROM global_waf")
+
+	mode := g.Mode
+	if mode == "" {
+		mode = "detection"
+	}
+	paranoia := g.ParanoiaLevel
+	if paranoia < 1 || paranoia > 4 {
+		paranoia = 1
+	}
+	threshold := g.AnomalyThreshold
+	if threshold < 1 || threshold > 100 {
+		threshold = 5
+	}
+	query := `
+		INSERT INTO global_waf (enabled, mode, paranoia_level, anomaly_threshold)
+		VALUES ($1, $2, $3, $4)
+	`
+	_, err := tx.ExecContext(ctx, query, g.Enabled, mode, paranoia, threshold)
+	return err
+}
+
 func (r *BackupRepository) importCloudProvider(ctx context.Context, tx *sql.Tx, cp *model.CloudProviderExport) error {
 	query := `
 		INSERT INTO cloud_providers (name, slug, description, region, ip_ranges_url, enabled)

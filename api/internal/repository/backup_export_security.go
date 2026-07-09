@@ -347,6 +347,24 @@ func (r *BackupRepository) exportGlobalRateLimit(ctx context.Context) (*model.Gl
 	return &g, nil
 }
 
+// exportGlobalWAF exports the singleton global WAF default (#198 slice 6).
+// Returns nil when no row exists.
+func (r *BackupRepository) exportGlobalWAF(ctx context.Context) (*model.GlobalWAFExport, error) {
+	query := `
+		SELECT enabled, mode, paranoia_level, anomaly_threshold
+		FROM global_waf LIMIT 1
+	`
+	var g model.GlobalWAFExport
+	err := r.db.QueryRowContext(ctx, query).Scan(&g.Enabled, &g.Mode, &g.ParanoiaLevel, &g.AnomalyThreshold)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &g, nil
+}
+
 func (r *BackupRepository) exportGlobalURIBlock(ctx context.Context) (*model.GlobalURIBlockExport, error) {
 	query := `
 		SELECT enabled, rules, COALESCE(exception_ips, '{}'), COALESCE(allow_private_ips, true)

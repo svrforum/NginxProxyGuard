@@ -2011,6 +2011,7 @@ CREATE TABLE IF NOT EXISTS public.proxy_hosts (
     ddns_enabled boolean DEFAULT false NOT NULL,
     ddns_provider_id uuid,
     ddns_proxied boolean DEFAULT false NOT NULL,
+    waf_use_global boolean DEFAULT false NOT NULL,
     CONSTRAINT chk_waf_anomaly_threshold CHECK (((waf_anomaly_threshold >= 1) AND (waf_anomaly_threshold <= 100))),
     CONSTRAINT chk_waf_paranoia_level CHECK (((waf_paranoia_level >= 1) AND (waf_paranoia_level <= 4)))
 );
@@ -2059,6 +2060,21 @@ CREATE TABLE IF NOT EXISTS public.global_rate_limits (
     updated_at timestamp with time zone DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_global_rate_limits_singleton ON public.global_rate_limits USING btree ((true));
+-- Global WAF default (#198 slice 6): singleton mode/paranoia/threshold that
+-- hosts with waf_use_global=true inherit. Service-layer resolution, templates
+-- unchanged. Canonical in migration.go.
+CREATE TABLE IF NOT EXISTS public.global_waf (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    enabled boolean DEFAULT false,
+    mode character varying(20) DEFAULT 'detection'::character varying,
+    paranoia_level integer DEFAULT 1,
+    anomaly_threshold integer DEFAULT 5,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT chk_global_waf_anomaly_threshold CHECK (((anomaly_threshold >= 1) AND (anomaly_threshold <= 100))),
+    CONSTRAINT chk_global_waf_paranoia_level CHECK (((paranoia_level >= 1) AND (paranoia_level <= 4)))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_global_waf_singleton ON public.global_waf USING btree ((true));
 CREATE TABLE IF NOT EXISTS public.redirect_hosts (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     domain_names text[] DEFAULT '{}'::text[] NOT NULL,
@@ -4022,6 +4038,27 @@ CREATE TABLE IF NOT EXISTS public.global_rate_limits (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_global_rate_limits_singleton ON public.global_rate_limits USING btree ((true));
 ALTER TABLE public.rate_limits ADD COLUMN IF NOT EXISTS disable_global boolean DEFAULT false NOT NULL;
+
+-- Slice 6 (WAF mode/paranoia): singleton global_waf (enabled OFF by default →
+-- zero behavior change on upgrade) + proxy_hosts.waf_use_global. A host with
+-- waf_use_global=true inherits the global enabled/mode/paranoia/threshold; the
+-- default false keeps every existing host on its own WAF columns. WAF/ModSecurity
+-- changes only take effect after a proxy container restart (reload does not
+-- reparse ModSec rules) — same systemic behavior as per-host WAF edits.
+-- Service-layer resolution onto the config-time host, templates unchanged.
+CREATE TABLE IF NOT EXISTS public.global_waf (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    enabled boolean DEFAULT false,
+    mode character varying(20) DEFAULT 'detection'::character varying,
+    paranoia_level integer DEFAULT 1,
+    anomaly_threshold integer DEFAULT 5,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT chk_global_waf_anomaly_threshold CHECK (((anomaly_threshold >= 1) AND (anomaly_threshold <= 100))),
+    CONSTRAINT chk_global_waf_paranoia_level CHECK (((paranoia_level >= 1) AND (paranoia_level <= 4)))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_global_waf_singleton ON public.global_waf USING btree ((true));
+ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS waf_use_global boolean DEFAULT false NOT NULL;
 
 -- Stream proxy: enforce listener uniqueness at the DB level so two concurrent
 -- creates cannot both succeed when they target the same (host, port, protocol).

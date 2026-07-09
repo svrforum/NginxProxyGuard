@@ -228,6 +228,7 @@ type ExportData struct {
 	GlobalSecurityHeaders *GlobalSecurityHeadersExport `json:"global_security_headers,omitempty"`
 	GlobalCloudProviders  *GlobalCloudProvidersExport  `json:"global_cloud_providers,omitempty"`
 	GlobalRateLimit       *GlobalRateLimitExport       `json:"global_rate_limit,omitempty"`
+	GlobalWAF             *GlobalWAFExport             `json:"global_waf,omitempty"`
 
 	// Cloud Providers
 	CloudProviders []CloudProviderExport `json:"cloud_providers,omitempty"`
@@ -379,6 +380,7 @@ type ProxyHostData struct {
 	WAFMode                   string                 `json:"waf_mode,omitempty"`
 	WAFParanoiaLevel          int                    `json:"waf_paranoia_level"`
 	WAFAnomalyThreshold       int                    `json:"waf_anomaly_threshold"`
+	WAFUseGlobal              bool                   `json:"waf_use_global"`
 	AccessListID              string                 `json:"access_list_id,omitempty"`
 	Enabled                   bool                   `json:"enabled"`
 	IsFavorite                bool                   `json:"is_favorite"`
@@ -525,6 +527,14 @@ type GlobalRateLimitExport struct {
 	LimitBy           string `json:"limit_by"`
 	LimitResponse     int    `json:"limit_response"`
 	WhitelistIPs      string `json:"whitelist_ips,omitempty"`
+}
+
+// GlobalWAFExport represents the singleton global WAF default (#198 slice 6).
+type GlobalWAFExport struct {
+	Enabled          bool   `json:"enabled"`
+	Mode             string `json:"mode"`
+	ParanoiaLevel    int    `json:"paranoia_level"`
+	AnomalyThreshold int    `json:"anomaly_threshold"`
 }
 
 // GlobalGeoRestrictionExport represents the singleton global geo default (#198).

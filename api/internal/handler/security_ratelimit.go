@@ -302,3 +302,31 @@ func (h *SecurityHandler) UpdateGlobalRateLimit(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, g)
 }
+
+// GetGlobalWAF returns the singleton global WAF default (#198 slice 6).
+func (h *SecurityHandler) GetGlobalWAF(c echo.Context) error {
+	g, err := h.securityService.GetGlobalWAF(c.Request().Context())
+	if err != nil {
+		return databaseError(c, "get global WAF", err)
+	}
+	return c.JSON(http.StatusOK, g)
+}
+
+// UpdateGlobalWAF updates the global WAF default and regenerates inheriting
+// hosts (#198 slice 6). WAF changes take effect after a proxy restart.
+func (h *SecurityHandler) UpdateGlobalWAF(c echo.Context) error {
+	var req model.UpdateGlobalWAFRequest
+	if err := c.Bind(&req); err != nil {
+		return badRequestError(c, "Invalid request body")
+	}
+
+	g, err := h.securityService.UpdateGlobalWAF(c.Request().Context(), &req)
+	if err != nil {
+		return internalError(c, "update global WAF", err)
+	}
+
+	auditCtx := service.ContextWithAudit(c.Request().Context(), c)
+	h.audit.LogGlobalWAFUpdate(auditCtx)
+
+	return c.JSON(http.StatusOK, g)
+}
