@@ -180,6 +180,7 @@ export interface SecurityHeaders {
   content_security_policy?: string;
   permissions_policy?: string;
   custom_headers?: Record<string, string>;
+  disable_global?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -197,6 +198,7 @@ export interface CreateSecurityHeadersRequest {
   content_security_policy?: string;
   permissions_policy?: string;
   custom_headers?: Record<string, string>;
+  disable_global?: boolean;
 }
 
 // Upstream types

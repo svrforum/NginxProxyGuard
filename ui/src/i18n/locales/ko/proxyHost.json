@@ -366,7 +366,9 @@
         "xssProtection": "X-XSS-Protection",
         "csp": "Content-Security-Policy",
         "advancedHeadersTitle": "Content-Security-Policy, Permissions-Policy 설정",
-        "advancedHeadersDesc": "이 헤더들은 잘못 설정하면 웹사이트가 깨질 수 있어 위험합니다. 고급 설정(Advanced) 탭에서 직접 nginx 설정으로 추가해주세요."
+        "advancedHeadersDesc": "이 헤더들은 잘못 설정하면 웹사이트가 깨질 수 있어 위험합니다. 고급 설정(Advanced) 탭에서 직접 nginx 설정으로 추가해주세요.",
+        "inheritHint": "이 호스트는 전역 보안 헤더 기본값을 사용합니다.",
+        "disableHint": "이 호스트에는 보안 헤더가 적용되지 않습니다(전역 기본값도 무시)."
       },
       "bannedIPs": {
         "title": "차단된 IP",

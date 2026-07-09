@@ -58,7 +58,8 @@
       "fail2ban": "Fail2ban",
       "tester": "WAF 테스터",
       "globalGeo": "전역 GeoIP 기본값",
-      "globalBotFilter": "전역 봇 필터 기본값"
+      "globalBotFilter": "전역 봇 필터 기본값",
+      "globalSecurityHeaders": "전역 보안 헤더"
     },
     "logs": {
       "access": "접근 로그",

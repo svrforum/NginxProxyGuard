@@ -56,6 +56,8 @@ import {
   getSecurityHeaders,
   updateSecurityHeaders,
 } from '../../../api/security'
+import { InheritOverrideControl, type InheritOverrideValue } from '../../common/InheritOverrideControl'
+import { SecurityHeadersFields } from './security/SecurityHeadersFields'
 
 interface ProtectionTabProps {
   hostId: string
@@ -143,6 +145,7 @@ function SecurityHeadersSection({ hostId }: { hostId: string }) {
     referrer_policy: 'strict-origin-when-cross-origin',
     content_security_policy: '',
     permissions_policy: '',
+    disable_global: false,
   })
 
   const [initialized, setInitialized] = useState(false)
@@ -161,6 +164,7 @@ function SecurityHeadersSection({ hostId }: { hostId: string }) {
         referrer_policy: data.referrer_policy,
         content_security_policy: data.content_security_policy || '',
         permissions_policy: data.permissions_policy || '',
+        disable_global: data.disable_global ?? false,
       })
       setInitialized(true)
     } else if (error && !initialized) {
@@ -184,138 +188,61 @@ function SecurityHeadersSection({ hostId }: { hostId: string }) {
 
   if (isLoading) return <div className="text-center py-4 text-sm text-slate-500 dark:text-slate-400">{t('common:status.loading')}</div>
 
+  // Tri-state (mirrors GeoIPSettings/BotFilterSettings):
+  //   enabled=true       → override (host uses its own headers)
+  //   disable_global=true→ disable  (host has no security headers)
+  //   otherwise          → inherit  (host uses the global default)
+  const mode: InheritOverrideValue = formData.enabled
+    ? 'override'
+    : formData.disable_global
+      ? 'disable'
+      : 'inherit'
+
+  const handleModeChange = (value: InheritOverrideValue) => {
+    if (value === 'override') {
+      setFormData((prev) => ({ ...prev, enabled: true, disable_global: false }))
+    } else if (value === 'disable') {
+      setFormData((prev) => ({ ...prev, enabled: false, disable_global: true }))
+    } else {
+      setFormData((prev) => ({ ...prev, enabled: false, disable_global: false }))
+    }
+  }
+
   return (
     <div className={`p-4 rounded-lg border-2 transition-colors ${formData.enabled ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700'}`}>
-      <label className="flex items-center justify-between cursor-pointer">
-        <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${formData.enabled ? 'bg-blue-100 dark:bg-blue-900/40' : 'bg-slate-200 dark:bg-slate-700'}`}>
-            <svg className={`w-5 h-5 ${formData.enabled ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400 dark:text-slate-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-            </svg>
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-slate-900 dark:text-white flex items-center gap-2">
-                {t('form.protection.securityHeaders.title')}
-                <HelpTip contentKey="help.protection.securityHeaders" />
-              </span>
-              <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 text-xs font-medium rounded-full">{t('common:misc.recommended')}</span>
-            </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400">{t('form.protection.securityHeaders.description')}</p>
-          </div>
+      <div className="flex items-center gap-3 mb-3">
+        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${formData.enabled ? 'bg-blue-100 dark:bg-blue-900/40' : 'bg-slate-200 dark:bg-slate-700'}`}>
+          <svg className={`w-5 h-5 ${formData.enabled ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400 dark:text-slate-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+          </svg>
         </div>
-        <input
-          type="checkbox"
-          checked={formData.enabled}
-          onChange={(e) => setFormData((prev) => ({ ...prev, enabled: e.target.checked }))}
-          className="rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 h-5 w-5 dark:bg-slate-700"
-        />
-      </label>
-
-      {formData.enabled && (
-        <div className="mt-4 ml-13 pl-4 border-l-2 border-blue-200 dark:border-blue-800 space-y-4">
-          {/* HSTS Settings */}
-          <div className="p-3 bg-white dark:bg-slate-800 rounded-lg space-y-2">
-            <div className="flex items-center gap-1">
-              <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{t('form.protection.securityHeaders.hsts')}</span>
-              <HelpTip contentKey="help.protection.securityHeadersDetail.hsts" />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={formData.hsts_enabled}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, hsts_enabled: e.target.checked }))}
-                  className="rounded border-slate-300 dark:border-slate-600 text-blue-600 dark:bg-slate-700"
-                />
-                <span className="text-xs text-slate-900 dark:text-slate-300">{t('form.protection.securityHeaders.hstsEnabled')}</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={formData.hsts_include_subdomains}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, hsts_include_subdomains: e.target.checked }))}
-                  className="rounded border-slate-300 dark:border-slate-600 text-blue-600 dark:bg-slate-700"
-                />
-                <span className="text-xs text-slate-900 dark:text-slate-300">{t('form.protection.securityHeaders.includeSubdomains')}</span>
-                <HelpTip contentKey="help.protection.securityHeadersDetail.includeSubdomains" />
-              </label>
-            </div>
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-slate-900 dark:text-white flex items-center gap-2">
+              {t('form.protection.securityHeaders.title')}
+              <HelpTip contentKey="help.protection.securityHeaders" />
+            </span>
+            <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 text-xs font-medium rounded-full">{t('common:misc.recommended')}</span>
           </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400">{t('form.protection.securityHeaders.description')}</p>
+        </div>
+      </div>
 
-          {/* X-Frame-Options and Referrer Policy */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="flex items-center gap-1 text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-                {t('form.protection.securityHeaders.xFrameOptions')}
-                <HelpTip contentKey="help.protection.securityHeadersDetail.xFrameOptions" />
-              </label>
-              <select
-                value={formData.x_frame_options}
-                onChange={(e) => setFormData((prev) => ({ ...prev, x_frame_options: e.target.value }))}
-                className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white"
-              >
-                <option value="DENY">DENY</option>
-                <option value="SAMEORIGIN">SAMEORIGIN</option>
-                <option value="">{t('common:misc.none')}</option>
-              </select>
-            </div>
-            <div>
-              <label className="flex items-center gap-1 text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-                {t('form.protection.securityHeaders.referrerPolicy')}
-                <HelpTip contentKey="help.protection.securityHeadersDetail.referrerPolicy" />
-              </label>
-              <select
-                value={formData.referrer_policy}
-                onChange={(e) => setFormData((prev) => ({ ...prev, referrer_policy: e.target.value }))}
-                className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white"
-              >
-                <option value="no-referrer">no-referrer</option>
-                <option value="strict-origin">strict-origin</option>
-                <option value="strict-origin-when-cross-origin">strict-origin-when-cross-origin</option>
-              </select>
-            </div>
-          </div>
+      <InheritOverrideControl value={mode} onChange={handleModeChange} />
 
-          {/* Additional Checkboxes */}
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.x_content_type_options}
-                onChange={(e) => setFormData((prev) => ({ ...prev, x_content_type_options: e.target.checked }))}
-                className="rounded border-slate-300 dark:border-slate-600 text-blue-600 dark:bg-slate-700"
-              />
-              <span className="text-xs text-slate-900 dark:text-slate-300">{t('form.protection.securityHeaders.xContentType')}</span>
-              <HelpTip contentKey="help.protection.securityHeadersDetail.xContentType" />
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.x_xss_protection}
-                onChange={(e) => setFormData((prev) => ({ ...prev, x_xss_protection: e.target.checked }))}
-                className="rounded border-slate-300 dark:border-slate-600 text-blue-600 dark:bg-slate-700"
-              />
-              <span className="text-xs text-slate-900 dark:text-slate-300">{t('form.protection.securityHeaders.xssProtection')}</span>
-              <HelpTip contentKey="help.protection.securityHeadersDetail.xssProtection" />
-            </label>
-          </div>
+      {mode === 'inherit' && (
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{t('form.protection.securityHeaders.inheritHint')}</p>
+      )}
+      {mode === 'disable' && (
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{t('form.protection.securityHeaders.disableHint')}</p>
+      )}
 
-          {/* Advanced Headers Notice */}
-          <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-            <div className="flex items-start gap-2">
-              <svg className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              <div>
-                <p className="text-xs font-medium text-amber-800 dark:text-amber-300">{t('form.protection.securityHeaders.advancedHeadersTitle')}</p>
-                <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">{t('form.protection.securityHeaders.advancedHeadersDesc')}</p>
-              </div>
-            </div>
-          </div>
+      {mode === 'override' && (
+        <div className="mt-4 ml-13 pl-4 border-l-2 border-blue-200 dark:border-blue-800">
+          <SecurityHeadersFields data={formData} setData={setFormData} />
 
           {mutation.isPending && (
-            <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+            <div className="mt-4 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
               <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>

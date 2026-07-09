@@ -364,7 +364,9 @@
         "xssProtection": "X-XSS-Protection",
         "csp": "Content-Security-Policy",
         "advancedHeadersTitle": "Content-Security-Policy & Permissions-Policy",
-        "advancedHeadersDesc": "These headers can break your website if misconfigured. Please add them manually in the Advanced tab using nginx configuration."
+        "advancedHeadersDesc": "These headers can break your website if misconfigured. Please add them manually in the Advanced tab using nginx configuration.",
+        "inheritHint": "This host uses the global security headers default.",
+        "disableHint": "This host gets no security headers (the global default is ignored too)."
       },
       "bannedIPs": {
         "title": "Banned IPs",

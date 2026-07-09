@@ -600,5 +600,16 @@
     "saveSuccess": "Global bot filter default saved and applied to inheriting hosts",
     "saveFailed": "Failed to save global bot filter default",
     "unsavedChanges": "You have unsaved changes"
+  },
+  "globalSecurityHeaders": {
+    "title": "Global Security Headers Default",
+    "subtitle": "Security headers applied by default to all proxy hosts. Each host can inherit, override, or disable them.",
+    "enableTitle": "Global Security Headers",
+    "enableDescription": "When enabled, this default applies to every host set to inherit.",
+    "infoTitle": "How the Global Security Headers Default Works",
+    "infoDesc": "This default applies to all proxy hosts that leave security headers set to \"Inherit\". A host set to \"Override\" uses its own configuration, and one set to \"Disable\" gets no security headers at all. Saving regenerates all inheriting hosts automatically.",
+    "saveSuccess": "Global security headers default saved and applied to inheriting hosts",
+    "saveFailed": "Failed to save global security headers default",
+    "unsavedChanges": "You have unsaved changes"
   }
 }

@@ -58,7 +58,8 @@
       "fail2ban": "Fail2ban",
       "tester": "WAF Tester",
       "globalGeo": "Global GeoIP",
-      "globalBotFilter": "Global Bot Filter"
+      "globalBotFilter": "Global Bot Filter",
+      "globalSecurityHeaders": "Global Security Headers"
     },
     "logs": {
       "access": "Access Logs",
