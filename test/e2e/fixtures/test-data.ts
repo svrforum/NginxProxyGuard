@@ -57,6 +57,8 @@ export const API_ENDPOINTS = {
 
   // Settings
   settingsGlobal: '/api/v1/settings',
+  globalWaf: '/api/v1/settings/global-waf',
+  globalRateLimit: '/api/v1/settings/global-rate-limit',
   systemSettings: '/api/v1/system-settings',
   settingsBackups: '/api/v1/backups',
   settingsCaptcha: '/api/v1/settings',
@@ -95,6 +97,8 @@ export const ROUTES = {
   wafExploitRules: '/waf/exploit-rules',
   wafFail2ban: '/waf/fail2ban',
   wafTester: '/waf/tester',
+  wafGlobalWaf: '/waf/global-waf',
+  wafGlobalRateLimit: '/waf/global-rate-limit',
 
   // Access
   accessLists: '/access/lists',

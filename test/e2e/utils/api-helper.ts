@@ -1365,6 +1365,34 @@ export class APIHelper {
     }
     this.bannedIpIds = [];
   }
+
+  // ============ Global default security singletons (#198) ============
+
+  /** Read the global WAF default singleton. */
+  async getGlobalWAF(): Promise<{ enabled: boolean; mode: string; paranoia_level: number; anomaly_threshold: number }> {
+    const r = await this.request.get(API_ENDPOINTS.globalWaf, { headers: this.getHeaders() });
+    if (!r.ok()) throw new Error(`get global-waf failed: ${r.status()}`);
+    return r.json();
+  }
+
+  /** Update the global WAF default singleton (partial). */
+  async setGlobalWAF(body: { enabled?: boolean; mode?: string; paranoia_level?: number; anomaly_threshold?: number }): Promise<void> {
+    const r = await this.request.put(API_ENDPOINTS.globalWaf, { headers: this.getHeaders(), data: body });
+    if (!r.ok()) throw new Error(`set global-waf failed: ${r.status()} ${await r.text()}`);
+  }
+
+  /** Read the global rate-limit default singleton. */
+  async getGlobalRateLimit(): Promise<{ enabled: boolean; requests_per_second: number; burst_size: number }> {
+    const r = await this.request.get(API_ENDPOINTS.globalRateLimit, { headers: this.getHeaders() });
+    if (!r.ok()) throw new Error(`get global-rate-limit failed: ${r.status()}`);
+    return r.json();
+  }
+
+  /** Update the global rate-limit default singleton (partial). */
+  async setGlobalRateLimit(body: { enabled?: boolean; requests_per_second?: number; burst_size?: number }): Promise<void> {
+    const r = await this.request.put(API_ENDPOINTS.globalRateLimit, { headers: this.getHeaders(), data: body });
+    if (!r.ok()) throw new Error(`set global-rate-limit failed: ${r.status()} ${await r.text()}`);
+  }
 }
 
 // Shape of a row returned by /api/v1/logs — kept loose so the spec can assert

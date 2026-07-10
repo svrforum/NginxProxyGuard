@@ -40,11 +40,17 @@ export class ProxyHostFormPage {
   readonly certificateSelect: Locator;
 
   // Security tab fields
-  readonly wafEnabledToggle: Locator;
-  readonly wafModeSelect: Locator;
-  readonly paranoiaLevelSelect: Locator;
-  readonly botFilterToggle: Locator;
-  readonly geoipToggle: Locator;
+  // WAF, GeoIP and Bot Filter are all tri-state (#198): the old on/off checkboxes
+  // were replaced by a shared InheritOverrideControl (Inherit / Override / Disable
+  // segmented radio). Each feature's radiogroup is anchored by document order —
+  // the first radiogroup *following* the feature's title span is that feature's
+  // own control — so the sibling tri-states (identical radio labels) aren't matched.
+  readonly wafGroup: Locator;
+  readonly geoipGroup: Locator;
+  readonly botFilterGroup: Locator;
+  // WAF mode / paranoia / threshold live in the WAF card (border-2 wrapper), which
+  // only renders its inner fields in the Override state.
+  readonly wafCard: Locator;
 
   // Save progress modal
   readonly saveProgressModal: Locator;
@@ -90,12 +96,15 @@ export class ProxyHostFormPage {
     this.hstsToggle = page.locator('input[type="checkbox"], button[role="switch"]').filter({ has: page.locator('text=/hsts/i') }).first();
     this.certificateSelect = page.locator('select[name*="certificate"], [role="combobox"]').filter({ has: page.locator('option:has-text("certificate"), [role="option"]:has-text("certificate")') }).first();
 
-    // Security tab fields
-    this.wafEnabledToggle = page.locator('label').filter({ hasText: /WAF.*Firewall|ModSecurity/i }).locator('input[type="checkbox"]').first();
-    this.wafModeSelect = page.locator('select[name*="waf_mode"], [role="combobox"]').filter({ has: page.locator('text=/detection|blocking/i') }).first();
-    this.paranoiaLevelSelect = page.locator('select[name*="paranoia"], [role="combobox"]').filter({ has: page.locator('text=/paranoia|level/i') }).first();
-    this.botFilterToggle = page.locator('label').filter({ hasText: /bot.*filter/i }).locator('input[type="checkbox"]').first();
-    this.geoipToggle = page.locator('label').filter({ hasText: /geo.*ip|country/i }).locator('input[type="checkbox"]').first();
+    // Security tab fields. Each feature's radiogroup is the first one that appears
+    // after its (English, in e2e) title span in document order.
+    const groupFor = (title: string): Locator =>
+      formArea.locator('span', { hasText: title }).first()
+        .locator("xpath=following::*[@role='radiogroup'][1]");
+    this.wafGroup = groupFor('WAF (Web Application Firewall)');
+    this.geoipGroup = groupFor('GeoIP Restriction');
+    this.botFilterGroup = groupFor('Bot Filter');
+    this.wafCard = formArea.locator('div.border-2').filter({ hasText: 'WAF (Web Application Firewall)' }).first();
 
     // Save progress modal
     this.saveProgressModal = page.locator('[class*="progress"], [class*="saving"]').first();
@@ -153,10 +162,13 @@ export class ProxyHostFormPage {
     };
 
     const tabButton = tabMap[tab];
-    if (await tabButton.isVisible()) {
-      await tabButton.click({ force: true });
-      await this.page.waitForTimeout(300); // Tab transition
-    }
+    // The form body is lazy-loaded (Suspense): the modal backdrop is visible
+    // immediately after open, but the tab bar mounts a few hundred ms later.
+    // A bare isVisible() guard fires before the mount and silently no-ops, leaving
+    // the form stuck on the Basic tab. Auto-wait for the tab to actually appear.
+    await tabButton.waitFor({ state: 'visible', timeout: TIMEOUTS.medium });
+    await tabButton.click({ force: true });
+    await this.page.waitForTimeout(300); // Tab transition
   }
 
   /**
@@ -259,59 +271,80 @@ export class ProxyHostFormPage {
   }
 
   /**
-   * Enable/disable WAF.
+   * Select a tri-state (#198) mode within a feature's radiogroup by clicking the
+   * matching radio of the shared InheritOverrideControl. No-op if already selected.
    */
-  async toggleWAF(enable: boolean): Promise<void> {
-    await this.switchTab('security');
-    const isEnabled = await this.isWAFEnabled();
-    if (isEnabled !== enable) {
-      await this.wafEnabledToggle.click();
+  private async setTriState(group: Locator, state: 'inherit' | 'override' | 'disable'): Promise<void> {
+    const name = state === 'inherit' ? 'Inherit' : state === 'override' ? 'Override' : 'Disable';
+    const radio = group.getByRole('radio', { name, exact: true });
+    if ((await radio.getAttribute('aria-checked')) !== 'true') {
+      await radio.click({ force: true });
     }
   }
 
   /**
-   * Check if WAF is enabled.
+   * Enable/disable WAF via the tri-state control.
+   *   enable=true  → "Override" (host runs its own WAF, waf_enabled=true)
+   *   enable=false → "Disable"  (WAF off regardless of the global default)
+   * "Inherit" is a third state not exercised by these on/off helpers.
+   */
+  async toggleWAF(enable: boolean): Promise<void> {
+    await this.switchTab('security');
+    await this.setTriState(this.wafGroup, enable ? 'override' : 'disable');
+  }
+
+  /**
+   * Set the WAF tri-state directly. `inherit` makes the host follow the global
+   * WAF default (#198); `override`/`disable` are the other two states.
+   */
+  async setWAF(state: 'inherit' | 'override' | 'disable'): Promise<void> {
+    await this.switchTab('security');
+    await this.setTriState(this.wafGroup, state);
+  }
+
+  /**
+   * Check if WAF is enabled (i.e. the "Override" state is selected).
    */
   async isWAFEnabled(): Promise<boolean> {
-    const toggle = this.wafEnabledToggle;
-    if (await toggle.isVisible()) {
-      return await toggle.isChecked();
+    const radio = this.wafGroup.getByRole('radio', { name: 'Override', exact: true });
+    if (await radio.isVisible()) {
+      return (await radio.getAttribute('aria-checked')) === 'true';
     }
     return false;
   }
 
   /**
-   * Set WAF mode by clicking the appropriate radio label card.
+   * Set WAF mode. The mode cards only render in "Override" state, so switch to
+   * Override first, then click the Blocking/Detection label card.
    */
   async setWAFMode(mode: 'blocking' | 'detection'): Promise<void> {
     await this.switchTab('security');
-    if (mode === 'blocking') {
-      await this.page.locator('label').filter({ hasText: /blocking/i }).first().click();
-    } else if (mode === 'detection') {
-      await this.page.locator('label').filter({ hasText: /detection/i }).first().click();
-    }
+    await this.setTriState(this.wafGroup, 'override');
+    const label = mode === 'blocking' ? 'Blocking' : 'Detection';
+    await this.wafCard.locator('label').filter({ hasText: label }).first().click({ force: true });
   }
 
   /**
-   * Enable/disable bot filter.
+   * Enable/disable bot filter via the tri-state control.
+   *   enable=true  → "Override" (host runs its own bot filter)
+   *   enable=false → "Disable"
    */
   async toggleBotFilter(enable: boolean): Promise<void> {
     await this.switchTab('security');
-    const isEnabled = await this.botFilterToggle.isChecked().catch(() => false);
-    if (isEnabled !== enable && await this.botFilterToggle.isVisible()) {
-      await this.botFilterToggle.click();
-    }
+    await this.setTriState(this.botFilterGroup, enable ? 'override' : 'disable');
   }
 
   /**
-   * Enable/disable GeoIP.
+   * Enable/disable GeoIP via the tri-state control. Lenient: GeoIP renders a
+   * "Not Available" placeholder (no tri-state) when no MaxMind database is
+   * configured — as in the e2e environment — so there is nothing to toggle and
+   * we no-op, matching the pre-tri-state behaviour.
    */
   async toggleGeoIP(enable: boolean): Promise<void> {
     await this.switchTab('security');
-    const isEnabled = await this.geoipToggle.isChecked().catch(() => false);
-    if (isEnabled !== enable && await this.geoipToggle.isVisible()) {
-      await this.geoipToggle.click();
-    }
+    const override = this.geoipGroup.getByRole('radio', { name: 'Override', exact: true });
+    if ((await override.count()) === 0) return;
+    await this.setTriState(this.geoipGroup, enable ? 'override' : 'disable');
   }
 
   /**
