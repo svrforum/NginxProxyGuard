@@ -71,7 +71,7 @@ export abstract class BasePage {
   async clickSyncAll(): Promise<void> {
     await this.syncAllButton.click();
     // Wait for sync modal to appear and complete
-    await this.page.waitForSelector('.fixed.inset-0.backdrop-blur-sm, [class*="modal"], [role="dialog"]', {
+    await this.page.waitForSelector('.fixed.inset-0[class*="bg-black/50"], [class*="modal"], [role="dialog"]', {
       state: 'visible',
       timeout: TIMEOUTS.medium,
     });

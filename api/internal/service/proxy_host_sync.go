@@ -282,8 +282,14 @@ func (s *ProxyHostService) SyncAllConfigsWithDetails(ctx context.Context) (*Sync
 			continue
 		}
 
-		// Generate WAF config if WAF is enabled (includes global + host exclusions)
-		if host.WAFEnabled && !host.IsStream() {
+		// Generate the per-host modsec WAF config based on the RESOLVED host
+		// (configData.Host), not the stored `host`. A host that inherits an enabled
+		// global WAF default (#198) has host.WAFEnabled=false but resolves to
+		// WAFEnabled=true; GenerateConfigFull already emitted its
+		// modsecurity_rules_file reference from the resolved host, so the modsec
+		// file must be written here too or `nginx -t` fails on the missing file
+		// (#202).
+		if configData.Host.WAFEnabled && !configData.Host.IsStream() {
 			mergedExclusions, err := s.getMergedWAFExclusions(ctx, host.ID)
 			if err != nil {
 				hostResult.Success = false
@@ -293,7 +299,7 @@ func (s *ProxyHostService) SyncAllConfigsWithDetails(ctx context.Context) (*Sync
 				continue
 			}
 			allowedIPs := s.getPriorityAllowIPs(ctx, host.ID)
-			if err := s.nginx.GenerateHostWAFConfig(ctx, &host, mergedExclusions, allowedIPs); err != nil {
+			if err := s.nginx.GenerateHostWAFConfig(ctx, configData.Host, mergedExclusions, allowedIPs); err != nil {
 				hostResult.Success = false
 				hostResult.Error = fmt.Sprintf("failed to generate WAF config: %v", err)
 				result.FailedCount++

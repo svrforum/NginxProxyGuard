@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { ProxyHostListPage } from '../../pages/proxy-host-list.page';
+import { ProxyHostFormPage } from '../../pages/proxy-host-form.page';
 import { DashboardPage } from '../../pages/dashboard.page';
 import { TestDataFactory } from '../../utils/test-data-factory';
 import { APIHelper } from '../../utils/api-helper';
@@ -33,7 +34,7 @@ test.describe('Proxy Host Sync', () => {
     await dashboardPage.syncAllButton.click();
 
     // Should show sync progress modal
-    const syncModal = page.locator('.fixed.inset-0.backdrop-blur-sm, [class*="modal"], [role="dialog"]');
+    const syncModal = page.locator('.fixed.inset-0[class*="bg-black/50"], [class*="modal"], [role="dialog"]');
     await expect(syncModal).toBeVisible({ timeout: TIMEOUTS.medium });
 
     // Wait for sync to complete
@@ -55,7 +56,7 @@ test.describe('Proxy Host Sync', () => {
     await dashboardPage.syncAllButton.click();
 
     // Wait for sync to complete
-    const syncModal = page.locator('.fixed.inset-0.backdrop-blur-sm, [class*="modal"], [role="dialog"]');
+    const syncModal = page.locator('.fixed.inset-0[class*="bg-black/50"], [class*="modal"], [role="dialog"]');
     await expect(syncModal).toBeVisible();
 
     // Wait for success indicator
@@ -70,7 +71,7 @@ test.describe('Proxy Host Sync', () => {
     await dashboardPage.syncAllButton.click();
 
     // Sync should complete (even if no hosts)
-    const syncModal = page.locator('.fixed.inset-0.backdrop-blur-sm, [class*="modal"], [role="dialog"]');
+    const syncModal = page.locator('.fixed.inset-0[class*="bg-black/50"], [class*="modal"], [role="dialog"]');
     await expect(syncModal).toBeVisible();
 
     // Wait for completion
@@ -82,7 +83,7 @@ test.describe('Proxy Host Sync', () => {
     await listPage.goto();
     await listPage.clickAddHost();
 
-    const formPage = await import('../../pages/proxy-host-form.page').then(m => new m.ProxyHostFormPage(page));
+    const formPage = new ProxyHostFormPage(page);
     const testDomain = TestDataFactory.generateDomain('sync-after-create');
 
     await formPage.fillDomain(testDomain);
@@ -97,7 +98,7 @@ test.describe('Proxy Host Sync', () => {
     await listPage.syncAllButton.click();
 
     // Wait for sync to complete
-    await page.waitForSelector('.fixed.inset-0.backdrop-blur-sm, [class*="modal"], [role="dialog"]', { state: 'visible' });
+    await page.waitForSelector('.fixed.inset-0[class*="bg-black/50"], [class*="modal"], [role="dialog"]', { state: 'visible' });
     await page.waitForFunction(
       () => !document.querySelector('[class*="animate-spin"]'),
       { timeout: TIMEOUTS.veryLong }
@@ -114,7 +115,7 @@ test.describe('Proxy Host Sync', () => {
     await dashboardPage.goto();
     await dashboardPage.syncAllButton.click();
 
-    const syncModal = page.locator('.fixed.inset-0.backdrop-blur-sm, [class*="modal"], [role="dialog"]');
+    const syncModal = page.locator('.fixed.inset-0[class*="bg-black/50"], [class*="modal"], [role="dialog"]');
     await expect(syncModal).toBeVisible();
 
     // Wait for sync to complete
@@ -132,7 +133,7 @@ test.describe('Proxy Host Sync', () => {
     await dashboardPage.goto();
     await dashboardPage.syncAllButton.click();
 
-    const syncModal = page.locator('.fixed.inset-0.backdrop-blur-sm, [class*="modal"], [role="dialog"]');
+    const syncModal = page.locator('.fixed.inset-0[class*="bg-black/50"], [class*="modal"], [role="dialog"]');
     await expect(syncModal).toBeVisible();
 
     // Wait for sync to complete

@@ -89,6 +89,26 @@ test.describe.serial('Global default security + per-host inherit (#198)', () => 
     expect(created.id).toBeTruthy();
   });
 
+  // ---------- Regression #202: enabling global WAF for an ALREADY-inheriting host ----------
+  // The order that broke in the wild: a host is set to Inherit FIRST (while the
+  // global default is off → no modsec file), THEN the operator enables the global
+  // WAF default. That fires SyncAllConfigs, whose fan-out must regenerate the
+  // per-host modsec file for hosts whose RESOLVED WAF flips on — otherwise the
+  // proxy conf references a modsec file that was never written and `nginx -t`
+  // fails, so the enable is rejected. (The other inherit test enables global
+  // BEFORE the host inherits, so it exercises the per-host path and misses this.)
+  test('enabling global WAF for an already-inheriting host does not fail nginx -t (#202)', async () => {
+    const data = TestDataFactory.createProxyHost();
+    const created = await apiHelper.createProxyHost({ ...data, waf_use_global: true });
+
+    // With the bug, this PUT returns 500 ("nginx config test failed") and throws.
+    await apiHelper.setGlobalWAF({ enabled: true, mode: 'detection', paranoia_level: 2, anomaly_threshold: 7 });
+
+    // The inheriting host's modsec file must now exist and reflect the global default.
+    await expect.poll(() => readHostModsecConfig(created.id), { timeout: 10_000 })
+      .toContain('SecRuleEngine DetectionOnly');
+  });
+
   // ---------- Per-host DISABLE beats an enabled global WAF default ----------
   test('per-host Disable beats an enabled global WAF default', async () => {
     await apiHelper.setGlobalWAF({ enabled: true, mode: 'blocking' });
