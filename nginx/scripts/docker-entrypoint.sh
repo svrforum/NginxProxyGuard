@@ -537,6 +537,11 @@ start_cloudflared() {
         | while IFS= read -r line; do echo "[cloudflared] $line"; done &
 }
 
+# NOTE: the three supervisor echo messages below ("token file changed",
+# "connector not running", "token removed") are matched verbatim by
+# test/e2e/specs/settings/cloudflare-tunnel.spec.ts (SUPERVISOR_PHRASES) to
+# tell supervisor lines apart from connector binary output — rewording any of
+# them requires updating that spec.
 cloudflared_supervisor() {
     last_mtime=""
     backoff=5
@@ -555,9 +560,28 @@ cloudflared_supervisor() {
                 backoff=5
             elif ! pgrep -x cloudflared >/dev/null 2>&1; then
                 echo "[cloudflared] connector not running; restarting in ${backoff}s"
-                sleep "$backoff"
-                [ "$backoff" -lt 60 ] && backoff=$((backoff * 2))
-                start_cloudflared
+                # Sleep in <=5s slices, re-checking the token file each slice:
+                # if it changed or disappeared mid-backoff, stop waiting so the
+                # outer loop reacts promptly (restart with new token / stop)
+                # instead of staying blind for the full backoff.
+                interrupted=0
+                slept=0
+                while [ "$slept" -lt "$backoff" ]; do
+                    slice=$((backoff - slept))
+                    if [ "$slice" -gt 5 ]; then slice=5; fi
+                    sleep "$slice"
+                    slept=$((slept + slice))
+                    cur_mtime=$(stat -c %Y "$CLOUDFLARED_TOKEN_FILE" 2>/dev/null || echo "")
+                    if [ "$cur_mtime" != "$last_mtime" ]; then
+                        interrupted=1
+                        break
+                    fi
+                done
+                backoff=$((backoff * 2))
+                if [ "$backoff" -gt 60 ]; then backoff=60; fi
+                if [ "$interrupted" -eq 0 ]; then
+                    start_cloudflared
+                fi
             else
                 backoff=5
             fi
