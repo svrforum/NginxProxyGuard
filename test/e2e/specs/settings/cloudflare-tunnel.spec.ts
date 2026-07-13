@@ -41,12 +41,15 @@ function cloudflaredLogsSince(sinceIso: string): string {
 // connector") landing inside this test's --since window on the supervisor's next
 // 5s tick.
 //
-// Timing: polls on this signal need a 90s budget, not 15s. While the connector
-// crash-loops (fake token), the supervisor sits in `sleep $backoff` (5s→60s,
-// escalated by any preceding crash-loop in this or a prior run) and is blind to
-// token-file changes until it wakes — so binary output can lag a save by up to
-// ~65s (60s max backoff + 5s tick). Verified empirically: 15s polls flaked
-// exactly when a prior test had escalated the backoff.
+// Timing: polls on this signal need a 105s budget, not 15s. While the connector
+// crash-loops (fake token), the supervisor sits in `sleep $backoff` and is blind
+// to token-file changes until it wakes. The entrypoint doubles AFTER the sleep,
+// with the `-lt 60` guard checked BEFORE doubling — so sleeps go 5→10→20→40→80:
+// the real max backoff sleep is 80s (the entrypoint's own "5s..60s" comment
+// overshoots), escalated by any preceding crash-loop in this or a prior run.
+// Worst-case lag for binary output after a save ≈ 84s (80s max backoff + 5s
+// tick loop). Verified empirically: 15s polls flaked exactly when a prior test
+// had escalated the backoff.
 const SUPERVISOR_PHRASES = ['token file changed', 'connector not running', 'token removed'];
 function connectorOutputSince(sinceIso: string): string {
   return cloudflaredLogsSince(sinceIso)
@@ -81,7 +84,7 @@ test.describe.serial('Cloudflare Tunnel settings (Phase 1 token mode)', () => {
   });
 
   test('saving a token writes the 0600 token file and starts the connector', async () => {
-    test.setTimeout(150_000); // 0600 poll (15s) + connector-start poll (90s, see helper comment)
+    test.setTimeout(150_000); // 0600 poll (15s) + connector-start poll (105s, see helper comment)
     // Skew guard: docker log timestamps come from the daemon clock.
     const since = new Date(Date.now() - 2_000).toISOString();
     const saved = await apiHelper.setCloudflareTunnel({ enabled: true, token: FAKE_TOKEN });
@@ -94,8 +97,8 @@ test.describe.serial('Cloudflare Tunnel settings (Phase 1 token mode)', () => {
     }, { timeout: 15_000 }).toContain('-rw-------');
     // Connector started = the cloudflared binary itself produced output
     // (supervisor-prefixed lines minus the supervisor's own fixed messages).
-    // 90s: supervisor backoff sleep can delay the start by up to ~65s.
-    await expect.poll(() => connectorOutputSince(since), { timeout: 90_000, intervals: [2_000] }).not.toBe('');
+    // 105s: supervisor backoff sleep can delay the start by up to ~84s (see helper comment).
+    await expect.poll(() => connectorOutputSince(since), { timeout: 105_000, intervals: [2_000] }).not.toBe('');
     // The token value itself must never reach the container logs — any line,
     // either stream, unfiltered.
     expect(allDockerLogsSince(since)).not.toContain('FAKE_E2E_TUNNEL_TOKEN');
@@ -121,13 +124,13 @@ test.describe.serial('Cloudflare Tunnel settings (Phase 1 token mode)', () => {
   });
 
   test('disabling removes the token file and stops the connector', async () => {
-    test.setTimeout(150_000); // connector-start poll (90s) + file/process polls (15s each)
+    test.setTimeout(150_000); // connector-start poll (105s) + file/process polls (15s each)
     // Since-mark taken BEFORE the save; the exclusion matcher additionally
     // guards against the previous test's teardown line drifting into the window.
     const since = new Date(Date.now() - 2_000).toISOString();
     await apiHelper.setCloudflareTunnel({ enabled: true, token: FAKE_TOKEN });
-    // 90s: test 3 just escalated the supervisor's backoff to 60s (see helper comment).
-    await expect.poll(() => connectorOutputSince(since), { timeout: 90_000, intervals: [2_000] }).not.toBe('');
+    // 105s: test 3 just escalated the supervisor's backoff to its real 80s cap (see helper comment).
+    await expect.poll(() => connectorOutputSince(since), { timeout: 105_000, intervals: [2_000] }).not.toBe('');
 
     await apiHelper.setCloudflareTunnel({ enabled: false });
     await expect.poll(() => {
