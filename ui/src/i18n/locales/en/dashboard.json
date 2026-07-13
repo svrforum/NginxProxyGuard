@@ -35,7 +35,8 @@
     "networkIo": "Network I/O",
     "blockIo": "Block I/O",
     "totalCpu": "Total CPU",
-    "totalMemory": "Total Memory"
+    "totalMemory": "Total Memory",
+    "cloudflareTunnel": "Cloudflare Tunnel"
   },
   "stats": {
     "blockedRequests": "Blocked Requests",

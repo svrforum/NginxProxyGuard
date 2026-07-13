@@ -35,7 +35,8 @@
     "networkIo": "네트워크 I/O",
     "blockIo": "블록 I/O",
     "totalCpu": "전체 CPU",
-    "totalMemory": "전체 메모리"
+    "totalMemory": "전체 메모리",
+    "cloudflareTunnel": "Cloudflare Tunnel"
   },
   "stats": {
     "blockedRequests": "차단된 요청",
