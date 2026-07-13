@@ -112,8 +112,14 @@ func (s *CloudflareTunnelService) Update(ctx context.Context, req *model.UpdateC
 	if req.Token != nil {
 		effToken = *req.Token
 	}
-	if effEnabled && effToken == "" {
-		return nil, errors.New("invalid tunnel token: cannot enable tunnel without a token")
+	if effEnabled {
+		// Re-validate the STORED effective token, not just non-emptiness —
+		// tokens can enter the DB unvalidated (backup import), and enabling
+		// over an invalid one must fail here instead of succeeding and then
+		// landing on "error" (syncFile refuses to write invalid tokens).
+		if err := ValidateTunnelToken(effToken); err != nil {
+			return nil, err
+		}
 	}
 
 	t, err := s.repo.Upsert(ctx, req)

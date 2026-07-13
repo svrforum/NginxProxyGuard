@@ -291,6 +291,11 @@ func (s *AuditService) LogGlobalWAFUpdate(ctx context.Context) error {
 	return s.logEntry(ctx, "global_waf_updated", "settings", "", "Global WAF", nil)
 }
 
+// LogCloudflareTunnelUpdate logs a change to the Cloudflare Tunnel settings.
+func (s *AuditService) LogCloudflareTunnelUpdate(ctx context.Context) error {
+	return s.logEntry(ctx, "cloudflare_tunnel_updated", "settings", "", "Cloudflare Tunnel", nil)
+}
+
 // LogSecurityFeatureUpdate logs security feature changes
 func (s *AuditService) LogSecurityFeatureUpdate(ctx context.Context, resource string, hostDomain string, enabled bool, details map[string]interface{}) error {
 	if details == nil {
