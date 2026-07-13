@@ -4,6 +4,7 @@ export interface CloudflareTunnelSettings {
   mode: 'token' | 'managed'
   has_token: boolean
   token_masked: string
+  origin_service_url: string
   created_at: string
   updated_at: string
 }

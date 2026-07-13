@@ -38,6 +38,7 @@ type TunnelNginxManager interface {
 	WriteCloudflaredToken(token string) error
 	RemoveCloudflaredToken() error
 	CloudflaredReady(ctx context.Context) (int, error)
+	GetHTTPSPort() string
 }
 
 // CloudflareTunnelService manages the tunnel settings singleton and keeps the
@@ -77,12 +78,20 @@ func toResponse(t *model.CloudflareTunnel) *model.CloudflareTunnelResponse {
 	}
 }
 
+// withOriginURL fills the origin service URL shown in the setup guide —
+// NPG's HTTPS port is configurable (NGINX_HTTPS_PORT), so the dashboard
+// entry must point at the actual port, not a hardcoded 443.
+func (s *CloudflareTunnelService) withOriginURL(resp *model.CloudflareTunnelResponse) *model.CloudflareTunnelResponse {
+	resp.OriginServiceURL = "https://localhost:" + s.nginx.GetHTTPSPort()
+	return resp
+}
+
 func (s *CloudflareTunnelService) Get(ctx context.Context) (*model.CloudflareTunnelResponse, error) {
 	t, err := s.repo.GetSingleton(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return toResponse(t), nil
+	return s.withOriginURL(toResponse(t)), nil
 }
 
 // Update validates, persists, and converges the token file. Token semantics:
@@ -143,7 +152,7 @@ func (s *CloudflareTunnelService) Update(ctx context.Context, req *model.UpdateC
 	if syncErr != nil {
 		return nil, syncErr
 	}
-	return toResponse(t), nil
+	return s.withOriginURL(toResponse(t)), nil
 }
 
 // syncFile converges the token file to the given settings state. The stored

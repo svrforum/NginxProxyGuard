@@ -1224,8 +1224,8 @@
       "step1": "Cloudflare Zero Trust 대시보드에서 Networks → Tunnels → Create a tunnel로 이동해 Cloudflared 커넥터 방식의 터널을 만듭니다.",
       "step2": "터널 생성 후 표시되는 커넥터 토큰을 복사합니다. 'cloudflared service install <토큰>' 설치 명령에서 <토큰> 부분만 복사하면 됩니다.",
       "step3": "복사한 토큰을 위 입력란에 붙여넣고 터널을 활성화한 뒤 저장합니다.",
-      "step4": "터널의 Public Hostname에 도메인별 와일드카드 호스트네임(예: *.example.com)을 추가하고, 서비스 주소는 https://localhost:443으로 지정한 뒤 TLS 설정에서 \"No TLS Verify\"를 켭니다.",
-      "redirectLoopWarning": "서비스 주소를 http://localhost:80으로 지정하면 HTTPS 강제(Force HTTPS)가 켜진 호스트에서 리다이렉트 루프가 발생합니다. 반드시 https://localhost:443을 사용하세요.",
+      "step4": "터널의 Public Hostname에 도메인별 와일드카드 호스트네임(예: *.example.com)을 추가하고, 서비스 주소는 {{originUrl}} 로 지정한 뒤 TLS 설정에서 \"No TLS Verify\"를 켭니다.",
+      "redirectLoopWarning": "서비스 주소를 http://localhost:80으로 지정하면 HTTPS 강제(Force HTTPS)가 켜진 호스트에서 리다이렉트 루프가 발생합니다. 반드시 {{originUrl}} 을 사용하세요.",
       "step5": "(선택) 터널로 전환한 도메인의 기존 A 레코드와 공유기 포트 포워딩 규칙을 정리합니다."
     }
   },

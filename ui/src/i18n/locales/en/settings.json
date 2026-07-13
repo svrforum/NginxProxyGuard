@@ -1220,8 +1220,8 @@
       "step1": "In the Cloudflare Zero Trust dashboard, go to Networks → Tunnels → Create a tunnel and create a tunnel using the Cloudflared connector.",
       "step2": "Copy the connector token shown after creating the tunnel — it is the <TOKEN> part of the 'cloudflared service install <TOKEN>' install command.",
       "step3": "Paste the token into the field above, enable the tunnel, and save.",
-      "step4": "Add a Public Hostname to the tunnel with a wildcard per domain (e.g. *.example.com), point the service to https://localhost:443, and turn ON \"No TLS Verify\" in the TLS settings.",
-      "redirectLoopWarning": "Pointing the service to http://localhost:80 causes redirect loops on hosts with Force HTTPS enabled. Always use https://localhost:443.",
+      "step4": "Add a Public Hostname to the tunnel with a wildcard per domain (e.g. *.example.com), point the service to {{originUrl}}, and turn ON \"No TLS Verify\" in the TLS settings.",
+      "redirectLoopWarning": "Pointing the service to http://localhost:80 causes redirect loops on hosts with Force HTTPS enabled. Always use {{originUrl}}.",
       "step5": "(Optional) Clean up old A records and router port-forwarding rules for the domains you moved to the tunnel."
     }
   },

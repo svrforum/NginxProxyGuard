@@ -110,6 +110,10 @@ export default function CloudflareTunnelSettings() {
 
   const showTokenInput = !settings?.has_token || replacingToken
 
+  // Origin service URL for the CF dashboard's Public Hostname — reflects the
+  // actual NGINX_HTTPS_PORT (e.g. https://localhost:8443), not a hardcoded 443.
+  const originUrl = settings?.origin_service_url || 'https://localhost:443'
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center py-12">
@@ -273,11 +277,11 @@ export default function CloudflareTunnelSettings() {
                     {n}
                   </span>
                   <div className="text-sm text-slate-600 dark:text-slate-300">
-                    <p>{t(`cloudflareTunnel.guide.step${n}`)}</p>
+                    <p>{t(`cloudflareTunnel.guide.step${n}`, { originUrl })}</p>
                     {n === 4 && (
                       <div className="mt-2 p-3 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-lg">
                         <p className="text-xs text-amber-700 dark:text-amber-400">
-                          {t('cloudflareTunnel.guide.redirectLoopWarning')}
+                          {t('cloudflareTunnel.guide.redirectLoopWarning', { originUrl })}
                         </p>
                       </div>
                     )}
