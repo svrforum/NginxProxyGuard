@@ -94,6 +94,10 @@ services:
       API_HOST: "127.0.0.1:19080"
       NPG_CANARY_INTERVAL: "5s"
       NPG_CANARY_BOOT_DELAY: "3s"
+      # Off-default cloudflared metrics port (must match the nginx service env):
+      # a dev NPG instance on the same host-network box would otherwise answer
+      # the e2e stack's /ready probe on 20241.
+      CLOUDFLARED_METRICS_PORT: "20242"
     ports:
       - "19080:8080"
     depends_on:
@@ -160,6 +164,8 @@ services:
       # Bypass entrypoint's >1MB validity check so the geoip2 module loads
       # against the test fixture instead of falling back to placeholder maps.
       NGINX_GEOIP_SKIP_SIZE_CHECK: "true"
+      # Off-default cloudflared metrics port (must match the api service env).
+      CLOUDFLARED_METRICS_PORT: "20242"
     volumes:
       - e2e_test_nginx_conf:/etc/nginx:rw
       # Synthetic GeoLite2 mmdb for block_reason E2E geo cases (Apache 2.0).

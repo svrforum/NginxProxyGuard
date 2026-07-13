@@ -39,14 +39,20 @@ func (m *Manager) RemoveCloudflaredToken() error {
 }
 
 // CloudflaredReady queries the connector's metrics /ready endpoint inside the
-// nginx container (bound to 127.0.0.1:20241 — not reachable from the api
-// container directly under host networking, hence docker exec like nginx -t).
-// Returns the number of active edge connections.
+// nginx container (bound to loopback — not reachable from the api container
+// directly under host networking, hence docker exec like nginx -t). The port
+// comes from CLOUDFLARED_METRICS_PORT (default 20241) and must match the same
+// env on the nginx container, whose entrypoint supervisor passes it to
+// cloudflared --metrics. Returns the number of active edge connections.
 func (m *Manager) CloudflaredReady(ctx context.Context) (int, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
+	port := os.Getenv("CLOUDFLARED_METRICS_PORT")
+	if port == "" {
+		port = "20241"
+	}
 	cmd := exec.CommandContext(ctx, "docker", "exec", m.nginxContainer,
-		"curl", "-fsS", "http://127.0.0.1:20241/ready")
+		"curl", "-fsS", "http://127.0.0.1:"+port+"/ready")
 	out, err := cmd.Output()
 	if err != nil {
 		return 0, fmt.Errorf("cloudflared ready probe failed: %w", err)

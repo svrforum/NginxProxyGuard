@@ -527,9 +527,12 @@ fi
 #   process crashes              -> restart with exponential backoff (5s..60s)
 # Token value is NEVER echoed. Logs are prefixed [cloudflared].
 CLOUDFLARED_TOKEN_FILE=/etc/nginx/cloudflared/token
+# Metrics port must match the api's CloudflaredReady probe (same env there).
+# Configurable so two host-network NPG instances on one box don't collide.
+CLOUDFLARED_METRICS_PORT="${CLOUDFLARED_METRICS_PORT:-20241}"
 
 start_cloudflared() {
-    cloudflared --no-autoupdate --metrics 127.0.0.1:20241 \
+    cloudflared --no-autoupdate --metrics "127.0.0.1:${CLOUDFLARED_METRICS_PORT}" \
         tunnel run --token-file "$CLOUDFLARED_TOKEN_FILE" 2>&1 \
         | while IFS= read -r line; do echo "[cloudflared] $line"; done &
 }
