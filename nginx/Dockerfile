@@ -17,6 +17,7 @@ ARG NGINX_VERSION=1.30.2
 ARG MODSECURITY_VERSION=3.0.15
 ARG MODSECURITY_NGINX_VERSION=1.0.4
 ARG OWASP_CRS_VERSION=4.26.0
+ARG CLOUDFLARED_VERSION=2026.7.1
 
 # =============================================================================
 # Stage 1: Build Stage
@@ -221,6 +222,15 @@ RUN apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/t
      mv geoipupdate_7.0.1_linux_${TARGETARCH}/geoipupdate /usr/local/bin/ && \
      chmod +x /usr/local/bin/geoipupdate && \
      rm -rf geoipupdate_7.0.1_linux_${TARGETARCH}*)
+
+# Cloudflare Tunnel connector (Phase 1 token mode). Static Go binary — runs on musl.
+# Supervised by docker-entrypoint.sh; idle (not started) until the api writes
+# /etc/nginx/cloudflared/token.
+ARG CLOUDFLARED_VERSION
+RUN wget -q https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}/cloudflared-linux-${TARGETARCH} \
+        -O /usr/local/bin/cloudflared \
+    && chmod +x /usr/local/bin/cloudflared \
+    && cloudflared --version
 
 # Create nginx user and directories
 RUN addgroup -g 101 -S nginx \

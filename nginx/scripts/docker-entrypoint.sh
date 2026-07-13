@@ -519,5 +519,57 @@ else
     exit 1
 fi
 
+# --- Cloudflare Tunnel connector supervisor (Phase 1, token mode) ---------------
+# The api writes/removes /etc/nginx/cloudflared/token (shared nginx_data volume).
+# This loop converges the connector process to the file's state:
+#   file appears / mtime changes -> (re)start cloudflared with that token
+#   file removed                 -> stop cloudflared
+#   process crashes              -> restart with exponential backoff (5s..60s)
+# Token value is NEVER echoed. Logs are prefixed [cloudflared].
+CLOUDFLARED_TOKEN_FILE=/etc/nginx/cloudflared/token
+
+start_cloudflared() {
+    cloudflared --no-autoupdate --metrics 127.0.0.1:20241 \
+        tunnel run --token-file "$CLOUDFLARED_TOKEN_FILE" 2>&1 \
+        | while IFS= read -r line; do echo "[cloudflared] $line"; done &
+}
+
+cloudflared_supervisor() {
+    last_mtime=""
+    backoff=5
+    while true; do
+        if [ -f "$CLOUDFLARED_TOKEN_FILE" ]; then
+            mtime=$(stat -c %Y "$CLOUDFLARED_TOKEN_FILE" 2>/dev/null || echo 0)
+            if [ "$mtime" != "$last_mtime" ]; then
+                echo "[cloudflared] token file changed; (re)starting connector"
+                # `|| true`: entrypoint runs under `set -e`, inherited by this
+                # backgrounded subshell — a no-match pkill (exit 1) would kill
+                # the whole supervisor loop.
+                pkill -x cloudflared 2>/dev/null || true
+                sleep 1
+                start_cloudflared
+                last_mtime="$mtime"
+                backoff=5
+            elif ! pgrep -x cloudflared >/dev/null 2>&1; then
+                echo "[cloudflared] connector not running; restarting in ${backoff}s"
+                sleep "$backoff"
+                [ "$backoff" -lt 60 ] && backoff=$((backoff * 2))
+                start_cloudflared
+            else
+                backoff=5
+            fi
+        else
+            if pgrep -x cloudflared >/dev/null 2>&1; then
+                echo "[cloudflared] token removed; stopping connector"
+                pkill -x cloudflared 2>/dev/null || true
+            fi
+            last_mtime=""
+        fi
+        sleep 5
+    done
+}
+
+cloudflared_supervisor &
+
 echo "[Entrypoint] Starting nginx..."
 exec nginx -g "daemon off;"
