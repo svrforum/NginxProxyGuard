@@ -1075,6 +1075,19 @@ ALTER TABLE public.rate_limits ADD COLUMN IF NOT EXISTS disable_global boolean D
 CREATE UNIQUE INDEX IF NOT EXISTS idx_global_waf_singleton ON public.global_waf USING btree ((true));
 ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS waf_use_global boolean DEFAULT false NOT NULL;`,
 		},
+		{
+			desc: "v2.32.0: cloudflare_tunnel singleton (Cloudflare Tunnel Phase 1 token mode)",
+			sql: `CREATE TABLE IF NOT EXISTS public.cloudflare_tunnel (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    enabled boolean DEFAULT false,
+    token text DEFAULT ''::text NOT NULL,
+    mode character varying(20) DEFAULT 'token'::character varying NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT chk_cloudflare_tunnel_mode CHECK (((mode)::text = ANY ((ARRAY['token'::character varying, 'managed'::character varying])::text[])))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cloudflare_tunnel_singleton ON public.cloudflare_tunnel USING btree ((true));`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {
