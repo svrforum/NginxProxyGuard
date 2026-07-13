@@ -46,6 +46,11 @@ type CloudflareTunnelService struct {
 	repo  *repository.CloudflareTunnelRepository
 	nginx TunnelNginxManager
 
+	// updateMu serializes DB upsert + token-file convergence so concurrent
+	// Update/SyncTokenFile calls cannot leave the file diverged from the DB.
+	// Kept separate from mu — never hold the status mutex across file I/O.
+	updateMu sync.Mutex
+
 	mu          sync.Mutex
 	enabledAt   time.Time // when the tunnel was last (re)enabled — grace window for 'starting'
 	statusCache *model.TunnelStatus
@@ -88,25 +93,62 @@ func (s *CloudflareTunnelService) Update(ctx context.Context, req *model.UpdateC
 			return nil, err
 		}
 	}
+
+	s.updateMu.Lock()
+	defer s.updateMu.Unlock()
+
+	// Reject enabling without a token. Compute the effective post-merge state
+	// (mirrors Upsert: nil keeps stored, non-nil replaces) — otherwise the DB
+	// would say enabled while Status() reads "disabled" forever.
+	cur, err := s.repo.GetSingleton(ctx)
+	if err != nil {
+		return nil, err
+	}
+	effEnabled := cur.Enabled
+	if req.Enabled != nil {
+		effEnabled = *req.Enabled
+	}
+	effToken := cur.Token
+	if req.Token != nil {
+		effToken = *req.Token
+	}
+	if effEnabled && effToken == "" {
+		return nil, errors.New("invalid tunnel token: cannot enable tunnel without a token")
+	}
+
 	t, err := s.repo.Upsert(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.syncFile(t); err != nil {
-		return nil, err
-	}
+	syncErr := s.syncFile(t)
+
+	// Invalidate the status cache even when the file sync failed — the DB
+	// state already changed, so a cached status would be stale either way.
 	s.mu.Lock()
 	if t.Enabled && t.Token != "" {
 		s.enabledAt = time.Now()
 	}
 	s.statusCache = nil // invalidate
 	s.mu.Unlock()
+
+	if syncErr != nil {
+		return nil, syncErr
+	}
 	return toResponse(t), nil
 }
 
-// syncFile converges the token file to the given settings state.
+// syncFile converges the token file to the given settings state. The stored
+// token is re-validated before every write: Update guards its own input, but
+// tokens can also enter the DB unvalidated (e.g. backup import), and this
+// file is consumed by the in-container supervisor — never write a token that
+// would fail ValidateTunnelToken.
 func (s *CloudflareTunnelService) syncFile(t *model.CloudflareTunnel) error {
 	if t.Enabled && t.Token != "" {
+		if err := ValidateTunnelToken(t.Token); err != nil {
+			// Log the validation error only — it contains no token bytes.
+			log.Printf("[CloudflareTunnel] stored token invalid; removing token file: %v", err)
+			return s.nginx.RemoveCloudflaredToken()
+		}
 		return s.nginx.WriteCloudflaredToken(t.Token)
 	}
 	return s.nginx.RemoveCloudflaredToken()
@@ -115,6 +157,9 @@ func (s *CloudflareTunnelService) syncFile(t *model.CloudflareTunnel) error {
 // SyncTokenFile re-converges file state to DB state. Called once at startup
 // (covers volume re-creation and backup restore).
 func (s *CloudflareTunnelService) SyncTokenFile(ctx context.Context) error {
+	s.updateMu.Lock()
+	defer s.updateMu.Unlock()
+
 	t, err := s.repo.GetSingleton(ctx)
 	if err != nil {
 		return err
