@@ -105,6 +105,12 @@ func runStartup(ctx context.Context, c *Container) error {
 		log.Println("[Startup] Proxy host configs synced successfully")
 	}
 
+	// Re-converge the cloudflared token file to DB state (covers volume
+	// re-creation and backup restore).
+	if err := c.Services.CloudflareTunnel.SyncTokenFile(ctx); err != nil {
+		log.Printf("[CloudflareTunnel] startup token sync failed: %v", err)
+	}
+
 	// Sync redirect host configs.
 	log.Println("[Startup] Syncing all redirect host configs...")
 	redirectHosts, _, err := c.Repositories.RedirectHost.List(ctx, 1, config.MaxWAFRulesLimit)
