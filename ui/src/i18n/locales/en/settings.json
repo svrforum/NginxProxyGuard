@@ -1204,6 +1204,7 @@
     "token": "Connector Token",
     "tokenDescription": "The tunnel connector token issued in the Cloudflare Zero Trust dashboard. It is shown masked after saving.",
     "tokenPlaceholder": "Paste your connector token (e.g. eyJh...)",
+    "tokenPasteHint": "Paste the full install command — the token is extracted automatically.",
     "replaceToken": "Replace",
     "cancelReplace": "Cancel",
     "save": "Save",

@@ -1208,6 +1208,7 @@
     "token": "커넥터 토큰",
     "tokenDescription": "Cloudflare Zero Trust 대시보드에서 발급한 터널 커넥터 토큰입니다. 저장 후에는 마스킹되어 표시됩니다.",
     "tokenPlaceholder": "커넥터 토큰을 붙여넣으세요 (예: eyJh...)",
+    "tokenPasteHint": "설치 명령 전체를 붙여넣어도 토큰만 자동으로 추출됩니다.",
     "replaceToken": "교체",
     "cancelReplace": "취소",
     "save": "저장",

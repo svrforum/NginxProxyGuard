@@ -23,6 +23,20 @@ const dotClasses: Record<TunnelStatus['state'], string> = {
   error: 'bg-red-500',
 }
 
+// The Cloudflare dashboard shows the connector token embedded in a full
+// install command (`sudo cloudflared service install eyJhFAKE...` or
+// `docker run ... --token eyJhFAKE...`), and users paste the whole command.
+// Extract the longest base64url blob starting with "eyJ" (the base64 of the
+// token's {"a":... JSON header). If nothing matches, return the trimmed input
+// unchanged so bare tokens and invalid input still flow to server-side
+// validation.
+export function extractTunnelToken(input: string): string {
+  const trimmed = input.trim()
+  const matches = trimmed.match(/eyJ[A-Za-z0-9_=-]{30,}/g)
+  if (!matches) return trimmed
+  return matches.reduce((longest, m) => (m.length > longest.length ? m : longest))
+}
+
 export default function CloudflareTunnelSettings() {
   const { t } = useTranslation('settings')
   const queryClient = useQueryClient()
@@ -76,9 +90,10 @@ export default function CloudflareTunnelSettings() {
       payload.enabled = enabledEdit
     }
     // The masked value must never round-trip — only send a token the user
-    // actually typed; omitting it keeps the stored one.
+    // actually typed; omitting it keeps the stored one. Extract defensively
+    // here too, even though the input is already normalized on change.
     if (typedToken !== '') {
-      payload.token = typedToken
+      payload.token = extractTunnelToken(typedToken)
     }
     updateMutation.mutate(payload)
   }
@@ -194,24 +209,29 @@ export default function CloudflareTunnelSettings() {
             {t('cloudflareTunnel.tokenDescription')}
           </p>
           {showTokenInput ? (
-            <div className="flex items-center gap-2">
-              <input
-                type="password"
-                value={tokenInput}
-                onChange={(e) => setTokenInput(e.target.value)}
-                autoComplete="off"
-                placeholder={t('cloudflareTunnel.tokenPlaceholder')}
-                className="flex-1 px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-sm text-slate-700 dark:text-slate-300 font-mono placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
-              />
-              {settings?.has_token && (
-                <button
-                  onClick={() => { setReplacingToken(false); setTokenInput('') }}
-                  className="px-3 py-2 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                >
-                  {t('cloudflareTunnel.cancelReplace')}
-                </button>
-              )}
-            </div>
+            <>
+              <div className="flex items-center gap-2">
+                <input
+                  type="password"
+                  value={tokenInput}
+                  onChange={(e) => setTokenInput(extractTunnelToken(e.target.value))}
+                  autoComplete="off"
+                  placeholder={t('cloudflareTunnel.tokenPlaceholder')}
+                  className="flex-1 px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-sm text-slate-700 dark:text-slate-300 font-mono placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                />
+                {settings?.has_token && (
+                  <button
+                    onClick={() => { setReplacingToken(false); setTokenInput('') }}
+                    className="px-3 py-2 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                  >
+                    {t('cloudflareTunnel.cancelReplace')}
+                  </button>
+                )}
+              </div>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1.5">
+                {t('cloudflareTunnel.tokenPasteHint')}
+              </p>
+            </>
           ) : (
             <div className="flex items-center gap-2">
               <div className="flex-1 px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-500 dark:text-slate-400 font-mono">
