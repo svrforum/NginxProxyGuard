@@ -245,3 +245,22 @@ func (r *BackupRepository) importFilterSubscription(ctx context.Context, tx *sql
 
 	return nil
 }
+
+// importCloudflareTunnel restores the singleton Cloudflare Tunnel setting
+// (Phase 1 token mode). Delete-then-insert so the singleton stays unique.
+// Defaults mode to "token" so a pre-Phase-2 backup with an empty mode cannot
+// fail the column CHECK.
+func (r *BackupRepository) importCloudflareTunnel(ctx context.Context, tx *sql.Tx, e *model.CloudflareTunnelExport) error {
+	_, _ = tx.ExecContext(ctx, "DELETE FROM cloudflare_tunnel")
+
+	mode := e.Mode
+	if mode == "" {
+		mode = "token"
+	}
+	query := `
+		INSERT INTO cloudflare_tunnel (enabled, token, mode)
+		VALUES ($1, $2, $3)
+	`
+	_, err := tx.ExecContext(ctx, query, e.Enabled, e.Token, mode)
+	return err
+}

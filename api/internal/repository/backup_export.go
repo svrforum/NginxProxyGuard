@@ -148,6 +148,13 @@ func (r *BackupRepository) ExportAllData(ctx context.Context) (*model.ExportData
 	}
 	export.GlobalWAF = globalWAF
 
+	// Export Cloudflare Tunnel (Phase 1 token mode singleton)
+	cloudflareTunnel, err := r.exportCloudflareTunnel(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to export cloudflare tunnel: %w", err)
+	}
+	export.CloudflareTunnel = cloudflareTunnel
+
 	// Export Cloud Providers
 	cloudProviders, err := r.exportCloudProviders(ctx)
 	if err != nil {
