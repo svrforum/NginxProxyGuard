@@ -113,6 +113,9 @@ func (s *CloudflareTunnelService) Update(ctx context.Context, req *model.UpdateC
 		effToken = *req.Token
 	}
 	if effEnabled {
+		if effToken == "" {
+			return nil, errors.New("invalid tunnel token: cannot enable tunnel without a token")
+		}
 		// Re-validate the STORED effective token, not just non-emptiness —
 		// tokens can enter the DB unvalidated (backup import), and enabling
 		// over an invalid one must fail here instead of succeeding and then
