@@ -66,7 +66,7 @@ func InitHandlers(
 		svcs.Audit,
 	)
 	h.Security = handler.NewSecurityHandler(svcs.Security, svcs.Audit)
-	h.Settings = handler.NewSettingsHandler(svcs.Settings, svcs.Audit)
+	h.Settings = handler.NewSettingsHandler(svcs.Settings, svcs.Audit, svcs.CloudflareTunnel)
 	h.SystemLog = handler.NewSystemLogHandler(repos.SystemLog)
 	h.Auth = handler.NewAuthHandler(svcs.Auth, svcs.Audit)
 	h.SystemSettings = handler.NewSystemSettingsHandler(
