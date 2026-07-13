@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { execFileSync } from 'child_process';
+import { execFileSync, spawnSync } from 'child_process';
 import { APIHelper } from '../../utils/api-helper';
 
 const PROXY = 'npg-test-proxy';
@@ -31,6 +31,38 @@ function cloudflaredLogsSince(sinceIso: string): string {
   }
 }
 
+// The supervisor's own three fixed messages carry the [cloudflared] prefix too,
+// and "token file changed; (re)starting connector" is printed BEFORE the binary
+// executes — matching any [cloudflared] line would pass without cloudflared ever
+// running. "Connector started" therefore means: a [cloudflared] line that is NOT
+// one of the supervisor's messages, i.e. output from the binary itself (the fake
+// token reliably prints "Provided Tunnel token is not valid."). This also makes
+// the poll immune to a previous test's teardown line ("token removed; stopping
+// connector") landing inside this test's --since window on the supervisor's next
+// 5s tick.
+//
+// Timing: polls on this signal need a 90s budget, not 15s. While the connector
+// crash-loops (fake token), the supervisor sits in `sleep $backoff` (5s→60s,
+// escalated by any preceding crash-loop in this or a prior run) and is blind to
+// token-file changes until it wakes — so binary output can lag a save by up to
+// ~65s (60s max backoff + 5s tick). Verified empirically: 15s polls flaked
+// exactly when a prior test had escalated the backoff.
+const SUPERVISOR_PHRASES = ['token file changed', 'connector not running', 'token removed'];
+function connectorOutputSince(sinceIso: string): string {
+  return cloudflaredLogsSince(sinceIso)
+    .split('\n')
+    .filter((line) => line && !SUPERVISOR_PHRASES.some((p) => line.includes(p)))
+    .join('\n');
+}
+
+// Unfiltered container logs, BOTH streams (docker logs prints the container's
+// stdout on stdout and its stderr on stderr) — for asserting the token value
+// never reaches the logs anywhere, not just on supervisor-prefixed stdout lines.
+function allDockerLogsSince(sinceIso: string): string {
+  const r = spawnSync('docker', ['logs', PROXY, '--since', sinceIso], { encoding: 'utf-8' });
+  return `${r.stdout ?? ''}${r.stderr ?? ''}`;
+}
+
 // Spec §7. Serial: mutates a global singleton + a real process in the proxy
 // container. Fake token: supervisor starts cloudflared, which fails upstream
 // auth and backs off — exactly the error-path we assert. No real CF account
@@ -49,6 +81,7 @@ test.describe.serial('Cloudflare Tunnel settings (Phase 1 token mode)', () => {
   });
 
   test('saving a token writes the 0600 token file and starts the connector', async () => {
+    test.setTimeout(150_000); // 0600 poll (15s) + connector-start poll (90s, see helper comment)
     // Skew guard: docker log timestamps come from the daemon clock.
     const since = new Date(Date.now() - 2_000).toISOString();
     const saved = await apiHelper.setCloudflareTunnel({ enabled: true, token: FAKE_TOKEN });
@@ -56,12 +89,16 @@ test.describe.serial('Cloudflare Tunnel settings (Phase 1 token mode)', () => {
     expect(saved.token_masked).toBe('eyJh****');
     expect(saved.token_masked).not.toContain('FAKE'); // masked, not echoed
 
-    await expect.poll(() => dockerExec(['ls', '-la', '/etc/nginx/cloudflared/token']), { timeout: 15_000 })
-      .toContain('-rw-------');
-    // Connector started = supervisor emitted [cloudflared] lines after the save.
-    await expect.poll(() => cloudflaredLogsSince(since), { timeout: 15_000 }).not.toBe('');
-    // The token value itself must never reach the container logs.
-    expect(cloudflaredLogsSince(since)).not.toContain('FAKE_E2E_TUNNEL_TOKEN');
+    await expect.poll(() => {
+      try { return dockerExec(['ls', '-la', '/etc/nginx/cloudflared/token']); } catch { return ''; }
+    }, { timeout: 15_000 }).toContain('-rw-------');
+    // Connector started = the cloudflared binary itself produced output
+    // (supervisor-prefixed lines minus the supervisor's own fixed messages).
+    // 90s: supervisor backoff sleep can delay the start by up to ~65s.
+    await expect.poll(() => connectorOutputSince(since), { timeout: 90_000, intervals: [2_000] }).not.toBe('');
+    // The token value itself must never reach the container logs — any line,
+    // either stream, unfiltered.
+    expect(allDockerLogsSince(since)).not.toContain('FAKE_E2E_TUNNEL_TOKEN');
   });
 
   test('invalid token (control chars) is rejected with 400', async () => {
@@ -70,21 +107,27 @@ test.describe.serial('Cloudflare Tunnel settings (Phase 1 token mode)', () => {
   });
 
   test('status degrades to error for a bogus token, nginx unaffected', async () => {
-    test.setTimeout(120_000);
+    test.setTimeout(150_000);
     await apiHelper.setCloudflareTunnel({ enabled: true, token: FAKE_TOKEN });
     // grace window is 60s → within it: starting; after: error (never connected)
     const first = await apiHelper.getTunnelStatus();
     expect(['starting', 'error']).toContain(first.state);
-    await expect.poll(async () => (await apiHelper.getTunnelStatus()).state, { timeout: 90_000, intervals: [5_000] })
+    // Worst case ≈ 85s (60s grace + 15s status cache TTL + 5s supervisor tick);
+    // 110s leaves slack for slow CI.
+    await expect.poll(async () => (await apiHelper.getTunnelStatus()).state, { timeout: 110_000, intervals: [5_000] })
       .toBe('error');
     // proxy keeps serving throughout — nginx -t exits 0 (execFileSync throws otherwise)
     expect(() => dockerExec(['nginx', '-t'])).not.toThrow();
   });
 
   test('disabling removes the token file and stops the connector', async () => {
+    test.setTimeout(150_000); // connector-start poll (90s) + file/process polls (15s each)
+    // Since-mark taken BEFORE the save; the exclusion matcher additionally
+    // guards against the previous test's teardown line drifting into the window.
     const since = new Date(Date.now() - 2_000).toISOString();
     await apiHelper.setCloudflareTunnel({ enabled: true, token: FAKE_TOKEN });
-    await expect.poll(() => cloudflaredLogsSince(since), { timeout: 15_000 }).not.toBe('');
+    // 90s: test 3 just escalated the supervisor's backoff to 60s (see helper comment).
+    await expect.poll(() => connectorOutputSince(since), { timeout: 90_000, intervals: [2_000] }).not.toBe('');
 
     await apiHelper.setCloudflareTunnel({ enabled: false });
     await expect.poll(() => {
