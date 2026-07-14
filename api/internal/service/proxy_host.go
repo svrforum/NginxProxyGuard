@@ -1047,45 +1047,26 @@ func (s *ProxyHostService) Delete(ctx context.Context, id string) error {
 		return fmt.Errorf("proxy host not found")
 	}
 
-	// Store config data in case we need to restore after DB failure.
-	// Best-effort: this snapshot is only used to roll the config back if the
-	// DB delete fails. When the lookup itself fails we proceed with the
-	// delete but skip the (incomplete) restore — never write a config that is
-	// missing security sections.
-	var configData nginx.ProxyHostConfigData
-	var configDataOK bool
-	var wafExclusions []model.WAFRuleExclusion
-	if host.Enabled {
-		configData, err = s.getHostConfigData(ctx, host)
-		if err != nil {
-			log.Printf("[WARN] Failed to snapshot config data for host %s before delete (restore-on-failure disabled): %v", id, err)
-		} else {
-			configDataOK = true
-		}
-		if host.WAFEnabled && !host.IsStream() {
-			wafExclusions, _ = s.getMergedWAFExclusions(ctx, host.ID)
-		}
-	}
-
-	// Remove nginx config FIRST (atomic: remove config + test + reload with global lock)
-	// This prevents orphan config files if DB deletion fails
-	if err := s.nginx.RemoveConfigAndReload(ctx, host); err != nil {
-		return fmt.Errorf("failed to remove nginx config: %w", err)
-	}
-
-	// Delete from database
+	// Ordering matters under concurrency (#21 zombie-conf race). Delete the DB
+	// row FIRST, then remove the nginx config. A concurrent SyncAllConfigs
+	// re-queries enabled hosts in BOTH its (lockless) write loop and its orphan
+	// sweep, trusting the DB as the source of truth. If the config were removed
+	// before the row, that sync could re-create this host's config from the
+	// still-present row (resurrect), and because the row is still present its
+	// sweep re-query would KEEP the zombie — which later poisons `nginx -t` once
+	// the host's certificate is deleted. Deleting the row first makes the sweep
+	// authoritative: any resurrect is swept away, and the RemoveConfigAndReload
+	// below is the final removal.
 	if err := s.repo.Delete(ctx, id); err != nil {
-		// DB deletion failed after nginx config was removed
-		// Try to restore nginx config to maintain consistency
-		if host.Enabled && configDataOK {
-			log.Printf("[WARN] DB deletion failed for host %s, attempting to restore nginx config: %v", id, err)
-			if restoreErr := s.nginx.GenerateConfigAndReload(ctx, configData, wafExclusions); restoreErr != nil {
-				log.Printf("[ERROR] Failed to restore nginx config for host %s after DB deletion failure: %v", id, restoreErr)
-			}
-		} else if host.Enabled {
-			log.Printf("[WARN] DB deletion failed for host %s and no config snapshot is available — run Sync All to restore the config: %v", id, err)
-		}
 		return fmt.Errorf("failed to delete proxy host: %w", err)
+	}
+
+	// Remove the nginx config (atomic: remove config + test + reload with the
+	// global lock). The DB row is already gone, so on failure the leftover file
+	// is a self-healing orphan — the next SyncAllConfigs sweep removes it — and
+	// we report the delete as successful rather than resurrecting the row.
+	if err := s.nginx.RemoveConfigAndReload(ctx, host); err != nil {
+		log.Printf("[WARN] Deleted proxy host %s from DB but failed to remove its nginx config (will be swept on next Sync All): %v", id, err)
 	}
 
 	return nil
