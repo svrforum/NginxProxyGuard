@@ -39,6 +39,7 @@ type TunnelNginxManager interface {
 	RemoveCloudflaredToken() error
 	CloudflaredReady(ctx context.Context) (int, error)
 	GetHTTPSPort() string
+	GetHTTPPort() string
 }
 
 // CloudflareTunnelService manages the tunnel settings singleton and keeps the
@@ -83,6 +84,7 @@ func toResponse(t *model.CloudflareTunnel) *model.CloudflareTunnelResponse {
 // entry must point at the actual port, not a hardcoded 443.
 func (s *CloudflareTunnelService) withOriginURL(resp *model.CloudflareTunnelResponse) *model.CloudflareTunnelResponse {
 	resp.OriginServiceURL = "https://localhost:" + s.nginx.GetHTTPSPort()
+	resp.OriginServiceURLHTTP = "http://localhost:" + s.nginx.GetHTTPPort()
 	return resp
 }
 

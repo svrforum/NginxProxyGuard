@@ -39,6 +39,7 @@ func (f *fakeTunnelNginx) CloudflaredReady(_ context.Context) (int, error) {
 	return 0, nil
 }
 func (f *fakeTunnelNginx) GetHTTPSPort() string { return "443" }
+func (f *fakeTunnelNginx) GetHTTPPort() string  { return "80" }
 
 // TestSyncFileRejectsInvalidStoredToken: a token that entered the DB without
 // validation (e.g. backup import) must never reach the supervisor-consumed

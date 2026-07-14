@@ -404,6 +404,7 @@
       "waf_rules_updated": "WAF Rules Updated",
       "settings_updated": "Settings Updated",
       "global_geo_updated": "Global Geo Restriction Updated",
+      "cloudflare_tunnel_updated": "Cloudflare Tunnel Updated",
       "user_login": "Login",
       "user_logout": "Logout",
       "user_created": "User Created",

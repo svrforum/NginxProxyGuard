@@ -1222,6 +1222,8 @@
       "step3": "Paste the token into the field above, enable the tunnel, and save.",
       "step4": "Add a Public Hostname to the tunnel with a wildcard per domain (e.g. *.example.com), point the service to {{originUrl}}, and turn ON \"No TLS Verify\" in the TLS settings.",
       "redirectLoopWarning": "Pointing the service to http://localhost:80 causes redirect loops on hosts with Force HTTPS enabled. Always use {{originUrl}}.",
+      "wildcardPriorityWarning": "Cloudflare matches Public Hostnames top-to-bottom (first match wins). A single wildcard (*.example.com) is enough — NPG routes each request to the right proxy host by its Host header. If you also add specific hostnames, place them ABOVE the wildcard, or the wildcard will shadow them and send traffic to the wrong origin.",
+      "httpOnlyNote": "For a proxy host served over plain HTTP (SSL disabled), point that hostname's service to {{originUrlHttp}} instead — the https origin above is for SSL-enabled hosts.",
       "step5": "(Optional) Clean up old A records and router port-forwarding rules for the domains you moved to the tunnel."
     }
   },

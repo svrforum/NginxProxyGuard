@@ -26,15 +26,18 @@ type UpdateCloudflareTunnelRequest struct {
 // CloudflareTunnelResponse is the API view: token masked, presence flagged.
 // OriginServiceURL is the origin service URL to enter in the Cloudflare
 // dashboard's Public Hostname — reflects the actual NGINX_HTTPS_PORT.
+// OriginServiceURLHTTP is the http:// variant (NGINX_HTTP_PORT) for hosts that
+// serve over plain HTTP (SSL disabled).
 type CloudflareTunnelResponse struct {
-	ID               string    `json:"id"`
-	Enabled          bool      `json:"enabled"`
-	Mode             string    `json:"mode"`
-	HasToken         bool      `json:"has_token"`
-	TokenMasked      string    `json:"token_masked"` // "eyJh****" (first 4 chars) or ""
-	OriginServiceURL string    `json:"origin_service_url"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ID                   string    `json:"id"`
+	Enabled              bool      `json:"enabled"`
+	Mode                 string    `json:"mode"`
+	HasToken             bool      `json:"has_token"`
+	TokenMasked          string    `json:"token_masked"` // "eyJh****" (first 4 chars) or ""
+	OriginServiceURL     string    `json:"origin_service_url"`
+	OriginServiceURLHTTP string    `json:"origin_service_url_http"`
+	CreatedAt            time.Time `json:"created_at"`
+	UpdatedAt            time.Time `json:"updated_at"`
 }
 
 // TunnelStatus is the connector runtime state.

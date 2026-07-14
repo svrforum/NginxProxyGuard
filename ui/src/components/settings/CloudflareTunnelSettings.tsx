@@ -113,6 +113,8 @@ export default function CloudflareTunnelSettings() {
   // Origin service URL for the CF dashboard's Public Hostname — reflects the
   // actual NGINX_HTTPS_PORT (e.g. https://localhost:8443), not a hardcoded 443.
   const originUrl = settings?.origin_service_url || 'https://localhost:443'
+  // http:// variant (NGINX_HTTP_PORT) for hosts served over plain HTTP.
+  const originUrlHttp = settings?.origin_service_url_http || 'http://localhost:80'
 
   if (isLoading) {
     return (
@@ -279,10 +281,22 @@ export default function CloudflareTunnelSettings() {
                   <div className="text-sm text-slate-600 dark:text-slate-300">
                     <p>{t(`cloudflareTunnel.guide.step${n}`, { originUrl })}</p>
                     {n === 4 && (
-                      <div className="mt-2 p-3 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-lg">
-                        <p className="text-xs text-amber-700 dark:text-amber-400">
-                          {t('cloudflareTunnel.guide.redirectLoopWarning', { originUrl })}
-                        </p>
+                      <div className="mt-2 space-y-2">
+                        <div className="p-3 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-lg">
+                          <p className="text-xs text-amber-700 dark:text-amber-400">
+                            {t('cloudflareTunnel.guide.redirectLoopWarning', { originUrl })}
+                          </p>
+                        </div>
+                        <div className="p-3 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-lg">
+                          <p className="text-xs text-amber-700 dark:text-amber-400">
+                            {t('cloudflareTunnel.guide.wildcardPriorityWarning')}
+                          </p>
+                        </div>
+                        <div className="p-3 bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-lg">
+                          <p className="text-xs text-blue-700 dark:text-blue-400">
+                            {t('cloudflareTunnel.guide.httpOnlyNote', { originUrlHttp })}
+                          </p>
+                        </div>
                       </div>
                     )}
                   </div>

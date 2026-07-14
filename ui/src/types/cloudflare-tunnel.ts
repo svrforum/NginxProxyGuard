@@ -5,6 +5,7 @@ export interface CloudflareTunnelSettings {
   has_token: boolean
   token_masked: string
   origin_service_url: string
+  origin_service_url_http: string
   created_at: string
   updated_at: string
 }
