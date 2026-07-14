@@ -774,12 +774,22 @@ func (s *ProxyHostService) Create(ctx context.Context, req *model.CreateProxyHos
 
 		// Atomic: generate config + WAF config + test + reload (with global lock)
 		if err := s.nginx.GenerateConfigAndReload(ctx, configData, wafExclusions); err != nil {
-			// Rollback: Remove config and DB record on failure
-			if removeErr := s.nginx.RemoveConfig(ctx, host); removeErr != nil {
-				log.Printf("[ERROR] Rollback failed: could not remove nginx config for host %s: %v", host.ID, removeErr)
-			}
+			// Rollback. Delete the DB row FIRST, then remove the config — same
+			// ordering as Delete() (#21 zombie-conf race). If the config were
+			// removed while the row remained, a concurrent SyncAllConfigs (also
+			// triggered by every global-settings save) could re-query
+			// GetAllEnabled, regenerate this failed host's still-invalid config,
+			// and — if its orphan sweep re-queried before this rollback's delete
+			// committed and runAutoRecovery couldn't map the nginx error back to
+			// this host — leave the invalid file on disk with no owning row,
+			// poisoning `nginx -t` until a manual Sync All. Deleting the row
+			// first makes the sweep authoritative; RemoveConfig then clears any
+			// residual file (GenerateConfigAndReload already rolled back its own).
 			if delErr := s.repo.Delete(ctx, host.ID); delErr != nil {
 				log.Printf("[ERROR] Rollback failed: could not delete host %s after config generation error: %v", host.ID, delErr)
+			}
+			if removeErr := s.nginx.RemoveConfig(ctx, host); removeErr != nil {
+				log.Printf("[ERROR] Rollback failed: could not remove nginx config for host %s: %v", host.ID, removeErr)
 			}
 			return nil, fmt.Errorf("failed to generate nginx config: %w", err)
 		}
@@ -1062,11 +1072,13 @@ func (s *ProxyHostService) Delete(ctx context.Context, id string) error {
 	}
 
 	// Remove the nginx config (atomic: remove config + test + reload with the
-	// global lock). The DB row is already gone, so on failure the leftover file
-	// is a self-healing orphan — the next SyncAllConfigs sweep removes it — and
-	// we report the delete as successful rather than resurrecting the row.
+	// global lock). Returning the error here does NOT reintroduce #21 — the DB
+	// row is already gone, so the leftover file is just an orphan the next
+	// SyncAllConfigs sweep removes. But until then nginx keeps serving the
+	// deleted host, so per Fail-Safe / "DB = Nginx State" we surface the failure
+	// instead of reporting a false success; the operator can re-run Sync All.
 	if err := s.nginx.RemoveConfigAndReload(ctx, host); err != nil {
-		log.Printf("[WARN] Deleted proxy host %s from DB but failed to remove its nginx config (will be swept on next Sync All): %v", id, err)
+		return fmt.Errorf("proxy host deleted from database, but removing its nginx config failed (run Sync All to clean up): %w", err)
 	}
 
 	return nil
