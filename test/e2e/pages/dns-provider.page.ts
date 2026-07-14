@@ -43,10 +43,8 @@ export class DnsProviderPage extends BasePage {
     this.pageTitle = page.locator('h1, h2').filter({ hasText: /dns.*provider/i }).first();
     this.addProviderButton = page.locator('button').filter({ hasText: /add\s*provider|create\s*provider/i }).first();
     this.providerList = page.locator('main .space-y-4, main .grid, main > div').first();
-    // Provider list uses a table - each provider is a row in tbody
-    this.providerItems = page.locator('main table tbody tr').filter({
-      hasNot: page.locator('text=/no.*provider.*configured|no.*data/i'),
-    });
+    // Provider list is now EntityCard-based cards (div.group.rounded-xl.border), not a table.
+    this.providerItems = page.locator('main div.group.rounded-xl.border');
     this.emptyState = page.locator('text=/no.*provider|empty|no.*data/i');
     this.loadingState = page.locator('.animate-spin, .animate-pulse');
 
@@ -127,7 +125,7 @@ export class DnsProviderPage extends BasePage {
    * Get provider table row by name.
    */
   getProviderByName(name: string): Locator {
-    return this.page.locator('main table tbody tr').filter({
+    return this.page.locator('main div.group.rounded-xl.border').filter({
       hasText: name,
     }).first();
   }
@@ -267,7 +265,8 @@ export class DnsProviderPage extends BasePage {
    */
   async clickProvider(name: string): Promise<void> {
     const provider = this.getProviderByName(name);
-    const editBtn = provider.locator('button').filter({ hasText: /edit/i }).first();
+    // Icon-only button; accessible name comes from i18n title/aria-label ("Edit").
+    const editBtn = provider.getByRole('button', { name: /edit/i }).first();
     await editBtn.click();
     await this.modal.waitFor({ state: 'visible', timeout: TIMEOUTS.medium });
   }
@@ -277,7 +276,8 @@ export class DnsProviderPage extends BasePage {
    */
   async deleteProvider(name: string): Promise<void> {
     const provider = this.getProviderByName(name);
-    const deleteBtn = provider.locator('button').filter({ hasText: /delete/i }).first();
+    // Icon-only button; accessible name comes from i18n title/aria-label ("Delete").
+    const deleteBtn = provider.getByRole('button', { name: /delete/i }).first();
 
     // Set up dialog handler before clicking delete (native confirm dialog)
     this.page.once('dialog', async (dialog) => {

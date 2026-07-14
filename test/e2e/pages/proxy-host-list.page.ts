@@ -155,7 +155,8 @@ export class ProxyHostListPage extends BasePage {
    */
   getEditButton(domain: string): Locator {
     const hostCard = this.getHostByDomain(domain);
-    return hostCard.locator('button').filter({ hasText: /edit/i }).first();
+    // Icon-only button; accessible name / title comes from i18n ("Edit" / "수정").
+    return hostCard.locator('button[title="Edit"], button[title="수정"]').first();
   }
 
   /**
@@ -163,7 +164,8 @@ export class ProxyHostListPage extends BasePage {
    */
   getDeleteButton(domain: string): Locator {
     const hostCard = this.getHostByDomain(domain);
-    return hostCard.locator('button').filter({ hasText: /delete/i }).first();
+    // Icon-only button; accessible name / title comes from i18n ("Delete" / "삭제").
+    return hostCard.locator('button[title="Delete"], button[title="삭제"]').first();
   }
 
   /**

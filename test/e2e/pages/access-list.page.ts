@@ -43,15 +43,11 @@ export class AccessListPage extends BasePage {
     this.addListButton = page.locator('button').filter({ hasText: /add|new|create/i }).first();
     this.searchInput = page.locator('input[type="search"], input[placeholder*="search"]');
 
-    // List display
+    // List display — redesigned to EntityCard-based cards (div.group.rounded-xl.border),
+    // no longer a table. The EmptyState box uses rounded-xl/border but lacks `group`.
     this.accessLists = page.locator('main .space-y-4, main .grid, main > div').first();
-    // Access list table rows - each row has edit/delete buttons; exclude header and empty state rows
-    this.accessListItems = page.locator('main table tbody tr').filter({
-      has: page.locator('td'),
-    }).filter({
-      hasNot: page.locator('td[colspan]'),
-    });
-    this.emptyState = page.locator('td[colspan]');
+    this.accessListItems = page.locator('main div.group.rounded-xl.border');
+    this.emptyState = page.locator('text=/no access lists configured|no.*access.*list/i');
     this.loadingState = page.locator('.animate-spin, .animate-pulse');
 
     // Form modal
@@ -113,7 +109,7 @@ export class AccessListPage extends BasePage {
    * Get list by name.
    */
   getListByName(name: string): Locator {
-    return this.page.locator('main table tbody tr').filter({
+    return this.page.locator('main div.group.rounded-xl.border').filter({
       hasText: name,
     }).first();
   }
@@ -249,11 +245,11 @@ export class AccessListPage extends BasePage {
 
   /**
    * Click on list to edit.
-   * The access list uses a table with explicit edit buttons.
+   * The access list cards expose an icon-only edit button (aria-label / title = "Edit").
    */
   async clickList(name: string): Promise<void> {
     const list = this.getListByName(name);
-    const editBtn = list.locator('button').filter({ hasText: /edit/i }).first();
+    const editBtn = list.getByRole('button', { name: /edit/i }).first();
     if (await editBtn.isVisible()) {
       await editBtn.click();
     } else {
@@ -268,7 +264,7 @@ export class AccessListPage extends BasePage {
    */
   async deleteList(name: string): Promise<void> {
     const list = this.getListByName(name);
-    const deleteBtn = list.locator('button').filter({ hasText: /delete/i }).first();
+    const deleteBtn = list.getByRole('button', { name: /delete/i }).first();
 
     // Set up dialog handler for the browser confirm() dialog
     this.page.once('dialog', async dialog => {

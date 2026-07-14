@@ -32,11 +32,11 @@ export class RedirectHostListPage extends BasePage {
     this.searchInput = page.locator('input[type="search"], input[placeholder*="search"], input[placeholder*="Search"]');
     this.filterButton = page.locator('button').filter({ hasText: /filter/i });
 
-    // Host list
+    // Host list — redesigned to EntityCard-based cards (div.group.rounded-xl.border),
+    // no longer a table. The empty-state box also uses rounded-xl/border but lacks the
+    // `group` class, so `.group` excludes it.
     this.hostList = page.locator('main .space-y-4, main .grid, main > div').first();
-    this.hostItems = page.locator('tbody tr').filter({
-      has: page.locator('text=/\\.(com|local|net|org|io)|redirect|301|302|307|308/i'),
-    });
+    this.hostItems = page.locator('main div.group.rounded-xl.border');
     this.emptyState = page.locator('text=/no.*redirect|empty|no.*data/i');
     this.loadingState = page.locator('.animate-spin, .animate-pulse');
 
@@ -109,19 +109,19 @@ export class RedirectHostListPage extends BasePage {
    * Get host card by domain name.
    */
   getHostByDomain(domain: string): Locator {
-    return this.page.locator('tr, [class*="card"], .bg-white.rounded').filter({
+    return this.page.locator('main div.group.rounded-xl.border').filter({
       hasText: domain,
     }).first();
   }
 
   /**
    * Click on a host to edit.
-   * The redirect host list uses a table with explicit edit buttons, not card clicks.
+   * The redirect host cards expose an icon-only edit button (aria-label / title = "Edit").
    */
   async clickHost(domain: string): Promise<void> {
     const hostCard = this.getHostByDomain(domain);
-    // Click the edit button within the host row
-    const editBtn = hostCard.locator('button').filter({ hasText: /edit/i }).first();
+    // Click the icon-only edit button within the host card (matched by accessible name)
+    const editBtn = hostCard.getByRole('button', { name: /edit/i }).first();
     if (await editBtn.isVisible()) {
       await editBtn.click();
     } else {
@@ -158,7 +158,7 @@ export class RedirectHostListPage extends BasePage {
    */
   async deleteHost(domain: string): Promise<void> {
     const hostCard = this.getHostByDomain(domain);
-    const deleteBtn = hostCard.locator('button').filter({ hasText: /delete/i }).first();
+    const deleteBtn = hostCard.getByRole('button', { name: /delete/i }).first();
 
     // Set up dialog handler for the browser confirm() dialog
     this.page.once('dialog', async dialog => {
@@ -193,7 +193,8 @@ export class RedirectHostListPage extends BasePage {
    */
   async isHostEnabled(domain: string): Promise<boolean> {
     const hostCard = this.getHostByDomain(domain);
-    const enabledIndicator = hostCard.locator('[class*="green-100"], [class*="green-300"], .bg-green-100').first();
+    // Enabled hosts show a StatusPill with emerald tint; disabled ones use slate.
+    const enabledIndicator = hostCard.locator('[class*="emerald"]').first();
     return await enabledIndicator.isVisible();
   }
 
