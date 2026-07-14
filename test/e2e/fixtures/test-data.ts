@@ -2,6 +2,14 @@
  * Test data constants for E2E tests.
  */
 
+// E2E proxy ports — single source of truth for the npg-test-proxy listener
+// (host-network mode). Defaults match docker-compose.e2e-test.yml's canonical
+// ports. On a workstation where the defaults are taken (e.g. SeaweedFS holds
+// 18080), run the stack on a free override port and export the matching env
+// vars so every spec targets it: E2E_PROXY_HTTP_PORT / E2E_PROXY_HTTPS_PORT.
+export const NGINX_HTTP_PORT = Number(process.env.E2E_PROXY_HTTP_PORT ?? '18080');
+export const NGINX_HTTPS_PORT = Number(process.env.E2E_PROXY_HTTPS_PORT ?? '18443');
+
 // Default admin credentials (default for fresh install)
 export const DEFAULT_ADMIN_CREDENTIALS = {
   username: 'admin',

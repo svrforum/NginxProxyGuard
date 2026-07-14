@@ -4,7 +4,7 @@
 // → access log → log_collector parser → DB → /api/v1/logs response. This file gives
 // the spec two primitives:
 //
-//   triggerRequest()  — fire a curl request against the e2e proxy (port 18080),
+//   triggerRequest()  — fire a curl request against the e2e proxy (HTTP port),
 //                       spoofing Host/XFF/UA/method so we can exercise individual
 //                       security paths in isolation.
 //   pollForLog()      — repeatedly poll /api/v1/logs until a row matching the
@@ -16,6 +16,7 @@
 
 import { execFileSync } from 'child_process';
 import type { APIHelper, LogRow } from './api-helper';
+import { NGINX_HTTP_PORT } from '../fixtures/test-data';
 
 export interface TriggerRequestOptions {
   /** Virtual host the proxy should route to. */
@@ -30,7 +31,7 @@ export interface TriggerRequestOptions {
   xForwardedFor?: string;
   /** Additional headers to set, in `Header: value` form. */
   extraHeaders?: string[];
-  /** Override the host:port the curl connects to. Defaults to 127.0.0.1:18080. */
+  /** Override the host:port the curl connects to. Defaults to 127.0.0.1:<NGINX_HTTP_PORT>. */
   origin?: string;
   /** Timeout in seconds passed to curl --max-time. Defaults to 5. */
   timeoutSec?: number;
@@ -41,7 +42,7 @@ export interface TriggerRequestResult {
   body: string;
 }
 
-const DEFAULT_ORIGIN = '127.0.0.1:18080';
+const DEFAULT_ORIGIN = `127.0.0.1:${NGINX_HTTP_PORT}`;
 const DEFAULT_USER_AGENT = 'npg-e2e/block-reason-spec';
 
 /**
@@ -78,7 +79,8 @@ export function triggerRequest(opts: TriggerRequestOptions): TriggerRequestResul
   }
 
   // Build URL — leave path encoding alone, the caller controls it. Use http:// because
-  // the test proxy listens on 18080 (HTTP). Tests that need TLS use port 18443 + ssl.
+  // the test proxy's default origin is the HTTP port. Tests that need TLS use the
+  // HTTPS port + ssl.
   args.push(`http://${origin}${path}`);
 
   let statusStr: string;

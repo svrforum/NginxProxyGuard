@@ -5,9 +5,9 @@ import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
 import { APIHelper } from '../../utils/api-helper';
+import { NGINX_HTTP_PORT } from '../../fixtures/test-data';
 
 const NGINX_HTTP_HOST = '127.0.0.1';
-const NGINX_HTTP_PORT = 18080;
 
 /**
  * Issue #129: Force HTTPS silently no-ops when the user adds a custom

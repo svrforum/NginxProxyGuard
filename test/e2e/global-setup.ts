@@ -1,9 +1,9 @@
 // Playwright global setup — runs once before any spec.
 //
 // Verifies that:
-//   1) port 18080 (npg-test-proxy HTTP) is reachable, i.e. the e2e stack is up
-//      and is the one serving 18080. A leftover container or unrelated host
-//      process on 18080 would silently send requests to the wrong target.
+//   1) the npg-test-proxy HTTP port is reachable, i.e. the e2e stack is up
+//      and is the one serving that port. A leftover container or unrelated host
+//      process on it would silently send requests to the wrong target.
 //   2) the GeoLite2 test fixture is vendored. Specs that exercise geo
 //      restrictions depend on it.
 //
@@ -11,8 +11,9 @@
 import { execFileSync } from 'child_process';
 import { existsSync, statSync } from 'fs';
 import { resolve } from 'path';
+import { NGINX_HTTP_PORT } from './fixtures/test-data';
 
-const PROXY_PORT = 18080;
+const PROXY_PORT = NGINX_HTTP_PORT;
 const FIXTURE_PATH = resolve(__dirname, 'fixtures', 'geoip-test.mmdb');
 
 // execFileSync avoids shell expansion (no command-injection surface) and
@@ -28,7 +29,7 @@ function runQuiet(cmd: string, args: string[]): string {
 function checkProxyHealthy(): { ok: boolean; reason: string } {
   // Confirm the e2e test stack is up by looking at the container name + status.
   // Avoids hand-rolling a TCP probe; lets us distinguish "stack down" from
-  // "stack up but some unrelated daemon stole 18080" — both surface here.
+  // "stack up but some unrelated daemon stole the port" — both surface here.
   const ps = runQuiet('docker', [
     'ps',
     '--filter', 'name=^npg-test-proxy$',
@@ -44,8 +45,8 @@ function checkProxyHealthy(): { ok: boolean; reason: string } {
     return { ok: false, reason: `npg-test-proxy state: ${ps.trim()}\nWait for healthcheck or inspect logs:\n  docker logs npg-test-proxy --tail 50` };
   }
 
-  // Verify port 18080 is actually responsive (host-network mode binds the port
-  // directly on the host). If something else holds 18080, this fetch returns
+  // Verify the port is actually responsive (host-network mode binds the port
+  // directly on the host). If something else holds it, this fetch returns
   // the wrong content or fails outright.
   const response = runQuiet('curl', [
     '-fsS', '--max-time', '5',
