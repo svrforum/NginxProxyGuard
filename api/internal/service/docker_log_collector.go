@@ -245,9 +245,38 @@ func (c *DockerLogCollector) collectContainerLogs(ctx context.Context, container
 	}
 }
 
+// startupLookback bounds how far back the collector reaches when (re)attaching
+// to a container. On a cold `docker compose up` the dependency-ordered
+// containers emit their startup logs seconds before the API's own collector
+// attaches; a fixed `--since 1s` misses that burst entirely, so those (often
+// quiet) sources never appear in the system log viewer until something restarts
+// (#205). When a container started within this window we attach from its actual
+// start time so the burst is captured — this also makes recovery on a container
+// restart deterministic (reconnect sees a fresh StartedAt). A long-running
+// container falls back to `--since 1s` so we never re-ingest stale history.
+const startupLookback = 10 * time.Minute
+
+// sinceArg returns the `docker logs --since` value for (re)attaching to a
+// container: the container's start time when it started recently, else "1s".
+func (c *DockerLogCollector) sinceArg(ctx context.Context, name string) string {
+	out, err := exec.CommandContext(ctx, "docker", "inspect", "-f", "{{.State.StartedAt}}", name).Output()
+	if err != nil {
+		return "1s"
+	}
+	startedAt, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(string(out)))
+	if err != nil || time.Since(startedAt) > startupLookback {
+		return "1s"
+	}
+	// Reach back one second before start to be safe against clock rounding.
+	return startedAt.Add(-1 * time.Second).Format(time.RFC3339)
+}
+
 func (c *DockerLogCollector) tailContainerLogs(ctx context.Context, container ContainerConfig) {
-	// Use docker logs with --follow and --since to stream new logs
-	cmd := exec.CommandContext(ctx, "docker", "logs", "--follow", "--since", "1s", container.Name)
+	// Use docker logs with --follow and --since to stream new logs. The --since
+	// value reaches back to the container's start when it started recently, so a
+	// startup burst emitted before this collector attached is still captured
+	// (#205); otherwise it is "1s" to avoid re-ingesting old history.
+	cmd := exec.CommandContext(ctx, "docker", "logs", "--follow", "--since", c.sinceArg(ctx, container.Name), container.Name)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
