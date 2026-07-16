@@ -519,5 +519,84 @@ else
     exit 1
 fi
 
+# --- Cloudflare Tunnel connector supervisor (Phase 1, token mode) ---------------
+# The api writes/removes /etc/nginx/cloudflared/token (shared nginx_data volume).
+# This loop converges the connector process to the file's state:
+#   file appears / mtime changes -> (re)start cloudflared with that token
+#   file removed                 -> stop cloudflared
+#   process crashes              -> restart with exponential backoff (5s..60s)
+# Token value is NEVER echoed. Logs are prefixed [cloudflared].
+CLOUDFLARED_TOKEN_FILE=/etc/nginx/cloudflared/token
+# Metrics port must match the api's CloudflaredReady probe (same env there).
+# Configurable so two host-network NPG instances on one box don't collide.
+CLOUDFLARED_METRICS_PORT="${CLOUDFLARED_METRICS_PORT:-20241}"
+
+start_cloudflared() {
+    cloudflared --no-autoupdate --metrics "127.0.0.1:${CLOUDFLARED_METRICS_PORT}" \
+        tunnel run --token-file "$CLOUDFLARED_TOKEN_FILE" 2>&1 \
+        | while IFS= read -r line; do echo "[cloudflared] $line"; done &
+}
+
+# NOTE: the three supervisor echo messages below ("token file changed",
+# "connector not running", "token removed") are matched verbatim by
+# test/e2e/specs/settings/cloudflare-tunnel.spec.ts (SUPERVISOR_PHRASES) to
+# tell supervisor lines apart from connector binary output — rewording any of
+# them requires updating that spec.
+cloudflared_supervisor() {
+    last_mtime=""
+    backoff=5
+    while true; do
+        if [ -f "$CLOUDFLARED_TOKEN_FILE" ]; then
+            mtime=$(stat -c %Y "$CLOUDFLARED_TOKEN_FILE" 2>/dev/null || echo 0)
+            if [ "$mtime" != "$last_mtime" ]; then
+                echo "[cloudflared] token file changed; (re)starting connector"
+                # `|| true`: entrypoint runs under `set -e`, inherited by this
+                # backgrounded subshell — a no-match pkill (exit 1) would kill
+                # the whole supervisor loop.
+                pkill -x cloudflared 2>/dev/null || true
+                sleep 1
+                start_cloudflared
+                last_mtime="$mtime"
+                backoff=5
+            elif ! pgrep -x cloudflared >/dev/null 2>&1; then
+                echo "[cloudflared] connector not running; restarting in ${backoff}s"
+                # Sleep in <=5s slices, re-checking the token file each slice:
+                # if it changed or disappeared mid-backoff, stop waiting so the
+                # outer loop reacts promptly (restart with new token / stop)
+                # instead of staying blind for the full backoff.
+                interrupted=0
+                slept=0
+                while [ "$slept" -lt "$backoff" ]; do
+                    slice=$((backoff - slept))
+                    if [ "$slice" -gt 5 ]; then slice=5; fi
+                    sleep "$slice"
+                    slept=$((slept + slice))
+                    cur_mtime=$(stat -c %Y "$CLOUDFLARED_TOKEN_FILE" 2>/dev/null || echo "")
+                    if [ "$cur_mtime" != "$last_mtime" ]; then
+                        interrupted=1
+                        break
+                    fi
+                done
+                backoff=$((backoff * 2))
+                if [ "$backoff" -gt 60 ]; then backoff=60; fi
+                if [ "$interrupted" -eq 0 ]; then
+                    start_cloudflared
+                fi
+            else
+                backoff=5
+            fi
+        else
+            if pgrep -x cloudflared >/dev/null 2>&1; then
+                echo "[cloudflared] token removed; stopping connector"
+                pkill -x cloudflared 2>/dev/null || true
+            fi
+            last_mtime=""
+        fi
+        sleep 5
+    done
+}
+
+cloudflared_supervisor &
+
 echo "[Entrypoint] Starting nginx..."
 exec nginx -g "daemon off;"

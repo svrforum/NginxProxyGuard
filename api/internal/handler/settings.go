@@ -26,11 +26,13 @@ type SettingsHandler struct {
 	proxyHostService *service.ProxyHostService
 	backupPath       string
 	redisCache       *cache.RedisClient
+	tunnelService    *service.CloudflareTunnelService
 }
 
 func NewSettingsHandler(
 	settingsService *service.SettingsService,
 	audit *service.AuditService,
+	tunnelService *service.CloudflareTunnelService,
 ) *SettingsHandler {
 	return &SettingsHandler{
 		settingsService:  settingsService,
@@ -44,6 +46,7 @@ func NewSettingsHandler(
 		proxyHostService: settingsService.GetProxyHostService(),
 		backupPath:       settingsService.GetBackupPath(),
 		redisCache:       settingsService.GetRedisCache(),
+		tunnelService:    tunnelService,
 	}
 }
 

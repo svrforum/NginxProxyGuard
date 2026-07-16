@@ -1196,7 +1196,42 @@
       "pleaseWait": "Please wait..."
     }
   },
+  "cloudflareTunnel": {
+    "title": "Cloudflare Tunnel",
+    "description": "Expose your proxy hosts through a Cloudflare Tunnel — no port forwarding required.",
+    "enable": "Enable Tunnel",
+    "enableDescription": "When enabled, the built-in cloudflared connector establishes an outbound connection to Cloudflare. No need to open ports 80/443 on your router.",
+    "token": "Connector Token",
+    "tokenDescription": "The tunnel connector token issued in the Cloudflare Zero Trust dashboard. It is shown masked after saving.",
+    "tokenPlaceholder": "Paste your connector token (e.g. eyJh...)",
+    "tokenPasteHint": "Paste the full install command — the token is extracted automatically.",
+    "replaceToken": "Replace",
+    "cancelReplace": "Cancel",
+    "save": "Save",
+    "saving": "Saving...",
+    "status": {
+      "disabled": "Disabled",
+      "starting": "Starting",
+      "connected": "Connected",
+      "error": "Error"
+    },
+    "guide": {
+      "title": "Setup Guide",
+      "step1": "In the Cloudflare Zero Trust dashboard, go to Networks → Tunnels → Create a tunnel and create a tunnel using the Cloudflared connector.",
+      "step2": "Copy the connector token shown after creating the tunnel — it is the <TOKEN> part of the 'cloudflared service install <TOKEN>' install command.",
+      "step3": "Paste the token into the field above, enable the tunnel, and save.",
+      "step4": "Add a Public Hostname to the tunnel with a wildcard per domain (e.g. *.example.com), point the service to {{originUrl}}, and turn ON \"No TLS Verify\" in the TLS settings.",
+      "redirectLoopWarning": "Pointing the service to http://localhost:80 causes redirect loops on hosts with Force HTTPS enabled. Always use {{originUrl}}.",
+      "wildcardPriorityWarning": "Cloudflare matches Public Hostnames top-to-bottom (first match wins). A single wildcard (*.example.com) is enough — NPG routes each request to the right proxy host by its Host header. If you also add specific hostnames, place them ABOVE the wildcard, or the wildcard will shadow them and send traffic to the wrong origin.",
+      "httpOnlyNote": "For a proxy host served over plain HTTP (SSL disabled), point that hostname's service to {{originUrlHttp}} instead — the https origin above is for SSL-enabled hosts.",
+      "step5": "(Optional) Clean up old A records and router port-forwarding rules for the domains you moved to the tunnel."
+    }
+  },
   "help": {
+    "cloudflareTunnel": {
+      "enable": "Cloudflare Tunnel only uses an outbound connection from your server to Cloudflare, so proxy hosts can be exposed without port forwarding or opening your firewall. It can take up to a minute after enabling for the connection to come up.",
+      "token": "The connector token issued when you create a tunnel in Cloudflare Zero Trust. It is stored only on the server and shown masked (first 4 characters) after saving. Click Replace to store a new token."
+    },
     "global": {
       "worker_processes": "Number of Nginx worker processes. Set to 'auto' to match CPU cores. Matching core count is recommended for high traffic.",
       "worker_connections": "Max simultaneous connections per worker. Too low values can cause connection errors. (Default: 1024)",

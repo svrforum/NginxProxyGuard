@@ -333,6 +333,17 @@ func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Back
 		}
 	}
 
+	// Re-converge the cloudflared token file with the restored DB state. The
+	// per-host/main-config regens above never touch it, so without this a
+	// pre-restore connector keeps running with the old token (and status can
+	// read "connected") until the next api restart. Restore must not fail on
+	// tunnel sync — log-warn only.
+	if h.tunnelService != nil && result.DatabaseRestored {
+		if err := h.tunnelService.SyncTokenFile(ctx); err != nil {
+			log.Printf("[Backup] Warning: failed to sync cloudflared token file after restore: %v", err)
+		}
+	}
+
 	result.DetermineStatus()
 	return result, nil
 }

@@ -47,6 +47,7 @@ type Repositories struct {
 	FilterSubscription *repository.FilterSubscriptionRepository
 	HealthDetailed     *repository.HealthDetailedRepository
 	DDNS               *repository.DDNSRepository
+	CloudflareTunnel   *repository.CloudflareTunnelRepository
 }
 
 // InitRepositories instantiates every repository and, if a cache is
@@ -89,6 +90,7 @@ func InitRepositories(db *database.DB, redisCache *cache.RedisClient) *Repositor
 		FilterSubscription: repository.NewFilterSubscriptionRepository(db.DB),
 		HealthDetailed:     repository.NewHealthDetailedRepository(db.DB),
 		DDNS:               repository.NewDDNSRepository(db),
+		CloudflareTunnel:   repository.NewCloudflareTunnelRepository(db.DB),
 	}
 
 	if redisCache != nil {

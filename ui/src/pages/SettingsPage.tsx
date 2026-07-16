@@ -11,6 +11,7 @@ import BotFilterSettings from '../components/BotFilterSettings'
 import WAFAutoBanSettings from '../components/WAFAutoBanSettings'
 import SystemLogSettings from '../components/SystemLogSettings'
 import FilterSubscriptionList from '../components/FilterSubscriptionList'
+import CloudflareTunnelSettings from '../components/settings/CloudflareTunnelSettings'
 
 type SubTab =
   | 'global'
@@ -23,6 +24,7 @@ type SubTab =
   | 'waf-auto-ban'
   | 'system-logs'
   | 'filter-subscriptions'
+  | 'cloudflare-tunnel'
 
 export default function SettingsPage({ subTab }: { subTab: SubTab }) {
   const { t } = useTranslation('navigation')
@@ -55,6 +57,7 @@ export default function SettingsPage({ subTab }: { subTab: SubTab }) {
         { key: 'maintenance', label: t('subTabs.settings.maintenance') },
         { key: 'backups', label: t('subTabs.settings.backups') },
         { key: 'system-logs', label: t('subTabs.settings.systemLogs') },
+        { key: 'cloudflare-tunnel', label: t('subTabs.settings.cloudflareTunnel') },
       ],
     },
   ]
@@ -102,6 +105,7 @@ export default function SettingsPage({ subTab }: { subTab: SubTab }) {
       {subTab === 'backups' && <BackupManager />}
       {subTab === 'system-logs' && <SystemLogSettings />}
       {subTab === 'filter-subscriptions' && <FilterSubscriptionList />}
+      {subTab === 'cloudflare-tunnel' && <CloudflareTunnelSettings />}
     </div>
   )
 }

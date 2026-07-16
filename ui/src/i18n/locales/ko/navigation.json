@@ -85,6 +85,7 @@
       "backups": "백업",
       "systemLogs": "시스템 로그",
       "filterSubscriptions": "필터 구독",
+      "cloudflareTunnel": "Cloudflare Tunnel",
       "groups": {
         "general": "일반",
         "security": "보안",

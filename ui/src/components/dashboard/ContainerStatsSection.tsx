@@ -1,5 +1,24 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { fetchCloudflareTunnel, fetchTunnelStatus } from '../../api/cloudflare-tunnel';
+import type { TunnelStatus } from '../../types/cloudflare-tunnel';
+
+// Badge colors mirror settings/CloudflareTunnelSettings.tsx so the dashboard
+// row and the settings page read as the same status.
+const tunnelBadgeClasses: Record<TunnelStatus['state'], string> = {
+  disabled: 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300',
+  starting: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
+  connected: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
+  error: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400',
+};
+
+const tunnelDotClasses: Record<TunnelStatus['state'], string> = {
+  disabled: 'bg-slate-400',
+  starting: 'bg-amber-500',
+  connected: 'bg-green-500',
+  error: 'bg-red-500',
+};
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -38,8 +57,29 @@ export default function ContainerStatsSection({ containerStats }: {
     healthy_count: number;
   }
 }) {
-  const { t } = useTranslation('dashboard');
+  const { t } = useTranslation(['dashboard', 'settings']);
   const [isExpanded, setIsExpanded] = useState(false);
+
+  // Same query keys as the settings page so both share one cache entry.
+  const { data: tunnelSettings } = useQuery({
+    queryKey: ['cloudflare-tunnel'],
+    queryFn: fetchCloudflareTunnel,
+  });
+
+  // Poll the connector status only while the tunnel is enabled server-side.
+  const { data: tunnelStatus } = useQuery({
+    queryKey: ['cloudflare-tunnel-status'],
+    queryFn: fetchTunnelStatus,
+    refetchInterval: 15000,
+    enabled: tunnelSettings?.enabled === true,
+  });
+
+  // Right after enabling, the status endpoint reports "starting" anyway.
+  const tunnelState: TunnelStatus['state'] = tunnelStatus?.state ?? 'starting';
+  const tunnelLabel =
+    tunnelState === 'connected'
+      ? `${t('settings:cloudflareTunnel.status.connected')} (${tunnelStatus?.connections ?? 0})`
+      : t(`settings:cloudflareTunnel.status.${tunnelState}`);
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-lg shadow">
@@ -158,6 +198,17 @@ export default function ContainerStatsSection({ containerStats }: {
                 </div>
               </div>
             ))}
+            {tunnelSettings?.enabled && (
+              <div className="p-4 flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${tunnelDotClasses[tunnelState]}`}></span>
+                  <span className="font-medium dark:text-gray-200">{t('containers.cloudflareTunnel')}</span>
+                </div>
+                <span className={`text-xs px-2 py-0.5 rounded ${tunnelBadgeClasses[tunnelState]}`}>
+                  {tunnelLabel}
+                </span>
+              </div>
+            )}
           </div>
           <div className="p-3 bg-gray-50 dark:bg-slate-700/50 border-t dark:border-slate-700 text-xs text-gray-500 dark:text-gray-400 flex justify-between flex-wrap gap-2">
             <span>{t('containers.totalCpu')} {containerStats.total_cpu_percent.toFixed(1)}%</span>

@@ -1393,6 +1393,42 @@ export class APIHelper {
     const r = await this.request.put(API_ENDPOINTS.globalRateLimit, { headers: this.getHeaders(), data: body });
     if (!r.ok()) throw new Error(`set global-rate-limit failed: ${r.status()} ${await r.text()}`);
   }
+
+  // ============ Cloudflare Tunnel (Phase 1 token mode) ============
+
+  /** Read the Cloudflare Tunnel settings singleton. */
+  async getCloudflareTunnel(): Promise<CloudflareTunnelData> {
+    const r = await this.request.get('/api/v1/settings/cloudflare-tunnel', { headers: this.getHeaders() });
+    if (!r.ok()) throw new Error(`get cloudflare-tunnel failed: ${r.status()}`);
+    return r.json();
+  }
+
+  /** Update the Cloudflare Tunnel settings singleton (partial). */
+  async setCloudflareTunnel(body: { enabled?: boolean; token?: string }): Promise<CloudflareTunnelData> {
+    const r = await this.request.put('/api/v1/settings/cloudflare-tunnel', { headers: this.getHeaders(), data: body });
+    if (!r.ok()) throw new Error(`set cloudflare-tunnel failed: ${r.status()} ${await r.text()}`);
+    return r.json();
+  }
+
+  /** Read the live tunnel connector status. */
+  async getTunnelStatus(): Promise<CloudflareTunnelStatusData> {
+    const r = await this.request.get('/api/v1/settings/cloudflare-tunnel/status', { headers: this.getHeaders() });
+    if (!r.ok()) throw new Error(`get cloudflare-tunnel status failed: ${r.status()}`);
+    return r.json();
+  }
+}
+
+// Cloudflare Tunnel Types
+export interface CloudflareTunnelData {
+  enabled: boolean;
+  has_token: boolean;
+  token_masked: string;
+  [key: string]: unknown;
+}
+
+export interface CloudflareTunnelStatusData {
+  state: string;
+  [key: string]: unknown;
 }
 
 // Shape of a row returned by /api/v1/logs — kept loose so the spec can assert

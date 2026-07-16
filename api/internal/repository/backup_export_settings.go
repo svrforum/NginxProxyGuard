@@ -285,3 +285,21 @@ func (r *BackupRepository) exportFilterSubscriptions(ctx context.Context) ([]mod
 	}
 	return subs, rows.Err()
 }
+
+// exportCloudflareTunnel exports the singleton Cloudflare Tunnel setting
+// (Phase 1 token mode). Returns nil when no row exists.
+func (r *BackupRepository) exportCloudflareTunnel(ctx context.Context) (*model.CloudflareTunnelExport, error) {
+	query := `
+		SELECT enabled, token, mode
+		FROM cloudflare_tunnel LIMIT 1
+	`
+	var e model.CloudflareTunnelExport
+	err := r.db.QueryRowContext(ctx, query).Scan(&e.Enabled, &e.Token, &e.Mode)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &e, nil
+}

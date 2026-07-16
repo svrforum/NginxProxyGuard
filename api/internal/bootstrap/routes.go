@@ -226,7 +226,18 @@ func registerTokenProtectedRoutes(v1 *echo.Group, c *Container) {
 	registerChallengeConfigRoutes(v1, c.Handlers.Challenge)
 	registerCloudProviderRoutes(v1, c.Handlers.CloudProvider)
 	registerFilterSubscriptionRoutes(v1, c.Handlers.FilterSubscription)
+	registerCloudflareTunnelRoutes(v1, c.Handlers.CloudflareTunnel)
 	registerTestRoutes(v1, c)
+}
+
+func registerCloudflareTunnelRoutes(v1 *echo.Group, h *handler.CloudflareTunnelHandler) {
+	settingsRead := authMiddleware.RequireAPIPermission(model.PermissionSettingsRead)
+	settingsWrite := authMiddleware.RequireAPIPermission(model.PermissionSettingsWrite)
+
+	// Cloudflare Tunnel (Phase 1 token mode) — settings-scoped singleton.
+	v1.GET("/settings/cloudflare-tunnel", h.Get, settingsRead)
+	v1.PUT("/settings/cloudflare-tunnel", h.Update, settingsWrite)
+	v1.GET("/settings/cloudflare-tunnel/status", h.Status, settingsRead)
 }
 
 func registerAPITokenRoutes(v1 *echo.Group, h *handler.APITokenHandler) {

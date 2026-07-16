@@ -34,6 +34,7 @@ type Handlers struct {
 	Metrics            *handler.MetricsHandler
 	HealthDetailed     *handler.HealthDetailedHandler
 	DDNS               *handler.DDNSHandler
+	CloudflareTunnel   *handler.CloudflareTunnelHandler
 }
 
 // InitHandlers constructs every HTTP handler with the previously built
@@ -65,7 +66,7 @@ func InitHandlers(
 		svcs.Audit,
 	)
 	h.Security = handler.NewSecurityHandler(svcs.Security, svcs.Audit)
-	h.Settings = handler.NewSettingsHandler(svcs.Settings, svcs.Audit)
+	h.Settings = handler.NewSettingsHandler(svcs.Settings, svcs.Audit, svcs.CloudflareTunnel)
 	h.SystemLog = handler.NewSystemLogHandler(repos.SystemLog)
 	h.Auth = handler.NewAuthHandler(svcs.Auth, svcs.Audit)
 	h.SystemSettings = handler.NewSystemSettingsHandler(
@@ -88,6 +89,7 @@ func InitHandlers(
 	h.Metrics = handler.NewMetricsHandler()
 	h.HealthDetailed = handler.NewHealthDetailedHandler(repos.HealthDetailed, svcs.LogCollector, redisCache, repos.ProxyHost, repos.GlobalSettings, svcs.PipelineCanary, svcs.StatsCollector, db)
 	h.DDNS = handler.NewDDNSHandler(svcs.DDNS, svcs.ProxyHost)
+	h.CloudflareTunnel = handler.NewCloudflareTunnelHandler(svcs.CloudflareTunnel, svcs.Audit)
 
 	return h
 }

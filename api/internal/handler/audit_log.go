@@ -230,6 +230,7 @@ func formatActionLabel(action string) string {
 		"global_rate_limit_updated": "전역 레이트 리밋 수정",
 		"global_waf_updated": "전역 WAF 수정",
 		"global_cloud_providers_updated": "전역 클라우드 차단 수정",
+		"cloudflare_tunnel_updated": "Cloudflare Tunnel 설정 수정",
 		"user_login":               "로그인",
 		"user_logout":              "로그아웃",
 		"user_created":             "사용자 생성",

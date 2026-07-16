@@ -2075,6 +2075,20 @@ CREATE TABLE IF NOT EXISTS public.global_waf (
     CONSTRAINT chk_global_waf_paranoia_level CHECK (((paranoia_level >= 1) AND (paranoia_level <= 4)))
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_global_waf_singleton ON public.global_waf USING btree ((true));
+-- Cloudflare Tunnel (Phase 1 token mode): singleton connector setting — the
+-- user pastes a connector token from the Cloudflare Zero Trust dashboard;
+-- ingress/DNS are managed there. mode reserved for Phase 2 ('managed').
+-- Canonical in migration.go.
+CREATE TABLE IF NOT EXISTS public.cloudflare_tunnel (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    enabled boolean DEFAULT false,
+    token text DEFAULT ''::text NOT NULL,
+    mode character varying(20) DEFAULT 'token'::character varying NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT chk_cloudflare_tunnel_mode CHECK (((mode)::text = ANY ((ARRAY['token'::character varying, 'managed'::character varying])::text[])))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cloudflare_tunnel_singleton ON public.cloudflare_tunnel USING btree ((true));
 CREATE TABLE IF NOT EXISTS public.redirect_hosts (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     domain_names text[] DEFAULT '{}'::text[] NOT NULL,
@@ -4082,3 +4096,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_proxy_hosts_stream_listener_unique
 -- reclaims names squatted by logs_partitioned_backup (DROP INDEX — the backup
 -- is verification-only) and builds the canonical index set on the live table
 -- using timescaledb.transaction_per_chunk to keep ingest unblocked.
+
+-- v2.32.0: cloudflare_tunnel singleton (Phase 1 token mode)
+CREATE TABLE IF NOT EXISTS public.cloudflare_tunnel (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    enabled boolean DEFAULT false,
+    token text DEFAULT ''::text NOT NULL,
+    mode character varying(20) DEFAULT 'token'::character varying NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT chk_cloudflare_tunnel_mode CHECK (((mode)::text = ANY ((ARRAY['token'::character varying, 'managed'::character varying])::text[])))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cloudflare_tunnel_singleton ON public.cloudflare_tunnel USING btree ((true));

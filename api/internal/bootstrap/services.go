@@ -38,6 +38,7 @@ type Services struct {
 	Fail2ban           *service.Fail2banService
 	StatsCollector     *service.StatsCollector
 	DDNS               *service.DDNSService
+	CloudflareTunnel   *service.CloudflareTunnelService
 }
 
 // InitServices creates the full service graph in the same order as the
@@ -188,6 +189,8 @@ func InitServices(
 	)
 
 	svcs.DDNS = service.NewDDNSService(repos.DDNS, repos.DNSProvider, service.NewPublicIPDetector())
+
+	svcs.CloudflareTunnel = service.NewCloudflareTunnelService(repos.CloudflareTunnel, nginxManager)
 
 	return svcs
 }

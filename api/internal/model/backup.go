@@ -229,6 +229,7 @@ type ExportData struct {
 	GlobalCloudProviders  *GlobalCloudProvidersExport  `json:"global_cloud_providers,omitempty"`
 	GlobalRateLimit       *GlobalRateLimitExport       `json:"global_rate_limit,omitempty"`
 	GlobalWAF             *GlobalWAFExport             `json:"global_waf,omitempty"`
+	CloudflareTunnel      *CloudflareTunnelExport      `json:"cloudflare_tunnel,omitempty"`
 
 	// Cloud Providers
 	CloudProviders []CloudProviderExport `json:"cloud_providers,omitempty"`
@@ -535,6 +536,15 @@ type GlobalWAFExport struct {
 	Mode             string `json:"mode"`
 	ParanoiaLevel    int    `json:"paranoia_level"`
 	AnomalyThreshold int    `json:"anomaly_threshold"`
+}
+
+// CloudflareTunnelExport represents the singleton Cloudflare Tunnel setting
+// (Phase 1 token mode). Contains the connector token — backups hold secrets
+// at the same trust level as dns_providers credentials.
+type CloudflareTunnelExport struct {
+	Enabled bool   `json:"enabled"`
+	Token   string `json:"token"`
+	Mode    string `json:"mode"`
 }
 
 // GlobalGeoRestrictionExport represents the singleton global geo default (#198).

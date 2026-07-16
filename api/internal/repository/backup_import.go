@@ -243,6 +243,13 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 		}
 	}
 
+	// Import Cloudflare Tunnel (Phase 1 token mode singleton)
+	if data.CloudflareTunnel != nil {
+		if err := r.importCloudflareTunnel(ctx, tx, data.CloudflareTunnel); err != nil {
+			return nil, fmt.Errorf("failed to import cloudflare tunnel: %w", err)
+		}
+	}
+
 	// Import Cloud Providers
 	for _, cp := range data.CloudProviders {
 		if err := r.importCloudProvider(ctx, tx, &cp); err != nil {
