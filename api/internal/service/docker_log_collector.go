@@ -45,13 +45,14 @@ var defaultSystemLogConfig = SystemLogConfig{
 
 // DockerLogCollector collects logs from Docker containers
 type DockerLogCollector struct {
-	systemLogRepo       *repository.SystemLogRepository
-	systemSettingsRepo  *repository.SystemSettingsRepository
-	containers          []ContainerConfig
-	stopCh              chan struct{}
-	wg                  sync.WaitGroup
-	config              SystemLogConfig
-	mu                  sync.RWMutex // Protects config
+	systemLogRepo      *repository.SystemLogRepository
+	systemSettingsRepo *repository.SystemSettingsRepository
+	containers         []ContainerConfig
+	stopCh             chan struct{}
+	wg                 sync.WaitGroup
+	config             SystemLogConfig
+	mu                 sync.RWMutex         // Protects config and startupGrace
+	startupGrace       map[string]time.Time // container -> time until startup logs bypass the min-level filter (#207)
 }
 
 type ContainerConfig struct {
@@ -69,8 +70,9 @@ func NewDockerLogCollector(systemLogRepo *repository.SystemLogRepository, system
 			{Name: "npg-db", Source: repository.SourceDockerDB},
 			{Name: "npg-ui", Source: repository.SourceDockerUI},
 		},
-		stopCh: make(chan struct{}),
-		config: defaultSystemLogConfig,
+		stopCh:       make(chan struct{}),
+		config:       defaultSystemLogConfig,
+		startupGrace: make(map[string]time.Time),
 	}
 	collector.loadConfig()
 	return collector
@@ -166,6 +168,19 @@ func (c *DockerLogCollector) shouldLog(container string, level repository.System
 		minLevelStr = "info" // Default to info
 	}
 
+	// Startup grace: for a short window after a container starts, don't hide
+	// info-level boot logs behind a higher (warn/error) configured threshold.
+	// db and ui default to "warn", so without this their "ready"/startup lines
+	// would never appear on a cold `docker compose up` even though we now
+	// capture the burst (#207). We only ever LOWER the threshold to info —
+	// debug (e.g. health-check) noise stays filtered.
+	if until, ok := c.startupGrace[container]; ok && time.Now().Before(until) {
+		switch strings.ToLower(minLevelStr) {
+		case "warn", "error", "fatal":
+			minLevelStr = "info"
+		}
+	}
+
 	return isLevelEnabled(level, minLevelStr)
 }
 
@@ -256,27 +271,56 @@ func (c *DockerLogCollector) collectContainerLogs(ctx context.Context, container
 // container falls back to `--since 1s` so we never re-ingest stale history.
 const startupLookback = 10 * time.Minute
 
+// startupGraceWindow is how long after a container's start info-level logs
+// bypass a higher configured min-level (see shouldLog). Long enough to cover a
+// boot sequence, short enough not to re-open the filter for steady-state noise.
+const startupGraceWindow = 3 * time.Minute
+
 // sinceArg returns the `docker logs --since` value for (re)attaching to a
-// container: the container's start time when it started recently, else "1s".
-func (c *DockerLogCollector) sinceArg(ctx context.Context, name string) string {
+// container, whether the container currently exists, and its start time when it
+// started recently (zero otherwise). `exists` is false when `docker inspect`
+// fails because the container isn't there yet — on a cold `docker compose up`
+// the API (which runs this collector) starts before the containers that depend
+// on it (ui, nginx), so its first attach attempts race their creation. `since`
+// is the container's start time when it started recently, else "1s".
+func (c *DockerLogCollector) sinceArg(ctx context.Context, name string) (since string, exists bool, startedAt time.Time) {
 	out, err := exec.CommandContext(ctx, "docker", "inspect", "-f", "{{.State.StartedAt}}", name).Output()
 	if err != nil {
-		return "1s"
+		return "", false, time.Time{}
 	}
-	startedAt, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(string(out)))
-	if err != nil || time.Since(startedAt) > startupLookback {
-		return "1s"
+	t, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(string(out)))
+	if err != nil || time.Since(t) > startupLookback {
+		return "1s", true, time.Time{}
 	}
 	// Reach back one second before start to be safe against clock rounding.
-	return startedAt.Add(-1 * time.Second).Format(time.RFC3339)
+	return t.Add(-1 * time.Second).Format(time.RFC3339), true, t
 }
 
 func (c *DockerLogCollector) tailContainerLogs(ctx context.Context, container ContainerConfig) {
+	// Skip the attach entirely while the container doesn't exist yet (startup
+	// race — see sinceArg). Running `docker logs` on a missing container makes
+	// the docker CLI print "Error response from daemon: No such container" to
+	// stderr, which we would otherwise ingest as a bogus error-level log entry
+	// (inflating the error count and cluttering the system log viewer). The
+	// caller's retry loop re-checks every few seconds and captures the startup
+	// burst via --since once the container appears. (#207)
+	since, exists, startedAt := c.sinceArg(ctx, container.Name)
+	if !exists {
+		return
+	}
+	// A recent start opens this container's startup grace window, during which
+	// info-level boot logs bypass a higher configured min-level (see shouldLog).
+	if !startedAt.IsZero() {
+		c.mu.Lock()
+		c.startupGrace[container.Name] = startedAt.Add(startupGraceWindow)
+		c.mu.Unlock()
+	}
+
 	// Use docker logs with --follow and --since to stream new logs. The --since
 	// value reaches back to the container's start when it started recently, so a
 	// startup burst emitted before this collector attached is still captured
 	// (#205); otherwise it is "1s" to avoid re-ingesting old history.
-	cmd := exec.CommandContext(ctx, "docker", "logs", "--follow", "--since", c.sinceArg(ctx, container.Name), container.Name)
+	cmd := exec.CommandContext(ctx, "docker", "logs", "--follow", "--since", since, container.Name)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -406,6 +450,17 @@ func (c *DockerLogCollector) processLogStream(ctx context.Context, container Con
 				strings.Contains(line, "[PartitionScheduler]") ||
 				strings.Contains(line, "INSERT INTO system_logs") ||
 				strings.Contains(line, "DETAIL:  Parameters:") {
+				continue
+			}
+
+			// Skip the docker CLI's own error output (not container logs). This
+			// happens when a container is removed while we're attached, or in the
+			// startup race before it exists (#207) — the pre-attach existence
+			// check catches most, this is the belt-and-suspenders for the mid-
+			// stream case so daemon errors never become bogus error-level rows.
+			if isStderr && (strings.Contains(line, "Error response from daemon:") ||
+				strings.Contains(line, "No such container") ||
+				strings.Contains(line, "Cannot connect to the Docker daemon")) {
 				continue
 			}
 
