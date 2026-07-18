@@ -109,6 +109,16 @@
     },
     "tagInputHelp": "Press Enter, Space or comma to add"
   },
+  "presets": {
+    "label": "Presets",
+    "select": "— Load a preset —",
+    "save": "Save current filters",
+    "namePlaceholder": "Preset name",
+    "confirmSave": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "deleteConfirm": "Delete this preset?"
+  },
   "charts": {
     "loading": "Loading visualization...",
     "noData": "No data available",

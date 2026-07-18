@@ -10,6 +10,7 @@ import {
 } from '../../api/logs';
 import type { LogFilter, CountryStat } from '../../types/log';
 import { TagInput } from './filters';
+import { LogFilterPresets } from './LogFilterPresets';
 import { getDefaultDateRange } from './utils';
 
 interface AdvancedFilterPanelProps {
@@ -91,6 +92,12 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
           </svg>
         </button>
       </div>
+
+      <LogFilterPresets
+        logType={logType ?? 'access'}
+        currentFilter={localFilter}
+        onLoad={(f) => { setLocalFilter(f); onFilterChange(f); }}
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Date Range */}

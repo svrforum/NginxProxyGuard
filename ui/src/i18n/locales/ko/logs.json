@@ -109,6 +109,16 @@
     "statusHelp": "HTTP 상태 코드로 필터링",
     "allStatuses": "모든 상태"
   },
+  "presets": {
+    "label": "프리셋",
+    "select": "— 프리셋 불러오기 —",
+    "save": "현재 필터 저장",
+    "namePlaceholder": "프리셋 이름",
+    "confirmSave": "저장",
+    "cancel": "취소",
+    "delete": "삭제",
+    "deleteConfirm": "이 프리셋을 삭제할까요?"
+  },
   "charts": {
     "loading": "시각화 데이터를 불러오는 중...",
     "noData": "데이터 없음",
