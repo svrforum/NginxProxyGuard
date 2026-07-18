@@ -35,6 +35,7 @@ type Repositories struct {
 	Dashboard          *repository.DashboardRepository
 	Backup             *repository.BackupRepository
 	SystemLog          *repository.SystemLogRepository
+	LogFilterPreset    *repository.LogFilterPresetRepository
 	Auth               *repository.AuthRepository
 	SystemSettings     *repository.SystemSettingsRepository
 	APIToken           *repository.APITokenRepository
@@ -78,6 +79,7 @@ func InitRepositories(db *database.DB, redisCache *cache.RedisClient) *Repositor
 		Dashboard:          repository.NewDashboardRepository(db.DB),
 		Backup:             repository.NewBackupRepository(db.DB),
 		SystemLog:          repository.NewSystemLogRepository(db.DB),
+		LogFilterPreset:    repository.NewLogFilterPresetRepository(db.DB),
 		Auth:               repository.NewAuthRepository(db.DB),
 		SystemSettings:     repository.NewSystemSettingsRepository(db.DB),
 		APIToken:           repository.NewAPITokenRepository(db.DB),

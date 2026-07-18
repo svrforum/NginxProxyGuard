@@ -1088,6 +1088,19 @@ ALTER TABLE public.proxy_hosts ADD COLUMN IF NOT EXISTS waf_use_global boolean D
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_cloudflare_tunnel_singleton ON public.cloudflare_tunnel USING btree ((true));`,
 		},
+		{
+			desc: "v2.33.0: log_filter_presets (saved log filter presets, #210)",
+			sql: `CREATE TABLE IF NOT EXISTS public.log_filter_presets (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    name text NOT NULL,
+    log_type text DEFAULT 'access'::text NOT NULL,
+    filter jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT log_filter_presets_pkey PRIMARY KEY (id)
+);
+CREATE INDEX IF NOT EXISTS idx_log_filter_presets_log_type ON public.log_filter_presets USING btree (log_type);`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

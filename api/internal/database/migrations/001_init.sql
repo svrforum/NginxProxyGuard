@@ -2089,6 +2089,16 @@ CREATE TABLE IF NOT EXISTS public.cloudflare_tunnel (
     CONSTRAINT chk_cloudflare_tunnel_mode CHECK (((mode)::text = ANY ((ARRAY['token'::character varying, 'managed'::character varying])::text[])))
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_cloudflare_tunnel_singleton ON public.cloudflare_tunnel USING btree ((true));
+CREATE TABLE IF NOT EXISTS public.log_filter_presets (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    name text NOT NULL,
+    log_type text DEFAULT 'access'::text NOT NULL,
+    filter jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT log_filter_presets_pkey PRIMARY KEY (id)
+);
+CREATE INDEX IF NOT EXISTS idx_log_filter_presets_log_type ON public.log_filter_presets USING btree (log_type);
 CREATE TABLE IF NOT EXISTS public.redirect_hosts (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     domain_names text[] DEFAULT '{}'::text[] NOT NULL,
@@ -4108,3 +4118,15 @@ CREATE TABLE IF NOT EXISTS public.cloudflare_tunnel (
     CONSTRAINT chk_cloudflare_tunnel_mode CHECK (((mode)::text = ANY ((ARRAY['token'::character varying, 'managed'::character varying])::text[])))
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_cloudflare_tunnel_singleton ON public.cloudflare_tunnel USING btree ((true));
+
+-- v2.33.0: log_filter_presets (saved log filter presets, #210)
+CREATE TABLE IF NOT EXISTS public.log_filter_presets (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    name text NOT NULL,
+    log_type text DEFAULT 'access'::text NOT NULL,
+    filter jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT log_filter_presets_pkey PRIMARY KEY (id)
+);
+CREATE INDEX IF NOT EXISTS idx_log_filter_presets_log_type ON public.log_filter_presets USING btree (log_type);

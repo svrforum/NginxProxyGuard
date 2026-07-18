@@ -211,6 +211,7 @@ func registerTokenProtectedRoutes(v1 *echo.Group, c *Container) {
 	registerDDNSRoutes(v1, c.Handlers.DDNS)
 	registerCertificateRoutes(v1, c.Handlers.Certificate)
 	registerLogRoutes(v1, c.Handlers.Log)
+	registerLogFilterPresetRoutes(v1, c.Handlers.LogFilterPreset)
 	registerWAFTestRoutes(v1, c.Handlers.WAFTest)
 	registerWAFRoutes(v1, c.Handlers.WAF)
 	registerExploitRuleRoutes(v1, c.Handlers.ExploitBlockRule)
@@ -351,6 +352,19 @@ func registerLogRoutes(v1 *echo.Group, h *handler.LogHandler) {
 	g.GET("/autocomplete/countries", echo.WrapHandler(http.HandlerFunc(h.GetDistinctCountries)), logsRead)
 	g.GET("/autocomplete/uris", echo.WrapHandler(http.HandlerFunc(h.GetDistinctURIs)), logsRead)
 	g.GET("/autocomplete/methods", echo.WrapHandler(http.HandlerFunc(h.GetDistinctMethods)), logsRead)
+}
+
+func registerLogFilterPresetRoutes(v1 *echo.Group, h *handler.LogFilterPresetHandler) {
+	logsRead := authMiddleware.RequireAPIPermission(model.PermissionLogsRead)
+	// Presets are an administrative convenience over the log viewer; mutating
+	// them follows the same rule as other log mutations → settings:write.
+	logsWrite := authMiddleware.RequireAPIPermission(model.PermissionSettingsWrite)
+
+	g := v1.Group("/log-filter-presets")
+	g.GET("", h.List, logsRead)
+	g.POST("", h.Create, logsWrite)
+	g.PUT("/:id", h.Update, logsWrite)
+	g.DELETE("/:id", h.Delete, logsWrite)
 }
 
 func registerWAFTestRoutes(v1 *echo.Group, h *handler.WAFTestHandler) {

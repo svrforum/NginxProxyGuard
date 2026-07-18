@@ -23,6 +23,7 @@ type Handlers struct {
 	Security           *handler.SecurityHandler
 	Settings           *handler.SettingsHandler
 	SystemLog          *handler.SystemLogHandler
+	LogFilterPreset    *handler.LogFilterPresetHandler
 	Auth               *handler.AuthHandler
 	SystemSettings     *handler.SystemSettingsHandler
 	APIToken           *handler.APITokenHandler
@@ -68,6 +69,7 @@ func InitHandlers(
 	h.Security = handler.NewSecurityHandler(svcs.Security, svcs.Audit)
 	h.Settings = handler.NewSettingsHandler(svcs.Settings, svcs.Audit, svcs.CloudflareTunnel)
 	h.SystemLog = handler.NewSystemLogHandler(repos.SystemLog)
+	h.LogFilterPreset = handler.NewLogFilterPresetHandler(repos.LogFilterPreset)
 	h.Auth = handler.NewAuthHandler(svcs.Auth, svcs.Audit)
 	h.SystemSettings = handler.NewSystemSettingsHandler(
 		repos.SystemSettings,
