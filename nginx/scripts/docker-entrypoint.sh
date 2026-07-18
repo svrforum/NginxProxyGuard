@@ -425,6 +425,25 @@ mkdir -p /tmp/modsecurity/data
 mkdir -p /tmp/modsecurity/upload
 mkdir -p /var/www/acme-challenge
 
+# Self-signed default certificate for the loopback HTTPS server (#209). The
+# Cloudflare Tunnel connector reaches nginx over https://localhost, whose SNI
+# ("localhost") matches no proxy host — so without a certificate here the
+# default server's `ssl_reject_handshake on` aborts the handshake ("remote
+# error: tls: unrecognized name"). This cert lets the loopback handshake
+# complete; real hosts are then routed by the Host header. Loopback-only and
+# self-signed (the tunnel uses "No TLS Verify"); generated once, then reused.
+mkdir -p /etc/nginx/certs
+DEFAULT_CERT="/etc/nginx/certs/default-selfsigned.crt"
+DEFAULT_KEY="/etc/nginx/certs/default-selfsigned.key"
+if [ ! -s "$DEFAULT_CERT" ] || [ ! -s "$DEFAULT_KEY" ]; then
+    echo "[Entrypoint] Generating self-signed default certificate (loopback HTTPS / Cloudflare Tunnel)..."
+    openssl req -x509 -nodes -days 36500 -newkey rsa:2048 \
+        -keyout "$DEFAULT_KEY" -out "$DEFAULT_CERT" \
+        -subj "/CN=localhost" 2>/dev/null || echo "[Entrypoint] WARN: could not generate default certificate"
+    chown nginx:nginx "$DEFAULT_CERT" "$DEFAULT_KEY" 2>/dev/null || true
+    chmod 600 "$DEFAULT_KEY" 2>/dev/null || true
+fi
+
 # Clean up stale temp files from previous runs (orphaned by crashes/interrupted transfers)
 echo "[Entrypoint] Cleaning up stale temp files..."
 find /etc/nginx/client_body_temp /etc/nginx/proxy_temp /etc/nginx/fastcgi_temp \
