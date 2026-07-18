@@ -2,9 +2,11 @@ package handler
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"nginx-proxy-guard/internal/model"
@@ -168,7 +170,7 @@ func parseLogFilter(q url.Values) *model.LogFilter {
 
 	// Exclude filters - apply size limits to prevent DoS
 	if excludeIPs := q["exclude_ips"]; len(excludeIPs) > 0 {
-		filter.ExcludeIPs = limitArray(excludeIPs, maxFilterArraySize)
+		filter.ExcludeIPs = sanitizeIPFilters(limitArray(excludeIPs, maxFilterArraySize))
 	}
 	if excludeUserAgents := q["exclude_user_agents"]; len(excludeUserAgents) > 0 {
 		filter.ExcludeUserAgents = limitArray(excludeUserAgents, maxFilterArraySize)
@@ -184,6 +186,32 @@ func parseLogFilter(q url.Values) *model.LogFilter {
 	}
 
 	return filter
+}
+
+// sanitizeIPFilters keeps only entries that are a valid IP address or CIDR
+// range, dropping anything else. Invalid values must never reach the SQL layer:
+// an unparseable string in `host(client_ip) NOT IN (...)` or `client_ip <<= $n`
+// would make PostgreSQL error out and turn the whole log query into a 500.
+// A CIDR entry (contains "/") lets the caller exclude a whole range, e.g. an
+// internal subnet or a monitoring host's range. (#210)
+func sanitizeIPFilters(vals []string) []string {
+	out := make([]string, 0, len(vals))
+	for _, v := range vals {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			continue
+		}
+		if strings.Contains(v, "/") {
+			if _, _, err := net.ParseCIDR(v); err == nil {
+				out = append(out, v)
+			}
+			continue
+		}
+		if net.ParseIP(v) != nil {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 func (h *LogHandler) List(w http.ResponseWriter, r *http.Request) {

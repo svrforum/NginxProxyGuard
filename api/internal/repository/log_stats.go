@@ -199,16 +199,25 @@ func (r *LogRepository) GetStatsWithFilter(ctx context.Context, filter *model.Lo
 			}
 		}
 
-		// Exclude filters
+		// Exclude filters. "/"-containing entries are CIDR ranges (inet
+		// containment); plain IPs use exact host() matching. Validated at the
+		// handler, so always parseable here. (#210)
 		if len(filter.ExcludeIPs) > 0 {
-			placeholders := make([]string, len(filter.ExcludeIPs))
-			for i, ip := range filter.ExcludeIPs {
-				placeholders[i] = fmt.Sprintf("$%d", argIndex)
+			exactPlaceholders := make([]string, 0, len(filter.ExcludeIPs))
+			for _, ip := range filter.ExcludeIPs {
+				if strings.Contains(ip, "/") {
+					whereClause += fmt.Sprintf(" AND (client_ip IS NULL OR NOT (client_ip <<= $%d::inet))", argIndex)
+					args = append(args, ip)
+					argIndex++
+					continue
+				}
+				exactPlaceholders = append(exactPlaceholders, fmt.Sprintf("$%d", argIndex))
 				args = append(args, ip)
 				argIndex++
 			}
-			// Use host() function to extract IP without /32 suffix for proper comparison
-			whereClause += fmt.Sprintf(" AND (client_ip IS NULL OR host(client_ip) NOT IN (%s))", strings.Join(placeholders, ","))
+			if len(exactPlaceholders) > 0 {
+				whereClause += fmt.Sprintf(" AND (client_ip IS NULL OR host(client_ip) NOT IN (%s))", strings.Join(exactPlaceholders, ","))
+			}
 		}
 		if len(filter.ExcludeUserAgents) > 0 {
 			for _, ua := range filter.ExcludeUserAgents {
