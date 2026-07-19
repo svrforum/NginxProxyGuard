@@ -121,6 +121,15 @@ export function TagInput({ values, onChange, placeholder, fetchSuggestions, clas
         e.preventDefault();
         togglePendingSelection(suggestions[selectedIndex]);
         return;
+      } else if (e.key === 'Enter' && selectedIndex < 0 && pendingSelections.length === 0 && inputValue.trim()) {
+        // No suggestion is highlighted — commit the typed value directly. This
+        // is the only way to add a value that never matches an autocomplete
+        // suggestion, e.g. a CIDR range like 192.168.1.0/24 in the IP exclude
+        // filter (autocomplete only offers exact IPs seen in the logs). (#210)
+        e.preventDefault();
+        addTag(inputValue);
+        setShowSuggestions(false);
+        return;
       } else if (e.key === 'Escape') {
         if (pendingSelections.length > 0) {
           setPendingSelections([]);
@@ -132,9 +141,14 @@ export function TagInput({ values, onChange, placeholder, fetchSuggestions, clas
       }
     }
 
-    if ((e.key === 'Enter' || e.key === ' ' || e.key === ',') && inputValue.trim() && !showSuggestions) {
+    if ((e.key === 'Enter' || e.key === ' ' || e.key === ',') && inputValue.trim() && (!showSuggestions || suggestions.length === 0)) {
+      // Commit the typed value when the dropdown is closed OR has no matching
+      // suggestions. Without the `suggestions.length === 0` case, a value that
+      // matches nothing (e.g. a CIDR range like 192.168.1.0/24) could never be
+      // added, because typing it still flips showSuggestions on. (#210)
       e.preventDefault();
       addTag(inputValue);
+      setShowSuggestions(false);
     } else if (e.key === 'Enter' && pendingSelections.length > 0) {
       e.preventDefault();
       addMultipleTags(pendingSelections);
