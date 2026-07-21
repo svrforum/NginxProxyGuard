@@ -640,6 +640,30 @@ func goldenCases() []goldenCase {
 		},
 	})
 
+	// 6b) geo_challenge_ssl — same as geo_challenge but on an SSL host. Locks in
+	// that the challenge redirect return= uses a fixed `https` scheme for SSL
+	// hosts (not raw $scheme), so the post-challenge return stays https behind a
+	// TLS-terminating proxy (e.g. Cloudflare Flexible) where nginx sees
+	// $scheme=http. Without the fix this rendered return=$scheme:// → http on an
+	// HTTPS page → Mixed Content. (#213)
+	cases = append(cases, goldenCase{
+		name: "geo_challenge_ssl",
+		data: ProxyHostConfigData{
+			Host:           goldenSSLHost("00000000-0000-0000-0000-000000000a0c", "challenge-ssl.example.com"),
+			GlobalSettings: baseGlobalSettings(),
+			GeoRestriction: &model.GeoRestriction{
+				ID:            "00000000-0000-0000-0000-00000000bbb3",
+				ProxyHostID:   "00000000-0000-0000-0000-000000000a0c",
+				Mode:          "blacklist",
+				Countries:     []string{"CN"},
+				Enabled:       true,
+				ChallengeMode: true,
+				CreatedAt:     fixtureNow,
+				UpdatedAt:     fixtureNow,
+			},
+		},
+	})
+
 	// 7) exploit_user_agent — BlockExploits=true with one user_agent rule.
 	{
 		host := goldenBaseHost("00000000-0000-0000-0000-000000000a07", "exploit.example.com")

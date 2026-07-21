@@ -10,7 +10,7 @@
 {{if .BlockedCloudIPRanges}}{{if .CloudProviderChallengeMode}}
     # Cloud provider challenge redirect handler
     location @cloud_challenge {
-        return 302 /api/v1/challenge/page?host={{.Host.ID}}&reason=cloud_provider&return=$scheme://$host$request_uri;
+        return 302 /api/v1/challenge/page?host={{.Host.ID}}&reason=cloud_provider&return={{if .Host.SSLEnabled}}https{{else}}$scheme{{end}}://$host$request_uri;
     }
 {{end}}{{end}}
 
