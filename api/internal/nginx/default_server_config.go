@@ -124,6 +124,28 @@ server {
 
     # Reject SSL handshake immediately - no certificate warning, just connection reset
     ssl_reject_handshake on;
+
+    # Direct handshakes to unknown SNI are rejected above. But a request can still
+    # reach this default server by Host header over a connection whose TLS was
+    # terminated by the loopback server below — i.e. Cloudflare Tunnel traffic for
+    # a subdomain that has no configured proxy host. Apply the same Direct IP
+    # Access Action so those non-existent subdomains are handled consistently
+    # (e.g. silently closed with 444) instead of leaking the welcome page. (#212)
+{{if eq .Action "block_444"}}
+    location / {
+        return 444;
+    }
+{{else if eq .Action "block_403"}}
+    location / {
+        return 403;
+    }
+{{else}}
+    root /usr/share/nginx/html;
+    index index.html;
+    location / {
+        try_files $uri $uri/ =404;
+    }
+{{end}}
 }
 
 # Loopback HTTPS server so the Cloudflare Tunnel connector (which reaches nginx
