@@ -24,6 +24,7 @@
     "actions": "작업",
     "empty": "인증서가 없습니다. 시작하려면 인증서를 생성하세요.",
     "more": "+{{count}} 더보기",
+    "cloudflareProxied": "Cloudflare 프록시(주황구름) 사용",
     "error": "오류",
     "renewalFailed": "갱신 실패",
     "dismissError": "해제",

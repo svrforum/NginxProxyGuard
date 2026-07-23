@@ -24,6 +24,7 @@
     "actions": "Actions",
     "empty": "No certificates found. Create one to get started.",
     "more": "+{{count}} more",
+    "cloudflareProxied": "Cloudflare proxy (orange cloud) enabled",
     "error": "Error",
     "renewalFailed": "Renewal Failed",
     "dismissError": "Dismiss",

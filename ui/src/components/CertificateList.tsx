@@ -202,9 +202,9 @@ export default function CertificateList() {
   });
 
   const hostsByCertId = useMemo(() => (proxyHostsData?.data ?? []).reduce((map, h) => {
-    if (h.certificate_id) (map[h.certificate_id] ??= []).push({ domain: h.domain_names[0], enabled: h.enabled });
+    if (h.certificate_id) (map[h.certificate_id] ??= []).push({ domain: h.domain_names[0], enabled: h.enabled, cfProxied: !!h.ddns_enabled && !!h.ddns_proxied });
     return map;
-  }, {} as Record<string, { domain: string; enabled: boolean }[]>), [proxyHostsData]);
+  }, {} as Record<string, { domain: string; enabled: boolean; cfProxied: boolean }[]>), [proxyHostsData]);
 
   const total = data?.total ?? 0;
   const totalPages = data?.total_pages ?? 1;

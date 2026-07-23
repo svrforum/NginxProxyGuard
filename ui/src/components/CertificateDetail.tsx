@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { getCertificate } from '../api/certificates'
 import { fetchProxyHosts } from '../api/proxy-hosts'
 import { ModalShell } from './common/ModalShell'
+import { CloudflareProxyBadge } from './certificate/CertificateBadges'
 import type { Certificate } from '../types/certificate'
 
 interface CertificateDetailProps {
@@ -206,8 +207,9 @@ export function CertificateDetail({ certificateId, onClose }: CertificateDetailP
                     <div key={host.id} className="flex items-center gap-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3">
                       <div className={`w-2 h-2 rounded-full ${host.enabled ? 'bg-green-500' : 'bg-slate-400'}`} />
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
-                          {host.domain_names[0]}
+                        <p className="text-sm font-medium text-slate-900 dark:text-white truncate flex items-center gap-1">
+                          <span className="truncate">{host.domain_names[0]}</span>
+                          {host.ddns_enabled && host.ddns_proxied && <CloudflareProxyBadge />}
                         </p>
                         {host.domain_names.length > 1 && (
                           <p className="text-xs text-slate-500 dark:text-slate-400">
