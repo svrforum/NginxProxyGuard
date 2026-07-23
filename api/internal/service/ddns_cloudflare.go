@@ -128,15 +128,28 @@ func (u *cloudflareUpdater) Update(ctx context.Context, rec model.DDNSRecord, ra
 	var recs []struct {
 		ID      string `json:"id"`
 		Content string `json:"content"`
+		Proxied bool   `json:"proxied"`
+		TTL     int    `json:"ttl"`
 	}
 	_ = json.Unmarshal(cr.Result, &recs)
 
 	body := cloudflareARecordBody(rec.Hostname, ip, rec.Proxied, rec.TTL)
 	if len(recs) > 0 {
-		if recs[0].Content == ip {
+		ex := recs[0]
+		// Skip the PUT only when the record already matches every managed field —
+		// not just the IP. Comparing content alone meant a proxy (orange-cloud) or
+		// TTL change with an unchanged IP was silently dropped. (#215)
+		// Cloudflare forces ttl=1 ("auto") for proxied records, so only compare TTL
+		// for unproxied records to avoid a spurious PUT every sync.
+		wantTTL := rec.TTL
+		if wantTTL <= 0 {
+			wantTTL = 1
+		}
+		ttlMatches := rec.Proxied || ex.TTL == wantTTL
+		if ex.Content == ip && ex.Proxied == rec.Proxied && ttlMatches {
 			return nil // already correct
 		}
-		_, err = u.do(ctx, http.MethodPut, fmt.Sprintf("%s/zones/%s/dns_records/%s", u.apiBase, zone, recs[0].ID), c, body)
+		_, err = u.do(ctx, http.MethodPut, fmt.Sprintf("%s/zones/%s/dns_records/%s", u.apiBase, zone, ex.ID), c, body)
 		return err
 	}
 	_, err = u.do(ctx, http.MethodPost, fmt.Sprintf("%s/zones/%s/dns_records", u.apiBase, zone), c, body)

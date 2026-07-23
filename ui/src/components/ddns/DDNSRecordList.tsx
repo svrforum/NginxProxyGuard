@@ -8,6 +8,7 @@ import type { DDNSRecord } from '../../types/ddns'
 import DDNSRecordForm from './DDNSRecordForm'
 import DDNSImportFromHostsModal from './DDNSImportFromHostsModal'
 import { AddButton, EmptyState, EntityCard, IconButton, PencilIcon, TrashIcon, RenewIcon } from '../common/listui'
+import { ModalShell } from '../common/ModalShell'
 
 /** Rounded status pill with a leading dot. DDNS has 3 states (ok / error / never)
  *  so this stays local rather than using the 2-state shared StatusPill. */
@@ -125,6 +126,8 @@ export default function DDNSRecordList() {
   const [showForm, setShowForm] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [editingRecord, setEditingRecord] = useState<DDNSRecord | null>(null)
+  const [deletingRecord, setDeletingRecord] = useState<DDNSRecord | null>(null)
+  const [removeProvider, setRemoveProvider] = useState(true)
   const [page, setPage] = useState(1)
 
   const { data, isLoading, error } = useQuery({
@@ -172,9 +175,10 @@ export default function DDNSRecordList() {
   }
 
   const deleteMutation = useMutation({
-    mutationFn: deleteDDNSRecord,
+    mutationFn: ({ id, removeProvider }: { id: string; removeProvider: boolean }) => deleteDDNSRecord(id, removeProvider),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ddns-records'] })
+      setDeletingRecord(null)
     },
   })
 
@@ -190,9 +194,10 @@ export default function DDNSRecordList() {
   })
 
   const handleDelete = (id: string) => {
-    if (confirm(t('confirmDelete'))) {
-      deleteMutation.mutate(id)
-    }
+    const rec = data?.data?.find((r) => r.id === id) ?? null
+    if (!rec) return
+    setRemoveProvider(true)
+    setDeletingRecord(rec)
   }
 
   const handleEdit = (record: DDNSRecord) => {
@@ -293,6 +298,48 @@ export default function DDNSRecordList() {
             queryClient.invalidateQueries({ queryKey: ['proxy-hosts'] })
           }}
         />
+      )}
+
+      {deletingRecord && (
+        <ModalShell isOpen onClose={() => setDeletingRecord(null)} panelClassName="max-w-md" labelledById="ddns-delete-title">
+          <div className="p-6">
+            <h3 id="ddns-delete-title" className="text-lg font-semibold text-slate-900 dark:text-white">
+              {t('deleteModal.title')}
+            </h3>
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+              {t('deleteModal.message', { hostname: deletingRecord.hostname })}
+            </p>
+            <label className="mt-4 flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={removeProvider}
+                onChange={(e) => setRemoveProvider(e.target.checked)}
+              />
+              <span className="text-sm text-slate-700 dark:text-slate-300">
+                {t('deleteModal.removeProvider')}
+                <span className="block text-xs text-slate-500 dark:text-slate-400">{t('deleteModal.removeProviderHint')}</span>
+              </span>
+            </label>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeletingRecord(null)}
+                className="px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+              >
+                {t('deleteModal.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={() => deleteMutation.mutate({ id: deletingRecord.id, removeProvider })}
+                disabled={deleteMutation.isPending}
+                className="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 transition-colors"
+              >
+                {t('deleteModal.confirm')}
+              </button>
+            </div>
+          </div>
+        </ModalShell>
       )}
 
       {!data?.data?.length ? (

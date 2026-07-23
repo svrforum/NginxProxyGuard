@@ -94,6 +94,23 @@ func (s *ProxyHostService) reconcileHostDDNS(ctx context.Context, host *model.Pr
 			log.Printf("[DDNS] %q already exists (manual or other host); skipped", name)
 		}
 	}
+
+	// Propagate a changed proxy (orange-cloud) setting onto records that already
+	// exist. reconcile otherwise only creates/prunes by hostname, so toggling
+	// DDNSProxied on a host whose domains are already managed would never update
+	// the record — leaving the DB (and thus the next sync) stale. (#215)
+	desiredSet := make(map[string]bool, len(desired))
+	for _, d := range desired {
+		desiredSet[d] = true
+	}
+	for _, r := range existing {
+		if desiredSet[r.Hostname] && r.Proxied != host.DDNSProxied {
+			proxied := host.DDNSProxied
+			if _, err := s.ddnsRepo.Update(ctx, r.ID, &model.UpdateDDNSRecordRequest{Proxied: &proxied}); err != nil {
+				log.Printf("[DDNS] reconcile proxied-update %q failed: %v", r.Hostname, err)
+			}
+		}
+	}
 	if err := s.ddnsRepo.DeleteManagedNotIn(ctx, host.ID, desired); err != nil {
 		log.Printf("[DDNS] reconcile prune failed for host %s: %v", host.ID, err)
 	}

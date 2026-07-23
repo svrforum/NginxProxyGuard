@@ -31,6 +31,14 @@
   "providerHint": "DDNS currently supports Cloudflare and DuckDNS only. Other provider types are not listed.",
   "noProviders": "No Cloudflare/DuckDNS providers available. Add one under Certificates > DNS Providers first.",
   "confirmDelete": "Delete this DDNS record? This also removes the live DNS record at your provider (e.g. the Cloudflare A record), so the hostname will stop resolving to this server.",
+  "deleteModal": {
+    "title": "Delete DDNS record",
+    "message": "Delete the record for '{{hostname}}'.",
+    "removeProvider": "Also remove the record from the DNS provider (Cloudflare, etc.)",
+    "removeProviderHint": "Uncheck to remove it from NPG only and keep the live DNS record at the provider.",
+    "cancel": "Cancel",
+    "confirm": "Delete"
+  },
   "hostnameRequired": "Hostname is required.",
   "providerRequired": "Please select a DNS provider.",
   "loadError": "Failed to load DDNS records.",

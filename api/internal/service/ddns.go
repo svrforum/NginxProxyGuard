@@ -209,16 +209,37 @@ func (s *DDNSService) Update(ctx context.Context, id string, req *model.UpdateDD
 		req.Hostname = nil
 		req.DNSProviderID = nil
 	}
-	return s.records.Update(ctx, id, req)
+	settingsChanged := req.Proxied != nil || req.TTL != nil
+	updated, err := s.records.Update(ctx, id, req)
+	if err != nil {
+		return nil, err
+	}
+	// A proxied/TTL change leaves the record's IP unchanged, so the scheduler's
+	// needsUpdate gate would never re-sync it and the provider would keep serving
+	// the old settings. Push it now (async, best-effort) so the change lands. (#215)
+	if updated != nil && updated.Enabled && settingsChanged {
+		go func() {
+			if err := s.SyncOne(context.Background(), updated.ID); err != nil {
+				log.Printf("[DDNS] post-update sync failed for %s: %v", updated.Hostname, err)
+			}
+		}()
+	}
+	return updated, nil
 }
 
 // Delete removes a DDNS record. The provider-side DNS record is removed
 // best-effort first (Cloudflare) — failures only log, so local cleanup is
 // never blocked by a provider outage. Reconcile prunes and proxy-host
 // CASCADE deletions remain DB-only (documented limitation).
-func (s *DDNSService) Delete(ctx context.Context, id string) error {
-	if rec, err := s.records.GetByID(ctx, id); err == nil && rec != nil {
-		s.deleteProviderRecord(ctx, *rec)
+func (s *DDNSService) Delete(ctx context.Context, id string, removeProvider bool) error {
+	// removeProvider lets the caller keep the provider-side DNS record (the user
+	// unchecked "also remove from Cloudflare"): NPG forgets the record but the
+	// public DNS entry stays. Default callers pass true to preserve the prior
+	// orphan-avoiding behavior. (#215)
+	if removeProvider {
+		if rec, err := s.records.GetByID(ctx, id); err == nil && rec != nil {
+			s.deleteProviderRecord(ctx, *rec)
+		}
 	}
 	return s.records.Delete(ctx, id)
 }

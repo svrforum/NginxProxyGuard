@@ -51,8 +51,9 @@ export async function updateDDNSRecord(
   return handleResponse<DDNSRecord>(response);
 }
 
-export async function deleteDDNSRecord(id: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/ddns-records/${id}`, {
+export async function deleteDDNSRecord(id: string, removeProvider = true): Promise<void> {
+  const qs = removeProvider ? '' : '?remove_provider=false';
+  const response = await fetch(`${API_BASE}/ddns-records/${id}${qs}`, {
     method: 'DELETE',
     headers: getAuthHeaders(),
   });

@@ -104,7 +104,12 @@ func (h *DDNSHandler) Update(c echo.Context) error {
 func (h *DDNSHandler) Delete(c echo.Context) error {
 	id := c.Param("id")
 
-	err := h.service.Delete(c.Request().Context(), id)
+	// Default: also remove the provider-side record (backward compatible). The UI
+	// passes remove_provider=false when the user unchecks "also remove from
+	// Cloudflare". (#215)
+	removeProvider := c.QueryParam("remove_provider") != "false"
+
+	err := h.service.Delete(c.Request().Context(), id, removeProvider)
 	if err != nil {
 		if err == model.ErrNotFound {
 			return notFoundError(c, "DDNS record")
