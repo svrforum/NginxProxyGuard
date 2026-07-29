@@ -244,6 +244,29 @@ func (s *DDNSService) Delete(ctx context.Context, id string, removeProvider bool
 	return s.records.Delete(ctx, id)
 }
 
+// DeleteManagedByProxyHost removes every managed record of a proxy host,
+// deleting the provider-side DNS entry first (best-effort, same semantics as
+// Delete). It exists so the host-driven lifecycle paths — turning DDNS off in
+// the host form, and deleting the host — can offer the same "also remove it at
+// the provider?" choice the DDNS record menu offers; previously both were
+// DB-only and silently orphaned the live DNS record. (#219)
+//
+// The caller decides whether the user asked for provider-side removal; this
+// method always removes it. A provider failure never blocks the DB cleanup.
+func (s *DDNSService) DeleteManagedByProxyHost(ctx context.Context, proxyHostID string) error {
+	recs, err := s.records.ListByProxyHost(ctx, proxyHostID)
+	if err != nil {
+		return fmt.Errorf("failed to list managed ddns records: %w", err)
+	}
+	for _, rec := range recs {
+		s.deleteProviderRecord(ctx, rec)
+		if err := s.records.Delete(ctx, rec.ID); err != nil {
+			log.Printf("[DDNS] Warning: provider-side record %s removed but its NPG row could not be deleted: %v", rec.Hostname, err)
+		}
+	}
+	return nil
+}
+
 // deleteProviderRecord best-effort removes the record at the DNS provider so
 // deleting in NPG doesn't leave an orphaned public DNS entry pointing at this
 // server.

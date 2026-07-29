@@ -141,7 +141,9 @@
       "ddnsStatusHint": "After saving, check sync status under Certificates → DDNS.",
       "ddnsProxied": "Cloudflare proxied",
       "ddnsProxiedHint": "Default for managed DDNS records created for this host. Per-record overrides on the DDNS page are preserved.",
-      "ddnsNoProviders": "No Cloudflare/DuckDNS providers available. Add one under Certificates > DNS Providers first."
+      "ddnsNoProviders": "No Cloudflare/DuckDNS providers available. Add one under Certificates > DNS Providers first.",
+      "ddnsDisableTitle": "Turn DDNS off",
+      "ddnsDisableMessage": "Saving removes the DDNS records this host managed from NPG."
     },
     "stream": {
       "tlsMode": {
@@ -614,7 +616,9 @@
     "edit": "Edit",
     "toggleEnable": "Toggle Enable/Disable",
     "favorite": "Add to favorites",
-    "unfavorite": "Remove from favorites"
+    "unfavorite": "Remove from favorites",
+    "deleteTitle": "Delete proxy host",
+    "deleteDdnsMessage": "Delete the host '{{domain}}'. The DDNS records it managed are removed as well."
   },
   "test": {
     "title": "Configuration Test",
@@ -764,5 +768,10 @@
     "deleteConfirm": "Delete upstream configuration? This will switch back to single server mode.",
     "saveError": "Save failed",
     "saveSuccess": "Upstream configuration saved."
+  },
+  "ddnsRemoval": {
+    "removeProvider": "Also remove the records from the DNS provider (Cloudflare)",
+    "removeProviderHint": "Checked deletes the live DNS records at the provider too. Unchecked removes them from NPG only and leaves the public DNS records in place.",
+    "providerCannotDelete": "This DNS provider does not support deleting records. They are removed from NPG only — delete them in the provider console yourself."
   }
 }

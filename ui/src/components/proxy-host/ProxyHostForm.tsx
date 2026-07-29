@@ -8,6 +8,7 @@ import { AdvancedTabContent } from './tabs/AdvancedTab'
 import { ProtectionTabContent } from './tabs/ProtectionTab'
 import { UpstreamTabContent } from './tabs/UpstreamTab'
 import { SaveProgressModal } from './SaveProgressModal'
+import { DDNSRemovalConfirmModal } from './DDNSRemovalConfirmModal'
 import { CertificateLogModal } from '../CertificateLogModal'
 import type { TabType } from './types'
 import { useMemo, useState, useEffect } from 'react'
@@ -21,7 +22,7 @@ interface ProxyHostFormProps {
 }
 
 export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps) {
-  const { t } = useTranslation('proxyHost')
+  const { t } = useTranslation(['proxyHost', 'common'])
   const [activeTab, setActiveTab] = useState<TabType>(initialTab || 'basic')
 
   const {
@@ -77,6 +78,9 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
     // Save progress
     saveProgress,
     closeSaveProgress,
+    ddnsConfirmOpen,
+    confirmDdnsRemoval,
+    cancelDdnsConfirm,
 
     // Certificate log modal
     pendingCertId,
@@ -446,6 +450,21 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
           </div>
         </form>
       </div>
+
+      {/* Turning DDNS off: offer to delete the records at the provider too (#219) */}
+      <DDNSRemovalConfirmModal
+        isOpen={ddnsConfirmOpen}
+        title={t('form.basic.ddnsDisableTitle')}
+        message={t('form.basic.ddnsDisableMessage')}
+        hostnames={host?.domain_names ?? []}
+        providerCanDelete={
+          dnsProviders.find((p) => p.id === host?.ddns_provider_id)?.provider_type === 'cloudflare'
+        }
+        defaultRemoveProvider
+        confirmLabel={t('common:buttons.save')}
+        onCancel={cancelDdnsConfirm}
+        onConfirm={confirmDdnsRemoval}
+      />
 
       {/* Save Progress Modal */}
       <SaveProgressModal

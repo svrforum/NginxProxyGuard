@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -42,13 +43,50 @@ func (cfProviderRepo) GetByID(context.Context, string) (*model.DNSProvider, erro
 }
 
 // recordingDeleter implements ddnsUpdater + ddnsDeleter and records the Delete call.
-type recordingDeleter struct{ called bool }
+// failWith makes the provider deletion fail, so tests can prove the DB cleanup
+// still happens on a provider outage.
+type recordingDeleter struct {
+	called   bool
+	hosts    []string
+	failWith error
+}
 
 func (d *recordingDeleter) Update(context.Context, model.DDNSRecord, json.RawMessage, string) error {
 	return nil
 }
-func (d *recordingDeleter) Delete(context.Context, model.DDNSRecord, json.RawMessage) error {
+func (d *recordingDeleter) Delete(_ context.Context, rec model.DDNSRecord, _ json.RawMessage) error {
 	d.called = true
+	d.hosts = append(d.hosts, rec.Hostname)
+	return d.failWith
+}
+
+// hostRecordsRepo serves a proxy host's managed records and records which rows
+// were deleted, for the host-scoped cleanup path. (#219)
+type hostRecordsRepo struct {
+	recs    []model.DDNSRecord
+	deleted []string
+	listErr error
+}
+
+func (r *hostRecordsRepo) Create(context.Context, *model.CreateDDNSRecordRequest) (*model.DDNSRecord, error) {
+	return nil, nil
+}
+func (r *hostRecordsRepo) GetByID(context.Context, string) (*model.DDNSRecord, error) { return nil, nil }
+func (r *hostRecordsRepo) List(context.Context, int, int) ([]model.DDNSRecord, int, error) {
+	return nil, 0, nil
+}
+func (r *hostRecordsRepo) Update(context.Context, string, *model.UpdateDDNSRecordRequest) (*model.DDNSRecord, error) {
+	return nil, nil
+}
+func (r *hostRecordsRepo) Delete(_ context.Context, id string) error {
+	r.deleted = append(r.deleted, id)
+	return nil
+}
+func (r *hostRecordsRepo) ListEnabled(context.Context) ([]model.DDNSRecord, error) { return nil, nil }
+func (r *hostRecordsRepo) ListByProxyHost(context.Context, string) ([]model.DDNSRecord, error) {
+	return r.recs, r.listErr
+}
+func (r *hostRecordsRepo) UpdateStatus(context.Context, string, string, string, string, time.Time) error {
 	return nil
 }
 
@@ -81,4 +119,59 @@ func TestDelete_RemoveProviderGating(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A host can hold one managed record per domain, so the host-scoped cleanup must
+// iterate all of them; and because deleting live DNS is best-effort, a provider
+// failure must never leave the NPG rows behind. (#219)
+func TestDeleteManagedByProxyHost(t *testing.T) {
+	recs := []model.DDNSRecord{
+		{ID: "r1", Hostname: "a.example.com", DNSProviderID: "p1"},
+		{ID: "r2", Hostname: "b.example.com", DNSProviderID: "p1"},
+	}
+
+	t.Run("removes every record at the provider and in the DB", func(t *testing.T) {
+		repo := &hostRecordsRepo{recs: recs}
+		del := &recordingDeleter{}
+		svc := NewDDNSService(repo, cfProviderRepo{}, fakeDetector{})
+		svc.updaters[model.DNSProviderCloudflare] = del
+
+		if err := svc.DeleteManagedByProxyHost(context.Background(), "host-1"); err != nil {
+			t.Fatalf("DeleteManagedByProxyHost: %v", err)
+		}
+		if len(del.hosts) != 2 {
+			t.Fatalf("provider delete called for %v, want both hostnames", del.hosts)
+		}
+		if len(repo.deleted) != 2 {
+			t.Fatalf("deleted rows %v, want both", repo.deleted)
+		}
+	})
+
+	t.Run("provider failure still deletes the rows", func(t *testing.T) {
+		repo := &hostRecordsRepo{recs: recs}
+		del := &recordingDeleter{failWith: errors.New("cloudflare unreachable")}
+		svc := NewDDNSService(repo, cfProviderRepo{}, fakeDetector{})
+		svc.updaters[model.DNSProviderCloudflare] = del
+
+		if err := svc.DeleteManagedByProxyHost(context.Background(), "host-1"); err != nil {
+			t.Fatalf("provider failure must not surface as an error: %v", err)
+		}
+		if len(repo.deleted) != 2 {
+			t.Fatalf("deleted rows %v, want both despite the provider error", repo.deleted)
+		}
+	})
+
+	t.Run("no managed records is a no-op", func(t *testing.T) {
+		repo := &hostRecordsRepo{}
+		del := &recordingDeleter{}
+		svc := NewDDNSService(repo, cfProviderRepo{}, fakeDetector{})
+		svc.updaters[model.DNSProviderCloudflare] = del
+
+		if err := svc.DeleteManagedByProxyHost(context.Background(), "host-1"); err != nil {
+			t.Fatalf("DeleteManagedByProxyHost: %v", err)
+		}
+		if del.called || len(repo.deleted) != 0 {
+			t.Fatal("nothing should have been deleted")
+		}
+	})
 }

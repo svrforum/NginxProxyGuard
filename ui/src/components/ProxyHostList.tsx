@@ -12,6 +12,8 @@ import { ProxyHostTable } from './proxy-host-list/ProxyHostTable'
 import { ProxyHostFilters, type SortBy, type SortOrder } from './proxy-host-list/ProxyHostFilters'
 import { ProxyHostBulkActions } from './proxy-host-list/ProxyHostBulkActions'
 import { ToggleConfirmDialog } from './proxy-host-list/ProxyHostRow'
+import { DDNSRemovalConfirmModal } from './proxy-host/DDNSRemovalConfirmModal'
+import { listDNSProviders } from '../api/dns-providers'
 import { EmptyState } from './common/listui'
 
 interface ProxyHostListProps {
@@ -38,6 +40,7 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
   const [testError, setTestError] = useState<string | null>(null)
   const [isTestLoading, setIsTestLoading] = useState(false)
   const [toggleConfirmHost, setToggleConfirmHost] = useState<ProxyHost | null>(null)
+  const [deletingHost, setDeletingHost] = useState<ProxyHost | null>(null)
   const [cloningHost, setCloningHost] = useState<ProxyHost | null>(null)
   // Certificate issuance progress state for clone
   const [cloneCertCreating, setCloneCertCreating] = useState(false)
@@ -77,8 +80,16 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
     queryFn: () => fetchProxyHosts(currentPage, perPage, searchQuery, sortBy, sortOrder),
   })
 
+  // Only used to tell whether the host's DDNS provider supports deleting a
+  // record, so the delete dialog never promises something it cannot do. (#219)
+  const { data: dnsProvidersData } = useQuery({
+    queryKey: ['dns-providers'],
+    queryFn: () => listDNSProviders(1, 100),
+  })
+
   const deleteMutation = useMutation({
-    mutationFn: deleteProxyHost,
+    mutationFn: ({ id, ddnsRemoveProvider }: { id: string; ddnsRemoveProvider: boolean }) =>
+      deleteProxyHost(id, ddnsRemoveProvider),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['proxy-hosts'] })
     },
@@ -193,11 +204,19 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.data])
 
+  // A host with DDNS on owns live records at the DNS provider; deleting it used
+  // to drop them from NPG only and leave the public DNS pointing here. Hosts
+  // without DDNS keep the plain confirmation. (#219)
   const handleDelete = useCallback(async (id: string) => {
-    if (confirm(t('actions.deleteConfirm'))) {
-      deleteMutation.mutate(id)
+    const host = data?.data?.find((h) => h.id === id)
+    if (host?.ddns_enabled) {
+      setDeletingHost(host)
+      return
     }
-  }, [deleteMutation, t])
+    if (confirm(t('actions.deleteConfirm'))) {
+      deleteMutation.mutate({ id, ddnsRemoveProvider: false })
+    }
+  }, [data?.data, deleteMutation, t])
 
   // Certificate polling function for clone modal
   const waitForCloneCertificate = async (hostId: string, maxWaitTime = 120000): Promise<boolean> => {
@@ -415,6 +434,25 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
           onRetest={handleRetest}
         />
       )}
+
+      {/* Delete Confirmation Modal — DDNS hosts only (#219) */}
+      <DDNSRemovalConfirmModal
+        isOpen={!!deletingHost}
+        title={t('actions.deleteTitle')}
+        message={t('actions.deleteDdnsMessage', { domain: deletingHost?.domain_names?.[0] ?? '' })}
+        hostnames={deletingHost?.domain_names ?? []}
+        providerCanDelete={
+          dnsProvidersData?.data?.find((p) => p.id === deletingHost?.ddns_provider_id)
+            ?.provider_type === 'cloudflare'
+        }
+        defaultRemoveProvider={false}
+        confirmLabel={t('actions.delete')}
+        onCancel={() => setDeletingHost(null)}
+        onConfirm={(removeProvider) => {
+          if (deletingHost) deleteMutation.mutate({ id: deletingHost.id, ddnsRemoveProvider: removeProvider })
+          setDeletingHost(null)
+        }}
+      />
 
       {/* Toggle Confirmation Modal */}
       {toggleConfirmHost && (

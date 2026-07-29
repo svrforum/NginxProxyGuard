@@ -44,19 +44,25 @@ export async function createProxyHost(
   return apiPost<ProxyHost>(`${API_BASE}/proxy-hosts`, data)
 }
 
+// ddnsRemoveProvider answers "also delete the managed DDNS records at the DNS
+// provider?" when DDNS is switched off. Omitted means no — the server keeps the
+// historical DB-only behavior. (#219)
 export async function updateProxyHost(
   id: string,
   data: UpdateProxyHostRequest,
-  skipNginx = false
+  skipNginx = false,
+  ddnsRemoveProvider = false
 ): Promise<ProxyHost> {
-  const url = skipNginx
-    ? `${API_BASE}/proxy-hosts/${id}?skip_nginx=true`
-    : `${API_BASE}/proxy-hosts/${id}`
-  return apiPut<ProxyHost>(url, data)
+  const params = new URLSearchParams()
+  if (skipNginx) params.set('skip_nginx', 'true')
+  if (ddnsRemoveProvider) params.set('ddns_remove_provider', 'true')
+  const query = params.toString()
+  return apiPut<ProxyHost>(`${API_BASE}/proxy-hosts/${id}${query ? `?${query}` : ''}`, data)
 }
 
-export async function deleteProxyHost(id: string): Promise<void> {
-  return apiDelete(`${API_BASE}/proxy-hosts/${id}`)
+export async function deleteProxyHost(id: string, ddnsRemoveProvider = false): Promise<void> {
+  const query = ddnsRemoveProvider ? '?ddns_remove_provider=true' : ''
+  return apiDelete(`${API_BASE}/proxy-hosts/${id}${query}`)
 }
 
 export async function testProxyHost(

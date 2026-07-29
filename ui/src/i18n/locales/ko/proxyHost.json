@@ -141,7 +141,9 @@
       "ddnsStatusHint": "등록 후 동기화 상태는 인증서 → DDNS에서 확인할 수 있어요.",
       "ddnsProxied": "Cloudflare 프록시",
       "ddnsProxiedHint": "이 호스트에서 생성되는 관리형 DDNS 레코드의 기본값입니다. DDNS 페이지에서 레코드별로 변경한 값은 그대로 유지됩니다.",
-      "ddnsNoProviders": "사용 가능한 Cloudflare/DuckDNS 프로바이더가 없습니다. 인증서 > DNS 프로바이더에서 먼저 추가하세요."
+      "ddnsNoProviders": "사용 가능한 Cloudflare/DuckDNS 프로바이더가 없습니다. 인증서 > DNS 프로바이더에서 먼저 추가하세요.",
+      "ddnsDisableTitle": "DDNS 해제",
+      "ddnsDisableMessage": "저장하면 이 호스트가 관리하던 DDNS 레코드가 NPG에서 제거됩니다."
     },
     "stream": {
       "tlsMode": {
@@ -612,7 +614,9 @@
     "edit": "수정",
     "toggleEnable": "활성화/비활성화 전환",
     "favorite": "즐겨찾기 추가",
-    "unfavorite": "즐겨찾기 해제"
+    "unfavorite": "즐겨찾기 해제",
+    "deleteTitle": "프록시 호스트 삭제",
+    "deleteDdnsMessage": "'{{domain}}' 호스트를 삭제합니다. 이 호스트가 관리하던 DDNS 레코드도 함께 제거됩니다."
   },
   "test": {
     "title": "설정 테스트",
@@ -762,5 +766,10 @@
     "deleteConfirm": "업스트림 설정을 삭제하시겠습니까? 단일 서버 모드로 전환됩니다.",
     "saveError": "저장 실패",
     "saveSuccess": "업스트림 설정이 저장되었습니다."
+  },
+  "ddnsRemoval": {
+    "removeProvider": "DNS 공급자(Cloudflare)에서도 레코드 제거",
+    "removeProviderHint": "체크하면 공급자에 등록된 실제 DNS 레코드까지 삭제됩니다. 해제하면 NPG에서만 제거되고 공용 DNS 레코드는 그대로 남습니다.",
+    "providerCannotDelete": "이 DNS 공급자는 레코드 삭제를 지원하지 않습니다. NPG에서만 제거되며, 공급자 콘솔에서 직접 삭제해야 합니다."
   }
 }

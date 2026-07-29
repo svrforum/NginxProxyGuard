@@ -6,6 +6,7 @@ import (
 	"log"
 	"strings"
 
+	"nginx-proxy-guard/internal/config"
 	"nginx-proxy-guard/internal/metrics"
 	"nginx-proxy-guard/internal/model"
 	"nginx-proxy-guard/internal/nginx"
@@ -54,9 +55,12 @@ type ContainerResolver interface {
 	ResolveContainerIP(ctx context.Context, name string, network string) (string, error)
 }
 
-// ddnsSyncer triggers an immediate DDNS sync for a host's managed records (#157 follow-up).
+// ddnsSyncer triggers an immediate DDNS sync for a host's managed records (#157 follow-up)
+// and removes them provider-side when the user opts in on the host form or on host
+// deletion (#219).
 type ddnsSyncer interface {
 	SyncByProxyHost(ctx context.Context, proxyHostID string)
+	DeleteManagedByProxyHost(ctx context.Context, proxyHostID string) error
 }
 
 type ProxyHostService struct {
@@ -796,8 +800,9 @@ func (s *ProxyHostService) Create(ctx context.Context, req *model.CreateProxyHos
 	}
 
 	// Sync managed DDNS records to the host's domains (#157). Graceful: never
-	// fails the create — the host has already been persisted + reloaded.
-	s.reconcileHostDDNS(ctx, host, true)
+	// fails the create — the host has already been persisted + reloaded. A create
+	// has nothing to opt out of, so provider deletion never applies here.
+	s.reconcileHostDDNS(ctx, host, true, false)
 
 	return host, nil
 }
@@ -897,10 +902,15 @@ func (s *ProxyHostService) UpdateWithoutReload(ctx context.Context, id string, r
 	return host, nil
 }
 
-func (s *ProxyHostService) Update(ctx context.Context, id string, req *model.UpdateProxyHostRequest) (*model.ProxyHost, error) {
+// ddnsRemoveProvider is variadic so the nine internal callers that regenerate a
+// host's config (WAF auto-ban, security, fail2ban, cloud provider) stay untouched;
+// only the HTTP handler passes it, forwarding the user's answer to "also remove the
+// records at the DNS provider?" when DDNS is switched off. (#219)
+func (s *ProxyHostService) Update(ctx context.Context, id string, req *model.UpdateProxyHostRequest, ddnsRemoveProvider ...bool) (*model.ProxyHost, error) {
 	var host *model.ProxyHost
 	var err error
 	var oldConfigFilename string // Track old config filename for cleanup when domain changes
+	removeProviderRecords := len(ddnsRemoveProvider) > 0 && ddnsRemoveProvider[0]
 
 	// If req is nil, we just want to regenerate config for the existing host
 	if req != nil {
@@ -997,7 +1007,7 @@ func (s *ProxyHostService) Update(ctx context.Context, id string, req *model.Upd
 
 	// Sync managed DDNS records to the host's (possibly changed) domains and
 	// opt-in state (#157). Graceful: never fails the update.
-	s.reconcileHostDDNS(ctx, host, true)
+	s.reconcileHostDDNS(ctx, host, true, removeProviderRecords)
 
 	return host, nil
 }
@@ -1007,7 +1017,10 @@ func (s *ProxyHostService) Update(ctx context.Context, id string, req *model.Upd
 //
 // immediateDDNSSync is forwarded to reconcileHostDDNS: interactive UI saves pass true
 // (sync the managed record immediately); bulk DDNS import passes false (let the scheduler sync).
-func (s *ProxyHostService) UpdateDBOnly(ctx context.Context, id string, req *model.UpdateProxyHostRequest, immediateDDNSSync bool) (*model.ProxyHost, error) {
+//
+// ddnsRemoveProvider is variadic for the same reason as on Update: only the HTTP
+// handler forwards the user's provider-deletion choice. (#219)
+func (s *ProxyHostService) UpdateDBOnly(ctx context.Context, id string, req *model.UpdateProxyHostRequest, immediateDDNSSync bool, ddnsRemoveProvider ...bool) (*model.ProxyHost, error) {
 	if req == nil {
 		return s.repo.GetByID(ctx, id)
 	}
@@ -1038,7 +1051,7 @@ func (s *ProxyHostService) UpdateDBOnly(ctx context.Context, id string, req *mod
 	// Sync managed DDNS records to the host's (possibly changed) domains and
 	// opt-in state (#157). The UI saves via skip_nginx=true (this path), so the
 	// reconcile must run here too — not only in Update. Graceful: never fails.
-	s.reconcileHostDDNS(ctx, host, immediateDDNSSync)
+	s.reconcileHostDDNS(ctx, host, immediateDDNSSync, len(ddnsRemoveProvider) > 0 && ddnsRemoveProvider[0])
 
 	return host, nil
 }
@@ -1047,7 +1060,11 @@ func (s *ProxyHostService) ToggleFavorite(ctx context.Context, id string) (*mode
 	return s.repo.ToggleFavorite(ctx, id)
 }
 
-func (s *ProxyHostService) Delete(ctx context.Context, id string) error {
+// ddnsRemoveProvider carries the user's answer to "also delete the DNS records at
+// the provider?". Without it the host's managed records vanish through the
+// ddns_records ON DELETE CASCADE and the public DNS entry keeps pointing at this
+// server. (#219)
+func (s *ProxyHostService) Delete(ctx context.Context, id string, ddnsRemoveProvider ...bool) error {
 	// Get host first to know domain names for config file
 	host, err := s.repo.GetByID(ctx, id)
 	if err != nil {
@@ -1055,6 +1072,23 @@ func (s *ProxyHostService) Delete(ctx context.Context, id string) error {
 	}
 	if host == nil {
 		return fmt.Errorf("proxy host not found")
+	}
+
+	// Provider-side DNS removal must happen BEFORE the row is deleted: the FK
+	// cascade takes the ddns_records rows with it, and with them the hostnames and
+	// provider ids needed to know what to delete.
+	//
+	// It runs on a detached, bounded context. On the request context a client that
+	// navigates away mid-loop would cancel it after some records were already gone
+	// at the provider, leaving rows marked last_status=ok that the scheduler's
+	// needsUpdate gate never repairs. Best-effort throughout: a provider outage must
+	// not block deleting the host.
+	if len(ddnsRemoveProvider) > 0 && ddnsRemoveProvider[0] && s.ddnsSyncer != nil {
+		ddnsCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), config.DDNSProviderDeleteTimeout)
+		if err := s.ddnsSyncer.DeleteManagedByProxyHost(ddnsCtx, id); err != nil {
+			log.Printf("[DDNS] provider-side cleanup for deleted host %s failed: %v", id, err)
+		}
+		cancel()
 	}
 
 	// Ordering matters under concurrency (#21 zombie-conf race). Delete the DB

@@ -147,6 +147,11 @@ const (
 const (
 	// DDNSCheckInterval is how often the DDNS scheduler re-checks the public IP. (#154)
 	DDNSCheckInterval = 5 * time.Minute
+	// DDNSProviderDeleteTimeout bounds the provider-side record cleanup that runs
+	// while deleting a proxy host. Each record costs a zone lookup + list + delete,
+	// so an unreachable provider API must not hold the delete request open for
+	// HTTPClientTimeout per domain. (#219)
+	DDNSProviderDeleteTimeout = 15 * time.Second
 )
 
 // Update-check constants (#190). Display + guidance only — NPG never updates itself.

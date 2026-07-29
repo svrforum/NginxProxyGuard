@@ -160,6 +160,31 @@ func (h *ProxyHostHandler) List(c echo.Context) error {
 	return c.JSON(http.StatusOK, response)
 }
 
+// ddnsRemoveProviderRequested reports whether the caller asked for the host's
+// managed DDNS records to be deleted at the DNS provider too (?ddns_remove_provider=true).
+//
+// It defaults to false: deleting live public DNS is irreversible, so existing API
+// automation that toggles DDNS off or deletes a host must keep its current
+// DB-only behavior unless it opts in. The UI always sends an explicit value.
+//
+// Provider-side DNS deletion is settings-scoped elsewhere (DELETE /ddns-records/:id
+// requires settings:write), so an API token reaching it through a proxy:write /
+// proxy:delete route must hold settings:write as well — otherwise the flag is
+// ignored rather than widening what the token can destroy. Session users are
+// unaffected; permission scopes apply to API tokens only. (#219)
+func ddnsRemoveProviderRequested(c echo.Context) bool {
+	if c.QueryParam("ddns_remove_provider") != "true" {
+		return false
+	}
+	if isAPIToken, ok := c.Get("is_api_token").(bool); ok && isAPIToken {
+		token, ok := c.Get("api_token").(*model.APIToken)
+		if !ok || token == nil || !token.HasPermission(model.PermissionSettingsWrite) {
+			return false
+		}
+	}
+	return true
+}
+
 func (h *ProxyHostHandler) Update(c echo.Context) error {
 	id := c.Param("id")
 	if id == "" {
@@ -179,13 +204,14 @@ func (h *ProxyHostHandler) Update(c echo.Context) error {
 	}
 
 	skipNginx := c.QueryParam("skip_nginx") == "true"
+	ddnsRemoveProvider := ddnsRemoveProviderRequested(c)
 
 	var host *model.ProxyHost
 	var err error
 	if skipNginx {
-		host, err = h.service.UpdateDBOnly(c.Request().Context(), id, &req, true)
+		host, err = h.service.UpdateDBOnly(c.Request().Context(), id, &req, true, ddnsRemoveProvider)
 	} else {
-		host, err = h.service.Update(c.Request().Context(), id, &req)
+		host, err = h.service.Update(c.Request().Context(), id, &req, ddnsRemoveProvider)
 	}
 	if err != nil {
 		errMsg := err.Error()
@@ -231,7 +257,7 @@ func (h *ProxyHostHandler) Delete(c echo.Context) error {
 	// Get host info before deletion for audit
 	host, _ := h.service.GetByID(c.Request().Context(), id)
 
-	if err := h.service.Delete(c.Request().Context(), id); err != nil {
+	if err := h.service.Delete(c.Request().Context(), id, ddnsRemoveProviderRequested(c)); err != nil {
 		return internalError(c, "delete proxy host", err)
 	}
 

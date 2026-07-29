@@ -100,6 +100,9 @@ export function useProxyHostForm(host: ProxyHost | null | undefined, onClose: ()
     saveProgress: submit.saveProgress,
     closeSaveProgress: submit.closeSaveProgress,
     handleSubmit: submit.handleSubmit,
+    ddnsConfirmOpen: submit.ddnsConfirmOpen,
+    confirmDdnsRemoval: submit.confirmDdnsRemoval,
+    cancelDdnsConfirm: submit.cancelDdnsConfirm,
 
     // Domain helpers
     addDomain,

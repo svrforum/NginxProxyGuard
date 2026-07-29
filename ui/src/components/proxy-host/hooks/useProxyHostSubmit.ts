@@ -61,6 +61,10 @@ export function useProxyHostSubmit({
   const isStreamMode = state.formData.proxy_type === 'stream'
 
   const [saveProgress, setSaveProgress] = useState<SaveProgressState>(INITIAL_PROGRESS)
+  // Switching DDNS off used to drop the managed records from NPG only, silently
+  // leaving the public DNS entry pointing here. Ask first, exactly like the
+  // DDNS record menu does. (#219)
+  const [ddnsConfirmOpen, setDdnsConfirmOpen] = useState(false)
 
   /** Helper to close the progress modal after a short delay. */
   function closeProgressWithDelay(delay = 800) {
@@ -133,8 +137,15 @@ export function useProxyHostSubmit({
 
   // ───── Update mutation ──────────────────────────────────────────────
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: CreateProxyHostRequest }) =>
-      updateProxyHost(id, data, true),
+    mutationFn: ({
+      id,
+      data,
+      ddnsRemoveProvider,
+    }: {
+      id: string
+      data: CreateProxyHostRequest
+      ddnsRemoveProvider?: boolean
+    }) => updateProxyHost(id, data, true, ddnsRemoveProvider),
     onMutate: () => {
       // Step 0: Server processing (DB save, nginx deferred to regenerate)
       setSaveProgress((prev) => ({ ...prev, currentStep: 0 }))
@@ -182,10 +193,38 @@ export function useProxyHostSubmit({
 
   const mutation = isEditing ? updateMutation : createMutation
 
+  /** True when saving would drop this host's managed DDNS records. (#219) */
+  const ddnsOptOut = isEditing && !!host?.ddns_enabled && !state.formData.ddns_enabled
+
   // ───── Submit handler ──────────────────────────────────────────────
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    // Ask BEFORE the progress modal opens — opening the question on top of it
+    // would stack two modals with no defined cancel path. Validate first so the
+    // user is never asked about deleting DNS for a form that cannot be saved;
+    // runSubmit re-validates (pure) for the resume-after-confirm path.
+    if (ddnsOptOut) {
+      const errs = validateProxyHostForm({
+        formData: state.formData,
+        portInput: state.portInput,
+        certMode: state.certMode,
+        t,
+      })
+      state.setErrors(errs)
+      if (!isFormValid(errs)) return
+      setDdnsConfirmOpen(true)
+      return
+    }
+    await runSubmit(false)
+  }
 
+  /** Answer to "also delete the records at the DNS provider?"; resumes the save. */
+  async function confirmDdnsRemoval(removeProvider: boolean) {
+    setDdnsConfirmOpen(false)
+    await runSubmit(removeProvider)
+  }
+
+  async function runSubmit(ddnsRemoveProvider: boolean) {
     // Step 0: Validation — open modal first, close on early return
     setSaveProgress({ isOpen: true, currentStep: 0, error: null, errorDetails: null })
 
@@ -271,7 +310,7 @@ export function useProxyHostSubmit({
       // no-op when the host never had a container binding. (#151)
       data.forward_container_name = data.forward_container_name ?? ''
       data.forward_container_network = data.forward_container_network ?? ''
-      updateMutation.mutate({ id: host.id, data })
+      updateMutation.mutate({ id: host.id, data, ddnsRemoveProvider })
     } else {
       createMutation.mutate(data)
     }
@@ -289,6 +328,9 @@ export function useProxyHostSubmit({
     closeSaveProgress,
     handleSubmit,
     mutation,
+    ddnsConfirmOpen,
+    confirmDdnsRemoval,
+    cancelDdnsConfirm: () => setDdnsConfirmOpen(false),
   }
 }
 

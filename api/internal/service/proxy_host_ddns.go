@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 
+	"nginx-proxy-guard/internal/config"
 	"nginx-proxy-guard/internal/model"
 )
 
@@ -45,7 +46,12 @@ func ddnsDesiredDiff(desired, existing []string) (toCreate, toDelete []string) {
 // saves (Create/Update/UI UpdateDBOnly) pass true so the record reflects the current
 // IP within seconds; bulk import passes false and relies on the DDNS scheduler's next
 // cycle, avoiding a burst of per-host public-IP detection + provider API writes.
-func (s *ProxyHostService) reconcileHostDDNS(ctx context.Context, host *model.ProxyHost, immediateSync bool) {
+//
+// removeProviderRecords applies only to the opt-out branch: when the user answered
+// "also remove them at the DNS provider" in the host form, the managed records are
+// deleted at the provider before the rows go away. Everything else keeps the
+// historical DB-only behavior. (#219)
+func (s *ProxyHostService) reconcileHostDDNS(ctx context.Context, host *model.ProxyHost, immediateSync, removeProviderRecords bool) {
 	if s.ddnsRepo == nil || host == nil {
 		return
 	}
@@ -53,6 +59,17 @@ func (s *ProxyHostService) reconcileHostDDNS(ctx context.Context, host *model.Pr
 	managed := host.DDNSEnabled && host.DDNSProviderID != nil && *host.DDNSProviderID != ""
 
 	if !managed {
+		if removeProviderRecords && s.ddnsSyncer != nil {
+			// Bounded so an unreachable provider API cannot hold the save open for
+			// the full HTTP client timeout once per domain.
+			ddnsCtx, cancel := context.WithTimeout(ctx, config.DDNSProviderDeleteTimeout)
+			if err := s.ddnsSyncer.DeleteManagedByProxyHost(ddnsCtx, host.ID); err != nil {
+				log.Printf("[DDNS] reconcile provider-delete failed for host %s: %v", host.ID, err)
+			}
+			cancel()
+		}
+		// Always run the DB-only sweep: it is the fallback when the syncer is not
+		// wired and the mop-up for any row the provider path could not remove.
 		if _, err := s.ddnsRepo.DeleteByProxyHost(ctx, host.ID); err != nil {
 			log.Printf("[DDNS] reconcile delete-all failed for host %s: %v", host.ID, err)
 		}
