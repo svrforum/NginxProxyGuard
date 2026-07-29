@@ -7,7 +7,7 @@ import { getSystemSettings, updateSystemSettings } from '../../api/settings'
 import type { DDNSRecord } from '../../types/ddns'
 import DDNSRecordForm from './DDNSRecordForm'
 import DDNSImportFromHostsModal from './DDNSImportFromHostsModal'
-import { AddButton, EmptyState, EntityCard, IconButton, PencilIcon, TrashIcon, RenewIcon } from '../common/listui'
+import { AddButton, CloudflareProxyBadge, EmptyState, EntityCard, IconButton, PencilIcon, TrashIcon, RenewIcon } from '../common/listui'
 import { ModalShell } from '../common/ModalShell'
 
 /** Rounded status pill with a leading dot. DDNS has 3 states (ok / error / never)
@@ -42,6 +42,7 @@ function StatusBadge({ status }: { status: string }) {
 interface RecordCardProps {
   record: DDNSRecord
   providerName: string
+  cfProxied: boolean
   formatDate: (iso?: string) => string
   onSync: (id: string) => void
   onEdit: (record: DDNSRecord) => void
@@ -50,7 +51,7 @@ interface RecordCardProps {
   deleting: boolean
 }
 
-function RecordCard({ record, providerName, formatDate, onSync, onEdit, onDelete, syncing, deleting }: RecordCardProps) {
+function RecordCard({ record, providerName, cfProxied, formatDate, onSync, onEdit, onDelete, syncing, deleting }: RecordCardProps) {
   const { t } = useTranslation('ddns')
   const isManaged = !!record.proxy_host_id
 
@@ -66,6 +67,7 @@ function RecordCard({ record, providerName, formatDate, onSync, onEdit, onDelete
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="truncate text-sm font-semibold text-slate-900 dark:text-white">{record.hostname}</span>
+            {cfProxied && <CloudflareProxyBadge title={t('proxiedDesc')} />}
             {isManaged && (
               <span
                 className="inline-flex items-center rounded-md bg-cyan-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-cyan-700 dark:bg-cyan-900/20 dark:text-cyan-300"
@@ -144,6 +146,11 @@ export default function DDNSRecordList() {
     const p = providersData?.data?.find((x) => x.id === id)
     return p ? p.name : id
   }
+
+  // proxied only means anything on Cloudflare — the other updaters never read it,
+  // so the orange cloud must be gated on the provider type. (#220)
+  const isCloudflare = (id: string): boolean =>
+    providersData?.data?.find((x) => x.id === id)?.provider_type === 'cloudflare'
 
   // DDNS check interval (system setting) — renewal cadence in minutes.
   const { data: systemSettings } = useQuery({
@@ -359,6 +366,7 @@ export default function DDNSRecordList() {
               key={record.id}
               record={record}
               providerName={providerName(record.dns_provider_id)}
+              cfProxied={record.proxied && isCloudflare(record.dns_provider_id)}
               formatDate={formatDate}
               onSync={(id) => syncMutation.mutate(id)}
               onEdit={handleEdit}
