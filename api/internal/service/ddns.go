@@ -261,7 +261,8 @@ func (s *DDNSService) DeleteManagedByProxyHost(ctx context.Context, proxyHostID 
 	for _, rec := range recs {
 		s.deleteProviderRecord(ctx, rec)
 		if err := s.records.Delete(ctx, rec.ID); err != nil {
-			log.Printf("[DDNS] Warning: provider-side record %s removed but its NPG row could not be deleted: %v", rec.Hostname, err)
+			// deleteProviderRecord reports its own outcome; say only what is known here.
+			log.Printf("[DDNS] Warning: could not delete the NPG row for %s: %v", rec.Hostname, err)
 		}
 	}
 	return nil

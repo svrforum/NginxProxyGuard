@@ -83,7 +83,10 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
   // Only used to tell whether the host's DDNS provider supports deleting a
   // record, so the delete dialog never promises something it cannot do. (#219)
   const { data: dnsProvidersData } = useQuery({
-    queryKey: ['dns-providers'],
+    // Params belong in the key: the app-wide ['dns-providers'] entry is the
+    // default 20-per-page fetch, and sharing that key with a different page
+    // size lets whichever component mounts first decide what the other sees.
+    queryKey: ['dns-providers', 1, 100],
     queryFn: () => listDNSProviders(1, 100),
   })
 
@@ -442,8 +445,10 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
         message={t('actions.deleteDdnsMessage', { domain: deletingHost?.domain_names?.[0] ?? '' })}
         hostnames={deletingHost?.domain_names ?? []}
         providerCanDelete={
-          dnsProvidersData?.data?.find((p) => p.id === deletingHost?.ddns_provider_id)
-            ?.provider_type === 'cloudflare'
+          dnsProvidersData
+            ? dnsProvidersData.data?.find((p) => p.id === deletingHost?.ddns_provider_id)
+              ?.provider_type === 'cloudflare'
+            : undefined
         }
         defaultRemoveProvider={false}
         confirmLabel={t('actions.delete')}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -139,11 +140,11 @@ func TestDeleteManagedByProxyHost(t *testing.T) {
 		if err := svc.DeleteManagedByProxyHost(context.Background(), "host-1"); err != nil {
 			t.Fatalf("DeleteManagedByProxyHost: %v", err)
 		}
-		if len(del.hosts) != 2 {
-			t.Fatalf("provider delete called for %v, want both hostnames", del.hosts)
+		if got, want := strings.Join(del.hosts, ","), "a.example.com,b.example.com"; got != want {
+			t.Fatalf("provider delete called for %q, want %q", got, want)
 		}
-		if len(repo.deleted) != 2 {
-			t.Fatalf("deleted rows %v, want both", repo.deleted)
+		if got, want := strings.Join(repo.deleted, ","), "r1,r2"; got != want {
+			t.Fatalf("deleted rows %q, want %q", got, want)
 		}
 	})
 
@@ -156,8 +157,8 @@ func TestDeleteManagedByProxyHost(t *testing.T) {
 		if err := svc.DeleteManagedByProxyHost(context.Background(), "host-1"); err != nil {
 			t.Fatalf("provider failure must not surface as an error: %v", err)
 		}
-		if len(repo.deleted) != 2 {
-			t.Fatalf("deleted rows %v, want both despite the provider error", repo.deleted)
+		if got, want := strings.Join(repo.deleted, ","), "r1,r2"; got != want {
+			t.Fatalf("deleted rows %q, want %q despite the provider error", got, want)
 		}
 	})
 

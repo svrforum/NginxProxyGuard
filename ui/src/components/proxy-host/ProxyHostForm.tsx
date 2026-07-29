@@ -113,7 +113,13 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
   ), [isStream, t])
 
   // ESC to close (but not during save progress unless there's an error)
-  useEscapeKey(onClose, !saveProgress.isOpen || (saveProgress.isOpen && !!saveProgress.error))
+  // Both this and ModalShell listen for ESC on document, so while the DDNS
+  // confirm modal is open ESC would dismiss the modal AND close the form,
+  // discarding every unsaved edit. Let the modal own the key.
+  useEscapeKey(
+    onClose,
+    !ddnsConfirmOpen && (!saveProgress.isOpen || (saveProgress.isOpen && !!saveProgress.error))
+  )
 
   useEffect(() => {
     if (!tabs.some(tab => tab.id === activeTab)) {
@@ -458,7 +464,9 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
         message={t('form.basic.ddnsDisableMessage')}
         hostnames={host?.domain_names ?? []}
         providerCanDelete={
-          dnsProviders.find((p) => p.id === host?.ddns_provider_id)?.provider_type === 'cloudflare'
+          dnsProviders.length === 0
+            ? undefined
+            : dnsProviders.find((p) => p.id === host?.ddns_provider_id)?.provider_type === 'cloudflare'
         }
         defaultRemoveProvider
         confirmLabel={t('common:buttons.save')}

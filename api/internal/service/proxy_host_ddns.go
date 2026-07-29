@@ -60,9 +60,13 @@ func (s *ProxyHostService) reconcileHostDDNS(ctx context.Context, host *model.Pr
 
 	if !managed {
 		if removeProviderRecords && s.ddnsSyncer != nil {
-			// Bounded so an unreachable provider API cannot hold the save open for
-			// the full HTTP client timeout once per domain.
-			ddnsCtx, cancel := context.WithTimeout(ctx, config.DDNSProviderDeleteTimeout)
+			// Detached for the same reason as the host-delete path: a client that
+			// navigates away mid-loop would cancel it after some records were already
+			// gone at the provider, leaving rows whose last_status is still ok — which
+			// the scheduler's needsUpdate gate never repairs. Bounded so an unreachable
+			// provider API cannot hold the save open for the full HTTP client timeout
+			// once per domain.
+			ddnsCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), config.DDNSProviderDeleteTimeout)
 			if err := s.ddnsSyncer.DeleteManagedByProxyHost(ddnsCtx, host.ID); err != nil {
 				log.Printf("[DDNS] reconcile provider-delete failed for host %s: %v", host.ID, err)
 			}

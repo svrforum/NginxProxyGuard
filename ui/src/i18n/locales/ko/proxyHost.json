@@ -770,6 +770,7 @@
   "ddnsRemoval": {
     "removeProvider": "DNS 공급자(Cloudflare)에서도 레코드 제거",
     "removeProviderHint": "체크하면 공급자에 등록된 실제 DNS 레코드까지 삭제됩니다. 해제하면 NPG에서만 제거되고 공용 DNS 레코드는 그대로 남습니다.",
-    "providerCannotDelete": "이 DNS 공급자는 레코드 삭제를 지원하지 않습니다. NPG에서만 제거되며, 공급자 콘솔에서 직접 삭제해야 합니다."
+    "providerCannotDelete": "이 DNS 공급자는 레코드 삭제를 지원하지 않습니다. NPG에서만 제거되며, 공급자 콘솔에서 직접 삭제해야 합니다.",
+    "providerUnknown": "DNS 공급자 정보를 불러오지 못해 공급자 레코드 삭제 여부를 확인할 수 없습니다. NPG에서만 제거됩니다."
   }
 }

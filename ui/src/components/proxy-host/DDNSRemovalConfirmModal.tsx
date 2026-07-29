@@ -10,8 +10,12 @@ interface DDNSRemovalConfirmModalProps {
   message: string
   /** Managed hostnames that would be removed, so the choice is informed. */
   hostnames: string[]
-  /** False for providers with no record-deletion concept (DuckDNS, Dynu). */
-  providerCanDelete: boolean
+  /**
+   * False for providers with no record-deletion concept (DuckDNS, Dynu);
+   * undefined while the provider list has not resolved, so the dialog never
+   * claims a provider cannot delete when it simply does not know yet.
+   */
+  providerCanDelete?: boolean
   /** Initial checkbox state — see the call sites for why they differ. */
   defaultRemoveProvider: boolean
   confirmLabel: string
@@ -44,9 +48,15 @@ export function DDNSRemovalConfirmModal({
   }, [isOpen, defaultRemoveProvider])
 
   return (
-    <ModalShell isOpen={isOpen} onClose={onCancel} closeOnBackdrop={false} panelClassName="max-w-md">
+    <ModalShell
+      isOpen={isOpen}
+      onClose={onCancel}
+      closeOnBackdrop={false}
+      panelClassName="max-w-md"
+      labelledById="ddns-removal-title"
+    >
       <div className="p-6">
-        <h3 className="text-lg font-semibold text-slate-900 dark:text-white">{title}</h3>
+        <h3 id="ddns-removal-title" className="text-lg font-semibold text-slate-900 dark:text-white">{title}</h3>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{message}</p>
 
         {hostnames.length > 0 && (
@@ -57,7 +67,11 @@ export function DDNSRemovalConfirmModal({
           </ul>
         )}
 
-        {providerCanDelete ? (
+        {providerCanDelete === undefined ? (
+          <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">
+            {t('ddnsRemoval.providerUnknown')}
+          </p>
+        ) : providerCanDelete ? (
           <label className="mt-4 flex cursor-pointer items-start gap-2.5">
             <input
               type="checkbox"
@@ -88,8 +102,12 @@ export function DDNSRemovalConfirmModal({
           </button>
           <button
             type="button"
-            onClick={() => onConfirm(providerCanDelete && removeProvider)}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
+            onClick={() => onConfirm(!!providerCanDelete && removeProvider)}
+            className={`rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors ${
+              providerCanDelete && removeProvider
+                ? 'bg-red-600 hover:bg-red-700'
+                : 'bg-indigo-600 hover:bg-indigo-700'
+            }`}
           >
             {confirmLabel}
           </button>

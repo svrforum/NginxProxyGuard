@@ -772,6 +772,7 @@
   "ddnsRemoval": {
     "removeProvider": "Also remove the records from the DNS provider (Cloudflare)",
     "removeProviderHint": "Checked deletes the live DNS records at the provider too. Unchecked removes them from NPG only and leaves the public DNS records in place.",
-    "providerCannotDelete": "This DNS provider does not support deleting records. They are removed from NPG only — delete them in the provider console yourself."
+    "providerCannotDelete": "This DNS provider does not support deleting records. They are removed from NPG only — delete them in the provider console yourself.",
+    "providerUnknown": "The DNS provider list could not be loaded, so provider-side deletion cannot be offered. The records are removed from NPG only."
   }
 }
