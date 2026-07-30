@@ -246,6 +246,48 @@ func (r *BackupRepository) importFilterSubscription(ctx context.Context, tx *sql
 	return nil
 }
 
+// importRoles restores RBAC roles and their permissions (#222).
+//
+// Upsert by name rather than delete-then-insert: users.role_id references roles
+// with ON DELETE RESTRICT, and import runs inside one transaction, so clearing
+// the table while accounts still point at it would abort the whole restore. This
+// also means the built-in roles seeded by the migration are updated in place
+// instead of being duplicated.
+//
+// Role ASSIGNMENTS are not restored — user rows are not part of a backup at all
+// (see model.RoleExport), so an administrator re-assigns roles afterwards.
+func (r *BackupRepository) importRoles(ctx context.Context, tx *sql.Tx, roles []model.RoleExport) error {
+	for _, e := range roles {
+		var id string
+		err := tx.QueryRowContext(ctx, `
+			INSERT INTO roles (name, description, is_superuser, is_builtin)
+			VALUES ($1, $2, $3, $4)
+			ON CONFLICT (lower((name)::text)) DO UPDATE
+			   SET description = EXCLUDED.description,
+			       is_superuser = EXCLUDED.is_superuser,
+			       is_builtin = EXCLUDED.is_builtin,
+			       updated_at = now()
+			RETURNING id`, e.Name, e.Description, e.IsSuperuser, e.IsBuiltin).Scan(&id)
+		if err != nil {
+			return fmt.Errorf("role %s: %w", e.Name, err)
+		}
+
+		// Replace the permission set wholesale: the backup is authoritative for
+		// what the role grants, and role_permissions has no inbound references.
+		if _, err := tx.ExecContext(ctx, `DELETE FROM role_permissions WHERE role_id = $1`, id); err != nil {
+			return fmt.Errorf("role %s: clearing permissions: %w", e.Name, err)
+		}
+		for _, perm := range e.Permissions {
+			if _, err := tx.ExecContext(ctx, `
+				INSERT INTO role_permissions (role_id, permission) VALUES ($1, $2)
+				ON CONFLICT (role_id, permission) DO NOTHING`, id, perm); err != nil {
+				return fmt.Errorf("role %s permission %s: %w", e.Name, perm, err)
+			}
+		}
+	}
+	return nil
+}
+
 // importCloudflareTunnel restores the singleton Cloudflare Tunnel setting
 // (Phase 1 token mode). Delete-then-insert so the singleton stays unique.
 // Defaults mode to "token" so a pre-Phase-2 backup with an empty mode cannot

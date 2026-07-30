@@ -155,6 +155,13 @@ func (r *BackupRepository) ExportAllData(ctx context.Context) (*model.ExportData
 	}
 	export.CloudflareTunnel = cloudflareTunnel
 
+	// Export RBAC roles (#222)
+	roles, err := r.exportRoles(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to export roles: %w", err)
+	}
+	export.Roles = roles
+
 	// Export Cloud Providers
 	cloudProviders, err := r.exportCloudProviders(ctx)
 	if err != nil {

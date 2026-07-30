@@ -286,6 +286,56 @@ func (r *BackupRepository) exportFilterSubscriptions(ctx context.Context) ([]mod
 	return subs, rows.Err()
 }
 
+// exportRoles exports RBAC roles and their permissions (#222). User accounts and
+// their role assignments are deliberately excluded — see model.RoleExport.
+func (r *BackupRepository) exportRoles(ctx context.Context) ([]model.RoleExport, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, name, COALESCE(description, ''), is_superuser, is_builtin
+		FROM roles ORDER BY is_builtin DESC, name
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []model.RoleExport
+	ids := make([]string, 0, 8)
+	for rows.Next() {
+		var id string
+		var e model.RoleExport
+		if err := rows.Scan(&id, &e.Name, &e.Description, &e.IsSuperuser, &e.IsBuiltin); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	for i, id := range ids {
+		permRows, err := r.db.QueryContext(ctx,
+			`SELECT permission FROM role_permissions WHERE role_id = $1 ORDER BY permission`, id)
+		if err != nil {
+			return nil, err
+		}
+		for permRows.Next() {
+			var perm string
+			if err := permRows.Scan(&perm); err != nil {
+				permRows.Close()
+				return nil, err
+			}
+			out[i].Permissions = append(out[i].Permissions, perm)
+		}
+		if err := permRows.Err(); err != nil {
+			permRows.Close()
+			return nil, err
+		}
+		permRows.Close()
+	}
+	return out, nil
+}
+
 // exportCloudflareTunnel exports the singleton Cloudflare Tunnel setting
 // (Phase 1 token mode). Returns nil when no row exists.
 func (r *BackupRepository) exportCloudflareTunnel(ctx context.Context) (*model.CloudflareTunnelExport, error) {

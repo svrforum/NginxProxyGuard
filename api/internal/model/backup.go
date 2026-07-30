@@ -231,6 +231,9 @@ type ExportData struct {
 	GlobalWAF             *GlobalWAFExport             `json:"global_waf,omitempty"`
 	CloudflareTunnel      *CloudflareTunnelExport      `json:"cloudflare_tunnel,omitempty"`
 
+	// Roles (#222). Assignments are deliberately NOT exported — see RoleExport.
+	Roles []RoleExport `json:"roles,omitempty"`
+
 	// Cloud Providers
 	CloudProviders []CloudProviderExport `json:"cloud_providers,omitempty"`
 
@@ -545,6 +548,24 @@ type CloudflareTunnelExport struct {
 	Enabled bool   `json:"enabled"`
 	Token   string `json:"token"`
 	Mode    string `json:"mode"`
+}
+
+// RoleExport represents one RBAC role and its permission strings (#222).
+//
+// User accounts and their role assignments are NOT part of a backup: user rows
+// carry bcrypt hashes plus totp_secret and backup_codes, and a backup file is
+// plaintext. Restoring roles alone also keeps the FK direction safe — import
+// clears and re-inserts inside one transaction, and users.role_id references
+// roles, so wiping roles while users still point at them would violate the
+// constraint. After a restore an administrator re-assigns roles.
+//
+// Built-in roles are matched by name on import rather than duplicated.
+type RoleExport struct {
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	IsSuperuser bool     `json:"is_superuser"`
+	IsBuiltin   bool     `json:"is_builtin"`
+	Permissions []string `json:"permissions"`
 }
 
 // GlobalGeoRestrictionExport represents the singleton global geo default (#198).

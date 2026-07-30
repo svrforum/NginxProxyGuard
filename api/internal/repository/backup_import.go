@@ -250,6 +250,13 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 		}
 	}
 
+	// Import RBAC roles (#222). Assignments are not part of a backup.
+	if len(data.Roles) > 0 {
+		if err := r.importRoles(ctx, tx, data.Roles); err != nil {
+			return nil, fmt.Errorf("failed to import roles: %w", err)
+		}
+	}
+
 	// Import Cloud Providers
 	for _, cp := range data.CloudProviders {
 		if err := r.importCloudProvider(ctx, tx, &cp); err != nil {
