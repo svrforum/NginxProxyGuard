@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import ErrorBoundary from './components/ErrorBoundary'
 import { Login } from './components/Login'
 import { InitialSetup } from './components/InitialSetup'
+import { ForcePasswordChange } from './components/ForcePasswordChange'
 import { getAuthStatus, logout, getToken, User } from './api/auth'
 import { apiPost } from './api/client'
 import type { ProxyHost } from './types/proxy-host'
@@ -536,7 +537,7 @@ function AppContent({ user, onLogout }: AppContentProps) {
   )
 }
 
-type AuthState = 'loading' | 'unauthenticated' | 'authenticated' | 'initial-setup'
+type AuthState = 'loading' | 'unauthenticated' | 'authenticated' | 'initial-setup' | 'must-change-password'
 
 function App() {
   const [authState, setAuthState] = useState<AuthState>('loading')
@@ -567,6 +568,10 @@ function App() {
         setUser(status.user)
         if (status.user.is_initial_setup) {
           setAuthState('initial-setup')
+        } else if (status.user.must_change_password) {
+          // The server blocks every endpoint except change-password until this
+          // is done, so rendering the app would show a UI where nothing works.
+          setAuthState('must-change-password')
         } else {
           setAuthState('authenticated')
         }
@@ -592,6 +597,13 @@ function App() {
     setAuthState('unauthenticated')
   }
 
+  // A forced password change keeps the session valid — only the password moved,
+  // and UpdatePassword does not drop sessions the way ChangeCredentials does. So
+  // re-read auth and enter the app rather than bouncing back to the login form.
+  const handlePasswordChanged = () => {
+    void checkAuth()
+  }
+
   // Loading state
   if (authState === 'loading') {
     return (
@@ -612,6 +624,10 @@ function App() {
   }
 
   // Initial setup required
+  if (authState === 'must-change-password' && user) {
+    return <ForcePasswordChange user={user} onComplete={handlePasswordChanged} />
+  }
+
   if (authState === 'initial-setup' && user) {
     return <InitialSetup user={user} onComplete={handleSetupComplete} />
   }

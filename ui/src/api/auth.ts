@@ -4,6 +4,9 @@ export interface User {
   id: string
   username: string
   role: string
+  /** RBAC role id and the forced-change flag for admin-created accounts (#222). */
+  role_id?: string
+  must_change_password?: boolean
   is_initial_setup: boolean
   totp_enabled: boolean
   last_login_at?: string

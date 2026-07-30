@@ -143,9 +143,13 @@ func (r *AuthRepository) UpdateUserCredentials(ctx context.Context, userID, user
 }
 
 func (r *AuthRepository) UpdatePassword(ctx context.Context, userID, passwordHash string) error {
+	// Clearing must_change_password here is what ends the forced-change gate: an
+	// admin-created account is blocked from everything but this call until it
+	// picks its own password. (#222)
 	query := `
 		UPDATE users
 		SET password_hash = $2,
+		    must_change_password = false,
 		    updated_at = NOW()
 		WHERE id = $1
 	`

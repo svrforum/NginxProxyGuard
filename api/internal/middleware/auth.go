@@ -123,3 +123,44 @@ func extractToken(c echo.Context) string {
 	}
 	return ""
 }
+
+// mustChangePasswordAllowedPaths mirrors initialSetupAllowedPaths for the
+// admin-created-account flow: the only write allowed is setting a new password.
+var mustChangePasswordAllowedPaths = map[string]struct{}{
+	"/api/v1/auth/change-password": {},
+	"/api/v1/auth/me":              {},
+	"/api/v1/auth/status":          {},
+	"/api/v1/auth/logout":          {},
+}
+
+// MustChangePasswordRequired blocks an account created by an administrator from
+// everything except changing its own password (#222).
+//
+// Without this the flag was decorative: the UI showed a "password change
+// required" badge while the account could use the whole application with the
+// password an administrator picked for it.
+//
+// A separate gate from InitialSetupRequired on purpose — that flow forces a
+// USERNAME change too (handler/auth.go requires new_username), which is right for
+// the seeded admin/admin account and wrong for an account whose name the
+// administrator just chose.
+//
+// No-op for API tokens, which carry no *model.User.
+func MustChangePasswordRequired(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		user, ok := c.Get("user").(*model.User)
+		if !ok || user == nil {
+			return next(c)
+		}
+		if !user.MustChangePassword {
+			return next(c)
+		}
+		if _, allowed := mustChangePasswordAllowedPaths[c.Path()]; allowed {
+			return next(c)
+		}
+		return c.JSON(http.StatusForbidden, map[string]string{
+			"error": "Password change required: set a new password before using the application",
+			"code":  "must_change_password",
+		})
+	}
+}

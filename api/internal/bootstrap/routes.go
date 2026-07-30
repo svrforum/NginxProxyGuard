@@ -204,6 +204,8 @@ func registerTokenProtectedRoutes(v1 *echo.Group, c *Container) {
 	// resource endpoint until they change their credentials (H1). No-op for
 	// API tokens (no *model.User in context) and for set-up users.
 	v1.Use(authMiddleware.InitialSetupRequired)
+	// Admin-created accounts must set their own password first (#222).
+	v1.Use(authMiddleware.MustChangePasswordRequired)
 	// Role permissions (#222). Attached HERE and not earlier on purpose: Echo
 	// snapshots group middleware at Add time, so this covers exactly the resource
 	// routes registered below and leaves the self-service /auth/* routes
