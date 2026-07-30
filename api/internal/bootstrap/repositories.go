@@ -38,6 +38,7 @@ type Repositories struct {
 	LogFilterPreset    *repository.LogFilterPresetRepository
 	Auth               *repository.AuthRepository
 	Role               *repository.RoleRepository
+	User               *repository.UserRepository
 	SystemSettings     *repository.SystemSettingsRepository
 	APIToken           *repository.APITokenRepository
 	AuditLog           *repository.AuditLogRepository
@@ -83,6 +84,7 @@ func InitRepositories(db *database.DB, redisCache *cache.RedisClient) *Repositor
 		LogFilterPreset:    repository.NewLogFilterPresetRepository(db.DB),
 		Auth:               repository.NewAuthRepository(db.DB),
 		Role:               repository.NewRoleRepository(db),
+		User:               repository.NewUserRepository(db),
 		SystemSettings:     repository.NewSystemSettingsRepository(db.DB),
 		APIToken:           repository.NewAPITokenRepository(db.DB),
 		AuditLog:           repository.NewAuditLogRepository(db.DB),

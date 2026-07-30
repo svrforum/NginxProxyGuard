@@ -235,6 +235,33 @@ func registerTokenProtectedRoutes(v1 *echo.Group, c *Container) {
 	registerFilterSubscriptionRoutes(v1, c.Handlers.FilterSubscription)
 	registerCloudflareTunnelRoutes(v1, c.Handlers.CloudflareTunnel)
 	registerTestRoutes(v1, c)
+	registerUserAdminRoutes(v1, c.Handlers.UserAdmin)
+}
+
+// registerUserAdminRoutes exposes role and user administration (#222).
+//
+// Guarded by the user/role areas rather than settings, so an operator role can
+// hold settings without gaining the ability to create administrators. The
+// permission strings are also recorded in middleware/permissions.go — the
+// registry is what actually enforces them for sessions; these attachments cover
+// API tokens.
+func registerUserAdminRoutes(v1 *echo.Group, h *handler.UserAdminHandler) {
+	userRead := authMiddleware.RequireAPIPermission(model.PermissionUserRead)
+	roleRead := authMiddleware.RequireAPIPermission(model.PermissionUserRead)
+
+	v1.GET("/permission-areas", h.GetPermissionAreas, roleRead)
+
+	v1.GET("/roles", h.ListRoles, roleRead)
+	v1.POST("/roles", h.CreateRole)
+	v1.PUT("/roles/:id", h.UpdateRole)
+	v1.DELETE("/roles/:id", h.DeleteRole)
+
+	v1.GET("/users", h.ListUsers, userRead)
+	v1.POST("/users", h.CreateUser)
+	v1.PUT("/users/:id/role", h.AssignRole)
+	v1.PUT("/users/:id/password", h.SetPassword)
+	v1.DELETE("/users/:id", h.DeleteUser)
+	v1.POST("/users/:id/end-sessions", h.EndSessions)
 }
 
 func registerCloudflareTunnelRoutes(v1 *echo.Group, h *handler.CloudflareTunnelHandler) {

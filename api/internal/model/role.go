@@ -44,3 +44,40 @@ const (
 	RoleOperator      = "builtin.operator"
 	RoleViewer        = "builtin.viewer"
 )
+
+// UserSummary is the administrative view of an account. It never carries the
+// password hash, TOTP secret or backup codes — those exist only on model.User
+// and are already json:"-" there. (#222)
+type UserSummary struct {
+	ID       string  `json:"id"`
+	Username string  `json:"username"`
+	RoleID   *string `json:"role_id,omitempty"`
+	RoleName string  `json:"role_name"`
+	// LegacyRole is the users.role column ('admin'|'user'), kept in sync with the
+	// role's is_superuser so `server reset-password` can still find administrators.
+	LegacyRole         string     `json:"legacy_role"`
+	IsSuperuser        bool       `json:"is_superuser"`
+	TOTPEnabled        bool       `json:"totp_enabled"`
+	MustChangePassword bool       `json:"must_change_password"`
+	LastLoginAt        *time.Time `json:"last_login_at,omitempty"`
+	LoginCount         int        `json:"login_count"`
+	CreatedAt          time.Time  `json:"created_at"`
+	// APITokenCount is surfaced because deleting a user cascades their API
+	// tokens; the confirmation shows the number so automation is not cut
+	// silently. (#222 D8)
+	APITokenCount int `json:"api_token_count"`
+}
+
+type CreateUserRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+	RoleID   string `json:"role_id"`
+}
+
+type AssignRoleRequest struct {
+	RoleID string `json:"role_id"`
+}
+
+type SetUserPasswordRequest struct {
+	Password string `json:"password"`
+}

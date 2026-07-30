@@ -14,7 +14,14 @@ import (
 type AuthHandler struct {
 	authService  *service.AuthService
 	auditService *service.AuditService
+	// authzService is optional: when wired, GetCurrentUser reports the caller's
+	// effective permissions so the UI can hide areas it cannot reach. (#222)
+	authzService *service.AuthzService
 }
+
+// SetAuthzService wires the authorizer after construction, matching how the other
+// optional cross-service dependencies are injected in bootstrap.
+func (h *AuthHandler) SetAuthzService(a *service.AuthzService) { h.authzService = a }
 
 func NewAuthHandler(authService *service.AuthService, auditService *service.AuditService) *AuthHandler {
 	return &AuthHandler{
@@ -133,12 +140,38 @@ func (h *AuthHandler) GetStatus(c echo.Context) error {
 }
 
 // GetCurrentUser returns the current authenticated user
+// GetCurrentUser is the canonical who-am-I. It carries the caller's effective
+// permissions so the UI can hide unreachable areas — convenience only, the
+// server stays the authority. The public /auth/status deliberately does NOT get
+// this payload: it is unauthenticated. (#222)
 func (h *AuthHandler) GetCurrentUser(c echo.Context) error {
 	user, ok := getUserFromContext(c)
 	if !ok {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	return c.JSON(http.StatusOK, user)
+	if h.authzService == nil {
+		return c.JSON(http.StatusOK, user)
+	}
+	perms, isSuperuser, err := h.authzService.EffectivePermissions(c.Request().Context(), user.ID)
+	if err != nil {
+		// Never fail who-am-I over this: the UI would be unable to render at all.
+		return c.JSON(http.StatusOK, user)
+	}
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"id":                   user.ID,
+		"username":             user.Username,
+		"role":                 user.Role,
+		"role_id":              user.RoleID,
+		"language":             user.Language,
+		"font_family":          user.FontFamily,
+		"is_initial_setup":     user.IsInitialSetup,
+		"must_change_password": user.MustChangePassword,
+		"totp_enabled":         user.TOTPEnabled,
+		"last_login_at":        user.LastLoginAt,
+		"login_count":          user.LoginCount,
+		"effective_permissions": perms,
+		"is_superuser":          isSuperuser,
+	})
 }
 
 // ChangeCredentials handles initial setup credential change

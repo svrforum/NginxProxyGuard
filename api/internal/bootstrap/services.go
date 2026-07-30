@@ -26,6 +26,7 @@ type Services struct {
 	Challenge          *service.ChallengeService
 	Auth               *service.AuthService
 	Authz              *service.AuthzService
+	UserAdmin          *service.UserAdminService
 	DockerStats        *service.DockerStatsService
 	DockerLogCollector *service.DockerLogCollector
 	Security           *service.SecurityService
@@ -104,6 +105,7 @@ func InitServices(
 
 	svcs.Auth = service.NewAuthServiceWithCache(repos.Auth, cfg.JWTSecret, redisCache)
 	svcs.Authz = service.NewAuthzService(repos.Role)
+	svcs.UserAdmin = service.NewUserAdminService(repos.User, repos.Role)
 
 	svcs.DockerStats = service.NewDockerStatsService()
 

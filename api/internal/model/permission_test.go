@@ -16,7 +16,7 @@ func TestExpandPermissions_BackwardCompatible(t *testing.T) {
 		{"proxy:read", []string{"proxy:read", "redirect:read", "access:read", "authprovider:read"}},
 		{"proxy:write", []string{"proxy:read", "proxy:write", "redirect:write", "access:write", "authprovider:write"}},
 		{"proxy:delete", []string{"proxy:delete", "redirect:delete"}},
-		{"certificate:write", []string{"certificate:read", "certificate:write", "ddns:read", "ddns:write"}},
+		{"certificate:write", []string{"certificate:read", "certificate:write", "dnsprovider:read", "dnsprovider:write"}},
 		{"waf:write", []string{"waf:read", "waf:write"}},
 	} {
 		got := ExpandPermissions([]string{tc.stored})
@@ -39,6 +39,17 @@ func TestExpandPermissions_ReadDoesNotImplyWrite(t *testing.T) {
 }
 
 // Areas that were split out of a catch-all must not be granted by a sibling.
+// certificate:write must not reach live DNS records. The two areas were split
+// precisely so a role could grant one without the other. (#222)
+func TestExpandPermissions_CertificateDoesNotGrantDDNS(t *testing.T) {
+	got := ExpandPermissions([]string{"certificate:write"})
+	for _, forbidden := range []string{"ddns:read", "ddns:write"} {
+		if got[forbidden] {
+			t.Errorf("certificate:write must not imply %q", forbidden)
+		}
+	}
+}
+
 func TestExpandPermissions_NoAccidentalGrant(t *testing.T) {
 	got := ExpandPermissions([]string{"logs:read"})
 	if got["audit:read"] {

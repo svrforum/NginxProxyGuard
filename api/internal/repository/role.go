@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/lib/pq"
+
 	"nginx-proxy-guard/internal/database"
 	"nginx-proxy-guard/internal/model"
 )
@@ -168,4 +170,110 @@ func (r *RoleRepository) permissionsFor(ctx context.Context, roleID string) ([]s
 		perms = append(perms, p)
 	}
 	return perms, rows.Err()
+}
+
+// Create inserts a role and its permissions in one transaction, so a failure
+// cannot leave a role with a half-written permission set.
+func (r *RoleRepository) Create(ctx context.Context, req *model.CreateRoleRequest) (*model.Role, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var id string
+	if err := tx.QueryRowContext(ctx, `
+		INSERT INTO roles (name, description, is_superuser, is_builtin)
+		VALUES ($1, $2, false, false)
+		RETURNING id`, req.Name, req.Description).Scan(&id); err != nil {
+		return nil, wrapRoleUniqueViolation(err)
+	}
+	if err := insertRolePermissions(ctx, tx, id, req.Permissions); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit role: %w", err)
+	}
+	return r.GetByID(ctx, id)
+}
+
+// Update applies a partial change. Permissions are replaced wholesale when
+// provided, which is what the role editor sends.
+func (r *RoleRepository) Update(ctx context.Context, id string, req *model.UpdateRoleRequest) (*model.Role, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if req.Name != nil {
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE roles SET name = $2, updated_at = now() WHERE id = $1`, id, *req.Name); err != nil {
+			return nil, wrapRoleUniqueViolation(err)
+		}
+	}
+	if req.Description != nil {
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE roles SET description = $2, updated_at = now() WHERE id = $1`, id, *req.Description); err != nil {
+			return nil, fmt.Errorf("failed to update role description: %w", err)
+		}
+	}
+	if req.Permissions != nil {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM role_permissions WHERE role_id = $1`, id); err != nil {
+			return nil, fmt.Errorf("failed to clear role permissions: %w", err)
+		}
+		if err := insertRolePermissions(ctx, tx, id, *req.Permissions); err != nil {
+			return nil, err
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE roles SET updated_at = now() WHERE id = $1`, id); err != nil {
+			return nil, fmt.Errorf("failed to touch role: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit role update: %w", err)
+	}
+	return r.GetByID(ctx, id)
+}
+
+// Delete removes a role. users_role_id_fkey is ON DELETE RESTRICT, so a role
+// that is still assigned fails here rather than silently stripping accounts of
+// every permission; the service turns that into a 409 with the user count.
+func (r *RoleRepository) Delete(ctx context.Context, id string) error {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM roles WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// CountUsersWithRole reports how many accounts hold a role, for the message a
+// blocked delete shows.
+func (r *RoleRepository) CountUsersWithRole(ctx context.Context, roleID string) (int, error) {
+	var n int
+	err := r.db.QueryRowContext(ctx, `SELECT count(*) FROM users WHERE role_id = $1`, roleID).Scan(&n)
+	return n, err
+}
+
+func insertRolePermissions(ctx context.Context, tx *sql.Tx, roleID string, perms []string) error {
+	for _, p := range perms {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO role_permissions (role_id, permission) VALUES ($1, $2)
+			ON CONFLICT (role_id, permission) DO NOTHING`, roleID, p); err != nil {
+			return fmt.Errorf("failed to add permission %s: %w", p, err)
+		}
+	}
+	return nil
+}
+
+// wrapRoleUniqueViolation turns the unique-index error into something the
+// handler can map to 409 — the codebase's existing pattern (see
+// isDDNSUniqueViolation) rather than string-matching the message.
+func wrapRoleUniqueViolation(err error) error {
+	if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+		return fmt.Errorf("role name already exists")
+	}
+	return fmt.Errorf("failed to write role: %w", err)
 }

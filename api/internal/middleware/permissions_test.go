@@ -33,11 +33,8 @@ func TestEveryAreaGatesAtLeastOneRoute(t *testing.T) {
 			used[area] = true
 		}
 	}
-	// user and role gate the management API that increment 2 adds; they are
-	// deliberately unused here.
-	pending := map[string]bool{"user": true, "role": true}
 	for _, a := range model.PermissionAreas {
-		if !used[a.Key] && !pending[a.Key] {
+		if !used[a.Key] {
 			t.Errorf("area %q gates no route", a.Key)
 		}
 	}

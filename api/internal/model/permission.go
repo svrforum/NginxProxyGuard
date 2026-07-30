@@ -45,6 +45,13 @@ var PermissionAreas = []PermissionArea{
 	{Key: "access", Verbs: []string{VerbRead, VerbWrite}},
 	{Key: "authprovider", Verbs: []string{VerbRead, VerbWrite}},
 	{Key: "certificate", Verbs: []string{VerbRead, VerbWrite, VerbDelete}},
+	// DNS providers and DDNS records look like one menu area but had different
+	// legacy scopes: /dns-providers was certificate:*, /ddns-records was
+	// settings:*. Keeping them as one area would force certificate:write to imply
+	// ddns:write, so a role with "certificate write" but not "DDNS write" could
+	// still change live public DNS — the UI would lie. They are separate areas,
+	// which also matches the Certificates > DNS Providers / DDNS sub-tabs.
+	{Key: "dnsprovider", Verbs: []string{VerbRead, VerbWrite, VerbDelete}},
 	{Key: "ddns", Verbs: []string{VerbRead, VerbWrite}},
 	{Key: "logs", Verbs: []string{VerbRead, VerbWrite}},
 	{Key: "audit", Verbs: []string{VerbRead}},
@@ -99,9 +106,11 @@ var implications = map[string][]string{
 	PermissionProxyDelete: {
 		"proxy:delete", "redirect:delete",
 	},
-	PermissionCertRead:   {"certificate:read", "ddns:read"},
-	PermissionCertWrite:  {"certificate:write", "ddns:write"},
-	PermissionCertDelete: {"certificate:delete"},
+	// certificate:* gated /dns-providers before the split, so it keeps that reach
+	// — and only that. It must NOT imply ddns:* (see PermissionAreas).
+	PermissionCertRead:   {"certificate:read", "dnsprovider:read"},
+	PermissionCertWrite:  {"certificate:write", "dnsprovider:write"},
+	PermissionCertDelete: {"certificate:delete", "dnsprovider:delete"},
 	PermissionWAFRead:    {"waf:read"},
 	PermissionWAFWrite:   {"waf:write"},
 	PermissionLogsRead:   {"logs:read"},

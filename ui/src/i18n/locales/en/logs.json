@@ -460,7 +460,12 @@
       "geo_restriction_updated": "Geo Restriction Updated",
       "upstream_updated": "Upstream Updated",
       "ip_banned": "IP Banned",
-      "ip_unbanned": "IP Unbanned"
+      "ip_unbanned": "IP Unbanned",
+      "role_created": "Role Created",
+      "role_updated": "Role Updated",
+      "role_deleted": "Role Deleted",
+      "user_role_assigned": "User Role Assigned",
+      "user_password_reset": "User Password Reset"
     },
     "tabs": {
       "admin": "Admin Activity",

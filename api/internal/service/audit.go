@@ -296,6 +296,48 @@ func (s *AuditService) LogCloudflareTunnelUpdate(ctx context.Context) error {
 	return s.logEntry(ctx, "cloudflare_tunnel_updated", "settings", "", "Cloudflare Tunnel", nil)
 }
 
+// ─── Identity administration (#222) ─────────────────────────────────────
+//
+// Role and permission changes are exactly the events that must never lose their
+// actor, so they go through the same ContextWithAudit path as every other
+// mutation. audit_logs.user_id is ON DELETE SET NULL, but the denormalized
+// username column survives a deleted actor.
+
+func (s *AuditService) LogRoleCreate(ctx context.Context, name string, permCount int) error {
+	return s.logEntry(ctx, "role_created", "role", "", name,
+		map[string]interface{}{"permissions": permCount})
+}
+
+func (s *AuditService) LogRoleUpdate(ctx context.Context, name string, permCount int) error {
+	return s.logEntry(ctx, "role_updated", "role", "", name,
+		map[string]interface{}{"permissions": permCount})
+}
+
+func (s *AuditService) LogRoleDelete(ctx context.Context, name string) error {
+	return s.logEntry(ctx, "role_deleted", "role", "", name, nil)
+}
+
+func (s *AuditService) LogUserCreate(ctx context.Context, username, roleName string) error {
+	return s.logEntry(ctx, "user_created", "user", "", username,
+		map[string]interface{}{"role": roleName})
+}
+
+func (s *AuditService) LogUserRoleAssign(ctx context.Context, username, roleName string) error {
+	return s.logEntry(ctx, "user_role_assigned", "user", "", username,
+		map[string]interface{}{"role": roleName})
+}
+
+func (s *AuditService) LogUserPasswordReset(ctx context.Context, username string) error {
+	return s.logEntry(ctx, "user_password_reset", "user", "", username, nil)
+}
+
+// LogUserDelete records how many API tokens went with the account, because that
+// is the part of a deletion that silently breaks automation. (#222 D8)
+func (s *AuditService) LogUserDelete(ctx context.Context, username string, apiTokenCount int) error {
+	return s.logEntry(ctx, "user_deleted", "user", "", username,
+		map[string]interface{}{"api_tokens_removed": apiTokenCount})
+}
+
 // LogSecurityFeatureUpdate logs security feature changes
 func (s *AuditService) LogSecurityFeatureUpdate(ctx context.Context, resource string, hostDomain string, enabled bool, details map[string]interface{}) error {
 	if details == nil {

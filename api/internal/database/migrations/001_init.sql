@@ -3440,6 +3440,8 @@ INSERT INTO public.role_permissions (role_id, permission) VALUES
     ('00000000-0000-0000-0000-0000000000a2', 'certificate:write'),
     ('00000000-0000-0000-0000-0000000000a2', 'ddns:read'),
     ('00000000-0000-0000-0000-0000000000a2', 'ddns:write'),
+    ('00000000-0000-0000-0000-0000000000a2', 'dnsprovider:read'),
+    ('00000000-0000-0000-0000-0000000000a2', 'dnsprovider:write'),
     ('00000000-0000-0000-0000-0000000000a2', 'logs:read'),
     ('00000000-0000-0000-0000-0000000000a2', 'backup:read'),
     ('00000000-0000-0000-0000-0000000000a3', 'dashboard:read'),
@@ -3450,6 +3452,7 @@ INSERT INTO public.role_permissions (role_id, permission) VALUES
     ('00000000-0000-0000-0000-0000000000a3', 'authprovider:read'),
     ('00000000-0000-0000-0000-0000000000a3', 'certificate:read'),
     ('00000000-0000-0000-0000-0000000000a3', 'ddns:read'),
+    ('00000000-0000-0000-0000-0000000000a3', 'dnsprovider:read'),
     ('00000000-0000-0000-0000-0000000000a3', 'logs:read')
 ON CONFLICT (role_id, permission) DO NOTHING;
 

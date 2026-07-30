@@ -462,7 +462,12 @@
       "geo_restriction_updated": "지역 제한 수정",
       "upstream_updated": "업스트림 수정",
       "ip_banned": "IP 차단",
-      "ip_unbanned": "IP 차단 해제"
+      "ip_unbanned": "IP 차단 해제",
+      "role_created": "역할 생성",
+      "role_updated": "역할 수정",
+      "role_deleted": "역할 삭제",
+      "user_role_assigned": "사용자 역할 변경",
+      "user_password_reset": "사용자 비밀번호 초기화"
     },
     "tabs": {
       "admin": "관리자 활동",

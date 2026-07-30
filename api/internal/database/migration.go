@@ -1175,6 +1175,19 @@ INSERT INTO public.role_permissions (role_id, permission) VALUES
 ON CONFLICT (role_id, permission) DO NOTHING;
 UPDATE public.users SET role_id = '00000000-0000-0000-0000-0000000000a1' WHERE role_id IS NULL;`,
 		},
+		// DNS providers were split out of the ddns area after the first seed
+		// shipped: /dns-providers was gated by certificate:* while /ddns-records was
+		// settings:*, so one area would have forced certificate:write to imply
+		// ddns:write. Added as its own statement because the seed above already ran
+		// on installs that upgraded to increment 1.
+		{
+			desc: "v2.34.0: grant dnsprovider permissions to built-in roles (RBAC area split, #222)",
+			sql: `INSERT INTO public.role_permissions (role_id, permission) VALUES
+    ('00000000-0000-0000-0000-0000000000a2', 'dnsprovider:read'),
+    ('00000000-0000-0000-0000-0000000000a2', 'dnsprovider:write'),
+    ('00000000-0000-0000-0000-0000000000a3', 'dnsprovider:read')
+ON CONFLICT (role_id, permission) DO NOTHING;`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {
