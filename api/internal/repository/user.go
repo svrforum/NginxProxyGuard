@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 
 	"github.com/lib/pq"
@@ -169,4 +170,59 @@ func (r *UserRepository) GetSummary(ctx context.Context, userID string) (*model.
 func (r *UserRepository) DeleteSessions(ctx context.Context, userID string) error {
 	_, err := r.db.ExecContext(ctx, `DELETE FROM auth_sessions WHERE user_id = $1`, userID)
 	return err
+}
+
+// GetDetail returns one account with its sign-in history, active session count
+// and the API tokens issued under it. (#222)
+func (r *UserRepository) GetDetail(ctx context.Context, userID string) (*model.UserDetail, error) {
+	summary, err := r.GetSummary(ctx, userID)
+	if err != nil || summary == nil {
+		return nil, err
+	}
+	d := &model.UserDetail{UserSummary: *summary}
+
+	var lastIP sql.NullString
+	var totpVerified sql.NullTime
+	if err := r.db.QueryRowContext(ctx, `
+		SELECT COALESCE(last_login_ip, ''), totp_verified_at, updated_at,
+		       (SELECT count(*) FROM auth_sessions s WHERE s.user_id = u.id AND s.expires_at > now())
+		FROM users u WHERE u.id = $1`, userID).Scan(&lastIP, &totpVerified, &d.UpdatedAt, &d.ActiveSessions); err != nil {
+		return nil, fmt.Errorf("failed to load user detail: %w", err)
+	}
+	d.LastLoginIP = lastIP.String
+	if totpVerified.Valid {
+		d.TOTPVerifiedAt = &totpVerified.Time
+	}
+
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, name, token_prefix, permissions, allowed_ips, expires_at,
+		       last_used_at, last_used_ip, use_count, is_active, revoked_at, created_at
+		FROM api_tokens WHERE user_id = $1 ORDER BY created_at DESC`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load user tokens: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var t model.UserTokenInfo
+		// api_tokens.permissions is jsonb while allowed_ips is text[] — the same
+		// split the existing token repository handles.
+		var permBytes []byte
+		var ips pq.StringArray
+		var lastUsedIP sql.NullString
+		if err := rows.Scan(&t.ID, &t.Name, &t.TokenPrefix, &permBytes, &ips, &t.ExpiresAt,
+			&t.LastUsedAt, &lastUsedIP, &t.UseCount, &t.IsActive, &t.RevokedAt, &t.CreatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan token: %w", err)
+		}
+		if len(permBytes) > 0 {
+			if err := json.Unmarshal(permBytes, &t.Permissions); err != nil {
+				return nil, fmt.Errorf("failed to decode token permissions: %w", err)
+			}
+		}
+		t.AllowedIPs = ips
+		if lastUsedIP.Valid {
+			t.LastUsedIP = &lastUsedIP.String
+		}
+		d.Tokens = append(d.Tokens, t)
+	}
+	return d, rows.Err()
 }

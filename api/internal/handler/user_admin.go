@@ -124,6 +124,19 @@ func (h *UserAdminHandler) ListUsers(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]interface{}{"data": users})
 }
 
+// GetUser returns one account's detail panel: sign-in history, active sessions,
+// its role's permissions and the API tokens issued under it.
+func (h *UserAdminHandler) GetUser(c echo.Context) error {
+	d, err := h.service.GetUserDetail(c.Request().Context(), c.Param("id"))
+	if err != nil {
+		return databaseError(c, "get user detail", err)
+	}
+	if d == nil {
+		return notFoundError(c, "User")
+	}
+	return c.JSON(http.StatusOK, d)
+}
+
 func (h *UserAdminHandler) CreateUser(c echo.Context) error {
 	var req model.CreateUserRequest
 	if err := c.Bind(&req); err != nil {

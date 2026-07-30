@@ -5,7 +5,6 @@ import {
   assignUserRole,
   createUser,
   deleteUser,
-  endUserSessions,
   listRoles,
   listUsers,
   setUserPassword,
@@ -14,6 +13,7 @@ import type { UserSummary } from '../../types/rbac'
 import { usePermissions } from '../../hooks/usePermissions'
 import { AddButton, EmptyState, EntityCard, IconButton, TrashIcon } from '../common/listui'
 import { ModalShell } from '../common/ModalShell'
+import { UserDetailModal } from './UserDetailModal'
 
 function roleLabel(name: string, t: (k: string, o?: Record<string, unknown>) => string): string {
   if (name.startsWith('builtin.')) {
@@ -38,6 +38,7 @@ export default function UserManager() {
   const [resetting, setResetting] = useState<UserSummary | null>(null)
   const [resetPassword, setResetPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [detailUserId, setDetailUserId] = useState<string | null>(null)
 
   const { data: usersData, isLoading } = useQuery({ queryKey: ['users'], queryFn: listUsers })
   const { data: rolesData } = useQuery({ queryKey: ['roles'], queryFn: listRoles })
@@ -71,7 +72,6 @@ export default function UserManager() {
     onSuccess: () => { invalidate(); setDeleting(null); setError(null) },
     onError: (e: Error) => { fail(e); setDeleting(null) },
   })
-  const sessionsMutation = useMutation({ mutationFn: endUserSessions, onError: fail })
 
   const roles = rolesData?.data ?? []
 
@@ -106,7 +106,14 @@ export default function UserManager() {
                 <div className="flex items-center gap-3 px-4 py-3.5 sm:px-5">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="truncate text-sm font-semibold text-slate-900 dark:text-white">{u.username}</span>
+                      <button
+                        type="button"
+                        onClick={() => setDetailUserId(u.id)}
+                        className="truncate text-sm font-semibold text-slate-900 hover:text-indigo-600 hover:underline dark:text-white dark:hover:text-indigo-400"
+                        title={t('users.openDetail')}
+                      >
+                        {u.username}
+                      </button>
                       {isSelf && (
                         <span className="inline-flex items-center rounded-md bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-300">
                           {t('users.you')}
@@ -154,11 +161,6 @@ export default function UserManager() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                       </svg>
                     </IconButton>
-                    <IconButton onClick={() => sessionsMutation.mutate(u.id)} title={t('users.endSessions')}>
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                      </svg>
-                    </IconButton>
                     <IconButton
                       onClick={() => { setDeleting(u); setError(null) }}
                       disabled={isSelf}
@@ -174,6 +176,8 @@ export default function UserManager() {
           })}
         </div>
       )}
+
+      <UserDetailModal userId={detailUserId} onClose={() => setDetailUserId(null)} />
 
       {/* Create user */}
       <ModalShell isOpen={creating} onClose={() => setCreating(false)} closeOnBackdrop={false} panelClassName="max-w-md" labelledById="user-create-title">

@@ -73,3 +73,32 @@ export interface CurrentUser {
   effective_permissions?: string[]
   is_superuser?: boolean
 }
+
+export interface UserTokenInfo {
+  id: string
+  name: string
+  token_prefix: string
+  permissions: string[]
+  allowed_ips?: string[]
+  expires_at?: string
+  last_used_at?: string
+  last_used_ip?: string
+  use_count: number
+  is_active: boolean
+  revoked_at?: string
+  created_at: string
+}
+
+/** What the admin panel shows when an account name is opened. */
+export interface UserDetail extends UserSummary {
+  last_login_ip?: string
+  totp_verified_at?: string
+  updated_at: string
+  /** The set actually enforced — expanded, so it includes what a legacy coarse
+   *  scope reaches and everything an administrator holds without stored rows. */
+  effective_permissions: string[] | null
+  /** The role's stored rows, for comparison with the above. */
+  role_permissions: string[] | null
+  tokens: UserTokenInfo[] | null
+  active_sessions: number
+}

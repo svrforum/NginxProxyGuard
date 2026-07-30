@@ -237,6 +237,7 @@ var routePermissions = map[string]string{
 	"PUT /api/v1/roles/:id": "role:write",
 	"DELETE /api/v1/roles/:id": "role:write",
 	"GET /api/v1/users": "user:read",
+	"GET /api/v1/users/:id": "user:read",
 	"POST /api/v1/users": "user:write",
 	"PUT /api/v1/users/:id/role": "user:write",
 	"PUT /api/v1/users/:id/password": "user:write",

@@ -81,3 +81,38 @@ type AssignRoleRequest struct {
 type SetUserPasswordRequest struct {
 	Password string `json:"password"`
 }
+
+// UserTokenInfo is the API-token view inside a user's detail panel. The token
+// hash never appears — only the prefix, which is what the tokens screen shows.
+type UserTokenInfo struct {
+	ID          string     `json:"id"`
+	Name        string     `json:"name"`
+	TokenPrefix string     `json:"token_prefix"`
+	Permissions []string   `json:"permissions"`
+	AllowedIPs  []string   `json:"allowed_ips,omitempty"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+	LastUsedAt  *time.Time `json:"last_used_at,omitempty"`
+	LastUsedIP  *string    `json:"last_used_ip,omitempty"`
+	UseCount    int64      `json:"use_count"`
+	IsActive    bool       `json:"is_active"`
+	RevokedAt   *time.Time `json:"revoked_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+}
+
+// UserDetail is what the admin panel shows when an account name is opened:
+// the summary plus the sign-in history and the tokens issued under it.
+//
+// EffectivePermissions is the EXPANDED set actually enforced, not the role's
+// stored rows — a role holding a legacy coarse scope reaches more than it lists,
+// and an administrator holds everything without any rows at all. Showing the
+// stored list would misrepresent what the account can do. (#222)
+type UserDetail struct {
+	UserSummary
+	LastLoginIP          string          `json:"last_login_ip,omitempty"`
+	TOTPVerifiedAt       *time.Time      `json:"totp_verified_at,omitempty"`
+	UpdatedAt            time.Time       `json:"updated_at"`
+	EffectivePermissions []string        `json:"effective_permissions"`
+	RolePermissions      []string        `json:"role_permissions"`
+	Tokens               []UserTokenInfo `json:"tokens"`
+	ActiveSessions       int             `json:"active_sessions"`
+}

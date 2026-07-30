@@ -6,6 +6,7 @@ import type {
   PermissionAreasResponse,
   Role,
   UpdateRoleRequest,
+  UserDetail,
   UserSummary,
 } from '../types/rbac'
 
@@ -35,6 +36,10 @@ export async function deleteRole(id: string): Promise<void> {
 
 export async function listUsers(): Promise<{ data: UserSummary[] }> {
   return apiGet<{ data: UserSummary[] }>(`${API_BASE}/users`)
+}
+
+export async function getUserDetail(id: string): Promise<UserDetail> {
+  return apiGet<UserDetail>(`${API_BASE}/users/${id}`)
 }
 
 export async function createUser(data: CreateUserRequest): Promise<UserSummary> {

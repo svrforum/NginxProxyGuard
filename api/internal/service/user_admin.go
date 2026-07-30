@@ -28,6 +28,7 @@ var (
 type userAdminRepo interface {
 	List(ctx context.Context) ([]model.UserSummary, error)
 	GetSummary(ctx context.Context, userID string) (*model.UserSummary, error)
+	GetDetail(ctx context.Context, userID string) (*model.UserDetail, error)
 	Create(ctx context.Context, username, passwordHash, roleID string, isSuperuser bool) (string, error)
 	AssignRole(ctx context.Context, userID, roleID string, isSuperuser bool) error
 	SetPassword(ctx context.Context, userID, passwordHash string) error
@@ -128,6 +129,38 @@ func (s *UserAdminService) ListUsers(ctx context.Context) ([]model.UserSummary, 
 
 func (s *UserAdminService) GetUser(ctx context.Context, id string) (*model.UserSummary, error) {
 	return s.users.GetSummary(ctx, id)
+}
+
+// GetUserDetail returns an account with its sign-in history and tokens, plus both
+// permission views: the role's stored rows and the EXPANDED set actually
+// enforced. Showing only the stored rows would misrepresent an account whose role
+// holds a legacy coarse scope, and an administrator whose reach comes from
+// is_superuser rather than any row at all. (#222)
+func (s *UserAdminService) GetUserDetail(ctx context.Context, id string) (*model.UserDetail, error) {
+	d, err := s.users.GetDetail(ctx, id)
+	if err != nil || d == nil {
+		return nil, err
+	}
+	if d.RoleID != nil {
+		role, err := s.roles.GetByID(ctx, *d.RoleID)
+		if err != nil {
+			return nil, err
+		}
+		if role != nil {
+			d.RolePermissions = role.Permissions
+			if role.IsSuperuser {
+				d.EffectivePermissions = model.AllAreaPermissions
+			} else {
+				expanded := model.ExpandPermissions(role.Permissions)
+				for _, p := range model.AllAreaPermissions {
+					if expanded[p] {
+						d.EffectivePermissions = append(d.EffectivePermissions, p)
+					}
+				}
+			}
+		}
+	}
+	return d, nil
 }
 
 // CreateUser provisions an account. The password must clear the same strength
