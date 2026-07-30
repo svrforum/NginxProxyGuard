@@ -246,22 +246,37 @@ func registerTokenProtectedRoutes(v1 *echo.Group, c *Container) {
 // registry is what actually enforces them for sessions; these attachments cover
 // API tokens.
 func registerUserAdminRoutes(v1 *echo.Group, h *handler.UserAdminHandler) {
-	userRead := authMiddleware.RequireAPIPermission(model.PermissionUserRead)
-	roleRead := authMiddleware.RequireAPIPermission(model.PermissionUserRead)
+	// The area strings are used directly rather than legacy model.Permission*
+	// constants, so this gate and the registry in middleware/permissions.go state
+	// the same requirement. There is no legacy scope for identity administration
+	// on purpose: an API token can only reach these with "*", because
+	// handler.isValidPermission accepts only "*" or a member of
+	// model.AllPermissions, and none of those is user:write or role:write.
+	// Conservative by design — a scoped token cannot mint administrators.
+	//
+	// These attachments are redundant with RequireRoutePermission, which already
+	// evaluates both sessions and tokens. They are here for defense in depth:
+	// every other route in this file carries its permission explicitly, and
+	// relying only on the group-level Use would silently open these if the
+	// registration order ever changed.
+	roleRead := authMiddleware.RequireAPIPermission("role:read")
+	roleWrite := authMiddleware.RequireAPIPermission("role:write")
+	userRead := authMiddleware.RequireAPIPermission("user:read")
+	userWrite := authMiddleware.RequireAPIPermission("user:write")
 
 	v1.GET("/permission-areas", h.GetPermissionAreas, roleRead)
 
 	v1.GET("/roles", h.ListRoles, roleRead)
-	v1.POST("/roles", h.CreateRole)
-	v1.PUT("/roles/:id", h.UpdateRole)
-	v1.DELETE("/roles/:id", h.DeleteRole)
+	v1.POST("/roles", h.CreateRole, roleWrite)
+	v1.PUT("/roles/:id", h.UpdateRole, roleWrite)
+	v1.DELETE("/roles/:id", h.DeleteRole, roleWrite)
 
 	v1.GET("/users", h.ListUsers, userRead)
-	v1.POST("/users", h.CreateUser)
-	v1.PUT("/users/:id/role", h.AssignRole)
-	v1.PUT("/users/:id/password", h.SetPassword)
-	v1.DELETE("/users/:id", h.DeleteUser)
-	v1.POST("/users/:id/end-sessions", h.EndSessions)
+	v1.POST("/users", h.CreateUser, userWrite)
+	v1.PUT("/users/:id/role", h.AssignRole, userWrite)
+	v1.PUT("/users/:id/password", h.SetPassword, userWrite)
+	v1.DELETE("/users/:id", h.DeleteUser, userWrite)
+	v1.POST("/users/:id/end-sessions", h.EndSessions, userWrite)
 }
 
 func registerCloudflareTunnelRoutes(v1 *echo.Group, h *handler.CloudflareTunnelHandler) {
