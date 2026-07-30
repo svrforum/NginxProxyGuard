@@ -22,16 +22,16 @@ func NewAuthRepository(db *sql.DB) *AuthRepository {
 
 func (r *AuthRepository) GetUserByUsername(ctx context.Context, username string) (*model.User, error) {
 	query := `
-		SELECT id, username, password_hash, role, COALESCE(language, 'ko'), COALESCE(font_family, 'system'),
+		SELECT id, username, password_hash, COALESCE(role, 'user'), COALESCE(language, 'ko'), COALESCE(font_family, 'system'),
 		       is_initial_setup, totp_enabled, totp_secret, totp_verified_at, backup_codes,
 		       last_login_at, last_login_ip, login_count,
-		       created_at, updated_at
+		       created_at, updated_at, role_id, must_change_password
 		FROM users
 		WHERE username = $1
 	`
 
 	var u model.User
-	var lastLoginIP, totpSecret sql.NullString
+	var lastLoginIP, totpSecret, roleID sql.NullString
 	var lastLoginAt, totpVerifiedAt sql.NullTime
 	var backupCodes []sql.NullString
 
@@ -39,7 +39,7 @@ func (r *AuthRepository) GetUserByUsername(ctx context.Context, username string)
 		&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.Language, &u.FontFamily,
 		&u.IsInitialSetup, &u.TOTPEnabled, &totpSecret, &totpVerifiedAt, pq.Array(&backupCodes),
 		&lastLoginAt, &lastLoginIP, &u.LoginCount,
-		&u.CreatedAt, &u.UpdatedAt,
+		&u.CreatedAt, &u.UpdatedAt, &roleID, &u.MustChangePassword,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -50,6 +50,9 @@ func (r *AuthRepository) GetUserByUsername(ctx context.Context, username string)
 
 	u.LastLoginIP = lastLoginIP.String
 	u.TOTPSecret = totpSecret.String
+	if roleID.Valid {
+		u.RoleID = &roleID.String
+	}
 	if lastLoginAt.Valid {
 		u.LastLoginAt = &lastLoginAt.Time
 	}
@@ -67,16 +70,16 @@ func (r *AuthRepository) GetUserByUsername(ctx context.Context, username string)
 
 func (r *AuthRepository) GetUserByID(ctx context.Context, id string) (*model.User, error) {
 	query := `
-		SELECT id, username, password_hash, role, COALESCE(language, 'ko'), COALESCE(font_family, 'system'),
+		SELECT id, username, password_hash, COALESCE(role, 'user'), COALESCE(language, 'ko'), COALESCE(font_family, 'system'),
 		       is_initial_setup, totp_enabled, totp_secret, totp_verified_at, backup_codes,
 		       last_login_at, last_login_ip, login_count,
-		       created_at, updated_at
+		       created_at, updated_at, role_id, must_change_password
 		FROM users
 		WHERE id = $1
 	`
 
 	var u model.User
-	var lastLoginIP, totpSecret sql.NullString
+	var lastLoginIP, totpSecret, roleID sql.NullString
 	var lastLoginAt, totpVerifiedAt sql.NullTime
 	var backupCodes []sql.NullString
 
@@ -84,7 +87,7 @@ func (r *AuthRepository) GetUserByID(ctx context.Context, id string) (*model.Use
 		&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.Language, &u.FontFamily,
 		&u.IsInitialSetup, &u.TOTPEnabled, &totpSecret, &totpVerifiedAt, pq.Array(&backupCodes),
 		&lastLoginAt, &lastLoginIP, &u.LoginCount,
-		&u.CreatedAt, &u.UpdatedAt,
+		&u.CreatedAt, &u.UpdatedAt, &roleID, &u.MustChangePassword,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -95,6 +98,9 @@ func (r *AuthRepository) GetUserByID(ctx context.Context, id string) (*model.Use
 
 	u.LastLoginIP = lastLoginIP.String
 	u.TOTPSecret = totpSecret.String
+	if roleID.Valid {
+		u.RoleID = &roleID.String
+	}
 	if lastLoginAt.Valid {
 		u.LastLoginAt = &lastLoginAt.Time
 	}

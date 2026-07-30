@@ -7,6 +7,11 @@ type User struct {
 	Username       string     `json:"username"`
 	PasswordHash   string     `json:"-"` // Never expose
 	Role           string     `json:"role"`
+	// RoleID points at the roles table and is the authoritative permission
+	// source; Role above stays as the legacy 'admin'|'user' marker the CLI
+	// recovery path still keys on. (#222)
+	RoleID             *string `json:"role_id,omitempty"`
+	MustChangePassword bool    `json:"must_change_password"`
 	Language       string     `json:"language"`
 	FontFamily     string     `json:"font_family"`
 	IsInitialSetup bool       `json:"is_initial_setup"`

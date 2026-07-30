@@ -1101,6 +1101,80 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_cloudflare_tunnel_singleton ON public.clou
 );
 CREATE INDEX IF NOT EXISTS idx_log_filter_presets_log_type ON public.log_filter_presets USING btree (log_type);`,
 		},
+		// -----------------------------------------------------------------------
+		// RBAC (#222). Roles are named permission sets; users point at one. The
+		// PK/FK are inline here (unlike 001_init.sql, which must order them in
+		// its ALTER section) because on an existing install both tables are
+		// created in this one statement.
+		// -----------------------------------------------------------------------
+		{
+			desc: "v2.34.0: roles + role_permissions + users.role_id/must_change_password (RBAC, #222)",
+			sql: `CREATE TABLE IF NOT EXISTS public.roles (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    name character varying(64) NOT NULL,
+    description text,
+    is_superuser boolean DEFAULT false NOT NULL,
+    is_builtin boolean DEFAULT false NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT roles_pkey PRIMARY KEY (id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS roles_name_key ON public.roles (lower((name)::text));
+CREATE TABLE IF NOT EXISTS public.role_permissions (
+    role_id uuid NOT NULL,
+    permission character varying(64) NOT NULL,
+    CONSTRAINT role_permissions_pkey PRIMARY KEY (role_id, permission),
+    CONSTRAINT role_permissions_role_id_fkey FOREIGN KEY (role_id) REFERENCES public.roles(id) ON DELETE CASCADE
+);
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS role_id uuid;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS must_change_password boolean DEFAULT false NOT NULL;`,
+		},
+		// ADD CONSTRAINT is not idempotent, so it needs the duplicate_object
+		// guard or every subsequent boot logs a failed upgrade.
+		{
+			desc: "v2.34.0: users.role_id FK -> roles (RBAC, #222)",
+			sql: `DO $$ BEGIN
+    ALTER TABLE public.users
+        ADD CONSTRAINT users_role_id_fkey FOREIGN KEY (role_id) REFERENCES public.roles(id) ON DELETE RESTRICT;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
+		},
+		{
+			desc: "v2.34.0: seed built-in roles and migrate existing accounts to administrator (RBAC, #222)",
+			sql: `INSERT INTO public.roles (id, name, description, is_superuser, is_builtin) VALUES
+    ('00000000-0000-0000-0000-0000000000a1', 'builtin.administrator', 'Full access to every area', true,  true),
+    ('00000000-0000-0000-0000-0000000000a2', 'builtin.operator',      'Day-to-day operation without settings or account administration', false, true),
+    ('00000000-0000-0000-0000-0000000000a3', 'builtin.viewer',        'Read-only across the operational areas', false, true)
+ON CONFLICT (id) DO NOTHING;
+INSERT INTO public.role_permissions (role_id, permission) VALUES
+    ('00000000-0000-0000-0000-0000000000a2', 'dashboard:read'),
+    ('00000000-0000-0000-0000-0000000000a2', 'proxy:read'),
+    ('00000000-0000-0000-0000-0000000000a2', 'proxy:write'),
+    ('00000000-0000-0000-0000-0000000000a2', 'redirect:read'),
+    ('00000000-0000-0000-0000-0000000000a2', 'redirect:write'),
+    ('00000000-0000-0000-0000-0000000000a2', 'waf:read'),
+    ('00000000-0000-0000-0000-0000000000a2', 'waf:write'),
+    ('00000000-0000-0000-0000-0000000000a2', 'access:read'),
+    ('00000000-0000-0000-0000-0000000000a2', 'access:write'),
+    ('00000000-0000-0000-0000-0000000000a2', 'authprovider:read'),
+    ('00000000-0000-0000-0000-0000000000a2', 'authprovider:write'),
+    ('00000000-0000-0000-0000-0000000000a2', 'certificate:read'),
+    ('00000000-0000-0000-0000-0000000000a2', 'certificate:write'),
+    ('00000000-0000-0000-0000-0000000000a2', 'ddns:read'),
+    ('00000000-0000-0000-0000-0000000000a2', 'ddns:write'),
+    ('00000000-0000-0000-0000-0000000000a2', 'logs:read'),
+    ('00000000-0000-0000-0000-0000000000a2', 'backup:read'),
+    ('00000000-0000-0000-0000-0000000000a3', 'dashboard:read'),
+    ('00000000-0000-0000-0000-0000000000a3', 'proxy:read'),
+    ('00000000-0000-0000-0000-0000000000a3', 'redirect:read'),
+    ('00000000-0000-0000-0000-0000000000a3', 'waf:read'),
+    ('00000000-0000-0000-0000-0000000000a3', 'access:read'),
+    ('00000000-0000-0000-0000-0000000000a3', 'authprovider:read'),
+    ('00000000-0000-0000-0000-0000000000a3', 'certificate:read'),
+    ('00000000-0000-0000-0000-0000000000a3', 'ddns:read'),
+    ('00000000-0000-0000-0000-0000000000a3', 'logs:read')
+ON CONFLICT (role_id, permission) DO NOTHING;
+UPDATE public.users SET role_id = '00000000-0000-0000-0000-0000000000a1' WHERE role_id IS NULL;`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

@@ -2543,7 +2543,26 @@ CREATE TABLE IF NOT EXISTS public.users (
     totp_verified_at timestamp with time zone,
     backup_codes text[],
     language character varying(10) DEFAULT 'ko'::character varying,
-    font_family character varying(100) DEFAULT 'system'::character varying
+    font_family character varying(100) DEFAULT 'system'::character varying,
+    role_id uuid,
+    must_change_password boolean DEFAULT false NOT NULL
+);
+-- RBAC (#222). Roles are named permission sets; role_permissions holds the
+-- area:verb strings defined in model/permission.go. Constraints and the FK from
+-- users live in the ALTER section below, because a fresh install runs this file
+-- top to bottom and users is created before roles.
+CREATE TABLE IF NOT EXISTS public.roles (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    name character varying(64) NOT NULL,
+    description text,
+    is_superuser boolean DEFAULT false NOT NULL,
+    is_builtin boolean DEFAULT false NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE TABLE IF NOT EXISTS public.role_permissions (
+    role_id uuid NOT NULL,
+    permission character varying(64) NOT NULL
 );
 CREATE TABLE IF NOT EXISTS public.waf_policy_history (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -2821,6 +2840,17 @@ ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_email_key UNIQUE (email);
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.roles
+    ADD CONSTRAINT roles_pkey PRIMARY KEY (id);
+CREATE UNIQUE INDEX IF NOT EXISTS roles_name_key ON public.roles (lower((name)::text));
+ALTER TABLE ONLY public.role_permissions
+    ADD CONSTRAINT role_permissions_pkey PRIMARY KEY (role_id, permission);
+ALTER TABLE ONLY public.role_permissions
+    ADD CONSTRAINT role_permissions_role_id_fkey FOREIGN KEY (role_id) REFERENCES public.roles(id) ON DELETE CASCADE;
+-- RESTRICT, not SET NULL: a role that is still assigned must not be deletable,
+-- because a user silently losing every permission is worse than a blocked delete.
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_role_id_fkey FOREIGN KEY (role_id) REFERENCES public.roles(id) ON DELETE RESTRICT;
 ALTER TABLE ONLY public.waf_policy_history
     ADD CONSTRAINT waf_policy_history_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.waf_rule_change_events
@@ -3384,6 +3414,48 @@ INSERT INTO public.users (id, email, username, password_hash, role, is_initial_s
 VALUES ('00000000-0000-0000-0000-000000000001', 'admin@localhost', 'admin', '$2a$10$kM9Su6aXZc8u3FHRvOsGAOwXVYL4WxVeYDcvlsFlU.S8GGWUwNWku', 'admin', true, 'ko', 'system')
 ON CONFLICT (id) DO NOTHING;
 
+-- Built-in roles (#222). Names are stable slugs; the UI renders them through
+-- i18n so they are never user-visible strings. The administrator role carries
+-- is_superuser instead of a permission list, so areas added in a later release
+-- are covered automatically rather than leaving existing admins short.
+INSERT INTO public.roles (id, name, description, is_superuser, is_builtin) VALUES
+    ('00000000-0000-0000-0000-0000000000a1', 'builtin.administrator', 'Full access to every area', true,  true),
+    ('00000000-0000-0000-0000-0000000000a2', 'builtin.operator',      'Day-to-day operation without settings or account administration', false, true),
+    ('00000000-0000-0000-0000-0000000000a3', 'builtin.viewer',        'Read-only across the operational areas', false, true)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.role_permissions (role_id, permission) VALUES
+    ('00000000-0000-0000-0000-0000000000a2', 'dashboard:read'),
+    ('00000000-0000-0000-0000-0000000000a2', 'proxy:read'),
+    ('00000000-0000-0000-0000-0000000000a2', 'proxy:write'),
+    ('00000000-0000-0000-0000-0000000000a2', 'redirect:read'),
+    ('00000000-0000-0000-0000-0000000000a2', 'redirect:write'),
+    ('00000000-0000-0000-0000-0000000000a2', 'waf:read'),
+    ('00000000-0000-0000-0000-0000000000a2', 'waf:write'),
+    ('00000000-0000-0000-0000-0000000000a2', 'access:read'),
+    ('00000000-0000-0000-0000-0000000000a2', 'access:write'),
+    ('00000000-0000-0000-0000-0000000000a2', 'authprovider:read'),
+    ('00000000-0000-0000-0000-0000000000a2', 'authprovider:write'),
+    ('00000000-0000-0000-0000-0000000000a2', 'certificate:read'),
+    ('00000000-0000-0000-0000-0000000000a2', 'certificate:write'),
+    ('00000000-0000-0000-0000-0000000000a2', 'ddns:read'),
+    ('00000000-0000-0000-0000-0000000000a2', 'ddns:write'),
+    ('00000000-0000-0000-0000-0000000000a2', 'logs:read'),
+    ('00000000-0000-0000-0000-0000000000a2', 'backup:read'),
+    ('00000000-0000-0000-0000-0000000000a3', 'dashboard:read'),
+    ('00000000-0000-0000-0000-0000000000a3', 'proxy:read'),
+    ('00000000-0000-0000-0000-0000000000a3', 'redirect:read'),
+    ('00000000-0000-0000-0000-0000000000a3', 'waf:read'),
+    ('00000000-0000-0000-0000-0000000000a3', 'access:read'),
+    ('00000000-0000-0000-0000-0000000000a3', 'authprovider:read'),
+    ('00000000-0000-0000-0000-0000000000a3', 'certificate:read'),
+    ('00000000-0000-0000-0000-0000000000a3', 'ddns:read'),
+    ('00000000-0000-0000-0000-0000000000a3', 'logs:read')
+ON CONFLICT (role_id, permission) DO NOTHING;
+
+-- Every pre-RBAC account was an unrestricted administrator, so keep it that way.
+UPDATE public.users SET role_id = '00000000-0000-0000-0000-0000000000a1' WHERE role_id IS NULL;
+
 -- Default log settings
 INSERT INTO public.log_settings (id, retention_days, auto_cleanup_enabled, system_log_retention_days, enable_docker_logs, filter_health_checks)
 VALUES (gen_random_uuid(), 30, true, 7, true, true)
@@ -3478,6 +3550,18 @@ CREATE INDEX IF NOT EXISTS idx_fsee_subscription ON public.filter_subscription_e
 -- This section uses ADD COLUMN IF NOT EXISTS to safely add columns
 -- that may not exist in older database versions
 -- ============================================================================
+
+-- RBAC (#222) — DOCUMENTATION ONLY. The executable copy lives in
+-- database/migration.go `upgrades` (three entries: tables + columns, the
+-- users.role_id FK behind a duplicate_object guard, and the built-in role seed
+-- plus the UPDATE that moves every pre-RBAC account to administrator).
+--   CREATE TABLE IF NOT EXISTS public.roles (...);
+--   CREATE UNIQUE INDEX IF NOT EXISTS roles_name_key ON public.roles (lower(name));
+--   CREATE TABLE IF NOT EXISTS public.role_permissions (...);
+--   ALTER TABLE public.users ADD COLUMN IF NOT EXISTS role_id uuid;
+--   ALTER TABLE public.users ADD COLUMN IF NOT EXISTS must_change_password boolean DEFAULT false NOT NULL;
+--   ALTER TABLE public.users ADD CONSTRAINT users_role_id_fkey ... ON DELETE RESTRICT;
+--   INSERT built-in roles + role_permissions; UPDATE users SET role_id = administrator WHERE role_id IS NULL;
 
 -- Enum upgrades
 ALTER TYPE public.block_reason ADD VALUE IF NOT EXISTS 'cloud_provider_challenge';
