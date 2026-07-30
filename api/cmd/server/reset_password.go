@@ -150,7 +150,21 @@ func selectTargetUser(db *database.DB, requested string) (*cliUser, error) {
 		return u, nil
 	}
 
-	rows, err := db.Query(`SELECT id, username, role FROM users WHERE role = 'admin' ORDER BY created_at`)
+	// Find administrators from the authoritative source (roles.is_superuser) when
+	// the RBAC tables exist, falling back to the legacy users.role marker so this
+	// recovery path still works on a database that predates them or where the
+	// roles migration failed. Keeping the fallback matters: this is the only way
+	// back in if an operator is locked out. (#222)
+	rows, err := db.Query(`
+		SELECT u.id, u.username, COALESCE(u.role, 'user')
+		FROM users u
+		LEFT JOIN roles r ON r.id = u.role_id
+		WHERE COALESCE(r.is_superuser, false) OR u.role = 'admin'
+		ORDER BY u.created_at`)
+	if err != nil {
+		// roles/role_id absent (pre-RBAC schema): fall back to the legacy query.
+		rows, err = db.Query(`SELECT id, username, role FROM users WHERE role = 'admin' ORDER BY created_at`)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("list admin users: %w", err)
 	}

@@ -313,10 +313,17 @@ func (r *AuthRepository) RecordLoginAttempt(ctx context.Context, ip, username st
 	return err
 }
 
-func (r *AuthRepository) CountRecentFailedAttempts(ctx context.Context, ip string, since time.Time) (int, error) {
-	query := `SELECT COUNT(*) FROM login_attempts WHERE ip_address = $1 AND success = FALSE AND attempted_at > $2`
+// CountRecentFailedAttempts counts failures for one ACCOUNT from one IP.
+//
+// It used to key on the IP alone, which does not survive multiple users: five
+// wrong passwords for one account locked out every other account behind the same
+// NAT or reverse proxy. Keying on both keeps the brute-force protection per
+// account while leaving colleagues on the same address alone. (#222)
+func (r *AuthRepository) CountRecentFailedAttempts(ctx context.Context, ip, username string, since time.Time) (int, error) {
+	query := `SELECT COUNT(*) FROM login_attempts
+	          WHERE ip_address = $1 AND username = $2 AND success = FALSE AND attempted_at > $3`
 	var count int
-	err := r.db.QueryRowContext(ctx, query, ip, since).Scan(&count)
+	err := r.db.QueryRowContext(ctx, query, ip, username, since).Scan(&count)
 	return count, err
 }
 

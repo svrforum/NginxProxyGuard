@@ -154,6 +154,12 @@ const (
 	DDNSProviderDeleteTimeout = 15 * time.Second
 )
 
+// Session/login-attempt housekeeping (#222). AuthService.CleanupSessions had no
+// caller before this, so auth_sessions and login_attempts grew without bound.
+const (
+	SessionCleanupInterval = 6 * time.Hour
+)
+
 // Update-check constants (#190). Display + guidance only — NPG never updates itself.
 const (
 	GitHubLatestReleaseURL = "https://api.github.com/repos/svrforum/NginxProxyGuard/releases/latest"

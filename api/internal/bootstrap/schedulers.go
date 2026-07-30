@@ -18,6 +18,7 @@ type Schedulers struct {
 	LogRotate          *scheduler.LogRotateScheduler
 	Backup             *scheduler.BackupScheduler
 	FilterRefresh      *scheduler.FilterRefreshScheduler
+	SessionCleanup     *scheduler.SessionCleanupScheduler
 	ContainerReconcile *scheduler.ContainerReconcileScheduler
 	DDNS               *scheduler.DDNSScheduler
 }
@@ -87,6 +88,7 @@ func NewSchedulers(cfg *config.Config, db *database.DB, repos *Repositories, svc
 		LogRotate:     scheduler.NewLogRotateScheduler(),
 		Backup:        scheduler.NewBackupScheduler(repos.Backup, repos.SystemSettings, cfg.BackupPath),
 		FilterRefresh: scheduler.NewFilterRefreshScheduler(svcs.FilterSubscription),
+		SessionCleanup: scheduler.NewSessionCleanupScheduler(svcs.Auth),
 		ContainerReconcile: scheduler.NewContainerReconcileScheduler(
 			svcs.ProxyHost,
 			svcs.AuthProvider,
@@ -108,6 +110,7 @@ func (s *Schedulers) Start() {
 	s.LogRotate.Start()
 	s.Backup.Start()
 	s.FilterRefresh.Start()
+	s.SessionCleanup.Start()
 	s.ContainerReconcile.Start()
 	s.DDNS.Start()
 }
@@ -120,6 +123,7 @@ func (s *Schedulers) Stop() {
 	s.Renewal.Stop()
 	s.Partition.Stop()
 	s.FilterRefresh.Stop()
+	s.SessionCleanup.Stop()
 	s.ContainerReconcile.Stop()
 	s.DDNS.Stop()
 	// LogRotateScheduler and BackupScheduler also expose Stop, but the
