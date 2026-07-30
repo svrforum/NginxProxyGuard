@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	authMiddleware "nginx-proxy-guard/internal/middleware"
 	"nginx-proxy-guard/internal/model"
 	"nginx-proxy-guard/internal/repository"
 	"nginx-proxy-guard/internal/service"
@@ -168,21 +169,18 @@ func (h *ProxyHostHandler) List(c echo.Context) error {
 // DB-only behavior unless it opts in. The UI always sends an explicit value.
 //
 // Provider-side DNS deletion is settings-scoped elsewhere (DELETE /ddns-records/:id
-// requires settings:write), so an API token reaching it through a proxy:write /
+// requires settings:write), so a caller reaching it through a proxy:write /
 // proxy:delete route must hold settings:write as well — otherwise the flag is
-// ignored rather than widening what the token can destroy. Session users are
-// unaffected; permission scopes apply to API tokens only. (#219)
+// ignored rather than widening what the caller can destroy. (#219)
+//
+// The check goes through the shared authorizer so it covers session users too;
+// it used to consult the API token only, which meant a role could not restrict
+// it once roles existed. (#222)
 func ddnsRemoveProviderRequested(c echo.Context) bool {
 	if c.QueryParam("ddns_remove_provider") != "true" {
 		return false
 	}
-	if isAPIToken, ok := c.Get("is_api_token").(bool); ok && isAPIToken {
-		token, ok := c.Get("api_token").(*model.APIToken)
-		if !ok || token == nil || !token.HasPermission(model.PermissionSettingsWrite) {
-			return false
-		}
-	}
-	return true
+	return authMiddleware.HasPermissionFromContext(c, model.PermissionSettingsWrite)
 }
 
 func (h *ProxyHostHandler) Update(c echo.Context) error {

@@ -1,5 +1,16 @@
 package middleware
 
+import (
+	"context"
+	"log"
+	"net/http"
+	"strings"
+
+	"github.com/labstack/echo/v4"
+
+	"nginx-proxy-guard/internal/model"
+)
+
 // Route → permission registry (#222).
 //
 // Authorization is default-deny: a route that appears in none of the three sets
@@ -34,9 +45,13 @@ var SelfRoutes = map[string]bool{
 	"POST /api/v1/auth/2fa/disable":        true,
 }
 
-// PublicRoutes need no permission: unauthenticated endpoints and operational
-// probes. /metrics stays here because a Prometheus scrape has no session, and
-// /health because breaking a container health check would take the service down.
+// PublicRoutes need no PERMISSION. Two kinds live here: genuinely
+// unauthenticated endpoints (login, the visitor-facing CAPTCHA, /metrics,
+// /health), and endpoints that require a session but no specific grant
+// (/api/v1/health/detailed and /api/v1/status are registered in
+// registerProtectedAuthRoutes, so AuthMiddleware still applies to them — they
+// simply carry no permission). Authentication is decided elsewhere; this map
+// only says "no permission needed".
 var PublicRoutes = map[string]bool{
 	"GET /health":                    true,
 	"GET /metrics":                   true,
@@ -44,6 +59,15 @@ var PublicRoutes = map[string]bool{
 	"GET /api/v1/health/detailed":    true,
 	"POST /api/v1/health/canary":     true,
 	"GET /api/v1/public/ui-settings": true,
+
+	// Swagger UI. D7 wanted these behind settings:read, but the UI links to
+	// /api/docs with a plain <a target="_blank"> (APITokenManager.tsx) and the
+	// session token lives in localStorage, so a browser navigation carries no
+	// Authorization header — bearer auth would 401 the docs for administrators
+	// too. Moving them needs a different access mechanism (cookie auth or a
+	// short-lived signed URL) and is deferred out of increment 1.
+	"GET /api/docs":              true,
+	"GET /api/docs/swagger.yaml": true,
 
 	// Login flow — no session exists yet.
 	"POST /api/v1/auth/login":      true,
@@ -75,8 +99,6 @@ var PublicRoutes = map[string]bool{
 //   - /api/docs requires settings:read (D7): publishing the whole API surface
 //     anonymously contradicts having permissions at all.
 var routePermissions = map[string]string{
-	"GET /api/docs": "settings:read",
-	"GET /api/docs/swagger.yaml": "settings:read",
 	"GET /api/v1/access-lists": "access:read",
 	"POST /api/v1/access-lists": "access:write",
 	"DELETE /api/v1/access-lists/:id": "access:write",
@@ -336,4 +358,126 @@ func RouteDecisionExists(method, path string) bool {
 	}
 	_, ok := routePermissions[key]
 	return ok
+}
+
+// Authorizer decides whether a principal holds a permission. Implemented by
+// service.AuthzService; declared here as an interface so the middleware package
+// does not import service (which imports repository, which would cycle).
+type Authorizer interface {
+	CanUser(ctx context.Context, userID, permission string) bool
+	CanToken(ctx context.Context, token *model.APIToken, permission string) bool
+}
+
+// RequireRoutePermission enforces the registry for every request that reaches
+// it, for BOTH humans and API tokens.
+//
+// It is attached once to the /api/v1 group immediately after the auth chain in
+// registerTokenProtectedRoutes, which is what makes the three buckets line up
+// with registration order: the self routes and the public routes are registered
+// earlier in the same group and therefore never reach this middleware, while
+// every resource route is registered after it. Echo snapshots group middleware
+// at Add time (v4.15 group.go), so this ordering is load-bearing — moving the
+// Use call earlier would gate the self routes and lock users out of their own
+// password change.
+//
+// Before this existed, RequireAPIPermission returned early for any non-token
+// request, so an authenticated session passed every permission check in the
+// application. (#222)
+func RequireRoutePermission(authz Authorizer) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			if authz == nil {
+				return next(c) // not wired (tests, or a build without RBAC): pre-RBAC behavior
+			}
+			// Published for in-handler field checks (see HasPermissionFromContext),
+			// so handlers need no constructor change to ask a permission question.
+			c.Set(ContextKeyAuthorizer, authz)
+			// Echo's per-group not-found catch-alls (paths ending in /*) carry no
+			// endpoint to protect. Enforcing them would turn a 404 for an unknown
+			// path into a 403 for every non-superuser, which is both misleading and
+			// a behavior change for lesser roles.
+			if strings.HasSuffix(c.Path(), "/*") {
+				return next(c)
+			}
+
+			permission, mapped := RoutePermission(c.Request().Method, c.Path())
+			if !mapped {
+				// Default-deny. The coverage test should have caught this before
+				// release, so log loudly: home-server operators read container
+				// logs, and a silently 403ing endpoint is hard to diagnose.
+				log.Printf("[Authz] no permission mapping for %s %s — allowing superusers only. "+
+					"Add it to middleware/permissions.go.", c.Request().Method, c.Path())
+				return requireSuperuser(c, authz, next)
+			}
+
+			if token, ok := c.Get("api_token").(*model.APIToken); ok && token != nil {
+				if !authz.CanToken(c.Request().Context(), token, permission) {
+					return forbidden(c, permission)
+				}
+				return next(c)
+			}
+
+			userID, _ := c.Get("user_id").(string)
+			if userID == "" {
+				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
+			}
+			if !authz.CanUser(c.Request().Context(), userID, permission) {
+				return forbidden(c, permission)
+			}
+			return next(c)
+		}
+	}
+}
+
+// requireSuperuser is the fallback for an unmapped route: only a principal that
+// passes an area permission no ordinary role is given can proceed. role:write is
+// used as the probe because it is administration-only by construction.
+func requireSuperuser(c echo.Context, authz Authorizer, next echo.HandlerFunc) error {
+	const probe = "role:write"
+	if token, ok := c.Get("api_token").(*model.APIToken); ok && token != nil {
+		if !authz.CanToken(c.Request().Context(), token, probe) {
+			return forbidden(c, probe)
+		}
+		return next(c)
+	}
+	userID, _ := c.Get("user_id").(string)
+	if userID == "" || !authz.CanUser(c.Request().Context(), userID, probe) {
+		return forbidden(c, probe)
+	}
+	return next(c)
+}
+
+func forbidden(c echo.Context, permission string) error {
+	return c.JSON(http.StatusForbidden, map[string]string{
+		"error":    "insufficient permissions",
+		"required": permission,
+	})
+}
+
+// ContextKeyAuthorizer is where RequireRoutePermission publishes the authorizer
+// for in-handler checks.
+const ContextKeyAuthorizer = "authz"
+
+// HasPermissionFromContext answers a permission question from inside a handler,
+// for the cases where authorization depends on a field rather than the route —
+// see the ddns_remove_provider gate in handler/proxy_host.go. Route middleware
+// alone would leave those checks token-only and blind to roles.
+//
+// Returns true when no authorizer is present, which is the pre-RBAC behavior for
+// routes outside the enforced group.
+func HasPermissionFromContext(c echo.Context, permission string) bool {
+	authz, _ := c.Get(ContextKeyAuthorizer).(Authorizer)
+	return HasPermission(c, authz, permission)
+}
+
+// HasPermission answers a permission question for an explicit authorizer.
+func HasPermission(c echo.Context, authz Authorizer, permission string) bool {
+	if authz == nil {
+		return true // not wired: pre-RBAC behavior
+	}
+	if token, ok := c.Get("api_token").(*model.APIToken); ok && token != nil {
+		return authz.CanToken(c.Request().Context(), token, permission)
+	}
+	userID, _ := c.Get("user_id").(string)
+	return userID != "" && authz.CanUser(c.Request().Context(), userID, permission)
 }

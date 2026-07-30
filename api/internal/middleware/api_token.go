@@ -204,10 +204,12 @@ func RequireAPIPermission(permission string) echo.MiddlewareFunc {
 			}
 
 			if !token.HasPermission(permission) {
+				// The caller's own permission set is deliberately NOT echoed back:
+				// once roles are shared between people, that response discloses
+				// what the role grants. (#222)
 				return c.JSON(http.StatusForbidden, map[string]string{
-					"error":              "insufficient permissions",
-					"required":           permission,
-					"token_permissions":  strings.Join(token.Permissions, ", "),
+					"error":    "insufficient permissions",
+					"required": permission,
 				})
 			}
 
