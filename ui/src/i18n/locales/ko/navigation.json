@@ -89,9 +89,16 @@
       "groups": {
         "general": "일반",
         "security": "보안",
-        "operations": "운영"
-      }
+        "operations": "운영",
+        "access": "접근 관리"
+      },
+      "users": "사용자",
+      "roles": "역할"
     }
   },
-  "loading": "로딩 중..."
+  "loading": "로딩 중...",
+  "noPermission": {
+    "title": "이 화면에 접근할 권한이 없습니다",
+    "hint": "필요하면 관리자에게 역할 권한을 요청하세요."
+  }
 }

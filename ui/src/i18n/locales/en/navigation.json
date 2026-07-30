@@ -89,9 +89,16 @@
       "groups": {
         "general": "General",
         "security": "Security",
-        "operations": "Operations"
-      }
+        "operations": "Operations",
+        "access": "Access"
+      },
+      "users": "Users",
+      "roles": "Roles"
     }
   },
-  "loading": "Loading..."
+  "loading": "Loading...",
+  "noPermission": {
+    "title": "You do not have permission to view this page",
+    "hint": "Ask an administrator to grant your role access."
+  }
 }

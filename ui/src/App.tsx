@@ -10,6 +10,7 @@ import { apiPost } from './api/client'
 import type { ProxyHost } from './types/proxy-host'
 import type { TabType as ProxyHostTabType } from './components/proxy-host/types'
 import { useDarkMode } from './hooks/useDarkMode'
+import { usePermissions } from './hooks/usePermissions'
 import { SyncProgressModal, SyncAllResult } from './components/SyncProgressModal'
 
 // Lazy-loaded route components
@@ -50,6 +51,25 @@ function AppContent({ user, onLogout }: AppContentProps) {
   const navigate = useNavigate()
   const location = useLocation()
   const { isDark, toggle } = useDarkMode()
+  // Menus the caller has no permission for are hidden. This is convenience, not
+  // a boundary — every endpoint behind them is enforced server-side. (#222)
+  const { canArea } = usePermissions()
+
+  // A restricted role must not land on a page it cannot load. Pick the first
+  // area it can actually see, in menu order. (#222)
+  const landingPath = (
+    [
+      ['dashboard', '/dashboard'],
+      ['proxy', '/proxy-hosts'],
+      ['redirect', '/redirects'],
+      ['waf', '/waf/settings'],
+      ['access', '/access/lists'],
+      ['authprovider', '/auth-providers'],
+      ['certificate', '/certificates'],
+      ['logs', '/logs/access'],
+      ['settings', '/settings/global'],
+    ] as const
+  ).find(([area]) => canArea(area))?.[1] ?? '/dashboard'
 
   // Derive active tab from URL
   const getActiveTab = (): Tab => {
@@ -258,92 +278,110 @@ function AppContent({ user, onLogout }: AppContentProps) {
       <nav className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
         <div className="max-w-7xl mx-auto px-4 overflow-x-auto scrollbar-hide">
           <div className="flex gap-1 sm:gap-2 lg:gap-4 min-w-max">
-            <button
-              onClick={() => handleTabClick('dashboard')}
-              className={`py-3 px-2 lg:px-1 text-xs lg:text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'dashboard'
-                ? 'border-primary-600 text-primary-600 dark:text-primary-400'
-                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-            >
-              {t('menu.dashboard')}
-            </button>
-            <button
-              onClick={() => handleTabClick('proxy-hosts')}
-              className={`py-3 px-2 lg:px-1 text-xs lg:text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'proxy-hosts'
-                ? 'border-primary-600 text-primary-600 dark:text-primary-400'
-                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-            >
-              <span className="hidden sm:inline">{t('menu.proxyHosts')}</span>
-              <span className="sm:hidden">{t('menu.hosts')}</span>
-            </button>
-            <button
-              onClick={() => handleTabClick('redirects')}
-              className={`py-3 px-2 lg:px-1 text-xs lg:text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'redirects'
-                ? 'border-primary-600 text-primary-600 dark:text-primary-400'
-                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-            >
-              {t('menu.redirects')}
-            </button>
-            <button
-              onClick={() => handleTabClick('waf')}
-              className={`py-3 px-2 lg:px-1 text-xs lg:text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'waf'
-                ? 'border-orange-600 text-orange-600 dark:text-orange-400'
-                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-            >
-              <span className="hidden sm:inline">{t('menu.wafBanIp')}</span>
-              <span className="sm:hidden">{t('menu.waf')}</span>
-            </button>
-            <button
-              onClick={() => handleTabClick('access')}
-              className={`py-3 px-2 lg:px-1 text-xs lg:text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'access'
-                ? 'border-purple-600 text-purple-600 dark:text-purple-400'
-                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-            >
-              <span className="hidden lg:inline">{t('menu.accessControl')}</span>
-              <span className="lg:hidden">{t('menu.access')}</span>
-            </button>
-            <button
-              onClick={() => handleTabClick('auth-providers')}
-              className={`py-3 px-2 lg:px-1 text-xs lg:text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'auth-providers'
-                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
-                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-            >
-              <span className="hidden lg:inline">{t('menu.authProviders')}</span>
-              <span className="lg:hidden">{t('menu.authProvidersShort')}</span>
-            </button>
-            <button
-              onClick={() => handleTabClick('certificates')}
-              className={`py-3 px-2 lg:px-1 text-xs lg:text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'certificates'
-                ? 'border-primary-600 text-primary-600 dark:text-primary-400'
-                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-            >
-              <span className="hidden sm:inline">{t('menu.certificates')}</span>
-              <span className="sm:hidden">{t('menu.sslCerts')}</span>
-            </button>
-            <button
-              onClick={() => handleTabClick('logs')}
-              className={`py-3 px-2 lg:px-1 text-xs lg:text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'logs'
-                ? 'border-primary-600 text-primary-600 dark:text-primary-400'
-                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-            >
-              {t('menu.logs')}
-            </button>
-            <button
-              onClick={() => handleTabClick('settings')}
-              className={`py-3 px-2 lg:px-1 text-xs lg:text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'settings'
-                ? 'border-teal-600 text-teal-600 dark:text-teal-400'
-                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-            >
-              {t('menu.settings')}
-            </button>
+            {canArea('dashboard') && (
+              <button
+                onClick={() => handleTabClick('dashboard')}
+                className={`py-3 px-2 lg:px-1 text-xs lg:text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'dashboard'
+                  ? 'border-primary-600 text-primary-600 dark:text-primary-400'
+                  : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+              >
+                {t('menu.dashboard')}
+              </button>
+            )}
+            {canArea('proxy') && (
+              <button
+                onClick={() => handleTabClick('proxy-hosts')}
+                className={`py-3 px-2 lg:px-1 text-xs lg:text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'proxy-hosts'
+                  ? 'border-primary-600 text-primary-600 dark:text-primary-400'
+                  : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+              >
+                <span className="hidden sm:inline">{t('menu.proxyHosts')}</span>
+                <span className="sm:hidden">{t('menu.hosts')}</span>
+              </button>
+            )}
+            {canArea('redirect') && (
+              <button
+                onClick={() => handleTabClick('redirects')}
+                className={`py-3 px-2 lg:px-1 text-xs lg:text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'redirects'
+                  ? 'border-primary-600 text-primary-600 dark:text-primary-400'
+                  : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+              >
+                {t('menu.redirects')}
+              </button>
+            )}
+            {canArea('waf') && (
+              <button
+                onClick={() => handleTabClick('waf')}
+                className={`py-3 px-2 lg:px-1 text-xs lg:text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'waf'
+                  ? 'border-orange-600 text-orange-600 dark:text-orange-400'
+                  : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+              >
+                <span className="hidden sm:inline">{t('menu.wafBanIp')}</span>
+                <span className="sm:hidden">{t('menu.waf')}</span>
+              </button>
+            )}
+            {canArea('access') && (
+              <button
+                onClick={() => handleTabClick('access')}
+                className={`py-3 px-2 lg:px-1 text-xs lg:text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'access'
+                  ? 'border-purple-600 text-purple-600 dark:text-purple-400'
+                  : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+              >
+                <span className="hidden lg:inline">{t('menu.accessControl')}</span>
+                <span className="lg:hidden">{t('menu.access')}</span>
+              </button>
+            )}
+            {canArea('authprovider') && (
+              <button
+                onClick={() => handleTabClick('auth-providers')}
+                className={`py-3 px-2 lg:px-1 text-xs lg:text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'auth-providers'
+                  ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+                  : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+              >
+                <span className="hidden lg:inline">{t('menu.authProviders')}</span>
+                <span className="lg:hidden">{t('menu.authProvidersShort')}</span>
+              </button>
+            )}
+            {canArea('certificate') && (
+              <button
+                onClick={() => handleTabClick('certificates')}
+                className={`py-3 px-2 lg:px-1 text-xs lg:text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'certificates'
+                  ? 'border-primary-600 text-primary-600 dark:text-primary-400'
+                  : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+              >
+                <span className="hidden sm:inline">{t('menu.certificates')}</span>
+                <span className="sm:hidden">{t('menu.sslCerts')}</span>
+              </button>
+            )}
+            {canArea('logs') && (
+              <button
+                onClick={() => handleTabClick('logs')}
+                className={`py-3 px-2 lg:px-1 text-xs lg:text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'logs'
+                  ? 'border-primary-600 text-primary-600 dark:text-primary-400'
+                  : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+              >
+                {t('menu.logs')}
+              </button>
+            )}
+            {(canArea('settings') || canArea('backup') || canArea('user') || canArea('role') || canArea('apitoken')) && (
+              <button
+                onClick={() => handleTabClick('settings')}
+                className={`py-3 px-2 lg:px-1 text-xs lg:text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'settings'
+                  ? 'border-teal-600 text-teal-600 dark:text-teal-400'
+                  : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+              >
+                {t('menu.settings')}
+              </button>
+            )}
           </div>
         </div>
       </nav>
@@ -356,7 +394,7 @@ function AppContent({ user, onLogout }: AppContentProps) {
           </div>
         }>
         <Routes>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/" element={<Navigate to={landingPath} replace />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/proxy-hosts" element={<ProxyHostList onEdit={handleEdit} onAdd={handleAdd} />} />
           <Route path="/certificates" element={<Navigate to="/certificates/list" replace />} />
@@ -401,6 +439,8 @@ function AppContent({ user, onLogout }: AppContentProps) {
           <Route path="/settings/system-logs" element={<SettingsPage subTab="system-logs" />} />
           <Route path="/settings/filter-subscriptions" element={<SettingsPage subTab="filter-subscriptions" />} />
           <Route path="/settings/cloudflare-tunnel" element={<SettingsPage subTab="cloudflare-tunnel" />} />
+          <Route path="/settings/users" element={<SettingsPage subTab="users" />} />
+          <Route path="/settings/roles" element={<SettingsPage subTab="roles" />} />
         </Routes>
         </Suspense>
       </main>

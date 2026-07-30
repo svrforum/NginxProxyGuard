@@ -12,6 +12,9 @@ import WAFAutoBanSettings from '../components/WAFAutoBanSettings'
 import SystemLogSettings from '../components/SystemLogSettings'
 import FilterSubscriptionList from '../components/FilterSubscriptionList'
 import CloudflareTunnelSettings from '../components/settings/CloudflareTunnelSettings'
+import RoleManager from '../components/settings/RoleManager'
+import UserManager from '../components/settings/UserManager'
+import { usePermissions } from '../hooks/usePermissions'
 
 type SubTab =
   | 'global'
@@ -25,10 +28,15 @@ type SubTab =
   | 'system-logs'
   | 'filter-subscriptions'
   | 'cloudflare-tunnel'
+  | 'users'
+  | 'roles'
 
 export default function SettingsPage({ subTab }: { subTab: SubTab }) {
   const { t } = useTranslation('navigation')
   const navigate = useNavigate()
+  // Sub-tabs the caller has no permission for are hidden. Convenience only —
+  // the server refuses the underlying endpoints regardless. (#222)
+  const { canArea } = usePermissions()
 
   // Horizontal sub-tabs (consistent with the other areas) but reordered into
   // three logical groups separated by dividers, with a single primary accent
@@ -36,37 +44,67 @@ export default function SettingsPage({ subTab }: { subTab: SubTab }) {
   const groups: { label: string; items: { key: SubTab; label: string }[] }[] = [
     {
       label: t('subTabs.settings.groups.general'),
-      items: [
-        { key: 'global', label: t('subTabs.settings.global') },
-        { key: 'ssl', label: t('subTabs.settings.ssl') },
-      ],
+      items: canArea('settings')
+        ? [
+          { key: 'global' as SubTab, label: t('subTabs.settings.global') },
+          { key: 'ssl' as SubTab, label: t('subTabs.settings.ssl') },
+        ]
+        : [],
     },
     {
       label: t('subTabs.settings.groups.security'),
+      items: canArea('settings')
+        ? [
+          { key: 'captcha' as SubTab, label: t('subTabs.settings.captcha') },
+          { key: 'geoip' as SubTab, label: t('subTabs.settings.geoip') },
+          { key: 'botfilter' as SubTab, label: t('subTabs.settings.botfilter') },
+          { key: 'waf-auto-ban' as SubTab, label: t('subTabs.settings.wafAutoBan') },
+          { key: 'filter-subscriptions' as SubTab, label: t('subTabs.settings.filterSubscriptions') },
+        ]
+        : [],
+    },
+    {
+      label: t('subTabs.settings.groups.access'),
       items: [
-        { key: 'captcha', label: t('subTabs.settings.captcha') },
-        { key: 'geoip', label: t('subTabs.settings.geoip') },
-        { key: 'botfilter', label: t('subTabs.settings.botfilter') },
-        { key: 'waf-auto-ban', label: t('subTabs.settings.wafAutoBan') },
-        { key: 'filter-subscriptions', label: t('subTabs.settings.filterSubscriptions') },
+        ...(canArea('user') ? [{ key: 'users' as SubTab, label: t('subTabs.settings.users') }] : []),
+        ...(canArea('role') ? [{ key: 'roles' as SubTab, label: t('subTabs.settings.roles') }] : []),
       ],
     },
     {
       label: t('subTabs.settings.groups.operations'),
       items: [
-        { key: 'maintenance', label: t('subTabs.settings.maintenance') },
-        { key: 'backups', label: t('subTabs.settings.backups') },
-        { key: 'system-logs', label: t('subTabs.settings.systemLogs') },
-        { key: 'cloudflare-tunnel', label: t('subTabs.settings.cloudflareTunnel') },
+        ...(canArea('settings') ? [{ key: 'maintenance' as SubTab, label: t('subTabs.settings.maintenance') }] : []),
+        ...(canArea('backup') ? [{ key: 'backups' as SubTab, label: t('subTabs.settings.backups') }] : []),
+        ...(canArea('settings')
+          ? [
+            { key: 'system-logs' as SubTab, label: t('subTabs.settings.systemLogs') },
+            { key: 'cloudflare-tunnel' as SubTab, label: t('subTabs.settings.cloudflareTunnel') },
+          ]
+          : []),
       ],
     },
   ]
+
+  const visibleGroups = groups.filter((g) => g.items.length > 0)
+  const visibleKeys = new Set(visibleGroups.flatMap((g) => g.items.map((i) => i.key)))
+
+  // Reaching a settings sub-tab the role cannot use (a bookmark, a typed URL)
+  // would otherwise render a full tab bar whose every request 403s. Say so
+  // instead. The server is what actually refuses; this is just honest UI.
+  if (!visibleKeys.has(subTab)) {
+    return (
+      <div className="rounded-lg border border-slate-200 bg-white p-8 text-center dark:border-slate-700 dark:bg-slate-800">
+        <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{t('noPermission.title')}</p>
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t('noPermission.hint')}</p>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
       <div className="border-b border-slate-200 dark:border-slate-700">
         <div className="flex items-stretch gap-1 overflow-x-auto">
-          {groups.map((group, gi) => (
+          {visibleGroups.map((group, gi) => (
             <Fragment key={group.label}>
               {gi > 0 && (
                 <span aria-hidden className="mx-2 my-2 w-px self-stretch bg-slate-200 dark:bg-slate-700" />
@@ -106,6 +144,8 @@ export default function SettingsPage({ subTab }: { subTab: SubTab }) {
       {subTab === 'system-logs' && <SystemLogSettings />}
       {subTab === 'filter-subscriptions' && <FilterSubscriptionList />}
       {subTab === 'cloudflare-tunnel' && <CloudflareTunnelSettings />}
+      {subTab === 'users' && <UserManager />}
+      {subTab === 'roles' && <RoleManager />}
     </div>
   )
 }
