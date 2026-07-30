@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { ProxyHost } from '../../types/proxy-host';
 import type { TabType } from '../proxy-host/types';
 import { IconButton, PencilIcon, TrashIcon } from '../common/listui';
+import { usePermissions } from '../../hooks/usePermissions';
 
 // ProxyHostRow.tsx - houses the per-row toggle confirmation dialog and the
 // memoized table row body. Splitting the row out lets `React.memo` skip
@@ -74,7 +75,12 @@ function ProxyHostRowImpl({
   onCheckHealth,
   onFavorite,
 }: ProxyHostRowProps) {
-  const { t } = useTranslation('proxyHost');
+  const { t } = useTranslation(['proxyHost', 'common']);
+  // Write affordances follow the role, so a read-only user is not offered actions
+  // the server will refuse. (#222)
+  const { can } = usePermissions();
+  const canWrite = can('proxy:write');
+  const canDelete = can('proxy:delete');
   const isStream = isStreamHost(host);
   const [domainsExpanded, setDomainsExpanded] = useState(false);
 
@@ -99,6 +105,7 @@ function ProxyHostRowImpl({
         <div className="flex items-start gap-1.5">
           <button
             onClick={() => onFavorite(host.id)}
+            disabled={!canWrite}
             className={`mt-0.5 p-0.5 rounded transition-colors flex-shrink-0 ${
               host.is_favorite
                 ? 'text-amber-400 hover:text-amber-500 dark:text-amber-400 dark:hover:text-amber-300'
@@ -281,12 +288,12 @@ function ProxyHostRowImpl({
         ) : (
           <button
             onClick={() => onToggle(host)}
-            disabled={togglePending}
+            disabled={togglePending || !canWrite}
             className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${host.enabled
               ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50'
               : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'
               }`}
-            title={host.enabled ? 'Click to disable' : 'Click to enable'}
+            title={canWrite ? (host.enabled ? 'Click to disable' : 'Click to enable') : t('common:noPermission')}
           >
             <span className={`w-1.5 h-1.5 rounded-full ${host.enabled ? 'bg-green-500' : 'bg-slate-400'}`} />
             {host.enabled ? t('list.status.active') : t('list.status.disabled')}
@@ -297,21 +304,34 @@ function ProxyHostRowImpl({
       {/* Actions */}
       <td className="px-4 py-3 text-right">
         <div className="flex items-center justify-end gap-0.5">
-          <IconButton onClick={() => onTestConfig(host)} title={t('actions.testConfig')}>
+          <IconButton onClick={() => onTestConfig(host)} disabled={!canWrite} title={t('actions.testConfig')}>
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </IconButton>
-          <IconButton onClick={() => onEdit(host)} title={t('actions.edit')}>
+          <IconButton
+            onClick={() => onEdit(host)}
+            disabled={!canWrite}
+            title={canWrite ? t('actions.edit') : t('common:noPermission')}
+          >
             <PencilIcon />
           </IconButton>
-          <IconButton onClick={() => onClone(host)} title={t('actions.clone')}>
+          <IconButton
+            onClick={() => onClone(host)}
+            disabled={!canWrite}
+            title={canWrite ? t('actions.clone') : t('common:noPermission')}
+          >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
             </svg>
           </IconButton>
           <span className="ml-1 border-l border-slate-200 pl-1 dark:border-slate-600">
-            <IconButton onClick={() => onDelete(host.id)} title={t('actions.delete')} variant="danger">
+            <IconButton
+              onClick={() => onDelete(host.id)}
+              disabled={!canDelete}
+              title={canDelete ? t('actions.delete') : t('common:noPermission')}
+              variant="danger"
+            >
               <TrashIcon />
             </IconButton>
           </span>

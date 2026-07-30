@@ -109,12 +109,25 @@ export function IconButton({ onClick, title, disabled, variant = 'default', chil
   );
 }
 
-/** Primary "add" button with a leading plus icon. */
-export function AddButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+/** Primary create button. `disabled` + `title` are used to reflect a role that
+ *  cannot write, so the affordance matches what the server will allow. (#222) */
+export function AddButton({
+  onClick,
+  children,
+  disabled,
+  title,
+}: {
+  onClick: () => void;
+  children: ReactNode;
+  disabled?: boolean;
+  title?: string;
+}) {
   return (
     <button
       onClick={onClick}
-      className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg shadow-sm hover:bg-indigo-700 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900"
+      disabled={disabled}
+      title={title}
+      className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg shadow-sm hover:bg-indigo-700 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-indigo-600 dark:focus:ring-offset-slate-900"
     >
       <PlusIcon />
       {children}

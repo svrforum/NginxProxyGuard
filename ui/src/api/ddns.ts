@@ -5,16 +5,13 @@ import type {
   DDNSRecordListResponse,
 } from '../types/ddns';
 import { getAuthHeaders } from './auth';
+// Uses the shared handler from client.ts so 403s get the operator-facing
+// permission message instead of the raw API wording, and 401/502-504 behave the
+// same as everywhere else. This module previously carried its own copy. (#222)
+import { handleResponse } from './client';
 
 const API_BASE = '/api/v1';
 
-async function handleResponse<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error(error.error || `HTTP ${response.status}`);
-  }
-  return response.json();
-}
 
 export async function listDDNSRecords(page = 1, perPage = 20): Promise<DDNSRecordListResponse> {
   const response = await fetch(`${API_BASE}/ddns-records?page=${page}&per_page=${perPage}`, {

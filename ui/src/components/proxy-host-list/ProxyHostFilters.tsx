@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { usePermissions } from '../../hooks/usePermissions';
 import { AddButton } from '../common/listui';
 
 export type SortBy = 'name' | 'updated' | 'created';
@@ -23,6 +24,7 @@ export function ProxyHostFilters({
   onSortChange,
   onAdd,
 }: ProxyHostFiltersProps) {
+  const { can } = usePermissions()
   const { t } = useTranslation('proxyHost');
 
   return (
@@ -71,7 +73,13 @@ export function ProxyHostFilters({
           <option value="created-asc">{t('list.sort.createdAsc')}</option>
         </select>
 
-        <AddButton onClick={onAdd}>{t('list.addNew')}</AddButton>
+        <AddButton
+          onClick={onAdd}
+          disabled={!can('proxy:write')}
+          title={can('proxy:write') ? undefined : t('common:noPermission')}
+        >
+          {t('list.addNew')}
+        </AddButton>
       </div>
     </div>
   );

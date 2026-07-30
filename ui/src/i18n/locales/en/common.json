@@ -212,5 +212,6 @@
     "inherit": "Inherit",
     "override": "Override",
     "disable": "Disable"
-  }
+  },
+  "noPermission": "You do not have permission"
 }

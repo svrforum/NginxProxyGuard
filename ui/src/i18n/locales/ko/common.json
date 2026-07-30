@@ -212,5 +212,6 @@
     "inherit": "상속",
     "override": "재정의",
     "disable": "비활성화"
-  }
+  },
+  "noPermission": "권한이 없습니다"
 }

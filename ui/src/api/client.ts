@@ -42,6 +42,25 @@ export async function handleResponse<T>(response: Response): Promise<T> {
     const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
     const message = errorData.error || `HTTP ${response.status}`
     const details = errorData.details
+    // 403 now means "your role does not allow this" far more often than anything
+    // else, and the server's wording is aimed at API clients ("insufficient
+    // permissions", "required: proxy:write"). Say it in terms an operator can act
+    // on, keeping the raw requirement as details. (#222)
+    if (response.status === 403) {
+      const code = (errorData as { code?: string }).code
+      if (code === 'must_change_password') {
+        throw new ApiError('You must change your password before using the application.', 403, details)
+      }
+      if (code === 'initial_setup_required') {
+        throw new ApiError(message, 403, details)
+      }
+      const required = (errorData as { required?: string }).required
+      throw new ApiError(
+        'Your role does not allow this action. Ask an administrator to grant it.',
+        403,
+        required ? `Required permission: ${required}` : details
+      )
+    }
     throw new ApiError(message, response.status, details)
   }
   // Handle empty responses (204 No Content)
