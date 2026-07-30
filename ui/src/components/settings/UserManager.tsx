@@ -131,7 +131,11 @@ export default function UserManager() {
                       )}
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-slate-500 dark:text-slate-400">
-                      <span>{t('users.logins', { count: u.login_count })}</span>
+                      <span>
+                        {u.last_login_at
+                          ? t('users.lastLoginAt', { when: new Date(u.last_login_at).toLocaleString() })
+                          : t('users.neverLoggedIn')}
+                      </span>
                       {!!u.api_token_count && (
                         <>
                           <span className="text-slate-300 dark:text-slate-600">·</span>

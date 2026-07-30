@@ -1400,7 +1400,6 @@
     "empty": "No users",
     "you": "You",
     "mustChangePassword": "Password change required",
-    "logins": "{{count}} login(s)",
     "apiTokens": "{{count}} API token(s)",
     "resetPassword": "Reset password",
     "cannotDeleteSelf": "You cannot delete your own account",
@@ -1430,7 +1429,6 @@
     "created": "Created",
     "lastLogin": "Last login",
     "lastLoginIP": "Last login IP",
-    "loginCount": "Logins",
     "activeSessions": "Active sessions",
     "effectiveHint": "What the account actually reaches, not the role’s stored rows.",
     "noPermissions": "No permissions",
@@ -1440,6 +1438,8 @@
     "tokenLastUsed": "Last used {{when}}",
     "tokenUseCount": "{{count}} use(s)",
     "tokenExpires": "Expires {{when}}",
-    "tokenAllowedIPs": "Allowed IPs"
+    "tokenAllowedIPs": "Allowed IPs",
+    "lastLoginAt": "Last login {{when}}",
+    "neverLoggedIn": "Never signed in"
   }
 }

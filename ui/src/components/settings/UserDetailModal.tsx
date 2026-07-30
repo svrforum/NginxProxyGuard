@@ -59,8 +59,10 @@ export function UserDetailModal({ userId, onClose }: UserDetailModalProps) {
           </p>
         )}
 
+        {/* No scroll container below: ModalShell's panel already caps height and
+            scrolls. A second one nested inside produced two scrollbars. */}
         {data && (
-          <div className="mt-4 max-h-[70vh] space-y-5 overflow-y-auto pr-1">
+          <div className="mt-4 space-y-5">
             {/* Account */}
             <section>
               <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -91,7 +93,6 @@ export function UserDetailModal({ userId, onClose }: UserDetailModalProps) {
                   label={t('users.lastLoginIP')}
                   value={<span className="font-mono text-xs">{data.last_login_ip || '—'}</span>}
                 />
-                <Row label={t('users.loginCount')} value={data.login_count} />
                 <Row label={t('users.activeSessions')} value={data.active_sessions} />
               </div>
             </section>

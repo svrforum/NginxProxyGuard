@@ -1413,7 +1413,6 @@
     "empty": "사용자가 없습니다",
     "you": "나",
     "mustChangePassword": "비밀번호 변경 필요",
-    "logins": "로그인 {{count}}회",
     "apiTokens": "API 토큰 {{count}}개",
     "resetPassword": "비밀번호 초기화",
     "cannotDeleteSelf": "자기 계정은 삭제할 수 없습니다",
@@ -1443,7 +1442,6 @@
     "created": "생성일",
     "lastLogin": "마지막 로그인",
     "lastLoginIP": "마지막 로그인 IP",
-    "loginCount": "로그인 횟수",
     "activeSessions": "활성 세션",
     "effectiveHint": "역할에 저장된 값이 아니라 실제로 적용되는 권한입니다.",
     "noPermissions": "권한 없음",
@@ -1453,6 +1451,8 @@
     "tokenLastUsed": "마지막 사용 {{when}}",
     "tokenUseCount": "{{count}}회 사용",
     "tokenExpires": "만료 {{when}}",
-    "tokenAllowedIPs": "허용 IP"
+    "tokenAllowedIPs": "허용 IP",
+    "lastLoginAt": "마지막 로그인 {{when}}",
+    "neverLoggedIn": "로그인 이력 없음"
   }
 }
