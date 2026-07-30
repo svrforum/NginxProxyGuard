@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	authMiddleware "nginx-proxy-guard/internal/middleware"
 	"nginx-proxy-guard/internal/model"
 	"nginx-proxy-guard/internal/repository"
 
@@ -68,6 +69,11 @@ func (h *APITokenHandler) CreateToken(c echo.Context) error {
 		if !isValidPermission(perm) {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid permission: " + perm})
 		}
+	}
+	if over, ok := assertPermissionsWithinRole(c, req.Permissions); !ok {
+		return c.JSON(http.StatusForbidden, map[string]string{
+			"error": "cannot grant a token more than your own role allows: " + over,
+		})
 	}
 
 	// Generate token
@@ -226,6 +232,11 @@ func (h *APITokenHandler) UpdateToken(c echo.Context) error {
 			if !isValidPermission(perm) {
 				return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid permission: " + perm})
 			}
+		}
+		if over, ok := assertPermissionsWithinRole(c, req.Permissions); !ok {
+			return c.JSON(http.StatusForbidden, map[string]string{
+				"error": "cannot grant a token more than your own role allows: " + over,
+			})
 		}
 	}
 
@@ -411,6 +422,30 @@ func (h *APITokenHandler) GetPermissions(c echo.Context) error {
 }
 
 // Helper functions
+
+// assertPermissionsWithinRole refuses a token that would exceed the issuer's own
+// role (#222 D5/D3, issuance side).
+//
+// The runtime intersection in AuthzService.CanToken already caps what a token can
+// do, so this is not the security boundary — it is the difference between a token
+// that quietly does less than its stated scopes and a request that is refused with
+// a reason. Failing at creation is what makes the scope list honest.
+//
+// Session users are checked too, not only API tokens: the point is the issuer's
+// role, whoever they are.
+func assertPermissionsWithinRole(c echo.Context, perms []string) (string, bool) {
+	for _, perm := range perms {
+		// "*" is only within reach of a principal that already holds everything.
+		probe := perm
+		if perm == model.PermissionAll {
+			probe = "role:write"
+		}
+		if !authMiddleware.HasPermissionFromContext(c, probe) {
+			return perm, false
+		}
+	}
+	return "", true
+}
 
 func isValidPermission(perm string) bool {
 	if perm == model.PermissionAll {
