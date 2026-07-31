@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { fetchCloudflareTunnel, fetchTunnelStatus } from '../../api/cloudflare-tunnel';
+import { usePermissions } from '../../hooks/usePermissions';
 import type { TunnelStatus } from '../../types/cloudflare-tunnel';
 
 // Badge colors mirror settings/CloudflareTunnelSettings.tsx so the dashboard
@@ -60,10 +61,16 @@ export default function ContainerStatsSection({ containerStats }: {
   const { t } = useTranslation(['dashboard', 'settings']);
   const [isExpanded, setIsExpanded] = useState(false);
 
+  // The tunnel lives under settings, so a role without settings:read would get a
+  // 403 per dashboard render for a chip it is never shown. (#222)
+  const { can } = usePermissions();
+  const maySeeTunnel = can('settings:read');
+
   // Same query keys as the settings page so both share one cache entry.
   const { data: tunnelSettings } = useQuery({
     queryKey: ['cloudflare-tunnel'],
     queryFn: fetchCloudflareTunnel,
+    enabled: maySeeTunnel,
   });
 
   // Poll the connector status only while the tunnel is enabled server-side.
@@ -71,7 +78,7 @@ export default function ContainerStatsSection({ containerStats }: {
     queryKey: ['cloudflare-tunnel-status'],
     queryFn: fetchTunnelStatus,
     refetchInterval: 15000,
-    enabled: tunnelSettings?.enabled === true,
+    enabled: maySeeTunnel && tunnelSettings?.enabled === true,
   });
 
   // Right after enabling, the status endpoint reports "starting" anyway.

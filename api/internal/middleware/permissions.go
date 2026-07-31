@@ -91,9 +91,11 @@ var PublicRoutes = map[string]bool{
 //   - /settings/global-{waf,bot-filter,geo,security-headers,rate-limit,cloud-providers}
 //     are the global DEFAULTS for those security features, so they belong to the
 //     waf area the UI shows them under, not to settings.
-//   - /test/nginx-config and /test/proxy-host/:id shell out through docker exec
-//     to run nginx -t and probe the target, so they are settings:write and not a
-//     read despite being GET-shaped work.
+//   - /test/nginx-config shells out through docker exec to run nginx -t, so it is
+//     settings:write and not a read despite being GET-shaped work.
+//   - /test/proxy-host/:id only probes the host's already-configured target over
+//     HTTP and stores nothing, and the host list fires it per row on render, so it
+//     is proxy:read — anything stricter makes a read-only role's own list 403.
 //   - backup has no write verb (read/create/restore); DELETE folds into create,
 //     matching how the legacy backup:create scope already gated it.
 //   - /api/docs requires settings:read (D7): publishing the whole API surface
@@ -334,7 +336,7 @@ var routePermissions = map[string]string{
 	"GET /api/v1/test/backup-restore": "settings:read",
 	"GET /api/v1/test/dashboard/queries": "settings:read",
 	"POST /api/v1/test/nginx-config": "settings:write",
-	"POST /api/v1/test/proxy-host/:id": "settings:write",
+	"POST /api/v1/test/proxy-host/:id": "proxy:read",
 	"GET /api/v1/test/system/self-check": "settings:read",
 	"GET /api/v1/upstreams/:id/health": "proxy:read",
 	"GET /api/v1/uri-blocks": "waf:read",
