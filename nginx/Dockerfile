@@ -2,7 +2,9 @@
 # Built from source for full control and latest features
 #
 # Versions (2026):
-# - nginx: 1.30.2 (stable with HTTP/3 QUIC support; CVE-2026-9256 rewrite-module fix)
+# - nginx: 1.30.4 (stable with HTTP/3 QUIC support; fixes CVE-2026-42533 map/regex
+#   buffer overflow (major), CVE-2026-60005 slice, CVE-2026-56434 ssi,
+#   CVE-2026-42055 grpc, CVE-2026-48142 charset)
 # - ModSecurity: 3.0.15
 # - ModSecurity-nginx: 1.0.4
 # - OWASP CRS: 4.26.0
@@ -13,7 +15,7 @@
 # - https://github.com/owasp-modsecurity/ModSecurity-nginx
 # - https://github.com/coreruleset/coreruleset
 
-ARG NGINX_VERSION=1.30.2
+ARG NGINX_VERSION=1.30.4
 ARG MODSECURITY_VERSION=3.0.15
 ARG MODSECURITY_NGINX_VERSION=1.0.4
 ARG OWASP_CRS_VERSION=4.26.0
