@@ -93,7 +93,8 @@
         "access": "접근 관리"
       },
       "users": "사용자",
-      "roles": "역할"
+      "roles": "역할",
+      "sso": "SSO"
     }
   },
   "loading": "로딩 중...",

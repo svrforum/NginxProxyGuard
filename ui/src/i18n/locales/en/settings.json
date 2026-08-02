@@ -1499,10 +1499,10 @@
     },
     "presets": {
       "generic": "Enter manually",
-      "googleHint": "Google always uses this address. Leave it as it is.",
-      "authentikHint": "Find the application slug under Applications → Providers in Authentik and put it where <application-slug> is.",
-      "autheliaHint": "The address Authelia is served on, e.g. https://auth.yourdomain",
-      "keycloakHint": "Replace <realm> with your realm name.",
+      "googleHint": "Fixed for every Google account — leave it exactly as it is, with no trailing slash.",
+      "authentikHint": "https://<your-authentik-domain>/application/o/<application-slug>/ — the slug is the one authentik fills in when you create the application.",
+      "autheliaHint": "The root URL you reach Authelia on — scheme and host only, no path, no trailing slash.",
+      "keycloakHint": "https://<keycloak-host>/realms/<realm-name> — the realm URL itself, not the discovery path.",
       "genericHint": "The provider's discovery base — everything before /.well-known/openid-configuration"
     },
     "test": "Test connection",
@@ -1518,11 +1518,52 @@
     "noLinkedIdentities": "No SSO link (password account)",
     "identityLinkedAt": "linked {{when}}",
     "groupsScopeMissing": "Group rules are set but the requested scopes do not include `groups`. Most providers withhold group information without it, so every sign-in would be refused as not permitted.",
-    "addGroupsScope": "Add groups"
-  },
-  "subTabs": {
-    "settings": {
-      "sso": "SSO"
-    }
+    "addGroupsScope": "Add groups",
+    "guides": {
+      "google": {
+        "steps": [
+          "In the Google Cloud Console, pick or create a project to hold the client.",
+          "Register the app and set Audience to External if anyone signs in with a personal Gmail account, or Internal if everyone is in your Workspace organisation.",
+          "Create a client with Application type set to Web application — that is the type that issues a client secret.",
+          "Add {{callback}} to Authorized redirect URIs. Google matches it exactly and rejects plain http, bare IP addresses and wildcards.",
+          "Copy the client ID and secret straight into the fields below: Google shows the full secret only once, though you can rotate it later.",
+          "If your Audience is External and the app is still in Testing, add each person to the Test users list or Google will block them."
+        ],
+        "groups": "Google sends no group information over OIDC, so assign roles per account here. To limit sign-in to one Workspace organisation, set Audience to Internal rather than looking for a groups setting."
+      },
+      "authentik": {
+        "steps": [
+          "In authentik, open Applications → Applications and create a new application, which sets up its provider in the same pass.",
+          "Note the Slug authentik fills in — it appears in the issuer URL above.",
+          "Choose OAuth2/OIDC as the provider type and leave Client Type on Confidential so a client secret is generated.",
+          "Under Redirect URIs, add {{callback}} with mode set to Strict.",
+          "Set a Signing Key, such as the built-in self-signed certificate — leaving it empty breaks token signing.",
+          "Create it, then reopen the provider to copy the Client ID and Client Secret."
+        ],
+        "groups": "authentik's default profile scope already emits a groups claim, so leaving the group claim name as \"groups\" is enough — no custom mapping needed."
+      },
+      "authelia": {
+        "steps": [
+          "Authelia has no admin interface — open configuration.yml and find or create identity_providers.oidc.",
+          "Generate a client ID and a hashed secret with the authelia crypto commands, and keep the plaintext secret for the field below.",
+          "Add the client under identity_providers.oidc.clients and leave `public` unset so it stays confidential.",
+          "Keep scopes as openid, profile, email and groups, and add {{callback}} as the redirect URI.",
+          "On Authelia 4.39 and newer, add a claims policy that puts email, preferred_username and groups in the ID token — otherwise they are only returned from the UserInfo endpoint.",
+          "Restart Authelia; it does not reload its configuration on its own."
+        ],
+        "groups": "groups is already in Authelia's default scopes. On 4.39 and newer the claims policy is what actually places it in the ID token, which is where NPG reads it."
+      },
+      "keycloak": {
+        "steps": [
+          "Switch to the realm your users actually log in to — a client in the master realm cannot authenticate them.",
+          "Create a client with Client type set to OpenID Connect.",
+          "Turn Client authentication On. It is off by default, which produces a public client with no secret for NPG to use.",
+          "Set Valid redirect URIs to exactly {{callback}}, with no wildcard, and save.",
+          "Open the client's Credentials tab and copy the Client secret into the field below."
+        ],
+        "groups": "Keycloak sends no group information until you add it: on the client's dedicated scope, add a Group Membership mapper, set Token Claim Name to groups and turn Full group path off."
+      }
+    },
+    "guideTitle": "At {{provider}}, do this"
   }
 }

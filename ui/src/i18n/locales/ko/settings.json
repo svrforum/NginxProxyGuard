@@ -1512,10 +1512,10 @@
     },
     "presets": {
       "generic": "직접 입력",
-      "googleHint": "구글은 이 주소로 고정입니다. 그대로 두세요.",
-      "authentikHint": "Authentik 관리화면 → Applications → Providers에서 애플리케이션 slug를 확인해 <application-slug> 자리에 넣으세요.",
-      "autheliaHint": "Authelia를 서비스하는 주소입니다. 예: https://auth.내도메인",
-      "keycloakHint": "<realm> 자리에 realm 이름을 넣으세요.",
+      "googleHint": "모든 구글 계정에 동일한 고정 주소입니다. 끝에 슬래시 없이 그대로 두세요.",
+      "authentikHint": "https://<authentik-도메인>/application/o/<application-slug>/ — slug는 애플리케이션 생성 시 authentik이 채워 넣는 값입니다.",
+      "autheliaHint": "Authelia에 접속하는 루트 주소입니다. 스킴+호스트만, 경로와 끝 슬래시 없이.",
+      "keycloakHint": "https://<keycloak-호스트>/realms/<realm-이름> — discovery 경로가 아니라 realm 주소 자체입니다.",
       "genericHint": "제공자의 discovery 기준 주소. `/.well-known/openid-configuration` 앞부분까지입니다."
     },
     "test": "연결 테스트",
@@ -1531,11 +1531,52 @@
     "noLinkedIdentities": "SSO 연결 없음 (비밀번호 로그인 계정)",
     "identityLinkedAt": "{{when}} 연결",
     "groupsScopeMissing": "그룹 규칙을 설정했지만 요청 scope에 `groups`가 없습니다. 대부분의 제공자는 이 scope 없이는 그룹 정보를 주지 않아, 모든 로그인이 \"허용되지 않음\"으로 거부됩니다.",
-    "addGroupsScope": "groups 추가"
-  },
-  "subTabs": {
-    "settings": {
-      "sso": "SSO"
-    }
+    "addGroupsScope": "groups 추가",
+    "guides": {
+      "google": {
+        "steps": [
+          "Google Cloud Console에서 클라이언트를 담을 프로젝트를 고르거나 새로 만듭니다.",
+          "앱을 등록하면서 대상(Audience)을 정합니다 — 개인 Gmail로 로그인하는 사람이 있으면 External, 전원이 Workspace 조직 소속이면 Internal.",
+          "클라이언트를 만들 때 애플리케이션 유형을 '웹 애플리케이션'으로 지정합니다. 클라이언트 보안 비밀번호가 발급되는 유형입니다.",
+          "승인된 리디렉션 URI에 {{callback}} 을 추가합니다. Google은 이 값을 완전히 일치시켜 비교하고 평문 http·IP 주소·와일드카드는 거부합니다.",
+          "클라이언트 ID와 보안 비밀번호를 아래 칸에 바로 붙여 넣으세요. 전체 비밀번호는 생성 시 한 번만 보입니다(이후엔 재발급).",
+          "대상이 External이고 게시 상태가 '테스트'라면, 로그인할 사람을 테스트 사용자 목록에 넣어야 Google이 막지 않습니다."
+        ],
+        "groups": "Google은 OIDC로 그룹 정보를 주지 않습니다. 역할은 여기서 계정별로 지정하세요. 하나의 Workspace 조직으로 제한하려면 그룹 설정을 찾지 말고 대상을 Internal로 두면 됩니다."
+      },
+      "authentik": {
+        "steps": [
+          "authentik에서 Applications → Applications로 가서 새 애플리케이션을 만듭니다. 같은 흐름에서 provider까지 만들어집니다.",
+          "authentik이 채워 넣는 Slug를 확인하세요 — 위 Issuer URL에 그대로 들어갑니다.",
+          "Provider 유형을 OAuth2/OIDC로 고르고 Client Type은 Confidential로 둡니다. 그래야 클라이언트 시크릿이 발급됩니다.",
+          "Redirect URIs에 {{callback}} 을 mode: Strict로 추가합니다.",
+          "Signing Key를 지정하세요(예: 내장 자체 서명 인증서). 비워 두면 토큰 서명이 깨집니다.",
+          "만든 뒤 provider를 다시 열어 Client ID와 Client Secret을 복사합니다."
+        ],
+        "groups": "authentik의 기본 profile scope가 이미 groups 클레임을 내보내므로, 그룹 클레임 이름을 \"groups\"로 두기만 하면 됩니다. 별도 매핑이 필요 없습니다."
+      },
+      "authelia": {
+        "steps": [
+          "Authelia는 관리 화면이 없습니다 — configuration.yml을 열어 identity_providers.oidc 섹션을 찾거나 만듭니다.",
+          "authelia crypto 명령으로 client ID와 해시된 시크릿을 생성하고, 평문 시크릿은 아래 칸에 넣을 용도로 보관하세요.",
+          "identity_providers.oidc.clients 아래에 클라이언트를 추가하고 `public`은 설정하지 않습니다(그래야 confidential 유지).",
+          "scopes는 openid·profile·email·groups로 두고, 리디렉션 URI로 {{callback}} 을 추가합니다.",
+          "Authelia 4.39 이상이면 claims policy를 추가해 email·preferred_username·groups를 ID 토큰에 포함시키세요. 안 하면 UserInfo에서만 반환됩니다.",
+          "Authelia를 재시작합니다. 설정을 자동으로 다시 읽지 않습니다."
+        ],
+        "groups": "groups는 Authelia 기본 scope에 이미 있습니다. 4.39 이상에서는 claims policy가 실제로 ID 토큰에 넣어 주며, NPG는 ID 토큰을 읽습니다."
+      },
+      "keycloak": {
+        "steps": [
+          "사용자가 실제로 로그인하는 realm으로 전환하세요. master realm에 만든 클라이언트로는 인증할 수 없습니다.",
+          "Client type을 OpenID Connect로 해서 클라이언트를 만듭니다.",
+          "Client authentication을 켜세요. 기본값이 꺼짐이라 그대로 두면 시크릿 없는 public 클라이언트가 만들어집니다.",
+          "Valid redirect URIs를 와일드카드 없이 정확히 {{callback}} 으로 지정하고 저장합니다.",
+          "클라이언트의 Credentials 탭에서 Client secret을 복사해 아래 칸에 넣습니다."
+        ],
+        "groups": "Keycloak은 설정하기 전엔 그룹 정보를 보내지 않습니다. 클라이언트 전용(dedicated) scope에 Group Membership 매퍼를 추가하고 Token Claim Name을 groups로, Full group path는 끄세요."
+      }
+    },
+    "guideTitle": "{{provider}}에서 해야 할 일"
   }
 }

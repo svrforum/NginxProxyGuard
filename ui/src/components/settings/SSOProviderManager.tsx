@@ -311,6 +311,27 @@ export function SSOProviderManager() {
                 ))}
               </div>
 
+              {/* What to do AT the provider. The callback URL is inlined rather
+                  than referred to, so the step and the value to paste are in the
+                  same place. */}
+              {preset !== 'generic' && (
+                <div data-testid="sso-guide" className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900/40">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    {tr('sso.guideTitle', { provider: SSO_PRESETS.find((x) => x.key === preset)?.label ?? '' })}
+                  </p>
+                  <ol className="mt-1.5 list-decimal space-y-1 pl-4 text-xs text-slate-600 dark:text-slate-300">
+                    {(t(`sso.guides.${preset}.steps`, { returnObjects: true, defaultValue: [] }) as unknown as string[]).map(
+                      (line, i) => (
+                        <li key={i}>{renderGuideLine(line, callbackPreview, tr('sso.callbackNeedsSlug'))}</li>
+                      ),
+                    )}
+                  </ol>
+                  <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+                    {tr(`sso.guides.${preset}.groups`, { defaultValue: '' })}
+                  </p>
+                </div>
+              )}
+
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <Field label={tr('sso.fields.name')}>
                   <input aria-label="sso-name" value={form.name} onChange={(e) => setName(e.target.value)} className={inputCls} />
@@ -585,6 +606,26 @@ export function SSOProviderManager() {
 
 const inputCls =
   'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:ring-2 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white'
+
+/** Splits a guide step on the {{callback}} placeholder and renders the real URL
+ *  inline as copyable code, so the instruction and the value never drift apart. */
+function renderGuideLine(line: string, callback: string, fallback: string) {
+  const parts = line.split('{{callback}}')
+  if (parts.length === 1) return line
+  return parts.flatMap((part, i) =>
+    i === 0
+      ? [part]
+      : [
+          <code
+            key={`cb-${i}`}
+            className="mx-0.5 rounded bg-white px-1 py-0.5 font-mono text-[11px] break-all text-slate-700 dark:bg-slate-800 dark:text-slate-200"
+          >
+            {callback || fallback}
+          </code>,
+          part,
+        ],
+  )
+}
 
 /** A numbered section. The form asks for twelve things; presenting them as three
  *  ordered steps is what turns a wall of inputs into a task. */

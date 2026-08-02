@@ -93,7 +93,8 @@
         "access": "Access"
       },
       "users": "Users",
-      "roles": "Roles"
+      "roles": "Roles",
+      "sso": "SSO"
     }
   },
   "loading": "Loading...",
