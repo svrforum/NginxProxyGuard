@@ -297,18 +297,22 @@ func registerUserAdminRoutes(v1 *echo.Group, h *handler.UserAdminHandler) {
 // registerSSORoutes exposes the OIDC provider registry (#227). The login flow
 // itself is public and lives in registerPublicRoutes.
 //
-// Guarded by settings rather than user/role: configuring an IdP is a settings
-// task. It does decide which role a provisioned account receives, but the roles
-// themselves can only be created through role:write, so a settings holder can
-// hand out no permission that does not already exist.
+// Guarded by the USER area, not settings. A provider decides which accounts may
+// exist here and what role they receive, so configuring one is account
+// administration wearing a settings-shaped hat. Gating it on settings:write
+// would have re-opened the door #222 deliberately closed: a role holding
+// settings but not user:write could point a provider it controls at the
+// administrator role, enable provisioning, and sign in as a superuser. That is
+// the same power as PUT /users/:id/role, which user:write already governs, so
+// this mapping makes SSO exactly as privileged as it is — no more, no less.
 func registerSSORoutes(v1 *echo.Group, h *handler.SSOHandler) {
-	settingsRead := authMiddleware.RequireAPIPermission(model.PermissionSettingsRead)
-	settingsWrite := authMiddleware.RequireAPIPermission(model.PermissionSettingsWrite)
+	userRead := authMiddleware.RequireAPIPermission("user:read")
+	userWrite := authMiddleware.RequireAPIPermission("user:write")
 
-	v1.GET("/sso-providers", h.ListProviders, settingsRead)
-	v1.POST("/sso-providers", h.CreateProvider, settingsWrite)
-	v1.PUT("/sso-providers/:id", h.UpdateProvider, settingsWrite)
-	v1.DELETE("/sso-providers/:id", h.DeleteProvider, settingsWrite)
+	v1.GET("/sso-providers", h.ListProviders, userRead)
+	v1.POST("/sso-providers", h.CreateProvider, userWrite)
+	v1.PUT("/sso-providers/:id", h.UpdateProvider, userWrite)
+	v1.DELETE("/sso-providers/:id", h.DeleteProvider, userWrite)
 }
 
 func registerCloudflareTunnelRoutes(v1 *echo.Group, h *handler.CloudflareTunnelHandler) {

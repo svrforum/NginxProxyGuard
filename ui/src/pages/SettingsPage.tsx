@@ -70,7 +70,7 @@ export default function SettingsPage({ subTab }: { subTab: SubTab }) {
       items: [
         ...(canArea('user') ? [{ key: 'users' as SubTab, label: t('subTabs.settings.users') }] : []),
         ...(canArea('role') ? [{ key: 'roles' as SubTab, label: t('subTabs.settings.roles') }] : []),
-        ...(canArea('settings') ? [{ key: 'sso' as SubTab, label: t('subTabs.settings.sso') }] : []),
+        ...(canArea('user') ? [{ key: 'sso' as SubTab, label: t('subTabs.settings.sso') }] : []),
       ],
     },
     {

@@ -60,7 +60,9 @@ export function SSOProviderManager() {
   const tr = (k: string, o?: Record<string, unknown>) => String(t(k, o ?? {}))
   const qc = useQueryClient()
   const { can } = usePermissions()
-  const canWrite = can('settings:write')
+  // The user area, not settings: a provider decides who may have an account here
+  // and with what role, so it is account administration. (#227 security review)
+  const canWrite = can('user:write')
 
   const [editing, setEditing] = useState<SSOProvider | null>(null)
   const [creating, setCreating] = useState(false)

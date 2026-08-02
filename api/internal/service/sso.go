@@ -76,38 +76,39 @@ func (s *SSOService) Available(ctx context.Context) bool {
 
 // ── login flow ────────────────────────────────────────────────────────────
 
-// StartLogin creates the CSRF/PKCE state and returns the IdP URL to redirect to.
-func (s *SSOService) StartLogin(ctx context.Context, slug, callbackBase string) (string, error) {
+// StartLogin creates the CSRF/PKCE state and returns the IdP URL to redirect to,
+// along with the state itself so the handler can bind it to this browser.
+func (s *SSOService) StartLogin(ctx context.Context, slug, callbackBase string) (authURL, state string, err error) {
 	if !s.Available(ctx) {
-		return "", ErrSSOUnavailable
+		return "", "", ErrSSOUnavailable
 	}
 	p, err := s.repo.GetEnabledBySlug(ctx, slug)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if p == nil {
-		return "", ErrSSOProviderGone
+		return "", "", ErrSSOProviderGone
 	}
 
 	cfg, err := s.oauthConfig(ctx, p, callbackBase)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	state, err := randomToken(32)
+	state, err = randomToken(32)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	nonce, err := randomToken(32)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	verifier := oauth2.GenerateVerifier()
 
 	if err := s.repo.SaveLoginState(ctx, state, p.ID, nonce, verifier, model.SSOLoginStateTTL); err != nil {
-		return "", err
+		return "", "", err
 	}
-	return cfg.AuthCodeURL(state, oidc.Nonce(nonce), oauth2.S256ChallengeOption(verifier)), nil
+	return cfg.AuthCodeURL(state, oidc.Nonce(nonce), oauth2.S256ChallengeOption(verifier)), state, nil
 }
 
 // CompleteLogin verifies the callback and returns a session token.

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"crypto/subtle"
 	"errors"
 	"net/http"
 	"net/url"
@@ -39,13 +40,56 @@ func (h *SSOHandler) ListPublicProviders(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]any{"data": providers})
 }
 
+// stateCookie binds a sign-in attempt to the browser that began it.
+//
+// The state row in the database proves the attempt is one NPG issued, but on its
+// own it does not prove the browser presenting it is the one that started it: an
+// attacker could complete authentication as themselves and then deliver the
+// resulting callback URL to somebody else, silently signing that person's
+// browser in as the attacker (RFC 6749 §10.12). Requiring the cookie to match
+// closes that.
+const stateCookie = "npg_sso_state"
+const stateCookiePath = "/api/v1/auth/sso"
+
 // Start redirects the browser to the identity provider.
 func (h *SSOHandler) Start(c echo.Context) error {
-	authURL, err := h.service.StartLogin(c.Request().Context(), c.Param("slug"), requestBase(c))
+	authURL, state, err := h.service.StartLogin(c.Request().Context(), c.Param("slug"), requestBase(c))
 	if err != nil {
 		return c.Redirect(http.StatusFound, completePath+"#error="+errorCode(err))
 	}
+	c.SetCookie(&http.Cookie{
+		Name:  stateCookie,
+		Value: state,
+		Path:  stateCookiePath,
+		// Lax, not Strict: the browser arrives back here as a top-level GET
+		// navigation from the identity provider, which Strict would strip.
+		SameSite: http.SameSiteLaxMode,
+		HttpOnly: true,
+		// Only when the panel is actually served over TLS. A home server on a LAN
+		// is often plain http, where a Secure cookie would simply never be sent
+		// and every sign-in would fail.
+		Secure: isTLSRequest(c),
+		MaxAge: int(model.SSOLoginStateTTL.Seconds()),
+	})
 	return c.Redirect(http.StatusFound, authURL)
+}
+
+// clearStateCookie expires the binding cookie once an attempt is over, whether
+// it succeeded or failed.
+func clearStateCookie(c echo.Context) {
+	c.SetCookie(&http.Cookie{
+		Name: stateCookie, Value: "", Path: stateCookiePath,
+		SameSite: http.SameSiteLaxMode, HttpOnly: true, Secure: isTLSRequest(c), MaxAge: -1,
+	})
+}
+
+func isTLSRequest(c echo.Context) bool {
+	r := c.Request()
+	if r.TLS != nil {
+		return true
+	}
+	proto := r.Header.Get("X-Forwarded-Proto")
+	return strings.EqualFold(strings.TrimSpace(strings.Split(proto, ",")[0]), "https")
 }
 
 // Callback finishes the flow and hands the SPA a session token.
@@ -58,6 +102,12 @@ func (h *SSOHandler) Callback(c echo.Context) error {
 	ip := c.RealIP()
 	userAgent := c.Request().UserAgent()
 
+	// Read the binding cookie and expire it in the same breath: it is single-use,
+	// and this must happen before any redirect is written, because a deferred
+	// SetCookie lands after the response headers have already gone out.
+	bound, cookieErr := c.Cookie(stateCookie)
+	clearStateCookie(c)
+
 	// The IdP reports its own refusals here — an unapproved app, a cancelled
 	// consent screen — before any code exists to exchange.
 	if idpErr := c.QueryParam("error"); idpErr != "" {
@@ -68,6 +118,16 @@ func (h *SSOHandler) Callback(c echo.Context) error {
 	state := c.QueryParam("state")
 	if code == "" || state == "" {
 		return c.Redirect(http.StatusFound, completePath+"#error=invalid_response")
+	}
+
+	// The browser finishing the flow must be the one that started it. Reported as
+	// "expired" like every other state failure so an anonymous caller cannot
+	// distinguish a missing cookie from an unknown state.
+	if cookieErr != nil || bound == nil || subtle.ConstantTimeCompare([]byte(bound.Value), []byte(state)) != 1 {
+		if h.audit != nil {
+			_ = h.audit.LogUserLoginFailed(c.Request().Context(), "sso:"+slug, ip, userAgent, "state_not_bound")
+		}
+		return c.Redirect(http.StatusFound, completePath+"#error=expired")
 	}
 
 	token, err := h.service.CompleteLogin(c.Request().Context(), slug, code, state, requestBase(c), ip, userAgent)
