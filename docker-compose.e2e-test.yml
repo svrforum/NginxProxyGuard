@@ -181,6 +181,25 @@ services:
       timeout: 5s
       retries: 15
 
+  # Real OpenID Connect provider for the SSO end-to-end tests (#227). Reachable
+  # at the same URL from both sides: the API resolves "dex" through docker DNS,
+  # and Chromium is launched with --host-resolver-rules mapping dex to 127.0.0.1.
+  dex:
+    image: dexidp/dex:v2.44.0
+    container_name: npg-test-dex
+    command: ["dex", "serve", "/etc/dex/config.yaml"]
+    volumes:
+      - ./test/e2e/dex/config.yaml:/etc/dex/config.yaml:ro
+    ports:
+      - "5556:5556"
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:5556/dex/.well-known/openid-configuration"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
 networks:
   test-network:
     name: npg-e2e-test-network

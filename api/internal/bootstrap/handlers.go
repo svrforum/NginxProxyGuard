@@ -26,6 +26,7 @@ type Handlers struct {
 	LogFilterPreset    *handler.LogFilterPresetHandler
 	Auth               *handler.AuthHandler
 	UserAdmin          *handler.UserAdminHandler
+	SSO                *handler.SSOHandler
 	SystemSettings     *handler.SystemSettingsHandler
 	APIToken           *handler.APITokenHandler
 	AuditLog           *handler.AuditLogHandler
@@ -73,6 +74,7 @@ func InitHandlers(
 	h.LogFilterPreset = handler.NewLogFilterPresetHandler(repos.LogFilterPreset)
 	h.Auth = handler.NewAuthHandler(svcs.Auth, svcs.Audit)
 	h.UserAdmin = handler.NewUserAdminHandler(svcs.UserAdmin, svcs.Audit, svcs.Authz)
+	h.SSO = handler.NewSSOHandler(svcs.SSO, svcs.Audit)
 	h.Auth.SetAuthzService(svcs.Authz)
 	h.SystemSettings = handler.NewSystemSettingsHandler(
 		repos.SystemSettings,

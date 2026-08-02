@@ -88,6 +88,46 @@ func (r *UserRepository) Create(ctx context.Context, username, passwordHash, rol
 	return id, nil
 }
 
+// CreateFederated inserts an account provisioned from an identity provider.
+//
+// It differs from Create in two ways that matter. The real email from the IdP is
+// stored rather than the username@localhost placeholder, because that address is
+// what later links the same person arriving from a second provider. And
+// must_change_password stays false: there is no password to change — the hash
+// the caller supplies is of bytes nobody holds, so local login for this account
+// cannot succeed until an admin resets it. (#227)
+func (r *UserRepository) CreateFederated(ctx context.Context, username, email, passwordHash, roleID string, isSuperuser bool) (string, error) {
+	legacyRole := "user"
+	if isSuperuser {
+		legacyRole = "admin"
+	}
+	var id string
+	err := r.db.QueryRowContext(ctx, `
+		INSERT INTO users (email, username, password_hash, role, role_id,
+		                   is_initial_setup, must_change_password, language, font_family)
+		VALUES ($1, $2, $3, $4, $5, false, false, 'ko', 'system')
+		RETURNING id`,
+		email, username, passwordHash, legacyRole, roleID).Scan(&id)
+	if err != nil {
+		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+			return "", fmt.Errorf("an account with this username or email already exists")
+		}
+		return "", fmt.Errorf("failed to create federated user: %w", err)
+	}
+	return id, nil
+}
+
+// UsernameTaken backs the disambiguation of a username derived from IdP claims.
+func (r *UserRepository) UsernameTaken(ctx context.Context, username string) (bool, error) {
+	var exists bool
+	err := r.db.QueryRowContext(ctx,
+		`SELECT EXISTS (SELECT 1 FROM users WHERE lower(username) = lower($1))`, username).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("failed to check username: %w", err)
+	}
+	return exists, nil
+}
+
 // AssignRole moves an account to a role and keeps the legacy role marker in sync
 // so the CLI recovery path still recognises administrators.
 func (r *UserRepository) AssignRole(ctx context.Context, userID, roleID string, isSuperuser bool) error {

@@ -257,6 +257,15 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 		}
 	}
 
+	// Import SSO providers (#227). Kept out of the roles branch: a backup can
+	// carry providers without carrying roles, and the provider's roles are
+	// resolved by name against whatever the target install already has.
+	if len(data.SSOProviders) > 0 {
+		if err := r.importSSOProviders(ctx, tx, data.SSOProviders); err != nil {
+			return nil, fmt.Errorf("failed to import sso providers: %w", err)
+		}
+	}
+
 	// Import Cloud Providers
 	for _, cp := range data.CloudProviders {
 		if err := r.importCloudProvider(ctx, tx, &cp); err != nil {

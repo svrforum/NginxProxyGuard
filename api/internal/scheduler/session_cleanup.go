@@ -19,6 +19,7 @@ import (
 // brute-force attempt. (#222)
 type SessionCleanupScheduler struct {
 	service  *service.AuthService
+	sso      *service.SSOService
 	interval time.Duration
 	stopChan chan struct{}
 	stopOnce sync.Once
@@ -26,9 +27,10 @@ type SessionCleanupScheduler struct {
 	mu       sync.Mutex
 }
 
-func NewSessionCleanupScheduler(svc *service.AuthService) *SessionCleanupScheduler {
+func NewSessionCleanupScheduler(svc *service.AuthService, sso *service.SSOService) *SessionCleanupScheduler {
 	return &SessionCleanupScheduler{
 		service:  svc,
+		sso:      sso,
 		interval: config.SessionCleanupInterval,
 		stopChan: make(chan struct{}),
 	}
@@ -88,5 +90,14 @@ func (s *SessionCleanupScheduler) cleanup() {
 	defer cancel()
 	if err := s.service.CleanupSessions(ctx); err != nil {
 		log.Printf("[Scheduler] Session cleanup failed: %v", err)
+	}
+	// Half-finished SSO sign-ins leave a state row behind; they expire in ten
+	// minutes but nothing would delete them. (#227)
+	if s.sso != nil {
+		if n, err := s.sso.CleanupLoginStates(ctx); err != nil {
+			log.Printf("[Scheduler] SSO login-state cleanup failed: %v", err)
+		} else if n > 0 {
+			log.Printf("[Scheduler] Removed %d expired SSO login states", n)
+		}
 	}
 }

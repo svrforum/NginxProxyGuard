@@ -1188,6 +1188,72 @@ UPDATE public.users SET role_id = '00000000-0000-0000-0000-0000000000a1' WHERE r
     ('00000000-0000-0000-0000-0000000000a3', 'dnsprovider:read')
 ON CONFLICT (role_id, permission) DO NOTHING;`,
 		},
+		{
+			desc: "v2.35.0: sso_providers + user_identities + sso_login_states (OIDC SSO, #227)",
+			sql: `CREATE TABLE IF NOT EXISTS public.sso_providers (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    slug character varying(32) NOT NULL,
+    name character varying(64) NOT NULL,
+    issuer_url text NOT NULL,
+    client_id text NOT NULL,
+    client_secret text NOT NULL,
+    scopes text DEFAULT 'openid profile email'::text NOT NULL,
+    callback_base_url text,
+    enabled boolean DEFAULT true NOT NULL,
+    allow_jit boolean DEFAULT false NOT NULL,
+    allowed_email_domains text[] DEFAULT '{}'::text[] NOT NULL,
+    allowed_emails text[] DEFAULT '{}'::text[] NOT NULL,
+    group_claim character varying(64) DEFAULT 'groups'::character varying NOT NULL,
+    required_group text,
+    default_role_id uuid,
+    group_role_mappings jsonb DEFAULT '[]'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT sso_providers_pkey PRIMARY KEY (id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS sso_providers_slug_key ON public.sso_providers (lower((slug)::text));
+CREATE TABLE IF NOT EXISTS public.user_identities (
+    provider_id uuid NOT NULL,
+    subject text NOT NULL,
+    user_id uuid NOT NULL,
+    email text,
+    last_login_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT user_identities_pkey PRIMARY KEY (provider_id, subject)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS user_identities_user_provider_key ON public.user_identities (user_id, provider_id);
+CREATE TABLE IF NOT EXISTS public.sso_login_states (
+    state character varying(64) NOT NULL,
+    provider_id uuid NOT NULL,
+    nonce character varying(64) NOT NULL,
+    code_verifier character varying(128) NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    CONSTRAINT sso_login_states_pkey PRIMARY KEY (state)
+);
+CREATE INDEX IF NOT EXISTS sso_login_states_expires_at_idx ON public.sso_login_states (expires_at);`,
+		},
+		// Separate statement behind duplicate_object guards: ADD CONSTRAINT is not
+		// idempotent, and the tables above may already exist from a partial run.
+		{
+			desc: "v2.35.0: SSO foreign keys (OIDC SSO, #227)",
+			sql: `DO $$ BEGIN
+    ALTER TABLE public.sso_providers
+        ADD CONSTRAINT sso_providers_default_role_id_fkey FOREIGN KEY (default_role_id) REFERENCES public.roles(id) ON DELETE RESTRICT;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+    ALTER TABLE public.user_identities
+        ADD CONSTRAINT user_identities_provider_id_fkey FOREIGN KEY (provider_id) REFERENCES public.sso_providers(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+    ALTER TABLE public.user_identities
+        ADD CONSTRAINT user_identities_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+    ALTER TABLE public.sso_login_states
+        ADD CONSTRAINT sso_login_states_provider_id_fkey FOREIGN KEY (provider_id) REFERENCES public.sso_providers(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

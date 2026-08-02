@@ -1,0 +1,34 @@
+# Dex, a real OpenID Connect provider, for exercising the SSO flow end to end.
+# The issuer is the compose service name so the API container and the browser
+# reach it at the same URL — the browser resolves it via Chromium's
+# --host-resolver-rules, the API via docker DNS.
+issuer: http://dex:5556/dex
+
+storage:
+  type: memory
+
+web:
+  http: 0.0.0.0:5556
+
+oauth2:
+  skipApprovalScreen: true
+
+staticClients:
+  - id: npg-e2e
+    name: NPG e2e
+    secret: npg-e2e-secret
+    redirectURIs:
+      - http://127.0.0.1:19080/api/v1/auth/sso/dex/callback
+      - https://127.0.0.1:18181/api/v1/auth/sso/dex/callback
+
+enablePasswordDB: true
+staticPasswords:
+  # bcrypt of "Password123!" (generated, round-trip verified)
+  - email: allowed@npg-test.example
+    hash: "$2a$10$uS0AT.mae9AdBlhQJTuzcu2B0/OnJbZT118hEr2az4ZekXc2r.UXu"
+    username: allowed
+    userID: "11111111-1111-1111-1111-111111111111"
+  - email: stranger@elsewhere.example
+    hash: "$2a$10$uS0AT.mae9AdBlhQJTuzcu2B0/OnJbZT118hEr2az4ZekXc2r.UXu"
+    username: stranger
+    userID: "22222222-2222-2222-2222-222222222222"

@@ -274,6 +274,23 @@ func (s *AuthService) createSession(ctx context.Context, user *model.User, ip, u
 	}, nil
 }
 
+// CreateSessionForUser issues an ordinary session for an account whose identity
+// has already been proven by other means. It exists for SSO (#227): the OIDC
+// callback has verified the ID token, so it needs exactly the session the
+// password path produces — same table, same expiry, same downstream middleware —
+// without re-checking a password. NPG's own TOTP is deliberately not consulted;
+// the identity provider performed the authentication.
+func (s *AuthService) CreateSessionForUser(ctx context.Context, userID, ip, userAgent string) (*model.LoginResponse, error) {
+	user, err := s.repo.GetUserByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		return nil, ErrUnauthorized
+	}
+	return s.createSession(ctx, user, ip, userAgent)
+}
+
 // Setup2FA initiates 2FA setup and returns secret + QR code URL
 func (s *AuthService) Setup2FA(ctx context.Context, userID string) (*model.Setup2FAResponse, error) {
 	user, err := s.repo.GetUserByID(ctx, userID)

@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 
@@ -283,6 +284,91 @@ func (r *BackupRepository) importRoles(ctx context.Context, tx *sql.Tx, roles []
 				ON CONFLICT (role_id, permission) DO NOTHING`, id, perm); err != nil {
 				return fmt.Errorf("role %s permission %s: %w", e.Name, perm, err)
 			}
+		}
+	}
+	return nil
+}
+
+// importSSOProviders restores the OIDC provider registry (#227).
+//
+// Upsert by slug, like importRoles upserts by name, so a restore over a live
+// install updates providers in place instead of colliding. Roles are resolved by
+// NAME: a backup carries no uuids that mean anything here. A provider whose role
+// is missing is imported with no default role and JIT forced off — silently
+// provisioning accounts with the wrong role would be worse than a provider the
+// administrator has to finish configuring.
+func (r *BackupRepository) importSSOProviders(ctx context.Context, tx *sql.Tx, providers []model.SSOProviderExport) error {
+	var present bool
+	if err := tx.QueryRowContext(ctx,
+		`SELECT to_regclass('public.sso_providers') IS NOT NULL`).Scan(&present); err != nil || !present {
+		if len(providers) > 0 {
+			log.Printf("Backup import: skipping %d SSO providers — the sso_providers table is missing", len(providers))
+		}
+		return nil
+	}
+
+	roleID := func(name string) *string {
+		if name == "" {
+			return nil
+		}
+		var id string
+		if err := tx.QueryRowContext(ctx,
+			`SELECT id FROM roles WHERE lower(name) = lower($1)`, name).Scan(&id); err != nil {
+			return nil
+		}
+		return &id
+	}
+
+	for _, e := range providers {
+		defaultRole := roleID(e.DefaultRoleName)
+		allowJIT := e.AllowJIT
+		if allowJIT && defaultRole == nil {
+			log.Printf("Backup import: SSO provider %q wanted role %q, which does not exist — importing with automatic account creation off",
+				e.Slug, e.DefaultRoleName)
+			allowJIT = false
+		}
+
+		mappings := make([]model.GroupRoleMapping, 0, len(e.GroupRoleMappings))
+		for _, m := range e.GroupRoleMappings {
+			if id := roleID(m.RoleName); id != nil {
+				mappings = append(mappings, model.GroupRoleMapping{Group: m.Group, RoleID: *id})
+			} else {
+				log.Printf("Backup import: SSO provider %q drops the mapping for group %q — role %q does not exist",
+					e.Slug, m.Group, m.RoleName)
+			}
+		}
+		encoded, err := json.Marshal(mappings)
+		if err != nil {
+			return fmt.Errorf("sso provider %s: %w", e.Slug, err)
+		}
+
+		scopes := e.Scopes
+		if scopes == "" {
+			scopes = "openid profile email"
+		}
+		groupClaim := e.GroupClaim
+		if groupClaim == "" {
+			groupClaim = "groups"
+		}
+
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO sso_providers (slug, name, issuer_url, client_id, client_secret, scopes,
+				callback_base_url, enabled, allow_jit, allowed_email_domains, allowed_emails,
+				group_claim, required_group, default_role_id, group_role_mappings)
+			VALUES ($1,$2,$3,$4,$5,$6,NULLIF($7,''),$8,$9,$10,$11,$12,NULLIF($13,''),$14,$15)
+			ON CONFLICT (lower((slug)::text)) DO UPDATE SET
+				name = EXCLUDED.name, issuer_url = EXCLUDED.issuer_url,
+				client_id = EXCLUDED.client_id, client_secret = EXCLUDED.client_secret,
+				scopes = EXCLUDED.scopes, callback_base_url = EXCLUDED.callback_base_url,
+				enabled = EXCLUDED.enabled, allow_jit = EXCLUDED.allow_jit,
+				allowed_email_domains = EXCLUDED.allowed_email_domains,
+				allowed_emails = EXCLUDED.allowed_emails, group_claim = EXCLUDED.group_claim,
+				required_group = EXCLUDED.required_group, default_role_id = EXCLUDED.default_role_id,
+				group_role_mappings = EXCLUDED.group_role_mappings, updated_at = now()`,
+			e.Slug, e.Name, e.IssuerURL, e.ClientID, e.ClientSecret, scopes,
+			e.CallbackBaseURL, e.Enabled, allowJIT, pq.Array(e.AllowedEmailDomains), pq.Array(e.AllowedEmails),
+			groupClaim, e.RequiredGroup, defaultRole, encoded); err != nil {
+			return fmt.Errorf("sso provider %s: %w", e.Slug, err)
 		}
 	}
 	return nil

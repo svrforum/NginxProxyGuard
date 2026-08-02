@@ -142,6 +142,17 @@ func registerPublicRoutes(v1 *echo.Group, c *Container) {
 		auth.POST("/logout", c.Handlers.Auth.Logout)
 		auth.GET("/status", c.Handlers.Auth.GetStatus)
 		auth.POST("/verify-2fa", c.Handlers.Auth.Verify2FA)
+
+		// OIDC SSO (#227). These three are unauthenticated by necessity: the
+		// login screen reads the provider list before anyone has signed in, and
+		// the browser arrives at start/callback carrying no NPG credential —
+		// proving the identity is the whole point of the exchange.
+		sso := auth.Group("/sso")
+		{
+			sso.GET("/providers", c.Handlers.SSO.ListPublicProviders)
+			sso.GET("/:slug/start", c.Handlers.SSO.Start)
+			sso.GET("/:slug/callback", c.Handlers.SSO.Callback)
+		}
 	}
 
 	challenge := v1.Group("/challenge")
@@ -238,6 +249,7 @@ func registerTokenProtectedRoutes(v1 *echo.Group, c *Container) {
 	registerCloudflareTunnelRoutes(v1, c.Handlers.CloudflareTunnel)
 	registerTestRoutes(v1, c)
 	registerUserAdminRoutes(v1, c.Handlers.UserAdmin)
+	registerSSORoutes(v1, c.Handlers.SSO)
 }
 
 // registerUserAdminRoutes exposes role and user administration (#222).
@@ -280,6 +292,23 @@ func registerUserAdminRoutes(v1 *echo.Group, h *handler.UserAdminHandler) {
 	v1.PUT("/users/:id/password", h.SetPassword, userWrite)
 	v1.DELETE("/users/:id", h.DeleteUser, userWrite)
 	v1.POST("/users/:id/end-sessions", h.EndSessions, userWrite)
+}
+
+// registerSSORoutes exposes the OIDC provider registry (#227). The login flow
+// itself is public and lives in registerPublicRoutes.
+//
+// Guarded by settings rather than user/role: configuring an IdP is a settings
+// task. It does decide which role a provisioned account receives, but the roles
+// themselves can only be created through role:write, so a settings holder can
+// hand out no permission that does not already exist.
+func registerSSORoutes(v1 *echo.Group, h *handler.SSOHandler) {
+	settingsRead := authMiddleware.RequireAPIPermission(model.PermissionSettingsRead)
+	settingsWrite := authMiddleware.RequireAPIPermission(model.PermissionSettingsWrite)
+
+	v1.GET("/sso-providers", h.ListProviders, settingsRead)
+	v1.POST("/sso-providers", h.CreateProvider, settingsWrite)
+	v1.PUT("/sso-providers/:id", h.UpdateProvider, settingsWrite)
+	v1.DELETE("/sso-providers/:id", h.DeleteProvider, settingsWrite)
 }
 
 func registerCloudflareTunnelRoutes(v1 *echo.Group, h *handler.CloudflareTunnelHandler) {

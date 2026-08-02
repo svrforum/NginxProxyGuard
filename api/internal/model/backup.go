@@ -234,6 +234,11 @@ type ExportData struct {
 	// Roles (#222). Assignments are deliberately NOT exported — see RoleExport.
 	Roles []RoleExport `json:"roles,omitempty"`
 
+	// SSO providers (#227). Identity links are NOT exported: they point at user
+	// accounts, which this backup deliberately excludes, so a restored provider
+	// starts with nobody linked and re-links on the next sign-in.
+	SSOProviders []SSOProviderExport `json:"sso_providers,omitempty"`
+
 	// Cloud Providers
 	CloudProviders []CloudProviderExport `json:"cloud_providers,omitempty"`
 
@@ -566,6 +571,35 @@ type RoleExport struct {
 	IsSuperuser bool     `json:"is_superuser"`
 	IsBuiltin   bool     `json:"is_builtin"`
 	Permissions []string `json:"permissions"`
+}
+
+// SSOProviderExport carries an OIDC provider's configuration (#227).
+//
+// default_role and the mapped roles travel by NAME, not id: a restore into a
+// different install has different role uuids, and a dangling uuid would make the
+// provider provision accounts with no role at all.
+type SSOProviderExport struct {
+	Slug                string                   `json:"slug"`
+	Name                string                   `json:"name"`
+	IssuerURL           string                   `json:"issuer_url"`
+	ClientID            string                   `json:"client_id"`
+	ClientSecret        string                   `json:"client_secret"`
+	Scopes              string                   `json:"scopes"`
+	CallbackBaseURL     string                   `json:"callback_base_url"`
+	Enabled             bool                     `json:"enabled"`
+	AllowJIT            bool                     `json:"allow_jit"`
+	AllowedEmailDomains []string                 `json:"allowed_email_domains"`
+	AllowedEmails       []string                 `json:"allowed_emails"`
+	GroupClaim          string                   `json:"group_claim"`
+	RequiredGroup       string                   `json:"required_group"`
+	DefaultRoleName     string                   `json:"default_role_name"`
+	GroupRoleMappings   []GroupRoleMappingExport `json:"group_role_mappings"`
+}
+
+// GroupRoleMappingExport is one IdP-group-to-role rule, by role name.
+type GroupRoleMappingExport struct {
+	Group    string `json:"group"`
+	RoleName string `json:"role_name"`
 }
 
 // GlobalGeoRestrictionExport represents the singleton global geo default (#198).

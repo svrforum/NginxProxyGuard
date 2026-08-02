@@ -2564,6 +2564,49 @@ CREATE TABLE IF NOT EXISTS public.role_permissions (
     role_id uuid NOT NULL,
     permission character varying(64) NOT NULL
 );
+-- OIDC SSO for the admin panel (#227). Distinct from auth_providers, which
+-- protects PROXIED HOSTS with ForwardAuth; these rows let someone sign in to
+-- THIS panel. Foreign keys live in the ALTER section below.
+CREATE TABLE IF NOT EXISTS public.sso_providers (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    slug character varying(32) NOT NULL,
+    name character varying(64) NOT NULL,
+    issuer_url text NOT NULL,
+    client_id text NOT NULL,
+    client_secret text NOT NULL,
+    scopes text DEFAULT 'openid profile email'::text NOT NULL,
+    callback_base_url text,
+    enabled boolean DEFAULT true NOT NULL,
+    allow_jit boolean DEFAULT false NOT NULL,
+    allowed_email_domains text[] DEFAULT '{}'::text[] NOT NULL,
+    allowed_emails text[] DEFAULT '{}'::text[] NOT NULL,
+    group_claim character varying(64) DEFAULT 'groups'::character varying NOT NULL,
+    required_group text,
+    default_role_id uuid,
+    group_role_mappings jsonb DEFAULT '[]'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+-- One row per (provider, IdP subject). The subject is the stable identifier;
+-- email is kept only for display and can change at the IdP.
+CREATE TABLE IF NOT EXISTS public.user_identities (
+    provider_id uuid NOT NULL,
+    subject text NOT NULL,
+    user_id uuid NOT NULL,
+    email text,
+    last_login_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+-- Short-lived CSRF/PKCE state. Server-side rather than a cookie: the panel may
+-- be served over plain HTTP on a LAN, where SameSite/Secure cookies are a trap.
+CREATE TABLE IF NOT EXISTS public.sso_login_states (
+    state character varying(64) NOT NULL,
+    provider_id uuid NOT NULL,
+    nonce character varying(64) NOT NULL,
+    code_verifier character varying(128) NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    expires_at timestamp with time zone NOT NULL
+);
 CREATE TABLE IF NOT EXISTS public.waf_policy_history (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     proxy_host_id uuid NOT NULL,
@@ -2851,6 +2894,29 @@ ALTER TABLE ONLY public.role_permissions
 -- because a user silently losing every permission is worse than a blocked delete.
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_role_id_fkey FOREIGN KEY (role_id) REFERENCES public.roles(id) ON DELETE RESTRICT;
+-- SSO (#227). Keys and FKs live here, not inline, because a fresh install runs
+-- this file top to bottom and users/roles are created before these tables.
+ALTER TABLE ONLY public.sso_providers
+    ADD CONSTRAINT sso_providers_pkey PRIMARY KEY (id);
+CREATE UNIQUE INDEX IF NOT EXISTS sso_providers_slug_key ON public.sso_providers (lower((slug)::text));
+-- RESTRICT mirrors users_role_id_fkey: a role still named as a provisioning
+-- target must not vanish underneath the provider.
+ALTER TABLE ONLY public.sso_providers
+    ADD CONSTRAINT sso_providers_default_role_id_fkey FOREIGN KEY (default_role_id) REFERENCES public.roles(id) ON DELETE RESTRICT;
+ALTER TABLE ONLY public.user_identities
+    ADD CONSTRAINT user_identities_pkey PRIMARY KEY (provider_id, subject);
+ALTER TABLE ONLY public.user_identities
+    ADD CONSTRAINT user_identities_provider_id_fkey FOREIGN KEY (provider_id) REFERENCES public.sso_providers(id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.user_identities
+    ADD CONSTRAINT user_identities_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+-- One identity per user per provider, so a second IdP account cannot quietly
+-- attach itself to an account that already has one.
+CREATE UNIQUE INDEX IF NOT EXISTS user_identities_user_provider_key ON public.user_identities (user_id, provider_id);
+ALTER TABLE ONLY public.sso_login_states
+    ADD CONSTRAINT sso_login_states_pkey PRIMARY KEY (state);
+ALTER TABLE ONLY public.sso_login_states
+    ADD CONSTRAINT sso_login_states_provider_id_fkey FOREIGN KEY (provider_id) REFERENCES public.sso_providers(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS sso_login_states_expires_at_idx ON public.sso_login_states (expires_at);
 ALTER TABLE ONLY public.waf_policy_history
     ADD CONSTRAINT waf_policy_history_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.waf_rule_change_events
@@ -3565,6 +3631,18 @@ CREATE INDEX IF NOT EXISTS idx_fsee_subscription ON public.filter_subscription_e
 --   ALTER TABLE public.users ADD COLUMN IF NOT EXISTS must_change_password boolean DEFAULT false NOT NULL;
 --   ALTER TABLE public.users ADD CONSTRAINT users_role_id_fkey ... ON DELETE RESTRICT;
 --   INSERT built-in roles + role_permissions; UPDATE users SET role_id = administrator WHERE role_id IS NULL;
+
+-- OIDC SSO (#227) — DOCUMENTATION ONLY. The executable copy lives in
+-- database/migration.go `upgrades` (two entries: the three tables with their
+-- indexes, then the foreign keys behind duplicate_object guards).
+--   CREATE TABLE IF NOT EXISTS public.sso_providers (...);
+--   CREATE UNIQUE INDEX IF NOT EXISTS sso_providers_slug_key ON public.sso_providers (lower(slug));
+--   CREATE TABLE IF NOT EXISTS public.user_identities (...);
+--   CREATE UNIQUE INDEX IF NOT EXISTS user_identities_user_provider_key ON public.user_identities (user_id, provider_id);
+--   CREATE TABLE IF NOT EXISTS public.sso_login_states (...);
+--   ALTER TABLE sso_providers ADD CONSTRAINT sso_providers_default_role_id_fkey ... ON DELETE RESTRICT;
+--   ALTER TABLE user_identities ADD CONSTRAINT user_identities_{provider,user}_id_fkey ... ON DELETE CASCADE;
+--   ALTER TABLE sso_login_states ADD CONSTRAINT sso_login_states_provider_id_fkey ... ON DELETE CASCADE;
 
 -- Enum upgrades
 ALTER TYPE public.block_reason ADD VALUE IF NOT EXISTS 'cloud_provider_challenge';

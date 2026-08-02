@@ -162,6 +162,13 @@ func (r *BackupRepository) ExportAllData(ctx context.Context) (*model.ExportData
 	}
 	export.Roles = roles
 
+	// Export SSO providers (#227)
+	ssoProviders, err := r.exportSSOProviders(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to export sso providers: %w", err)
+	}
+	export.SSOProviders = ssoProviders
+
 	// Export Cloud Providers
 	cloudProviders, err := r.exportCloudProviders(ctx)
 	if err != nil {

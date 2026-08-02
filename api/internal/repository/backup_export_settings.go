@@ -336,6 +336,73 @@ func (r *BackupRepository) exportRoles(ctx context.Context) ([]model.RoleExport,
 	return out, nil
 }
 
+// exportSSOProviders exports the OIDC provider registry (#227). Roles travel by
+// name because a restore into another install has different role uuids.
+//
+// Returns an empty slice when the table is absent: SSO shipped after this backup
+// format existed, and migrations warn-and-continue, so an install missing the
+// table must still be able to take a backup.
+func (r *BackupRepository) exportSSOProviders(ctx context.Context) ([]model.SSOProviderExport, error) {
+	var present bool
+	if err := r.db.QueryRowContext(ctx,
+		`SELECT to_regclass('public.sso_providers') IS NOT NULL`).Scan(&present); err != nil || !present {
+		return nil, nil
+	}
+
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT p.slug, p.name, p.issuer_url, p.client_id, p.client_secret, p.scopes,
+		       COALESCE(p.callback_base_url, ''), p.enabled, p.allow_jit,
+		       p.allowed_email_domains, p.allowed_emails, p.group_claim,
+		       COALESCE(p.required_group, ''), COALESCE(dr.name, ''), p.group_role_mappings
+		FROM sso_providers p
+		LEFT JOIN roles dr ON dr.id = p.default_role_id
+		ORDER BY p.slug`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []model.SSOProviderExport
+	var rawMappings [][]byte
+	for rows.Next() {
+		var e model.SSOProviderExport
+		var domains, emails pq.StringArray
+		var mappings []byte
+		if err := rows.Scan(&e.Slug, &e.Name, &e.IssuerURL, &e.ClientID, &e.ClientSecret, &e.Scopes,
+			&e.CallbackBaseURL, &e.Enabled, &e.AllowJIT, &domains, &emails, &e.GroupClaim,
+			&e.RequiredGroup, &e.DefaultRoleName, &mappings); err != nil {
+			return nil, err
+		}
+		e.AllowedEmailDomains = domains
+		e.AllowedEmails = emails
+		out = append(out, e)
+		rawMappings = append(rawMappings, mappings)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// The stored mappings hold role ids; resolve each to a name so the export is
+	// portable.
+	for i, raw := range rawMappings {
+		var stored []model.GroupRoleMapping
+		if len(raw) > 0 {
+			if err := json.Unmarshal(raw, &stored); err != nil {
+				return nil, err
+			}
+		}
+		for _, m := range stored {
+			var name string
+			if err := r.db.QueryRowContext(ctx, `SELECT name FROM roles WHERE id = $1`, m.RoleID).Scan(&name); err != nil {
+				continue // a mapping pointing at a deleted role is dropped, not fatal
+			}
+			out[i].GroupRoleMappings = append(out[i].GroupRoleMappings,
+				model.GroupRoleMappingExport{Group: m.Group, RoleName: name})
+		}
+	}
+	return out, nil
+}
+
 // exportCloudflareTunnel exports the singleton Cloudflare Tunnel setting
 // (Phase 1 token mode). Returns nil when no row exists.
 func (r *BackupRepository) exportCloudflareTunnel(ctx context.Context) (*model.CloudflareTunnelExport, error) {

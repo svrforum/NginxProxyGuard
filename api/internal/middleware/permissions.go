@@ -83,6 +83,14 @@ var PublicRoutes = map[string]bool{
 	"POST /api/v1/challenge/verify-redirect": true,
 	"GET /api/v1/challenge/validate":        true,
 	"GET /api/v1/challenge/favicon.ico":     true,
+
+	// OIDC SSO (#227). The login screen reads the provider list before anyone
+	// has signed in, and the browser reaches start/callback carrying no NPG
+	// credential — establishing one is the point. The list response is limited
+	// to id/slug/name so an anonymous caller learns nothing about the IdP.
+	"GET /api/v1/auth/sso/providers":       true,
+	"GET /api/v1/auth/sso/:slug/start":     true,
+	"GET /api/v1/auth/sso/:slug/callback":  true,
 }
 
 // routePermissions maps a route to the single permission it requires.
@@ -296,6 +304,10 @@ var routePermissions = map[string]string{
 	"GET /api/v1/security-headers/presets": "proxy:read",
 	"GET /api/v1/settings": "settings:read",
 	"PUT /api/v1/settings": "settings:write",
+	"GET /api/v1/sso-providers": "settings:read",
+	"POST /api/v1/sso-providers": "settings:write",
+	"PUT /api/v1/sso-providers/:id": "settings:write",
+	"DELETE /api/v1/sso-providers/:id": "settings:write",
 	"GET /api/v1/settings/cloudflare-tunnel": "settings:read",
 	"PUT /api/v1/settings/cloudflare-tunnel": "settings:write",
 	"GET /api/v1/settings/cloudflare-tunnel/status": "settings:read",

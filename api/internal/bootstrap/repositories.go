@@ -39,6 +39,7 @@ type Repositories struct {
 	Auth               *repository.AuthRepository
 	Role               *repository.RoleRepository
 	User               *repository.UserRepository
+	SSO                *repository.SSORepository
 	SystemSettings     *repository.SystemSettingsRepository
 	APIToken           *repository.APITokenRepository
 	AuditLog           *repository.AuditLogRepository
@@ -85,6 +86,7 @@ func InitRepositories(db *database.DB, redisCache *cache.RedisClient) *Repositor
 		Auth:               repository.NewAuthRepository(db.DB),
 		Role:               repository.NewRoleRepository(db),
 		User:               repository.NewUserRepository(db),
+		SSO:                repository.NewSSORepository(db),
 		SystemSettings:     repository.NewSystemSettingsRepository(db.DB),
 		APIToken:           repository.NewAPITokenRepository(db.DB),
 		AuditLog:           repository.NewAuditLogRepository(db.DB),
