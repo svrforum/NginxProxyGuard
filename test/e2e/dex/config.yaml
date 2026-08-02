@@ -32,3 +32,11 @@ staticPasswords:
     hash: "$2a$10$uS0AT.mae9AdBlhQJTuzcu2B0/OnJbZT118hEr2az4ZekXc2r.UXu"
     username: stranger
     userID: "22222222-2222-2222-2222-222222222222"
+
+# A second connector that issues a groups claim. Dex's static passwords carry no
+# groups, so without this the group-to-role mapping could only be tested
+# negatively. This one returns a fixed user in the "authors" group.
+connectors:
+  - type: mockCallback
+    id: mock
+    name: Groups

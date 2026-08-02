@@ -1529,7 +1529,9 @@
     "advanced": "고급 설정",
     "linkedIdentities": "연결된 로그인 제공자",
     "noLinkedIdentities": "SSO 연결 없음 (비밀번호 로그인 계정)",
-    "identityLinkedAt": "{{when}} 연결"
+    "identityLinkedAt": "{{when}} 연결",
+    "groupsScopeMissing": "그룹 규칙을 설정했지만 요청 scope에 `groups`가 없습니다. 대부분의 제공자는 이 scope 없이는 그룹 정보를 주지 않아, 모든 로그인이 \"허용되지 않음\"으로 거부됩니다.",
+    "addGroupsScope": "groups 추가"
   },
   "subTabs": {
     "settings": {

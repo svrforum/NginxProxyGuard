@@ -153,6 +153,12 @@ export function SSOProviderManager() {
     }
   }
 
+  // Group rules are silent failures waiting to happen: if the groups claim is
+  // never requested, the claim never arrives, every login is refused as "not
+  // permitted", and nothing on screen says why. (#227)
+  const usesGroups = form.required_group.trim() !== '' || form.group_role_mappings.length > 0
+  const groupsScopeMissing = usesGroups && !form.scopes.split(/\s+/).includes('groups')
+
   const hasAllowlist =
     form.allowed_emails.length > 0 || form.allowed_email_domains.length > 0 || form.required_group.trim() !== ''
 
@@ -412,6 +418,20 @@ export function SSOProviderManager() {
             {/* ── 3. Who gets in, and as what ──────────────────────── */}
             <Step n={3} title={tr('sso.steps.access')}>
               <p className="text-xs text-slate-500 dark:text-slate-400">{tr('sso.provisioningHint')}</p>
+
+              {groupsScopeMissing && (
+                <div data-testid="sso-groups-scope-warning" className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-300">
+                  <span className="flex-1">{tr('sso.groupsScopeMissing')}</span>
+                  <button
+                    type="button"
+                    aria-label="sso-add-groups-scope"
+                    onClick={() => setForm((f) => ({ ...f, scopes: `${f.scopes.trim()} groups`.trim() }))}
+                    className="shrink-0 rounded border border-amber-400 px-2 py-0.5 font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-200"
+                  >
+                    {tr('sso.addGroupsScope')}
+                  </button>
+                </div>
+              )}
 
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label={tr('sso.fields.allowedDomains')} hint={tr('sso.fields.listHint')}>

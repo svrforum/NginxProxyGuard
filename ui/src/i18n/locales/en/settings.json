@@ -1516,7 +1516,9 @@
     "advanced": "Advanced",
     "linkedIdentities": "Linked sign-in providers",
     "noLinkedIdentities": "No SSO link (password account)",
-    "identityLinkedAt": "linked {{when}}"
+    "identityLinkedAt": "linked {{when}}",
+    "groupsScopeMissing": "Group rules are set but the requested scopes do not include `groups`. Most providers withhold group information without it, so every sign-in would be refused as not permitted.",
+    "addGroupsScope": "Add groups"
   },
   "subTabs": {
     "settings": {
