@@ -234,6 +234,35 @@ func (r *UserRepository) GetDetail(ctx context.Context, userID string) (*model.U
 		d.TOTPVerifiedAt = &totpVerified.Time
 	}
 
+	// Identity providers this account can sign in through (#227). Guarded with
+	// to_regclass because SSO shipped later and migrations warn-and-continue: an
+	// install whose upgrade failed must still be able to open a user's detail.
+	var ssoPresent bool
+	if err := r.db.QueryRowContext(ctx,
+		`SELECT to_regclass('public.user_identities') IS NOT NULL`).Scan(&ssoPresent); err == nil && ssoPresent {
+		idRows, err := r.db.QueryContext(ctx, `
+			SELECT p.name, p.slug, COALESCE(i.email, ''), i.last_login_at, i.created_at
+			FROM user_identities i
+			JOIN sso_providers p ON p.id = i.provider_id
+			WHERE i.user_id = $1 ORDER BY p.name`, userID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load linked identities: %w", err)
+		}
+		for idRows.Next() {
+			var info model.UserIdentityInfo
+			if err := idRows.Scan(&info.ProviderName, &info.ProviderSlug, &info.Email,
+				&info.LastLoginAt, &info.LinkedAt); err != nil {
+				idRows.Close()
+				return nil, fmt.Errorf("failed to scan linked identity: %w", err)
+			}
+			d.LinkedIdentities = append(d.LinkedIdentities, info)
+		}
+		idRows.Close()
+		if err := idRows.Err(); err != nil {
+			return nil, err
+		}
+	}
+
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, name, token_prefix, permissions, allowed_ips, expires_at,
 		       last_used_at, last_used_ip, use_count, is_active, revoked_at, created_at

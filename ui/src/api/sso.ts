@@ -1,5 +1,5 @@
 import { apiGet, apiPost, apiPut, apiDelete } from './client'
-import type { PublicSSOProvider, SSOProvider, SSOProviderRequest } from '../types/sso'
+import type { PublicSSOProvider, SSODiscoveryResult, SSOProvider, SSOProviderRequest } from '../types/sso'
 
 const API_BASE = '/api/v1'
 
@@ -29,4 +29,10 @@ export async function updateSSOProvider(id: string, data: SSOProviderRequest): P
 
 export async function deleteSSOProvider(id: string): Promise<void> {
   return apiDelete(`${API_BASE}/sso-providers/${id}`)
+}
+
+/** Probes an issuer before the provider is saved, so a typo surfaces while the
+ *  operator is still looking at the form rather than at someone's first login. */
+export async function testSSODiscovery(issuer_url: string, scopes: string): Promise<SSODiscoveryResult> {
+  return apiPost<SSODiscoveryResult>(`${API_BASE}/sso-providers/test`, { issuer_url, scopes })
 }

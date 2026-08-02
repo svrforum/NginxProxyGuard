@@ -97,6 +97,29 @@ export function UserDetailModal({ userId, onClose }: UserDetailModalProps) {
               </div>
             </section>
 
+            {/* Sign-in providers (#227) */}
+            <section>
+              <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                {t('users.linkedIdentities', { defaultValue: 'Linked sign-in providers' })}
+              </h4>
+              {(data.linked_identities ?? []).length === 0 ? (
+                <p className="text-sm text-slate-500 dark:text-slate-400">{t('sso.noLinkedIdentities')}</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {(data.linked_identities ?? []).map((idp) => (
+                    <span
+                      key={idp.provider_slug}
+                      className="rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs text-indigo-800 dark:border-indigo-900 dark:bg-indigo-900/30 dark:text-indigo-200"
+                    >
+                      <span className="font-medium">{idp.provider_name}</span>
+                      {idp.email && <span className="ml-1.5 font-mono text-[11px] opacity-80">{idp.email}</span>}
+                      <span className="ml-1.5 opacity-70">{t('sso.identityLinkedAt', { when: fmt(idp.linked_at) })}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </section>
+
             {/* Permissions */}
             <section>
               <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">

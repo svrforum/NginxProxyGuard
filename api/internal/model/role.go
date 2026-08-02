@@ -106,6 +106,16 @@ type UserTokenInfo struct {
 // stored rows — a role holding a legacy coarse scope reaches more than it lists,
 // and an administrator holds everything without any rows at all. Showing the
 // stored list would misrepresent what the account can do. (#222)
+// UserIdentityInfo names an identity provider an account can sign in through,
+// so an administrator can tell a federated account from a local one. (#227)
+type UserIdentityInfo struct {
+	ProviderName string     `json:"provider_name"`
+	ProviderSlug string     `json:"provider_slug"`
+	Email        string     `json:"email"`
+	LastLoginAt  *time.Time `json:"last_login_at"`
+	LinkedAt     time.Time  `json:"linked_at"`
+}
+
 type UserDetail struct {
 	UserSummary
 	LastLoginIP          string          `json:"last_login_ip,omitempty"`
@@ -115,4 +125,6 @@ type UserDetail struct {
 	RolePermissions      []string        `json:"role_permissions"`
 	Tokens               []UserTokenInfo `json:"tokens"`
 	ActiveSessions       int             `json:"active_sessions"`
+	// Identity providers this account may sign in through. (#227)
+	LinkedIdentities []UserIdentityInfo `json:"linked_identities"`
 }

@@ -90,6 +90,15 @@ export interface UserTokenInfo {
 }
 
 /** What the admin panel shows when an account name is opened. */
+/** An identity provider this account can sign in through. (#227) */
+export interface UserIdentityInfo {
+  provider_name: string
+  provider_slug: string
+  email: string
+  last_login_at?: string
+  linked_at: string
+}
+
 export interface UserDetail extends UserSummary {
   last_login_ip?: string
   totp_verified_at?: string
@@ -101,4 +110,6 @@ export interface UserDetail extends UserSummary {
   role_permissions: string[] | null
   tokens: UserTokenInfo[] | null
   active_sessions: number
+  /** Identity providers this account may sign in through. (#227) */
+  linked_identities: UserIdentityInfo[] | null
 }

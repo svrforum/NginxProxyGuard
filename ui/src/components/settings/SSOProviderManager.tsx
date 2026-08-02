@@ -1,9 +1,16 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { createSSOProvider, deleteSSOProvider, listSSOProviders, updateSSOProvider } from '../../api/sso'
+import { createSSOProvider, deleteSSOProvider, listSSOProviders, testSSODiscovery, updateSSOProvider } from '../../api/sso'
 import { listRoles } from '../../api/rbac'
-import { SSO_SECRET_PLACEHOLDER, type GroupRoleMapping, type SSOProvider, type SSOProviderRequest } from '../../types/sso'
+import {
+  SSO_PRESETS,
+  SSO_SECRET_PLACEHOLDER,
+  type GroupRoleMapping,
+  type SSODiscoveryResult,
+  type SSOProvider,
+  type SSOProviderRequest,
+} from '../../types/sso'
 import { usePermissions } from '../../hooks/usePermissions'
 import { ModalShell } from '../common/ModalShell'
 
@@ -43,6 +50,10 @@ const toForm = (p: SSOProvider): SSOProviderRequest => ({
   group_role_mappings: p.group_role_mappings ?? [],
 })
 
+/** Derives a URL-safe identifier from a display name so nobody has to invent one. */
+const slugify = (v: string) =>
+  v.toLowerCase().trim().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32)
+
 const splitList = (v: string) => v.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean)
 
 /**
@@ -70,6 +81,11 @@ export function SSOProviderManager() {
   const [formError, setFormError] = useState('')
   const [deleting, setDeleting] = useState<SSOProvider | null>(null)
   const [copied, setCopied] = useState('')
+  const [preset, setPreset] = useState('generic')
+  // Whether the operator has typed a slug themselves. Until they do, the slug
+  // follows the display name — nobody should have to invent a URL segment.
+  const [slugTouched, setSlugTouched] = useState(false)
+  const [probe, setProbe] = useState<{ state: 'idle' | 'busy' | 'ok' | 'error'; result?: SSODiscoveryResult; message?: string }>({ state: 'idle' })
 
   const { data, isLoading } = useQuery({ queryKey: ['sso-providers'], queryFn: listSSOProviders })
   const { data: rolesData } = useQuery({ queryKey: ['roles'], queryFn: listRoles })
@@ -93,8 +109,49 @@ export function SSOProviderManager() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['sso-providers'] }); setDeleting(null) },
   })
 
-  const openCreate = () => { setForm(emptyForm()); setCreating(true); setEditing(null); setFormError('') }
-  const openEdit = (p: SSOProvider) => { setForm(toForm(p)); setEditing(p); setCreating(false); setFormError('') }
+  const openCreate = () => {
+    setForm(emptyForm()); setCreating(true); setEditing(null); setFormError('')
+    setPreset('generic'); setSlugTouched(false); setProbe({ state: 'idle' })
+  }
+  const openEdit = (p: SSOProvider) => {
+    setForm(toForm(p)); setEditing(p); setCreating(false); setFormError('')
+    setPreset('generic'); setSlugTouched(true); setProbe({ state: 'idle' })
+  }
+
+  const applyPreset = (key: string) => {
+    const found = SSO_PRESETS.find((x) => x.key === key)
+    if (!found) return
+    setPreset(key)
+    setProbe({ state: 'idle' })
+    setForm((f) => ({
+      ...f,
+      name: f.name || (key === 'generic' ? '' : found.label),
+      slug: slugTouched ? f.slug : slugify(f.name || (key === 'generic' ? '' : found.label)),
+      issuer_url: found.issuerTemplate,
+      scopes: found.scopes,
+      group_claim: found.groupClaim,
+    }))
+  }
+
+  const setName = (name: string) =>
+    setForm((f) => ({ ...f, name, slug: slugTouched ? f.slug : slugify(name) }))
+
+  // The callback URL the server will derive, computed the same way it does, so
+  // it can be registered at the provider BEFORE the provider is saved here —
+  // Google and Authentik both demand the redirect URI up front.
+  const callbackPreview = form.slug
+    ? `${(form.callback_base_url || window.location.origin).replace(/\/+$/, '')}/api/v1/auth/sso/${form.slug}/callback`
+    : ''
+
+  const runProbe = async () => {
+    setProbe({ state: 'busy' })
+    try {
+      const result = await testSSODiscovery(form.issuer_url, form.scopes)
+      setProbe({ state: 'ok', result })
+    } catch (e) {
+      setProbe({ state: 'error', message: e instanceof Error ? e.message : String(e) })
+    }
+  }
 
   const hasAllowlist =
     form.allowed_emails.length > 0 || form.allowed_email_domains.length > 0 || form.required_group.trim() !== ''
@@ -227,57 +284,134 @@ export function SSOProviderManager() {
             <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">{formError}</p>
           )}
 
-          <div className="mt-4 space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label={tr('sso.fields.name')}>
-                <input aria-label="sso-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputCls} />
-              </Field>
-              <Field label={tr('sso.fields.slug')} hint={tr('sso.fields.slugHint')}>
-                <input aria-label="sso-slug" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} className={inputCls} />
-              </Field>
-            </div>
+          <div className="mt-4 space-y-5">
+            {/* ── 1. Which provider ─────────────────────────────────── */}
+            <Step n={1} title={tr('sso.steps.provider')}>
+              <div className="flex flex-wrap gap-2">
+                {SSO_PRESETS.map((x) => (
+                  <button
+                    key={x.key}
+                    type="button"
+                    aria-label={`sso-preset-${x.key}`}
+                    onClick={() => applyPreset(x.key)}
+                    className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+                      preset === x.key
+                        ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-200'
+                        : 'border-slate-300 text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    {x.key === 'generic' ? tr('sso.presets.generic') : x.label}
+                  </button>
+                ))}
+              </div>
 
-            <Field label={tr('sso.fields.issuer')} hint={tr('sso.fields.issuerHint')}>
-              <input aria-label="sso-issuer" value={form.issuer_url} onChange={(e) => setForm({ ...form, issuer_url: e.target.value })} className={inputCls} />
-            </Field>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <Field label={tr('sso.fields.name')}>
+                  <input aria-label="sso-name" value={form.name} onChange={(e) => setName(e.target.value)} className={inputCls} />
+                </Field>
+                <Field label={tr('sso.fields.slug')} hint={tr('sso.fields.slugHint')}>
+                  <input
+                    aria-label="sso-slug"
+                    value={form.slug}
+                    onChange={(e) => { setSlugTouched(true); setForm({ ...form, slug: e.target.value }) }}
+                    className={inputCls}
+                  />
+                </Field>
+              </div>
+            </Step>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label={tr('sso.fields.clientId')}>
-                <input aria-label="sso-client-id" value={form.client_id} onChange={(e) => setForm({ ...form, client_id: e.target.value })} className={inputCls} />
+            {/* ── 2. Connection, with a way to check it ─────────────── */}
+            <Step n={2} title={tr('sso.steps.connection')}>
+              <Field label={tr('sso.fields.issuer')} hint={tr(SSO_PRESETS.find((x) => x.key === preset)?.hintKey ?? 'sso.fields.issuerHint')}>
+                <div className="flex gap-2">
+                  <input
+                    aria-label="sso-issuer"
+                    value={form.issuer_url}
+                    onChange={(e) => { setForm({ ...form, issuer_url: e.target.value }); setProbe({ state: 'idle' }) }}
+                    className={inputCls}
+                  />
+                  <button
+                    type="button"
+                    aria-label="sso-test"
+                    onClick={runProbe}
+                    disabled={!form.issuer_url || probe.state === 'busy'}
+                    className="shrink-0 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+                  >
+                    {probe.state === 'busy' ? tr('sso.testing') : tr('sso.test')}
+                  </button>
+                </div>
               </Field>
-              <Field label={tr('sso.fields.clientSecret')} hint={editing ? tr('sso.fields.secretKeepHint') : undefined}>
-                <input aria-label="sso-client-secret" type="password" value={form.client_secret} onChange={(e) => setForm({ ...form, client_secret: e.target.value })} className={inputCls} />
-              </Field>
-            </div>
 
-            {editing?.callback_url && (
-              <Field label={tr('sso.callbackURL')} hint={tr('sso.callbackHint')}>
-                <code className="block truncate rounded-lg bg-slate-100 px-3 py-2 font-mono text-xs text-slate-700 dark:bg-slate-900 dark:text-slate-300">
-                  {editing.callback_url}
-                </code>
-              </Field>
-            )}
+              {probe.state === 'ok' && probe.result && (
+                <div data-testid="sso-probe-ok" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:border-emerald-900 dark:bg-emerald-900/20 dark:text-emerald-300">
+                  <p className="font-semibold">{tr('sso.testOk')}</p>
+                  <p className="mt-1 font-mono break-all">{probe.result.issuer}</p>
+                  <p className="mt-0.5">
+                    {probe.result.supports_pkce ? tr('sso.testPkceOk') : tr('sso.testPkceUnknown')}
+                  </p>
+                  {!!probe.result.missing_scopes?.length && (
+                    <p className="mt-0.5 text-amber-700 dark:text-amber-300">
+                      {tr('sso.testMissingScopes', { scopes: probe.result.missing_scopes.join(', ') })}
+                    </p>
+                  )}
+                </div>
+              )}
+              {probe.state === 'error' && (
+                <div data-testid="sso-probe-error" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900 dark:bg-red-900/20 dark:text-red-300">
+                  {tr('sso.testFailed')}
+                </div>
+              )}
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label={tr('sso.fields.scopes')}>
-                <input aria-label="sso-scopes" value={form.scopes} onChange={(e) => setForm({ ...form, scopes: e.target.value })} className={inputCls} />
-              </Field>
-              <Field label={tr('sso.fields.callbackBase')} hint={tr('sso.fields.callbackBaseHint')}>
-                <input aria-label="sso-callback-base" value={form.callback_base_url} onChange={(e) => setForm({ ...form, callback_base_url: e.target.value })} className={inputCls} />
-              </Field>
-            </div>
+              {/* Shown BEFORE saving: Google and Authentik want the redirect URI
+                  registered while the client is being created. */}
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-900/40">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{tr('sso.callbackURL')}</p>
+                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{tr('sso.callbackHint')}</p>
+                <div className="mt-1.5 flex items-center gap-2">
+                  <code data-testid="sso-callback-preview" className="min-w-0 flex-1 truncate font-mono text-xs text-slate-700 dark:text-slate-300">
+                    {callbackPreview || tr('sso.callbackNeedsSlug')}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => callbackPreview && copy(callbackPreview)}
+                    disabled={!callbackPreview}
+                    className="shrink-0 rounded border border-slate-300 px-2 py-0.5 text-[11px] text-slate-600 hover:bg-white disabled:opacity-40 dark:border-slate-600 dark:text-slate-300"
+                  >
+                    {copied && copied === callbackPreview ? tr('sso.copied') : tr('sso.copy')}
+                  </button>
+                </div>
+              </div>
 
-            <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
-              <input type="checkbox" aria-label="sso-enabled" checked={form.enabled} onChange={(e) => setForm({ ...form, enabled: e.target.checked })} className="rounded" />
-              {tr('sso.fields.enabled')}
-            </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label={tr('sso.fields.clientId')}>
+                  <input aria-label="sso-client-id" value={form.client_id} onChange={(e) => setForm({ ...form, client_id: e.target.value })} className={inputCls} />
+                </Field>
+                <Field label={tr('sso.fields.clientSecret')} hint={editing ? tr('sso.fields.secretKeepHint') : undefined}>
+                  <input aria-label="sso-client-secret" type="password" value={form.client_secret} onChange={(e) => setForm({ ...form, client_secret: e.target.value })} className={inputCls} />
+                </Field>
+              </div>
 
-            <hr className="border-slate-200 dark:border-slate-700" />
+              <details className="rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700">
+                <summary className="cursor-pointer text-xs font-medium text-slate-600 dark:text-slate-300">{tr('sso.advanced')}</summary>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <Field label={tr('sso.fields.scopes')}>
+                    <input aria-label="sso-scopes" value={form.scopes} onChange={(e) => setForm({ ...form, scopes: e.target.value })} className={inputCls} />
+                  </Field>
+                  <Field label={tr('sso.fields.callbackBase')} hint={tr('sso.fields.callbackBaseHint')}>
+                    <input aria-label="sso-callback-base" value={form.callback_base_url} onChange={(e) => setForm({ ...form, callback_base_url: e.target.value })} className={inputCls} />
+                  </Field>
+                </div>
+              </details>
 
-            <div>
-              <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{tr('sso.provisioning')}</h4>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{tr('sso.provisioningHint')}</p>
-            </div>
+              <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                <input type="checkbox" aria-label="sso-enabled" checked={form.enabled} onChange={(e) => setForm({ ...form, enabled: e.target.checked })} className="rounded" />
+                {tr('sso.fields.enabled')}
+              </label>
+            </Step>
+
+            {/* ── 3. Who gets in, and as what ──────────────────────── */}
+            <Step n={3} title={tr('sso.steps.access')}>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{tr('sso.provisioningHint')}</p>
 
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label={tr('sso.fields.allowedDomains')} hint={tr('sso.fields.listHint')}>
@@ -383,6 +517,7 @@ export function SSOProviderManager() {
                 ))}
               </div>
             </div>
+            </Step>
           </div>
 
           <div className="mt-6 flex justify-end gap-2">
@@ -430,6 +565,22 @@ export function SSOProviderManager() {
 
 const inputCls =
   'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:ring-2 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white'
+
+/** A numbered section. The form asks for twelve things; presenting them as three
+ *  ordered steps is what turns a wall of inputs into a task. */
+function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+      <div className="mb-3 flex items-center gap-2">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-600 text-xs font-semibold text-white">
+          {n}
+        </span>
+        <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{title}</h4>
+      </div>
+      <div className="space-y-3">{children}</div>
+    </section>
+  )
+}
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (

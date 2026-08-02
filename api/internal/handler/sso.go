@@ -248,6 +248,26 @@ func (h *SSOHandler) DeleteProvider(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
+// TestDiscovery probes an issuer before the provider is saved, so a typo shows
+// up while the operator is still looking at the form.
+func (h *SSOHandler) TestDiscovery(c echo.Context) error {
+	var req struct {
+		IssuerURL string `json:"issuer_url"`
+		Scopes    string `json:"scopes"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
+	}
+	result, err := h.service.TestDiscovery(c.Request().Context(), req.IssuerURL, req.Scopes)
+	if err != nil {
+		if errors.Is(err, service.ErrSSODiscovery) {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "provider_unreachable"})
+		}
+		return classifySSOError(c, err)
+	}
+	return c.JSON(http.StatusOK, result)
+}
+
 func classifySSOError(c echo.Context, err error) error {
 	switch {
 	case errors.Is(err, service.ErrSSOUnavailable):

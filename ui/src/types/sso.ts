@@ -61,3 +61,75 @@ export interface SSOProviderRequest {
 
 /** The marker the API substitutes for a stored client secret. */
 export const SSO_SECRET_PLACEHOLDER = '********'
+
+/** What an issuer advertises, reported by the Test button. */
+export interface SSODiscoveryResult {
+  issuer: string
+  authorization_endpoint: string
+  token_endpoint: string
+  scopes_supported: string[] | null
+  supports_pkce: boolean
+  missing_scopes: string[] | null
+}
+
+/**
+ * Starting points for the providers people actually run.
+ *
+ * The issuer is the one field nobody remembers and every provider writes
+ * differently — Google publishes a fixed URL, Authentik buries the application
+ * slug in the path, Keycloak the realm. Filling it as a template with the parts
+ * to replace made obvious is the difference between "paste your issuer" and a
+ * support question.
+ */
+export interface SSOPreset {
+  key: string
+  label: string
+  issuerTemplate: string
+  scopes: string
+  groupClaim: string
+  /** Shown under the issuer field while this preset is selected. */
+  hintKey: string
+}
+
+export const SSO_PRESETS: SSOPreset[] = [
+  {
+    key: 'google',
+    label: 'Google',
+    issuerTemplate: 'https://accounts.google.com',
+    scopes: 'openid profile email',
+    groupClaim: 'groups',
+    hintKey: 'sso.presets.googleHint',
+  },
+  {
+    key: 'authentik',
+    label: 'Authentik',
+    issuerTemplate: 'https://authentik.example.com/application/o/<application-slug>/',
+    scopes: 'openid profile email',
+    groupClaim: 'groups',
+    hintKey: 'sso.presets.authentikHint',
+  },
+  {
+    key: 'authelia',
+    label: 'Authelia',
+    issuerTemplate: 'https://auth.example.com',
+    scopes: 'openid profile email groups',
+    groupClaim: 'groups',
+    hintKey: 'sso.presets.autheliaHint',
+  },
+  {
+    key: 'keycloak',
+    label: 'Keycloak',
+    issuerTemplate: 'https://keycloak.example.com/realms/<realm>',
+    scopes: 'openid profile email',
+    groupClaim: 'groups',
+    hintKey: 'sso.presets.keycloakHint',
+  },
+  {
+    key: 'generic',
+    label: 'OpenID Connect',
+    issuerTemplate: '',
+    scopes: 'openid profile email',
+    groupClaim: 'groups',
+    hintKey: 'sso.presets.genericHint',
+  },
+]

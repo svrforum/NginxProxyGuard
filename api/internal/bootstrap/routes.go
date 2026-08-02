@@ -313,6 +313,7 @@ func registerSSORoutes(v1 *echo.Group, h *handler.SSOHandler) {
 	v1.POST("/sso-providers", h.CreateProvider, userWrite)
 	v1.PUT("/sso-providers/:id", h.UpdateProvider, userWrite)
 	v1.DELETE("/sso-providers/:id", h.DeleteProvider, userWrite)
+	v1.POST("/sso-providers/test", h.TestDiscovery, userWrite)
 }
 
 func registerCloudflareTunnelRoutes(v1 *echo.Group, h *handler.CloudflareTunnelHandler) {

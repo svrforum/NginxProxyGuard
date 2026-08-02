@@ -1504,7 +1504,32 @@
       "groupMappings": "그룹 → 역할 매핑",
       "addMapping": "매핑 추가",
       "groupPlaceholder": "제공자의 그룹 이름"
-    }
+    },
+    "steps": {
+      "provider": "어떤 제공자인가요?",
+      "connection": "연결 정보",
+      "access": "누가 들어올 수 있고, 어떤 역할인가요?"
+    },
+    "presets": {
+      "generic": "직접 입력",
+      "googleHint": "구글은 이 주소로 고정입니다. 그대로 두세요.",
+      "authentikHint": "Authentik 관리화면 → Applications → Providers에서 애플리케이션 slug를 확인해 <application-slug> 자리에 넣으세요.",
+      "autheliaHint": "Authelia를 서비스하는 주소입니다. 예: https://auth.내도메인",
+      "keycloakHint": "<realm> 자리에 realm 이름을 넣으세요.",
+      "genericHint": "제공자의 discovery 기준 주소. `/.well-known/openid-configuration` 앞부분까지입니다."
+    },
+    "test": "연결 테스트",
+    "testing": "확인 중…",
+    "testOk": "연결됐습니다. 이 제공자를 쓸 수 있습니다.",
+    "testPkceOk": "PKCE(S256) 지원 확인",
+    "testPkceUnknown": "PKCE 지원 여부를 알리지 않는 제공자입니다. 대개는 정상 동작합니다.",
+    "testMissingScopes": "제공자가 알리지 않는 scope: {{scopes}} — 그래도 동작할 수 있지만 확인해 보세요.",
+    "testFailed": "연결하지 못했습니다. 주소와 NPG에서의 도달 가능 여부를 확인하세요.",
+    "callbackNeedsSlug": "식별자를 먼저 입력하세요",
+    "advanced": "고급 설정",
+    "linkedIdentities": "연결된 로그인 제공자",
+    "noLinkedIdentities": "SSO 연결 없음 (비밀번호 로그인 계정)",
+    "identityLinkedAt": "{{when}} 연결"
   },
   "subTabs": {
     "settings": {

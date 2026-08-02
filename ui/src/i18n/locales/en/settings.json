@@ -1491,7 +1491,32 @@
       "groupMappings": "Group to role mappings",
       "addMapping": "Add mapping",
       "groupPlaceholder": "Group name at the provider"
-    }
+    },
+    "steps": {
+      "provider": "Which provider?",
+      "connection": "Connection",
+      "access": "Who may sign in, and as what?"
+    },
+    "presets": {
+      "generic": "Enter manually",
+      "googleHint": "Google always uses this address. Leave it as it is.",
+      "authentikHint": "Find the application slug under Applications → Providers in Authentik and put it where <application-slug> is.",
+      "autheliaHint": "The address Authelia is served on, e.g. https://auth.yourdomain",
+      "keycloakHint": "Replace <realm> with your realm name.",
+      "genericHint": "The provider's discovery base — everything before /.well-known/openid-configuration"
+    },
+    "test": "Test connection",
+    "testing": "Checking…",
+    "testOk": "Connected. This provider is usable.",
+    "testPkceOk": "PKCE (S256) confirmed",
+    "testPkceUnknown": "The provider does not advertise PKCE support. It usually still works.",
+    "testMissingScopes": "Scopes the provider does not advertise: {{scopes}} — it may still work, but check.",
+    "testFailed": "Could not connect. Check the address and that NPG can reach it.",
+    "callbackNeedsSlug": "Enter an identifier first",
+    "advanced": "Advanced",
+    "linkedIdentities": "Linked sign-in providers",
+    "noLinkedIdentities": "No SSO link (password account)",
+    "identityLinkedAt": "linked {{when}}"
   },
   "subTabs": {
     "settings": {

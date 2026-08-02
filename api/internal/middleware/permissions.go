@@ -308,6 +308,7 @@ var routePermissions = map[string]string{
 	"POST /api/v1/sso-providers": "user:write",
 	"PUT /api/v1/sso-providers/:id": "user:write",
 	"DELETE /api/v1/sso-providers/:id": "user:write",
+	"POST /api/v1/sso-providers/test": "user:write",
 	"GET /api/v1/settings/cloudflare-tunnel": "settings:read",
 	"PUT /api/v1/settings/cloudflare-tunnel": "settings:write",
 	"GET /api/v1/settings/cloudflare-tunnel/status": "settings:read",

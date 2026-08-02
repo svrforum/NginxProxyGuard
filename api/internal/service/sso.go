@@ -463,6 +463,80 @@ func randomToken(n int) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
+// SSODiscoveryResult reports what an issuer advertises, so an operator learns
+// about a typo while editing rather than when somebody first tries to sign in.
+type SSODiscoveryResult struct {
+	Issuer                string   `json:"issuer"`
+	AuthorizationEndpoint string   `json:"authorization_endpoint"`
+	TokenEndpoint         string   `json:"token_endpoint"`
+	ScopesSupported       []string `json:"scopes_supported"`
+	SupportsPKCE          bool     `json:"supports_pkce"`
+	MissingScopes         []string `json:"missing_scopes"`
+}
+
+// TestDiscovery fetches an issuer's discovery document and reports what it
+// found. The issuer is validated exactly as it is on save, so this cannot be
+// used to reach a host a provider could not have been pointed at anyway — and
+// the caller already holds user:write, which can trigger the same outbound
+// request simply by saving a provider and signing in.
+func (s *SSOService) TestDiscovery(ctx context.Context, issuer, scopes string) (*SSODiscoveryResult, error) {
+	probe := &model.CreateSSOProviderRequest{
+		Slug: "probe", Name: "probe", IssuerURL: issuer,
+		ClientID: "probe", ClientSecret: "probe", Scopes: scopes,
+	}
+	if err := probe.Validate(true); err != nil {
+		return nil, err
+	}
+
+	// Deliberately bypasses the cache: the point of pressing Test is to find out
+	// what the issuer says right now.
+	s.forgetDiscovery(probe.IssuerURL)
+	provider, err := s.discover(ctx, probe.IssuerURL)
+	if err != nil {
+		return nil, err
+	}
+
+	var doc struct {
+		Issuer                string   `json:"issuer"`
+		AuthorizationEndpoint string   `json:"authorization_endpoint"`
+		TokenEndpoint         string   `json:"token_endpoint"`
+		ScopesSupported       []string `json:"scopes_supported"`
+		CodeChallengeMethods  []string `json:"code_challenge_methods_supported"`
+	}
+	if err := provider.Claims(&doc); err != nil {
+		return nil, ErrSSODiscovery
+	}
+
+	out := &SSODiscoveryResult{
+		Issuer:                doc.Issuer,
+		AuthorizationEndpoint: doc.AuthorizationEndpoint,
+		TokenEndpoint:         doc.TokenEndpoint,
+		ScopesSupported:       doc.ScopesSupported,
+	}
+	for _, m := range doc.CodeChallengeMethods {
+		if m == "S256" {
+			out.SupportsPKCE = true
+		}
+	}
+	// Only report a scope as missing when the issuer actually publishes a list;
+	// plenty of providers omit scopes_supported and still honour the scopes.
+	if len(doc.ScopesSupported) > 0 {
+		for _, want := range strings.Fields(probe.Scopes) {
+			found := false
+			for _, have := range doc.ScopesSupported {
+				if have == want {
+					found = true
+					break
+				}
+			}
+			if !found {
+				out.MissingScopes = append(out.MissingScopes, want)
+			}
+		}
+	}
+	return out, nil
+}
+
 // ── administration ────────────────────────────────────────────────────────
 
 // ListProviders returns every provider with its secret masked.
