@@ -13,6 +13,7 @@ import SystemLogSettings from '../components/SystemLogSettings'
 import FilterSubscriptionList from '../components/FilterSubscriptionList'
 import CloudflareTunnelSettings from '../components/settings/CloudflareTunnelSettings'
 import RoleManager from '../components/settings/RoleManager'
+import SSOProviderManager from '../components/settings/SSOProviderManager'
 import UserManager from '../components/settings/UserManager'
 import { usePermissions } from '../hooks/usePermissions'
 
@@ -30,6 +31,7 @@ type SubTab =
   | 'cloudflare-tunnel'
   | 'users'
   | 'roles'
+  | 'sso'
 
 export default function SettingsPage({ subTab }: { subTab: SubTab }) {
   const { t } = useTranslation('navigation')
@@ -68,6 +70,7 @@ export default function SettingsPage({ subTab }: { subTab: SubTab }) {
       items: [
         ...(canArea('user') ? [{ key: 'users' as SubTab, label: t('subTabs.settings.users') }] : []),
         ...(canArea('role') ? [{ key: 'roles' as SubTab, label: t('subTabs.settings.roles') }] : []),
+        ...(canArea('settings') ? [{ key: 'sso' as SubTab, label: t('subTabs.settings.sso') }] : []),
       ],
     },
     {
@@ -146,6 +149,7 @@ export default function SettingsPage({ subTab }: { subTab: SubTab }) {
       {subTab === 'cloudflare-tunnel' && <CloudflareTunnelSettings />}
       {subTab === 'users' && <UserManager />}
       {subTab === 'roles' && <RoleManager />}
+      {subTab === 'sso' && <SSOProviderManager />}
     </div>
   )
 }

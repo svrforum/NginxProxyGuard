@@ -1,10 +1,58 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { login, verify2FA } from '../api/auth'
+import { fetchPublicSSOProviders, ssoStartURL } from '../api/sso'
 import { LanguageSwitcher } from './LanguageSwitcher'
 
 interface LoginProps {
   onLogin: () => void
+}
+
+/** Buttons for every enabled identity provider, above the password form.
+ *
+ *  The password form is never removed. NPG is often the reverse proxy in front
+ *  of the very IdP being used, so requiring SSO would mean a dead IdP container
+ *  locks the operator out of the tool needed to fix it. (#227)
+ */
+function SSOButtons({ onChoose }: { onChoose: (slug: string) => void }) {
+  const { t } = useTranslation('auth')
+  const { data } = useQuery({
+    queryKey: ['sso-providers-public'],
+    queryFn: fetchPublicSSOProviders,
+    staleTime: 60_000,
+    retry: false,
+  })
+  const providers = data?.data ?? []
+  if (providers.length === 0) return null
+
+  return (
+    <div className="mb-6">
+      <div className="space-y-2">
+        {providers.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => onChoose(p.slug)}
+            aria-label={`sso-${p.slug}`}
+            className="w-full flex items-center justify-center gap-2 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 py-2.5 px-4 rounded-lg font-medium hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+            </svg>
+            {t('login.ssoWith', { provider: p.name })}
+          </button>
+        ))}
+      </div>
+      <div className="relative my-5">
+        <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200 dark:border-slate-700" /></div>
+        <div className="relative flex justify-center">
+          <span className="bg-white dark:bg-slate-800 px-3 text-xs text-slate-400">{t('login.ssoOr')}</span>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export function Login({ onLogin }: LoginProps) {
@@ -16,6 +64,14 @@ export function Login({ onLogin }: LoginProps) {
   const [requires2FA, setRequires2FA] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // The SSO callback parks a failure code in the fragment before sending the
+  // browser here, so the reason is shown on the form the operator is looking at.
+  const [ssoError, setSsoError] = useState(() => {
+    const code = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('error')
+    if (code) window.history.replaceState(null, '', window.location.pathname)
+    return code || ''
+  })
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -79,6 +135,14 @@ export function Login({ onLogin }: LoginProps) {
               <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-6 text-center">
                 {t('login.title')}
               </h2>
+
+              {ssoError && (
+                <div className="mb-5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg text-sm">
+                  {t(`login.ssoErrors.${ssoError}`, { defaultValue: t('login.ssoErrors.failed') })}
+                </div>
+              )}
+
+              <SSOButtons onChoose={(slug) => { setSsoError(''); window.location.href = ssoStartURL(slug) }} />
 
               <form onSubmit={handleSubmit} className="space-y-5">
                 {error && (

@@ -1441,5 +1441,61 @@
     "tokenAllowedIPs": "Allowed IPs",
     "lastLoginAt": "Last login {{when}}",
     "neverLoggedIn": "Never signed in"
+  },
+  "sso": {
+    "title": "SSO (OpenID Connect)",
+    "subtitle": "Sign in to the admin panel with a standard OIDC provider — Google, Authentik, Authelia, Keycloak and others.",
+    "add": "Add provider",
+    "addTitle": "Add an SSO provider",
+    "editTitle": "Edit SSO provider",
+    "empty": "No providers yet. Adding one puts a button on the login screen.",
+    "disabled": "Disabled",
+    "jitOn": "Creates accounts",
+    "linkedUsers": "{{count}} linked account(s)",
+    "callbackURL": "Callback URL",
+    "callbackHint": "Register this exact value at the provider. A single character of difference fails the sign-in.",
+    "copy": "Copy",
+    "copied": "Copied",
+    "localLoginNote": "Password sign-in always stays available. NPG is often the reverse proxy in front of the very provider you configure, so an SSO-only panel would lock you out of the tool you need to fix it.",
+    "noPermission": "You do not have permission",
+    "provisioning": "Account creation and roles",
+    "provisioningHint": "Authenticated is not authorized. A public provider such as Google authenticates every account on earth, so automatic creation only turns on once you say who is allowed.",
+    "jitNeedsAllowlist": "Set an allowed domain, an allowed email, or a required group first.",
+    "mappingsAuthoritative": "With mappings set, the role is recomputed at every sign-in — removing a group at the provider takes effect on the next login.",
+    "mappingsNone": "With no mappings, the role is set once when the account is created and NPG owns it from then on.",
+    "deleteTitle": "Delete provider",
+    "deleteBody": "Delete '{{name}}'. Its {{count}} linked account(s) are unlinked, not deleted.",
+    "fields": {
+      "name": "Display name",
+      "slug": "Identifier",
+      "slugHint": "Used in the URL. Lowercase letters, digits and hyphens.",
+      "issuer": "Issuer URL",
+      "issuerHint": "The provider's discovery base, e.g. https://accounts.google.com",
+      "clientId": "Client ID",
+      "clientSecret": "Client secret",
+      "secretKeepHint": "Leave unchanged to keep the stored secret.",
+      "scopes": "Scopes",
+      "callbackBase": "Callback base URL",
+      "callbackBaseHint": "Pins the public origin when NPG sits behind another proxy. Derived from the request when empty.",
+      "enabled": "Use this provider",
+      "allowedDomains": "Allowed email domains",
+      "allowedEmails": "Allowed emails",
+      "listHint": "Separated by commas or spaces",
+      "groupClaim": "Group claim name",
+      "requiredGroup": "Required group",
+      "requiredGroupHint": "When set, only members of this group may sign in.",
+      "allowJit": "Create an account the first time someone signs in",
+      "defaultRole": "Default role",
+      "defaultRoleHint": "The role a newly created account receives",
+      "noRole": "None",
+      "groupMappings": "Group to role mappings",
+      "addMapping": "Add mapping",
+      "groupPlaceholder": "Group name at the provider"
+    }
+  },
+  "subTabs": {
+    "settings": {
+      "sso": "SSO"
+    }
   }
 }

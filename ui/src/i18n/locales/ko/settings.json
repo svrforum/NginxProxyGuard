@@ -1454,5 +1454,61 @@
     "tokenAllowedIPs": "허용 IP",
     "lastLoginAt": "마지막 로그인 {{when}}",
     "neverLoggedIn": "로그인 이력 없음"
+  },
+  "sso": {
+    "title": "SSO (OpenID Connect)",
+    "subtitle": "구글·Authentik·Authelia·Keycloak 등 표준 OIDC 제공자로 관리 패널에 로그인합니다.",
+    "add": "제공자 추가",
+    "addTitle": "SSO 제공자 추가",
+    "editTitle": "SSO 제공자 편집",
+    "empty": "등록된 제공자가 없습니다. 추가하면 로그인 화면에 버튼이 나타납니다.",
+    "disabled": "비활성",
+    "jitOn": "자동 계정 생성",
+    "linkedUsers": "연결된 계정 {{count}}개",
+    "callbackURL": "콜백 URL",
+    "callbackHint": "제공자에 이 값을 그대로 등록해야 합니다. 한 글자라도 다르면 로그인이 실패합니다.",
+    "copy": "복사",
+    "copied": "복사됨",
+    "localLoginNote": "비밀번호 로그인은 항상 사용할 수 있습니다. NPG가 그 제공자를 프록시하는 경우가 많아, SSO만 남기면 제공자가 멈췄을 때 고칠 도구에서 잠기기 때문입니다.",
+    "noPermission": "권한이 없습니다",
+    "provisioning": "계정 생성 및 역할",
+    "provisioningHint": "인증 성공은 허가와 다릅니다. 구글 같은 공용 제공자는 전 세계 모든 계정을 인증시켜 주므로, 허용 조건을 지정해야만 자동 생성이 켜집니다.",
+    "jitNeedsAllowlist": "허용 도메인·이메일·필수 그룹 중 하나 이상을 먼저 지정하세요.",
+    "mappingsAuthoritative": "매핑이 있으므로 로그인할 때마다 역할이 다시 계산됩니다. 제공자에서 그룹을 빼면 다음 로그인에 반영됩니다.",
+    "mappingsNone": "매핑이 없으면 역할은 계정 생성 시 한 번만 정해지고 이후에는 NPG에서 관리합니다.",
+    "deleteTitle": "제공자 삭제",
+    "deleteBody": "'{{name}}'을(를) 삭제합니다. 연결된 계정 {{count}}개는 삭제되지 않고 연결만 끊깁니다.",
+    "fields": {
+      "name": "표시 이름",
+      "slug": "식별자",
+      "slugHint": "URL에 쓰입니다. 영소문자·숫자·하이픈.",
+      "issuer": "Issuer URL",
+      "issuerHint": "제공자의 discovery 기준 주소. 예: https://accounts.google.com",
+      "clientId": "Client ID",
+      "clientSecret": "Client Secret",
+      "secretKeepHint": "비워두면 기존 값을 유지합니다.",
+      "scopes": "Scopes",
+      "callbackBase": "콜백 기준 주소",
+      "callbackBaseHint": "다른 프록시 뒤에 있을 때 공개 주소를 고정합니다. 비우면 요청에서 유추합니다.",
+      "enabled": "이 제공자 사용",
+      "allowedDomains": "허용 이메일 도메인",
+      "allowedEmails": "허용 이메일",
+      "listHint": "쉼표 또는 공백으로 구분",
+      "groupClaim": "그룹 클레임 이름",
+      "requiredGroup": "필수 그룹",
+      "requiredGroupHint": "지정하면 이 그룹 구성원만 로그인할 수 있습니다.",
+      "allowJit": "처음 로그인하는 사람의 계정을 자동으로 만듭니다",
+      "defaultRole": "기본 역할",
+      "defaultRoleHint": "자동 생성된 계정이 받을 역할",
+      "noRole": "선택 안 함",
+      "groupMappings": "그룹 → 역할 매핑",
+      "addMapping": "매핑 추가",
+      "groupPlaceholder": "제공자의 그룹 이름"
+    }
+  },
+  "subTabs": {
+    "settings": {
+      "sso": "SSO"
+    }
   }
 }

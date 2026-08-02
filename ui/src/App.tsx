@@ -6,6 +6,7 @@ import ErrorBoundary from './components/ErrorBoundary'
 import { Login } from './components/Login'
 import { InitialSetup } from './components/InitialSetup'
 import { ForcePasswordChange } from './components/ForcePasswordChange'
+import { SSOComplete } from './components/SSOComplete'
 import { getAuthStatus, logout, getToken, User } from './api/auth'
 import { apiPost } from './api/client'
 import type { ProxyHost } from './types/proxy-host'
@@ -440,6 +441,7 @@ function AppContent({ user, onLogout }: AppContentProps) {
           <Route path="/settings/system-logs" element={<SettingsPage subTab="system-logs" />} />
           <Route path="/settings/filter-subscriptions" element={<SettingsPage subTab="filter-subscriptions" />} />
           <Route path="/settings/cloudflare-tunnel" element={<SettingsPage subTab="cloudflare-tunnel" />} />
+          <Route path="/settings/sso" element={<SettingsPage subTab="sso" />} />
           <Route path="/settings/users" element={<SettingsPage subTab="users" />} />
           <Route path="/settings/roles" element={<SettingsPage subTab="roles" />} />
         </Routes>
@@ -602,6 +604,13 @@ function App() {
   // re-read auth and enter the app rather than bouncing back to the login form.
   const handlePasswordChanged = () => {
     void checkAuth()
+  }
+
+  // The OIDC callback lands here with no session yet, so it must be handled
+  // before the auth gate — otherwise the login screen would render and discard
+  // the token sitting in the fragment. (#227)
+  if (window.location.pathname === '/sso/complete') {
+    return <SSOComplete onAuthenticated={handleLogin} />
   }
 
   // Loading state
