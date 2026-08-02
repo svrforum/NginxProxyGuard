@@ -1529,7 +1529,8 @@
           "Copy the client ID and secret straight into the fields below: Google shows the full secret only once, though you can rotate it later.",
           "If your Audience is External and the app is still in Testing, add each person to the Test users list or Google will block them."
         ],
-        "groups": "Google sends no group information over OIDC, so assign roles per account here. To limit sign-in to one Workspace organisation, set Audience to Internal rather than looking for a groups setting."
+        "groups": "Google sends no group information over OIDC, so assign roles per account here. To limit sign-in to one Workspace organisation, set Audience to Internal rather than looking for a groups setting.",
+        "requires": "Before you start: this panel must be reachable on a real domain over https, and Google cannot assign roles by group — you set each account's role here."
       },
       "authentik": {
         "steps": [
@@ -1564,6 +1565,8 @@
         "groups": "Keycloak sends no group information until you add it: on the client's dedicated scope, add a Group Membership mapper, set Token Claim Name to groups and turn Full group path off."
       }
     },
-    "guideTitle": "At {{provider}}, do this"
+    "guideTitle": "At {{provider}}, do this",
+    "googleCallbackHttp": "Google will refuse this callback URL: it accepts only https (localhost excepted). Reach this panel on a real domain with a valid certificate before setting Google up.",
+    "googleCallbackIP": "Google will refuse this callback URL: it does not accept IP addresses. Reach this panel on a real domain name with a valid certificate before setting Google up."
   }
 }

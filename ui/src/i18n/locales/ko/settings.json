@@ -1542,7 +1542,8 @@
           "클라이언트 ID와 보안 비밀번호를 아래 칸에 바로 붙여 넣으세요. 전체 비밀번호는 생성 시 한 번만 보입니다(이후엔 재발급).",
           "대상이 External이고 게시 상태가 '테스트'라면, 로그인할 사람을 테스트 사용자 목록에 넣어야 Google이 막지 않습니다."
         ],
-        "groups": "Google은 OIDC로 그룹 정보를 주지 않습니다. 역할은 여기서 계정별로 지정하세요. 하나의 Workspace 조직으로 제한하려면 그룹 설정을 찾지 말고 대상을 Internal로 두면 됩니다."
+        "groups": "Google은 OIDC로 그룹 정보를 주지 않습니다. 역할은 여기서 계정별로 지정하세요. 하나의 Workspace 조직으로 제한하려면 그룹 설정을 찾지 말고 대상을 Internal로 두면 됩니다.",
+        "requires": "시작 전에: 이 패널이 실도메인 + https로 접속 가능해야 하고, 구글은 그룹으로 역할을 배정할 수 없어 계정마다 여기서 역할을 지정합니다."
       },
       "authentik": {
         "steps": [
@@ -1577,6 +1578,8 @@
         "groups": "Keycloak은 설정하기 전엔 그룹 정보를 보내지 않습니다. 클라이언트 전용(dedicated) scope에 Group Membership 매퍼를 추가하고 Token Claim Name을 groups로, Full group path는 끄세요."
       }
     },
-    "guideTitle": "{{provider}}에서 해야 할 일"
+    "guideTitle": "{{provider}}에서 해야 할 일",
+    "googleCallbackHttp": "구글은 이 콜백 URL을 거부합니다 — https만 받습니다(localhost 제외). 구글을 붙이기 전에 실도메인 + 유효한 인증서로 이 패널에 접속할 수 있어야 합니다.",
+    "googleCallbackIP": "구글은 이 콜백 URL을 거부합니다 — IP 주소는 받지 않습니다. 구글을 붙이기 전에 실도메인 + 유효한 인증서로 이 패널에 접속할 수 있어야 합니다."
   }
 }

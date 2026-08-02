@@ -153,6 +153,28 @@ export function SSOProviderManager() {
     }
   }
 
+  // Google is the one preset with a hard prerequisite on NPG's own address: it
+  // refuses any redirect URI that is not https, and refuses IP addresses
+  // outright (localhost excepted). A home server reached at http://192.168.x.y
+  // therefore cannot use Google at all — and the operator would only discover
+  // that after registering a client. The form already knows the callback URL,
+  // so it can say so immediately. Detected from the issuer rather than the
+  // preset button, so it also fires when editing an existing provider.
+  const isGoogle = form.issuer_url.includes('accounts.google.com')
+  const googleCallbackProblem = (() => {
+    if (!isGoogle || !callbackPreview) return null
+    try {
+      const u = new URL(callbackPreview)
+      const host = u.hostname.replace(/^\[|\]$/g, '')
+      if (host === 'localhost' || host === '127.0.0.1' || host === '::1') return null
+      if (u.protocol !== 'https:') return 'http'
+      if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(':')) return 'ip'
+      return null
+    } catch {
+      return null
+    }
+  })()
+
   // Group rules are silent failures waiting to happen: if the groups claim is
   // never requested, the claim never arrives, every login is refused as "not
   // permitted", and nothing on screen says why. (#227)
@@ -319,6 +341,11 @@ export function SSOProviderManager() {
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
                     {tr('sso.guideTitle', { provider: SSO_PRESETS.find((x) => x.key === preset)?.label ?? '' })}
                   </p>
+                  {tr(`sso.guides.${preset}.requires`, { defaultValue: '' }) && (
+                    <p className="mt-1 text-xs font-medium text-slate-600 dark:text-slate-300">
+                      {tr(`sso.guides.${preset}.requires`)}
+                    </p>
+                  )}
                   <ol className="mt-1.5 list-decimal space-y-1 pl-4 text-xs text-slate-600 dark:text-slate-300">
                     {(t(`sso.guides.${preset}.steps`, { returnObjects: true, defaultValue: [] }) as unknown as string[]).map(
                       (line, i) => (
@@ -394,6 +421,11 @@ export function SSOProviderManager() {
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-900/40">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{tr('sso.callbackURL')}</p>
                 <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{tr('sso.callbackHint')}</p>
+                {googleCallbackProblem && (
+                  <p data-testid="sso-google-callback-warning" className="mt-1.5 rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-700 dark:border-red-900 dark:bg-red-900/20 dark:text-red-300">
+                    {tr(googleCallbackProblem === 'ip' ? 'sso.googleCallbackIP' : 'sso.googleCallbackHttp')}
+                  </p>
+                )}
                 <div className="mt-1.5 flex items-center gap-2">
                   <code data-testid="sso-callback-preview" className="min-w-0 flex-1 truncate font-mono text-xs text-slate-700 dark:text-slate-300">
                     {callbackPreview || tr('sso.callbackNeedsSlug')}
