@@ -28,6 +28,8 @@ type Services struct {
 	Authz              *service.AuthzService
 	UserAdmin          *service.UserAdminService
 	SSO                *service.SSOService
+	Notification       *service.NotificationService
+	NotifyDispatcher   *service.NotificationDispatcher
 	DockerStats        *service.DockerStatsService
 	DockerLogCollector *service.DockerLogCollector
 	Security           *service.SecurityService
@@ -108,6 +110,8 @@ func InitServices(
 	svcs.Authz = service.NewAuthzService(repos.Role)
 	svcs.UserAdmin = service.NewUserAdminService(repos.User, repos.Role)
 	svcs.SSO = service.NewSSOService(repos.SSO, repos.User, repos.Role, svcs.Auth, svcs.Audit)
+	svcs.Notification = service.NewNotificationService(repos.Notification)
+	svcs.NotifyDispatcher = service.NewNotificationDispatcher(repos.Notification, svcs.Notification)
 
 	svcs.DockerStats = service.NewDockerStatsService()
 

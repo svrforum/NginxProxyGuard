@@ -158,6 +158,14 @@ const (
 // caller before this, so auth_sessions and login_attempts grew without bound.
 const (
 	SessionCleanupInterval = 6 * time.Hour
+
+	// NotificationDispatchInterval is how often the outbox is drained. Short
+	// enough that an alert is not stale, long enough that an idle install is
+	// not querying constantly. (#221)
+	NotificationDispatchInterval = 30 * time.Second
+	// NotificationBatchWindow bounds how long a burst of request-scoped events
+	// is held before being summarised into one message.
+	NotificationBatchWindow = 5 * time.Minute
 )
 
 // Update-check constants (#190). Display + guidance only — NPG never updates itself.
