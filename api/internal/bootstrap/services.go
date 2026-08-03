@@ -30,6 +30,7 @@ type Services struct {
 	SSO                *service.SSOService
 	Notification       *service.NotificationService
 	NotifyDispatcher   *service.NotificationDispatcher
+	NotifyDigest       *service.NotificationDigestService
 	DockerStats        *service.DockerStatsService
 	DockerLogCollector *service.DockerLogCollector
 	Security           *service.SecurityService
@@ -201,6 +202,8 @@ func InitServices(
 	svcs.DDNS = service.NewDDNSService(repos.DDNS, repos.DNSProvider, service.NewPublicIPDetector())
 
 	svcs.CloudflareTunnel = service.NewCloudflareTunnelService(repos.CloudflareTunnel, nginxManager)
+
+	svcs.NotifyDigest = service.NewNotificationDigestService(repos.Dashboard, svcs.Certificate, repos.Notification)
 
 	return svcs
 }

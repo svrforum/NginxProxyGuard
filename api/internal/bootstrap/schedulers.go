@@ -22,6 +22,7 @@ type Schedulers struct {
 	ContainerReconcile *scheduler.ContainerReconcileScheduler
 	DDNS               *scheduler.DDNSScheduler
 	NotifyDispatch     *scheduler.NotificationDispatchScheduler
+	NotifyDigest       *scheduler.NotificationDigestScheduler
 }
 
 // ddnsIntervalFn returns a function the DDNS scheduler consults each cycle so a
@@ -91,6 +92,7 @@ func NewSchedulers(cfg *config.Config, db *database.DB, repos *Repositories, svc
 		FilterRefresh: scheduler.NewFilterRefreshScheduler(svcs.FilterSubscription),
 		SessionCleanup: scheduler.NewSessionCleanupScheduler(svcs.Auth, svcs.SSO),
 		NotifyDispatch: scheduler.NewNotificationDispatchScheduler(svcs.NotifyDispatcher),
+		NotifyDigest:   scheduler.NewNotificationDigestScheduler(svcs.NotifyDigest),
 		ContainerReconcile: scheduler.NewContainerReconcileScheduler(
 			svcs.ProxyHost,
 			svcs.AuthProvider,
@@ -114,6 +116,7 @@ func (s *Schedulers) Start() {
 	s.FilterRefresh.Start()
 	s.SessionCleanup.Start()
 	s.NotifyDispatch.Start()
+	s.NotifyDigest.Start()
 	s.ContainerReconcile.Start()
 	s.DDNS.Start()
 }
@@ -128,6 +131,7 @@ func (s *Schedulers) Stop() {
 	s.FilterRefresh.Stop()
 	s.SessionCleanup.Stop()
 	s.NotifyDispatch.Stop()
+	s.NotifyDigest.Stop()
 	s.ContainerReconcile.Stop()
 	s.DDNS.Stop()
 	// LogRotateScheduler and BackupScheduler also expose Stop, but the

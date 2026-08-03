@@ -241,7 +241,7 @@ func (r *DashboardRepository) getTopHosts(ctx context.Context, since time.Time) 
 		  AND host != ''
 		  AND host NOT IN ('nginx', 'localhost', '_', '0.0.0.0')
 		  AND host !~ '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'
-		AND ` + canaryURIExclusion + `
+		AND `+canaryURIExclusion+`
 			GROUP BY proxy_host_id, host
 		ORDER BY total DESC
 		LIMIT 10
@@ -293,6 +293,75 @@ func (r *DashboardRepository) getTopIPs(ctx context.Context, since time.Time) []
 	return stats
 }
 
+// GetTopBlockedIPs returns the addresses that were REFUSED, with counts, for
+// the daily digest. (#221)
+//
+// It reports attackers, not visitors: the digest leaves the operator's network
+// and a list of who visited would be exporting other people's browsing to
+// Discord. Restricting to rows that carry a block reason is also what keeps the
+// query cheap — blocked requests are a small fraction of the table, so this
+// never becomes a full scan of a 154M-row hypertable.
+func (r *DashboardRepository) GetTopBlockedIPs(ctx context.Context, since time.Time, limit int) ([]model.IPStat, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT HOST(client_ip), COUNT(*) AS total
+		FROM logs_partitioned
+		WHERE created_at >= $1
+		  AND client_ip IS NOT NULL
+		  AND block_reason IS NOT NULL
+		  AND block_reason <> 'none'
+		  AND `+canaryURIExclusion+`
+		GROUP BY client_ip
+		ORDER BY total DESC
+		LIMIT $2
+	`, since, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := []model.IPStat{}
+	for rows.Next() {
+		var s model.IPStat
+		if err := rows.Scan(&s.IP, &s.Count); err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
+// GetBlockBreakdown counts blocked requests by reason over a window, which is
+// the body of the digest.
+func (r *DashboardRepository) GetBlockBreakdown(ctx context.Context, since time.Time) (map[string]int64, int64, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT block_reason::text, COUNT(*)
+		FROM logs_partitioned
+		WHERE created_at >= $1
+		  AND block_reason IS NOT NULL
+		  AND block_reason <> 'none'
+		  AND `+canaryURIExclusion+`
+		GROUP BY block_reason
+		ORDER BY 2 DESC
+	`, since)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	out := map[string]int64{}
+	var total int64
+	for rows.Next() {
+		var reason string
+		var n int64
+		if err := rows.Scan(&reason, &n); err != nil {
+			return nil, 0, err
+		}
+		out[reason] = n
+		total += n
+	}
+	return out, total, rows.Err()
+}
+
 func (r *DashboardRepository) getTopCountries(ctx context.Context, since time.Time) []model.CountryStat {
 	// Aggregate from JSONB top_countries column
 	rows, err := r.db.QueryContext(ctx, `
@@ -331,7 +400,7 @@ func (r *DashboardRepository) GetGeoIPStats(ctx context.Context, since time.Time
 		AND created_at >= $1
 		AND geo_country_code IS NOT NULL
 		AND geo_country_code != ''
-		AND ` + canaryURIExclusion + `
+		AND `+canaryURIExclusion+`
 			GROUP BY geo_country_code
 		ORDER BY request_count DESC
 		LIMIT 50
@@ -437,7 +506,7 @@ func (r *DashboardRepository) getTopUserAgents(ctx context.Context, since time.T
 		  AND http_user_agent IS NOT NULL
 		  AND http_user_agent != ''
 		  AND http_user_agent != '-'
-		AND ` + canaryURIExclusion + `
+		AND `+canaryURIExclusion+`
 			GROUP BY http_user_agent
 		ORDER BY total DESC
 		LIMIT 10
