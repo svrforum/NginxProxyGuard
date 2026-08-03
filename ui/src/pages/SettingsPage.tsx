@@ -14,6 +14,7 @@ import FilterSubscriptionList from '../components/FilterSubscriptionList'
 import CloudflareTunnelSettings from '../components/settings/CloudflareTunnelSettings'
 import RoleManager from '../components/settings/RoleManager'
 import SSOProviderManager from '../components/settings/SSOProviderManager'
+import NotificationChannelManager from '../components/settings/NotificationChannelManager'
 import UserManager from '../components/settings/UserManager'
 import { usePermissions } from '../hooks/usePermissions'
 
@@ -32,6 +33,7 @@ type SubTab =
   | 'users'
   | 'roles'
   | 'sso'
+  | 'notifications'
 
 export default function SettingsPage({ subTab }: { subTab: SubTab }) {
   const { t } = useTranslation('navigation')
@@ -82,6 +84,7 @@ export default function SettingsPage({ subTab }: { subTab: SubTab }) {
           ? [
             { key: 'system-logs' as SubTab, label: t('subTabs.settings.systemLogs') },
             { key: 'cloudflare-tunnel' as SubTab, label: t('subTabs.settings.cloudflareTunnel') },
+            { key: 'notifications' as SubTab, label: t('subTabs.settings.notifications') },
           ]
           : []),
       ],
@@ -150,6 +153,7 @@ export default function SettingsPage({ subTab }: { subTab: SubTab }) {
       {subTab === 'users' && <UserManager />}
       {subTab === 'roles' && <RoleManager />}
       {subTab === 'sso' && <SSOProviderManager />}
+      {subTab === 'notifications' && <NotificationChannelManager />}
     </div>
   )
 }

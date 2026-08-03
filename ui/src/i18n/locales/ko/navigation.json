@@ -94,7 +94,8 @@
       },
       "users": "사용자",
       "roles": "역할",
-      "sso": "SSO"
+      "sso": "SSO",
+      "notifications": "알림"
     }
   },
   "loading": "로딩 중...",

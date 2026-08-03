@@ -442,6 +442,7 @@ function AppContent({ user, onLogout }: AppContentProps) {
           <Route path="/settings/filter-subscriptions" element={<SettingsPage subTab="filter-subscriptions" />} />
           <Route path="/settings/cloudflare-tunnel" element={<SettingsPage subTab="cloudflare-tunnel" />} />
           <Route path="/settings/sso" element={<SettingsPage subTab="sso" />} />
+          <Route path="/settings/notifications" element={<SettingsPage subTab="notifications" />} />
           <Route path="/settings/users" element={<SettingsPage subTab="users" />} />
           <Route path="/settings/roles" element={<SettingsPage subTab="roles" />} />
         </Routes>

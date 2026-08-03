@@ -94,7 +94,8 @@
       },
       "users": "Users",
       "roles": "Roles",
-      "sso": "SSO"
+      "sso": "SSO",
+      "notifications": "Notifications"
     }
   },
   "loading": "Loading...",
