@@ -25,6 +25,16 @@ func NewNotificationDispatcher(repo *repository.NotificationRepository, notify *
 		notify: notify,
 		adapters: map[string]channelAdapter{
 			model.NotificationTypeWebhook: newWebhookAdapter(),
+			model.NotificationTypeDiscord: newDiscordAdapter(),
+			// The persister closes over the repository so the adapter can report
+			// a migrated chat id without knowing what a repository is.
+			model.NotificationTypeTelegram: newTelegramAdapter(func(ctx context.Context, channelID, newChatID string) {
+				if err := repo.SetChatID(ctx, channelID, newChatID); err != nil {
+					log.Printf("[Notify] failed to persist migrated chat id for %s: %v", channelID, err)
+				} else {
+					log.Printf("[Notify] telegram chat %s migrated to a supergroup, new id stored", channelID)
+				}
+			}),
 		},
 		batchSize: 25,
 	}

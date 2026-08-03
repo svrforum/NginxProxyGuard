@@ -148,6 +148,20 @@ func (r *NotificationRepository) ChannelsForDigest(ctx context.Context, hour int
 	return out, rows.Err()
 }
 
+// SetChatID rewrites a Telegram channel's chat id in place. Telegram hands out
+// a new one when a group is upgraded to a supergroup, and the old id stops
+// working, so persisting it is what keeps the channel alive across the upgrade.
+func (r *NotificationRepository) SetChatID(ctx context.Context, channelID, chatID string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE notification_channels
+		 SET config = jsonb_set(config, '{chat_id}', to_jsonb($2::text)), updated_at = now()
+		 WHERE id = $1`, channelID, chatID)
+	if err != nil {
+		return fmt.Errorf("failed to store migrated chat id: %w", err)
+	}
+	return nil
+}
+
 func (r *NotificationRepository) MarkDigestSent(ctx context.Context, channelID string, day time.Time) error {
 	_, err := r.db.ExecContext(ctx,
 		`UPDATE notification_channels SET last_digest_on = $2::date WHERE id = $1`,
