@@ -87,9 +87,9 @@ func NewSchedulers(cfg *config.Config, db *database.DB, repos *Repositories, svc
 			repos.SystemLog,
 			repos.Dashboard,
 		),
-		LogRotate:     scheduler.NewLogRotateScheduler(),
-		Backup:        scheduler.NewBackupScheduler(repos.Backup, repos.SystemSettings, cfg.BackupPath),
-		FilterRefresh: scheduler.NewFilterRefreshScheduler(svcs.FilterSubscription),
+		LogRotate:      scheduler.NewLogRotateScheduler(),
+		Backup:         scheduler.NewBackupScheduler(repos.Backup, repos.SystemSettings, cfg.BackupPath),
+		FilterRefresh:  scheduler.NewFilterRefreshScheduler(svcs.FilterSubscription),
 		SessionCleanup: scheduler.NewSessionCleanupScheduler(svcs.Auth, svcs.SSO),
 		NotifyDispatch: scheduler.NewNotificationDispatchScheduler(svcs.NotifyDispatcher),
 		NotifyDigest:   scheduler.NewNotificationDigestScheduler(svcs.NotifyDigest),
@@ -104,6 +104,9 @@ func NewSchedulers(cfg *config.Config, db *database.DB, repos *Repositories, svc
 	// Surface container-reconcile events (auth provider IP change / container down) to
 	// the Logs view, not just container stdout. (#181 follow-up)
 	s.ContainerReconcile.SetSystemLogRepo(repos.SystemLog)
+	// Notifications (#221): setter injection, like the service graph does.
+	s.Backup.SetNotificationService(svcs.Notification)
+
 	return s
 }
 

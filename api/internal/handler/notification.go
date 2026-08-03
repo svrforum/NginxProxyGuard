@@ -185,6 +185,31 @@ func (h *NotificationHandler) Deliveries(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]any{"data": entries})
 }
 
+// DetectTelegramChats answers "what is my chat id", which Telegram shows
+// nowhere in its own interface. Without it the setup instruction would be
+// "find your chat id" with no way to find it.
+func (h *NotificationHandler) DetectTelegramChats(c echo.Context) error {
+	var req struct {
+		BotToken  string `json:"bot_token"`
+		ChannelID string `json:"channel_id"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
+	}
+	// The UI sends the mask when editing a saved channel rather than the real
+	// token, so the stored one is used.
+	if (req.BotToken == "" || req.BotToken == model.SecretPlaceholder) && req.ChannelID != "" {
+		if ch, err := h.repo.GetByID(c.Request().Context(), req.ChannelID); err == nil && ch != nil {
+			req.BotToken = ch.Config["bot_token"]
+		}
+	}
+	chats, err := service.DetectTelegramChats(c.Request().Context(), req.BotToken)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	return c.JSON(http.StatusOK, map[string]any{"data": chats})
+}
+
 func classifyNotificationError(c echo.Context, err error) error {
 	if errors.Is(err, sql.ErrNoRows) {
 		return c.JSON(http.StatusNotFound, map[string]string{"error": "Channel not found"})

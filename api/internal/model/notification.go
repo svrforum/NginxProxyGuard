@@ -38,16 +38,19 @@ type EventDescriptor struct {
 // hour they belong in the digest and in ip.banned, which already means "this
 // address earned a ban". Also absent: update.available, because nothing checks
 // for updates in the background — UpdateChecker.Check is only ever called from
-// an HTTP handler.
+// an HTTP handler; cert.expiring, because the daily digest already lists every
+// certificate expiring within 30 days and a separate event would say the same
+// thing again; and host.unreachable, because the only per-host prober is
+// the on-demand one the UI calls — there is no background health check to hang
+// an event on. An event key that can never fire is worse than an absent one:
+// the operator ticks it and then waits for a message that will not come.
 var EventCatalogue = []EventDescriptor{
 	{Key: "cert.renewal_failed"},
 	{Key: "cert.renewed"},
-	{Key: "cert.expiring"},
 	{Key: "ddns.sync_failed"},
 	{Key: "ddns.recovered"},
 	{Key: "backup.failed"},
 	{Key: "nginx.reload_failed"},
-	{Key: "host.unreachable"},
 	{Key: "auth.login_failed"},
 	{Key: "ip.banned", Batched: true},
 	{Key: "sso.login_refused", Batched: true},

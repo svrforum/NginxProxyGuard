@@ -208,3 +208,79 @@ func (a *telegramAdapter) Send(ctx context.Context, ch *model.NotificationChanne
 	}
 	return outcome, wait, fmt.Errorf("telegram: %s", detail)
 }
+
+// TelegramChat is one conversation a bot can currently reach.
+type TelegramChat struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Type  string `json:"type"`
+}
+
+// DetectTelegramChats asks getUpdates which conversations the bot has seen.
+//
+// This exists because a Telegram bot cannot start a conversation — the operator
+// must message it or add it to a group first — and the chat id is not shown
+// anywhere in the Telegram UI. Telling somebody to "find your chat id" without
+// giving them a way to find it is where a setup guide stops being a guide.
+func DetectTelegramChats(ctx context.Context, botToken string) ([]TelegramChat, error) {
+	return detectTelegramChatsAt(ctx, telegramAPIBase, botToken)
+}
+
+func detectTelegramChatsAt(ctx context.Context, base, botToken string) ([]TelegramChat, error) {
+	if strings.TrimSpace(botToken) == "" {
+		return nil, fmt.Errorf("invalid bot_token: required")
+	}
+	endpoint := strings.TrimRight(base, "/") + "/bot" + url.PathEscape(botToken) + "/getUpdates"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := notifyHTTPClient().Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("could not reach Telegram: %w", err)
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+
+	var parsed struct {
+		OK          bool   `json:"ok"`
+		Description string `json:"description"`
+		Result      []struct {
+			Message struct {
+				Chat struct {
+					ID        int64  `json:"id"`
+					Title     string `json:"title"`
+					Username  string `json:"username"`
+					FirstName string `json:"first_name"`
+					Type      string `json:"type"`
+				} `json:"chat"`
+			} `json:"message"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return nil, fmt.Errorf("Telegram returned something unexpected")
+	}
+	if !parsed.OK {
+		detail := parsed.Description
+		if detail == "" {
+			detail = fmt.Sprintf("status %d", resp.StatusCode)
+		}
+		return nil, fmt.Errorf("Telegram refused: %s", detail)
+	}
+
+	seen := map[int64]bool{}
+	out := []TelegramChat{}
+	for _, u := range parsed.Result {
+		c := u.Message.Chat
+		if c.ID == 0 || seen[c.ID] {
+			continue
+		}
+		seen[c.ID] = true
+		title := c.Title
+		if title == "" {
+			title = strings.TrimSpace(c.FirstName + " " + c.Username)
+		}
+		out = append(out, TelegramChat{ID: strconv.FormatInt(c.ID, 10), Title: title, Type: c.Type})
+	}
+	return out, nil
+}

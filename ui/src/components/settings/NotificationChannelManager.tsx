@@ -6,6 +6,7 @@ import {
   deleteNotificationChannel,
   listNotificationChannels,
   listNotificationDeliveries,
+  detectTelegramChats,
   testNotificationChannel,
   updateNotificationChannel,
 } from '../../api/notification'
@@ -14,6 +15,7 @@ import {
   type NotificationChannel,
   type NotificationChannelRequest,
   type NotificationChannelType,
+  type TelegramChat,
 } from '../../types/notification'
 import { usePermissions } from '../../hooks/usePermissions'
 import { ModalShell } from '../common/ModalShell'
@@ -77,6 +79,8 @@ export function NotificationChannelManager() {
   const [deleting, setDeleting] = useState<NotificationChannel | null>(null)
   const [logFor, setLogFor] = useState<NotificationChannel | null>(null)
   const [testResult, setTestResult] = useState<{ id: string; ok: boolean; message: string } | null>(null)
+  const [chats, setChats] = useState<{ list: TelegramChat[]; error: string } | null>(null)
+  const [detecting, setDetecting] = useState(false)
 
   const { data, isLoading } = useQuery({ queryKey: ['notification-channels'], queryFn: listNotificationChannels })
   const channels = data?.data ?? []
@@ -114,8 +118,21 @@ export function NotificationChannelManager() {
     },
   })
 
-  const openCreate = () => { setForm(emptyForm()); setCreating(true); setEditing(null); setFormError('') }
-  const openEdit = (c: NotificationChannel) => { setForm(toForm(c)); setEditing(c); setCreating(false); setFormError('') }
+  const detect = async () => {
+    setDetecting(true)
+    setChats(null)
+    try {
+      const r = await detectTelegramChats(form.config.bot_token ?? '', editing?.id)
+      setChats({ list: r.data ?? [], error: '' })
+    } catch (e) {
+      setChats({ list: [], error: e instanceof Error ? e.message : String(e) })
+    } finally {
+      setDetecting(false)
+    }
+  }
+
+  const openCreate = () => { setForm(emptyForm()); setCreating(true); setEditing(null); setFormError(''); setChats(null) }
+  const openEdit = (c: NotificationChannel) => { setForm(toForm(c)); setEditing(c); setCreating(false); setFormError(''); setChats(null) }
 
   const setConfig = (key: string, value: string) =>
     setForm((f) => ({ ...f, config: { ...f.config, [key]: value } }))
@@ -286,14 +303,65 @@ export function NotificationChannelManager() {
               </Field>
             </div>
 
+            {/* What to do at the provider, before any field is filled in. The
+                bot token and chat id are not discoverable without this, and the
+                chat id is shown nowhere in Telegram's own interface. */}
+            <div data-testid="notify-guide" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900/40">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                {tr(`notifications.guides.${form.type}.title`)}
+              </p>
+              <ol className="mt-1.5 list-decimal space-y-1 pl-4 text-xs text-slate-600 dark:text-slate-300">
+                {(t(`notifications.guides.${form.type}.steps`, { returnObjects: true, defaultValue: [] }) as unknown as string[]).map(
+                  (line, i) => <li key={i}>{line}</li>,
+                )}
+              </ol>
+            </div>
+
             {form.type === 'telegram' ? (
               <>
                 <Field label={tr('notifications.fields.botToken')} hint={editing ? tr('notifications.fields.secretKeepHint') : tr('notifications.fields.botTokenHint')}>
                   <input aria-label="notify-bot-token" type="password" value={form.config.bot_token ?? ''} onChange={(e) => setConfig('bot_token', e.target.value)} className={inputCls} />
                 </Field>
                 <Field label={tr('notifications.fields.chatId')} hint={tr('notifications.fields.chatIdHint')}>
-                  <input aria-label="notify-chat-id" value={form.config.chat_id ?? ''} onChange={(e) => setConfig('chat_id', e.target.value)} className={inputCls} />
+                  <div className="flex gap-2">
+                    <input aria-label="notify-chat-id" value={form.config.chat_id ?? ''} onChange={(e) => setConfig('chat_id', e.target.value)} className={inputCls} />
+                    <button
+                      type="button"
+                      aria-label="notify-detect-chat"
+                      onClick={detect}
+                      disabled={detecting || !(form.config.bot_token || editing)}
+                      className="shrink-0 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+                    >
+                      {detecting ? tr('notifications.detecting') : tr('notifications.detect')}
+                    </button>
+                  </div>
                 </Field>
+                {chats && (
+                  <div data-testid="notify-chat-results" className="rounded-lg border border-slate-200 px-3 py-2 text-xs dark:border-slate-700">
+                    {chats.error ? (
+                      <p className="text-red-600 dark:text-red-400">{chats.error}</p>
+                    ) : chats.list.length === 0 ? (
+                      <p className="text-amber-700 dark:text-amber-400">{tr('notifications.detectEmpty')}</p>
+                    ) : (
+                      <>
+                        <p className="mb-1.5 text-slate-500 dark:text-slate-400">{tr('notifications.detectPick')}</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {chats.list.map((c) => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onClick={() => setConfig('chat_id', c.id)}
+                              className="rounded border border-slate-300 px-2 py-1 text-left hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700"
+                            >
+                              <span className="font-medium text-slate-700 dark:text-slate-200">{c.title || c.type}</span>
+                              <span className="ml-1.5 font-mono text-[11px] text-slate-500">{c.id}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
               </>
             ) : (
               <>

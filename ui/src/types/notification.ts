@@ -55,6 +55,13 @@ export interface NotificationDelivery {
   payload: { event: string; severity: string; text: string; fields: Record<string, string> }
 }
 
+/** One conversation a Telegram bot can currently reach. */
+export interface TelegramChat {
+  id: string
+  title: string
+  type: string
+}
+
 export const NOTIFICATION_SECRET_PLACEHOLDER = '********'
 
 /** The placeholders a template may use. Deliberately excludes request headers,

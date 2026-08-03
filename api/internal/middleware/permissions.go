@@ -315,6 +315,7 @@ var routePermissions = map[string]string{
 	"DELETE /api/v1/notification-channels/:id": "settings:write",
 	"POST /api/v1/notification-channels/:id/test": "settings:write",
 	"GET /api/v1/notification-channels/:id/deliveries": "settings:read",
+	"POST /api/v1/notification-channels/detect-telegram-chats": "settings:write",
 	"GET /api/v1/settings/cloudflare-tunnel": "settings:read",
 	"PUT /api/v1/settings/cloudflare-tunnel": "settings:write",
 	"GET /api/v1/settings/cloudflare-tunnel/status": "settings:read",

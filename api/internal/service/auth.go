@@ -62,6 +62,8 @@ type AuthService struct {
 	tokenMu     sync.RWMutex
 	redisCache  *cache.RedisClient
 	stopCleanup chan struct{}
+	// notify is optional: nil means notifications are not configured.
+	notify *NotificationService
 }
 
 func NewAuthService(repo *repository.AuthRepository, jwtSecret string) *AuthService {
@@ -131,6 +133,15 @@ func (s *AuthService) Login(ctx context.Context, req *model.LoginRequest, ip, us
 			return nil, err
 		}
 		if failedCount >= maxFailedAttempts {
+			// Not edge-triggered on a subject that recovers — a lockout is a
+			// discrete occurrence — but batched, so a sustained brute-force
+			// attempt produces one message with a count rather than one per
+			// rejected password. (#221)
+			if s.notify != nil {
+				_ = s.notify.EmitBatched(ctx, "auth.login_failed", map[string]string{
+					"subject": req.Username, "ip": ip, "reason": "locked_out",
+				})
+			}
 			return nil, ErrTooManyAttempts
 		}
 	}
@@ -661,3 +672,6 @@ func hashToken(token string) string {
 	hash := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(hash[:])
 }
+
+// SetNotificationService wires notifications after construction. (#221)
+func (s *AuthService) SetNotificationService(n *NotificationService) { s.notify = n }

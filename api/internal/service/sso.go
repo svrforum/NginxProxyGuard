@@ -57,6 +57,9 @@ type SSOService struct {
 
 	mu        sync.Mutex
 	discovery map[string]cachedDiscovery
+
+	// notify is optional: nil means notifications are not configured.
+	notify *NotificationService
 }
 
 func NewSSOService(repo *repository.SSORepository, users *repository.UserRepository,
@@ -242,6 +245,13 @@ func (s *SSOService) resolveUser(ctx context.Context, p *model.SSOProvider, c *m
 		return "", "", ErrSSOEmailMissing
 	}
 	if !p.AllowedByList(c) {
+		// Batched (#221): a misconfigured allowlist rejects everyone who tries,
+		// and a scripted attempt would produce one message per try.
+		if s.notify != nil {
+			_ = s.notify.EmitBatched(ctx, "sso.login_refused", map[string]string{
+				"subject": p.Slug, "reason": "not_on_allowlist",
+			})
+		}
 		return "", "", ErrSSONotAllowed
 	}
 	return s.provision(ctx, p, c)
@@ -670,3 +680,6 @@ func (s *SSOService) CleanupLoginStates(ctx context.Context) (int64, error) {
 	}
 	return s.repo.DeleteExpiredLoginStates(ctx)
 }
+
+// SetNotificationService wires notifications after construction. (#221)
+func (s *SSOService) SetNotificationService(n *NotificationService) { s.notify = n }

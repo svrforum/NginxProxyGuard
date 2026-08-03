@@ -4,6 +4,7 @@ import type {
   NotificationChannelRequest,
   NotificationDelivery,
   NotificationEvent,
+  TelegramChat,
 } from '../types/notification'
 
 const API_BASE = '/api/v1'
@@ -36,4 +37,14 @@ export async function testNotificationChannel(id: string): Promise<{ status: str
 
 export async function listNotificationDeliveries(id: string): Promise<{ data: NotificationDelivery[] }> {
   return apiGet(`${API_BASE}/notification-channels/${id}/deliveries`)
+}
+
+/** Asks Telegram which conversations the bot can currently see. Telegram shows
+ *  the chat id nowhere in its own interface, so without this the instruction
+ *  would be "find your chat id" with no way to find it. */
+export async function detectTelegramChats(botToken: string, channelId?: string): Promise<{ data: TelegramChat[] }> {
+  return apiPost(`${API_BASE}/notification-channels/detect-telegram-chats`, {
+    bot_token: botToken,
+    channel_id: channelId ?? '',
+  })
 }

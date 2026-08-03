@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"nginx-proxy-guard/internal/service"
 	"os"
 	"path/filepath"
 	"sort"
@@ -22,15 +23,17 @@ import (
 
 // BackupScheduler handles automatic backups based on cron schedule
 type BackupScheduler struct {
-	backupRepo       *repository.BackupRepository
-	systemSettings   *repository.SystemSettingsRepository
-	backupPath       string
-	cronScheduler    *cron.Cron
-	currentEntryID   cron.EntryID
-	currentSchedule  string
-	wasEnabled       bool  // Track if auto backup was previously enabled
-	stopChan         chan struct{}
-	running          bool
+	backupRepo      *repository.BackupRepository
+	systemSettings  *repository.SystemSettingsRepository
+	backupPath      string
+	cronScheduler   *cron.Cron
+	currentEntryID  cron.EntryID
+	currentSchedule string
+	wasEnabled      bool // Track if auto backup was previously enabled
+	stopChan        chan struct{}
+	running         bool
+	// notify is optional: nil means notifications are not configured.
+	notify *service.NotificationService
 }
 
 // NewBackupScheduler creates a new backup scheduler
@@ -216,10 +219,19 @@ func (s *BackupScheduler) runBackup() {
 	if err := s.performBackup(ctx, backup); err != nil {
 		log.Printf("[BackupScheduler] Backup failed: %v", err)
 		s.backupRepo.UpdateStatus(ctx, backup.ID, "failed", err.Error())
+		// Edge-triggered on the schedule as a whole (#221): a scheduled backup
+		// that keeps failing every night says so once, and once when it works
+		// again. There is one subject because there is one schedule.
+		if s.notify != nil {
+			_ = s.notify.EmitTransition(ctx, "backup.failed", "scheduled", true, err.Error(), nil)
+		}
 		return
 	}
 
 	log.Printf("[BackupScheduler] Backup completed successfully: %s", filename)
+	if s.notify != nil {
+		_ = s.notify.EmitTransition(ctx, "backup.failed", "scheduled", false, "", nil)
+	}
 
 	// Clean up old backups based on retention count
 	retentionCount := settings.BackupRetentionCount
@@ -400,3 +412,6 @@ func (s *BackupScheduler) cleanupOldBackups(ctx context.Context, retentionCount 
 		}
 	}
 }
+
+// SetNotificationService wires notifications after construction. (#221)
+func (s *BackupScheduler) SetNotificationService(n *service.NotificationService) { s.notify = n }

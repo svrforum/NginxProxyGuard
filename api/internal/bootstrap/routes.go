@@ -320,6 +320,7 @@ func registerNotificationRoutes(v1 *echo.Group, h *handler.NotificationHandler) 
 	v1.DELETE("/notification-channels/:id", h.Delete, settingsWrite)
 	v1.POST("/notification-channels/:id/test", h.Test, settingsWrite)
 	v1.GET("/notification-channels/:id/deliveries", h.Deliveries, settingsRead)
+	v1.POST("/notification-channels/detect-telegram-chats", h.DetectTelegramChats, settingsWrite)
 }
 
 func registerSSORoutes(v1 *echo.Group, h *handler.SSOHandler) {

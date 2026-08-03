@@ -49,6 +49,8 @@ type NginxReloader struct {
 	lastReload    time.Time
 	reloadCount   int64
 	retryCount    int // consecutive failed debounced executions since the last success
+	// notify is optional: nil means notifications are not configured.
+	notify *NotificationService
 }
 
 // NewNginxReloader creates a new debounced nginx reloader.
@@ -135,6 +137,13 @@ func (r *NginxReloader) executeReload() {
 	} else {
 		log.Println("[NginxReloader] Reload completed successfully")
 	}
+	// Clears the failing state so a later failure is news again (#221). Sent
+	// unconditionally rather than only when recovered: EmitTransition is a
+	// no-op when the state has not changed, and this way a reload that
+	// succeeds on the first try after a restart still records health.
+	if r.notify != nil {
+		_ = r.notify.EmitTransition(context.Background(), "nginx.reload_failed", "nginx", false, "", nil)
+	}
 }
 
 // scheduleRetryOrGiveUp re-arms the debounce timer with exponential backoff so
@@ -164,7 +173,18 @@ func (r *NginxReloader) scheduleRetryOrGiveUp(reloadErr error) {
 	log.Printf("[NginxReloader] Reload failed after %d attempts, giving up — nginx keeps running its previous config; pending changes (e.g. IP bans) are NOT applied. Check the nginx container, then save any host or security setting to retry: %v",
 		attempt, reloadErr)
 	r.logGiveUp(attempt, reloadErr)
+
+	// Edge-triggered (#221). Only one subject exists — nginx itself — so a
+	// reload that keeps failing says so once, and the recovery below says so
+	// once. The system log already carries every attempt.
+	if r.notify != nil {
+		_ = r.notify.EmitTransition(context.Background(), "nginx.reload_failed", "nginx", true,
+			reloadErr.Error(), nil)
+	}
 }
+
+// SetNotificationService wires notifications after construction. (#221)
+func (r *NginxReloader) SetNotificationService(n *NotificationService) { r.notify = n }
 
 // retryDelay returns the backoff before retry N (1-based): debounce×2^N,
 // capped at maxReloadRetryDelay (2s debounce → 4s, 8s, 16s, 32s, 60s).

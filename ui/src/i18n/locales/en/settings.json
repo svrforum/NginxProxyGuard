@@ -1620,6 +1620,37 @@
       "template": "Message format (optional)",
       "templateHint": "Leave empty for the default format.",
       "secretKeepHint": "Leave unchanged to keep the stored value."
-    }
+    },
+    "guides": {
+      "webhook": {
+        "title": "At your receiver",
+        "steps": [
+          "Create a receiving address in whatever will show the notification — ntfy, Gotify, Apprise, Home Assistant.",
+          "Paste it into Receiver URL below. If the receiver needs authentication, put the token in the Authorization header field.",
+          "Save, then press Send test and confirm it actually arrives."
+        ]
+      },
+      "discord": {
+        "title": "In Discord",
+        "steps": [
+          "In the channel that should receive alerts: Edit Channel → Integrations → Webhooks → New Webhook.",
+          "Press Copy Webhook URL. That URL is itself the credential — anyone holding it can post to the channel.",
+          "Paste it into Discord webhook URL below, save, and press Send test."
+        ]
+      },
+      "telegram": {
+        "title": "In Telegram",
+        "steps": [
+          "Message @BotFather and send /newbot. Give it a name and a username, and it hands you a bot token that looks like 123456:ABC-DEF. Paste that below.",
+          "A bot cannot message you first. To receive privately, open the chat with your new bot and send it anything. To receive in a group, add the bot to the group and send a message there.",
+          "Press Detect chat id below and NPG lists the conversations the bot can see. Click the one you want and the chat id fills in.",
+          "Save, then press Send test — a real message should arrive."
+        ]
+      }
+    },
+    "detect": "Detect chat id",
+    "detecting": "Looking…",
+    "detectEmpty": "The bot can see no conversations yet. Send it a message, or add it to a group and post there, then try again.",
+    "detectPick": "Pick the conversation to send to:"
   }
 }
