@@ -119,32 +119,44 @@ func (d *NotificationDispatcher) Prune(ctx context.Context) {
 	}
 }
 
-// SendTest delivers a message immediately, bypassing the outbox, so the UI's
-// Test button reports a real result rather than "queued".
-func (d *NotificationDispatcher) SendTest(ctx context.Context, ch *model.NotificationChannel) error {
+// SendTest delivers a sample message immediately and records the attempt, so
+// the button reports a real result AND the delivery log shows it.
+//
+// The first version skipped the outbox entirely, which meant an operator who
+// pressed Test and then opened the log found it empty and had no way to tell
+// whether anything had happened. Bypassing the queue is right — a test should
+// answer now, not in thirty seconds — but skipping the record was not.
+//
+// eventKey selects which event to imitate, so an operator can see what each
+// alert will actually look like before subscribing to it.
+func (d *NotificationDispatcher) SendTest(ctx context.Context, ch *model.NotificationChannel, eventKey string) error {
 	adapter, ok := d.adapters[ch.Type]
 	if !ok {
 		return &UnsupportedChannelError{Type: ch.Type}
 	}
-	msg := model.RenderedMessage{
-		Event:    "test",
-		Severity: "info",
-		Text:     "Nginx Proxy Guard test notification",
-		Fields:   map[string]string{"event": "test", "instance": "npg"},
-	}
+
+	msg := SampleMessage(eventKey)
 	if ch.Template != "" {
 		msg.Text = model.Render(ch.Template, msg.Fields)
 	}
-	outcome, _, err := adapter.Send(ctx, ch, msg)
+
+	outcome, _, sendErr := adapter.Send(ctx, ch, msg)
+	reason := ""
+	if sendErr != nil {
+		reason = sendErr.Error()
+	}
 	if outcome == OutcomeSent {
 		_ = d.repo.RecordChannelResult(ctx, ch.ID, "")
+		_ = d.repo.RecordAttempt(ctx, ch.ID, msg.Event, msg, "sent", "")
 		return nil
 	}
-	if err == nil {
-		err = &UnsupportedChannelError{Type: ch.Type}
+	if sendErr == nil {
+		sendErr = &UnsupportedChannelError{Type: ch.Type}
+		reason = sendErr.Error()
 	}
-	_ = d.repo.RecordChannelResult(ctx, ch.ID, err.Error())
-	return err
+	_ = d.repo.RecordChannelResult(ctx, ch.ID, reason)
+	_ = d.repo.RecordAttempt(ctx, ch.ID, msg.Event, msg, "failed", reason)
+	return sendErr
 }
 
 // UnsupportedChannelError is returned for a channel type this build cannot send.

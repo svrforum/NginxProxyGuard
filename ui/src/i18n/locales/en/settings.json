@@ -1593,7 +1593,7 @@
     "deleteBody": "Delete '{{name}}'. Notifications routed here will stop.",
     "noPermission": "You do not have permission",
     "whatToSend": "What to send",
-    "whatToSendHint": "Only the events you pick reach this channel. Events marked batched are coalesced over five minutes into one message.",
+    "whatToSendHint": "For each alert: off, delivered the moment it happens, or mentioned only in the daily summary. Once the channel is saved you can preview any of them.",
     "placeholders": "Available placeholders",
     "piiNote": "Request headers, cookies, user-agent, request URL and raw log data are deliberately unavailable: they carry credentials, and a notification leaves your network.",
     "types": {
@@ -1619,7 +1619,13 @@
       "digestHour": "Send at ({{zone}})",
       "template": "Message format (optional)",
       "templateHint": "Leave empty for the default format.",
-      "secretKeepHint": "Leave unchanged to keep the stored value."
+      "secretKeepHint": "Leave unchanged to keep the stored value.",
+      "richFormat": "Use the platform's own formatting",
+      "richFormatHint": {
+        "discord": "Sends an embed with a title, a severity-coloured bar and the fields as columns. Off sends one plain block.",
+        "telegram": "Sends MarkdownV2 with a bold title and highlighted values. Off sends plain text.",
+        "webhook": "The JSON body is always structured; this only affects the human-readable text line."
+      }
     },
     "guides": {
       "webhook": {
@@ -1651,6 +1657,56 @@
     "detect": "Detect chat id",
     "detecting": "Looking…",
     "detectEmpty": "The bot can see no conversations yet. Send it a message, or add it to a group and post there, then try again.",
-    "detectPick": "Pick the conversation to send to:"
+    "detectPick": "Pick the conversation to send to:",
+    "events": {
+      "cert.renewal_failed": {
+        "label": "Certificate renewal failed",
+        "desc": "A Let's Encrypt renewal failed. Left alone the certificate expires and the site stops loading."
+      },
+      "cert.renewed": {
+        "label": "Certificate renewed",
+        "desc": "Sent only when a renewal that had been failing works again."
+      },
+      "ddns.sync_failed": {
+        "label": "DDNS update failed",
+        "desc": "Your public IP changed but DNS was not updated, so you may lose access from outside."
+      },
+      "ddns.recovered": {
+        "label": "DDNS updating again",
+        "desc": "Sent only when a failing DDNS record starts working again."
+      },
+      "backup.failed": {
+        "label": "Scheduled backup failed",
+        "desc": "The automatic backup did not run. You have no new restore point."
+      },
+      "nginx.reload_failed": {
+        "label": "nginx reload failed",
+        "desc": "Applying the config failed through every retry. nginx keeps serving the old config, so changes such as IP bans are not in effect."
+      },
+      "auth.login_failed": {
+        "label": "Admin sign-in locked out",
+        "desc": "Failed sign-ins hit the lockout threshold. Often a brute-force attempt."
+      },
+      "ip.banned": {
+        "label": "IP banned",
+        "desc": "fail2ban or WAF auto-ban blocked an address. These arrive in bursts, so they are coalesced every five minutes."
+      },
+      "sso.login_refused": {
+        "label": "SSO sign-in refused",
+        "desc": "An identity outside your allowlist tried to sign in — a misconfiguration, or somebody trying."
+      }
+    },
+    "modes": {
+      "off": "Off",
+      "immediate": "Immediate",
+      "digest": "Summary only"
+    },
+    "severity": {
+      "error": "Problem",
+      "warning": "Notice",
+      "info": "Info"
+    },
+    "testShort": "Preview",
+    "testThisEvent": "Send this exact alert now so you can see how it looks"
   }
 }

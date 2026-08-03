@@ -166,7 +166,11 @@ func (h *NotificationHandler) Test(c echo.Context) error {
 	if ch == nil {
 		return c.JSON(http.StatusNotFound, map[string]string{"error": "Channel not found"})
 	}
-	if err := h.dispatcher.SendTest(ctx, ch); err != nil {
+	var req struct {
+		Event string `json:"event"`
+	}
+	_ = c.Bind(&req) // an empty body means the generic test
+	if err := h.dispatcher.SendTest(ctx, ch, req.Event); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "sent"})

@@ -1606,7 +1606,7 @@
     "deleteBody": "'{{name}}'을(를) 삭제합니다. 이 채널로 가던 알림은 더 이상 발송되지 않습니다.",
     "noPermission": "권한이 없습니다",
     "whatToSend": "무엇을 보낼까요",
-    "whatToSendHint": "선택한 이벤트만 이 채널로 갑니다. '묶음' 표시가 있는 이벤트는 5분 단위로 합쳐서 1건으로 보냅니다.",
+    "whatToSendHint": "각 알림을 끄거나, 생기는 즉시 받거나, 매일 요약에만 담을지 고를 수 있습니다. 채널을 저장한 뒤에는 미리보기로 실제 메시지를 받아볼 수 있습니다.",
     "placeholders": "쓸 수 있는 placeholder",
     "piiNote": "요청 헤더·쿠키·User-Agent·요청 URL·원본 로그는 의도적으로 제공하지 않습니다. 자격증명이 담기는데 알림은 외부로 나가기 때문입니다.",
     "types": {
@@ -1632,7 +1632,13 @@
       "digestHour": "발송 시각 ({{zone}})",
       "template": "메시지 형식 (선택)",
       "templateHint": "비우면 기본 형식으로 보냅니다.",
-      "secretKeepHint": "비워두면 기존 값을 유지합니다."
+      "secretKeepHint": "비워두면 기존 값을 유지합니다.",
+      "richFormat": "플랫폼에 맞춘 서식 사용",
+      "richFormatHint": {
+        "discord": "제목·색상 막대·항목이 있는 임베드로 보냅니다. 끄면 평문 한 덩어리로 갑니다.",
+        "telegram": "굵은 제목과 값 강조가 있는 MarkdownV2로 보냅니다. 끄면 평문으로 갑니다.",
+        "webhook": "JSON 본문은 항상 구조화돼 있고, 이 설정은 사람이 읽는 text 줄에만 영향을 줍니다."
+      }
     },
     "guides": {
       "webhook": {
@@ -1664,6 +1670,56 @@
     "detect": "chat id 감지",
     "detecting": "찾는 중…",
     "detectEmpty": "봇이 볼 수 있는 대화가 없습니다. 봇에게 메시지를 한 번 보내거나 그룹에 초대한 뒤 다시 눌러 주세요.",
-    "detectPick": "받을 대화를 고르세요:"
+    "detectPick": "받을 대화를 고르세요:",
+    "events": {
+      "cert.renewal_failed": {
+        "label": "인증서 갱신 실패",
+        "desc": "Let's Encrypt 갱신이 실패했습니다. 방치하면 인증서가 만료돼 사이트가 열리지 않습니다."
+      },
+      "cert.renewed": {
+        "label": "인증서 갱신 성공",
+        "desc": "실패하던 갱신이 다시 성공했을 때만 옵니다."
+      },
+      "ddns.sync_failed": {
+        "label": "DDNS 갱신 실패",
+        "desc": "공인 IP가 바뀌었는데 DNS에 반영하지 못했습니다. 외부에서 접속이 끊길 수 있습니다."
+      },
+      "ddns.recovered": {
+        "label": "DDNS 갱신 복구",
+        "desc": "실패하던 DDNS 갱신이 다시 동작할 때만 옵니다."
+      },
+      "backup.failed": {
+        "label": "예약 백업 실패",
+        "desc": "야간 자동 백업이 실패했습니다. 복구 지점이 생기지 않은 상태입니다."
+      },
+      "nginx.reload_failed": {
+        "label": "nginx 리로드 실패",
+        "desc": "설정 반영이 재시도까지 모두 실패했습니다. nginx는 이전 설정으로 계속 돌지만 변경사항(IP 차단 등)이 적용되지 않습니다."
+      },
+      "auth.login_failed": {
+        "label": "관리자 로그인 잠금",
+        "desc": "로그인 실패가 누적돼 계정이 잠겼습니다. 무차별 대입 시도일 수 있습니다."
+      },
+      "ip.banned": {
+        "label": "IP 차단",
+        "desc": "fail2ban 또는 WAF 자동차단이 IP를 막았습니다. 몰아칠 수 있어 5분 단위로 묶어서 보냅니다."
+      },
+      "sso.login_refused": {
+        "label": "SSO 로그인 거부",
+        "desc": "허용목록에 없는 신원이 SSO로 들어오려 했습니다. 설정 실수이거나 외부 시도입니다."
+      }
+    },
+    "modes": {
+      "off": "끄기",
+      "immediate": "즉시",
+      "digest": "요약에만"
+    },
+    "severity": {
+      "error": "문제",
+      "warning": "주의",
+      "info": "정보"
+    },
+    "testShort": "미리보기",
+    "testThisEvent": "이 알림이 실제로 어떻게 오는지 지금 보내 봅니다"
   }
 }

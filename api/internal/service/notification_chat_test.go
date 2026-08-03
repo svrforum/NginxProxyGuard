@@ -22,16 +22,82 @@ func TestDiscordAdapterPostsContent(t *testing.T) {
 	}))
 	defer srv.Close()
 
+	// Plain mode: one content string, no embed.
 	ch := &model.NotificationChannel{
-		Type: model.NotificationTypeDiscord, AllowPrivateTarget: true,
+		Type: model.NotificationTypeDiscord, AllowPrivateTarget: true, RichFormat: false,
 		Config: map[string]string{"url": srv.URL},
 	}
 	out, _, err := newDiscordAdapter().Send(context.Background(), ch,
-		model.RenderedMessage{Event: "ip.banned", Text: "banned 192.0.2.5"})
+		model.RenderedMessage{Event: "ip.banned", Severity: "warning",
+			Fields: map[string]string{"ip": "192.0.2.5"}})
 	if err != nil || out != OutcomeSent {
 		t.Fatalf("out=%v err=%v", out, err)
 	}
-	if got["content"] != "banned 192.0.2.5" {
+	content, _ := got["content"].(string)
+	if !strings.Contains(content, "addresses banned") || !strings.Contains(content, "192.0.2.5") {
+		t.Fatalf("content = %q", content)
+	}
+	if _, hasEmbed := got["embeds"]; hasEmbed {
+		t.Fatal("plain mode should not send an embed")
+	}
+}
+
+// Rich mode is what makes Discord look like Discord rather than a pipe: a
+// severity-coloured bar, a title, and the fields as columns.
+func TestDiscordRichModeSendsAnEmbed(t *testing.T) {
+	var got map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		w.WriteHeader(204)
+	}))
+	defer srv.Close()
+
+	ch := &model.NotificationChannel{
+		Type: model.NotificationTypeDiscord, AllowPrivateTarget: true, RichFormat: true,
+		Config: map[string]string{"url": srv.URL},
+	}
+	_, _, err := newDiscordAdapter().Send(context.Background(), ch,
+		model.RenderedMessage{Event: "cert.renewal_failed", Severity: "error",
+			Fields: map[string]string{"host": "a.example.com", "detail": "dns timeout"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	embeds, _ := got["embeds"].([]any)
+	if len(embeds) != 1 {
+		t.Fatalf("embeds = %#v", got)
+	}
+	e, _ := embeds[0].(map[string]any)
+	if !strings.Contains(e["title"].(string), "certificate renewal failed") {
+		t.Fatalf("title = %v", e["title"])
+	}
+	if e["description"] != "dns timeout" {
+		t.Fatalf("description = %v", e["description"])
+	}
+	// Red for an error — the colour is the fastest thing to read in a busy channel.
+	if int(e["color"].(float64)) != 0xE5484D {
+		t.Fatalf("color = %v", e["color"])
+	}
+	fields, _ := e["fields"].([]any)
+	if len(fields) == 0 {
+		t.Fatal("host should appear as a field")
+	}
+}
+
+// A template means the operator took over; rich formatting must step aside.
+func TestTemplateBeatsRichFormat(t *testing.T) {
+	var got map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		w.WriteHeader(204)
+	}))
+	defer srv.Close()
+	ch := &model.NotificationChannel{
+		Type: model.NotificationTypeDiscord, AllowPrivateTarget: true, RichFormat: true,
+		Template: "custom", Config: map[string]string{"url": srv.URL},
+	}
+	_, _, _ = newDiscordAdapter().Send(context.Background(), ch,
+		model.RenderedMessage{Event: "x", Text: "my own wording"})
+	if got["content"] != "my own wording" {
 		t.Fatalf("body = %#v", got)
 	}
 }
@@ -123,7 +189,9 @@ func TestTelegramSendsEscapedText(t *testing.T) {
 		Config: map[string]string{"bot_token": "1:x", "chat_id": "-100"},
 	}
 	a := newTelegramAdapterWithBase(srv.URL, nil)
-	out, _, err := a.Send(context.Background(), ch, model.RenderedMessage{Text: "host a.example.com is down"})
+	out, _, err := a.Send(context.Background(), ch, model.RenderedMessage{
+		Event: "host.down", Severity: "error",
+		Fields: map[string]string{"host": "a.example.com"}})
 	if err != nil || out != OutcomeSent {
 		t.Fatalf("out=%v err=%v", out, err)
 	}

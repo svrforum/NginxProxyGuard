@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -103,8 +104,13 @@ func TestWebhookAdapterBuildsTheEnvelope(t *testing.T) {
 	if err != nil || out != OutcomeSent {
 		t.Fatalf("out=%v err=%v", out, err)
 	}
-	if got["event"] != "ip.banned" || got["text"] != "banned 192.0.2.5" || got["severity"] != "warning" {
+	if got["event"] != "ip.banned" || got["severity"] != "warning" {
 		t.Fatalf("envelope = %#v", got)
+	}
+	// text is the human line; a receiver keys off fields rather than parsing it.
+	text, _ := got["text"].(string)
+	if !strings.Contains(text, "addresses banned") || !strings.Contains(text, "192.0.2.5") {
+		t.Fatalf("text = %q", text)
 	}
 	fields, _ := got["fields"].(map[string]any)
 	if fields["ip"] != "192.0.2.5" {

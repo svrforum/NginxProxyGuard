@@ -6,6 +6,8 @@ export type NotificationChannelType = 'webhook' | 'discord' | 'telegram'
  *  checklist can never offer a key the server would reject. */
 export interface NotificationEvent {
   key: string
+  /** 'error' | 'warning' | 'info' — set by the server, not the operator. */
+  severity: string
   batched?: boolean
 }
 
@@ -17,6 +19,8 @@ export interface NotificationChannel {
   /** Credentials read back as the mask; send it unchanged to keep them. */
   config: Record<string, string>
   events: string[]
+  digest_events: string[]
+  rich_format: boolean
   digest_enabled: boolean
   digest_hour: number
   allow_private_target: boolean
@@ -35,6 +39,8 @@ export interface NotificationChannelRequest {
   enabled: boolean
   config: Record<string, string>
   events: string[]
+  digest_events: string[]
+  rich_format: boolean
   digest_enabled: boolean
   digest_hour: number
   allow_private_target: boolean

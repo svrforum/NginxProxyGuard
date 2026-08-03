@@ -24,6 +24,10 @@ const (
 // EventDescriptor is one thing NPG can tell an operator about.
 type EventDescriptor struct {
 	Key string `json:"key"`
+	// Severity lets the UI group events and the adapters colour them. It is not
+	// operator-configurable: whether a failed backup is an error is not a
+	// matter of taste.
+	Severity string `json:"severity"`
 	// Batched events are coalesced over a window into a single message with a
 	// count. Everything else is edge-triggered on (key, subject): one message
 	// when it breaks, one when it recovers, nothing in between.
@@ -45,15 +49,15 @@ type EventDescriptor struct {
 // an event on. An event key that can never fire is worse than an absent one:
 // the operator ticks it and then waits for a message that will not come.
 var EventCatalogue = []EventDescriptor{
-	{Key: "cert.renewal_failed"},
-	{Key: "cert.renewed"},
-	{Key: "ddns.sync_failed"},
-	{Key: "ddns.recovered"},
-	{Key: "backup.failed"},
-	{Key: "nginx.reload_failed"},
-	{Key: "auth.login_failed"},
-	{Key: "ip.banned", Batched: true},
-	{Key: "sso.login_refused", Batched: true},
+	{Key: "cert.renewal_failed", Severity: "error"},
+	{Key: "cert.renewed", Severity: "info"},
+	{Key: "ddns.sync_failed", Severity: "error"},
+	{Key: "ddns.recovered", Severity: "info"},
+	{Key: "backup.failed", Severity: "error"},
+	{Key: "nginx.reload_failed", Severity: "error"},
+	{Key: "auth.login_failed", Severity: "warning"},
+	{Key: "ip.banned", Severity: "warning", Batched: true},
+	{Key: "sso.login_refused", Severity: "warning", Batched: true},
 }
 
 func IsKnownEvent(key string) bool {
@@ -81,6 +85,8 @@ type NotificationChannel struct {
 	Enabled            bool              `json:"enabled"`
 	Config             map[string]string `json:"config"`
 	Events             []string          `json:"events"`
+	DigestEvents       []string          `json:"digest_events"`
+	RichFormat         bool              `json:"rich_format"`
 	DigestEnabled      bool              `json:"digest_enabled"`
 	DigestHour         int               `json:"digest_hour"`
 	AllowPrivateTarget bool              `json:"allow_private_target"`
@@ -99,6 +105,8 @@ type CreateNotificationChannelRequest struct {
 	Enabled            *bool             `json:"enabled"`
 	Config             map[string]string `json:"config"`
 	Events             []string          `json:"events"`
+	DigestEvents       []string          `json:"digest_events"`
+	RichFormat         bool              `json:"rich_format"`
 	DigestEnabled      bool              `json:"digest_enabled"`
 	DigestHour         int               `json:"digest_hour"`
 	AllowPrivateTarget bool              `json:"allow_private_target"`
@@ -167,6 +175,30 @@ func (r *CreateNotificationChannelRequest) Validate(isCreate bool) error {
 		kept = append(kept, e)
 	}
 	r.Events = kept
+
+	digestSeen := map[string]bool{}
+	keptDigest := make([]string, 0, len(r.DigestEvents))
+	for _, e := range r.DigestEvents {
+		e = strings.TrimSpace(e)
+		if e == "" || digestSeen[e] {
+			continue
+		}
+		if !IsKnownEvent(e) {
+			return fmt.Errorf("invalid event: %q is not a known event", e)
+		}
+		// An event cannot be both immediate and summary-only; the UI offers a
+		// three-way choice, so this can only happen through the API.
+		if seen[e] {
+			return fmt.Errorf("invalid event: %q is set to both immediate and summary", e)
+		}
+		digestSeen[e] = true
+		keptDigest = append(keptDigest, e)
+	}
+	r.DigestEvents = keptDigest
+	// Summary-only events need the summary turned on, or they go nowhere.
+	if len(r.DigestEvents) > 0 {
+		r.DigestEnabled = true
+	}
 
 	if len(r.Events) == 0 && !r.DigestEnabled {
 		return fmt.Errorf("invalid events: pick at least one event, or turn on the daily summary")

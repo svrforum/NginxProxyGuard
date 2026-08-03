@@ -26,6 +26,8 @@ const emptyForm = (): NotificationChannelRequest => ({
   enabled: true,
   config: {},
   events: [],
+  digest_events: [],
+  rich_format: true,
   digest_enabled: false,
   digest_hour: 9,
   allow_private_target: false,
@@ -38,6 +40,8 @@ const toForm = (c: NotificationChannel): NotificationChannelRequest => ({
   enabled: c.enabled,
   config: { ...c.config },
   events: [...(c.events ?? [])],
+  digest_events: [...(c.digest_events ?? [])],
+  rich_format: c.rich_format,
   digest_enabled: c.digest_enabled,
   digest_hour: c.digest_hour,
   allow_private_target: c.allow_private_target,
@@ -107,14 +111,16 @@ export function NotificationChannelManager() {
   })
 
   const test = useMutation({
-    mutationFn: (id: string) => testNotificationChannel(id),
-    onSuccess: (_r, id) => {
-      setTestResult({ id, ok: true, message: tr('notifications.testSent') })
+    mutationFn: (v: { id: string; event?: string }) => testNotificationChannel(v.id, v.event),
+    onSuccess: (_r, v) => {
+      setTestResult({ id: v.id, ok: true, message: tr('notifications.testSent') })
       qc.invalidateQueries({ queryKey: ['notification-channels'] })
+      qc.invalidateQueries({ queryKey: ['notification-deliveries'] })
     },
-    onError: (e: Error, id) => {
-      setTestResult({ id, ok: false, message: e.message })
+    onError: (e: Error, v) => {
+      setTestResult({ id: v.id, ok: false, message: e.message })
       qc.invalidateQueries({ queryKey: ['notification-channels'] })
+      qc.invalidateQueries({ queryKey: ['notification-deliveries'] })
     },
   })
 
@@ -137,10 +143,19 @@ export function NotificationChannelManager() {
   const setConfig = (key: string, value: string) =>
     setForm((f) => ({ ...f, config: { ...f.config, [key]: value } }))
 
-  const toggleEvent = (key: string) =>
+  type EventMode = 'off' | 'immediate' | 'digest'
+  const modeOf = (key: string): EventMode =>
+    form.events.includes(key) ? 'immediate' : form.digest_events.includes(key) ? 'digest' : 'off'
+
+  // Three states rather than a checkbox: "send me this the moment it happens"
+  // and "just mention it in the daily summary" are genuinely different answers,
+  // and forcing both into one tick makes a busy channel the only option.
+  const setEventMode = (key: string, mode: EventMode) =>
     setForm((f) => ({
       ...f,
-      events: f.events.includes(key) ? f.events.filter((e) => e !== key) : [...f.events, key],
+      events: mode === 'immediate' ? [...new Set([...f.events, key])] : f.events.filter((e) => e !== key),
+      digest_events: mode === 'digest' ? [...new Set([...f.digest_events, key])] : f.digest_events.filter((e) => e !== key),
+      digest_enabled: mode === 'digest' ? true : f.digest_enabled,
     }))
 
   const typeLabel = (ty: NotificationChannelType) =>
@@ -228,7 +243,7 @@ export function NotificationChannelManager() {
                   <button
                     type="button"
                     aria-label={`test-${c.name}`}
-                    onClick={() => { setTestResult(null); test.mutate(c.id) }}
+                    onClick={() => { setTestResult(null); test.mutate({ id: c.id }) }}
                     disabled={!canWrite || test.isPending}
                     title={canWrite ? undefined : tr('notifications.noPermission')}
                     className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
@@ -408,25 +423,85 @@ export function NotificationChannelManager() {
             <div>
               <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{tr('notifications.whatToSend')}</h4>
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{tr('notifications.whatToSendHint')}</p>
-              <div data-testid="notify-event-list" className="mt-2 grid gap-1.5 sm:grid-cols-2">
-                {events.map((ev) => (
-                  <label key={ev.key} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
-                    <input
-                      type="checkbox"
-                      aria-label={`notify-event-${ev.key}`}
-                      checked={form.events.includes(ev.key)}
-                      onChange={() => toggleEvent(ev.key)}
-                      className="rounded"
-                    />
-                    <span className="font-mono text-xs">{ev.key}</span>
-                    {ev.batched && (
-                      <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500 dark:bg-slate-700 dark:text-slate-300">
-                        {tr('notifications.batched')}
-                      </span>
-                    )}
-                  </label>
-                ))}
+              <div data-testid="notify-event-list" className="mt-2 space-y-1.5">
+                {events.map((ev) => {
+                  const mode = modeOf(ev.key)
+                  return (
+                    <div
+                      key={ev.key}
+                      className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 px-2.5 py-2 dark:border-slate-700"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span
+                            className={`h-2 w-2 shrink-0 rounded-full ${
+                              ev.severity === 'error'
+                                ? 'bg-red-500'
+                                : ev.severity === 'warning'
+                                  ? 'bg-amber-500'
+                                  : 'bg-emerald-500'
+                            }`}
+                            title={tr(`notifications.severity.${ev.severity}`)}
+                          />
+                          <span className="text-sm font-medium text-slate-800 dark:text-slate-100">
+                            {tr(`notifications.events.${ev.key}.label`, { defaultValue: ev.key })}
+                          </span>
+                          {ev.batched && (
+                            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500 dark:bg-slate-700 dark:text-slate-300">
+                              {tr('notifications.batched')}
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                          {tr(`notifications.events.${ev.key}.desc`, { defaultValue: '' })}
+                        </p>
+                      </div>
+
+                      <div className="flex shrink-0 items-center gap-1">
+                        {(['off', 'immediate', 'digest'] as const).map((m) => (
+                          <button
+                            key={m}
+                            type="button"
+                            aria-label={`notify-event-${ev.key}-${m}`}
+                            aria-pressed={mode === m}
+                            onClick={() => setEventMode(ev.key, m)}
+                            className={`rounded px-2 py-1 text-[11px] transition-colors ${
+                              mode === m
+                                ? 'bg-primary-600 text-white'
+                                : 'border border-slate-300 text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700'
+                            }`}
+                          >
+                            {tr(`notifications.modes.${m}`)}
+                          </button>
+                        ))}
+                        {editing && (
+                          <button
+                            type="button"
+                            aria-label={`notify-test-${ev.key}`}
+                            onClick={() => { setTestResult(null); test.mutate({ id: editing.id, event: ev.key }) }}
+                            title={tr('notifications.testThisEvent')}
+                            className="ml-1 rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+                          >
+                            {tr('notifications.testShort')}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
+              {testResult && (creating || editing) && (
+                <p
+                  data-testid="notify-inline-test-result"
+                  className={`mt-2 rounded-md px-2 py-1.5 text-xs ${
+                    testResult.ok
+                      ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300'
+                      : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300'
+                  }`}
+                >
+                  {testResult.message}
+                </p>
+              )}
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
@@ -446,6 +521,22 @@ export function NotificationChannelManager() {
                 />
               </Field>
             </div>
+
+            <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
+              <input
+                type="checkbox"
+                aria-label="notify-rich-format"
+                checked={form.rich_format}
+                onChange={(e) => setForm({ ...form, rich_format: e.target.checked })}
+                className="mt-0.5 rounded"
+              />
+              <span>
+                {tr('notifications.fields.richFormat')}
+                <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
+                  {tr(`notifications.fields.richFormatHint.${form.type}`)}
+                </span>
+              </span>
+            </label>
 
             <Field label={tr('notifications.fields.template')} hint={tr('notifications.fields.templateHint')}>
               <input aria-label="notify-template" value={form.template} onChange={(e) => setForm({ ...form, template: e.target.value })} className={inputCls} placeholder="{{event}} — {{host}} {{detail}}" />

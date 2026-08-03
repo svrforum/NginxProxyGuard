@@ -1263,6 +1263,8 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
     enabled boolean DEFAULT true NOT NULL,
     config jsonb DEFAULT '{}'::jsonb NOT NULL,
     events text[] DEFAULT '{}'::text[] NOT NULL,
+    digest_events text[] DEFAULT '{}'::text[] NOT NULL,
+    rich_format boolean DEFAULT true NOT NULL,
     digest_enabled boolean DEFAULT false NOT NULL,
     digest_hour smallint DEFAULT 9 NOT NULL,
     allow_private_target boolean DEFAULT false NOT NULL,
@@ -1306,6 +1308,11 @@ CREATE INDEX IF NOT EXISTS notification_outbox_due_idx ON public.notification_ou
     ALTER TABLE public.notification_outbox
         ADD CONSTRAINT notification_outbox_channel_id_fkey FOREIGN KEY (channel_id) REFERENCES public.notification_channels(id) ON DELETE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
+		},
+		{
+			desc: "v2.36.0: per-event delivery mode and platform-native formatting (#221)",
+			sql: `ALTER TABLE public.notification_channels ADD COLUMN IF NOT EXISTS digest_events text[] DEFAULT '{}'::text[] NOT NULL;
+ALTER TABLE public.notification_channels ADD COLUMN IF NOT EXISTS rich_format boolean DEFAULT true NOT NULL;`,
 		},
 	}
 	for _, a := range upgrades {

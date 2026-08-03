@@ -397,6 +397,26 @@ func (r *NotificationRepository) RecordChannelResult(ctx context.Context, channe
 	return err
 }
 
+// RecordAttempt writes an already-completed delivery straight to the log. It
+// exists for the Test button, which sends immediately rather than queueing but
+// must still leave a trace — an operator who presses Test and finds an empty
+// log has been told nothing.
+func (r *NotificationRepository) RecordAttempt(ctx context.Context, channelID, eventKey string, payload model.RenderedMessage, status, reason string) error {
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	sentAt := "now()"
+	if status != "sent" {
+		sentAt = "NULL"
+	}
+	_, err = r.db.ExecContext(ctx, `
+		INSERT INTO notification_outbox (channel_id, event_key, payload, status, attempts, last_error, sent_at)
+		VALUES ($1,$2,$3,$4,1,NULLIF($5,''), `+sentAt+`)`,
+		channelID, eventKey, encoded, status, reason)
+	return err
+}
+
 // RecentDeliveries backs the "why did I not get an alert" view.
 func (r *NotificationRepository) RecentDeliveries(ctx context.Context, channelID string, limit int) ([]model.OutboxEntry, error) {
 	rows, err := r.db.QueryContext(ctx, `

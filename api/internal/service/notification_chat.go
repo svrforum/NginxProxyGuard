@@ -53,9 +53,20 @@ func (a *discordAdapter) Send(ctx context.Context, ch *model.NotificationChannel
 		return OutcomeFailed, 0, err
 	}
 
-	body, err := json.Marshal(map[string]string{
-		"content": truncateRunes(msg.Text, discordContentLimit),
-	})
+	// A template means the operator took over formatting; otherwise a rich
+	// channel gets an embed with a severity-coloured bar, which is the whole
+	// reason to treat Discord as Discord rather than as a pipe.
+	var payload any
+	if ch.RichFormat && !usesTemplate(ch) {
+		payload = map[string]any{"embeds": []any{discordEmbed(msg)}}
+	} else {
+		text := msg.Text
+		if !usesTemplate(ch) {
+			text = plainText(msg)
+		}
+		payload = map[string]string{"content": truncateRunes(text, discordContentLimit)}
+	}
+	body, err := json.Marshal(payload)
 	if err != nil {
 		return OutcomeFailed, 0, err
 	}
@@ -141,7 +152,17 @@ func (a *telegramAdapter) Send(ctx context.Context, ch *model.NotificationChanne
 
 	// Escape first, then truncate: escaping adds backslashes and could push an
 	// otherwise-legal message past the limit.
-	text := truncateRunes(escapeMarkdownV2(msg.Text), telegramTextLimit)
+	var text string
+	if ch.RichFormat && !usesTemplate(ch) {
+		text = telegramMarkdown(msg)
+	} else {
+		body := msg.Text
+		if !usesTemplate(ch) {
+			body = plainText(msg)
+		}
+		text = escapeMarkdownV2(body)
+	}
+	text = truncateRunes(text, telegramTextLimit)
 	body, err := json.Marshal(map[string]any{
 		"chat_id":    chatID,
 		"text":       text,

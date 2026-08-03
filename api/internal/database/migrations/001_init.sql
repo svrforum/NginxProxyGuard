@@ -2616,6 +2616,8 @@ CREATE TABLE IF NOT EXISTS public.notification_channels (
     enabled boolean DEFAULT true NOT NULL,
     config jsonb DEFAULT '{}'::jsonb NOT NULL,
     events text[] DEFAULT '{}'::text[] NOT NULL,
+    digest_events text[] DEFAULT '{}'::text[] NOT NULL,
+    rich_format boolean DEFAULT true NOT NULL,
     digest_enabled boolean DEFAULT false NOT NULL,
     digest_hour smallint DEFAULT 9 NOT NULL,
     allow_private_target boolean DEFAULT false NOT NULL,
@@ -3702,6 +3704,8 @@ CREATE INDEX IF NOT EXISTS idx_fsee_subscription ON public.filter_subscription_e
 -- database/migration.go `upgrades` (two entries: the three tables with their
 -- indexes, then the foreign key behind a duplicate_object guard).
 --   CREATE TABLE IF NOT EXISTS public.notification_channels (...);
+--   ALTER TABLE public.notification_channels ADD COLUMN IF NOT EXISTS digest_events text[] DEFAULT '{}' NOT NULL;
+--   ALTER TABLE public.notification_channels ADD COLUMN IF NOT EXISTS rich_format boolean DEFAULT true NOT NULL;
 --   CREATE UNIQUE INDEX IF NOT EXISTS notification_channels_name_key ON public.notification_channels (lower(name));
 --   CREATE TABLE IF NOT EXISTS public.notification_state (...);
 --   CREATE TABLE IF NOT EXISTS public.notification_outbox (...);

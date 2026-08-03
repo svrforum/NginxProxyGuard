@@ -31,8 +31,10 @@ export async function deleteNotificationChannel(id: string): Promise<void> {
 
 /** Delivers immediately rather than queueing, so the button reports a real
  *  result instead of "accepted". */
-export async function testNotificationChannel(id: string): Promise<{ status: string }> {
-  return apiPost(`${API_BASE}/notification-channels/${id}/test`)
+/** eventKey lets the operator preview one specific alert rather than a generic
+ *  "hello" — seeing the real shape is what makes the format choices meaningful. */
+export async function testNotificationChannel(id: string, eventKey?: string): Promise<{ status: string }> {
+  return apiPost(`${API_BASE}/notification-channels/${id}/test`, { event: eventKey ?? '' })
 }
 
 export async function listNotificationDeliveries(id: string): Promise<{ data: NotificationDelivery[] }> {
