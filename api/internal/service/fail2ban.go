@@ -19,21 +19,23 @@ import (
 
 // Fail2banService handles automatic IP banning based on HTTP error responses
 type Fail2banService struct {
-	db              *sql.DB
-	rateLimitRepo   *repository.RateLimitRepository
-	proxyHostRepo   *repository.ProxyHostRepository
+	db               *sql.DB
+	rateLimitRepo    *repository.RateLimitRepository
+	proxyHostRepo    *repository.ProxyHostRepository
 	proxyHostService *ProxyHostService
-	redisCache      *cache.RedisClient
-	historyRepo     *repository.IPBanHistoryRepository
+	redisCache       *cache.RedisClient
+	historyRepo      *repository.IPBanHistoryRepository
 
 	// In-memory tracking of failed requests per IP per host (fallback when Redis unavailable)
 	mu       sync.RWMutex
 	ipEvents map[string]map[string][]time.Time // hostID -> IP -> list of fail timestamps
 
 	// Cache of fail2ban configs per host
-	configMu     sync.RWMutex
-	configCache  map[string]*model.Fail2banConfig // hostID -> config
+	configMu          sync.RWMutex
+	configCache       map[string]*model.Fail2banConfig // hostID -> config
 	lastConfigRefresh time.Time
+	// notify is optional: nil means notifications are not configured.
+	notify *NotificationService
 }
 
 // NewFail2banService creates a new Fail2ban service
@@ -176,6 +178,15 @@ func (s *Fail2banService) RecordFailedRequest(ctx context.Context, hostID string
 			log.Printf("[Fail2ban] Failed to ban IP %s: %v", clientIP, err)
 		} else {
 			log.Printf("[Fail2ban] Banned IP %s on %s: %s", clientIP, hostDomain, reason)
+
+			// Batched (#221): the peak measured hour held 1,566 blocked
+			// requests, so bans are coalesced into one message with a count
+			// rather than sent one by one.
+			if s.notify != nil {
+				_ = s.notify.EmitBatched(ctx, "ip.banned", map[string]string{
+					"ip": clientIP, "host": hostDomain, "reason": "fail2ban",
+				})
+			}
 
 			// Clear events for this IP after banning
 			if s.redisCache != nil && s.redisCache.IsReady() {
@@ -532,3 +543,6 @@ func (s *Fail2banService) GetStats() map[string]interface{} {
 		"tracked_ips":   trackedIPs,
 	}
 }
+
+// SetNotificationService wires notifications after construction. (#221)
+func (s *Fail2banService) SetNotificationService(n *NotificationService) { s.notify = n }

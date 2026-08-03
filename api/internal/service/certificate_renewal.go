@@ -304,6 +304,9 @@ func (s *CertificateService) renewLetsEncrypt(ctx context.Context, cert *model.C
 
 	// Notify that certificate is ready - regenerate nginx configs for proxy hosts using this cert
 	s.notifyCertificateReady(cert.ID)
+
+	// A renewal that succeeds after failing is worth one message (#221).
+	s.emitRenewalState(ctx, cert, false, "")
 }
 
 // GetExpiringSoon returns certificates expiring within days
@@ -348,6 +351,28 @@ func (s *CertificateService) updateRenewalError(ctx context.Context, certID, err
 
 	// Save history as renewal error
 	s.saveHistory(cert, "renewed", "error", errMsg)
+
+	// Notify (#221). Edge-triggered on the certificate id, so a renewal that
+	// keeps failing — the scheduler retries every six hours — says so once
+	// rather than four times a day.
+	s.emitRenewalState(ctx, cert, true, errMsg)
+}
+
+// emitRenewalState reports a certificate's renewal health to the notification
+// service. A nil service (tests, or an install whose migration failed) is a
+// no-op, which is why this is a method rather than an inline call.
+func (s *CertificateService) emitRenewalState(ctx context.Context, cert *model.Certificate, failing bool, detail string) {
+	if s.notify == nil || cert == nil {
+		return
+	}
+	domain := ""
+	if len(cert.DomainNames) > 0 {
+		domain = cert.DomainNames[0]
+	}
+	if err := s.notify.EmitTransition(ctx, "cert.renewal_failed", cert.ID, failing, detail,
+		map[string]string{"host": domain}); err != nil {
+		log.Printf("[Certificate] notification failed: %v", err)
+	}
 }
 
 // Certificate logging methods for real-time progress tracking

@@ -29,6 +29,8 @@ type CertificateService struct {
 	onCertReady        CertificateReadyCallback
 	redisCache         *cache.RedisClient
 	inUseChecker       CertificateInUseChecker
+	// notify is optional: a nil service means notifications are not configured.
+	notify *NotificationService
 	// renewalInflight tracks certificate IDs with an in-flight renewal in THIS
 	// process. It is the concurrency guard that always applies — the Redis
 	// lock in Renew only covers the cross-instance case and Valkey is optional.
@@ -91,6 +93,10 @@ func (s *CertificateService) getACMEService(ctx context.Context) (*acme.Service,
 }
 
 // SetCertificateReadyCallback sets the callback to be called when a certificate is ready
+// SetNotificationService wires notifications after construction, following the
+// setter-injection convention this codebase uses to avoid cycles. (#221)
+func (s *CertificateService) SetNotificationService(n *NotificationService) { s.notify = n }
+
 func (s *CertificateService) SetCertificateReadyCallback(cb CertificateReadyCallback) {
 	s.onCertReady = cb
 }

@@ -232,6 +232,13 @@ func wireServiceCallbacks(svcs *Services, repos *Repositories) {
 	// otherwise never trigger an nginx reload after renewal).
 	svcs.ProxyHost.SetRedirectHostRepo(repos.RedirectHost)
 
+	// Notifications (#221). Setter injection like the callbacks above: the
+	// notification service is constructed before these, but wiring it here keeps
+	// construction order irrelevant.
+	svcs.Certificate.SetNotificationService(svcs.Notification)
+	svcs.DDNS.SetNotificationService(svcs.Notification)
+	svcs.Fail2ban.SetNotificationService(svcs.Notification)
+
 	// Certificate: regenerate proxy-host configs after a cert is ready.
 	//
 	// Decouples cert issuance from nginx config regeneration: the callback

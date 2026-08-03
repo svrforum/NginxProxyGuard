@@ -40,6 +40,15 @@ const channelColumns = `id, name, type, enabled, config, events, digest_enabled,
 	allow_private_target, COALESCE(template, ''), last_success_at, last_error_at,
 	COALESCE(last_error, ''), consecutive_failures, created_at, updated_at`
 
+// channelColumnsAliased is the same list qualified with the c alias. It exists
+// because the unqualified list is ambiguous the moment it appears in a join —
+// notification_outbox also has id, created_at and last_error. A single shared
+// constant used in both contexts silently produced "column reference id is
+// ambiguous" only at runtime, which no unit test would have caught.
+const channelColumnsAliased = `c.id, c.name, c.type, c.enabled, c.config, c.events, c.digest_enabled, c.digest_hour,
+	c.allow_private_target, COALESCE(c.template, ''), c.last_success_at, c.last_error_at,
+	COALESCE(c.last_error, ''), c.consecutive_failures, c.created_at, c.updated_at`
+
 func scanChannel(s interface{ Scan(...any) error }) (*model.NotificationChannel, error) {
 	var c model.NotificationChannel
 	var config []byte
@@ -291,7 +300,7 @@ func (r *NotificationRepository) ClaimDue(ctx context.Context, limit int) ([]mod
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT o.id, o.channel_id, o.event_key, o.payload, o.status, o.attempts,
 		       o.next_attempt_at, COALESCE(o.last_error,''), o.created_at, o.sent_at,
-		       `+channelColumns+`
+		       `+channelColumnsAliased+`
 		FROM notification_outbox o
 		JOIN notification_channels c ON c.id = o.channel_id
 		WHERE o.status = 'queued' AND o.next_attempt_at <= now() AND c.enabled

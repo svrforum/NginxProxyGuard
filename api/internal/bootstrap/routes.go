@@ -250,6 +250,7 @@ func registerTokenProtectedRoutes(v1 *echo.Group, c *Container) {
 	registerTestRoutes(v1, c)
 	registerUserAdminRoutes(v1, c.Handlers.UserAdmin)
 	registerSSORoutes(v1, c.Handlers.SSO)
+	registerNotificationRoutes(v1, c.Handlers.Notification)
 }
 
 // registerUserAdminRoutes exposes role and user administration (#222).
@@ -305,6 +306,22 @@ func registerUserAdminRoutes(v1 *echo.Group, h *handler.UserAdminHandler) {
 // administrator role, enable provisioning, and sign in as a superuser. That is
 // the same power as PUT /users/:id/role, which user:write already governs, so
 // this mapping makes SSO exactly as privileged as it is — no more, no less.
+// registerNotificationRoutes exposes the notification channel registry (#221).
+//
+// Guarded by settings, unlike SSO: a channel grants access to nothing. It only
+// decides where NPG talks about itself.
+func registerNotificationRoutes(v1 *echo.Group, h *handler.NotificationHandler) {
+	settingsRead := authMiddleware.RequireAPIPermission(model.PermissionSettingsRead)
+	settingsWrite := authMiddleware.RequireAPIPermission(model.PermissionSettingsWrite)
+
+	v1.GET("/notification-channels", h.List, settingsRead)
+	v1.POST("/notification-channels", h.Create, settingsWrite)
+	v1.PUT("/notification-channels/:id", h.Update, settingsWrite)
+	v1.DELETE("/notification-channels/:id", h.Delete, settingsWrite)
+	v1.POST("/notification-channels/:id/test", h.Test, settingsWrite)
+	v1.GET("/notification-channels/:id/deliveries", h.Deliveries, settingsRead)
+}
+
 func registerSSORoutes(v1 *echo.Group, h *handler.SSOHandler) {
 	userRead := authMiddleware.RequireAPIPermission("user:read")
 	userWrite := authMiddleware.RequireAPIPermission("user:write")

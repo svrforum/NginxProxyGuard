@@ -52,6 +52,8 @@ type DDNSService struct {
 	detector  publicIPDetector
 	updaters  map[string]ddnsUpdater
 	now       func() time.Time
+	// notify is optional: nil means notifications are not configured.
+	notify *NotificationService
 }
 
 func NewDDNSService(records ddnsRecordRepo, providers ddnsCredsRepo, detector publicIPDetector) *DDNSService {
@@ -92,9 +94,31 @@ func (s *DDNSService) SyncAll(ctx context.Context) {
 		if !needsUpdate(rec, ip) {
 			continue
 		}
-		s.syncRecord(ctx, rec, ip)
+		err := s.syncRecord(ctx, rec, ip)
+		// Edge-triggered (#221): a record that keeps failing is retried every
+		// five minutes, so reporting each attempt would be 288 messages a day.
+		s.emitSyncState(ctx, rec, err)
 	}
 }
+
+// emitSyncState reports a DDNS record's health. A nil notification service is a
+// no-op, which is the case in tests and on installs where the migration failed.
+func (s *DDNSService) emitSyncState(ctx context.Context, rec model.DDNSRecord, syncErr error) {
+	if s.notify == nil {
+		return
+	}
+	detail := ""
+	if syncErr != nil {
+		detail = syncErr.Error()
+	}
+	if err := s.notify.EmitTransition(ctx, "ddns.sync_failed", rec.ID, syncErr != nil, detail,
+		map[string]string{"host": rec.Hostname}); err != nil {
+		log.Printf("[DDNS] notification failed: %v", err)
+	}
+}
+
+// SetNotificationService wires notifications after construction. (#221)
+func (s *DDNSService) SetNotificationService(n *NotificationService) { s.notify = n }
 
 // SyncByProxyHost immediately syncs the managed records of a single proxy host
 // (used right after a host opts into DDNS, instead of waiting for the scheduler).
