@@ -174,17 +174,17 @@ func validateHTTPSURL(raw, field string) error {
 	// protecting nothing. Anything publicly routable must be TLS, because the
 	// authorization code and the client secret would otherwise cross the
 	// internet in the clear.
-	if u.Scheme == "http" && isPrivateHost(u.Hostname()) {
+	if u.Scheme == "http" && IsPrivateHost(u.Hostname()) {
 		return nil
 	}
 	return fmt.Errorf("invalid %s: must use https (http is allowed only for localhost, a private address, or a container/LAN hostname)", field)
 }
 
-// isPrivateHost reports whether a host can only be reached from the operator's
+// IsPrivateHost reports whether a host can only be reached from the operator's
 // own network: loopback, an RFC1918/CGNAT/link-local address, a .local name, or
 // a single-label hostname — which cannot exist in public DNS and is what a
 // docker-compose service name looks like.
-func isPrivateHost(h string) bool {
+func IsPrivateHost(h string) bool {
 	h = strings.ToLower(strings.Trim(h, "[]"))
 	if h == "localhost" || strings.HasSuffix(h, ".local") || strings.HasSuffix(h, ".internal") {
 		return true

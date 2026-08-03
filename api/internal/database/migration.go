@@ -1254,6 +1254,59 @@ DO $$ BEGIN
         ADD CONSTRAINT sso_login_states_provider_id_fkey FOREIGN KEY (provider_id) REFERENCES public.sso_providers(id) ON DELETE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
 		},
+		{
+			desc: "v2.36.0: notification_channels + notification_state + notification_outbox (#221)",
+			sql: `CREATE TABLE IF NOT EXISTS public.notification_channels (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    name character varying(64) NOT NULL,
+    type character varying(16) NOT NULL,
+    enabled boolean DEFAULT true NOT NULL,
+    config jsonb DEFAULT '{}'::jsonb NOT NULL,
+    events text[] DEFAULT '{}'::text[] NOT NULL,
+    digest_enabled boolean DEFAULT false NOT NULL,
+    digest_hour smallint DEFAULT 9 NOT NULL,
+    allow_private_target boolean DEFAULT false NOT NULL,
+    template text,
+    last_success_at timestamp with time zone,
+    last_error_at timestamp with time zone,
+    last_error text,
+    consecutive_failures integer DEFAULT 0 NOT NULL,
+    last_digest_on date,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT notification_channels_pkey PRIMARY KEY (id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS notification_channels_name_key ON public.notification_channels (lower((name)::text));
+CREATE TABLE IF NOT EXISTS public.notification_state (
+    event_key character varying(64) NOT NULL,
+    subject character varying(255) NOT NULL,
+    state character varying(16) NOT NULL,
+    since timestamp with time zone DEFAULT now() NOT NULL,
+    last_detail text,
+    CONSTRAINT notification_state_pkey PRIMARY KEY (event_key, subject)
+);
+CREATE TABLE IF NOT EXISTS public.notification_outbox (
+    id bigserial NOT NULL,
+    channel_id uuid NOT NULL,
+    event_key character varying(64) NOT NULL,
+    payload jsonb NOT NULL,
+    status character varying(16) DEFAULT 'queued'::character varying NOT NULL,
+    attempts integer DEFAULT 0 NOT NULL,
+    next_attempt_at timestamp with time zone DEFAULT now() NOT NULL,
+    last_error text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    sent_at timestamp with time zone,
+    CONSTRAINT notification_outbox_pkey PRIMARY KEY (id)
+);
+CREATE INDEX IF NOT EXISTS notification_outbox_due_idx ON public.notification_outbox (status, next_attempt_at);`,
+		},
+		{
+			desc: "v2.36.0: notification_outbox FK -> notification_channels (#221)",
+			sql: `DO $$ BEGIN
+    ALTER TABLE public.notification_outbox
+        ADD CONSTRAINT notification_outbox_channel_id_fkey FOREIGN KEY (channel_id) REFERENCES public.notification_channels(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

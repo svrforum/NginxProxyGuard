@@ -2607,6 +2607,48 @@ CREATE TABLE IF NOT EXISTS public.sso_login_states (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     expires_at timestamp with time zone NOT NULL
 );
+-- Notifications (#221). notification_channels is configuration; state and outbox
+-- are runtime. Foreign keys live in the ALTER section below.
+CREATE TABLE IF NOT EXISTS public.notification_channels (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    name character varying(64) NOT NULL,
+    type character varying(16) NOT NULL,
+    enabled boolean DEFAULT true NOT NULL,
+    config jsonb DEFAULT '{}'::jsonb NOT NULL,
+    events text[] DEFAULT '{}'::text[] NOT NULL,
+    digest_enabled boolean DEFAULT false NOT NULL,
+    digest_hour smallint DEFAULT 9 NOT NULL,
+    allow_private_target boolean DEFAULT false NOT NULL,
+    template text,
+    last_success_at timestamp with time zone,
+    last_error_at timestamp with time zone,
+    last_error text,
+    consecutive_failures integer DEFAULT 0 NOT NULL,
+    last_digest_on date,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+-- Edge triggering lives here: one row per thing that can be broken, so a failure
+-- that repeats every six hours produces one message rather than four a day.
+CREATE TABLE IF NOT EXISTS public.notification_state (
+    event_key character varying(64) NOT NULL,
+    subject character varying(255) NOT NULL,
+    state character varying(16) NOT NULL,
+    since timestamp with time zone DEFAULT now() NOT NULL,
+    last_detail text
+);
+CREATE TABLE IF NOT EXISTS public.notification_outbox (
+    id bigserial NOT NULL,
+    channel_id uuid NOT NULL,
+    event_key character varying(64) NOT NULL,
+    payload jsonb NOT NULL,
+    status character varying(16) DEFAULT 'queued'::character varying NOT NULL,
+    attempts integer DEFAULT 0 NOT NULL,
+    next_attempt_at timestamp with time zone DEFAULT now() NOT NULL,
+    last_error text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    sent_at timestamp with time zone
+);
 CREATE TABLE IF NOT EXISTS public.waf_policy_history (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     proxy_host_id uuid NOT NULL,
@@ -2917,6 +2959,18 @@ ALTER TABLE ONLY public.sso_login_states
 ALTER TABLE ONLY public.sso_login_states
     ADD CONSTRAINT sso_login_states_provider_id_fkey FOREIGN KEY (provider_id) REFERENCES public.sso_providers(id) ON DELETE CASCADE;
 CREATE INDEX IF NOT EXISTS sso_login_states_expires_at_idx ON public.sso_login_states (expires_at);
+-- Notifications (#221). Keys and the FK live here, not inline: 001_init.sql is
+-- pg_dump-style and an inline REFERENCES fails on a fresh install (#154).
+ALTER TABLE ONLY public.notification_channels
+    ADD CONSTRAINT notification_channels_pkey PRIMARY KEY (id);
+CREATE UNIQUE INDEX IF NOT EXISTS notification_channels_name_key ON public.notification_channels (lower((name)::text));
+ALTER TABLE ONLY public.notification_state
+    ADD CONSTRAINT notification_state_pkey PRIMARY KEY (event_key, subject);
+ALTER TABLE ONLY public.notification_outbox
+    ADD CONSTRAINT notification_outbox_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.notification_outbox
+    ADD CONSTRAINT notification_outbox_channel_id_fkey FOREIGN KEY (channel_id) REFERENCES public.notification_channels(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS notification_outbox_due_idx ON public.notification_outbox (status, next_attempt_at);
 ALTER TABLE ONLY public.waf_policy_history
     ADD CONSTRAINT waf_policy_history_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.waf_rule_change_events
@@ -3643,6 +3697,16 @@ CREATE INDEX IF NOT EXISTS idx_fsee_subscription ON public.filter_subscription_e
 --   ALTER TABLE sso_providers ADD CONSTRAINT sso_providers_default_role_id_fkey ... ON DELETE RESTRICT;
 --   ALTER TABLE user_identities ADD CONSTRAINT user_identities_{provider,user}_id_fkey ... ON DELETE CASCADE;
 --   ALTER TABLE sso_login_states ADD CONSTRAINT sso_login_states_provider_id_fkey ... ON DELETE CASCADE;
+
+-- Notifications (#221) — DOCUMENTATION ONLY. The executable copy lives in
+-- database/migration.go `upgrades` (two entries: the three tables with their
+-- indexes, then the foreign key behind a duplicate_object guard).
+--   CREATE TABLE IF NOT EXISTS public.notification_channels (...);
+--   CREATE UNIQUE INDEX IF NOT EXISTS notification_channels_name_key ON public.notification_channels (lower(name));
+--   CREATE TABLE IF NOT EXISTS public.notification_state (...);
+--   CREATE TABLE IF NOT EXISTS public.notification_outbox (...);
+--   CREATE INDEX IF NOT EXISTS notification_outbox_due_idx ON public.notification_outbox (status, next_attempt_at);
+--   ALTER TABLE notification_outbox ADD CONSTRAINT notification_outbox_channel_id_fkey ... ON DELETE CASCADE;
 
 -- Enum upgrades
 ALTER TYPE public.block_reason ADD VALUE IF NOT EXISTS 'cloud_provider_challenge';
