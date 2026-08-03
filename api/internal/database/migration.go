@@ -1265,6 +1265,7 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
     events text[] DEFAULT '{}'::text[] NOT NULL,
     digest_events text[] DEFAULT '{}'::text[] NOT NULL,
     rich_format boolean DEFAULT true NOT NULL,
+    language character varying(8) DEFAULT 'en'::character varying NOT NULL,
     digest_enabled boolean DEFAULT false NOT NULL,
     digest_hour smallint DEFAULT 9 NOT NULL,
     allow_private_target boolean DEFAULT false NOT NULL,
@@ -1312,7 +1313,8 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
 		{
 			desc: "v2.36.0: per-event delivery mode and platform-native formatting (#221)",
 			sql: `ALTER TABLE public.notification_channels ADD COLUMN IF NOT EXISTS digest_events text[] DEFAULT '{}'::text[] NOT NULL;
-ALTER TABLE public.notification_channels ADD COLUMN IF NOT EXISTS rich_format boolean DEFAULT true NOT NULL;`,
+ALTER TABLE public.notification_channels ADD COLUMN IF NOT EXISTS rich_format boolean DEFAULT true NOT NULL;
+ALTER TABLE public.notification_channels ADD COLUMN IF NOT EXISTS language character varying(8) DEFAULT 'en'::character varying NOT NULL;`,
 		},
 	}
 	for _, a := range upgrades {

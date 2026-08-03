@@ -135,7 +135,7 @@ func (d *NotificationDispatcher) SendTest(ctx context.Context, ch *model.Notific
 		return &UnsupportedChannelError{Type: ch.Type}
 	}
 
-	msg := SampleMessage(eventKey)
+	msg := SampleMessage(ch.Language, eventKey)
 	if ch.Template != "" {
 		msg.Text = model.Render(ch.Template, msg.Fields)
 	}

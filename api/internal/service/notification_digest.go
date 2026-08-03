@@ -108,14 +108,14 @@ func (s *NotificationDigestService) Build(ctx context.Context, now time.Time) (*
 }
 
 // Text renders the digest as plain text every channel can carry.
-func (d *Digest) Text() string {
+func (d *Digest) Text(lang string) string {
 	var b strings.Builder
-	b.WriteString("Nginx Proxy Guard — last 24 hours\n")
+	b.WriteString(tr(lang, "digest.title") + "\n")
 
 	if d.BlockedTotal == 0 {
-		b.WriteString("\nNothing was blocked.")
+		b.WriteString("\n" + tr(lang, "digest.quiet"))
 	} else {
-		fmt.Fprintf(&b, "\nBlocked requests: %d", d.BlockedTotal)
+		fmt.Fprintf(&b, "\n%s: %d", tr(lang, "digest.blocked"), d.BlockedTotal)
 		reasons := make([]string, 0, len(d.ByReason))
 		for r := range d.ByReason {
 			reasons = append(reasons, r)
@@ -127,23 +127,23 @@ func (d *Digest) Text() string {
 	}
 
 	if len(d.TopBlockedIPs) > 0 {
-		b.WriteString("\n\nMost blocked addresses:")
+		b.WriteString("\n\n" + tr(lang, "digest.topIPs") + ":")
 		for _, ip := range d.TopBlockedIPs {
 			fmt.Fprintf(&b, "\n  %s — %d", ip.IP, ip.Count)
 		}
 	}
 
 	if len(d.ExpiringCerts) > 0 {
-		b.WriteString("\n\nCertificates expiring within 30 days:")
+		b.WriteString("\n\n" + tr(lang, "digest.certs") + ":")
 		for _, c := range d.ExpiringCerts {
 			fmt.Fprintf(&b, "\n  %s", c)
 		}
 	}
 
 	if len(d.Outstanding) > 0 {
-		b.WriteString("\n\nStill failing:")
+		b.WriteString("\n\n" + tr(lang, "digest.failing") + ":")
 		for _, f := range d.Outstanding {
-			fmt.Fprintf(&b, "\n  %s — %s (since %s)", f.EventKey, f.Subject, f.Since.Format("2006-01-02 15:04"))
+			fmt.Fprintf(&b, "\n  %s — %s (%s %s)", eventTitle(lang, f.EventKey), f.Subject, tr(lang, "digest.since"), f.Since.Format("2006-01-02 15:04"))
 		}
 	}
 	return b.String()
@@ -167,10 +167,11 @@ func (s *NotificationDigestService) SendDue(ctx context.Context, now time.Time) 
 	if err != nil {
 		return 0, err
 	}
-	text := digest.Text()
-
 	sent := 0
 	for _, ch := range channels {
+		// Rendered per channel, not once: two channels can legitimately want
+		// the same summary in different languages.
+		text := digest.Text(ch.Language)
 		msg := model.RenderedMessage{
 			Event:    "digest.daily",
 			Severity: "info",

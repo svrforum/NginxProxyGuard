@@ -28,6 +28,9 @@ const emptyForm = (): NotificationChannelRequest => ({
   events: [],
   digest_events: [],
   rich_format: true,
+  // Defaults to the language the operator is configuring in: somebody
+  // working in Korean does not expect English alerts.
+  language: (localStorage.getItem('npg_language') === 'ko' ? 'ko' : 'en'),
   digest_enabled: false,
   digest_hour: 9,
   allow_private_target: false,
@@ -42,6 +45,7 @@ const toForm = (c: NotificationChannel): NotificationChannelRequest => ({
   events: [...(c.events ?? [])],
   digest_events: [...(c.digest_events ?? [])],
   rich_format: c.rich_format,
+  language: c.language || 'en',
   digest_enabled: c.digest_enabled,
   digest_hour: c.digest_hour,
   allow_private_target: c.allow_private_target,
@@ -521,6 +525,18 @@ export function NotificationChannelManager() {
                 />
               </Field>
             </div>
+
+            <Field label={tr('notifications.fields.language')} hint={tr('notifications.fields.languageHint')}>
+              <select
+                aria-label="notify-language"
+                value={form.language}
+                onChange={(e) => setForm({ ...form, language: e.target.value })}
+                className={inputCls}
+              >
+                <option value="ko">한국어</option>
+                <option value="en">English</option>
+              </select>
+            </Field>
 
             <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
               <input

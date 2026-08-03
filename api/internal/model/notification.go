@@ -79,24 +79,27 @@ func IsBatchedEvent(key string) bool {
 }
 
 type NotificationChannel struct {
-	ID                 string            `json:"id"`
-	Name               string            `json:"name"`
-	Type               string            `json:"type"`
-	Enabled            bool              `json:"enabled"`
-	Config             map[string]string `json:"config"`
-	Events             []string          `json:"events"`
-	DigestEvents       []string          `json:"digest_events"`
-	RichFormat         bool              `json:"rich_format"`
-	DigestEnabled      bool              `json:"digest_enabled"`
-	DigestHour         int               `json:"digest_hour"`
-	AllowPrivateTarget bool              `json:"allow_private_target"`
-	Template           string            `json:"template"`
-	LastSuccessAt      *time.Time        `json:"last_success_at"`
-	LastErrorAt        *time.Time        `json:"last_error_at"`
-	LastError          string            `json:"last_error"`
-	ConsecutiveFail    int               `json:"consecutive_failures"`
-	CreatedAt          time.Time         `json:"created_at"`
-	UpdatedAt          time.Time         `json:"updated_at"`
+	ID           string            `json:"id"`
+	Name         string            `json:"name"`
+	Type         string            `json:"type"`
+	Enabled      bool              `json:"enabled"`
+	Config       map[string]string `json:"config"`
+	Events       []string          `json:"events"`
+	DigestEvents []string          `json:"digest_events"`
+	RichFormat   bool              `json:"rich_format"`
+	// Language the messages are written in. The person who configured this
+	// channel is the person who reads it, so English is not a safe default.
+	Language           string     `json:"language"`
+	DigestEnabled      bool       `json:"digest_enabled"`
+	DigestHour         int        `json:"digest_hour"`
+	AllowPrivateTarget bool       `json:"allow_private_target"`
+	Template           string     `json:"template"`
+	LastSuccessAt      *time.Time `json:"last_success_at"`
+	LastErrorAt        *time.Time `json:"last_error_at"`
+	LastError          string     `json:"last_error"`
+	ConsecutiveFail    int        `json:"consecutive_failures"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
 }
 
 type CreateNotificationChannelRequest struct {
@@ -107,6 +110,7 @@ type CreateNotificationChannelRequest struct {
 	Events             []string          `json:"events"`
 	DigestEvents       []string          `json:"digest_events"`
 	RichFormat         bool              `json:"rich_format"`
+	Language           string            `json:"language"`
 	DigestEnabled      bool              `json:"digest_enabled"`
 	DigestHour         int               `json:"digest_hour"`
 	AllowPrivateTarget bool              `json:"allow_private_target"`
@@ -202,6 +206,14 @@ func (r *CreateNotificationChannelRequest) Validate(isCreate bool) error {
 
 	if len(r.Events) == 0 && !r.DigestEnabled {
 		return fmt.Errorf("invalid events: pick at least one event, or turn on the daily summary")
+	}
+	switch strings.ToLower(strings.TrimSpace(r.Language)) {
+	case "", "en":
+		r.Language = "en"
+	case "ko":
+		r.Language = "ko"
+	default:
+		return fmt.Errorf("invalid language: must be ko or en")
 	}
 	if r.DigestHour < 0 || r.DigestHour > 23 {
 		return fmt.Errorf("invalid digest_hour: must be between 0 and 23")

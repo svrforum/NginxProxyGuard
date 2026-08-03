@@ -143,7 +143,7 @@ func (a *webhookAdapter) Send(ctx context.Context, ch *model.NotificationChannel
 	// than parsing prose; text is the human line it can also display.
 	text := msg.Text
 	if !usesTemplate(ch) {
-		text = plainText(msg)
+		text = plainText(ch.Language, msg)
 	}
 	body, err := json.Marshal(webhookEnvelope{
 		Event: msg.Event, At: msg.At, Instance: "npg",

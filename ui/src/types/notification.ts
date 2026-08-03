@@ -21,6 +21,8 @@ export interface NotificationChannel {
   events: string[]
   digest_events: string[]
   rich_format: boolean
+  /** Language the messages are written in — 'ko' or 'en'. */
+  language: string
   digest_enabled: boolean
   digest_hour: number
   allow_private_target: boolean
@@ -41,6 +43,7 @@ export interface NotificationChannelRequest {
   events: string[]
   digest_events: string[]
   rich_format: boolean
+  language: string
   digest_enabled: boolean
   digest_hour: number
   allow_private_target: boolean

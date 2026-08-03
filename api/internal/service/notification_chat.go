@@ -58,11 +58,11 @@ func (a *discordAdapter) Send(ctx context.Context, ch *model.NotificationChannel
 	// reason to treat Discord as Discord rather than as a pipe.
 	var payload any
 	if ch.RichFormat && !usesTemplate(ch) {
-		payload = map[string]any{"embeds": []any{discordEmbed(msg)}}
+		payload = map[string]any{"embeds": []any{discordEmbed(ch.Language, msg)}}
 	} else {
 		text := msg.Text
 		if !usesTemplate(ch) {
-			text = plainText(msg)
+			text = plainText(ch.Language, msg)
 		}
 		payload = map[string]string{"content": truncateRunes(text, discordContentLimit)}
 	}
@@ -154,11 +154,11 @@ func (a *telegramAdapter) Send(ctx context.Context, ch *model.NotificationChanne
 	// otherwise-legal message past the limit.
 	var text string
 	if ch.RichFormat && !usesTemplate(ch) {
-		text = telegramMarkdown(msg)
+		text = telegramMarkdown(ch.Language, msg)
 	} else {
 		body := msg.Text
 		if !usesTemplate(ch) {
-			body = plainText(msg)
+			body = plainText(ch.Language, msg)
 		}
 		text = escapeMarkdownV2(body)
 	}

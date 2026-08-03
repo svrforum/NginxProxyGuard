@@ -1625,7 +1625,9 @@
         "discord": "Sends an embed with a title, a severity-coloured bar and the fields as columns. Off sends one plain block.",
         "telegram": "Sends MarkdownV2 with a bold title and highlighted values. Off sends plain text.",
         "webhook": "The JSON body is always structured; this only affects the human-readable text line."
-      }
+      },
+      "language": "Message language",
+      "languageHint": "The language of alerts sent to this channel, chosen per channel and independent of the panel's own language."
     },
     "guides": {
       "webhook": {

@@ -36,7 +36,7 @@ func (r *NotificationRepository) TablesExist(ctx context.Context) bool {
 	return err == nil && ok
 }
 
-const channelColumns = `id, name, type, enabled, config, events, digest_enabled, digest_hour,
+const channelColumns = `id, name, type, enabled, config, events, digest_events, rich_format, language, digest_enabled, digest_hour,
 	allow_private_target, COALESCE(template, ''), last_success_at, last_error_at,
 	COALESCE(last_error, ''), consecutive_failures, created_at, updated_at`
 
@@ -45,16 +45,16 @@ const channelColumns = `id, name, type, enabled, config, events, digest_enabled,
 // notification_outbox also has id, created_at and last_error. A single shared
 // constant used in both contexts silently produced "column reference id is
 // ambiguous" only at runtime, which no unit test would have caught.
-const channelColumnsAliased = `c.id, c.name, c.type, c.enabled, c.config, c.events, c.digest_enabled, c.digest_hour,
+const channelColumnsAliased = `c.id, c.name, c.type, c.enabled, c.config, c.events, c.digest_events, c.rich_format, c.language, c.digest_enabled, c.digest_hour,
 	c.allow_private_target, COALESCE(c.template, ''), c.last_success_at, c.last_error_at,
 	COALESCE(c.last_error, ''), c.consecutive_failures, c.created_at, c.updated_at`
 
 func scanChannel(s interface{ Scan(...any) error }) (*model.NotificationChannel, error) {
 	var c model.NotificationChannel
 	var config []byte
-	var events pq.StringArray
-	if err := s.Scan(&c.ID, &c.Name, &c.Type, &c.Enabled, &config, &events,
-		&c.DigestEnabled, &c.DigestHour, &c.AllowPrivateTarget, &c.Template,
+	var events, digestEvents pq.StringArray
+	if err := s.Scan(&c.ID, &c.Name, &c.Type, &c.Enabled, &config, &events, &digestEvents,
+		&c.RichFormat, &c.Language, &c.DigestEnabled, &c.DigestHour, &c.AllowPrivateTarget, &c.Template,
 		&c.LastSuccessAt, &c.LastErrorAt, &c.LastError, &c.ConsecutiveFail,
 		&c.CreatedAt, &c.UpdatedAt); err != nil {
 		return nil, err
@@ -66,6 +66,7 @@ func scanChannel(s interface{ Scan(...any) error }) (*model.NotificationChannel,
 		}
 	}
 	c.Events = events
+	c.DigestEvents = digestEvents
 	return &c, nil
 }
 
@@ -180,12 +181,12 @@ func (r *NotificationRepository) Create(ctx context.Context, req *model.CreateNo
 	}
 	var id string
 	err = r.db.QueryRowContext(ctx, `
-		INSERT INTO notification_channels (name, type, enabled, config, events,
-			digest_enabled, digest_hour, allow_private_target, template)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NULLIF($9,''))
+		INSERT INTO notification_channels (name, type, enabled, config, events, digest_events,
+			rich_format, language, digest_enabled, digest_hour, allow_private_target, template)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NULLIF($12,''))
 		RETURNING id`,
-		req.Name, req.Type, enabled, config, pq.Array(req.Events),
-		req.DigestEnabled, req.DigestHour, req.AllowPrivateTarget, req.Template).Scan(&id)
+		req.Name, req.Type, enabled, config, pq.Array(req.Events), pq.Array(req.DigestEvents),
+		req.RichFormat, req.Language, req.DigestEnabled, req.DigestHour, req.AllowPrivateTarget, req.Template).Scan(&id)
 	if err != nil {
 		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
 			return "", fmt.Errorf("a channel with this name already exists")
@@ -209,12 +210,12 @@ func (r *NotificationRepository) Update(ctx context.Context, id string, req *mod
 	}
 	res, err := r.db.ExecContext(ctx, `
 		UPDATE notification_channels SET
-			name = $2, type = $3, enabled = $4, config = $5, events = $6,
-			digest_enabled = $7, digest_hour = $8, allow_private_target = $9,
-			template = NULLIF($10,''), updated_at = now()
+			name = $2, type = $3, enabled = $4, config = $5, events = $6, digest_events = $7,
+			rich_format = $8, language = $9, digest_enabled = $10, digest_hour = $11,
+			allow_private_target = $12, template = NULLIF($13,''), updated_at = now()
 		WHERE id = $1`,
-		id, req.Name, req.Type, enabled, config, pq.Array(req.Events),
-		req.DigestEnabled, req.DigestHour, req.AllowPrivateTarget, req.Template)
+		id, req.Name, req.Type, enabled, config, pq.Array(req.Events), pq.Array(req.DigestEvents),
+		req.RichFormat, req.Language, req.DigestEnabled, req.DigestHour, req.AllowPrivateTarget, req.Template)
 	if err != nil {
 		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
 			return fmt.Errorf("a channel with this name already exists")
@@ -332,10 +333,10 @@ func (r *NotificationRepository) ClaimDue(ctx context.Context, limit int) ([]mod
 		var payload []byte
 		var c model.NotificationChannel
 		var config []byte
-		var events pq.StringArray
+		var events, digestEvents pq.StringArray
 		if err := rows.Scan(&e.ID, &e.ChannelID, &e.EventKey, &payload, &e.Status, &e.Attempts,
 			&e.NextAttemptAt, &e.LastError, &e.CreatedAt, &e.SentAt,
-			&c.ID, &c.Name, &c.Type, &c.Enabled, &config, &events, &c.DigestEnabled, &c.DigestHour,
+			&c.ID, &c.Name, &c.Type, &c.Enabled, &config, &events, &digestEvents, &c.RichFormat, &c.Language, &c.DigestEnabled, &c.DigestHour,
 			&c.AllowPrivateTarget, &c.Template, &c.LastSuccessAt, &c.LastErrorAt, &c.LastError,
 			&c.ConsecutiveFail, &c.CreatedAt, &c.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan notification: %w", err)
@@ -352,6 +353,7 @@ func (r *NotificationRepository) ClaimDue(ctx context.Context, limit int) ([]mod
 			}
 		}
 		c.Events = events
+		c.DigestEvents = digestEvents
 		e.Channel = &c
 		out = append(out, e)
 	}

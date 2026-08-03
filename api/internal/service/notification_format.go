@@ -56,59 +56,47 @@ func orderedFields(fields map[string]string) []string {
 }
 
 // headline is the one-line summary every format leads with.
-func headline(msg model.RenderedMessage) string {
-	switch msg.Severity {
-	case "error":
-		return "Problem — " + eventTitle(msg.Event)
-	case "warning":
-		return "Notice — " + eventTitle(msg.Event)
-	default:
-		return "Resolved — " + eventTitle(msg.Event)
+func headline(lang string, msg model.RenderedMessage) string {
+	sev := "info"
+	if msg.Severity == "error" || msg.Severity == "warning" {
+		sev = msg.Severity
 	}
+	return tr(lang, "severity."+sev) + " — " + eventTitle(lang, msg.Event)
 }
 
-// eventTitle turns a key into something readable. It is deliberately derived
-// rather than translated: the server has no locale, and a notification is read
-// by whoever owns the channel, not by the browser that configured it.
-func eventTitle(key string) string {
-	switch key {
-	case "cert.renewal_failed":
-		return "certificate renewal failed"
-	case "cert.renewed":
-		return "certificate renewed"
-	case "ddns.sync_failed":
-		return "DDNS update failed"
-	case "ddns.recovered":
-		return "DDNS updating again"
-	case "backup.failed":
-		return "scheduled backup failed"
-	case "nginx.reload_failed":
-		return "nginx reload failed"
-	case "auth.login_failed":
-		return "admin sign-in locked out"
-	case "ip.banned":
-		return "addresses banned"
-	case "sso.login_refused":
-		return "SSO sign-in refused"
-	case "digest.daily":
-		return "daily summary"
-	case "test":
-		return "test notification"
-	default:
-		return strings.ReplaceAll(key, ".", " ")
+// eventTitle turns a key into something readable in the channel's language.
+func eventTitle(lang, key string) string {
+	if v, ok := notificationStrings[normaliseLang(lang)]["event."+key]; ok && v != "" {
+		return v
 	}
+	if v, ok := notificationStrings[LangEnglish]["event."+key]; ok && v != "" {
+		return v
+	}
+	return strings.ReplaceAll(key, ".", " ")
+}
+
+// fieldLabel names a field in the channel's language. Unknown keys fall through
+// to the key itself, which is still more use than blank.
+func fieldLabel(lang, key string) string {
+	if v, ok := notificationStrings[normaliseLang(lang)]["field."+key]; ok && v != "" {
+		return v
+	}
+	if v, ok := notificationStrings[LangEnglish]["field."+key]; ok && v != "" {
+		return v
+	}
+	return key
 }
 
 // discordEmbed builds the embed body. Falls back to plain content when the
 // channel asked for plain text or the operator supplied a template.
-func discordEmbed(msg model.RenderedMessage) map[string]any {
+func discordEmbed(lang string, msg model.RenderedMessage) map[string]any {
 	fields := []map[string]any{}
 	for _, k := range orderedFields(msg.Fields) {
 		if k == "time" || k == "detail" {
 			continue // time is the embed timestamp; detail is the description
 		}
 		fields = append(fields, map[string]any{
-			"name":   k,
+			"name":   fieldLabel(lang, k),
 			"value":  truncateRunes(msg.Fields[k], 1024),
 			"inline": true,
 		})
@@ -123,10 +111,10 @@ func discordEmbed(msg model.RenderedMessage) map[string]any {
 	}
 
 	embed := map[string]any{
-		"title":       truncateRunes(headline(msg), 256),
+		"title":       truncateRunes(headline(lang, msg), 256),
 		"description": truncateRunes(description, 4096),
 		"color":       severityColour(msg.Severity),
-		"footer":      map[string]any{"text": "Nginx Proxy Guard"},
+		"footer":      map[string]any{"text": tr(lang, "footer.signature")},
 	}
 	if !msg.At.IsZero() {
 		embed["timestamp"] = msg.At.UTC().Format("2006-01-02T15:04:05Z07:00")
@@ -142,13 +130,13 @@ func discordEmbed(msg model.RenderedMessage) map[string]any {
 // Escaping happens per value and the markup is added afterwards. Escaping the
 // finished string would escape the asterisks and backticks too, and the message
 // would arrive with the markup showing.
-func telegramMarkdown(msg model.RenderedMessage) string {
+func telegramMarkdown(lang string, msg model.RenderedMessage) string {
 	var b strings.Builder
 	icon := map[string]string{"error": "🔴", "warning": "🟠"}[msg.Severity]
 	if icon == "" {
 		icon = "🟢"
 	}
-	fmt.Fprintf(&b, "%s *%s*", icon, escapeMarkdownV2(headline(msg)))
+	fmt.Fprintf(&b, "%s *%s*", icon, escapeMarkdownV2(headline(lang, msg)))
 
 	if d := msg.Fields["detail"]; d != "" {
 		fmt.Fprintf(&b, "\n%s", escapeMarkdownV2(d))
@@ -157,15 +145,15 @@ func telegramMarkdown(msg model.RenderedMessage) string {
 		if k == "detail" {
 			continue
 		}
-		fmt.Fprintf(&b, "\n%s: `%s`", escapeMarkdownV2(k), escapeMarkdownV2(msg.Fields[k]))
+		fmt.Fprintf(&b, "\n%s: `%s`", escapeMarkdownV2(fieldLabel(lang, k)), escapeMarkdownV2(msg.Fields[k]))
 	}
 	return b.String()
 }
 
 // plainText is the fallback every channel can carry.
-func plainText(msg model.RenderedMessage) string {
+func plainText(lang string, msg model.RenderedMessage) string {
 	var b strings.Builder
-	b.WriteString(headline(msg))
+	b.WriteString(headline(lang, msg))
 	if d := msg.Fields["detail"]; d != "" {
 		b.WriteString("\n" + d)
 	}
@@ -173,7 +161,7 @@ func plainText(msg model.RenderedMessage) string {
 		if k == "detail" {
 			continue
 		}
-		fmt.Fprintf(&b, "\n%s: %s", k, msg.Fields[k])
+		fmt.Fprintf(&b, "\n%s: %s", fieldLabel(lang, k), msg.Fields[k])
 	}
 	return b.String()
 }
@@ -189,7 +177,7 @@ func usesTemplate(ch *model.NotificationChannel) bool {
 //
 // The values are documentation-range addresses and example.com hostnames on
 // purpose: a sample must never carry real traffic data off the box.
-func SampleMessage(eventKey string) model.RenderedMessage {
+func SampleMessage(lang, eventKey string) model.RenderedMessage {
 	now := time.Now()
 	if eventKey == "" || !model.IsKnownEvent(eventKey) {
 		eventKey = "test"
@@ -206,26 +194,26 @@ func SampleMessage(eventKey string) model.RenderedMessage {
 	case "cert.renewal_failed":
 		severity = "error"
 		fields["host"] = "app.example.com"
-		fields["detail"] = "DNS challenge timed out after 120s"
+		fields["detail"] = tr(lang, "sample.certFail")
 		fields["subject"] = "app.example.com"
 	case "cert.renewed":
 		fields["host"] = "app.example.com"
-		fields["detail"] = "valid for another 90 days"
+		fields["detail"] = tr(lang, "sample.certOK")
 	case "ddns.sync_failed":
 		severity = "error"
 		fields["host"] = "home.example.com"
-		fields["detail"] = "provider rejected the update: invalid credentials"
+		fields["detail"] = tr(lang, "sample.ddnsFail")
 	case "ddns.recovered":
 		fields["host"] = "home.example.com"
 		fields["ip"] = "203.0.113.42"
 	case "backup.failed":
 		severity = "error"
 		fields["subject"] = "scheduled"
-		fields["detail"] = "no space left on device"
+		fields["detail"] = tr(lang, "sample.backup")
 	case "nginx.reload_failed":
 		severity = "error"
 		fields["subject"] = "nginx"
-		fields["detail"] = "nginx -t failed: duplicate location \"/\""
+		fields["detail"] = tr(lang, "sample.nginx")
 	case "auth.login_failed":
 		severity = "warning"
 		fields["subject"] = "admin"
@@ -238,19 +226,19 @@ func SampleMessage(eventKey string) model.RenderedMessage {
 		fields["host"] = "app.example.com"
 		fields["count"] = "3"
 		fields["reason"] = "fail2ban"
-		fields["subject"] = "192.0.2.5 and 2 more"
+		fields["subject"] = "192.0.2.5 " + tr(lang, "sample.andMore")
 	case "sso.login_refused":
 		severity = "warning"
 		fields["subject"] = "google"
 		fields["count"] = "2"
 		fields["reason"] = "not_on_allowlist"
 	default:
-		fields["detail"] = "This is a test from Nginx Proxy Guard."
+		fields["detail"] = tr(lang, "sample.test")
 	}
 
 	msg := model.RenderedMessage{
 		Event: eventKey, Severity: severity, Fields: fields, At: now,
 	}
-	msg.Text = plainText(msg)
+	msg.Text = plainText(lang, msg)
 	return msg
 }
