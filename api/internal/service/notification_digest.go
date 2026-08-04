@@ -204,7 +204,14 @@ func (d *Digest) Text(lang, dashboardURL string) string {
 	if len(d.Outstanding) > 0 {
 		b.WriteString("\n\n" + tr(lang, "digest.failing") + ":")
 		for _, f := range d.Outstanding {
-			fmt.Fprintf(&b, "\n  %s — %s (%s %s)", eventTitle(lang, f.EventKey), f.Subject, tr(lang, "digest.since"), f.Since.Format("2006-01-02 15:04"))
+			// Label over Subject: the subject is a UUID, and a summary that
+			// names the broken thing by its database id tells the reader
+			// nothing. Rows written before labels existed still fall back.
+			name := f.Label
+			if name == "" {
+				name = f.Subject
+			}
+			fmt.Fprintf(&b, "\n  %s — %s (%s %s)", eventTitle(lang, f.EventKey), name, tr(lang, "digest.since"), f.Since.Format("2006-01-02 15:04"))
 		}
 	}
 

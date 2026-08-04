@@ -2637,6 +2637,7 @@ CREATE TABLE IF NOT EXISTS public.notification_channels (
 CREATE TABLE IF NOT EXISTS public.notification_state (
     event_key character varying(64) NOT NULL,
     subject character varying(255) NOT NULL,
+    subject_label character varying(255),
     state character varying(16) NOT NULL,
     since timestamp with time zone DEFAULT now() NOT NULL,
     last_detail text
@@ -3712,6 +3713,7 @@ CREATE INDEX IF NOT EXISTS idx_fsee_subscription ON public.filter_subscription_e
 --   ALTER TABLE public.notification_channels ADD COLUMN IF NOT EXISTS dashboard_url text;
 --   CREATE UNIQUE INDEX IF NOT EXISTS notification_channels_name_key ON public.notification_channels (lower(name));
 --   CREATE TABLE IF NOT EXISTS public.notification_state (...);
+--   ALTER TABLE public.notification_state ADD COLUMN IF NOT EXISTS subject_label varchar(255);
 --   CREATE TABLE IF NOT EXISTS public.notification_outbox (...);
 --   CREATE INDEX IF NOT EXISTS notification_outbox_due_idx ON public.notification_outbox (status, next_attempt_at);
 --   ALTER TABLE notification_outbox ADD CONSTRAINT notification_outbox_channel_id_fkey ... ON DELETE CASCADE;

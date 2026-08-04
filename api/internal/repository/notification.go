@@ -256,15 +256,38 @@ func (r *NotificationRepository) GetState(ctx context.Context, eventKey, subject
 	return state, nil
 }
 
-func (r *NotificationRepository) SetState(ctx context.Context, eventKey, subject, state, detail string) error {
+func (r *NotificationRepository) SetState(ctx context.Context, eventKey, subject, label, state, detail string) error {
 	_, err := r.db.ExecContext(ctx, `
-		INSERT INTO notification_state (event_key, subject, state, since, last_detail)
-		VALUES ($1,$2,$3,now(),NULLIF($4,''))
+		INSERT INTO notification_state (event_key, subject, subject_label, state, since, last_detail)
+		VALUES ($1,$2,NULLIF($3,''),$4,now(),NULLIF($5,''))
 		ON CONFLICT (event_key, subject)
-		DO UPDATE SET state = EXCLUDED.state, since = now(), last_detail = EXCLUDED.last_detail`,
-		eventKey, subject, state, detail)
+		DO UPDATE SET subject_label = EXCLUDED.subject_label, state = EXCLUDED.state,
+		              since = now(), last_detail = EXCLUDED.last_detail`,
+		eventKey, subject, label, state, detail)
 	if err != nil {
 		return fmt.Errorf("failed to write notification state: %w", err)
+	}
+	return nil
+}
+
+// SetSubjectLabel refreshes the readable name without touching the state or
+// its since timestamp.
+//
+// It exists for the path where nothing changed: a certificate that has been
+// failing for a week is re-checked every six hours and takes the early return
+// in EmitTransition, so a row written before labels existed — or written when
+// the domain was different — would otherwise keep showing a UUID in the digest
+// forever. The IS DISTINCT FROM guard means the common case writes nothing.
+func (r *NotificationRepository) SetSubjectLabel(ctx context.Context, eventKey, subject, label string) error {
+	if label == "" {
+		return nil
+	}
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE notification_state SET subject_label = $3
+		WHERE event_key = $1 AND subject = $2 AND subject_label IS DISTINCT FROM $3`,
+		eventKey, subject, label)
+	if err != nil {
+		return fmt.Errorf("failed to update notification subject label: %w", err)
 	}
 	return nil
 }
@@ -273,7 +296,7 @@ func (r *NotificationRepository) SetState(ctx context.Context, eventKey, subject
 // breakage visible after its single edge-triggered alert.
 func (r *NotificationRepository) OutstandingFailures(ctx context.Context) ([]model.NotificationState, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT event_key, subject, since, COALESCE(last_detail, '')
+		SELECT event_key, subject, COALESCE(subject_label, ''), since, COALESCE(last_detail, '')
 		FROM notification_state WHERE state = 'failing' ORDER BY since`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list outstanding failures: %w", err)
@@ -283,7 +306,7 @@ func (r *NotificationRepository) OutstandingFailures(ctx context.Context) ([]mod
 	out := []model.NotificationState{}
 	for rows.Next() {
 		var s model.NotificationState
-		if err := rows.Scan(&s.EventKey, &s.Subject, &s.Since, &s.LastDetail); err != nil {
+		if err := rows.Scan(&s.EventKey, &s.Subject, &s.Label, &s.Since, &s.LastDetail); err != nil {
 			return nil, err
 		}
 		s.State = "failing"

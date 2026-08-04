@@ -33,7 +33,8 @@ import (
 type notifyStore interface {
 	TablesExist(ctx context.Context) bool
 	GetState(ctx context.Context, eventKey, subject string) (string, error)
-	SetState(ctx context.Context, eventKey, subject, state, detail string) error
+	SetState(ctx context.Context, eventKey, subject, label, state, detail string) error
+	SetSubjectLabel(ctx context.Context, eventKey, subject, label string) error
 	ChannelsForEvent(ctx context.Context, eventKey string) ([]model.NotificationChannel, error)
 	Enqueue(ctx context.Context, channelID, eventKey string, payload model.RenderedMessage) error
 }
@@ -97,18 +98,27 @@ func (s *NotificationService) EmitTransition(ctx context.Context, eventKey, subj
 	if failing {
 		want = stateFailing
 	}
+	// The subject is an identity — a certificate's UUID — because the state has
+	// to survive the thing being renamed. Nobody can read a UUID, so the
+	// caller's host field is carried alongside it as the label and is what
+	// every message and the digest actually print.
+	label := firstNonEmpty(fields["host"], fields["subject"], subject)
+
 	previous, err := s.store.GetState(ctx, eventKey, subject)
 	if err != nil {
 		return err
 	}
 	if previous == want {
-		return nil
+		// Nothing to announce, but this is the only moment a long-running
+		// failure is looked at again — so it is where a row written before
+		// labels existed gets its readable name.
+		return s.store.SetSubjectLabel(ctx, eventKey, subject, label)
 	}
 	// An unseen subject that is already healthy is not news.
 	if previous == "" && !failing {
-		return s.store.SetState(ctx, eventKey, subject, want, detail)
+		return s.store.SetState(ctx, eventKey, subject, label, want, detail)
 	}
-	if err := s.store.SetState(ctx, eventKey, subject, want, detail); err != nil {
+	if err := s.store.SetState(ctx, eventKey, subject, label, want, detail); err != nil {
 		return err
 	}
 
@@ -119,7 +129,7 @@ func (s *NotificationService) EmitTransition(ctx context.Context, eventKey, subj
 		severity = "resolved"
 	}
 
-	payload := s.buildPayload(key, severity, subject, detail, fields)
+	payload := s.buildPayload(key, severity, label, detail, fields)
 	return s.fanOut(ctx, key, payload)
 }
 

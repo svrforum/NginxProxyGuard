@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,11 +14,12 @@ import (
 type fakeStore struct {
 	subscribed map[string]bool
 	state      map[string]string
+	labels     map[string]string
 	enqueued   []model.RenderedMessage
 }
 
 func newFakeStore(events ...string) *fakeStore {
-	f := &fakeStore{subscribed: map[string]bool{}, state: map[string]string{}}
+	f := &fakeStore{subscribed: map[string]bool{}, state: map[string]string{}, labels: map[string]string{}}
 	for _, e := range events {
 		f.subscribed[e] = true
 	}
@@ -30,8 +32,16 @@ func (f *fakeStore) GetState(_ context.Context, key, subject string) (string, er
 	return f.state[key+"|"+subject], nil
 }
 
-func (f *fakeStore) SetState(_ context.Context, key, subject, state, _ string) error {
+func (f *fakeStore) SetState(_ context.Context, key, subject, label, state, _ string) error {
 	f.state[key+"|"+subject] = state
+	f.labels[key+"|"+subject] = label
+	return nil
+}
+
+func (f *fakeStore) SetSubjectLabel(_ context.Context, key, subject, label string) error {
+	if label != "" {
+		f.labels[key+"|"+subject] = label
+	}
 	return nil
 }
 
@@ -127,6 +137,58 @@ func TestFlushIsIdempotent(t *testing.T) {
 	s.FlushBatches(ctx)
 	if len(fake.enqueued) != 1 {
 		t.Fatalf("a second flush with nothing pending produced %d messages", len(fake.enqueued))
+	}
+}
+
+// The subject is a UUID because the state must survive a rename, but nobody
+// can read one. A message that says "certificate renewal failed —
+// 9be4344a-60b0-4cf7-aae2-a2259ae1e2cf" tells the operator nothing about which
+// site is down.
+func TestMessagesNameTheHostNotTheDatabaseID(t *testing.T) {
+	fake := newFakeStore("cert.renewal_failed")
+	s := NewNotificationServiceWithStore(fake)
+	ctx := context.Background()
+	const id = "9be4344a-60b0-4cf7-aae2-a2259ae1e2cf"
+
+	_ = s.EmitTransition(ctx, "cert.renewal_failed", id, true, "DNS challenge timed out",
+		map[string]string{"host": "app.example.com"})
+
+	if len(fake.enqueued) != 1 {
+		t.Fatalf("expected one message, got %d", len(fake.enqueued))
+	}
+	msg := fake.enqueued[0]
+	if msg.Fields["subject"] != "app.example.com" {
+		t.Errorf("message subject = %q, want the domain", msg.Fields["subject"])
+	}
+	if strings.Contains(plainText("en", msg), id) {
+		t.Errorf("the raw id reached the message:\n%s", plainText("en", msg))
+	}
+	// The state still keys on the id — that is what makes it survive a rename.
+	if got, _ := fake.GetState(ctx, "cert.renewal_failed", id); got != "failing" {
+		t.Errorf("state should still be keyed by id, got %q", got)
+	}
+	if fake.labels["cert.renewal_failed|"+id] != "app.example.com" {
+		t.Errorf("label not persisted: %q", fake.labels["cert.renewal_failed|"+id])
+	}
+}
+
+// A row written before labels existed gets its name back on the next check,
+// which is the only time a week-long failure is looked at again.
+func TestAnUnchangedFailureStillLearnsItsLabel(t *testing.T) {
+	fake := newFakeStore("cert.renewal_failed")
+	s := NewNotificationServiceWithStore(fake)
+	ctx := context.Background()
+	const id = "cert-1"
+	fake.state["cert.renewal_failed|"+id] = "failing" // as an older version left it
+
+	_ = s.EmitTransition(ctx, "cert.renewal_failed", id, true, "still failing",
+		map[string]string{"host": "app.example.com"})
+
+	if len(fake.enqueued) != 0 {
+		t.Fatalf("an unchanged state must not re-announce, got %d messages", len(fake.enqueued))
+	}
+	if fake.labels["cert.renewal_failed|"+id] != "app.example.com" {
+		t.Errorf("label was not backfilled: %q", fake.labels["cert.renewal_failed|"+id])
 	}
 }
 

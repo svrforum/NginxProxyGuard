@@ -282,8 +282,15 @@ type OutboxEntry struct {
 // NotificationState is one subject's last known health, which is what makes an
 // event edge-triggered rather than repeated.
 type NotificationState struct {
-	EventKey   string    `json:"event_key"`
-	Subject    string    `json:"subject"`
+	EventKey string `json:"event_key"`
+	// Subject is the stable identity of the failing thing — a certificate's
+	// UUID, a DDNS record's UUID. It keys the edge-triggering state, so it must
+	// not change when the thing is renamed.
+	Subject string `json:"subject"`
+	// Label is what a person reads: the certificate's domain, the DDNS
+	// hostname. Empty on rows written before the label existed, in which case
+	// callers fall back to Subject.
+	Label      string    `json:"label"`
 	State      string    `json:"state"`
 	Since      time.Time `json:"since"`
 	LastDetail string    `json:"last_detail"`

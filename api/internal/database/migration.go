@@ -1318,6 +1318,10 @@ ALTER TABLE public.notification_channels ADD COLUMN IF NOT EXISTS rich_format bo
 ALTER TABLE public.notification_channels ADD COLUMN IF NOT EXISTS language character varying(8) DEFAULT 'en'::character varying NOT NULL;
 ALTER TABLE public.notification_channels ADD COLUMN IF NOT EXISTS dashboard_url text;`,
 		},
+		{
+			desc: "v2.36.0: readable subject label on notification state (#221)",
+			sql:  `ALTER TABLE public.notification_state ADD COLUMN IF NOT EXISTS subject_label character varying(255);`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {
