@@ -36,6 +36,32 @@ func severityColour(severity string) int {
 // would otherwise reshuffle them and make two identical alerts look different.
 var fieldOrder = []string{"host", "ip", "country", "count", "reason", "detail", "subject", "time"}
 
+// dropRedundantSubject removes a subject that only repeats the host.
+//
+// The two are usually the same string — the subject is the failing thing and
+// the host is its name — and an alert that prints "host: app.example.com" and
+// "subject: app.example.com" on consecutive lines reads like a bug. It lives
+// here rather than inline so the samples an operator previews cannot drift
+// from what a real alert does.
+func dropRedundantSubject(fields map[string]string) {
+	if fields["subject"] != "" && fields["subject"] == fields["host"] {
+		delete(fields, "subject")
+	}
+}
+
+// displayValue renders one field for a human reader. Only the presentation
+// changes — fields keeps its raw values, because a webhook receiver keys off
+// them and a {{time}} template must still yield a machine-readable timestamp.
+func displayValue(key, value string) string {
+	if key != "time" {
+		return value
+	}
+	if t, err := time.Parse(time.RFC3339, value); err == nil {
+		return t.Format("2006-01-02 15:04")
+	}
+	return value
+}
+
 func orderedFields(fields map[string]string) []string {
 	seen := map[string]bool{}
 	out := make([]string, 0, len(fields))
@@ -55,6 +81,22 @@ func orderedFields(fields map[string]string) []string {
 	return append(out, rest...)
 }
 
+// severityIcon is the glyph a message leads with. It is the fastest read in a
+// busy channel — colour lands before words do, and the same alert then looks
+// the same on Telegram, on Discord and in a webhook body.
+func severityIcon(severity string) string {
+	switch severity {
+	case "error":
+		return "🔴"
+	case "warning":
+		return "🟠"
+	case "resolved":
+		return "✅"
+	default:
+		return "ℹ️"
+	}
+}
+
 // headline is the one-line summary every format leads with.
 func headline(lang string, msg model.RenderedMessage) string {
 	sev := msg.Severity
@@ -63,7 +105,7 @@ func headline(lang string, msg model.RenderedMessage) string {
 	default:
 		sev = "info"
 	}
-	return tr(lang, "severity."+sev) + " — " + eventTitle(lang, msg.Event)
+	return severityIcon(sev) + " " + tr(lang, "severity."+sev) + " — " + eventTitle(lang, msg.Event)
 }
 
 // eventTitle turns a key into something readable in the channel's language.
@@ -134,11 +176,9 @@ func discordEmbed(lang string, msg model.RenderedMessage) map[string]any {
 // would arrive with the markup showing.
 func telegramMarkdown(lang string, msg model.RenderedMessage) string {
 	var b strings.Builder
-	icon := map[string]string{"error": "🔴", "warning": "🟠"}[msg.Severity]
-	if icon == "" {
-		icon = "🟢"
-	}
-	fmt.Fprintf(&b, "%s *%s*", icon, escapeMarkdownV2(headline(lang, msg)))
+	// The glyph comes from headline, so one alert cannot arrive amber here and
+	// green somewhere else.
+	fmt.Fprintf(&b, "*%s*", escapeMarkdownV2(headline(lang, msg)))
 
 	if d := msg.Fields["detail"]; d != "" {
 		fmt.Fprintf(&b, "\n%s", escapeMarkdownV2(d))
@@ -147,7 +187,7 @@ func telegramMarkdown(lang string, msg model.RenderedMessage) string {
 		if k == "detail" {
 			continue
 		}
-		fmt.Fprintf(&b, "\n%s: `%s`", escapeMarkdownV2(fieldLabel(lang, k)), escapeMarkdownV2(msg.Fields[k]))
+		fmt.Fprintf(&b, "\n%s: `%s`", escapeMarkdownV2(fieldLabel(lang, k)), escapeMarkdownV2(displayValue(k, msg.Fields[k])))
 	}
 	return b.String()
 }
@@ -163,7 +203,7 @@ func plainText(lang string, msg model.RenderedMessage) string {
 		if k == "detail" {
 			continue
 		}
-		fmt.Fprintf(&b, "\n%s: %s", fieldLabel(lang, k), msg.Fields[k])
+		fmt.Fprintf(&b, "\n%s: %s", fieldLabel(lang, k), displayValue(k, msg.Fields[k]))
 	}
 	return b.String()
 }
@@ -209,6 +249,10 @@ func SampleMessage(lang, eventKey string) model.RenderedMessage {
 		fields["detail"] = tr(lang, "sample.certFail")
 		fields["subject"] = "app.example.com"
 	case "cert.renewed":
+		// Recovery events carry severity "resolved" when they really fire, so
+		// the sample must too — otherwise the preview shows an "info" glyph and
+		// the real message arrives with a different one.
+		severity = "resolved"
 		fields["host"] = "app.example.com"
 		fields["detail"] = tr(lang, "sample.certOK")
 	case "ddns.sync_failed":
@@ -216,6 +260,7 @@ func SampleMessage(lang, eventKey string) model.RenderedMessage {
 		fields["host"] = "home.example.com"
 		fields["detail"] = tr(lang, "sample.ddnsFail")
 	case "ddns.recovered":
+		severity = "resolved"
 		fields["host"] = "home.example.com"
 		fields["ip"] = "203.0.113.42"
 	case "backup.failed":
@@ -248,6 +293,7 @@ func SampleMessage(lang, eventKey string) model.RenderedMessage {
 		fields["detail"] = tr(lang, "sample.test")
 	}
 
+	dropRedundantSubject(fields)
 	msg := model.RenderedMessage{
 		Event: eventKey, Severity: severity, Fields: fields, At: now,
 	}

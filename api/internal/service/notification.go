@@ -216,6 +216,9 @@ func (s *NotificationService) buildPayload(eventKey, severity, subject, detail s
 	if subject != "" {
 		out["subject"] = subject
 	}
+	// It stays when it says something the host line does not — a coalesced
+	// "192.0.2.5 and 2 more", for instance.
+	dropRedundantSubject(out)
 	if detail != "" {
 		out["detail"] = detail
 	}

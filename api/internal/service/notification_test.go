@@ -157,11 +157,17 @@ func TestMessagesNameTheHostNotTheDatabaseID(t *testing.T) {
 		t.Fatalf("expected one message, got %d", len(fake.enqueued))
 	}
 	msg := fake.enqueued[0]
-	if msg.Fields["subject"] != "app.example.com" {
-		t.Errorf("message subject = %q, want the domain", msg.Fields["subject"])
+	body := plainText("en", msg)
+	if strings.Contains(body, id) {
+		t.Errorf("the raw id reached the message:\n%s", body)
 	}
-	if strings.Contains(plainText("en", msg), id) {
-		t.Errorf("the raw id reached the message:\n%s", plainText("en", msg))
+	if !strings.Contains(body, "app.example.com") {
+		t.Errorf("the message does not name the host:\n%s", body)
+	}
+	// The domain arrives once. It is the host, and repeating it as the subject
+	// would print the same value on two lines.
+	if strings.Count(body, "app.example.com") != 1 {
+		t.Errorf("the host is repeated:\n%s", body)
 	}
 	// The state still keys on the id — that is what makes it survive a rename.
 	if got, _ := fake.GetState(ctx, "cert.renewal_failed", id); got != "failing" {

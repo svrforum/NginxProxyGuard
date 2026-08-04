@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -131,20 +132,25 @@ func (s *NotificationDigestService) Build(ctx context.Context, now time.Time) (*
 }
 
 // Text renders the digest as plain text every channel can carry.
+//
+// The shape is deliberately uniform: an icon-led heading, then indented lines
+// under it. A daily summary is skimmed on a phone, and a wall of unindented
+// "label: value" pairs gives the eye nothing to land on.
 func (d *Digest) Text(lang, dashboardURL string) string {
 	var b strings.Builder
-	b.WriteString(tr(lang, "digest.title") + "\n")
+	b.WriteString("📊 " + tr(lang, "digest.title") + "\n")
 
 	// The dashboard's headline counters, so the summary answers "is everything
 	// still standing" without opening a browser.
 	if o := d.Overview; o != nil {
-		fmt.Fprintf(&b, "\n%s: %d", tr(lang, "digest.requests"), o.RequestsTotal)
-		fmt.Fprintf(&b, "\n%s: %d / %d", tr(lang, "digest.hosts"), o.ProxyHostsEnabled, o.ProxyHostsTotal)
+		b.WriteString("\n📋 " + tr(lang, "digest.overview"))
+		fmt.Fprintf(&b, "\n  %s: %s", tr(lang, "digest.requests"), formatCount(o.RequestsTotal))
+		fmt.Fprintf(&b, "\n  %s: %d / %d", tr(lang, "digest.hosts"), o.ProxyHostsEnabled, o.ProxyHostsTotal)
 		if o.RedirectsEnabled > 0 {
-			fmt.Fprintf(&b, "\n%s: %d", tr(lang, "digest.redirects"), o.RedirectsEnabled)
+			fmt.Fprintf(&b, "\n  %s: %d", tr(lang, "digest.redirects"), o.RedirectsEnabled)
 		}
-		fmt.Fprintf(&b, "\n%s: %d", tr(lang, "digest.certificates"), o.CertificatesTotal)
-		fmt.Fprintf(&b, "\n%s: %d", tr(lang, "digest.bannedActive"), o.BannedIPsActive)
+		fmt.Fprintf(&b, "\n  %s: %d", tr(lang, "digest.certificates"), o.CertificatesTotal)
+		fmt.Fprintf(&b, "\n  %s: %d", tr(lang, "digest.bannedActive"), o.BannedIPsActive)
 		b.WriteString("\n")
 	}
 
@@ -153,56 +159,57 @@ func (d *Digest) Text(lang, dashboardURL string) string {
 	// home server: logs grow until the disk is full, and by then nginx cannot
 	// write and Postgres cannot commit.
 	if r := d.Resources; r != nil && (!r.RecordedAt.IsZero() || r.DatabaseBytes > 0) {
+		b.WriteString("\n🖥 " + tr(lang, "digest.resources"))
 		if !r.RecordedAt.IsZero() {
-			fmt.Fprintf(&b, "\n%s: %.0f%%", tr(lang, "digest.cpu"), r.CPUUsage)
+			fmt.Fprintf(&b, "\n  %s: %.0f%%", tr(lang, "digest.cpu"), r.CPUUsage)
 			if r.MemoryTotal > 0 {
-				fmt.Fprintf(&b, "\n%s: %s / %s (%.0f%%)", tr(lang, "digest.memory"),
+				fmt.Fprintf(&b, "\n  %s: %s / %s (%.0f%%)", tr(lang, "digest.memory"),
 					formatBytes(r.MemoryUsed), formatBytes(r.MemoryTotal), r.MemoryUsage)
 			}
 			if r.DiskTotal > 0 {
-				fmt.Fprintf(&b, "\n%s: %s / %s (%.0f%%)", tr(lang, "digest.disk"),
+				fmt.Fprintf(&b, "\n  %s: %s / %s (%.0f%%)", tr(lang, "digest.disk"),
 					formatBytes(r.DiskUsed), formatBytes(r.DiskTotal), r.DiskUsage)
 			}
 		}
 		if r.DatabaseBytes > 0 {
-			fmt.Fprintf(&b, "\n%s: %s", tr(lang, "digest.database"), formatBytes(r.DatabaseBytes))
+			fmt.Fprintf(&b, "\n  %s: %s", tr(lang, "digest.database"), formatBytes(r.DatabaseBytes))
 		}
 		if !r.RecordedAt.IsZero() && r.UptimeSeconds > 0 {
-			fmt.Fprintf(&b, "\n%s: %s", tr(lang, "digest.uptime"), formatUptime(lang, r.UptimeSeconds))
+			fmt.Fprintf(&b, "\n  %s: %s", tr(lang, "digest.uptime"), formatUptime(lang, r.UptimeSeconds))
 		}
 		b.WriteString("\n")
 	}
 
 	if d.BlockedTotal == 0 {
-		b.WriteString("\n" + tr(lang, "digest.quiet"))
+		b.WriteString("\n✅ " + tr(lang, "digest.quiet"))
 	} else {
-		fmt.Fprintf(&b, "\n%s: %d", tr(lang, "digest.blocked"), d.BlockedTotal)
+		fmt.Fprintf(&b, "\n🛡 %s: %s", tr(lang, "digest.blocked"), formatCount(d.BlockedTotal))
 		reasons := make([]string, 0, len(d.ByReason))
 		for r := range d.ByReason {
 			reasons = append(reasons, r)
 		}
 		sort.Slice(reasons, func(i, j int) bool { return d.ByReason[reasons[i]] > d.ByReason[reasons[j]] })
 		for _, r := range reasons {
-			fmt.Fprintf(&b, "\n  %s: %d", r, d.ByReason[r])
+			fmt.Fprintf(&b, "\n  %s: %s", r, formatCount(d.ByReason[r]))
 		}
 	}
 
 	if len(d.TopBlockedIPs) > 0 {
-		b.WriteString("\n\n" + tr(lang, "digest.topIPs") + ":")
+		b.WriteString("\n\n🚫 " + tr(lang, "digest.topIPs"))
 		for _, ip := range d.TopBlockedIPs {
-			fmt.Fprintf(&b, "\n  %s — %d", ip.IP, ip.Count)
+			fmt.Fprintf(&b, "\n  %s — %s", ip.IP, formatCount(ip.Count))
 		}
 	}
 
 	if len(d.ExpiringCerts) > 0 {
-		b.WriteString("\n\n" + tr(lang, "digest.certs") + ":")
+		b.WriteString("\n\n📜 " + tr(lang, "digest.certs"))
 		for _, c := range d.ExpiringCerts {
 			fmt.Fprintf(&b, "\n  %s", c)
 		}
 	}
 
 	if len(d.Outstanding) > 0 {
-		b.WriteString("\n\n" + tr(lang, "digest.failing") + ":")
+		b.WriteString("\n\n⚠️ " + tr(lang, "digest.failing"))
 		for _, f := range d.Outstanding {
 			// Label over Subject: the subject is a UUID, and a summary that
 			// names the broken thing by its database id tells the reader
@@ -219,9 +226,30 @@ func (d *Digest) Text(lang, dashboardURL string) string {
 	// without hunting for the address. Omitted entirely when unset rather than
 	// printing a dangling label.
 	if dashboardURL != "" {
-		fmt.Fprintf(&b, "\n\n%s: %s", tr(lang, "digest.openDashboard"), strings.TrimRight(dashboardURL, "/"))
+		fmt.Fprintf(&b, "\n\n🔗 %s: %s", tr(lang, "digest.openDashboard"), strings.TrimRight(dashboardURL, "/"))
 	}
 	return b.String()
+}
+
+// formatCount groups thousands. 4556 and 4,556 carry the same information, but
+// only one of them can be read at a glance on a phone.
+func formatCount(n int64) string {
+	s := strconv.FormatInt(n, 10)
+	sign := ""
+	if strings.HasPrefix(s, "-") {
+		sign, s = "-", s[1:]
+	}
+	if len(s) <= 3 {
+		return sign + s
+	}
+	var b strings.Builder
+	for i, r := range s {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			b.WriteByte(',')
+		}
+		b.WriteRune(r)
+	}
+	return sign + b.String()
 }
 
 // Byte counts reuse formatBytes from docker_stats.go — the same formatting the
