@@ -20,6 +20,19 @@ interface ModalShellProps {
   ariaLabel?: string;
   /** id of the visible heading element that labels the dialog. */
   labelledById?: string;
+  /**
+   * Scroll the BODY instead of the whole panel, so a header and footer supplied
+   * by the caller stay pinned. Use for long forms: with panel scrolling, a form
+   * two or three screens tall pushes its own title off the top and buries Save
+   * at the very bottom, so saving a one-field edit means scrolling past
+   * everything else first.
+   *
+   * The caller then owns the three regions — `shrink-0` header, `min-h-0
+   * flex-1 overflow-y-auto` body, `shrink-0` footer — because only the caller
+   * knows which of its children is which. Default false keeps every existing
+   * modal exactly as it was.
+   */
+  bodyScroll?: boolean;
 }
 
 const LEAVE_MS = 200;
@@ -41,6 +54,7 @@ export function ModalShell({
   closeOnBackdrop = true,
   ariaLabel,
   labelledById,
+  bodyScroll = false,
 }: ModalShellProps) {
   // `mounted` keeps the node in the DOM during the leave animation;
   // `visible` toggles the enter/leave transition classes one frame later.
@@ -75,7 +89,9 @@ export function ModalShell({
     >
       <div
         onMouseDown={(e) => e.stopPropagation()}
-        className={`m-4 w-full ${panelClassName} max-h-[90vh] overflow-y-auto rounded-lg border bg-white shadow-xl transition-[transform,opacity] duration-200 will-change-transform dark:border-slate-700 dark:bg-slate-800 motion-reduce:transition-none motion-reduce:transform-none ${
+        className={`m-4 w-full ${panelClassName} max-h-[90vh] ${
+          bodyScroll ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'
+        } rounded-lg border bg-white shadow-xl transition-[transform,opacity] duration-200 will-change-transform dark:border-slate-700 dark:bg-slate-800 motion-reduce:transition-none motion-reduce:transform-none ${
           visible ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
         }`}
       >

@@ -295,19 +295,24 @@ export function NotificationChannelManager() {
         closeOnBackdrop={false}
         panelClassName="max-w-2xl"
         labelledById="notification-form-title"
+        bodyScroll
       >
-        <div className="p-6">
+        {/* The form runs two to three screens tall, so its title and its Save
+            button stay pinned and only the middle scrolls. */}
+        <div className="shrink-0 border-b border-slate-200 px-6 py-4 dark:border-slate-700">
           <h3 id="notification-form-title" className="text-lg font-semibold text-slate-900 dark:text-white">
             {editing ? tr('notifications.editTitle') : tr('notifications.addTitle')}
           </h3>
+        </div>
 
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
           {formError && (
-            <p data-testid="notification-form-error" className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">
+            <p data-testid="notification-form-error" className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">
               {formError}
             </p>
           )}
 
-          <div className="mt-4 space-y-4">
+          <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label={tr('notifications.fields.name')}>
                 <input aria-label="notify-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputCls} />
@@ -596,32 +601,36 @@ export function NotificationChannelManager() {
               </p>
             </div>
           </div>
+        </div>
 
-          <div className="mt-6 flex justify-end gap-2">
-            <button type="button" onClick={close} className="rounded-lg px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700">
-              {tr('common:buttons.cancel')}
+        <div className="flex shrink-0 justify-end gap-2 border-t border-slate-200 px-6 py-4 dark:border-slate-700">
+          <button type="button" onClick={close} className="rounded-lg px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700">
+            {tr('common:buttons.cancel')}
+          </button>
+          {canWrite && (
+            <button
+              type="button"
+              onClick={() => { setFormError(''); save.mutate(form) }}
+              disabled={save.isPending}
+              className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+            >
+              {tr('common:buttons.save')}
             </button>
-            {canWrite && (
-              <button
-                type="button"
-                onClick={() => { setFormError(''); save.mutate(form) }}
-                disabled={save.isPending}
-                className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
-              >
-                {tr('common:buttons.save')}
-              </button>
-            )}
-          </div>
+          )}
         </div>
       </ModalShell>
 
       {/* ── delivery history ─────────────────────────────────────── */}
-      <ModalShell isOpen={logFor !== null} onClose={() => setLogFor(null)} panelClassName="max-w-2xl" labelledById="notification-log-title">
-        <div className="p-6">
+      <ModalShell isOpen={logFor !== null} onClose={() => setLogFor(null)} panelClassName="max-w-2xl" labelledById="notification-log-title" bodyScroll>
+        {/* The history is as long as the channel is old, so the same pinned
+            frame applies: which channel this is stays on screen while reading. */}
+        <div className="shrink-0 border-b border-slate-200 px-6 py-4 dark:border-slate-700">
           <h3 id="notification-log-title" className="text-lg font-semibold text-slate-900 dark:text-white">
             {tr('notifications.historyTitle', { name: logFor?.name ?? '' })}
           </h3>
-          <div className="mt-4 space-y-2">
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+          <div className="space-y-2">
             {(deliveries?.data ?? []).length === 0 ? (
               <p className="text-sm text-slate-500 dark:text-slate-400">{tr('notifications.noHistory')}</p>
             ) : (
@@ -648,11 +657,11 @@ export function NotificationChannelManager() {
               ))
             )}
           </div>
-          <div className="mt-6 flex justify-end">
-            <button type="button" onClick={() => setLogFor(null)} className="rounded-lg px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700">
-              {tr('common:buttons.close')}
-            </button>
-          </div>
+        </div>
+        <div className="flex shrink-0 justify-end border-t border-slate-200 px-6 py-4 dark:border-slate-700">
+          <button type="button" onClick={() => setLogFor(null)} className="rounded-lg px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700">
+            {tr('common:buttons.close')}
+          </button>
         </div>
       </ModalShell>
 
