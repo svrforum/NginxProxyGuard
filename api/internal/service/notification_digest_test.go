@@ -7,9 +7,11 @@ import (
 	"time"
 
 	"nginx-proxy-guard/internal/model"
+	"nginx-proxy-guard/internal/repository"
 )
 
 type fakeDigestSource struct {
+	overview *repository.DigestOverview
 	ips      []model.IPStat
 	byReason map[string]int64
 	total    int64
@@ -22,6 +24,10 @@ func (f *fakeDigestSource) GetBlockBreakdown(context.Context, time.Time) (map[st
 	return f.byReason, f.total, nil
 }
 
+func (f *fakeDigestSource) GetDigestOverview(context.Context, time.Time) (*repository.DigestOverview, error) {
+	return f.overview, nil
+}
+
 func TestDigestRendersCounts(t *testing.T) {
 	s := &NotificationDigestService{dash: &fakeDigestSource{
 		total:    142,
@@ -32,7 +38,7 @@ func TestDigestRendersCounts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	text := d.Text("en")
+	text := d.Text("en", "")
 	if !strings.Contains(text, "Blocked requests: 142") {
 		t.Fatalf("total missing:\n%s", text)
 	}
@@ -50,8 +56,8 @@ func TestDigestRendersCounts(t *testing.T) {
 func TestDigestSaysNothingHappened(t *testing.T) {
 	s := &NotificationDigestService{dash: &fakeDigestSource{byReason: map[string]int64{}}}
 	d, _ := s.Build(context.Background(), time.Now())
-	if !strings.Contains(d.Text("en"), "Nothing was blocked") {
-		t.Fatalf("a quiet day should say so:\n%s", d.Text("en"))
+	if !strings.Contains(d.Text("en", ""), "Nothing was blocked") {
+		t.Fatalf("a quiet day should say so:\n%s", d.Text("en", ""))
 	}
 }
 
@@ -65,14 +71,14 @@ func TestDigestKeepsOutstandingFailuresVisible(t *testing.T) {
 		}},
 	}
 	d, _ := s.Build(context.Background(), time.Now())
-	text := d.Text("en")
+	text := d.Text("en", "")
 	// The readable title, not the raw key — the digest is read by a person.
 	if !strings.Contains(text, "Still failing") || !strings.Contains(text, "certificate renewal failed") {
 		t.Fatalf("outstanding failure missing:\n%s", text)
 	}
 
 	// The same summary in Korean, because the channel decides the language.
-	ko := d.Text("ko")
+	ko := d.Text("ko", "")
 	if !strings.Contains(ko, "아직 복구되지 않음") || !strings.Contains(ko, "인증서 갱신 실패") {
 		t.Fatalf("Korean digest not localised:\n%s", ko)
 	}
@@ -110,10 +116,10 @@ func TestDigestCarriesNoVisitorData(t *testing.T) {
 		ips: []model.IPStat{{IP: "192.0.2.5", Count: 5}},
 	}}
 	d, _ := s.Build(context.Background(), time.Now())
-	text := strings.ToLower(d.Text("en"))
+	text := strings.ToLower(d.Text("en", ""))
 	for _, banned := range []string{"user-agent", "user_agent", "mozilla", "raw_log", "request_uri", "cookie", "authorization"} {
 		if strings.Contains(text, banned) {
-			t.Errorf("digest leaked %q:\n%s", banned, d.Text("en"))
+			t.Errorf("digest leaked %q:\n%s", banned, d.Text("en", ""))
 		}
 	}
 }
@@ -122,4 +128,35 @@ type fakeFailures struct{ out []model.NotificationState }
 
 func (f *fakeFailures) OutstandingFailures(context.Context) ([]model.NotificationState, error) {
 	return f.out, nil
+}
+
+// A missing translation used to leak the lookup key straight into a message —
+// the dashboard link arrived as "digest.openDashboard: https://…". Every key the
+// digest and the formatter use must resolve in both languages.
+func TestNoTranslationKeyLeaksIntoMessages(t *testing.T) {
+	keys := []string{
+		"digest.title", "digest.quiet", "digest.blocked", "digest.topIPs",
+		"digest.certs", "digest.failing", "digest.since", "digest.openDashboard",
+		"digest.requests", "digest.hosts", "digest.redirects", "digest.certificates",
+		"digest.bannedActive",
+		"severity.error", "severity.warning", "severity.info", "severity.resolved",
+		"footer.signature",
+	}
+	for _, lang := range []string{"en", "ko"} {
+		for _, k := range keys {
+			if got := tr(lang, k); got == k {
+				t.Errorf("%s/%s is untranslated and would print the key", lang, k)
+			}
+		}
+	}
+	// And the rendered digest must contain no dotted lookup keys at all.
+	d := &Digest{ByReason: map[string]int64{}}
+	for _, lang := range []string{"en", "ko"} {
+		text := d.Text(lang, "https://npg.example.com")
+		for _, k := range keys {
+			if strings.Contains(text, k) {
+				t.Errorf("%s digest leaked the key %q:\n%s", lang, k, text)
+			}
+		}
+	}
 }

@@ -141,10 +141,7 @@ func (a *webhookAdapter) Send(ctx context.Context, ch *model.NotificationChannel
 
 	// The envelope is already structured, so a receiver keys off fields rather
 	// than parsing prose; text is the human line it can also display.
-	text := msg.Text
-	if !usesTemplate(ch) {
-		text = plainText(ch.Language, msg)
-	}
+	text := bodyFor(ch.Language, ch, msg)
 	body, err := json.Marshal(webhookEnvelope{
 		Event: msg.Event, At: msg.At, Instance: "npg",
 		Severity: msg.Severity, Text: text, Fields: msg.Fields,

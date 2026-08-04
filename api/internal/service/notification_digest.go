@@ -30,6 +30,7 @@ const (
 type digestSource interface {
 	GetTopBlockedIPs(ctx context.Context, since time.Time, limit int) ([]model.IPStat, error)
 	GetBlockBreakdown(ctx context.Context, since time.Time) (map[string]int64, int64, error)
+	GetDigestOverview(ctx context.Context, since time.Time) (*repository.DigestOverview, error)
 }
 
 type certExpirySource interface {
@@ -56,6 +57,7 @@ func NewNotificationDigestService(dash digestSource, certs certExpirySource, rep
 // Digest is the assembled summary.
 type Digest struct {
 	Since         time.Time
+	Overview      *repository.DigestOverview
 	BlockedTotal  int64
 	ByReason      map[string]int64
 	TopBlockedIPs []model.IPStat
@@ -69,6 +71,10 @@ func (s *NotificationDigestService) Build(ctx context.Context, now time.Time) (*
 	d := &Digest{Since: since, ByReason: map[string]int64{}}
 
 	if s.dash != nil {
+		if ov, err := s.dash.GetDigestOverview(ctx, since); err == nil {
+			d.Overview = ov
+		}
+
 		byReason, total, err := s.dash.GetBlockBreakdown(ctx, since)
 		if err != nil {
 			return nil, err
@@ -108,9 +114,22 @@ func (s *NotificationDigestService) Build(ctx context.Context, now time.Time) (*
 }
 
 // Text renders the digest as plain text every channel can carry.
-func (d *Digest) Text(lang string) string {
+func (d *Digest) Text(lang, dashboardURL string) string {
 	var b strings.Builder
 	b.WriteString(tr(lang, "digest.title") + "\n")
+
+	// The dashboard's headline counters, so the summary answers "is everything
+	// still standing" without opening a browser.
+	if o := d.Overview; o != nil {
+		fmt.Fprintf(&b, "\n%s: %d", tr(lang, "digest.requests"), o.RequestsTotal)
+		fmt.Fprintf(&b, "\n%s: %d / %d", tr(lang, "digest.hosts"), o.ProxyHostsEnabled, o.ProxyHostsTotal)
+		if o.RedirectsEnabled > 0 {
+			fmt.Fprintf(&b, "\n%s: %d", tr(lang, "digest.redirects"), o.RedirectsEnabled)
+		}
+		fmt.Fprintf(&b, "\n%s: %d", tr(lang, "digest.certificates"), o.CertificatesTotal)
+		fmt.Fprintf(&b, "\n%s: %d", tr(lang, "digest.bannedActive"), o.BannedIPsActive)
+		b.WriteString("\n")
+	}
 
 	if d.BlockedTotal == 0 {
 		b.WriteString("\n" + tr(lang, "digest.quiet"))
@@ -146,7 +165,36 @@ func (d *Digest) Text(lang string) string {
 			fmt.Fprintf(&b, "\n  %s — %s (%s %s)", eventTitle(lang, f.EventKey), f.Subject, tr(lang, "digest.since"), f.Since.Format("2006-01-02 15:04"))
 		}
 	}
+
+	// The numbers answer "what happened"; the link is how you get to the graphs
+	// without hunting for the address. Omitted entirely when unset rather than
+	// printing a dangling label.
+	if dashboardURL != "" {
+		fmt.Fprintf(&b, "\n\n%s: %s", tr(lang, "digest.openDashboard"), strings.TrimRight(dashboardURL, "/"))
+	}
 	return b.String()
+}
+
+// BuildPreview renders the digest a channel would receive right now, from real
+// data. It backs the preview button: waiting until the configured hour to find
+// out whether the summary is useful is not a workable feedback loop.
+func (s *NotificationDigestService) BuildPreview(ctx context.Context, ch *model.NotificationChannel, now time.Time) (model.RenderedMessage, error) {
+	digest, err := s.Build(ctx, now)
+	if err != nil {
+		return model.RenderedMessage{}, err
+	}
+	return model.RenderedMessage{
+		Event:        "digest.daily",
+		Severity:     "info",
+		Preformatted: true,
+		Text:         digest.Text(ch.Language, ch.DashboardURL),
+		Fields: map[string]string{
+			"event": "digest.daily",
+			"time":  now.Format(time.RFC3339),
+			"count": fmt.Sprintf("%d", digest.BlockedTotal),
+		},
+		At: now,
+	}, nil
 }
 
 // SendDue queues a digest for every channel whose hour has come and which has
@@ -171,11 +219,14 @@ func (s *NotificationDigestService) SendDue(ctx context.Context, now time.Time) 
 	for _, ch := range channels {
 		// Rendered per channel, not once: two channels can legitimately want
 		// the same summary in different languages.
-		text := digest.Text(ch.Language)
+		text := digest.Text(ch.Language, ch.DashboardURL)
 		msg := model.RenderedMessage{
 			Event:    "digest.daily",
 			Severity: "info",
-			Text:     text,
+			// The digest composes its whole body; the formatter must pass it
+			// through rather than rebuild it from headline and fields.
+			Preformatted: true,
+			Text:         text,
 			Fields: map[string]string{
 				"event": "digest.daily",
 				"time":  now.Format(time.RFC3339),

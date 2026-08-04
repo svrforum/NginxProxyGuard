@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"strings"
 	"sync"
@@ -291,6 +292,43 @@ func (r *DashboardRepository) getTopIPs(ctx context.Context, since time.Time) []
 		stats = append(stats, s)
 	}
 	return stats
+}
+
+// DigestOverview is the "how does the install look right now" block of the
+// daily summary — the same counters the dashboard leads with, so the message
+// answers "is everything still up" without opening a browser. (#221)
+type DigestOverview struct {
+	ProxyHostsTotal   int
+	ProxyHostsEnabled int
+	RedirectsEnabled  int
+	CertificatesTotal int
+	BannedIPsActive   int
+	RequestsTotal     int64
+}
+
+// GetDigestOverview reads the current shape of the install plus the request
+// volume over the window. The counts are over small config tables; only the
+// request total touches the log hypertable, and it is bounded to the window.
+func (r *DashboardRepository) GetDigestOverview(ctx context.Context, since time.Time) (*DigestOverview, error) {
+	var o DigestOverview
+	if err := r.db.QueryRowContext(ctx, `
+		SELECT (SELECT count(*) FROM proxy_hosts),
+		       (SELECT count(*) FROM proxy_hosts WHERE enabled),
+		       (SELECT count(*) FROM redirect_hosts WHERE enabled),
+		       (SELECT count(*) FROM certificates),
+		       (SELECT count(*) FROM banned_ips WHERE expires_at IS NULL OR expires_at > now())
+	`).Scan(&o.ProxyHostsTotal, &o.ProxyHostsEnabled, &o.RedirectsEnabled,
+		&o.CertificatesTotal, &o.BannedIPsActive); err != nil {
+		return nil, fmt.Errorf("failed to read digest overview: %w", err)
+	}
+	// Separate query: this one hits logs_partitioned and must carry the canary
+	// exclusion, while the counts above do not touch it at all.
+	if err := r.db.QueryRowContext(ctx, `
+		SELECT count(*) FROM logs_partitioned
+		WHERE created_at >= $1 AND log_type = 'access' AND `+canaryURIExclusion, since).Scan(&o.RequestsTotal); err != nil {
+		return nil, fmt.Errorf("failed to count requests: %w", err)
+	}
+	return &o, nil
 }
 
 // GetTopBlockedIPs returns the addresses that were REFUSED, with counts, for

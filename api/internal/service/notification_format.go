@@ -57,9 +57,11 @@ func orderedFields(fields map[string]string) []string {
 
 // headline is the one-line summary every format leads with.
 func headline(lang string, msg model.RenderedMessage) string {
-	sev := "info"
-	if msg.Severity == "error" || msg.Severity == "warning" {
-		sev = msg.Severity
+	sev := msg.Severity
+	switch sev {
+	case "error", "warning", "resolved":
+	default:
+		sev = "info"
 	}
 	return tr(lang, "severity."+sev) + " — " + eventTitle(lang, msg.Event)
 }
@@ -169,6 +171,16 @@ func plainText(lang string, msg model.RenderedMessage) string {
 // usesTemplate reports whether the operator has taken over formatting.
 func usesTemplate(ch *model.NotificationChannel) bool {
 	return strings.TrimSpace(ch.Template) != ""
+}
+
+// bodyFor returns the text a channel should send: the sender's own body when it
+// composed one, the operator's template when they wrote one, and otherwise the
+// derived headline-and-fields form.
+func bodyFor(lang string, ch *model.NotificationChannel, msg model.RenderedMessage) string {
+	if usesTemplate(ch) || msg.Preformatted {
+		return msg.Text
+	}
+	return plainText(lang, msg)
 }
 
 // SampleMessage builds a realistic example of one event, so the operator can

@@ -1627,7 +1627,9 @@
         "webhook": "The JSON body is always structured; this only affects the human-readable text line."
       },
       "language": "Message language",
-      "languageHint": "The language of alerts sent to this channel, chosen per channel and independent of the panel's own language."
+      "languageHint": "The language of alerts sent to this channel, chosen per channel and independent of the panel's own language.",
+      "dashboardUrl": "Dashboard address",
+      "dashboardUrlHint": "Appended to the daily summary as a link. Use the address the people reading this channel actually reach the panel on. Empty means no link."
     },
     "guides": {
       "webhook": {
@@ -1709,6 +1711,7 @@
       "info": "Info"
     },
     "testShort": "Preview",
-    "testThisEvent": "Send this exact alert now so you can see how it looks"
+    "testThisEvent": "Send this exact alert now so you can see how it looks",
+    "previewDigest": "Preview the summary (send now)"
   }
 }

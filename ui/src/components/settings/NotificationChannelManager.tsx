@@ -31,6 +31,9 @@ const emptyForm = (): NotificationChannelRequest => ({
   // Defaults to the language the operator is configuring in: somebody
   // working in Korean does not expect English alerts.
   language: (localStorage.getItem('npg_language') === 'ko' ? 'ko' : 'en'),
+  // Prefilled with the address the operator is looking at, which is almost
+  // always the one they want in the message.
+  dashboard_url: window.location.origin,
   digest_enabled: false,
   digest_hour: 9,
   allow_private_target: false,
@@ -46,6 +49,7 @@ const toForm = (c: NotificationChannel): NotificationChannelRequest => ({
   digest_events: [...(c.digest_events ?? [])],
   rich_format: c.rich_format,
   language: c.language || 'en',
+  dashboard_url: c.dashboard_url ?? '',
   digest_enabled: c.digest_enabled,
   digest_hour: c.digest_hour,
   allow_private_target: c.allow_private_target,
@@ -525,6 +529,27 @@ export function NotificationChannelManager() {
                 />
               </Field>
             </div>
+
+            <Field label={tr('notifications.fields.dashboardUrl')} hint={tr('notifications.fields.dashboardUrlHint')}>
+              <input
+                aria-label="notify-dashboard-url"
+                value={form.dashboard_url}
+                onChange={(e) => setForm({ ...form, dashboard_url: e.target.value })}
+                className={inputCls}
+                placeholder="https://npg.example.com"
+              />
+            </Field>
+
+            {editing && (
+              <button
+                type="button"
+                aria-label="notify-preview-digest"
+                onClick={() => { setTestResult(null); test.mutate({ id: editing.id, event: 'digest.daily' }) }}
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+              >
+                {tr('notifications.previewDigest')}
+              </button>
+            )}
 
             <Field label={tr('notifications.fields.language')} hint={tr('notifications.fields.languageHint')}>
               <select

@@ -89,7 +89,11 @@ type NotificationChannel struct {
 	RichFormat   bool              `json:"rich_format"`
 	// Language the messages are written in. The person who configured this
 	// channel is the person who reads it, so English is not a safe default.
-	Language           string     `json:"language"`
+	Language string `json:"language"`
+	// DashboardURL is appended to the daily summary so the numbers lead
+	// somewhere. Per channel, not global: an internal channel and an external
+	// one legitimately reach the panel at different addresses.
+	DashboardURL       string     `json:"dashboard_url"`
 	DigestEnabled      bool       `json:"digest_enabled"`
 	DigestHour         int        `json:"digest_hour"`
 	AllowPrivateTarget bool       `json:"allow_private_target"`
@@ -111,6 +115,7 @@ type CreateNotificationChannelRequest struct {
 	DigestEvents       []string          `json:"digest_events"`
 	RichFormat         bool              `json:"rich_format"`
 	Language           string            `json:"language"`
+	DashboardURL       string            `json:"dashboard_url"`
 	DigestEnabled      bool              `json:"digest_enabled"`
 	DigestHour         int               `json:"digest_hour"`
 	AllowPrivateTarget bool              `json:"allow_private_target"`
@@ -207,6 +212,13 @@ func (r *CreateNotificationChannelRequest) Validate(isCreate bool) error {
 	if len(r.Events) == 0 && !r.DigestEnabled {
 		return fmt.Errorf("invalid events: pick at least one event, or turn on the daily summary")
 	}
+	// The link is shown to a human, never fetched by NPG, so it needs no SSRF
+	// check — but a malformed one in a message is just noise.
+	r.DashboardURL = strings.TrimSpace(r.DashboardURL)
+	if r.DashboardURL != "" && !strings.HasPrefix(r.DashboardURL, "http://") && !strings.HasPrefix(r.DashboardURL, "https://") {
+		return fmt.Errorf("invalid dashboard_url: must start with http:// or https://")
+	}
+
 	switch strings.ToLower(strings.TrimSpace(r.Language)) {
 	case "", "en":
 		r.Language = "en"
@@ -223,11 +235,15 @@ func (r *CreateNotificationChannelRequest) Validate(isCreate bool) error {
 
 // RenderedMessage is what an adapter turns into one HTTP request.
 type RenderedMessage struct {
-	Event    string            `json:"event"`
-	Severity string            `json:"severity"`
-	Text     string            `json:"text"`
-	Fields   map[string]string `json:"fields"`
-	At       time.Time         `json:"at"`
+	Event string `json:"event"`
+	// Preformatted marks a body the sender composed in full — the daily digest
+	// is a multi-section report, not a headline plus fields, and rebuilding it
+	// from those parts throws the report away.
+	Preformatted bool              `json:"preformatted,omitempty"`
+	Severity     string            `json:"severity"`
+	Text         string            `json:"text"`
+	Fields       map[string]string `json:"fields"`
+	At           time.Time         `json:"at"`
 }
 
 var placeholderPattern = regexp.MustCompile(`\{\{\s*([a-zA-Z0-9_]+)\s*\}\}`)

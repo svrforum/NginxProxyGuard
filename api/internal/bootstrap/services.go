@@ -204,6 +204,7 @@ func InitServices(
 	svcs.CloudflareTunnel = service.NewCloudflareTunnelService(repos.CloudflareTunnel, nginxManager)
 
 	svcs.NotifyDigest = service.NewNotificationDigestService(repos.Dashboard, svcs.Certificate, repos.Notification)
+	svcs.NotifyDispatcher.SetDigestService(svcs.NotifyDigest)
 
 	return svcs
 }

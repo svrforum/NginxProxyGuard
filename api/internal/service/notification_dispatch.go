@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"log"
+	"time"
 
 	"nginx-proxy-guard/internal/model"
 	"nginx-proxy-guard/internal/repository"
@@ -12,8 +13,11 @@ import (
 // outbound HTTP for notifications, which is what makes the retry budget and the
 // per-channel health bookkeeping enforceable in one spot. (#221)
 type NotificationDispatcher struct {
-	repo     *repository.NotificationRepository
-	notify   *NotificationService
+	repo   *repository.NotificationRepository
+	notify *NotificationService
+	// digest is optional and set after construction: the digest service needs
+	// the certificate service, which is built later in the graph.
+	digest   *NotificationDigestService
 	adapters map[string]channelAdapter
 	// batchSize bounds one pass so a large backlog cannot hold the tick open.
 	batchSize int
@@ -135,7 +139,18 @@ func (d *NotificationDispatcher) SendTest(ctx context.Context, ch *model.Notific
 		return &UnsupportedChannelError{Type: ch.Type}
 	}
 
-	msg := SampleMessage(ch.Language, eventKey)
+	// A digest preview is built from REAL data — a fabricated one would not
+	// answer "is my summary useful", which is the only reason to preview it.
+	var msg model.RenderedMessage
+	if eventKey == "digest.daily" && d.digest != nil {
+		built, err := d.digest.BuildPreview(ctx, ch, time.Now())
+		if err != nil {
+			return err
+		}
+		msg = built
+	} else {
+		msg = SampleMessage(ch.Language, eventKey)
+	}
 	if ch.Template != "" {
 		msg.Text = model.Render(ch.Template, msg.Fields)
 	}
@@ -158,6 +173,9 @@ func (d *NotificationDispatcher) SendTest(ctx context.Context, ch *model.Notific
 	_ = d.repo.RecordAttempt(ctx, ch.ID, msg.Event, msg, "failed", reason)
 	return sendErr
 }
+
+// SetDigestService wires the digest after construction. (#221)
+func (d *NotificationDispatcher) SetDigestService(s *NotificationDigestService) { d.digest = s }
 
 // UnsupportedChannelError is returned for a channel type this build cannot send.
 type UnsupportedChannelError struct{ Type string }

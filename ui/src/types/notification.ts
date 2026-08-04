@@ -23,6 +23,8 @@ export interface NotificationChannel {
   rich_format: boolean
   /** Language the messages are written in — 'ko' or 'en'. */
   language: string
+  /** Shown as a link at the end of the daily summary. */
+  dashboard_url: string
   digest_enabled: boolean
   digest_hour: number
   allow_private_target: boolean
@@ -44,6 +46,7 @@ export interface NotificationChannelRequest {
   digest_events: string[]
   rich_format: boolean
   language: string
+  dashboard_url: string
   digest_enabled: boolean
   digest_hour: number
   allow_private_target: boolean

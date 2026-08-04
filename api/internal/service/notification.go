@@ -116,7 +116,7 @@ func (s *NotificationService) EmitTransition(ctx context.Context, eventKey, subj
 	severity := "error"
 	if !failing {
 		key = recoveryKeyFor(eventKey)
-		severity = "info"
+		severity = "resolved"
 	}
 
 	payload := s.buildPayload(key, severity, subject, detail, fields)

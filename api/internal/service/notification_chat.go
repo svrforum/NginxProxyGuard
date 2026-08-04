@@ -57,14 +57,10 @@ func (a *discordAdapter) Send(ctx context.Context, ch *model.NotificationChannel
 	// channel gets an embed with a severity-coloured bar, which is the whole
 	// reason to treat Discord as Discord rather than as a pipe.
 	var payload any
-	if ch.RichFormat && !usesTemplate(ch) {
+	if ch.RichFormat && !usesTemplate(ch) && !msg.Preformatted {
 		payload = map[string]any{"embeds": []any{discordEmbed(ch.Language, msg)}}
 	} else {
-		text := msg.Text
-		if !usesTemplate(ch) {
-			text = plainText(ch.Language, msg)
-		}
-		payload = map[string]string{"content": truncateRunes(text, discordContentLimit)}
+		payload = map[string]string{"content": truncateRunes(bodyFor(ch.Language, ch, msg), discordContentLimit)}
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -153,14 +149,10 @@ func (a *telegramAdapter) Send(ctx context.Context, ch *model.NotificationChanne
 	// Escape first, then truncate: escaping adds backslashes and could push an
 	// otherwise-legal message past the limit.
 	var text string
-	if ch.RichFormat && !usesTemplate(ch) {
+	if ch.RichFormat && !usesTemplate(ch) && !msg.Preformatted {
 		text = telegramMarkdown(ch.Language, msg)
 	} else {
-		body := msg.Text
-		if !usesTemplate(ch) {
-			body = plainText(ch.Language, msg)
-		}
-		text = escapeMarkdownV2(body)
+		text = escapeMarkdownV2(bodyFor(ch.Language, ch, msg))
 	}
 	text = truncateRunes(text, telegramTextLimit)
 	body, err := json.Marshal(map[string]any{
