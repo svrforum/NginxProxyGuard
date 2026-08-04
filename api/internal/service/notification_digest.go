@@ -25,12 +25,18 @@ const (
 	digestWindow      = 24 * time.Hour
 	digestTopIPs      = 5
 	certExpiryHorizon = 30 * 24 * time.Hour
+	// resourceSampleMaxAge bounds how old a system_health row may be before the
+	// digest stops quoting it. The collector writes every 30s, so anything this
+	// stale means it is not running — and yesterday's CPU figure printed as if
+	// it were current is worse than no figure at all.
+	resourceSampleMaxAge = 15 * time.Minute
 )
 
 type digestSource interface {
 	GetTopBlockedIPs(ctx context.Context, since time.Time, limit int) ([]model.IPStat, error)
 	GetBlockBreakdown(ctx context.Context, since time.Time) (map[string]int64, int64, error)
 	GetDigestOverview(ctx context.Context, since time.Time) (*repository.DigestOverview, error)
+	GetDigestResources(ctx context.Context) (*repository.DigestResources, error)
 }
 
 type certExpirySource interface {
@@ -58,6 +64,7 @@ func NewNotificationDigestService(dash digestSource, certs certExpirySource, rep
 type Digest struct {
 	Since         time.Time
 	Overview      *repository.DigestOverview
+	Resources     *repository.DigestResources
 	BlockedTotal  int64
 	ByReason      map[string]int64
 	TopBlockedIPs []model.IPStat
@@ -73,6 +80,16 @@ func (s *NotificationDigestService) Build(ctx context.Context, now time.Time) (*
 	if s.dash != nil {
 		if ov, err := s.dash.GetDigestOverview(ctx, since); err == nil {
 			d.Overview = ov
+		}
+
+		// Best-effort, like the overview above and unlike the breakdown below:
+		// a resource read that fails must cost the digest its resource lines,
+		// not cost every channel its whole summary for that hour.
+		if res, err := s.dash.GetDigestResources(ctx); err == nil && res != nil {
+			if !res.RecordedAt.IsZero() && now.Sub(res.RecordedAt) > resourceSampleMaxAge {
+				res.RecordedAt = time.Time{} // stale sample: keep storage, drop the host lines
+			}
+			d.Resources = res
 		}
 
 		byReason, total, err := s.dash.GetBlockBreakdown(ctx, since)
@@ -131,6 +148,31 @@ func (d *Digest) Text(lang, dashboardURL string) string {
 		b.WriteString("\n")
 	}
 
+	// What the machine itself is consuming. This sits with the headline
+	// counters rather than at the end because storage is what actually kills a
+	// home server: logs grow until the disk is full, and by then nginx cannot
+	// write and Postgres cannot commit.
+	if r := d.Resources; r != nil && (!r.RecordedAt.IsZero() || r.DatabaseBytes > 0) {
+		if !r.RecordedAt.IsZero() {
+			fmt.Fprintf(&b, "\n%s: %.0f%%", tr(lang, "digest.cpu"), r.CPUUsage)
+			if r.MemoryTotal > 0 {
+				fmt.Fprintf(&b, "\n%s: %s / %s (%.0f%%)", tr(lang, "digest.memory"),
+					formatBytes(r.MemoryUsed), formatBytes(r.MemoryTotal), r.MemoryUsage)
+			}
+			if r.DiskTotal > 0 {
+				fmt.Fprintf(&b, "\n%s: %s / %s (%.0f%%)", tr(lang, "digest.disk"),
+					formatBytes(r.DiskUsed), formatBytes(r.DiskTotal), r.DiskUsage)
+			}
+		}
+		if r.DatabaseBytes > 0 {
+			fmt.Fprintf(&b, "\n%s: %s", tr(lang, "digest.database"), formatBytes(r.DatabaseBytes))
+		}
+		if !r.RecordedAt.IsZero() && r.UptimeSeconds > 0 {
+			fmt.Fprintf(&b, "\n%s: %s", tr(lang, "digest.uptime"), formatUptime(lang, r.UptimeSeconds))
+		}
+		b.WriteString("\n")
+	}
+
 	if d.BlockedTotal == 0 {
 		b.WriteString("\n" + tr(lang, "digest.quiet"))
 	} else {
@@ -173,6 +215,27 @@ func (d *Digest) Text(lang, dashboardURL string) string {
 		fmt.Fprintf(&b, "\n\n%s: %s", tr(lang, "digest.openDashboard"), strings.TrimRight(dashboardURL, "/"))
 	}
 	return b.String()
+}
+
+// Byte counts reuse formatBytes from docker_stats.go — the same formatting the
+// container cards already show, so a size in the summary reads identically to
+// the same size in the UI.
+
+// formatUptime renders a duration in the channel's language, coarsest unit
+// first. An operator reads this for one thing — whether the box rebooted — so
+// two units is enough and seconds never appear.
+func formatUptime(lang string, seconds int64) string {
+	days := seconds / 86400
+	hours := (seconds % 86400) / 3600
+	minutes := (seconds % 3600) / 60
+	switch {
+	case days > 0:
+		return fmt.Sprintf("%d%s %d%s", days, tr(lang, "unit.day"), hours, tr(lang, "unit.hour"))
+	case hours > 0:
+		return fmt.Sprintf("%d%s %d%s", hours, tr(lang, "unit.hour"), minutes, tr(lang, "unit.minute"))
+	default:
+		return fmt.Sprintf("%d%s", minutes, tr(lang, "unit.minute"))
+	}
 }
 
 // BuildPreview renders the digest a channel would receive right now, from real

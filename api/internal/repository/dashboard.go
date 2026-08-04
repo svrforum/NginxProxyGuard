@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -329,6 +330,57 @@ func (r *DashboardRepository) GetDigestOverview(ctx context.Context, since time.
 		return nil, fmt.Errorf("failed to count requests: %w", err)
 	}
 	return &o, nil
+}
+
+// DigestResources is what the box itself is consuming, for the daily summary.
+//
+// The numbers come from the newest system_health row rather than from a live
+// gopsutil read. A live read would block ~500ms inside a scheduler tick for the
+// CPU percentage alone, and it would print figures that disagree with the
+// dashboard the operator opens straight after reading the summary.
+type DigestResources struct {
+	// RecordedAt is zero when no sample exists — a fresh install, or a stopped
+	// stats collector. DatabaseBytes is filled either way.
+	RecordedAt    time.Time
+	CPUUsage      float64
+	MemoryUsage   float64
+	DiskUsage     float64
+	MemoryTotal   int64
+	MemoryUsed    int64
+	DiskTotal     int64
+	DiskUsed      int64
+	UptimeSeconds int64
+	DatabaseBytes int64
+}
+
+// GetDigestResources reads the resource picture for the digest.
+func (r *DashboardRepository) GetDigestResources(ctx context.Context) (*DigestResources, error) {
+	var res DigestResources
+
+	// pg_database_size is the honest headline for storage. hypertable_size()
+	// counts only the chunks TimescaleDB still tracks, which on this dev
+	// install reported 197MB against a real 740MB — orphaned chunk relations,
+	// telemetry tables and catalogue bloat are all invisible to it.
+	if err := r.db.QueryRowContext(ctx, `SELECT pg_database_size(current_database())`).Scan(&res.DatabaseBytes); err != nil {
+		return nil, fmt.Errorf("failed to read database size: %w", err)
+	}
+
+	// A missing row is not an error: a fresh install has none until the stats
+	// collector's first tick.
+	err := r.db.QueryRowContext(ctx, `
+		SELECT recorded_at, cpu_usage, memory_usage, disk_usage,
+		       COALESCE(memory_total, 0), COALESCE(memory_used, 0),
+		       COALESCE(disk_total, 0), COALESCE(disk_used, 0),
+		       COALESCE(uptime_seconds, 0)
+		FROM system_health
+		ORDER BY recorded_at DESC
+		LIMIT 1
+	`).Scan(&res.RecordedAt, &res.CPUUsage, &res.MemoryUsage, &res.DiskUsage,
+		&res.MemoryTotal, &res.MemoryUsed, &res.DiskTotal, &res.DiskUsed, &res.UptimeSeconds)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("failed to read system health: %w", err)
+	}
+	return &res, nil
 }
 
 // GetTopBlockedIPs returns the addresses that were REFUSED, with counts, for
