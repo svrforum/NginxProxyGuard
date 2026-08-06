@@ -22,6 +22,7 @@ type WAFAutoBanService struct {
 	proxyHostRepo    *repository.ProxyHostRepository
 	proxyHostService *ProxyHostService
 	historyRepo      *repository.IPBanHistoryRepository
+	notify           *NotificationService
 
 	// In-memory tracking of WAF events per IP
 	mu          sync.RWMutex
@@ -160,6 +161,17 @@ func (s *WAFAutoBanService) RecordWAFEvent(ctx context.Context, clientIP string,
 			log.Printf("[WAF Auto-Ban] Failed to ban IP %s: %v", clientIP, err)
 		} else {
 			log.Printf("[WAF Auto-Ban] Banned IP %s: %s", clientIP, reason)
+
+			// The ip.banned event promises "fail2ban OR WAF auto-ban" (#221).
+			// Only fail2ban emitted it, so half of what the description
+			// advertised never arrived. Batched for the same reason: the peak
+			// measured hour held 1,566 blocked requests.
+			if s.notify != nil {
+				_ = s.notify.EmitBatched(ctx, "ip.banned", map[string]string{
+					"ip": clientIP, "host": host, "reason": "waf_auto_ban",
+					"count": fmt.Sprintf("%d", eventCount),
+				})
+			}
 
 			// Clear events for this IP after banning
 			s.mu.Lock()
@@ -442,3 +454,7 @@ func truncateStringWithEllipsis(s string, maxLen int) string {
 	}
 	return s[:maxLen-3] + "..."
 }
+
+// SetNotificationService wires notifications after construction, keeping the
+// constructor free of a dependency cycle. (#221)
+func (s *WAFAutoBanService) SetNotificationService(n *NotificationService) { s.notify = n }

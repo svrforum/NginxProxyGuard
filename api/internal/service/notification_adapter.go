@@ -122,14 +122,32 @@ func newWebhookAdapter() *webhookAdapter {
 }
 
 // webhookEnvelope is the stable JSON shape a receiver can rely on.
+//
+// Message, Title and Body are aliases of the same human line, not redundancy:
+// Gotify reads "message", Apprise reads "body", and both reject a payload
+// without their key. Sending one shape that all three accept costs a few bytes
+// and removes a configuration step the operator would otherwise have to
+// discover from a rejected delivery.
 type webhookEnvelope struct {
 	Event    string            `json:"event"`
 	At       time.Time         `json:"at"`
 	Instance string            `json:"instance"`
 	Severity string            `json:"severity"`
 	Text     string            `json:"text"`
+	Message  string            `json:"message"`
+	Body     string            `json:"body"`
+	Title    string            `json:"title"`
 	Fields   map[string]string `json:"fields"`
 }
+
+// payloadFormatText posts the human line as a plain-text body.
+//
+// ntfy cannot be served by any JSON shape when the URL carries the topic:
+// it treats the whole body as the message, so an operator pointing NPG at
+// https://ntfy.sh/my-topic got a wall of raw JSON on their phone — and because
+// ntfy answers 2xx, NPG reported success. This is the format that receiver
+// actually wants.
+const payloadFormatText = "text"
 
 func (a *webhookAdapter) Send(ctx context.Context, ch *model.NotificationChannel, msg model.RenderedMessage) (Outcome, time.Duration, error) {
 	target := ch.Config["url"]
@@ -142,19 +160,29 @@ func (a *webhookAdapter) Send(ctx context.Context, ch *model.NotificationChannel
 	// The envelope is already structured, so a receiver keys off fields rather
 	// than parsing prose; text is the human line it can also display.
 	text := bodyFor(ch.Language, ch, msg)
-	body, err := json.Marshal(webhookEnvelope{
-		Event: msg.Event, At: msg.At, Instance: "npg",
-		Severity: msg.Severity, Text: text, Fields: msg.Fields,
-	})
-	if err != nil {
-		return OutcomeFailed, 0, err
+
+	var body []byte
+	contentType := "application/json"
+	if ch.Config["payload_format"] == payloadFormatText {
+		body, contentType = []byte(text), "text/plain; charset=utf-8"
+	} else {
+		encoded, err := json.Marshal(webhookEnvelope{
+			Event: msg.Event, At: msg.At, Instance: "npg",
+			Severity: msg.Severity, Text: text,
+			Message: text, Body: text, Title: headline(ch.Language, msg),
+			Fields: msg.Fields,
+		})
+		if err != nil {
+			return OutcomeFailed, 0, err
+		}
+		body = encoded
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, target, bytes.NewReader(body))
 	if err != nil {
 		return OutcomeFailed, 0, err
 	}
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("User-Agent", "NginxProxyGuard")
 	// Operator-supplied headers, for an Authorization against ntfy or Gotify.
 	for k, v := range ch.Config {

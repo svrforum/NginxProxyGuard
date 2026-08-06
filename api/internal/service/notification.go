@@ -36,7 +36,9 @@ type notifyStore interface {
 	SetState(ctx context.Context, eventKey, subject, label, state, detail string) error
 	SetSubjectLabel(ctx context.Context, eventKey, subject, label string) error
 	ChannelsForEvent(ctx context.Context, eventKey string) ([]model.NotificationChannel, error)
+	ChannelsForDigestEvent(ctx context.Context, eventKey string) ([]model.NotificationChannel, error)
 	Enqueue(ctx context.Context, channelID, eventKey string, payload model.RenderedMessage) error
+	EnqueueForDigest(ctx context.Context, channelID, eventKey string, payload model.RenderedMessage) error
 }
 
 // allowedFields is the whole vocabulary a payload may carry.
@@ -252,6 +254,20 @@ func (s *NotificationService) fanOut(ctx context.Context, eventKey string, paylo
 			msg.Text = model.Render(ch.Template, payload.Fields)
 		}
 		if err := s.store.Enqueue(ctx, ch.ID, eventKey, msg); err != nil {
+			return err
+		}
+	}
+
+	// Channels that asked for this event in the summary only. The occurrence is
+	// parked rather than dropped: before this, "summary only" removed the key
+	// from events and nothing ever read digest_events, so the UI's third state
+	// was an elaborate way to spell "off".
+	digestOnly, err := s.store.ChannelsForDigestEvent(ctx, eventKey)
+	if err != nil {
+		return err
+	}
+	for _, ch := range digestOnly {
+		if err := s.store.EnqueueForDigest(ctx, ch.ID, eventKey, payload); err != nil {
 			return err
 		}
 	}

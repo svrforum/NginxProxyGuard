@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -331,6 +332,104 @@ func (r *NotificationRepository) Enqueue(ctx context.Context, channelID, eventKe
 	return nil
 }
 
+// outboxStatusDigest parks an occurrence for tomorrow's summary instead of
+// sending it.
+//
+// It rides in the outbox rather than a table of its own because everything the
+// row needs already exists here: the channel FK with its ON DELETE CASCADE, the
+// payload, the timestamp, and Prune's retention. ClaimDue selects status
+// 'queued', so a parked row is never dispatched.
+const outboxStatusDigest = "digest"
+
+// EnqueueForDigest records an event a channel asked to hear about only in the
+// daily summary.
+func (r *NotificationRepository) EnqueueForDigest(ctx context.Context, channelID, eventKey string, payload model.RenderedMessage) error {
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to encode notification payload: %w", err)
+	}
+	_, err = r.db.ExecContext(ctx,
+		`INSERT INTO notification_outbox (channel_id, event_key, payload, status) VALUES ($1,$2,$3,$4)`,
+		channelID, eventKey, encoded, outboxStatusDigest)
+	if err != nil {
+		return fmt.Errorf("failed to park notification for the digest: %w", err)
+	}
+	return nil
+}
+
+// ChannelsForDigestEvent lists channels that want this event in the summary
+// only. digest_enabled is required because a channel with the summary switched
+// off has nowhere to put it.
+func (r *NotificationRepository) ChannelsForDigestEvent(ctx context.Context, eventKey string) ([]model.NotificationChannel, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT `+channelColumns+` FROM notification_channels
+		 WHERE enabled AND digest_enabled AND digest_events @> ARRAY[$1]::text[] ORDER BY name`, eventKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to select digest channels for %s: %w", eventKey, err)
+	}
+	defer rows.Close()
+
+	out := []model.NotificationChannel{}
+	for rows.Next() {
+		c, err := scanChannel(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *c)
+	}
+	return out, rows.Err()
+}
+
+// DigestPending is one event key parked for a channel, with how many times it
+// happened and when it was last seen.
+type DigestPending struct {
+	EventKey string
+	Count    int
+	Last     time.Time
+	Subject  string
+}
+
+// PendingDigestItems groups a channel's parked occurrences for rendering.
+func (r *NotificationRepository) PendingDigestItems(ctx context.Context, channelID string, since time.Time) ([]DigestPending, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT event_key, count(*), max(created_at),
+		       COALESCE((array_agg(payload->'fields'->>'subject' ORDER BY created_at DESC))[1], '')
+		FROM notification_outbox
+		WHERE channel_id = $1 AND status = $2 AND created_at >= $3
+		GROUP BY event_key
+		ORDER BY count(*) DESC, event_key`, channelID, outboxStatusDigest, since)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read parked digest items: %w", err)
+	}
+	defer rows.Close()
+
+	out := []DigestPending{}
+	for rows.Next() {
+		var p DigestPending
+		var subject sql.NullString
+		if err := rows.Scan(&p.EventKey, &p.Count, &p.Last, &subject); err != nil {
+			return nil, err
+		}
+		p.Subject = subject.String
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// ConsumeDigestItems marks a channel's parked rows as delivered, so tomorrow's
+// summary does not repeat today's. They stay in the log as evidence until Prune
+// takes them.
+func (r *NotificationRepository) ConsumeDigestItems(ctx context.Context, channelID string, until time.Time) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE notification_outbox SET status = 'sent', sent_at = now()
+		 WHERE channel_id = $1 AND status = $2 AND created_at <= $3`,
+		channelID, outboxStatusDigest, until)
+	if err != nil {
+		return fmt.Errorf("failed to consume parked digest items: %w", err)
+	}
+	return nil
+}
+
 // ClaimDue returns queued rows whose time has come, each joined to its channel
 // so the dispatcher needs no second query. SKIP LOCKED keeps a second process
 // (a restart overlapping a shutdown) from sending the same row twice.
@@ -406,19 +505,53 @@ func (r *NotificationRepository) MarkFailed(ctx context.Context, id int64, reaso
 // RecordChannelResult tracks health so the UI can explain silence, and disables
 // a channel that has failed ten times running — a dead webhook should stop
 // costing outbound requests.
-func (r *NotificationRepository) RecordChannelResult(ctx context.Context, channelID string, failure string) error {
+// It reports whether this result is what turned the channel off, so the caller
+// can say so in the container log — the surface a home-server operator actually
+// watches. A channel that disables itself in silence is the same failure the
+// whole feature exists to prevent.
+func (r *NotificationRepository) RecordChannelResult(ctx context.Context, channelID string, failure string) (justDisabled bool, err error) {
 	if failure == "" {
+		// A success re-enables a channel this counter turned off: the operator
+		// fixed the token, pressed Test, and the channel has proved it works.
 		_, err := r.db.ExecContext(ctx,
-			`UPDATE notification_channels SET last_success_at = now(), consecutive_failures = 0, last_error = NULL WHERE id = $1`,
-			channelID)
-		return err
+			`UPDATE notification_channels
+			 SET last_success_at = now(), consecutive_failures = 0, last_error = NULL,
+			     enabled = CASE WHEN consecutive_failures >= 10 THEN true ELSE enabled END
+			 WHERE id = $1`, channelID)
+		return false, err
 	}
-	_, err := r.db.ExecContext(ctx, `
-		UPDATE notification_channels
+	// The previous value comes from a CTE rather than a subquery in RETURNING:
+	// both would read the pre-update snapshot, but only one of them says so.
+	var wasEnabled, nowEnabled bool
+	err = r.db.QueryRowContext(ctx, `
+		WITH prev AS (SELECT enabled FROM notification_channels WHERE id = $1)
+		UPDATE notification_channels c
 		SET last_error_at = now(), last_error = $2,
-		    consecutive_failures = consecutive_failures + 1,
-		    enabled = CASE WHEN consecutive_failures + 1 >= 10 THEN false ELSE enabled END
-		WHERE id = $1`, channelID, failure)
+		    consecutive_failures = c.consecutive_failures + 1,
+		    enabled = CASE WHEN c.consecutive_failures + 1 >= 10 THEN false ELSE c.enabled END
+		FROM prev
+		WHERE c.id = $1
+		RETURNING prev.enabled, c.enabled`,
+		channelID, failure).Scan(&wasEnabled, &nowEnabled)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	return wasEnabled && !nowEnabled, err
+}
+
+// RecordTransientFailure notes an attempt that is going to be retried.
+//
+// It records the error so the card can explain the silence, but deliberately
+// does NOT touch consecutive_failures. Counting retries toward the disable
+// threshold meant a receiver that was merely DOWN — an ntfy container
+// restarting, a Telegram 429 — burned the whole budget from a single message:
+// four attempts is four failures, so a short outage turned alerting off
+// permanently and the operator was never told why. Only results we will not
+// retry say anything about the channel's configuration.
+func (r *NotificationRepository) RecordTransientFailure(ctx context.Context, channelID, failure string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE notification_channels SET last_error_at = now(), last_error = $2 WHERE id = $1`,
+		channelID, failure)
 	return err
 }
 

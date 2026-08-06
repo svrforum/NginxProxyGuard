@@ -1642,7 +1642,9 @@
       "language": "메시지 언어",
       "languageHint": "이 채널로 가는 알림의 언어입니다. 화면 언어와 별개로 채널마다 정할 수 있습니다.",
       "dashboardUrl": "대시보드 주소",
-      "dashboardUrlHint": "매일 요약 끝에 링크로 붙습니다. 이 채널을 보는 사람이 실제로 접속하는 주소를 넣으세요. 비우면 링크가 안 붙습니다."
+      "dashboardUrlHint": "매일 요약 끝에 링크로 붙습니다. 이 채널을 보는 사람이 실제로 접속하는 주소를 넣으세요. 비우면 링크가 안 붙습니다.",
+      "payloadFormat": "본문 형식",
+      "payloadFormatHint": "ntfy처럼 주소에 토픽이 들어가는 수신 서버는 “일반 텍스트”를 고르세요. JSON을 보내면 폰에 JSON 덩어리가 그대로 뜹니다. Gotify·Apprise·Home Assistant·직접 만든 수신기는 “JSON”이 맞습니다."
     },
     "guides": {
       "webhook": {
@@ -1725,6 +1727,10 @@
     },
     "testShort": "미리보기",
     "testThisEvent": "이 알림이 실제로 어떻게 오는지 지금 보내 봅니다",
-    "previewDigest": "요약 미리보기 (지금 보내기)"
+    "previewDigest": "요약 미리보기 (지금 보내기)",
+    "payloadFormats": {
+      "json": "JSON (Gotify·Apprise·Home Assistant·직접 만든 수신기)",
+      "text": "일반 텍스트 (ntfy)"
+    }
   }
 }

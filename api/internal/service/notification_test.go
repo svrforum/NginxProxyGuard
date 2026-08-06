@@ -12,14 +12,16 @@ import (
 // fakeStore stands in for the repository so the emission rules can be tested
 // without a database. It records what would have been queued.
 type fakeStore struct {
-	subscribed map[string]bool
-	state      map[string]string
-	labels     map[string]string
-	enqueued   []model.RenderedMessage
+	subscribed       map[string]bool
+	digestSubscribed map[string]bool
+	state            map[string]string
+	labels           map[string]string
+	enqueued         []model.RenderedMessage
+	parked           []string
 }
 
 func newFakeStore(events ...string) *fakeStore {
-	f := &fakeStore{subscribed: map[string]bool{}, state: map[string]string{}, labels: map[string]string{}}
+	f := &fakeStore{subscribed: map[string]bool{}, digestSubscribed: map[string]bool{}, state: map[string]string{}, labels: map[string]string{}}
 	for _, e := range events {
 		f.subscribed[e] = true
 	}
@@ -50,6 +52,18 @@ func (f *fakeStore) ChannelsForEvent(_ context.Context, key string) ([]model.Not
 		return nil, nil
 	}
 	return []model.NotificationChannel{{ID: "ch-1", Name: "test", Type: model.NotificationTypeWebhook}}, nil
+}
+
+func (f *fakeStore) ChannelsForDigestEvent(_ context.Context, key string) ([]model.NotificationChannel, error) {
+	if !f.digestSubscribed[key] {
+		return nil, nil
+	}
+	return []model.NotificationChannel{{ID: "ch-digest", Name: "summary", Type: model.NotificationTypeWebhook}}, nil
+}
+
+func (f *fakeStore) EnqueueForDigest(_ context.Context, channelID, eventKey string, _ model.RenderedMessage) error {
+	f.parked = append(f.parked, channelID+"|"+eventKey)
+	return nil
 }
 
 func (f *fakeStore) Enqueue(_ context.Context, _, _ string, payload model.RenderedMessage) error {
@@ -195,6 +209,44 @@ func TestAnUnchangedFailureStillLearnsItsLabel(t *testing.T) {
 	}
 	if fake.labels["cert.renewal_failed|"+id] != "app.example.com" {
 		t.Errorf("label was not backfilled: %q", fake.labels["cert.renewal_failed|"+id])
+	}
+}
+
+// "Summary only" is the middle state an operator picks for a noisy event. It
+// used to remove the key from `events` and be read by nothing, so it was an
+// elaborate spelling of "off" — the event went nowhere at all.
+func TestSummaryOnlyParksTheEventInsteadOfDroppingIt(t *testing.T) {
+	fake := newFakeStore() // NOT subscribed for immediate delivery
+	fake.digestSubscribed["ip.banned"] = true
+	s := NewNotificationServiceWithStore(fake)
+	ctx := context.Background()
+
+	_ = s.EmitBatched(ctx, "ip.banned", map[string]string{"ip": "192.0.2.1"})
+	s.FlushBatches(ctx)
+
+	if len(fake.enqueued) != 0 {
+		t.Errorf("a summary-only event was delivered immediately: %d", len(fake.enqueued))
+	}
+	if len(fake.parked) != 1 || fake.parked[0] != "ch-digest|ip.banned" {
+		t.Errorf("the event was not parked for the summary: %v", fake.parked)
+	}
+}
+
+// A channel can want one event immediately and another in the summary, and both
+// must happen for the same emission.
+func TestImmediateAndSummaryChannelsBothGetTheEvent(t *testing.T) {
+	fake := newFakeStore("cert.renewal_failed")
+	fake.digestSubscribed["cert.renewal_failed"] = true
+	s := NewNotificationServiceWithStore(fake)
+
+	_ = s.EmitTransition(context.Background(), "cert.renewal_failed", "cert-1", true, "boom",
+		map[string]string{"host": "app.example.com"})
+
+	if len(fake.enqueued) != 1 {
+		t.Errorf("immediate channel got %d messages, want 1", len(fake.enqueued))
+	}
+	if len(fake.parked) != 1 {
+		t.Errorf("summary channel parked %d items, want 1", len(fake.parked))
 	}
 }
 

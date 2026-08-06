@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 	"sort"
 	"strconv"
 	"strings"
@@ -131,12 +132,27 @@ func (s *NotificationDigestService) Build(ctx context.Context, now time.Time) (*
 	return d, nil
 }
 
-// Text renders the digest as plain text every channel can carry.
+// Text renders the summary with no per-channel section. Callers that have a
+// channel should use TextFor.
+func (d *Digest) Text(lang, dashboardURL string) string {
+	return d.text(lang, dashboardURL, nil)
+}
+
+// TextFor renders the summary for one channel, including the events that
+// channel asked to hear about here rather than immediately.
+//
+// The body is otherwise shared: the counters, the blocked breakdown and the
+// outstanding failures are properties of the install, not of the channel.
+func (d *Digest) TextFor(lang, dashboardURL string, pending []repository.DigestPending) string {
+	return d.text(lang, dashboardURL, pending)
+}
+
+// text renders the digest as plain text every channel can carry.
 //
 // The shape is deliberately uniform: an icon-led heading, then indented lines
 // under it. A daily summary is skimmed on a phone, and a wall of unindented
 // "label: value" pairs gives the eye nothing to land on.
-func (d *Digest) Text(lang, dashboardURL string) string {
+func (d *Digest) text(lang, dashboardURL string, pending []repository.DigestPending) string {
 	var b strings.Builder
 	b.WriteString("📊 " + tr(lang, "digest.title") + "\n")
 
@@ -194,6 +210,24 @@ func (d *Digest) Text(lang, dashboardURL string) string {
 		}
 	}
 
+	// The events this channel chose to hear about here instead of immediately.
+	// Counted rather than listed one by one: "요약에만" is what an operator
+	// picks for the noisy ones, and reproducing every occurrence would undo the
+	// reason they picked it.
+	if len(pending) > 0 {
+		b.WriteString("\n\n🔔 " + tr(lang, "digest.parked"))
+		for _, p := range pending {
+			line := "\n  " + eventTitle(lang, p.EventKey)
+			if p.Count > 1 {
+				line += fmt.Sprintf(" ×%d", p.Count)
+			}
+			if p.Subject != "" {
+				line += " — " + p.Subject
+			}
+			b.WriteString(line)
+		}
+	}
+
 	if len(d.TopBlockedIPs) > 0 {
 		b.WriteString("\n\n🚫 " + tr(lang, "digest.topIPs"))
 		for _, ip := range d.TopBlockedIPs {
@@ -229,6 +263,20 @@ func (d *Digest) Text(lang, dashboardURL string) string {
 		fmt.Fprintf(&b, "\n\n🔗 %s: %s", tr(lang, "digest.openDashboard"), strings.TrimRight(dashboardURL, "/"))
 	}
 	return b.String()
+}
+
+// pendingFor reads a channel's parked events, best-effort: a summary missing
+// its held-back section is worth more than no summary at all.
+func (s *NotificationDigestService) pendingFor(ctx context.Context, channelID string, now time.Time) []repository.DigestPending {
+	if s.repo == nil {
+		return nil
+	}
+	items, err := s.repo.PendingDigestItems(ctx, channelID, now.Add(-digestWindow))
+	if err != nil {
+		log.Printf("[Notify] failed to read parked digest items for channel %s: %v", channelID, err)
+		return nil
+	}
+	return items
 }
 
 // formatCount groups thousands. 4556 and 4,556 carry the same information, but
@@ -281,11 +329,14 @@ func (s *NotificationDigestService) BuildPreview(ctx context.Context, ch *model.
 	if err != nil {
 		return model.RenderedMessage{}, err
 	}
+	// The preview reads the parked items but does NOT consume them: pressing
+	// preview must not empty tomorrow's summary.
+	pending := s.pendingFor(ctx, ch.ID, now)
 	return model.RenderedMessage{
 		Event:        "digest.daily",
 		Severity:     "info",
 		Preformatted: true,
-		Text:         digest.Text(ch.Language, ch.DashboardURL),
+		Text:         digest.TextFor(ch.Language, ch.DashboardURL, pending),
 		Fields: map[string]string{
 			"event": "digest.daily",
 			"time":  now.Format(time.RFC3339),
@@ -316,8 +367,10 @@ func (s *NotificationDigestService) SendDue(ctx context.Context, now time.Time) 
 	sent := 0
 	for _, ch := range channels {
 		// Rendered per channel, not once: two channels can legitimately want
-		// the same summary in different languages.
-		text := digest.Text(ch.Language, ch.DashboardURL)
+		// the same summary in different languages — and now also because the
+		// parked events belong to the channel that asked for them.
+		pending := s.pendingFor(ctx, ch.ID, now)
+		text := digest.TextFor(ch.Language, ch.DashboardURL, pending)
 		msg := model.RenderedMessage{
 			Event:    "digest.daily",
 			Severity: "info",
@@ -340,6 +393,14 @@ func (s *NotificationDigestService) SendDue(ctx context.Context, now time.Time) 
 		// send is visible in the delivery log, which is the right place for it.
 		if err := s.repo.MarkDigestSent(ctx, ch.ID, now); err != nil {
 			return sent, err
+		}
+		// Consumed only once the summary carrying them is queued, and bounded
+		// by `now` so an event arriving during this loop lands in tomorrow's
+		// rather than being marked delivered by a message that predates it.
+		if len(pending) > 0 {
+			if err := s.repo.ConsumeDigestItems(ctx, ch.ID, now); err != nil {
+				log.Printf("[Notify] failed to consume parked items for channel %s: %v", ch.ID, err)
+			}
 		}
 		sent++
 	}

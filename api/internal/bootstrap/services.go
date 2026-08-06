@@ -242,6 +242,7 @@ func wireServiceCallbacks(svcs *Services, repos *Repositories) {
 	svcs.Certificate.SetNotificationService(svcs.Notification)
 	svcs.DDNS.SetNotificationService(svcs.Notification)
 	svcs.Fail2ban.SetNotificationService(svcs.Notification)
+	svcs.WAFAutoBan.SetNotificationService(svcs.Notification)
 	svcs.NginxReloader.SetNotificationService(svcs.Notification)
 	svcs.Auth.SetNotificationService(svcs.Notification)
 	svcs.SSO.SetNotificationService(svcs.Notification)

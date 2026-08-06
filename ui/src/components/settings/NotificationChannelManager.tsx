@@ -306,12 +306,6 @@ export function NotificationChannelManager() {
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
-          {formError && (
-            <p data-testid="notification-form-error" className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">
-              {formError}
-            </p>
-          )}
-
           <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label={tr('notifications.fields.name')}>
@@ -400,15 +394,28 @@ export function NotificationChannelManager() {
                   <input aria-label="notify-url" value={form.config.url ?? ''} onChange={(e) => setConfig('url', e.target.value)} className={inputCls} />
                 </Field>
                 {form.type === 'webhook' && (
-                  <Field label={tr('notifications.fields.authHeader')} hint={tr('notifications.fields.authHeaderHint')}>
-                    <input
-                      aria-label="notify-auth-header"
-                      type="password"
-                      value={form.config['header_Authorization'] ?? ''}
-                      onChange={(e) => setConfig('header_Authorization', e.target.value)}
-                      className={inputCls}
-                    />
-                  </Field>
+                  <>
+                    <Field label={tr('notifications.fields.payloadFormat')} hint={tr('notifications.fields.payloadFormatHint')}>
+                      <select
+                        data-testid="notify-payload-format"
+                        value={form.config['payload_format'] ?? 'json'}
+                        onChange={(e) => setConfig('payload_format', e.target.value)}
+                        className={inputCls}
+                      >
+                        <option value="json">{tr('notifications.payloadFormats.json')}</option>
+                        <option value="text">{tr('notifications.payloadFormats.text')}</option>
+                      </select>
+                    </Field>
+                    <Field label={tr('notifications.fields.authHeader')} hint={tr('notifications.fields.authHeaderHint')}>
+                      <input
+                        aria-label="notify-auth-header"
+                        type="password"
+                        value={form.config['header_Authorization'] ?? ''}
+                        onChange={(e) => setConfig('header_Authorization', e.target.value)}
+                        className={inputCls}
+                      />
+                    </Field>
+                  </>
                 )}
                 <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
                   <input
@@ -603,20 +610,32 @@ export function NotificationChannelManager() {
           </div>
         </div>
 
-        <div className="flex shrink-0 justify-end gap-2 border-t border-slate-200 px-6 py-4 dark:border-slate-700">
-          <button type="button" onClick={close} className="rounded-lg px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700">
-            {tr('common:buttons.cancel')}
-          </button>
-          {canWrite && (
-            <button
-              type="button"
-              onClick={() => { setFormError(''); save.mutate(form) }}
-              disabled={save.isPending}
-              className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
-            >
-              {tr('common:buttons.save')}
-            </button>
+        {/* The error lives beside Save, not at the top of the body. The form is
+            two to three screens tall and Save is pinned, so an error rendered
+            above the fold means clicking Save looks like nothing happened —
+            which is exactly what a first Telegram attempt hits when the chat id
+            is still blank. */}
+        <div className="shrink-0 border-t border-slate-200 px-6 py-4 dark:border-slate-700">
+          {formError && (
+            <p data-testid="notification-form-error" className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">
+              {formError}
+            </p>
           )}
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={close} className="rounded-lg px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700">
+              {tr('common:buttons.cancel')}
+            </button>
+            {canWrite && (
+              <button
+                type="button"
+                onClick={() => { setFormError(''); save.mutate(form) }}
+                disabled={save.isPending}
+                className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+              >
+                {tr('common:buttons.save')}
+              </button>
+            )}
+          </div>
         </div>
       </ModalShell>
 

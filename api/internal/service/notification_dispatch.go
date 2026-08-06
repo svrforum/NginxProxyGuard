@@ -80,12 +80,12 @@ func (d *NotificationDispatcher) DispatchOnce(ctx context.Context) (int, error) 
 			if err := d.repo.MarkSent(ctx, e.ID); err != nil {
 				log.Printf("[Notify] failed to mark %d sent: %v", e.ID, err)
 			}
-			_ = d.repo.RecordChannelResult(ctx, e.Channel.ID, "")
+			_, _ = d.repo.RecordChannelResult(ctx, e.Channel.ID, "")
 			sent++
 		case OutcomeRetry:
 			if isExhausted(e.Attempts + 1) {
 				_ = d.repo.MarkFailed(ctx, e.ID, "gave up after "+reason)
-				_ = d.repo.RecordChannelResult(ctx, e.Channel.ID, reason)
+				d.recordTerminalFailure(ctx, e.Channel, reason)
 				continue
 			}
 			if wait <= 0 {
@@ -94,13 +94,35 @@ func (d *NotificationDispatcher) DispatchOnce(ctx context.Context) (int, error) 
 			if err := d.repo.MarkRetry(ctx, e.ID, wait, reason); err != nil {
 				log.Printf("[Notify] failed to reschedule %d: %v", e.ID, err)
 			}
-			_ = d.repo.RecordChannelResult(ctx, e.Channel.ID, reason)
+			// A retry is not evidence about the channel — see
+			// RecordTransientFailure. It records the error without spending the
+			// disable budget.
+			_ = d.repo.RecordTransientFailure(ctx, e.Channel.ID, reason)
 		default:
 			_ = d.repo.MarkFailed(ctx, e.ID, reason)
-			_ = d.repo.RecordChannelResult(ctx, e.Channel.ID, reason)
+			d.recordTerminalFailure(ctx, e.Channel, reason)
 		}
 	}
 	return sent, nil
+}
+
+// recordTerminalFailure books a failure we will not retry, and says so in the
+// container log.
+//
+// Until now a channel could count to ten and switch itself off with the only
+// trace anywhere being a red box inside one settings sub-tab. A home-server
+// operator reads container logs; alerting going dark has to appear there.
+func (d *NotificationDispatcher) recordTerminalFailure(ctx context.Context, ch *model.NotificationChannel, reason string) {
+	disabled, err := d.repo.RecordChannelResult(ctx, ch.ID, reason)
+	if err != nil {
+		log.Printf("[Notify] failed to record channel result for %q: %v", ch.Name, err)
+		return
+	}
+	if disabled {
+		log.Printf("[Notify] channel %q (%s) DISABLED after 10 consecutive delivery failures — alerts are no longer being sent to it. Last error: %s", ch.Name, ch.Type, reason)
+		return
+	}
+	log.Printf("[Notify] delivery to %q (%s) failed: %s", ch.Name, ch.Type, reason)
 }
 
 // FlushBatches hands the batching window to the notify service.
@@ -161,7 +183,7 @@ func (d *NotificationDispatcher) SendTest(ctx context.Context, ch *model.Notific
 		reason = sendErr.Error()
 	}
 	if outcome == OutcomeSent {
-		_ = d.repo.RecordChannelResult(ctx, ch.ID, "")
+		_, _ = d.repo.RecordChannelResult(ctx, ch.ID, "")
 		_ = d.repo.RecordAttempt(ctx, ch.ID, msg.Event, msg, "sent", "")
 		return nil
 	}
@@ -169,7 +191,7 @@ func (d *NotificationDispatcher) SendTest(ctx context.Context, ch *model.Notific
 		sendErr = &UnsupportedChannelError{Type: ch.Type}
 		reason = sendErr.Error()
 	}
-	_ = d.repo.RecordChannelResult(ctx, ch.ID, reason)
+	d.recordTerminalFailure(ctx, ch, reason)
 	_ = d.repo.RecordAttempt(ctx, ch.ID, msg.Event, msg, "failed", reason)
 	return sendErr
 }
