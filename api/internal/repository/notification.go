@@ -71,14 +71,9 @@ func scanChannel(s interface{ Scan(...any) error }) (*model.NotificationChannel,
 	return &c, nil
 }
 
-func (r *NotificationRepository) List(ctx context.Context) ([]model.NotificationChannel, error) {
-	rows, err := r.db.QueryContext(ctx,
-		`SELECT `+channelColumns+` FROM notification_channels ORDER BY name`)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list notification channels: %w", err)
-	}
-	defer rows.Close()
-
+// scanChannels drains a channel query. Four call sites had an identical copy of
+// this loop; a fifth was one paste away.
+func scanChannels(rows *sql.Rows) ([]model.NotificationChannel, error) {
 	out := []model.NotificationChannel{}
 	for rows.Next() {
 		c, err := scanChannel(rows)
@@ -88,6 +83,17 @@ func (r *NotificationRepository) List(ctx context.Context) ([]model.Notification
 		out = append(out, *c)
 	}
 	return out, rows.Err()
+}
+
+func (r *NotificationRepository) List(ctx context.Context) ([]model.NotificationChannel, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT `+channelColumns+` FROM notification_channels ORDER BY name`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list notification channels: %w", err)
+	}
+	defer rows.Close()
+
+	return scanChannels(rows)
 }
 
 func (r *NotificationRepository) GetByID(ctx context.Context, id string) (*model.NotificationChannel, error) {
@@ -114,15 +120,7 @@ func (r *NotificationRepository) ChannelsForEvent(ctx context.Context, eventKey 
 	}
 	defer rows.Close()
 
-	out := []model.NotificationChannel{}
-	for rows.Next() {
-		c, err := scanChannel(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, *c)
-	}
-	return out, rows.Err()
+	return scanChannels(rows)
 }
 
 // ChannelsForDigest returns channels whose digest is due this hour and which
@@ -139,15 +137,7 @@ func (r *NotificationRepository) ChannelsForDigest(ctx context.Context, hour int
 	}
 	defer rows.Close()
 
-	out := []model.NotificationChannel{}
-	for rows.Next() {
-		c, err := scanChannel(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, *c)
-	}
-	return out, rows.Err()
+	return scanChannels(rows)
 }
 
 // SetChatID rewrites a Telegram channel's chat id in place. Telegram hands out
@@ -369,15 +359,7 @@ func (r *NotificationRepository) ChannelsForDigestEvent(ctx context.Context, eve
 	}
 	defer rows.Close()
 
-	out := []model.NotificationChannel{}
-	for rows.Next() {
-		c, err := scanChannel(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, *c)
-	}
-	return out, rows.Err()
+	return scanChannels(rows)
 }
 
 // DigestPending is one event key parked for a channel, with how many times it

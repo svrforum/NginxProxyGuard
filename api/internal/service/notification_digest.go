@@ -132,27 +132,19 @@ func (s *NotificationDigestService) Build(ctx context.Context, now time.Time) (*
 	return d, nil
 }
 
-// Text renders the summary with no per-channel section. Callers that have a
-// channel should use TextFor.
-func (d *Digest) Text(lang, dashboardURL string) string {
-	return d.text(lang, dashboardURL, nil)
-}
-
 // TextFor renders the summary for one channel, including the events that
-// channel asked to hear about here rather than immediately.
+// channel asked to hear about here rather than immediately. Pass a nil pending
+// slice for a channel-less rendering.
 //
 // The body is otherwise shared: the counters, the blocked breakdown and the
 // outstanding failures are properties of the install, not of the channel.
-func (d *Digest) TextFor(lang, dashboardURL string, pending []repository.DigestPending) string {
-	return d.text(lang, dashboardURL, pending)
-}
-
-// text renders the digest as plain text every channel can carry.
+//
+// This renders as plain text every channel can carry.
 //
 // The shape is deliberately uniform: an icon-led heading, then indented lines
 // under it. A daily summary is skimmed on a phone, and a wall of unindented
 // "label: value" pairs gives the eye nothing to land on.
-func (d *Digest) text(lang, dashboardURL string, pending []repository.DigestPending) string {
+func (d *Digest) TextFor(lang, dashboardURL string, pending []repository.DigestPending) string {
 	var b strings.Builder
 	b.WriteString("📊 " + tr(lang, "digest.title") + "\n")
 

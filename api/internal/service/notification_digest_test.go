@@ -43,7 +43,7 @@ func TestDigestRendersCounts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	text := d.Text("en", "")
+	text := d.TextFor("en", "", nil)
 	if !strings.Contains(text, "Blocked requests: 142") {
 		t.Fatalf("total missing:\n%s", text)
 	}
@@ -61,8 +61,8 @@ func TestDigestRendersCounts(t *testing.T) {
 func TestDigestSaysNothingHappened(t *testing.T) {
 	s := &NotificationDigestService{dash: &fakeDigestSource{byReason: map[string]int64{}}}
 	d, _ := s.Build(context.Background(), time.Now())
-	if !strings.Contains(d.Text("en", ""), "Nothing was blocked") {
-		t.Fatalf("a quiet day should say so:\n%s", d.Text("en", ""))
+	if !strings.Contains(d.TextFor("en", "", nil), "Nothing was blocked") {
+		t.Fatalf("a quiet day should say so:\n%s", d.TextFor("en", "", nil))
 	}
 }
 
@@ -76,14 +76,14 @@ func TestDigestKeepsOutstandingFailuresVisible(t *testing.T) {
 		}},
 	}
 	d, _ := s.Build(context.Background(), time.Now())
-	text := d.Text("en", "")
+	text := d.TextFor("en", "", nil)
 	// The readable title, not the raw key — the digest is read by a person.
 	if !strings.Contains(text, "Still failing") || !strings.Contains(text, "certificate renewal failed") {
 		t.Fatalf("outstanding failure missing:\n%s", text)
 	}
 
 	// The same summary in Korean, because the channel decides the language.
-	ko := d.Text("ko", "")
+	ko := d.TextFor("ko", "", nil)
 	if !strings.Contains(ko, "아직 복구되지 않음") || !strings.Contains(ko, "인증서 갱신 실패") {
 		t.Fatalf("Korean digest not localised:\n%s", ko)
 	}
@@ -121,10 +121,10 @@ func TestDigestCarriesNoVisitorData(t *testing.T) {
 		ips: []model.IPStat{{IP: "192.0.2.5", Count: 5}},
 	}}
 	d, _ := s.Build(context.Background(), time.Now())
-	text := strings.ToLower(d.Text("en", ""))
+	text := strings.ToLower(d.TextFor("en", "", nil))
 	for _, banned := range []string{"user-agent", "user_agent", "mozilla", "raw_log", "request_uri", "cookie", "authorization"} {
 		if strings.Contains(text, banned) {
-			t.Errorf("digest leaked %q:\n%s", banned, d.Text("en", ""))
+			t.Errorf("digest leaked %q:\n%s", banned, d.TextFor("en", "", nil))
 		}
 	}
 }
@@ -154,14 +154,14 @@ func TestDigestReportsResourceUsage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	en := d.Text("en", "")
+	en := d.TextFor("en", "", nil)
 	for _, want := range []string{"CPU: 23%", "Memory: 9.0 GB / 16.0 GB (55%)", "Disk: 425.0 GB / 500.0 GB (85%)", "Database: 739.6 MB", "Uptime: 12d 4h"} {
 		if !strings.Contains(en, want) {
 			t.Errorf("missing %q:\n%s", want, en)
 		}
 	}
 
-	ko := d.Text("ko", "")
+	ko := d.TextFor("ko", "", nil)
 	for _, want := range []string{"메모리: 9.0 GB / 16.0 GB (55%)", "디스크:", "데이터베이스: 739.6 MB", "가동 시간: 12일 4시간"} {
 		if !strings.Contains(ko, want) {
 			t.Errorf("Korean digest missing %q:\n%s", want, ko)
@@ -185,7 +185,7 @@ func TestDigestDropsAStaleResourceSample(t *testing.T) {
 		},
 	}}
 	d, _ := s.Build(context.Background(), now)
-	text := d.Text("en", "")
+	text := d.TextFor("en", "", nil)
 	if strings.Contains(text, "CPU") || strings.Contains(text, "Memory") || strings.Contains(text, "Uptime") {
 		t.Errorf("stale host sample was quoted:\n%s", text)
 	}
@@ -199,7 +199,7 @@ func TestDigestDropsAStaleResourceSample(t *testing.T) {
 func TestDigestOmitsResourcesOnAFreshInstall(t *testing.T) {
 	s := &NotificationDigestService{dash: &fakeDigestSource{byReason: map[string]int64{}}}
 	d, _ := s.Build(context.Background(), time.Now())
-	text := d.Text("en", "")
+	text := d.TextFor("en", "", nil)
 	for _, absent := range []string{"CPU", "Memory", "Disk", "Database", "Uptime", "0%"} {
 		if strings.Contains(text, absent) {
 			t.Errorf("empty resource block leaked %q:\n%s", absent, text)
@@ -283,7 +283,7 @@ func TestNoTranslationKeyLeaksIntoMessages(t *testing.T) {
 		Outstanding:   []model.NotificationState{{EventKey: "cert.renewal_failed", Subject: "app.example.com", Since: time.Now().Add(-time.Hour)}},
 	}
 	for _, lang := range []string{"en", "ko"} {
-		text := d.Text(lang, "https://npg.example.com")
+		text := d.TextFor(lang, "https://npg.example.com", nil)
 		for _, k := range keys {
 			if strings.Contains(text, k) {
 				t.Errorf("%s digest leaked the key %q:\n%s", lang, k, text)
