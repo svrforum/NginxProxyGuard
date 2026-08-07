@@ -56,11 +56,14 @@ const toForm = (c: NotificationChannel): NotificationChannelRequest => ({
   template: c.template ?? '',
 })
 
-/** The timezone digest_hour is actually interpreted in. There is no timezone
- *  setting in NPG; the API container follows TZ and defaults to UTC, so the
- *  label states what the browser resolves rather than letting the operator
- *  guess. */
-const localZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+/** The browser's zone, used only to tell the operator when it DIFFERS from the
+ *  server's. digest_hour is compared against the API container's clock, so the
+ *  browser's zone is not the answer — labelling the field with it promised a
+ *  9am summary to a Seoul operator whose container runs UTC. */
+const browserZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+
+/** Minutes the browser is offset from UTC, sign-matched to the server's. */
+const browserOffsetMinutes = -new Date().getTimezoneOffset()
 
 const fmt = (iso?: string) => {
   if (!iso) return '—'
@@ -97,6 +100,12 @@ export function NotificationChannelManager() {
   const { data, isLoading } = useQuery({ queryKey: ['notification-channels'], queryFn: listNotificationChannels })
   const channels = data?.data ?? []
   const events = data?.events ?? []
+  // The hour is compared against the API container's clock, so the label must
+  // name the server's zone. When it differs from the browser's, say so — this
+  // silently sent a Seoul operator's 9am summary at 18:00 local.
+  const serverZone = data?.timezone?.name ?? browserZone
+  const zoneMismatch =
+    data?.timezone !== undefined && data.timezone.offset_minutes !== browserOffsetMinutes
 
   const { data: deliveries } = useQuery({
     queryKey: ['notification-deliveries', logFor?.id],
@@ -110,7 +119,7 @@ export function NotificationChannelManager() {
     mutationFn: (payload: NotificationChannelRequest) =>
       editing ? updateNotificationChannel(editing.id, payload) : createNotificationChannel(payload),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['notification-channels'] }); close() },
-    onError: (e: Error) => setFormError(e.message),
+    onError: (e: Error) => setFormError(humanError(e)),
   })
 
   const remove = useMutation({
@@ -126,7 +135,7 @@ export function NotificationChannelManager() {
       qc.invalidateQueries({ queryKey: ['notification-deliveries'] })
     },
     onError: (e: Error, v) => {
-      setTestResult({ id: v.id, ok: false, message: e.message })
+      setTestResult({ id: v.id, ok: false, message: humanError(e) })
       qc.invalidateQueries({ queryKey: ['notification-channels'] })
       qc.invalidateQueries({ queryKey: ['notification-deliveries'] })
     },
@@ -139,7 +148,7 @@ export function NotificationChannelManager() {
       const r = await detectTelegramChats(form.config.bot_token ?? '', editing?.id)
       setChats({ list: r.data ?? [], error: '' })
     } catch (e) {
-      setChats({ list: [], error: e instanceof Error ? e.message : String(e) })
+      setChats({ list: [], error: e instanceof Error ? humanError(e) : String(e) })
     } finally {
       setDetecting(false)
     }
@@ -165,6 +174,21 @@ export function NotificationChannelManager() {
       digest_events: mode === 'digest' ? [...new Set([...f.digest_events, key])] : f.digest_events.filter((e) => e !== key),
       digest_enabled: mode === 'digest' ? true : f.digest_enabled,
     }))
+
+  // The server's validation messages are written for API clients: they name
+  // JSON fields the form labels differently ("chat_id" vs "Chat ID") and are
+  // only ever English, which reads as a bug in an otherwise Korean panel. The
+  // code is the stable part; an unrecognised one falls back to the raw message
+  // rather than swallowing it.
+  const humanError = (e: Error) => {
+    const code = (e as { code?: string }).code
+    if (code) {
+      const key = `notifications.errors.${code}`
+      const translated = tr(key)
+      if (translated !== key) return translated
+    }
+    return e.message
+  }
 
   const typeLabel = (ty: NotificationChannelType) =>
     ty === 'discord' ? 'Discord' : ty === 'telegram' ? 'Telegram' : tr('notifications.types.webhook')
@@ -529,7 +553,10 @@ export function NotificationChannelManager() {
                 <input type="checkbox" aria-label="notify-digest" checked={form.digest_enabled} onChange={(e) => setForm({ ...form, digest_enabled: e.target.checked })} className="rounded" />
                 {tr('notifications.fields.digest')}
               </label>
-              <Field label={tr('notifications.fields.digestHour', { zone: localZone })}>
+              <Field
+                label={tr('notifications.fields.digestHour', { zone: serverZone })}
+                hint={zoneMismatch ? tr('notifications.fields.digestHourZoneMismatch', { server: serverZone, browser: browserZone }) : undefined}
+              >
                 <input
                   aria-label="notify-digest-hour"
                   type="number"

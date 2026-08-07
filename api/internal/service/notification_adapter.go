@@ -50,6 +50,10 @@ const (
 	// maxAttempts bounds delivery. An unreachable receiver plus a short
 	// scheduler interval is how a retry loop becomes a self-inflicted flood.
 	maxAttempts = 4
+	// staleQueuedAfter is how long a message may wait before it stops being
+	// worth sending. Chosen to outlast an ordinary receiver restart while
+	// staying well inside "this is still current".
+	staleQueuedAfter = 6 * time.Hour
 )
 
 // classifyResponse decides what a status code means for delivery.

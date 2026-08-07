@@ -139,7 +139,9 @@ func (s *DDNSService) SyncByProxyHost(ctx context.Context, proxyHostID string) {
 		if !rec.Enabled {
 			continue
 		}
-		s.syncRecord(ctx, rec, ip) // force sync (first sync after enabling), no needsUpdate gate
+		// Force sync (first sync after enabling), no needsUpdate gate. State is
+		// reported here as well so this path cannot strand the record either.
+		s.emitSyncState(ctx, rec, s.syncRecord(ctx, rec, ip))
 	}
 }
 
@@ -156,7 +158,13 @@ func (s *DDNSService) SyncOne(ctx context.Context, id string) error {
 	if err != nil {
 		return fmt.Errorf("public IP detection failed: %w", err)
 	}
-	return s.syncRecord(ctx, *rec, ip)
+	syncErr := s.syncRecord(ctx, *rec, ip)
+	// The manual path reports state too. Without this, fixing a record by hand
+	// left the edge-trigger state at "failing" forever: no recovery message
+	// went out, the record kept appearing under "still failing" in every daily
+	// summary, and the NEXT genuine failure was swallowed as "no change".
+	s.emitSyncState(ctx, *rec, syncErr)
+	return syncErr
 }
 
 func (s *DDNSService) syncRecord(ctx context.Context, rec model.DDNSRecord, ip string) error {

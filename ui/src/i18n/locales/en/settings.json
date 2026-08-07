@@ -1631,7 +1631,8 @@
       "dashboardUrl": "Dashboard address",
       "dashboardUrlHint": "Appended to the daily summary as a link. Use the address the people reading this channel actually reach the panel on. Empty means no link.",
       "payloadFormat": "Body format",
-      "payloadFormatHint": "Choose plain text for receivers whose URL carries the topic, like ntfy — send them JSON and the phone shows raw JSON. Gotify, Apprise, Home Assistant and your own receivers want JSON."
+      "payloadFormatHint": "Choose plain text for receivers whose URL carries the topic, like ntfy — send them JSON and the phone shows raw JSON. Gotify, Apprise, Home Assistant and your own receivers want JSON.",
+      "digestHourZoneMismatch": "This server runs on {{server}} while your browser is on {{browser}}, so the two clocks differ — enter the hour in the server’s time, not your local time. (Set TZ in your docker compose file to change what the server uses.)"
     },
     "guides": {
       "webhook": {
@@ -1654,7 +1655,7 @@
         "title": "In Telegram",
         "steps": [
           "Message @BotFather and send /newbot. Give it a name and a username, and it hands you a bot token that looks like 123456:ABC-DEF. Paste that below.",
-          "A bot cannot message you first. To receive privately, open the chat with your new bot and send it anything. To receive in a group, add the bot to the group and send a message there.",
+          "A bot cannot message you first. To receive privately, open the chat with your new bot and send it anything. To receive in a group, add the bot to the group and send a message there. To receive in a channel, add the bot as a channel admin and post once.",
           "Press Detect chat id below and NPG lists the conversations the bot can see. Click the one you want and the chat id fills in.",
           "Save, then press Send test — a real message should arrive."
         ]
@@ -1662,7 +1663,7 @@
     },
     "detect": "Detect chat id",
     "detecting": "Looking…",
-    "detectEmpty": "The bot can see no conversations yet. Send it a message, or add it to a group and post there, then try again.",
+    "detectEmpty": "The bot can see no conversations yet. Message it directly, add it to a group and post there, or add it as a channel admin and post once — then try again.",
     "detectPick": "Pick the conversation to send to:",
     "events": {
       "cert.renewal_failed": {
@@ -1718,6 +1719,19 @@
     "payloadFormats": {
       "json": "JSON (Gotify, Apprise, Home Assistant, your own receiver)",
       "text": "Plain text (ntfy)"
+    },
+    "errors": {
+      "invalid_name": "Enter a name between 1 and 64 characters.",
+      "invalid_type": "Choose a channel type.",
+      "invalid_url": "That receiver URL is not valid. It must start with http:// or https://, and sending to a private network address needs \"Allow a private receiver\" turned on.",
+      "invalid_bot_token": "Enter the bot token — the \"digits:letters\" string @BotFather gave you.",
+      "invalid_chat_id": "Enter the chat ID. Message the bot, or add it to a group or channel and post once, then press Detect chat id to fill it in.",
+      "invalid_events": "Pick at least one alert, or turn on the daily summary.",
+      "invalid_event": "That includes an alert this version does not know. Reload the page and try again.",
+      "invalid_dashboard_url": "The dashboard address must start with http:// or https://.",
+      "invalid_digest_hour": "The send hour must be between 0 and 23.",
+      "invalid_language": "The message language must be Korean or English.",
+      "invalid_config": "A setting has leading or trailing whitespace — remove the spaces that came along when pasting."
     }
   }
 }

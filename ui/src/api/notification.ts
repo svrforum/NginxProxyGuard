@@ -9,10 +9,13 @@ import type {
 
 const API_BASE = '/api/v1'
 
-/** The channel list, together with the event catalogue the server enforces. */
+/** The channel list, the event catalogue the server enforces, and the timezone
+ *  the server actually schedules the digest in — which is the API container's,
+ *  not the browser's. */
 export async function listNotificationChannels(): Promise<{
   data: NotificationChannel[]
   events: NotificationEvent[]
+  timezone?: { name: string; offset_minutes: number }
 }> {
   return apiGet(`${API_BASE}/notification-channels`)
 }

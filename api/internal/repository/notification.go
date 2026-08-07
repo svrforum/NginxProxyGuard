@@ -430,6 +430,41 @@ func (r *NotificationRepository) ConsumeDigestItems(ctx context.Context, channel
 	return nil
 }
 
+// FailQueuedForDisabledChannel closes out what a switched-off channel still has
+// waiting.
+//
+// ClaimDue requires c.enabled, so the moment a channel is disabled its queued
+// rows become unreachable: never sent, never marked failed, and eventually
+// deleted by Prune without ever appearing in the delivery log. An operator
+// asking "why did I not hear about that" deserves a row that says so.
+func (r *NotificationRepository) FailQueuedForDisabledChannel(ctx context.Context, channelID, reason string) (int64, error) {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE notification_outbox SET status = 'failed', last_error = $2
+		 WHERE channel_id = $1 AND status = 'queued'`, channelID, reason)
+	if err != nil {
+		return 0, fmt.Errorf("failed to close out queued notifications: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
+// ExpireStaleQueued fails rows that have waited too long to still be news.
+//
+// A channel that comes back after a long outage would otherwise deliver
+// yesterday's alerts as if they had just happened, which is worse than not
+// delivering them: the operator goes looking for a problem that is over.
+func (r *NotificationRepository) ExpireStaleQueued(ctx context.Context, maxAge time.Duration, reason string) (int64, error) {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE notification_outbox SET status = 'failed', last_error = $2
+		 WHERE status = 'queued' AND created_at < now() - $1::interval`,
+		fmt.Sprintf("%d seconds", int(maxAge.Seconds())), reason)
+	if err != nil {
+		return 0, fmt.Errorf("failed to expire stale notifications: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
 // ClaimDue returns queued rows whose time has come, each joined to its channel
 // so the dispatcher needs no second query. SKIP LOCKED keeps a second process
 // (a restart overlapping a shutdown) from sending the same row twice.

@@ -1644,7 +1644,8 @@
       "dashboardUrl": "대시보드 주소",
       "dashboardUrlHint": "매일 요약 끝에 링크로 붙습니다. 이 채널을 보는 사람이 실제로 접속하는 주소를 넣으세요. 비우면 링크가 안 붙습니다.",
       "payloadFormat": "본문 형식",
-      "payloadFormatHint": "ntfy처럼 주소에 토픽이 들어가는 수신 서버는 “일반 텍스트”를 고르세요. JSON을 보내면 폰에 JSON 덩어리가 그대로 뜹니다. Gotify·Apprise·Home Assistant·직접 만든 수신기는 “JSON”이 맞습니다."
+      "payloadFormatHint": "ntfy처럼 주소에 토픽이 들어가는 수신 서버는 “일반 텍스트”를 고르세요. JSON을 보내면 폰에 JSON 덩어리가 그대로 뜹니다. Gotify·Apprise·Home Assistant·직접 만든 수신기는 “JSON”이 맞습니다.",
+      "digestHourZoneMismatch": "이 서버는 {{server}} 기준으로 동작합니다. 지금 보고 계신 브라우저는 {{browser}}라 시각이 서로 다릅니다 — 원하는 현지 시각이 아니라 서버 시각 기준으로 넣으세요. (도커 compose의 TZ 값을 바꾸면 서버 기준을 맞출 수 있습니다.)"
     },
     "guides": {
       "webhook": {
@@ -1667,7 +1668,7 @@
         "title": "텔레그램에서 할 일",
         "steps": [
           "텔레그램에서 @BotFather 를 찾아 /newbot 을 보내고, 이름과 사용자명을 정하면 봇 토큰(숫자:문자 형태)을 줍니다. 그 토큰을 아래에 붙여 넣으세요.",
-          "봇은 먼저 말을 걸 수 없습니다. 개인으로 받으려면 만든 봇과의 대화에서 아무 메시지나 한 번 보내고, 그룹으로 받으려면 그룹에 봇을 초대한 뒤 그룹에서 아무 메시지나 보냅니다.",
+          "봇은 먼저 말을 걸 수 없습니다. 개인으로 받으려면 만든 봇과의 대화에서 아무 메시지나 한 번 보내고, 그룹으로 받으려면 그룹에 봇을 초대한 뒤 그룹에서 아무 메시지나 보냅니다. 채널로 받으려면 봇을 채널 관리자로 추가하고 채널에 아무 글이나 하나 올리세요.",
           "아래 'chat id 감지'를 누르면 봇이 볼 수 있는 대화 목록이 뜹니다. 받을 대화를 클릭하면 chat id가 채워집니다.",
           "저장한 뒤 '테스트 전송'을 누르면 실제 메시지가 도착합니다."
         ]
@@ -1675,7 +1676,7 @@
     },
     "detect": "chat id 감지",
     "detecting": "찾는 중…",
-    "detectEmpty": "봇이 볼 수 있는 대화가 없습니다. 봇에게 메시지를 한 번 보내거나 그룹에 초대한 뒤 다시 눌러 주세요.",
+    "detectEmpty": "봇이 볼 수 있는 대화가 없습니다. 봇에게 직접 메시지를 보내거나, 그룹에 초대한 뒤 그룹에서 글을 쓰거나, 채널 관리자로 추가한 뒤 채널에 글을 올리고 다시 눌러 주세요.",
     "detectPick": "받을 대화를 고르세요:",
     "events": {
       "cert.renewal_failed": {
@@ -1731,6 +1732,19 @@
     "payloadFormats": {
       "json": "JSON (Gotify·Apprise·Home Assistant·직접 만든 수신기)",
       "text": "일반 텍스트 (ntfy)"
+    },
+    "errors": {
+      "invalid_name": "이름을 1~64자로 입력하세요.",
+      "invalid_type": "채널 종류를 고르세요.",
+      "invalid_url": "수신 URL이 올바르지 않습니다. http:// 또는 https:// 로 시작하는 주소여야 하고, 내부망 주소로 보내려면 “사설망 수신자 허용”을 켜세요.",
+      "invalid_bot_token": "봇 토큰을 입력하세요. @BotFather가 준 “숫자:문자” 형태입니다.",
+      "invalid_chat_id": "chat ID를 입력하세요. 봇에게 먼저 말을 걸거나 그룹·채널에 추가해 글을 올린 뒤 “chat id 감지”를 누르면 채워집니다.",
+      "invalid_events": "받을 알림을 하나 이상 고르거나, 매일 요약 보내기를 켜세요.",
+      "invalid_event": "알 수 없는 알림이 포함돼 있습니다. 화면을 새로고침한 뒤 다시 시도해 주세요.",
+      "invalid_dashboard_url": "대시보드 주소는 http:// 또는 https:// 로 시작해야 합니다.",
+      "invalid_digest_hour": "발송 시각은 0~23 사이여야 합니다.",
+      "invalid_language": "메시지 언어는 한국어 또는 English만 됩니다.",
+      "invalid_config": "설정값 앞뒤에 공백이 있습니다. 붙여 넣을 때 딸려 온 공백을 지워 주세요."
     }
   }
 }

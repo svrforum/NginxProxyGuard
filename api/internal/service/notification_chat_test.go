@@ -259,3 +259,46 @@ func TestTelegramTruncates(t *testing.T) {
 		t.Fatalf("len = %d, want %d", len([]rune(got)), telegramTextLimit)
 	}
 }
+
+// A broadcast channel is a normal way to receive home-server alerts, and
+// Telegram reports it as channel_post rather than message. Reading only
+// "message" meant Detect answered "no conversations yet" forever and the
+// operator concluded the feature was broken.
+func TestDetectFindsChannelsAndGroupsNotJustPrivateChats(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The request must ask for the update types we depend on: my_chat_member
+		// is not in Telegram's default set.
+		allowed := r.URL.Query().Get("allowed_updates")
+		for _, want := range []string{"message", "channel_post", "my_chat_member"} {
+			if !strings.Contains(allowed, want) {
+				t.Errorf("allowed_updates does not request %q: %q", want, allowed)
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true,"result":[
+			{"message":{"chat":{"id":11,"type":"private","first_name":"Ada"}}},
+			{"channel_post":{"chat":{"id":-100222,"type":"channel","title":"Home alerts"}}},
+			{"my_chat_member":{"chat":{"id":-333,"type":"supergroup","title":"Ops"}}},
+			{"channel_post":{"chat":{"id":-100222,"type":"channel","title":"Home alerts"}}}
+		]}`))
+	}))
+	defer srv.Close()
+
+	chats, err := detectTelegramChatsAt(context.Background(), srv.URL, "1:x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(chats) != 3 {
+		t.Fatalf("got %d chats, want 3 (private, channel, supergroup) — duplicates must collapse: %+v", len(chats), chats)
+	}
+	found := map[string]string{}
+	for _, c := range chats {
+		found[c.ID] = c.Type
+	}
+	if found["-100222"] != "channel" {
+		t.Errorf("the broadcast channel was not detected: %+v", chats)
+	}
+	if found["-333"] != "supergroup" {
+		t.Errorf("a group the bot was added to but has not posted in was not detected: %+v", chats)
+	}
+}

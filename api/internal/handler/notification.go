@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4"
 
@@ -65,9 +66,17 @@ func (h *NotificationHandler) List(c echo.Context) error {
 	for i := range channels {
 		maskChannel(&channels[i])
 	}
+	// The digest hour is compared against the API container's clock, and the
+	// container follows TZ (UTC unless the operator sets it). Labelling the
+	// field with the BROWSER's zone was a confident, specific promise the
+	// scheduler does not keep: set 9 from Seoul on a default install and the
+	// summary arrives at 18:00 local. Reporting the server's own zone makes the
+	// discrepancy visible instead of un-debuggable.
+	zone, offset := time.Now().Zone()
 	return c.JSON(http.StatusOK, map[string]any{
-		"data":   channels,
-		"events": model.EventCatalogue,
+		"data":     channels,
+		"events":   model.EventCatalogue,
+		"timezone": map[string]any{"name": zone, "offset_minutes": offset / 60},
 	})
 }
 
@@ -223,7 +232,36 @@ func classifyNotificationError(c echo.Context, err error) error {
 	case strings.Contains(msg, "already exists"):
 		return c.JSON(http.StatusConflict, map[string]string{"error": msg})
 	case strings.HasPrefix(msg, "invalid"):
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": msg})
+		// The code lets the panel show its own wording. The message itself is
+		// aimed at API clients — it names JSON fields the UI labels differently
+		// and is only ever English — so a Korean operator saw
+		// "invalid chat_id: required" in an otherwise translated form.
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": msg,
+			"code":  validationCode(msg),
+		})
 	}
 	return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Operation failed"})
+}
+
+// validationCode turns "invalid chat_id: required — …" into "invalid_chat_id".
+//
+// The model's messages already carry the field as a stable first token, so the
+// code is derived rather than threaded through every return. An unrecognisable
+// message yields an empty code and the panel falls back to showing the message
+// as-is, which is what it did before.
+func validationCode(msg string) string {
+	rest, ok := strings.CutPrefix(msg, "invalid ")
+	if !ok {
+		return ""
+	}
+	field, _, ok := strings.Cut(rest, ":")
+	if !ok {
+		return ""
+	}
+	field = strings.TrimSpace(field)
+	if field == "" || strings.ContainsAny(field, " \t") {
+		return ""
+	}
+	return "invalid_" + field
 }

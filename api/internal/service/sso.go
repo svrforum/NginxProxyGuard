@@ -239,19 +239,20 @@ func (s *SSOService) resolveUser(ctx context.Context, p *model.SSOProvider, c *m
 	}
 
 	if !p.AllowJIT {
+		// Refused for the commonest reason of all — JIT provisioning is off by
+		// default, so this is the branch a first SSO attempt actually takes.
+		// Reporting only the allowlist branch below meant the event could not
+		// fire on a default install, and an operator watching for "SSO sign-in
+		// refused" saw nothing while people were being turned away.
+		s.emitRefusal(ctx, p.Slug, "no_local_account")
 		return "", "", ErrSSONoAccount
 	}
 	if c.Email == "" {
+		s.emitRefusal(ctx, p.Slug, "no_verified_email")
 		return "", "", ErrSSOEmailMissing
 	}
 	if !p.AllowedByList(c) {
-		// Batched (#221): a misconfigured allowlist rejects everyone who tries,
-		// and a scripted attempt would produce one message per try.
-		if s.notify != nil {
-			_ = s.notify.EmitBatched(ctx, "sso.login_refused", map[string]string{
-				"subject": p.Slug, "reason": "not_on_allowlist",
-			})
-		}
+		s.emitRefusal(ctx, p.Slug, "not_on_allowlist")
 		return "", "", ErrSSONotAllowed
 	}
 	return s.provision(ctx, p, c)
@@ -683,3 +684,16 @@ func (s *SSOService) CleanupLoginStates(ctx context.Context) (int64, error) {
 
 // SetNotificationService wires notifications after construction. (#221)
 func (s *SSOService) SetNotificationService(n *NotificationService) { s.notify = n }
+
+// emitRefusal reports an SSO sign-in that was turned away.
+//
+// Batched (#221): a misconfigured allowlist rejects everyone who tries, and a
+// scripted attempt would otherwise produce one message per try.
+func (s *SSOService) emitRefusal(ctx context.Context, providerSlug, reason string) {
+	if s.notify == nil {
+		return
+	}
+	_ = s.notify.EmitBatched(ctx, "sso.login_refused", map[string]string{
+		"subject": providerSlug, "reason": reason,
+	})
+}

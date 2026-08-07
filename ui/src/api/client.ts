@@ -15,12 +15,20 @@ export function getAuthHeaders(): HeadersInit {
 export class ApiError extends Error {
   details?: string
   status: number
+  /**
+   * Stable machine-readable reason, when the server sends one. It exists so a
+   * screen can show its own translated wording: the server's message names JSON
+   * fields ("invalid chat_id") and is always English, which reads as a bug in an
+   * otherwise Korean panel.
+   */
+  code?: string
 
-  constructor(message: string, status: number, details?: string) {
+  constructor(message: string, status: number, details?: string, code?: string) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.details = details
+    this.code = code
   }
 }
 
@@ -61,7 +69,7 @@ export async function handleResponse<T>(response: Response): Promise<T> {
         required ? `Required permission: ${required}` : details
       )
     }
-    throw new ApiError(message, response.status, details)
+    throw new ApiError(message, response.status, details, (errorData as { code?: string }).code)
   }
   // Handle empty responses (204 No Content)
   if (response.status === 204) {

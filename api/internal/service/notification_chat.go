@@ -130,6 +130,19 @@ func escapeMarkdownV2(s string) string {
 	return b.String()
 }
 
+// telegramChat is the chat as Telegram reports it, whatever update carried it.
+type telegramChat struct {
+	ID        int64  `json:"id"`
+	Title     string `json:"title"`
+	Username  string `json:"username"`
+	FirstName string `json:"first_name"`
+	Type      string `json:"type"`
+}
+
+type telegramUpdateMessage struct {
+	Chat telegramChat `json:"chat"`
+}
+
 type telegramResponse struct {
 	OK          bool   `json:"ok"`
 	Description string `json:"description"`
@@ -243,7 +256,11 @@ func detectTelegramChatsAt(ctx context.Context, base, botToken string) ([]Telegr
 	if strings.TrimSpace(botToken) == "" {
 		return nil, fmt.Errorf("invalid bot_token: required")
 	}
-	endpoint := strings.TrimRight(base, "/") + "/bot" + url.PathEscape(botToken) + "/getUpdates"
+	// allowed_updates must be explicit: Telegram excludes my_chat_member from
+	// the default set, so a bot added to a channel that has posted nothing
+	// would be invisible without asking for it by name.
+	endpoint := strings.TrimRight(base, "/") + "/bot" + url.PathEscape(botToken) +
+		`/getUpdates?allowed_updates=["message","channel_post","my_chat_member"]`
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
@@ -259,15 +276,17 @@ func detectTelegramChatsAt(ctx context.Context, base, botToken string) ([]Telegr
 		OK          bool   `json:"ok"`
 		Description string `json:"description"`
 		Result      []struct {
-			Message struct {
-				Chat struct {
-					ID        int64  `json:"id"`
-					Title     string `json:"title"`
-					Username  string `json:"username"`
-					FirstName string `json:"first_name"`
-					Type      string `json:"type"`
-				} `json:"chat"`
-			} `json:"message"`
+			// Telegram delivers the same chat under a different update type
+			// depending on where the message was posted. Reading only
+			// "message" meant a broadcast channel — a normal way to receive
+			// home-server alerts — could never be detected, and the operator
+			// was told to keep retrying forever. my_chat_member covers the
+			// case where the bot was added but nothing has been posted since.
+			Message      telegramUpdateMessage `json:"message"`
+			ChannelPost  telegramUpdateMessage `json:"channel_post"`
+			MyChatMember struct {
+				Chat telegramChat `json:"chat"`
+			} `json:"my_chat_member"`
 		} `json:"result"`
 	}
 	if err := json.Unmarshal(raw, &parsed); err != nil {
@@ -284,16 +303,17 @@ func detectTelegramChatsAt(ctx context.Context, base, botToken string) ([]Telegr
 	seen := map[int64]bool{}
 	out := []TelegramChat{}
 	for _, u := range parsed.Result {
-		c := u.Message.Chat
-		if c.ID == 0 || seen[c.ID] {
-			continue
+		for _, c := range []telegramChat{u.Message.Chat, u.ChannelPost.Chat, u.MyChatMember.Chat} {
+			if c.ID == 0 || seen[c.ID] {
+				continue
+			}
+			seen[c.ID] = true
+			title := c.Title
+			if title == "" {
+				title = strings.TrimSpace(c.FirstName + " " + c.Username)
+			}
+			out = append(out, TelegramChat{ID: strconv.FormatInt(c.ID, 10), Title: title, Type: c.Type})
 		}
-		seen[c.ID] = true
-		title := c.Title
-		if title == "" {
-			title = strings.TrimSpace(c.FirstName + " " + c.Username)
-		}
-		out = append(out, TelegramChat{ID: strconv.FormatInt(c.ID, 10), Title: title, Type: c.Type})
 	}
 	return out, nil
 }

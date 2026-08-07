@@ -120,6 +120,15 @@ func (d *NotificationDispatcher) recordTerminalFailure(ctx context.Context, ch *
 	}
 	if disabled {
 		log.Printf("[Notify] channel %q (%s) DISABLED after 10 consecutive delivery failures — alerts are no longer being sent to it. Last error: %s", ch.Name, ch.Type, reason)
+		// Whatever it still had queued is now unreachable: ClaimDue requires an
+		// enabled channel, so those rows would sit there until Prune deleted
+		// them without ever reaching the delivery log. Close them out with a
+		// reason the operator can read.
+		if n, err := d.repo.FailQueuedForDisabledChannel(ctx, ch.ID, "channel turned off after 10 consecutive failures"); err != nil {
+			log.Printf("[Notify] failed to close out queued messages for %q: %v", ch.Name, err)
+		} else if n > 0 {
+			log.Printf("[Notify] %d queued message(s) for %q were dropped with the channel", n, ch.Name)
+		}
 		return
 	}
 	log.Printf("[Notify] delivery to %q (%s) failed: %s", ch.Name, ch.Type, reason)
@@ -137,6 +146,14 @@ func (d *NotificationDispatcher) FlushBatches(ctx context.Context) {
 func (d *NotificationDispatcher) Prune(ctx context.Context) {
 	if d == nil || d.repo == nil || !d.repo.TablesExist(ctx) {
 		return
+	}
+	// Stale first, then prune. A message that has waited longer than this is no
+	// longer news: delivering yesterday's alert as if it just happened sends the
+	// operator looking for a problem that is over.
+	if n, err := d.repo.ExpireStaleQueued(ctx, staleQueuedAfter, "not sent within 6 hours — too old to still be news"); err != nil {
+		log.Printf("[Notify] failed to expire stale queued messages: %v", err)
+	} else if n > 0 {
+		log.Printf("[Notify] %d queued message(s) expired unsent after %s", n, staleQueuedAfter)
 	}
 	if n, err := d.repo.Prune(ctx); err != nil {
 		log.Printf("[Notify] outbox prune failed: %v", err)
