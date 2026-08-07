@@ -190,6 +190,10 @@ export function NotificationChannelManager() {
     return e.message
   }
 
+  // Whether the form differs from what is stored. Only used to warn that a
+  // preview will not reflect unsaved edits.
+  const dirty = editing ? JSON.stringify(toForm(editing)) !== JSON.stringify(form) : true
+
   const typeLabel = (ty: NotificationChannelType) =>
     ty === 'discord' ? 'Discord' : ty === 'telegram' ? 'Telegram' : tr('notifications.types.webhook')
 
@@ -243,10 +247,27 @@ export function NotificationChannelManager() {
                       </span>
                     )}
                   </div>
+                  {/* Both counts, because "이벤트 3개" hid the summary-only
+                      subscriptions entirely — a channel with 2 immediate and 4
+                      summary-only events read as if it had 2. And the last
+                      delivery, so a working channel and a silent one do not
+                      look identical without opening the history. */}
                   <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    {(c.events ?? []).length === 0
+                    {(c.events ?? []).length === 0 && (c.digest_events ?? []).length === 0
                       ? tr('notifications.noEvents')
-                      : tr('notifications.eventCount', { count: (c.events ?? []).length })}
+                      : [
+                          (c.events ?? []).length > 0
+                            ? tr('notifications.eventCount', { count: (c.events ?? []).length })
+                            : null,
+                          (c.digest_events ?? []).length > 0
+                            ? tr('notifications.digestEventCount', { count: (c.digest_events ?? []).length })
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                    <span className="ml-2 text-slate-400 dark:text-slate-500">
+                      {tr('notifications.lastDelivery', { when: fmt(c.last_success_at) })}
+                    </span>
                   </p>
 
                   {/* The failure mode of a notification system is silence, so a
@@ -274,7 +295,7 @@ export function NotificationChannelManager() {
                 <div className="flex shrink-0 flex-wrap gap-2">
                   <button
                     type="button"
-                    aria-label={`test-${c.name}`}
+                    data-testid={`test-${c.name}`}
                     onClick={() => { setTestResult(null); test.mutate({ id: c.id }) }}
                     disabled={!canWrite || test.isPending}
                     title={canWrite ? undefined : tr('notifications.noPermission')}
@@ -333,11 +354,11 @@ export function NotificationChannelManager() {
           <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label={tr('notifications.fields.name')}>
-                <input aria-label="notify-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputCls} />
+                <input data-testid="notify-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputCls} />
               </Field>
               <Field label={tr('notifications.fields.type')}>
                 <select
-                  aria-label="notify-type"
+                  data-testid="notify-type"
                   value={form.type}
                   onChange={(e) => setForm({ ...form, type: e.target.value as NotificationChannelType, config: {} })}
                   className={inputCls}
@@ -366,14 +387,14 @@ export function NotificationChannelManager() {
             {form.type === 'telegram' ? (
               <>
                 <Field label={tr('notifications.fields.botToken')} hint={editing ? tr('notifications.fields.secretKeepHint') : tr('notifications.fields.botTokenHint')}>
-                  <input aria-label="notify-bot-token" type="password" value={form.config.bot_token ?? ''} onChange={(e) => setConfig('bot_token', e.target.value)} className={inputCls} />
+                  <input data-testid="notify-bot-token" type="password" value={form.config.bot_token ?? ''} onChange={(e) => setConfig('bot_token', e.target.value)} className={inputCls} />
                 </Field>
                 <Field label={tr('notifications.fields.chatId')} hint={tr('notifications.fields.chatIdHint')}>
                   <div className="flex gap-2">
-                    <input aria-label="notify-chat-id" value={form.config.chat_id ?? ''} onChange={(e) => setConfig('chat_id', e.target.value)} className={inputCls} />
+                    <input data-testid="notify-chat-id" value={form.config.chat_id ?? ''} onChange={(e) => setConfig('chat_id', e.target.value)} className={inputCls} />
                     <button
                       type="button"
-                      aria-label="notify-detect-chat"
+                      data-testid="notify-detect-chat"
                       onClick={detect}
                       disabled={detecting || !(form.config.bot_token || editing)}
                       className="shrink-0 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
@@ -415,7 +436,7 @@ export function NotificationChannelManager() {
                   label={form.type === 'discord' ? tr('notifications.fields.discordUrl') : tr('notifications.fields.webhookUrl')}
                   hint={form.type === 'discord' ? tr('notifications.fields.discordUrlHint') : tr('notifications.fields.webhookUrlHint')}
                 >
-                  <input aria-label="notify-url" value={form.config.url ?? ''} onChange={(e) => setConfig('url', e.target.value)} className={inputCls} />
+                  <input data-testid="notify-url" value={form.config.url ?? ''} onChange={(e) => setConfig('url', e.target.value)} className={inputCls} />
                 </Field>
                 {form.type === 'webhook' && (
                   <>
@@ -432,7 +453,7 @@ export function NotificationChannelManager() {
                     </Field>
                     <Field label={tr('notifications.fields.authHeader')} hint={tr('notifications.fields.authHeaderHint')}>
                       <input
-                        aria-label="notify-auth-header"
+                        data-testid="notify-auth-header"
                         type="password"
                         value={form.config['header_Authorization'] ?? ''}
                         onChange={(e) => setConfig('header_Authorization', e.target.value)}
@@ -444,7 +465,7 @@ export function NotificationChannelManager() {
                 <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
                   <input
                     type="checkbox"
-                    aria-label="notify-allow-private"
+                    data-testid="notify-allow-private"
                     checked={form.allow_private_target}
                     onChange={(e) => setForm({ ...form, allow_private_target: e.target.checked })}
                     className="mt-0.5 rounded"
@@ -458,7 +479,7 @@ export function NotificationChannelManager() {
             )}
 
             <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
-              <input type="checkbox" aria-label="notify-enabled" checked={form.enabled} onChange={(e) => setForm({ ...form, enabled: e.target.checked })} className="rounded" />
+              <input type="checkbox" data-testid="notify-enabled" checked={form.enabled} onChange={(e) => setForm({ ...form, enabled: e.target.checked })} className="rounded" />
               {tr('notifications.fields.enabled')}
             </label>
 
@@ -467,6 +488,15 @@ export function NotificationChannelManager() {
             <div>
               <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{tr('notifications.whatToSend')}</h4>
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{tr('notifications.whatToSendHint')}</p>
+              {/* The preview sends from the SAVED channel, so an operator who
+                  edits the template and presses it to check receives the old
+                  format — the exact loop the button exists to close. Say so
+                  only when it is actually true. */}
+              {dirty && editing && (
+                <p data-testid="notify-dirty-preview" className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                  {tr('notifications.previewUsesSaved')}
+                </p>
+              )}
               <div data-testid="notify-event-list" className="mt-2 space-y-1.5">
                 {events.map((ev) => {
                   const mode = modeOf(ev.key)
@@ -506,7 +536,7 @@ export function NotificationChannelManager() {
                           <button
                             key={m}
                             type="button"
-                            aria-label={`notify-event-${ev.key}-${m}`}
+                            data-testid={`notify-event-${ev.key}-${m}`}
                             aria-pressed={mode === m}
                             onClick={() => setEventMode(ev.key, m)}
                             className={`rounded px-2 py-1 text-[11px] transition-colors ${
@@ -521,7 +551,7 @@ export function NotificationChannelManager() {
                         {editing && (
                           <button
                             type="button"
-                            aria-label={`notify-test-${ev.key}`}
+                            data-testid={`notify-test-${ev.key}`}
                             onClick={() => { setTestResult(null); test.mutate({ id: editing.id, event: ev.key }) }}
                             title={tr('notifications.testThisEvent')}
                             className="ml-1 rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
@@ -550,7 +580,7 @@ export function NotificationChannelManager() {
 
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
-                <input type="checkbox" aria-label="notify-digest" checked={form.digest_enabled} onChange={(e) => setForm({ ...form, digest_enabled: e.target.checked })} className="rounded" />
+                <input type="checkbox" data-testid="notify-digest" checked={form.digest_enabled} onChange={(e) => setForm({ ...form, digest_enabled: e.target.checked })} className="rounded" />
                 {tr('notifications.fields.digest')}
               </label>
               <Field
@@ -558,7 +588,7 @@ export function NotificationChannelManager() {
                 hint={zoneMismatch ? tr('notifications.fields.digestHourZoneMismatch', { server: serverZone, browser: browserZone }) : undefined}
               >
                 <input
-                  aria-label="notify-digest-hour"
+                  data-testid="notify-digest-hour"
                   type="number"
                   min={0}
                   max={23}
@@ -571,7 +601,7 @@ export function NotificationChannelManager() {
 
             <Field label={tr('notifications.fields.dashboardUrl')} hint={tr('notifications.fields.dashboardUrlHint')}>
               <input
-                aria-label="notify-dashboard-url"
+                data-testid="notify-dashboard-url"
                 value={form.dashboard_url}
                 onChange={(e) => setForm({ ...form, dashboard_url: e.target.value })}
                 className={inputCls}
@@ -582,7 +612,7 @@ export function NotificationChannelManager() {
             {editing && (
               <button
                 type="button"
-                aria-label="notify-preview-digest"
+                data-testid="notify-preview-digest"
                 onClick={() => { setTestResult(null); test.mutate({ id: editing.id, event: 'digest.daily' }) }}
                 className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
               >
@@ -592,7 +622,7 @@ export function NotificationChannelManager() {
 
             <Field label={tr('notifications.fields.language')} hint={tr('notifications.fields.languageHint')}>
               <select
-                aria-label="notify-language"
+                data-testid="notify-language"
                 value={form.language}
                 onChange={(e) => setForm({ ...form, language: e.target.value })}
                 className={inputCls}
@@ -605,7 +635,7 @@ export function NotificationChannelManager() {
             <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
               <input
                 type="checkbox"
-                aria-label="notify-rich-format"
+                data-testid="notify-rich-format"
                 checked={form.rich_format}
                 onChange={(e) => setForm({ ...form, rich_format: e.target.checked })}
                 className="mt-0.5 rounded"
@@ -619,7 +649,7 @@ export function NotificationChannelManager() {
             </label>
 
             <Field label={tr('notifications.fields.template')} hint={tr('notifications.fields.templateHint')}>
-              <input aria-label="notify-template" value={form.template} onChange={(e) => setForm({ ...form, template: e.target.value })} className={inputCls} placeholder="{{event}} — {{host}} {{detail}}" />
+              <input data-testid="notify-template" value={form.template} onChange={(e) => setForm({ ...form, template: e.target.value })} className={inputCls} placeholder="{{event}} — {{host}} {{detail}}" />
             </Field>
             <div className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-900/40">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{tr('notifications.placeholders')}</p>

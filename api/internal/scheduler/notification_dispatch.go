@@ -80,6 +80,14 @@ func (s *NotificationDispatchScheduler) run() {
 		case <-pruneTicker.C:
 			s.prune()
 		case <-s.stopChan:
+			// A burst arriving in the last minutes of the process is held in
+			// memory waiting for the batch window; without this it dies with
+			// the container on every restart and upgrade. Flushing writes it to
+			// the outbox, so the next boot delivers it.
+			s.flush()
+			// And dispatch what that flush just queued, so a clean shutdown
+			// does not itself delay the alert by a whole boot cycle.
+			s.dispatch()
 			return
 		}
 	}

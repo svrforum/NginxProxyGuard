@@ -55,7 +55,12 @@ var EventCatalogue = []EventDescriptor{
 	{Key: "ddns.recovered", Severity: "info"},
 	{Key: "backup.failed", Severity: "error"},
 	{Key: "nginx.reload_failed", Severity: "error"},
-	{Key: "auth.login_failed", Severity: "warning"},
+	// Batched because auth.go emits it through EmitBatched: the check runs on
+	// every attempt while a lockout holds, so a sustained brute-force would
+	// otherwise be one message per attempt. The flag was missing, so the UI
+	// showed no "batched" badge and the description implied one message per
+	// lockout.
+	{Key: "auth.login_failed", Severity: "warning", Batched: true},
 	{Key: "ip.banned", Severity: "warning", Batched: true},
 	{Key: "sso.login_refused", Severity: "warning", Batched: true},
 }

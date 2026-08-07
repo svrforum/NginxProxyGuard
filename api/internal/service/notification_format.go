@@ -105,7 +105,34 @@ func headline(lang string, msg model.RenderedMessage) string {
 	default:
 		sev = "info"
 	}
-	return severityIcon(sev) + " " + tr(lang, "severity."+sev) + " — " + eventTitle(lang, msg.Event)
+	return severityIcon(sev) + " " + tr(lang, "severity."+sev) + " — " + titleFor(lang, msg.Event, sev)
+}
+
+// titleFor names the event, preferring a recovery-specific title when this IS
+// the recovery.
+//
+// Events whose recovery travels under their own key — a backup, an nginx
+// reload — otherwise produced "✅ Resolved — scheduled backup failed", a
+// headline that contradicts itself.
+func titleFor(lang, key, severity string) string {
+	if severity == "resolved" {
+		if v := lookupEventTitle(lang, key+".resolved"); v != "" {
+			return v
+		}
+	}
+	return eventTitle(lang, key)
+}
+
+// lookupEventTitle returns the title for a key, or empty when neither language
+// defines one.
+func lookupEventTitle(lang, key string) string {
+	if v, ok := notificationStrings[normaliseLang(lang)]["event."+key]; ok && v != "" {
+		return v
+	}
+	if v, ok := notificationStrings[LangEnglish]["event."+key]; ok && v != "" {
+		return v
+	}
+	return ""
 }
 
 // eventTitle turns a key into something readable in the channel's language.

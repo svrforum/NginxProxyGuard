@@ -1576,15 +1576,15 @@
     "add": "Add channel",
     "addTitle": "Add a notification channel",
     "editTitle": "Edit notification channel",
-    "empty": "No channels yet. Add one and notifications will start arriving there.",
+    "empty": "No channels yet. Add one and its alerts will go to that channel.",
     "disabled": "Disabled",
     "batched": "batched",
     "digestBadge": "daily at {{hour}}:00",
-    "eventCount": "{{count}} event(s)",
+    "eventCount": "{{count}} immediate",
     "noEvents": "No events selected (summary only)",
     "failing": "{{count}} consecutive failures — the channel turns itself off at 10",
     "test": "Send test",
-    "testSent": "Sent. Check your inbox.",
+    "testSent": "Sent. Check the channel to see whether it arrived.",
     "history": "Delivery log",
     "historyTitle": "{{name}} delivery log",
     "noHistory": "Nothing delivered yet.",
@@ -1684,7 +1684,7 @@
       },
       "backup.failed": {
         "label": "Scheduled backup failed",
-        "desc": "The automatic backup did not run. You have no new restore point."
+        "desc": "The scheduled backup ran and failed. You have no new restore point."
       },
       "nginx.reload_failed": {
         "label": "nginx reload failed",
@@ -1692,7 +1692,7 @@
       },
       "auth.login_failed": {
         "label": "Admin sign-in locked out",
-        "desc": "Failed sign-ins hit the lockout threshold. Often a brute-force attempt."
+        "desc": "Failed sign-ins hit the lockout threshold. Often a brute-force attempt. Coalesced into one message per 5 minutes while the lockout holds."
       },
       "ip.banned": {
         "label": "IP banned",
@@ -1713,8 +1713,8 @@
       "warning": "Notice",
       "info": "Info"
     },
-    "testShort": "Preview",
-    "testThisEvent": "Send this exact alert now so you can see how it looks",
+    "testShort": "Send now",
+    "testThisEvent": "Sends this alert for real, right now. It uses the saved channel, so unsaved changes to language, formatting or the template are not included.",
     "previewDigest": "Preview the summary (send now)",
     "payloadFormats": {
       "json": "JSON (Gotify, Apprise, Home Assistant, your own receiver)",
@@ -1732,6 +1732,9 @@
       "invalid_digest_hour": "The send hour must be between 0 and 23.",
       "invalid_language": "The message language must be Korean or English.",
       "invalid_config": "A setting has leading or trailing whitespace — remove the spaces that came along when pasting."
-    }
+    },
+    "digestEventCount": "{{count}} summary-only",
+    "lastDelivery": "last delivered {{when}}",
+    "previewUsesSaved": "Previews send using the saved settings. Save first to see the changes you just made."
   }
 }

@@ -1589,15 +1589,15 @@
     "add": "채널 추가",
     "addTitle": "알림 채널 추가",
     "editTitle": "알림 채널 편집",
-    "empty": "등록된 채널이 없습니다. 추가하면 여기서 알림을 받게 됩니다.",
+    "empty": "등록된 채널이 없습니다. 채널을 추가하면 그 채널로 알림이 갑니다.",
     "disabled": "비활성",
     "batched": "묶음",
     "digestBadge": "매일 {{hour}}시 요약",
-    "eventCount": "이벤트 {{count}}개",
+    "eventCount": "즉시 {{count}}건",
     "noEvents": "선택된 이벤트 없음 (요약만)",
     "failing": "연속 {{count}}회 실패 — 10회가 되면 채널이 자동으로 꺼집니다",
     "test": "테스트 전송",
-    "testSent": "전송했습니다. 수신함을 확인하세요.",
+    "testSent": "보냈습니다. 채널에 도착했는지 확인해 보세요.",
     "history": "전송 이력",
     "historyTitle": "{{name}} 전송 이력",
     "noHistory": "아직 전송 기록이 없습니다.",
@@ -1618,8 +1618,8 @@
       "enabled": "이 채널 사용",
       "webhookUrl": "수신 URL",
       "webhookUrlHint": "ntfy·Gotify·Apprise·Home Assistant 등에서 발급한 주소",
-      "discordUrl": "디스코드 웹훅 URL",
-      "discordUrlHint": "채널 설정 → 연동 → 웹훅에서 만들고 URL을 복사하세요. 이 URL 자체가 자격증명입니다.",
+      "discordUrl": "디스코드 웹후크 URL",
+      "discordUrlHint": "채널 설정 → 연동 → 웹후크에서 만들고 URL을 복사하세요. 이 URL 자체가 자격증명입니다.",
       "botToken": "봇 토큰",
       "botTokenHint": "@BotFather에서 봇을 만들면 발급됩니다.",
       "chatId": "Chat ID",
@@ -1659,9 +1659,9 @@
       "discord": {
         "title": "디스코드에서 할 일",
         "steps": [
-          "알림을 받을 채널에서 채널 편집 → 연동 → 웹훅 → 새 웹훅을 만듭니다.",
+          "알림을 받을 채널에서 채널 편집 → 연동 → 웹후크 → 새 웹후크를 만듭니다.",
           "'웹후크 URL 복사'를 눌러 주소를 복사합니다. 이 URL 자체가 자격증명이니 공유하지 마세요.",
-          "아래 '디스코드 웹훅 URL'에 붙여 넣고 저장한 뒤 '테스트 전송'으로 확인합니다."
+          "아래 '디스코드 웹후크 URL'에 붙여 넣고 저장한 뒤 '테스트 전송'으로 확인합니다."
         ]
       },
       "telegram": {
@@ -1697,7 +1697,7 @@
       },
       "backup.failed": {
         "label": "예약 백업 실패",
-        "desc": "야간 자동 백업이 실패했습니다. 복구 지점이 생기지 않은 상태입니다."
+        "desc": "예약해 둔 자동 백업이 실행됐지만 실패했습니다. 새 복구 지점이 만들어지지 않았습니다."
       },
       "nginx.reload_failed": {
         "label": "nginx 리로드 실패",
@@ -1705,7 +1705,7 @@
       },
       "auth.login_failed": {
         "label": "관리자 로그인 잠금",
-        "desc": "로그인 실패가 누적돼 계정이 잠겼습니다. 무차별 대입 시도일 수 있습니다."
+        "desc": "로그인 실패가 누적돼 계정이 잠겼습니다. 무차별 대입 시도일 수 있습니다. 잠금이 이어지는 동안 5분 단위로 묶어서 보냅니다."
       },
       "ip.banned": {
         "label": "IP 차단",
@@ -1726,8 +1726,8 @@
       "warning": "주의",
       "info": "정보"
     },
-    "testShort": "미리보기",
-    "testThisEvent": "이 알림이 실제로 어떻게 오는지 지금 보내 봅니다",
+    "testShort": "지금 보내기",
+    "testThisEvent": "이 알림을 지금 실제로 보냅니다. 저장된 설정 기준이라, 아직 저장하지 않은 언어·서식·메시지 형식 변경은 반영되지 않습니다.",
     "previewDigest": "요약 미리보기 (지금 보내기)",
     "payloadFormats": {
       "json": "JSON (Gotify·Apprise·Home Assistant·직접 만든 수신기)",
@@ -1745,6 +1745,9 @@
       "invalid_digest_hour": "발송 시각은 0~23 사이여야 합니다.",
       "invalid_language": "메시지 언어는 한국어 또는 English만 됩니다.",
       "invalid_config": "설정값 앞뒤에 공백이 있습니다. 붙여 넣을 때 딸려 온 공백을 지워 주세요."
-    }
+    },
+    "digestEventCount": "요약에만 {{count}}건",
+    "lastDelivery": "마지막 전송 {{when}}",
+    "previewUsesSaved": "미리보기는 저장된 설정으로 보냅니다. 지금 화면에서 바꾼 내용을 확인하려면 먼저 저장하세요."
   }
 }
