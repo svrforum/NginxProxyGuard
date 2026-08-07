@@ -9,6 +9,7 @@ import type { Log } from '../../../types/log';
 import type { URIMatchType } from '../../../types/security';
 import { RelatedLogsModal } from './RelatedLogsModal';
 import { LogDetailHeader, LogDetailGeoIP } from './LogDetailHeader';
+import { FilterMatchPanel } from './FilterMatchPanel';
 import {
   BanIPForm,
   BlockURIForm,
@@ -205,6 +206,10 @@ export function LogDetailModal({ log, onClose, onRuleDisabled }: LogDetailModalP
           )}
 
           <LogDetailGeoIP log={log} />
+
+          {/* Which subscription refused this request. The log records only that
+              one did — nginx cannot say which. (#230) */}
+          {log.block_reason === 'filter_subscription' && <FilterMatchPanel log={log} />}
 
           {log.log_type === 'access' && (
             <>

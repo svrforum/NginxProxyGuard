@@ -612,5 +612,12 @@
       "close": "Close",
       "noContent": "No content"
     }
+  },
+  "filterMatch": {
+    "title": "Filter that blocked this request",
+    "loading": "Checking…",
+    "failed": "Could not check the filter lists.",
+    "none": "No enabled subscription matches now. The list may have been refreshed, or the entry excluded, since this request was refused.",
+    "alsoDisabled": "Also present in disabled subscriptions: {{names}}"
   }
 }

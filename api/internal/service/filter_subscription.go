@@ -861,3 +861,20 @@ func (s *FilterSubscriptionService) regenerateSharedConfigs(ctx context.Context)
 func (s *FilterSubscriptionService) RegenerateSharedConfigs(ctx context.Context) error {
 	return s.regenerateSharedConfigs(ctx)
 }
+
+// MatchesFor answers "which subscription blocked this request", for one log
+// entry's address and user-agent. Either may be empty. (#230)
+func (s *FilterSubscriptionService) MatchesFor(ctx context.Context, ip, userAgent string) (ipMatches, uaMatches []repository.FilterMatch, err error) {
+	ipMatches, uaMatches = []repository.FilterMatch{}, []repository.FilterMatch{}
+	if ip != "" {
+		if ipMatches, err = s.repo.MatchIP(ctx, ip); err != nil {
+			return nil, nil, err
+		}
+	}
+	if userAgent != "" {
+		if uaMatches, err = s.repo.MatchUserAgent(ctx, userAgent); err != nil {
+			return nil, nil, err
+		}
+	}
+	return ipMatches, uaMatches, nil
+}

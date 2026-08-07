@@ -4,6 +4,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 
@@ -315,4 +316,32 @@ func containsLower(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// Match reports which subscriptions contain a given address or user-agent.
+//
+// It exists because a filter_subscription block in the access log says only
+// THAT a list matched, never which one — nginx resolves every subscribed range
+// through one shared radix tree. Without this the operator disables
+// subscriptions one at a time until the block stops, which is what issue #230
+// describes doing. (#230)
+func (h *FilterSubscriptionHandler) Match(c echo.Context) error {
+	ip := strings.TrimSpace(c.QueryParam("ip"))
+	ua := c.QueryParam("user_agent")
+	if ip == "" && strings.TrimSpace(ua) == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "ip or user_agent is required"})
+	}
+	if ip != "" && net.ParseIP(ip) == nil {
+		// Guarded rather than passed through: the query casts to inet, and an
+		// unparseable value would surface as a 500 from Postgres.
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "ip is not a valid address"})
+	}
+	ipMatches, uaMatches, err := h.service.MatchesFor(c.Request().Context(), ip, ua)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to match against subscriptions"})
+	}
+	return c.JSON(http.StatusOK, map[string]any{
+		"ip_matches":         ipMatches,
+		"user_agent_matches": uaMatches,
+	})
 }

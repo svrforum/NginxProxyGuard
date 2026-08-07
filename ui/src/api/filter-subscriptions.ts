@@ -98,3 +98,29 @@ export async function removeEntryExclusion(
 ): Promise<void> {
   return apiDelete(`${API_BASE}/${subscriptionId}/entry-exclusions?value=${encodeURIComponent(value)}`)
 }
+
+/** One subscription that contains an address or user-agent, and the entry that matched. */
+export interface FilterMatch {
+  subscription_id: string
+  subscription_name: string
+  type: string
+  matched_value: string
+  enabled: boolean
+  reason?: string
+}
+
+/**
+ * Ask which subscriptions contain this address or user-agent (#230).
+ *
+ * The access log records that a filter list refused a request but not which
+ * one, because nginx resolves them all through a single shared radix tree.
+ */
+export async function matchFilterSubscriptions(
+  ip: string,
+  userAgent: string
+): Promise<{ ip_matches: FilterMatch[]; user_agent_matches: FilterMatch[] }> {
+  const params = new URLSearchParams()
+  if (ip) params.set('ip', ip)
+  if (userAgent) params.set('user_agent', userAgent)
+  return apiGet(`${API_BASE}/match?${params.toString()}`)
+}

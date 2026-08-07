@@ -794,6 +794,8 @@ func registerFilterSubscriptionRoutes(v1 *echo.Group, h *handler.FilterSubscript
 	proxyDelete := authMiddleware.RequireAPIPermission(model.PermissionProxyDelete)
 
 	g := v1.Group("/filter-subscriptions")
+	// Registered before /:id so "match" is not read as a subscription id.
+	g.GET("/match", h.Match, proxyRead)
 	g.GET("/catalog", h.GetCatalog, proxyRead)
 	g.POST("/catalog/subscribe", h.SubscribeFromCatalog, proxyWrite)
 	g.GET("", h.List, proxyRead)

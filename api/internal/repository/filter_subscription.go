@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"strings"
 	"time"
 
 	"nginx-proxy-guard/internal/model"
@@ -617,4 +618,75 @@ func (r *FilterSubscriptionRepository) HasExcludePrivateIPsEnabled(ctx context.C
 		`SELECT EXISTS(SELECT 1 FROM filter_subscriptions WHERE enabled = true AND exclude_private_ips = true)`,
 	).Scan(&exists)
 	return exists, err
+}
+
+// FilterMatch names one subscription that contains a value, and the entry that
+// matched it.
+type FilterMatch struct {
+	SubscriptionID   string `json:"subscription_id"`
+	SubscriptionName string `json:"subscription_name"`
+	Type             string `json:"type"`
+	MatchedValue     string `json:"matched_value"`
+	Enabled          bool   `json:"enabled"`
+	Reason           string `json:"reason,omitempty"`
+}
+
+// MatchIP answers "which subscription blocked this address".
+//
+// It runs at read time rather than tagging the request, because nginx resolves
+// every subscribed range through one shared radix tree and has no idea which
+// list a hit came from. Doing it here costs nothing per request, works on logs
+// that were already written, and is the exact lookup an operator would
+// otherwise do by removing subscriptions one at a time (#230).
+//
+// Disabled subscriptions are included on purpose: an operator debugging a block
+// wants to see that a list would have matched even if it is not the one that
+// did, and the caller can tell them apart by Enabled.
+func (r *FilterSubscriptionRepository) MatchIP(ctx context.Context, ip string) ([]FilterMatch, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT s.id, s.name, s.type, e.value, s.enabled, COALESCE(e.reason, '')
+		FROM filter_subscription_entries e
+		JOIN filter_subscriptions s ON s.id = e.subscription_id
+		WHERE s.type IN ('ip', 'cidr')
+		  AND (
+		    (position('/' in e.value) = 0 AND e.value = $1)
+		    OR (position('/' in e.value) > 0 AND $1::inet <<= e.value::inet)
+		  )
+		ORDER BY s.enabled DESC, s.name`, ip)
+	if err != nil {
+		return nil, fmt.Errorf("failed to match ip against subscriptions: %w", err)
+	}
+	defer rows.Close()
+	return scanFilterMatches(rows)
+}
+
+// MatchUserAgent answers the same question for a user-agent block. The stored
+// values are substrings, matched the same way the nginx map does.
+func (r *FilterSubscriptionRepository) MatchUserAgent(ctx context.Context, ua string) ([]FilterMatch, error) {
+	if strings.TrimSpace(ua) == "" {
+		return []FilterMatch{}, nil
+	}
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT s.id, s.name, s.type, e.value, s.enabled, COALESCE(e.reason, '')
+		FROM filter_subscription_entries e
+		JOIN filter_subscriptions s ON s.id = e.subscription_id
+		WHERE s.type = 'user_agent' AND $1 ILIKE '%' || e.value || '%'
+		ORDER BY s.enabled DESC, s.name`, ua)
+	if err != nil {
+		return nil, fmt.Errorf("failed to match user agent against subscriptions: %w", err)
+	}
+	defer rows.Close()
+	return scanFilterMatches(rows)
+}
+
+func scanFilterMatches(rows *sql.Rows) ([]FilterMatch, error) {
+	out := []FilterMatch{}
+	for rows.Next() {
+		var m FilterMatch
+		if err := rows.Scan(&m.SubscriptionID, &m.SubscriptionName, &m.Type, &m.MatchedValue, &m.Enabled, &m.Reason); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
 }

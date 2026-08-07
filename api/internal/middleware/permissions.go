@@ -205,6 +205,7 @@ var routePermissions = map[string]string{
 	"DELETE /api/v1/exploit-rules/hosts/:hostId/rules/:ruleId/exclude": "waf:write",
 	"POST /api/v1/exploit-rules/hosts/:hostId/rules/:ruleId/exclude": "waf:write",
 	"GET /api/v1/filter-subscriptions": "waf:read",
+	"GET /api/v1/filter-subscriptions/match": "waf:read",
 	"POST /api/v1/filter-subscriptions": "waf:write",
 	"DELETE /api/v1/filter-subscriptions/:id": "waf:write",
 	"GET /api/v1/filter-subscriptions/:id": "waf:read",
