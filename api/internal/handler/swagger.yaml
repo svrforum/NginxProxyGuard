@@ -2347,6 +2347,99 @@ components:
           type: boolean
         waf_mode:
           type: string
+        waf_use_global:
+          type: boolean
+          description: Inherit WAF settings from global defaults (true = inherit, false = use host-specific settings)
+        waf_paranoia_level:
+          type: integer
+          description: WAF paranoia level (1-4)
+        waf_anomaly_threshold:
+          type: integer
+          description: WAF anomaly threshold
+        ssl_http2:
+          type: boolean
+          description: Enable HTTP/2
+        ssl_http3:
+          type: boolean
+          description: Enable HTTP/3 (QUIC)
+        ssl_force_https:
+          type: boolean
+          description: Force HTTPS redirect
+        ssl_cert_id:
+          type: string
+          format: uuid
+          description: Certificate ID for SSL termination
+        block_exploits:
+          type: boolean
+          description: Enable exploit blocking
+        block_exploits_exceptions:
+          type: string
+          description: Regex patterns for exploit blocking exceptions
+        allow_websocket_upgrade:
+          type: boolean
+          description: Allow WebSocket upgrade
+        cache_enabled:
+          type: boolean
+          description: Enable caching
+        cache_static_only:
+          type: boolean
+          description: Only cache static assets
+        cache_ttl:
+          type: string
+          description: Cache TTL (e.g., "7d")
+        advanced_config:
+          type: string
+          description: Custom nginx configuration directives
+        proxy_connect_timeout:
+          type: integer
+          description: Proxy connect timeout in seconds
+        proxy_send_timeout:
+          type: integer
+          description: Proxy send timeout in seconds
+        proxy_read_timeout:
+          type: integer
+          description: Proxy read timeout in seconds
+        proxy_buffering:
+          type: string
+          description: Proxy buffering setting
+        proxy_request_buffering:
+          type: string
+          description: Proxy request buffering setting
+        client_max_body_size:
+          type: string
+          description: Maximum client request body size
+        proxy_max_temp_file_size:
+          type: string
+          description: Maximum temp file size for proxy buffering
+        access_list_id:
+          type: string
+          format: uuid
+          description: Access list ID for IP-based access control
+        auth_provider_id:
+          type: string
+          format: uuid
+          description: Auth provider ID for ForwardAuth (Authelia/Authentik)
+        auth_bypass_paths:
+          type: array
+          items:
+            type: string
+          description: Paths to bypass auth
+        ddns_enabled:
+          type: boolean
+          description: Enable DDNS auto-registration
+        ddns_provider_id:
+          type: string
+          format: uuid
+          description: DDNS provider ID
+        ddns_proxied:
+          type: boolean
+          description: DDNS proxied mode
+        forward_container_name:
+          type: string
+          description: Docker container name as forward target
+        forward_container_network:
+          type: string
+          description: Docker container network name
 
     Certificate:
       type: object
@@ -2399,16 +2492,32 @@ components:
           type: boolean
         block_bad_bots:
           type: boolean
+          description: Block known malicious bots (Ahrefs, Semrush, etc.)
         block_ai_bots:
           type: boolean
+          description: Block AI scraping bots (GPTBot, ClaudeBot, etc.)
         allow_search_engines:
           type: boolean
-        challenge_suspicious:
+          description: Allow search engine bots (Google, Bing, etc.)
+        block_suspicious_clients:
           type: boolean
+          description: Block suspicious clients (curl, python-requests, etc.)
         custom_blocked_agents:
           type: array
           items:
             type: string
+          description: Custom user agents to block
+        custom_allowed_agents:
+          type: array
+          items:
+            type: string
+          description: Custom user agents to allow
+        challenge_suspicious:
+          type: boolean
+          description: Challenge suspicious clients instead of blocking
+        disable_global:
+          type: boolean
+          description: Disable global bot filter default (inherit=false means inherit from global settings)
 
     SecurityHeaders:
       type: object
@@ -2443,6 +2552,7 @@ components:
         mode:
           type: string
           enum: [whitelist, blacklist]
+          description: Whitelist (only allow) or blacklist (block) countries
         countries:
           type: array
           items:
@@ -2453,9 +2563,18 @@ components:
           items:
             type: string
           description: IPs/CIDRs that bypass geo restriction
+        allow_private_ips:
+          type: boolean
+          description: Allow private IP ranges (10.x, 172.16-31.x, 192.168.x)
+        allow_search_bots:
+          type: boolean
+          description: Allow search engine bots (Googlebot, Bingbot, etc.)
         challenge_mode:
           type: boolean
           description: Show CAPTCHA instead of blocking
+        disable_global:
+          type: boolean
+          description: Disable global geo restriction default (inherit=false means inherit from global settings)
 
     Upstream:
       type: object
