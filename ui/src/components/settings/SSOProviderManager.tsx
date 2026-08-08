@@ -516,6 +516,13 @@ export function SSOProviderManager() {
               </Field>
             </div>
 
+            {/* Linking an existing account needs no setting and has no button,
+                so the panel has to say so — people looked for one and filed an
+                issue when they could not find it. (#229) */}
+            <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:bg-slate-700/40 dark:text-slate-300">
+              {tr('sso.existingAccountLinking')}
+            </p>
+
             <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
               <input
                 type="checkbox"
