@@ -83,6 +83,11 @@ export interface DisableRuleByHostRequest {
   rule_category?: string;
   rule_description?: string;
   reason?: string;
+  /** How narrowly to switch the rule off. Omitted means the whole host, which
+   *  is what every client got before scoped exclusions existed. (#231) */
+  scope_type?: 'host' | 'uri' | 'param';
+  /** The path prefix (uri) or argument name (param) the scope applies to. */
+  scope_value?: string;
 }
 
 export async function disableWAFRuleByHost(request: DisableRuleByHostRequest): Promise<WAFRuleExclusion> {

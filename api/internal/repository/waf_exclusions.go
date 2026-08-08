@@ -12,9 +12,9 @@ import (
 func (r *WAFRepository) CreateExclusion(ctx context.Context, proxyHostID string, req *model.CreateWAFRuleExclusionRequest) (*model.WAFRuleExclusion, error) {
 	query := `
 		INSERT INTO waf_rule_exclusions (
-			proxy_host_id, rule_id, rule_category, rule_description, reason
-		) VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, proxy_host_id, rule_id, rule_category, rule_description, reason, disabled_by, created_at
+			proxy_host_id, rule_id, rule_category, rule_description, reason, scope_type, scope_value
+		) VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING id, proxy_host_id, rule_id, rule_category, rule_description, reason, disabled_by, scope_type, scope_value, created_at
 	`
 
 	var exclusion model.WAFRuleExclusion
@@ -26,6 +26,8 @@ func (r *WAFRepository) CreateExclusion(ctx context.Context, proxyHostID string,
 		req.RuleCategory,
 		req.RuleDescription,
 		req.Reason,
+		req.ScopeType,
+		req.ScopeValue,
 	).Scan(
 		&exclusion.ID,
 		&exclusion.ProxyHostID,
@@ -34,6 +36,8 @@ func (r *WAFRepository) CreateExclusion(ctx context.Context, proxyHostID string,
 		&ruleDescription,
 		&reason,
 		&disabledBy,
+		&exclusion.ScopeType,
+		&exclusion.ScopeValue,
 		&exclusion.CreatedAt,
 	)
 
@@ -80,7 +84,7 @@ func (r *WAFRepository) DeleteExclusion(ctx context.Context, proxyHostID string,
 // GetExclusionsByProxyHost returns all rule exclusions for a specific proxy host
 func (r *WAFRepository) GetExclusionsByProxyHost(ctx context.Context, proxyHostID string) ([]model.WAFRuleExclusion, error) {
 	query := `
-		SELECT id, proxy_host_id, rule_id, rule_category, rule_description, reason, disabled_by, created_at
+		SELECT id, proxy_host_id, rule_id, rule_category, rule_description, reason, disabled_by, scope_type, scope_value, created_at
 		FROM waf_rule_exclusions
 		WHERE proxy_host_id = $1
 		ORDER BY rule_id ASC
@@ -105,6 +109,8 @@ func (r *WAFRepository) GetExclusionsByProxyHost(ctx context.Context, proxyHostI
 			&ruleDescription,
 			&reason,
 			&disabledBy,
+			&exclusion.ScopeType,
+			&exclusion.ScopeValue,
 			&exclusion.CreatedAt,
 		)
 		if err != nil {
@@ -137,7 +143,7 @@ func (r *WAFRepository) GetExclusionsByProxyHost(ctx context.Context, proxyHostI
 // GetExclusionByRuleID checks if a specific rule is excluded for a proxy host
 func (r *WAFRepository) GetExclusionByRuleID(ctx context.Context, proxyHostID string, ruleID int) (*model.WAFRuleExclusion, error) {
 	query := `
-		SELECT id, proxy_host_id, rule_id, rule_category, rule_description, reason, disabled_by, created_at
+		SELECT id, proxy_host_id, rule_id, rule_category, rule_description, reason, disabled_by, scope_type, scope_value, created_at
 		FROM waf_rule_exclusions
 		WHERE proxy_host_id = $1 AND rule_id = $2
 	`
@@ -182,7 +188,7 @@ func (r *WAFRepository) GetExclusionByRuleID(ctx context.Context, proxyHostID st
 // GetAllExclusions returns all rule exclusions grouped by proxy host
 func (r *WAFRepository) GetAllExclusions(ctx context.Context) (map[string][]model.WAFRuleExclusion, error) {
 	query := `
-		SELECT id, proxy_host_id, rule_id, rule_category, rule_description, reason, disabled_by, created_at
+		SELECT id, proxy_host_id, rule_id, rule_category, rule_description, reason, disabled_by, scope_type, scope_value, created_at
 		FROM waf_rule_exclusions
 		ORDER BY proxy_host_id, rule_id ASC
 	`
@@ -206,6 +212,8 @@ func (r *WAFRepository) GetAllExclusions(ctx context.Context) (map[string][]mode
 			&ruleDescription,
 			&reason,
 			&disabledBy,
+			&exclusion.ScopeType,
+			&exclusion.ScopeValue,
 			&exclusion.CreatedAt,
 		)
 		if err != nil {

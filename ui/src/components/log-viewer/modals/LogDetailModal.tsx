@@ -35,6 +35,10 @@ export function LogDetailModal({ log, onClose, onRuleDisabled }: LogDetailModalP
   const queryClient = useQueryClient();
   const [showRelatedLogs, setShowRelatedLogs] = useState(false);
   const [disableReason, setDisableReason] = useState('');
+  // Scope of a per-host rule exclusion (#231). Defaults to host so the
+  // existing behaviour is what an operator gets without touching it.
+  const [ruleScope, setRuleScope] = useState<'host' | 'uri' | 'param'>('host');
+  const [scopeValue, setScopeValue] = useState('');
   const [showDisableForm, setShowDisableForm] = useState(false);
   const [isGlobalDisable, setIsGlobalDisable] = useState(!log.host);
   const [showBanForm, setShowBanForm] = useState(false);
@@ -150,6 +154,8 @@ export function LogDetailModal({ log, onClose, onRuleDisabled }: LogDetailModalP
           rule_category: log.attack_type,
           rule_description: log.rule_message,
           reason: disableReason || t('messages.disabledReasonDefault'),
+          scope_type: ruleScope,
+          scope_value: ruleScope === 'host' ? '' : scopeValue.trim(),
         });
       }
     },
@@ -163,6 +169,8 @@ export function LogDetailModal({ log, onClose, onRuleDisabled }: LogDetailModalP
       onRuleDisabled?.();
       setShowDisableForm(false);
       setDisableReason('');
+      setRuleScope('host');
+      setScopeValue('');
       setIsGlobalDisable(!log.host);
     },
     onError: (error) => {
@@ -262,6 +270,10 @@ export function LogDetailModal({ log, onClose, onRuleDisabled }: LogDetailModalP
                       setDisableReason={setDisableReason}
                       isGlobalDisable={isGlobalDisable}
                       setIsGlobalDisable={setIsGlobalDisable}
+                      ruleScope={ruleScope}
+                      setRuleScope={setRuleScope}
+                      scopeValue={scopeValue}
+                      setScopeValue={setScopeValue}
                       onSubmit={handleDisableRule}
                       onCancel={() => setShowDisableForm(false)}
                       isPending={disableMutation.isPending}

@@ -65,11 +65,21 @@ func (r *BackupRepository) importAccessList(ctx context.Context, tx *sql.Tx, al 
 
 func (r *BackupRepository) importWAFExclusion(ctx context.Context, tx *sql.Tx, we *model.WAFExclusionExport) error {
 	query := `
-		INSERT INTO waf_rule_exclusions (proxy_host_id, rule_id, rule_category, rule_description, reason, disabled_by)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		ON CONFLICT (proxy_host_id, rule_id) DO NOTHING
+		INSERT INTO waf_rule_exclusions (proxy_host_id, rule_id, rule_category, rule_description, reason, disabled_by,
+			scope_type, scope_value)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		ON CONFLICT (proxy_host_id, rule_id, scope_type, scope_value) DO NOTHING
 	`
-	_, err := tx.ExecContext(ctx, query, we.ProxyHostID, we.RuleID, we.RuleCategory, we.RuleDescription, we.Reason, we.DisabledBy)
+	// A backup written before scoped exclusions existed carries no scope, and
+	// the column is NOT NULL. Those exclusions were host-wide, so that is what
+	// they are restored as — without this the restore fails outright, since the
+	// conflict target now includes both columns.
+	scopeType, scopeValue := we.ScopeType, we.ScopeValue
+	if scopeType == "" {
+		scopeType, scopeValue = model.WAFScopeHost, ""
+	}
+	_, err := tx.ExecContext(ctx, query, we.ProxyHostID, we.RuleID, we.RuleCategory, we.RuleDescription, we.Reason, we.DisabledBy,
+		scopeType, scopeValue)
 	return err
 }
 

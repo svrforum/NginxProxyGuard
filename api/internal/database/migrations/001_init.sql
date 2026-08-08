@@ -2686,9 +2686,12 @@ CREATE TABLE IF NOT EXISTS public.waf_rule_exclusions (
     rule_description text,
     reason text,
     disabled_by character varying(255),
+    scope_type character varying(16) DEFAULT 'host'::character varying NOT NULL,
+    scope_value text DEFAULT ''::text NOT NULL,
     created_at timestamp with time zone DEFAULT now()
 );
 COMMENT ON TABLE public.waf_rule_exclusions IS 'Per-host WAF rule exclusions for OWASP CRS rules';
+COMMENT ON COLUMN public.waf_rule_exclusions.scope_type IS 'host = rule off for the whole host; uri = off under a path prefix; param = one argument dropped from the rule targets';
 COMMENT ON COLUMN public.waf_rule_exclusions.rule_id IS 'OWASP CRS rule ID (e.g., 941100)';
 COMMENT ON COLUMN public.waf_rule_exclusions.rule_category IS 'Rule category like XSS, SQLI, RCE, etc.';
 CREATE TABLE IF NOT EXISTS public.waf_rule_snapshot_details (
@@ -3717,6 +3720,11 @@ CREATE INDEX IF NOT EXISTS idx_fsee_subscription ON public.filter_subscription_e
 --   CREATE TABLE IF NOT EXISTS public.notification_outbox (...);
 --   CREATE INDEX IF NOT EXISTS notification_outbox_due_idx ON public.notification_outbox (status, next_attempt_at);
 --   ALTER TABLE notification_outbox ADD CONSTRAINT notification_outbox_channel_id_fkey ... ON DELETE CASCADE;
+
+--   ALTER TABLE public.waf_rule_exclusions ADD COLUMN IF NOT EXISTS scope_type varchar(16) DEFAULT 'host' NOT NULL;
+--   ALTER TABLE public.waf_rule_exclusions ADD COLUMN IF NOT EXISTS scope_value text DEFAULT '' NOT NULL;
+--   ALTER TABLE public.waf_rule_exclusions DROP CONSTRAINT IF EXISTS waf_rule_exclusions_proxy_host_id_rule_id_key;
+--   ALTER TABLE public.waf_rule_exclusions ADD CONSTRAINT waf_rule_exclusions_scope_key UNIQUE (proxy_host_id, rule_id, scope_type, scope_value);
 
 -- Enum upgrades
 ALTER TYPE public.block_reason ADD VALUE IF NOT EXISTS 'cloud_provider_challenge';

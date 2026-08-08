@@ -726,6 +726,10 @@ type WAFExclusionExport struct {
 	RuleDescription string `json:"rule_description,omitempty"`
 	Reason          string `json:"reason,omitempty"`
 	DisabledBy      string `json:"disabled_by,omitempty"`
+	// Absent in backups taken before v2.37.0; import defaults it to host,
+	// which is what those exclusions were. (#231)
+	ScopeType  string `json:"scope_type,omitempty"`
+	ScopeValue string `json:"scope_value,omitempty"`
 }
 
 // BannedIPExport represents a banned IP for export

@@ -260,7 +260,22 @@
     "cancel": "Cancel",
     "description": "This will disable policy {{ruleId}} for <1>{{host}}</1>. You can re-enable it from WAF Settings.",
     "globalNote": "Policy {{ruleId}} will be disabled for all hosts.",
-    "successGlobal": "Policy {{ruleId}} has been globally disabled."
+    "successGlobal": "Policy {{ruleId}} has been globally disabled.",
+    "narrowTitle": "Where to switch it off",
+    "scopes": {
+      "host": "The whole host",
+      "uri": "Only this path",
+      "param": "Only this argument"
+    },
+    "scopePlaceholder": {
+      "uri": "/wp-admin",
+      "param": "content"
+    },
+    "scopeHint": {
+      "host": "The rule is off for every request to this host. The widest choice — whatever it was catching now gets through on other paths too.",
+      "uri": "Off only for requests whose path starts with this. Every other path stays protected.",
+      "param": "The rule stays on but stops inspecting that one argument. The narrowest choice."
+    }
   },
   "banIP": {
     "button": "Ban this IP",

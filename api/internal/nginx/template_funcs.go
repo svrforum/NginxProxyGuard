@@ -265,5 +265,16 @@ func GetSimpleTemplateFuncMap() template.FuncMap {
 		"joinComma": func(s []string) string {
 			return strings.Join(s, ",")
 		},
+		// scopedRuleID numbers the helper rules a URI-scoped exclusion needs.
+		//
+		// ModSecurity requires every rule in a set to carry a unique id, and a
+		// scoped exclusion is implemented as its own SecRule. The range starts
+		// at 1,000,000 — the conventional local-rule space, clear of the
+		// 900,000-999,999 block OWASP CRS uses, so a CRS upgrade cannot collide
+		// with an operator's exclusions. Per-host files are separate rule sets,
+		// so the index only has to be unique within one host. (#231)
+		"scopedRuleID": func(i int) int {
+			return 1000000 + i
+		},
 	}
 }

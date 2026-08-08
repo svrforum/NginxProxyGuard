@@ -1319,6 +1319,17 @@ ALTER TABLE public.notification_channels ADD COLUMN IF NOT EXISTS language chara
 ALTER TABLE public.notification_channels ADD COLUMN IF NOT EXISTS dashboard_url text;`,
 		},
 		{
+			desc: "v2.37.0: scoped WAF rule exclusions (#231)",
+			sql: `ALTER TABLE public.waf_rule_exclusions ADD COLUMN IF NOT EXISTS scope_type character varying(16) DEFAULT 'host'::character varying NOT NULL;
+ALTER TABLE public.waf_rule_exclusions ADD COLUMN IF NOT EXISTS scope_value text DEFAULT ''::text NOT NULL;
+-- The old key allowed one exclusion per rule per host, which makes a scoped
+-- exclusion impossible: the same rule has to be excludable on two paths.
+ALTER TABLE public.waf_rule_exclusions DROP CONSTRAINT IF EXISTS waf_rule_exclusions_proxy_host_id_rule_id_key;
+DO $$ BEGIN
+    ALTER TABLE public.waf_rule_exclusions ADD CONSTRAINT waf_rule_exclusions_scope_key UNIQUE (proxy_host_id, rule_id, scope_type, scope_value);
+EXCEPTION WHEN duplicate_table OR duplicate_object THEN NULL; END $$;`,
+		},
+		{
 			desc: "v2.36.0: readable subject label on notification state (#221)",
 			sql:  `ALTER TABLE public.notification_state ADD COLUMN IF NOT EXISTS subject_label character varying(255);`,
 		},

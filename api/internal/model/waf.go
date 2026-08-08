@@ -1,6 +1,11 @@
 package model
 
-import "time"
+import (
+	"fmt"
+	"regexp"
+	"strings"
+	"time"
+)
 
 // WAFRuleExclusion represents a disabled WAF rule for a specific proxy host
 type WAFRuleExclusion struct {
@@ -11,8 +16,80 @@ type WAFRuleExclusion struct {
 	RuleDescription string    `json:"rule_description,omitempty"`
 	Reason          string    `json:"reason,omitempty"`
 	DisabledBy      string    `json:"disabled_by,omitempty"`
+	// ScopeType narrows what the exclusion switches off. Turning a rule off for
+	// a whole host is a blunt instrument — it opens the attack the rule exists
+	// to stop on every other path — so an operator can instead name the path or
+	// the argument that is producing the false positive. (#231)
+	ScopeType       string    `json:"scope_type"`
+	ScopeValue      string    `json:"scope_value,omitempty"`
 	CreatedAt       time.Time `json:"created_at"`
 }
+
+// Exclusion scopes.
+const (
+	// WAFScopeHost switches the rule off everywhere on this host.
+	WAFScopeHost = "host"
+	// WAFScopeURI switches it off only for requests whose path starts with
+	// ScopeValue. The rule keeps protecting every other path.
+	WAFScopeURI = "uri"
+	// WAFScopeParam keeps the rule but stops it inspecting one argument.
+	WAFScopeParam = "param"
+)
+
+// maxScopeValue bounds a value that ends up inside a generated ModSecurity
+// directive. Long enough for any real path or parameter name.
+const maxScopeValue = 255
+
+// ValidateScope checks an exclusion's scope before it can reach a config file.
+//
+// Every one of these values is interpolated into a ModSecurity directive, which
+// makes it an injection vector in exactly the way a templated nginx field is:
+// a quote or a newline would let an operator append their own directives, and
+// "SecRuleEngine Off" is one line away. Rejected here rather than escaped,
+// because no real path or parameter name needs any of these characters. (#231)
+func (e *WAFRuleExclusion) ValidateScope() error {
+	switch e.ScopeType {
+	case "", WAFScopeHost:
+		e.ScopeType = WAFScopeHost
+		e.ScopeValue = ""
+		return nil
+	case WAFScopeURI, WAFScopeParam:
+	default:
+		return fmt.Errorf("invalid scope_type: must be host, uri or param")
+	}
+
+	v := strings.TrimSpace(e.ScopeValue)
+	if v == "" {
+		return fmt.Errorf("invalid scope_value: required when scope_type is %s", e.ScopeType)
+	}
+	if len(v) > maxScopeValue {
+		return fmt.Errorf("invalid scope_value: must be %d characters or fewer", maxScopeValue)
+	}
+	for _, r := range v {
+		if r < 0x21 || r > 0x7e {
+			return fmt.Errorf("invalid scope_value: only printable ASCII without spaces is allowed")
+		}
+	}
+	if strings.ContainsAny(v, `"'\`+"`"+`;{}$|&<>`) {
+		return fmt.Errorf("invalid scope_value: contains a character that is not allowed in a rule scope")
+	}
+
+	if e.ScopeType == WAFScopeURI {
+		if !strings.HasPrefix(v, "/") {
+			return fmt.Errorf("invalid scope_value: a uri scope must start with /")
+		}
+	} else if !paramNamePattern.MatchString(v) {
+		return fmt.Errorf("invalid scope_value: a param scope must be an argument name")
+	}
+	e.ScopeValue = v
+	return nil
+}
+
+// paramNamePattern is what a request argument may be named. Deliberately
+// narrower than what HTTP permits: anything outside this set in a real form
+// field is rare enough that refusing it costs less than reasoning about how
+// ModSecurity would parse it.
+var paramNamePattern = regexp.MustCompile(`^[A-Za-z0-9_.\[\]-]+$`)
 
 // WAFRule represents an OWASP CRS rule
 type WAFRule struct {
@@ -53,6 +130,21 @@ type CreateWAFRuleExclusionRequest struct {
 	RuleCategory    string `json:"rule_category,omitempty"`
 	RuleDescription string `json:"rule_description,omitempty"`
 	Reason          string `json:"reason,omitempty"`
+	// ScopeType/ScopeValue narrow the exclusion. Omitted means host — the
+	// behaviour every existing client already gets. (#231)
+	ScopeType  string `json:"scope_type,omitempty"`
+	ScopeValue string `json:"scope_value,omitempty"`
+}
+
+// ValidateScope normalises and checks the scope on a create request, using the
+// same rules as a stored exclusion.
+func (r *CreateWAFRuleExclusionRequest) ValidateScope() error {
+	e := WAFRuleExclusion{ScopeType: r.ScopeType, ScopeValue: r.ScopeValue}
+	if err := e.ValidateScope(); err != nil {
+		return err
+	}
+	r.ScopeType, r.ScopeValue = e.ScopeType, e.ScopeValue
+	return nil
 }
 
 // WAFRulesResponse is the response for listing WAF rules

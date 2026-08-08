@@ -113,7 +113,8 @@ func (r *BackupRepository) getAccessListItems(ctx context.Context, accessListID 
 
 func (r *BackupRepository) exportWAFExclusions(ctx context.Context) ([]model.WAFExclusionExport, error) {
 	query := `
-		SELECT proxy_host_id, rule_id, rule_category, rule_description, reason, disabled_by
+		SELECT proxy_host_id, rule_id, rule_category, rule_description, reason, disabled_by,
+		       scope_type, scope_value
 		FROM waf_rule_exclusions ORDER BY proxy_host_id, rule_id
 	`
 
@@ -128,7 +129,8 @@ func (r *BackupRepository) exportWAFExclusions(ctx context.Context) ([]model.WAF
 		var we model.WAFExclusionExport
 		var category, desc, reason, disabledBy sql.NullString
 
-		err := rows.Scan(&we.ProxyHostID, &we.RuleID, &category, &desc, &reason, &disabledBy)
+		err := rows.Scan(&we.ProxyHostID, &we.RuleID, &category, &desc, &reason, &disabledBy,
+			&we.ScopeType, &we.ScopeValue)
 		if err != nil {
 			return nil, err
 		}

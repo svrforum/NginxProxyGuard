@@ -223,6 +223,12 @@ func (h *WAFHandler) DisableRule(w http.ResponseWriter, r *http.Request) {
 		req = model.CreateWAFRuleExclusionRequest{}
 	}
 	req.RuleID = ruleID
+	// The scope ends up inside a ModSecurity directive, so it is validated
+	// before it can reach a config file. (#231)
+	if err := req.ValidateScope(); err != nil {
+		httpJSONError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	// Check if already excluded
 	existing, err := h.wafRepo.GetExclusionByRuleID(ctx, proxyHostID, ruleID)
@@ -276,6 +282,8 @@ func (h *WAFHandler) DisableRuleByHost(w http.ResponseWriter, r *http.Request) {
 		RuleCategory    string `json:"rule_category,omitempty"`
 		RuleDescription string `json:"rule_description,omitempty"`
 		Reason          string `json:"reason,omitempty"`
+		ScopeType       string `json:"scope_type,omitempty"`
+		ScopeValue      string `json:"scope_value,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -328,6 +336,12 @@ func (h *WAFHandler) DisableRuleByHost(w http.ResponseWriter, r *http.Request) {
 		RuleCategory:    req.RuleCategory,
 		RuleDescription: req.RuleDescription,
 		Reason:          req.Reason,
+		ScopeType:       req.ScopeType,
+		ScopeValue:      req.ScopeValue,
+	}
+	if err := exclusionReq.ValidateScope(); err != nil {
+		httpJSONError(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	// Create the exclusion

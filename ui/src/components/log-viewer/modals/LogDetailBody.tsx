@@ -196,13 +196,20 @@ interface DisableRuleFormProps {
   setDisableReason: (r: string) => void;
   isGlobalDisable: boolean;
   setIsGlobalDisable: (v: boolean) => void;
+  /** How narrowly the rule is switched off. Per-host only — a global
+   *  exclusion has no scope. (#231) */
+  ruleScope: 'host' | 'uri' | 'param';
+  setRuleScope: (v: 'host' | 'uri' | 'param') => void;
+  scopeValue: string;
+  setScopeValue: (v: string) => void;
   onSubmit: () => void;
   onCancel: () => void;
   isPending: boolean;
 }
 
 export function DisableRuleForm({
-  log, disableReason, setDisableReason, isGlobalDisable, setIsGlobalDisable, onSubmit, onCancel, isPending,
+  log, disableReason, setDisableReason, isGlobalDisable, setIsGlobalDisable,
+  ruleScope, setRuleScope, scopeValue, setScopeValue, onSubmit, onCancel, isPending,
 }: DisableRuleFormProps) {
   const { t } = useTranslation('logs');
   return (
@@ -248,6 +255,50 @@ export function DisableRuleForm({
           </p>
         )}
       </div>
+
+      {/* How narrowly to switch it off. Turning a rule off for a whole host
+          reopens the attack it exists to stop on every other path, so the
+          narrower options come first and are prefilled from this request. (#231) */}
+      {!isGlobalDisable && (
+        <div>
+          <label className="mb-1 block text-xs font-medium uppercase text-slate-500 dark:text-slate-400">
+            {t('disableRule.narrowTitle')}
+          </label>
+          <div className="flex gap-2">
+            {(['host', 'uri', 'param'] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                data-testid={`disable-scope-${mode}`}
+                onClick={() => {
+                  setRuleScope(mode);
+                  setScopeValue(mode === 'uri' ? (log.request_uri?.split('?')[0] ?? '/') : '');
+                }}
+                className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  ruleScope === mode
+                    ? 'bg-amber-600 text-white'
+                    : 'border border-amber-300 bg-white text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:bg-slate-800 dark:text-amber-400 dark:hover:bg-amber-900/30'
+                }`}
+              >
+                {t(`disableRule.scopes.${mode}`)}
+              </button>
+            ))}
+          </div>
+          {ruleScope !== 'host' && (
+            <input
+              value={scopeValue}
+              onChange={(e) => setScopeValue(e.target.value)}
+              data-testid="disable-scope-value"
+              placeholder={t(`disableRule.scopePlaceholder.${ruleScope}`)}
+              className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+            />
+          )}
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            {t(`disableRule.scopeHint.${ruleScope}`)}
+          </p>
+        </div>
+      )}
+
       <div>
         <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase mb-1 block">
           {t('disableRule.reason')}
