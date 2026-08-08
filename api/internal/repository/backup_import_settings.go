@@ -300,7 +300,7 @@ func (r *BackupRepository) importRoles(ctx context.Context, tx *sql.Tx, roles []
 func (r *BackupRepository) importSSOProviders(ctx context.Context, tx *sql.Tx, providers []model.SSOProviderExport) error {
 	var present bool
 	if err := tx.QueryRowContext(ctx,
-		`SELECT to_regclass('public.sso_providers') IS NOT NULL`).Scan(&present); err != nil || !present {
+		tablesExistSQL("sso_providers")).Scan(&present); err != nil || !present {
 		if len(providers) > 0 {
 			log.Printf("Backup import: skipping %d SSO providers — the sso_providers table is missing", len(providers))
 		}

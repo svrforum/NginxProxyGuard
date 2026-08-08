@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"nginx-proxy-guard/internal/database/dialect"
 	"time"
 
 	"github.com/lib/pq"
@@ -31,9 +32,7 @@ func NewNotificationRepository(db *database.DB) *NotificationRepository {
 func (r *NotificationRepository) TablesExist(ctx context.Context) bool {
 	var ok bool
 	err := r.db.QueryRowContext(ctx,
-		`SELECT to_regclass('public.notification_channels') IS NOT NULL
-		    AND to_regclass('public.notification_state') IS NOT NULL
-		    AND to_regclass('public.notification_outbox') IS NOT NULL`).Scan(&ok)
+		tablesExistSQL("notification_channels", "notification_state", "notification_outbox")).Scan(&ok)
 	return err == nil && ok
 }
 
@@ -114,7 +113,7 @@ func (r *NotificationRepository) GetByID(ctx context.Context, id string) (*model
 func (r *NotificationRepository) ChannelsForEvent(ctx context.Context, eventKey string) ([]model.NotificationChannel, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT `+channelColumns+` FROM notification_channels
-		 WHERE enabled AND events @> ARRAY[$1]::text[] ORDER BY name`, eventKey)
+		 WHERE enabled AND `+arrayContains("events", 1)+` ORDER BY name`, eventKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to select channels for %s: %w", eventKey, err)
 	}
@@ -146,7 +145,7 @@ func (r *NotificationRepository) ChannelsForDigest(ctx context.Context, hour int
 func (r *NotificationRepository) SetChatID(ctx context.Context, channelID, chatID string) error {
 	_, err := r.db.ExecContext(ctx,
 		`UPDATE notification_channels
-		 SET config = jsonb_set(config, '{chat_id}', to_jsonb($2::text)), updated_at = now()
+		 SET config = `+jsonSetString("config", "chat_id", 2)+`, updated_at = now()
 		 WHERE id = $1`, channelID, chatID)
 	if err != nil {
 		return fmt.Errorf("failed to store migrated chat id: %w", err)
@@ -179,7 +178,7 @@ func (r *NotificationRepository) Create(ctx context.Context, req *model.CreateNo
 		req.Name, req.Type, enabled, config, pq.Array(req.Events), pq.Array(req.DigestEvents),
 		req.RichFormat, req.Language, req.DashboardURL, req.DigestEnabled, req.DigestHour, req.AllowPrivateTarget, req.Template).Scan(&id)
 	if err != nil {
-		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+		if dialect.IsUniqueViolation(err) {
 			return "", fmt.Errorf("a channel with this name already exists")
 		}
 		return "", fmt.Errorf("failed to create notification channel: %w", err)
@@ -208,7 +207,7 @@ func (r *NotificationRepository) Update(ctx context.Context, id string, req *mod
 		id, req.Name, req.Type, enabled, config, pq.Array(req.Events), pq.Array(req.DigestEvents),
 		req.RichFormat, req.Language, req.DashboardURL, req.DigestEnabled, req.DigestHour, req.AllowPrivateTarget, req.Template)
 	if err != nil {
-		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+		if dialect.IsUniqueViolation(err) {
 			return fmt.Errorf("a channel with this name already exists")
 		}
 		return fmt.Errorf("failed to update notification channel: %w", err)
@@ -353,7 +352,7 @@ func (r *NotificationRepository) EnqueueForDigest(ctx context.Context, channelID
 func (r *NotificationRepository) ChannelsForDigestEvent(ctx context.Context, eventKey string) ([]model.NotificationChannel, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT `+channelColumns+` FROM notification_channels
-		 WHERE enabled AND digest_enabled AND digest_events @> ARRAY[$1]::text[] ORDER BY name`, eventKey)
+		 WHERE enabled AND digest_enabled AND `+arrayContains("digest_events", 1)+` ORDER BY name`, eventKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to select digest channels for %s: %w", eventKey, err)
 	}
@@ -375,7 +374,7 @@ type DigestPending struct {
 func (r *NotificationRepository) PendingDigestItems(ctx context.Context, channelID string, since time.Time) ([]DigestPending, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT event_key, count(*), max(created_at),
-		       COALESCE((array_agg(payload->'fields'->>'subject' ORDER BY created_at DESC))[1], '')
+		       `+latestJSONField("payload", "subject", "created_at DESC")+`
 		FROM notification_outbox
 		WHERE channel_id = $1 AND status = $2 AND created_at >= $3
 		GROUP BY event_key
@@ -438,8 +437,8 @@ func (r *NotificationRepository) FailQueuedForDisabledChannel(ctx context.Contex
 func (r *NotificationRepository) ExpireStaleQueued(ctx context.Context, maxAge time.Duration, reason string) (int64, error) {
 	res, err := r.db.ExecContext(ctx,
 		`UPDATE notification_outbox SET status = 'failed', last_error = $2
-		 WHERE status = 'queued' AND created_at < now() - $1::interval`,
-		fmt.Sprintf("%d seconds", int(maxAge.Seconds())), reason)
+		 WHERE status = 'queued' AND created_at < now() - ($1 || ' seconds')::interval`,
+		int(maxAge.Seconds()), reason)
 	if err != nil {
 		return 0, fmt.Errorf("failed to expire stale notifications: %w", err)
 	}
@@ -508,8 +507,8 @@ func (r *NotificationRepository) MarkSent(ctx context.Context, id int64) error {
 func (r *NotificationRepository) MarkRetry(ctx context.Context, id int64, in time.Duration, reason string) error {
 	_, err := r.db.ExecContext(ctx, `
 		UPDATE notification_outbox
-		SET attempts = attempts + 1, next_attempt_at = now() + $2::interval, last_error = $3
-		WHERE id = $1`, id, fmt.Sprintf("%d seconds", int(in.Seconds())), reason)
+		SET attempts = attempts + 1, next_attempt_at = now() + ($2 || ' seconds')::interval, last_error = $3
+		WHERE id = $1`, id, int(in.Seconds()), reason)
 	return err
 }
 

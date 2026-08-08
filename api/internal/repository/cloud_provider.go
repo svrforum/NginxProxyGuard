@@ -72,11 +72,11 @@ func (r *CloudProviderRepository) List(ctx context.Context) ([]model.CloudProvid
 
 // ListByRegion returns providers grouped by region
 func (r *CloudProviderRepository) ListByRegion(ctx context.Context) (*model.CloudProvidersByRegion, error) {
-	query := `
-		SELECT slug, name, region, COALESCE(description, ''), array_length(ip_ranges, 1), enabled
+	query := fmt.Sprintf(`
+		SELECT slug, name, region, COALESCE(description, ''), %s, enabled
 		FROM cloud_providers
 		WHERE enabled = true
-		ORDER BY region, name`
+		ORDER BY region, name`, arrayLength("ip_ranges"))
 
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
@@ -252,12 +252,12 @@ func (r *CloudProviderRepository) GetIPRangesForProviders(ctx context.Context, s
 		return []string{}, nil
 	}
 
-	query := `
+	query := fmt.Sprintf(`
 		SELECT ip_ranges
 		FROM cloud_providers
-		WHERE slug = ANY($1) AND enabled = true`
+		WHERE slug IN (%s) AND enabled = true`, placeholders(1, len(slugs)))
 
-	rows, err := r.db.QueryContext(ctx, query, pq.Array(slugs))
+	rows, err := r.db.QueryContext(ctx, query, stringArgs(slugs)...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get IP ranges: %w", err)
 	}
@@ -486,7 +486,7 @@ func (r *CloudProviderRepository) GetProxyHostIDsWithCloudProviderBlocking(ctx c
 			SELECT proxy_host_id
 			FROM geo_restrictions
 			WHERE blocked_cloud_providers IS NOT NULL
-			  AND array_length(blocked_cloud_providers, 1) > 0`
+			  AND ` + arrayNotEmpty("blocked_cloud_providers")
 	} else {
 		// Get hosts blocking any of the specified providers
 		query = `

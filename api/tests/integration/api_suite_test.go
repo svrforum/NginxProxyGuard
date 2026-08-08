@@ -702,12 +702,12 @@ func TestIntegrationSuite(t *testing.T) {
 
 		t.Run("Set_Geo_Restriction", func(t *testing.T) {
 			geoConfig := map[string]interface{}{
-				"enabled":            true,
-				"mode":               "whitelist",
-				"countries":          []string{"KR", "US", "JP"},
-				"challenge_mode":     false,
-				"allow_search_bots":  true,
-				"allow_private_ips":  true,
+				"enabled":           true,
+				"mode":              "whitelist",
+				"countries":         []string{"KR", "US", "JP"},
+				"challenge_mode":    false,
+				"allow_search_bots": true,
+				"allow_private_ips": true,
 			}
 			code, body := client.Post(t, "/api/v1/proxy-hosts/"+testHostID+"/geo", geoConfig)
 			if code != http.StatusOK && code != http.StatusCreated {
@@ -720,12 +720,12 @@ func TestIntegrationSuite(t *testing.T) {
 
 		t.Run("Update_Geo_Restriction", func(t *testing.T) {
 			geoConfig := map[string]interface{}{
-				"enabled":            true,
-				"mode":               "blacklist",
-				"countries":          []string{"CN", "RU"},
-				"challenge_mode":     true,
-				"allow_search_bots":  true,
-				"allow_private_ips":  true,
+				"enabled":           true,
+				"mode":              "blacklist",
+				"countries":         []string{"CN", "RU"},
+				"challenge_mode":    true,
+				"allow_search_bots": true,
+				"allow_private_ips": true,
 			}
 			code, body := client.Put(t, "/api/v1/proxy-hosts/"+testHostID+"/geo", geoConfig)
 			if code != http.StatusOK {
@@ -767,10 +767,10 @@ func TestIntegrationSuite(t *testing.T) {
 
 		t.Run("Set_Rate_Limit", func(t *testing.T) {
 			rateLimitConfig := map[string]interface{}{
-				"enabled":           true,
+				"enabled":             true,
 				"requests_per_second": 100,
-				"burst_size":        200,
-				"per_ip":            true,
+				"burst_size":          200,
+				"per_ip":              true,
 			}
 			code, body := client.Put(t, "/api/v1/proxy-hosts/"+testHostID+"/rate-limit", rateLimitConfig)
 			if code != http.StatusOK && code != http.StatusCreated {

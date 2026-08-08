@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"nginx-proxy-guard/internal/database/dialect"
 	"time"
 
 	"github.com/lib/pq"
@@ -148,7 +149,7 @@ func (r *SSORepository) Create(ctx context.Context, req *model.CreateSSOProvider
 		req.CallbackBaseURL, enabled, req.AllowJIT, pq.Array(req.AllowedEmailDomains), pq.Array(req.AllowedEmails),
 		req.GroupClaim, req.RequiredGroup, req.DefaultRoleID, mappings).Scan(&id)
 	if err != nil {
-		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+		if dialect.IsUniqueViolation(err) {
 			return "", fmt.Errorf("a provider with this slug already exists")
 		}
 		return "", fmt.Errorf("failed to create sso provider: %w", err)
@@ -180,7 +181,7 @@ func (r *SSORepository) Update(ctx context.Context, id string, req *model.Update
 		req.CallbackBaseURL, enabled, req.AllowJIT, pq.Array(req.AllowedEmailDomains), pq.Array(req.AllowedEmails),
 		req.GroupClaim, req.RequiredGroup, req.DefaultRoleID, mappings)
 	if err != nil {
-		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+		if dialect.IsUniqueViolation(err) {
 			return fmt.Errorf("a provider with this slug already exists")
 		}
 		return fmt.Errorf("failed to update sso provider: %w", err)
@@ -245,7 +246,7 @@ func (r *SSORepository) LinkIdentity(ctx context.Context, providerID, subject, u
 		DO UPDATE SET email = EXCLUDED.email, last_login_at = now()`,
 		providerID, subject, userID, email)
 	if err != nil {
-		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+		if dialect.IsUniqueViolation(err) {
 			return fmt.Errorf("this account is already linked to a different identity on that provider")
 		}
 		return fmt.Errorf("failed to link identity: %w", err)
@@ -258,8 +259,8 @@ func (r *SSORepository) LinkIdentity(ctx context.Context, providerID, subject, u
 func (r *SSORepository) SaveLoginState(ctx context.Context, state, providerID, nonce, verifier string, ttl time.Duration) error {
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO sso_login_states (state, provider_id, nonce, code_verifier, expires_at)
-		VALUES ($1,$2,$3,$4, now() + $5::interval)`,
-		state, providerID, nonce, verifier, fmt.Sprintf("%d seconds", int(ttl.Seconds())))
+		VALUES ($1,$2,$3,$4, now() + ($5 || ' seconds')::interval)`,
+		state, providerID, nonce, verifier, int(ttl.Seconds()))
 	if err != nil {
 		return fmt.Errorf("failed to save login state: %w", err)
 	}
@@ -298,8 +299,6 @@ func (r *SSORepository) DeleteExpiredLoginStates(ctx context.Context) (int64, er
 func (r *SSORepository) TablesExist(ctx context.Context) bool {
 	var ok bool
 	err := r.db.QueryRowContext(ctx,
-		`SELECT to_regclass('public.sso_providers') IS NOT NULL
-		    AND to_regclass('public.user_identities') IS NOT NULL
-		    AND to_regclass('public.sso_login_states') IS NOT NULL`).Scan(&ok)
+		tablesExistSQL("sso_providers", "user_identities", "sso_login_states")).Scan(&ok)
 	return err == nil && ok
 }

@@ -9,6 +9,7 @@ import (
 
 	"nginx-proxy-guard/internal/config"
 	"nginx-proxy-guard/internal/database"
+	"nginx-proxy-guard/internal/database/dialect"
 	"nginx-proxy-guard/internal/repository"
 	"nginx-proxy-guard/internal/service"
 	"nginx-proxy-guard/pkg/cache"
@@ -20,15 +21,15 @@ import (
 // All sub-queries are bounded by a short context timeout so a stuck DB or
 // Redis cannot stall the handler indefinitely.
 type HealthDetailedHandler struct {
-	startedAt   time.Time
-	repo        *repository.HealthDetailedRepository
-	logCollect  *service.LogCollector
-	redis       *cache.RedisClient
-	proxyRepo   *repository.ProxyHostRepository
+	startedAt    time.Time
+	repo         *repository.HealthDetailedRepository
+	logCollect   *service.LogCollector
+	redis        *cache.RedisClient
+	proxyRepo    *repository.ProxyHostRepository
 	settingsRepo *repository.GlobalSettingsRepository
-	canary      *service.PipelineCanary
-	stats       *service.StatsCollector
-	db          *database.DB
+	canary       *service.PipelineCanary
+	stats        *service.StatsCollector
+	db           *database.DB
 }
 
 func NewHealthDetailedHandler(
@@ -55,13 +56,13 @@ func NewHealthDetailedHandler(
 }
 
 type detailedHealthResponse struct {
-	Version       string                      `json:"version"`
-	UptimeSeconds int64                       `json:"uptime_seconds"`
-	Database      *detailedDatabaseInfo       `json:"database"`
-	Cache         *detailedCacheInfo          `json:"cache"`
-	LogCollector  *detailedLogCollectorInfo   `json:"log_collector"`
-	Nginx         *detailedNginxInfo          `json:"nginx"`
-	NginxTuning   *detailedNginxTuningInfo    `json:"nginx_tuning,omitempty"`
+	Version       string                    `json:"version"`
+	UptimeSeconds int64                     `json:"uptime_seconds"`
+	Database      *detailedDatabaseInfo     `json:"database"`
+	Cache         *detailedCacheInfo        `json:"cache"`
+	LogCollector  *detailedLogCollectorInfo `json:"log_collector"`
+	Nginx         *detailedNginxInfo        `json:"nginx"`
+	NginxTuning   *detailedNginxTuningInfo  `json:"nginx_tuning,omitempty"`
 }
 
 // detailedNginxTuningInfo exposes the subset of global_settings that an
@@ -80,10 +81,14 @@ type detailedNginxTuningInfo struct {
 }
 
 type detailedDatabaseInfo struct {
-	Connected         bool                          `json:"connected"`
-	AccessLogRows     int64                         `json:"access_log_rows_estimate"`
-	Hypertables       []repository.HypertableStats  `json:"hypertables"`
-	HypertablesError  string                        `json:"hypertables_error,omitempty"`
+	Connected bool `json:"connected"`
+	// 이 설치가 어느 백엔드에서 도는지: "postgres", "mariadb", "mysql".
+	// 드러낼 가치가 있는 이유는 이 구조체의 나머지가 무엇을 보고할 수 있는지가
+	// 이 값에 따라 달라지기 때문이다. 하이퍼테이블 통계는 TimescaleDB 전용이다.
+	Engine           string                       `json:"engine"`
+	AccessLogRows    int64                        `json:"access_log_rows_estimate"`
+	Hypertables      []repository.HypertableStats `json:"hypertables"`
+	HypertablesError string                       `json:"hypertables_error,omitempty"`
 	// Degraded-but-serving signal: upgrade migrations are warn-and-continue
 	// (a fail-fast boot would brick existing installs), so partial-migration
 	// state surfaces here instead of flipping the liveness probe.
@@ -92,8 +97,8 @@ type detailedDatabaseInfo struct {
 }
 
 type detailedCacheInfo struct {
-	Ready          bool  `json:"ready"`
-	LogBufferSize  int64 `json:"log_buffer_size"`
+	Ready         bool  `json:"ready"`
+	LogBufferSize int64 `json:"log_buffer_size"`
 }
 
 type detailedLogCollectorInfo struct {
@@ -176,7 +181,7 @@ func (h *HealthDetailedHandler) tuningInfo(ctx context.Context) *detailedNginxTu
 }
 
 func (h *HealthDetailedHandler) dbInfo(ctx context.Context) *detailedDatabaseInfo {
-	info := &detailedDatabaseInfo{Connected: true}
+	info := &detailedDatabaseInfo{Connected: true, Engine: dialect.Active().String()}
 
 	if rows, err := h.repo.GetAccessLogRowCount(ctx); err == nil {
 		info.AccessLogRows = rows
@@ -184,11 +189,16 @@ func (h *HealthDetailedHandler) dbInfo(ctx context.Context) *detailedDatabaseInf
 		info.Connected = false
 	}
 
-	hyper, err := h.repo.GetHypertableStats(ctx)
-	if err != nil {
-		info.HypertablesError = err.Error()
-	} else {
-		info.Hypertables = hyper
+	// 하이퍼테이블은 TimescaleDB 개념이다. MySQL 계열에서 그에 해당하는 월별
+	// RANGE 파티션은 파티션 스케줄러가 관리하며, 여기서 물어봐야 혼란스러운
+	// 오류 문자열만 나온다.
+	if !dialect.ActiveIsMySQLFamily() {
+		hyper, err := h.repo.GetHypertableStats(ctx)
+		if err != nil {
+			info.HypertablesError = err.Error()
+		} else {
+			info.Hypertables = hyper
+		}
 	}
 
 	if h.db != nil {

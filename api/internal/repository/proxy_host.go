@@ -790,7 +790,7 @@ func (r *ProxyHostRepository) GetByDomain(ctx context.Context, domain string) (*
 			COALESCE(client_max_body_size, '') as client_max_body_size,
 			COALESCE(proxy_max_temp_file_size, '') as proxy_max_temp_file_size,
 			access_list_id, enabled, is_favorite, COALESCE(config_status, 'ok') as config_status, COALESCE(config_error, '') as config_error, ddns_enabled, ddns_provider_id, ddns_proxied, auth_provider_id, COALESCE(auth_bypass_paths, '{}') as auth_bypass_paths, meta, created_at, updated_at
-		FROM proxy_hosts WHERE $1 = ANY(domain_names)
+		FROM proxy_hosts WHERE ` + arrayContains("domain_names", 1) + `
 		LIMIT 1
 	`
 

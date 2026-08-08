@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"nginx-proxy-guard/internal/database/dialect"
 	"nginx-proxy-guard/internal/repository"
 )
 
@@ -94,6 +95,9 @@ func (s *PartitionScheduler) isLogsHypertable(ctx context.Context) bool {
 // Returns false when the timescaledb_information view is unavailable so
 // installs without the extension fall through to the legacy code paths.
 func (s *PartitionScheduler) isHypertable(ctx context.Context, table string) bool {
+	if dialect.ActiveIsMySQLFamily() {
+		return false
+	}
 	var isHT bool
 	err := s.db.QueryRowContext(ctx, `
 		SELECT EXISTS(
@@ -141,6 +145,11 @@ func (s *PartitionScheduler) cleanupDashboardStats() {
 func (s *PartitionScheduler) analyzeOldPartitions() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
+
+	if dialect.ActiveIsMySQLFamily() {
+		s.analyzeMariaDB(ctx)
+		return
+	}
 
 	// TimescaleDB auto-analyzes its chunks; the native `logs_p%` partitions
 	// targeted below do not exist on hypertable installs.
@@ -191,6 +200,11 @@ func (s *PartitionScheduler) analyzeOldPartitions() {
 func (s *PartitionScheduler) createPartitions() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
+
+	if dialect.ActiveIsMySQLFamily() {
+		s.createPartitionsMariaDB(ctx)
+		return
+	}
 
 	// Skip native partition operations when logs_partitioned has been migrated
 	// to a TimescaleDB hypertable. CREATE TABLE ... PARTITION OF on a hypertable
@@ -307,6 +321,11 @@ func (s *PartitionScheduler) createPartitions() {
 }
 
 func (s *PartitionScheduler) logPartitionStats(ctx context.Context) {
+	// pg_class/pg_inherits에는 여기서 보고할 만한 MySQL 계열 대응물이 없다.
+	// 파티션 관리가 이미 무엇을 추가하고 삭제했는지 로그로 남긴다.
+	if dialect.ActiveIsMySQLFamily() {
+		return
+	}
 	// Count log partitions
 	var logPartitionCount int
 	err := s.db.QueryRowContext(ctx, `
@@ -385,6 +404,16 @@ func (s *PartitionScheduler) enforceRetention() {
 		} else if deleted > 0 {
 			log.Printf("[PartitionScheduler] Cleaned up %d old system logs (retention: %d days)", deleted, settings.SystemLogRetentionDays)
 		}
+	}
+
+	if dialect.ActiveIsMySQLFamily() {
+		// 파티션 단위 보존 정책. 파티션 삭제는 메타데이터 작업인 반면 아래의
+		// 행 단위 DELETE는 모든 행을 훑고 로그로 남겨야 한다. 보존 기간 바깥에
+		// 완전히 놓인 파티션만 삭제하므로, 경계에 걸친 달은 위에서 행 단위로
+		// 정리된다.
+		s.dropOldPartitionsMariaDB(ctx, "logs_partitioned", settings.AccessLogRetentionDays)
+		s.dropOldPartitionsMariaDB(ctx, "dashboard_stats_hourly_partitioned", settings.StatsRetentionDays)
+		return
 	}
 
 	// 3. Drop old log partitions (logs_partitioned)

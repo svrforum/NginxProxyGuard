@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"nginx-proxy-guard/internal/database/dialect"
 )
 
 // HealthDetailedRepository surfaces storage + compression telemetry used by
@@ -32,6 +33,13 @@ type HypertableStats struct {
 // catalog rows on errors so a missing timescaledb_information view (older PG
 // or a non-Timescale fallback) does not block the entire health response.
 func (r *HealthDetailedRepository) GetHypertableStats(ctx context.Context) ([]HypertableStats, error) {
+	// 하이퍼테이블은 TimescaleDB에서만 존재한다. 오류 대신 아무것도 돌려주지
+	// 않으면 "여기엔 그런 지표가 없다"는 답이 되고, 헬스 응답이 굳이 설명해야
+	// 할 실패가 되지 않는다.
+	if dialect.ActiveIsMySQLFamily() {
+		return nil, nil
+	}
+
 	const q = `
 		SELECT h.hypertable_name,
 		       h.compression_enabled,

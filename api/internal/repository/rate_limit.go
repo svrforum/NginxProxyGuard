@@ -3,10 +3,10 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log"
 	"time"
 
-	"github.com/lib/pq"
 	"nginx-proxy-guard/internal/model"
 	"nginx-proxy-guard/pkg/cache"
 )
@@ -606,11 +606,13 @@ func (r *RateLimitRepository) GetBannedIPsByIDs(ctx context.Context, ids []strin
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	query := `
+	// `= ANY($1)` 대신 IN 목록을 쓴다. 두 엔진 모두 받아주므로 이 질의에는
+	// dialect 분기가 필요 없다.
+	query := fmt.Sprintf(`
 		SELECT id, proxy_host_id, ip_address, reason, fail_count, banned_at, expires_at, is_permanent, created_at
-		FROM banned_ips WHERE id = ANY($1::uuid[])
-	`
-	rows, err := r.db.QueryContext(ctx, query, pq.Array(ids))
+		FROM banned_ips WHERE id IN (%s)
+	`, placeholders(1, len(ids)))
+	rows, err := r.db.QueryContext(ctx, query, stringArgs(ids)...)
 	if err != nil {
 		return nil, err
 	}
@@ -645,7 +647,9 @@ func (r *RateLimitRepository) UnbanIPsByIDs(ctx context.Context, ids []string) (
 	if len(ids) == 0 {
 		return 0, nil
 	}
-	result, err := r.db.ExecContext(ctx, "DELETE FROM banned_ips WHERE id = ANY($1::uuid[])", pq.Array(ids))
+	result, err := r.db.ExecContext(ctx,
+		fmt.Sprintf("DELETE FROM banned_ips WHERE id IN (%s)", placeholders(1, len(ids))),
+		stringArgs(ids)...)
 	if err != nil {
 		return 0, err
 	}
@@ -711,12 +715,12 @@ func (r *RateLimitRepository) GetActiveBannedIPSet(ctx context.Context, ips []st
 		return result, nil
 	}
 
-	query := `
+	query := fmt.Sprintf(`
 		SELECT DISTINCT ip_address FROM banned_ips
-		WHERE ip_address = ANY($1) AND (is_permanent = TRUE OR expires_at > NOW())
-	`
+		WHERE ip_address IN (%s) AND (is_permanent = TRUE OR expires_at > NOW())
+	`, placeholders(1, len(ips)))
 
-	rows, err := r.db.QueryContext(ctx, query, pq.Array(ips))
+	rows, err := r.db.QueryContext(ctx, query, stringArgs(ips)...)
 	if err != nil {
 		return nil, err
 	}

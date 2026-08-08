@@ -16,6 +16,12 @@ var migrationFS embed.FS
 // 001_init.sql runs only once (on fresh install)
 // Upgrade statements run every time for existing installations
 func (db *DB) RunMigrations() error {
+	// MySQL 계열 엔진은 자체 스키마 파일을 쓰고 복구할 TimescaleDB 이력도 없다.
+	// migration_mysqlfamily.go 참고. 이 아래로는 전부 PostgreSQL 전용이다.
+	if db.kind.IsMySQLFamily() {
+		return db.runMySQLFamilyMigrations()
+	}
+
 	// Create migrations tracking table (for version tracking only)
 	_, err := db.Exec(`
 		CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -2525,10 +2531,11 @@ func (db *DB) runTrgmIndexMigration() error {
 // ExploitRulesAutoDisableSQL is the one-shot UPDATE + system_logs entry used by
 // RunMigrations (embedded inside upgradeSQL) and by integration tests that need
 // to exercise the migration independently. It is safe to run repeatedly:
-// - ADD COLUMN IF NOT EXISTS is a no-op after the first run.
-// - The UPDATE filters on auto_disabled_at IS NULL, so it only touches rows the
-//   migration has not yet marked. Admins who have re-enabled the rules keep
-//   their choice.
+//   - ADD COLUMN IF NOT EXISTS is a no-op after the first run.
+//   - The UPDATE filters on auto_disabled_at IS NULL, so it only touches rows the
+//     migration has not yet marked. Admins who have re-enabled the rules keep
+//     their choice.
+//
 // See GitHub Issue #123.
 const ExploitRulesAutoDisableSQL = `
 ALTER TABLE public.exploit_block_rules ADD COLUMN IF NOT EXISTS auto_disabled_at timestamp with time zone;

@@ -9,7 +9,7 @@ import (
 func WaitForAPI(t *testing.T, baseURL string) {
 	client := NewAPIClient(baseURL)
 	maxRetries := 30
-	
+
 	for i := 0; i < maxRetries; i++ {
 		// Try to hit health endpoint
 		// Note: Using a simple req directly to avoid Auth checks if any
@@ -22,9 +22,9 @@ func WaitForAPI(t *testing.T, baseURL string) {
 		if resp != nil {
 			resp.Body.Close()
 		}
-		
+
 		time.Sleep(1 * time.Second)
 	}
-	
+
 	t.Fatalf("API did not become ready at %s after %d seconds", baseURL, maxRetries)
 }
