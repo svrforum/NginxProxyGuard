@@ -22,7 +22,7 @@
     "react-i18next": "^17.0.11",
     "react-router-dom": "^7.18.1",
     "react-simple-maps": "^3.0.0",
-    "recharts": "^3.10.0",
+    "recharts": "^3.10.1",
     "topojson-client": "^3.1.0"
   },
   "devDependencies": {
@@ -33,7 +33,7 @@
     "@types/react-datepicker": "^7.0.0",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.4",
-    "eslint": "^10.7.0",
+    "eslint": "^10.8.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.3",
     "tailwindcss": "^4.3.0",
