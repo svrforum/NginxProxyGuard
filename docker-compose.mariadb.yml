@@ -1,0 +1,71 @@
+# Nginx Proxy Guard — TimescaleDB/PostgreSQL 대신 MariaDB로 구동한다.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.mariadb.yml up -d
+#
+# 매번 두 파일을 지정하기 번거로우면 셸 별칭을 만들거나 .env에 COMPOSE_FILE을
+# 설정해 두면 이후 명령이 자동으로 인식한다.
+#
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.mariadb.yml
+#
+# 이 오버레이는 서비스 이름을 `db` 그대로 유지한다. 덕분에 스택의 나머지 —
+# depends_on, 헬스체크, api의 DB 대기 루프 — 는 손댈 필요가 없다.
+# MySQL용은 docker-compose.mysql.yml을 보면 된다. 두 엔진은 스키마 한 벌과 코드
+# 경로 하나를 공유한다.
+#
+# 백엔드 선택은 설치할 때 한 번 하는 결정이다. 두 엔진 사이의 마이그레이션
+# 경로는 없다. 스키마는 같은 원본에서 생성되지만 데이터는 이식되지 않으므로,
+# 바꾸려면 빈 데이터베이스에서 새로 시작하거나 Nginx Proxy Guard 백업을
+# 복원해야 한다. 백업은 pg_dump가 아니라 API가 직접 내보내고 가져오므로 엔진과
+# 무관하게 호환된다.
+#
+# MariaDB에서 달라지는 점:
+#   * 로그 테이블이 TimescaleDB 하이퍼테이블이 아니라 MariaDB 네이티브 월별
+#     RANGE 파티션을 쓴다. 보존 정책은 여전히 파티션을 통째로 삭제한다.
+#   * 압축은 TimescaleDB 청크 압축이 아니라 InnoDB 페이지 압축이다. 실제 형태의
+#     액세스 로그로 측정했을 때 약 5배.
+#   * 로그 텍스트 검색에는 트라이그램 인덱스가 없어 선택한 기간 범위 안을
+#     스캔한다. 기간 필터를 켜 두는 것이 속도를 유지하는 방법이다.
+# 프록시 호스트, 인증서, WAF, 알림, SSO 등 나머지는 동일하게 동작한다.
+
+services:
+  db:
+    image: mariadb:11.4
+    # 베이스 파일의 postgres 커맨드라인을 대체한다.
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_bin
+      --innodb-buffer-pool-size=512M
+      --innodb-flush-log-at-trx-commit=2
+      --max-connections=200
+      --default-time-zone=+00:00
+    environment:
+      # 베이스 파일의 POSTGRES_* 변수는 병합된 설정에 남지만 이 이미지가 그냥
+      # 무시한다.
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-${DB_PASSWORD:-postgres}}
+      MARIADB_USER: ${DB_USER:-npg}
+      MARIADB_PASSWORD: ${DB_PASSWORD:-postgres}
+      MARIADB_DATABASE: ${DB_NAME:-nginx_proxy_guard}
+      # utf8mb4_bin은 PostgreSQL처럼 `=`가 대소문자를 구분하게 한다. 대소문자
+      # 무시 매칭은 질의가 원래 요구한 자리(ILIKE)에서만 API의 SQL 번역 계층이
+      # 되살린다.
+      MARIADB_AUTO_UPGRADE: "1"
+    volumes:
+      # Compose는 볼륨 목록을 대상 경로 기준으로 병합하므로 베이스 파일의
+      # postgres_data 마운트가 이것과 함께 남는다. 빈 채로 있고 비용도 없다.
+      # 없애려면 `!reset` 태그가 필요한데, 구버전 Compose가 아예 거부한다.
+      - mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  api:
+    environment:
+      # 스킴이 백엔드를 고른다. internal/database/dialect 참고.
+      DATABASE_URL: mariadb://${DB_USER:-npg}:${DB_PASSWORD:-postgres}@db:3306/${DB_NAME:-nginx_proxy_guard}
+
+volumes:
+  mariadb_data:
+    name: npg_mariadb_data

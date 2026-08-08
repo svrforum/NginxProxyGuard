@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"nginx-proxy-guard/internal/database/dialect"
 	"strings"
 
 	"github.com/lib/pq"
@@ -201,6 +202,10 @@ func (r *ProxyHostRepository) CheckDomainExists(ctx context.Context, domains []s
 		return nil, nil
 	}
 
+	if dialect.ActiveIsMySQLFamily() {
+		return r.checkDomainExistsMariaDB(ctx, domains, excludeID)
+	}
+
 	// Single query: unnest stored domain_names, intersect with input set in one pass.
 	// Was: N round-trips (one SELECT per domain). Now: one SELECT.
 	query := `
@@ -229,6 +234,63 @@ func (r *ProxyHostRepository) CheckDomainExists(ctx context.Context, domains []s
 			return nil, fmt.Errorf("failed to scan existing domain: %w", err)
 		}
 		existingDomains = append(existingDomains, d)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate domain check rows: %w", err)
+	}
+
+	return existingDomains, nil
+}
+
+// checkDomainExistsMariaDB는 MySQL 계열에 없는 UNNEST 없이 같은 질문에 답한다.
+//
+// 술어가 여전히 후보 도메인 중 하나 이상을 가진 호스트로 범위를 좁히므로 스캔은
+// 선택적으로 유지된다. UNNEST가 SQL에서 하던 교집합 연산만 그 몇 행에 대해 Go
+// 쪽에서 수행한다.
+func (r *ProxyHostRepository) checkDomainExistsMariaDB(ctx context.Context, domains []string, excludeID string) ([]string, error) {
+	predicates := make([]string, len(domains))
+	args := make([]interface{}, 0, len(domains)+1)
+	for i, d := range domains {
+		predicates[i] = arrayContains("domain_names", i+1)
+		args = append(args, d)
+	}
+
+	query := fmt.Sprintf(`
+		SELECT domain_names
+		FROM proxy_hosts
+		WHERE (%s)
+		  AND COALESCE(proxy_type, 'http') = 'http'
+	`, strings.Join(predicates, " OR "))
+
+	if excludeID != "" {
+		query += fmt.Sprintf(" AND id != $%d", len(domains)+1)
+		args = append(args, excludeID)
+	}
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check domain existence: %w", err)
+	}
+	defer rows.Close()
+
+	wanted := make(map[string]bool, len(domains))
+	for _, d := range domains {
+		wanted[d] = true
+	}
+
+	seen := map[string]bool{}
+	var existingDomains []string
+	for rows.Next() {
+		var stored pq.StringArray
+		if err := rows.Scan(&stored); err != nil {
+			return nil, fmt.Errorf("failed to scan existing domain: %w", err)
+		}
+		for _, d := range stored {
+			if wanted[d] && !seen[d] {
+				seen[d] = true
+				existingDomains = append(existingDomains, d)
+			}
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("failed to iterate domain check rows: %w", err)

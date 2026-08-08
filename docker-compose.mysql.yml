@@ -1,0 +1,66 @@
+# Nginx Proxy Guard — TimescaleDB/PostgreSQL 대신 MySQL로 구동한다.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.mysql.yml up -d
+#
+# 매번 두 파일을 지정하기 번거로우면 셸 별칭을 만들거나 .env에 COMPOSE_FILE을
+# 설정해 두면 이후 명령이 자동으로 인식한다.
+#
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.mysql.yml
+#
+# MariaDB용은 docker-compose.mariadb.yml을 보면 된다. 두 엔진은 스키마 한 벌과
+# 코드 경로 하나를 공유한다. API는 접속할 때 어느 쪽인지 서버에 직접 묻고
+# (MariaDB는 VERSION()에 자기 이름을 넣는다) 둘이 어긋나는 소수의 문장만
+# 조정한다. MySQL에만 필요한 처리는 다음과 같다.
+#
+#   * RETURNING 절이 아예 없다. 새 행을 돌려주는 INSERT는 한 트랜잭션 안에서
+#     삽입과 재조회로 나뉘어 실행되며, 조회할 키가 있어야 하므로 기본 키는 API가
+#     만든다. 행을 돌려주는 DELETE는 먼저 읽는다.
+#   * CREATE INDEX, ADD COLUMN, ADD FOREIGN KEY에 IF NOT EXISTS를 쓸 수 없다.
+#     그래서 마이그레이션 파일에서 그 절을 빼고 내보내고, 재실행 시 나오는
+#     "이미 존재함" 오류를 성공으로 읽는다.
+#   * 압축이 MariaDB의 PAGE_COMPRESSED 속성이 아니라 COMPRESSION='zlib'이다.
+#
+# 백엔드 선택은 설치할 때 한 번 하는 결정이다. 두 엔진 사이의 마이그레이션
+# 경로는 없다. 바꾸려면 빈 데이터베이스에서 새로 시작하거나 Nginx Proxy Guard
+# 백업을 복원해야 한다. 백업은 덤프 도구가 아니라 API가 직접 내보내고
+# 가져오므로 엔진과 무관하게 호환된다.
+
+services:
+  db:
+    image: mysql:8.4
+    # 베이스 파일의 postgres 커맨드라인을 대체한다.
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_bin
+      --innodb-buffer-pool-size=512M
+      --innodb-flush-log-at-trx-commit=2
+      --max-connections=200
+      --default-time-zone=+00:00
+    environment:
+      # 베이스 파일의 POSTGRES_* 변수는 병합된 설정에 남지만 이 이미지가 그냥
+      # 무시한다.
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-${DB_PASSWORD:-postgres}}
+      MYSQL_USER: ${DB_USER:-npg}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-postgres}
+      MYSQL_DATABASE: ${DB_NAME:-nginx_proxy_guard}
+    volumes:
+      # Compose는 볼륨 목록을 대상 경로 기준으로 병합하므로 베이스 파일의
+      # postgres_data 마운트가 이것과 함께 남는다. 빈 채로 있고 비용도 없다.
+      # 없애려면 `!reset` 태그가 필요한데, 구버전 Compose가 아예 거부한다.
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p${DB_ROOT_PASSWORD:-${DB_PASSWORD:-postgres}}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  api:
+    environment:
+      # 어느 스킴이든 같은 드라이버로 이어지고, 엔진은 서버에 물어서 정한다.
+      # internal/database/dialect 참고.
+      DATABASE_URL: mysql://${DB_USER:-npg}:${DB_PASSWORD:-postgres}@db:3306/${DB_NAME:-nginx_proxy_guard}
+
+volumes:
+  mysql_data:
+    name: npg_mysql_data

@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"nginx-proxy-guard/internal/database/dialect"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -454,6 +456,10 @@ func (r *DashboardRepository) GetBlockBreakdown(ctx context.Context, since time.
 
 func (r *DashboardRepository) getTopCountries(ctx context.Context, since time.Time) []model.CountryStat {
 	// Aggregate from JSONB top_countries column
+	if dialect.ActiveIsMySQLFamily() {
+		return r.getTopCountriesMariaDB(ctx, since)
+	}
+
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT key, SUM(value::INT) as total
 		FROM dashboard_stats_hourly, jsonb_each_text(top_countries)
@@ -472,6 +478,61 @@ func (r *DashboardRepository) getTopCountries(ctx context.Context, since time.Ti
 		var s model.CountryStat
 		rows.Scan(&s.Country, &s.Count)
 		stats = append(stats, s)
+	}
+	return stats
+}
+
+// getTopCountriesMariaDB는 시간별 JSON 맵을 Go에서 집계한다.
+//
+// PostgreSQL은 jsonb_each_text로 객체를 행으로 펼쳐 SQL에서 합산한다. MySQL
+// 계열은 JSON 객체의 키를 순회하려면 JSON_TABLE에 생성 수열을 곁들여야 하는데,
+// 여기서 행을 합산하는 것보다 느리고 읽기도 훨씬 어렵다. 행 수도 기간 내 시간
+// 수 곱하기 호스트 수로 제한되며 대시보드가 이미 그 값을 작게 유지한다.
+func (r *DashboardRepository) getTopCountriesMariaDB(ctx context.Context, since time.Time) []model.CountryStat {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT top_countries FROM dashboard_stats_hourly WHERE hour_bucket >= $1
+	`, since)
+	if err != nil {
+		return []model.CountryStat{}
+	}
+	defer rows.Close()
+
+	totals := map[string]int64{}
+	for rows.Next() {
+		var raw sql.NullString
+		if err := rows.Scan(&raw); err != nil || !raw.Valid || raw.String == "" {
+			continue
+		}
+		// 개수는 JSON 숫자로 기록되지만 과거에는 문자열로도 쓰였다. 관대하게
+		// 디코딩하고 둘 중 어느 쪽도 아니면 건너뛴다.
+		var bucket map[string]json.Number
+		if err := json.Unmarshal([]byte(raw.String), &bucket); err != nil {
+			continue
+		}
+		for country, count := range bucket {
+			n, err := count.Int64()
+			if err != nil {
+				continue
+			}
+			totals[country] += n
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return []model.CountryStat{}
+	}
+
+	stats := make([]model.CountryStat, 0, len(totals))
+	for country, count := range totals {
+		stats = append(stats, model.CountryStat{Country: country, Count: count})
+	}
+	sort.Slice(stats, func(i, j int) bool {
+		if stats[i].Count != stats[j].Count {
+			return stats[i].Count > stats[j].Count
+		}
+		return stats[i].Country < stats[j].Country
+	})
+	if len(stats) > 10 {
+		stats = stats[:10]
 	}
 	return stats
 }

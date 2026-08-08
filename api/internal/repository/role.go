@@ -4,8 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-
-	"github.com/lib/pq"
+	"nginx-proxy-guard/internal/database/dialect"
 
 	"nginx-proxy-guard/internal/database"
 	"nginx-proxy-guard/internal/model"
@@ -28,9 +27,7 @@ func NewRoleRepository(db *database.DB) *RoleRepository {
 // denying everything and locking the operator out of their own server. (#222)
 func (r *RoleRepository) TablesExist(ctx context.Context) bool {
 	var present bool
-	err := r.db.QueryRowContext(ctx, `
-		SELECT to_regclass('public.roles') IS NOT NULL
-		   AND to_regclass('public.role_permissions') IS NOT NULL`).Scan(&present)
+	err := r.db.QueryRowContext(ctx, tablesExistSQL("roles", "role_permissions")).Scan(&present)
 	return err == nil && present
 }
 
@@ -272,7 +269,7 @@ func insertRolePermissions(ctx context.Context, tx *sql.Tx, roleID string, perms
 // handler can map to 409 — the codebase's existing pattern (see
 // isDDNSUniqueViolation) rather than string-matching the message.
 func wrapRoleUniqueViolation(err error) error {
-	if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+	if dialect.IsUniqueViolation(err) {
 		return fmt.Errorf("role name already exists")
 	}
 	return fmt.Errorf("failed to write role: %w", err)

@@ -134,7 +134,7 @@ Built-in DDNS keeps your domains pointed at your home server as your public IP c
 | Technology | Purpose |
 |------------|---------|
 | **Nginx 1.30.2** | High-performance HTTP and stream reverse proxy core with HTTP/3 & QUIC support |
-| **TimescaleDB (PostgreSQL 17)** | Time-series-optimized database with automatic log compression |
+| **TimescaleDB (PostgreSQL 17)**, **MariaDB 11** _or_ **MySQL 8** | Time-series-optimized database with automatic log compression; MariaDB and MySQL are supported alternatives (see [Database engine](#-database-engine)) |
 | **Valkey 9** | Redis-compatible high-speed caching and session management (optional) |
 | **Go 1.26 (Echo v4)** | Backend API with efficient resource management and concurrency |
 | **React 19 & TypeScript 6** | Type-safe, component-based modern UI (Vite 8 + Tailwind 4) |
@@ -265,12 +265,87 @@ https://localhost:81/api/v1/swagger
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `DB_PASSWORD` | PostgreSQL password | (required) |
+| `DB_PASSWORD` | Database password | (required) |
 | `JWT_SECRET` | Secret for JWT tokens | (required) |
 | `TZ` | Timezone | `UTC` |
-| `DB_USER` | PostgreSQL user | `postgres` |
+| `DB_USER` | Database user | `postgres` |
 | `DB_NAME` | Database name | `nginx_proxy_guard` |
+| `DATABASE_URL` | Full connection URL; its scheme picks the engine | built from the variables above |
 | `DOCKER_API_VERSION` | Docker API version (for Synology) | auto-detect |
+
+---
+
+## 🗄 Database Engine
+
+Nginx Proxy Guard runs on **TimescaleDB/PostgreSQL** (the default), **MariaDB
+11**, or **MySQL 8**. The engine is chosen by the `DATABASE_URL` scheme —
+nothing else in the configuration differs.
+
+**PostgreSQL** is the default and needs no configuration.
+
+**MariaDB or MySQL** need the compose overlay that swaps the `db` service:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.mariadb.yml up -d
+# or
+docker compose -f docker-compose.yml -f docker-compose.mysql.yml up -d
+```
+
+and in `.env`:
+
+```ini
+DB_USER=npg
+DB_PASSWORD=change-me
+DB_ROOT_PASSWORD=change-me-too
+DATABASE_URL=mariadb://npg:change-me@db:3306/nginx_proxy_guard
+# so later `docker compose` commands pick the overlay up automatically
+COMPOSE_FILE=docker-compose.yml:docker-compose.mariadb.yml
+```
+
+The scheme only selects the driver. Which of MariaDB and MySQL is actually
+listening is settled by asking the server, so `mysql://` pointed at MariaDB
+(or the reverse) still behaves correctly.
+
+**Choose once, at install time.** There is no in-place migration between the
+two engines. Moving an existing install means starting from an empty database
+or restoring a Nginx Proxy Guard backup — backups are engine-independent
+because the API exports and imports them itself rather than shelling out to
+`pg_dump`.
+
+**What differs on MariaDB**
+
+| | PostgreSQL / TimescaleDB | MariaDB / MySQL |
+|---|---|---|
+| Log storage | Hypertables | Native monthly `RANGE` partitions |
+| Compression | TimescaleDB chunk compression | InnoDB page compression (~5x measured) |
+| Retention | Drops old chunks | Drops old partitions |
+| Log text search | Trigram (GIN) indexed | Scan within the selected time window |
+
+Everything else — proxy hosts, certificates, WAF, GeoIP, notifications, SSO,
+backups — behaves identically. `GET /health/detailed` reports which engine is
+in use under `database.engine`.
+
+**Log compression.** The high-volume tables (`logs_partitioned`, `logs`,
+`system_logs`, `audit_logs`) are created with InnoDB page compression — zlib
+level 1 on MariaDB, `COMPRESSION='zlib'` on MySQL. Measured on 200,000 realistic access-log rows, `logs_partitioned`
+occupies 60 MB on disk against 317 MB logical — a factor of 5.3. Level 1 is
+chosen over the default 6 because both produce the same size on log data while
+level 6 costs 2.7x the write time, and log ingestion is this application's
+write-heaviest path.
+
+Page compression needs a filesystem that can punch holes in sparse files —
+ext4, xfs and btrfs all can. Where it is unavailable InnoDB still compresses
+the page but writes it at full size, so the effect is a little wasted CPU
+rather than an error.
+
+**Log text search** is the one thing with no MariaDB or MySQL equivalent. PostgreSQL
+backs the log search box with `pg_trgm` GIN indexes, which make arbitrary
+`%substring%` matching indexed; neither MySQL-family engine has a trigram
+index, and their FULLTEXT index is word-based, so it cannot answer a
+partial-token query at all (searching `sourc` would not find `resource`).
+Rather than silently change what the search box matches, they scan — but only
+within the time range the query selects, which prunes to the relevant monthly
+partitions. Keeping a time filter on is what makes log search fast there.
 
 ---
 

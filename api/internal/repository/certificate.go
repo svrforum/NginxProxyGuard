@@ -611,27 +611,31 @@ func (r *CertificateRepository) RecoverInterruptedStates(ctx context.Context) (r
 	// RETURNING id + per-row invalidation mirrors DeleteByErrorStatus: these
 	// raw UPDATEs change status/error_message, so a stale GetByID cache entry
 	// would otherwise serve the pre-restart status for up to 60s after recovery.
-	recovered, err = r.updateAndInvalidate(ctx, `
-		UPDATE certificates
-		SET status = 'issued',
-			error_message = 'renewal interrupted by API restart; will retry on schedule',
-			updated_at = NOW()
-		WHERE status = 'renewing' AND certificate_pem IS NOT NULL AND certificate_pem != ''
-		RETURNING id
-	`)
+	// RETURNING이 아니라 UPDATE 전에 모은다. 술어가 바로 그 갱신 대상 컬럼을
+	// 검사하므로, 나중에는 영향받은 행을 다시 조회할 방법이 없다. 이 코드는
+	// API가 서비스를 시작하기 전 부팅 시점에 돌고, 단일 인스턴스 배포에서 다른
+	// 고루틴이 인증서 상태를 건드리지 않으므로 안전하다.
+	recovered, err = r.updateAndInvalidate(ctx,
+		`SELECT id FROM certificates
+		 WHERE status = 'renewing' AND certificate_pem IS NOT NULL AND certificate_pem != ''`,
+		`UPDATE certificates
+		 SET status = 'issued',
+			 error_message = 'renewal interrupted by API restart; will retry on schedule',
+			 updated_at = NOW()
+		 WHERE id IN (%s)`)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to recover interrupted renewals: %w", err)
 	}
 
-	failed, err = r.updateAndInvalidate(ctx, `
-		UPDATE certificates
-		SET status = 'error',
-			error_message = 'issuance interrupted by API restart; please retry',
-			updated_at = NOW()
-		WHERE status IN ('pending', 'renewing')
-			AND (certificate_pem IS NULL OR certificate_pem = '')
-		RETURNING id
-	`)
+	failed, err = r.updateAndInvalidate(ctx,
+		`SELECT id FROM certificates
+		 WHERE status IN ('pending', 'renewing')
+		   AND (certificate_pem IS NULL OR certificate_pem = '')`,
+		`UPDATE certificates
+		 SET status = 'error',
+			 error_message = 'issuance interrupted by API restart; please retry',
+			 updated_at = NOW()
+		 WHERE id IN (%s)`)
 	if err != nil {
 		return recovered, 0, fmt.Errorf("failed to fail interrupted issuances: %w", err)
 	}
@@ -639,25 +643,53 @@ func (r *CertificateRepository) RecoverInterruptedStates(ctx context.Context) (r
 	return recovered, failed, nil
 }
 
-// updateAndInvalidate runs an UPDATE ... RETURNING id query, drops each
-// affected row's per-id cache entry, and returns the number of rows changed.
-func (r *CertificateRepository) updateAndInvalidate(ctx context.Context, query string) (int64, error) {
-	rows, err := r.db.QueryContext(ctx, query)
+// updateAndInvalidate는 복구 UPDATE가 건드릴 행을 먼저 조회하고, 정확히 그 id
+// 들에만 갱신을 적용한 뒤, 각 id의 캐시 항목을 지우고 바뀐 행 수를 돌려준다.
+//
+// selectSQL이 대상 행을 특정하고, updateSQL은 %s 하나가 그 id들의 IN 목록으로
+// 채워지는 포맷 문자열이다. 행별 캐시 무효화가 중요한 이유는 이 원시 UPDATE들이
+// status와 error_message를 바꾸기 때문이다. 그대로 두면 오래된 GetByID 항목이
+// 재시작 이전 상태를 최대 60초간 서빙한다.
+func (r *CertificateRepository) updateAndInvalidate(ctx context.Context, selectSQL, updateSQL string) (int64, error) {
+	rows, err := r.db.QueryContext(ctx, selectSQL)
 	if err != nil {
 		return 0, err
 	}
-	defer rows.Close()
 
-	var affected int64
+	var ids []string
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
-			return affected, fmt.Errorf("failed to scan recovered cert id: %w", err)
+			rows.Close()
+			return 0, fmt.Errorf("failed to scan recovered cert id: %w", err)
 		}
-		r.invalidateCert(ctx, id)
-		affected++
+		ids = append(ids, id)
 	}
-	return affected, rows.Err()
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return 0, err
+	}
+	rows.Close()
+
+	if len(ids) == 0 {
+		return 0, nil
+	}
+
+	result, err := r.db.ExecContext(ctx,
+		fmt.Sprintf(updateSQL, placeholders(1, len(ids))), stringArgs(ids)...)
+	if err != nil {
+		return 0, err
+	}
+
+	for _, id := range ids {
+		r.invalidateCert(ctx, id)
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return int64(len(ids)), nil
+	}
+	return affected, nil
 }
 
 // Helper functions

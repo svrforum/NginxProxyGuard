@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"nginx-proxy-guard/internal/database/dialect"
 
 	"github.com/lib/pq"
 
@@ -80,7 +81,7 @@ func (r *UserRepository) Create(ctx context.Context, username, passwordHash, rol
 		RETURNING id`,
 		username+"@localhost", username, passwordHash, legacyRole, roleID).Scan(&id)
 	if err != nil {
-		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+		if dialect.IsUniqueViolation(err) {
 			return "", fmt.Errorf("username already exists")
 		}
 		return "", fmt.Errorf("failed to create user: %w", err)
@@ -109,7 +110,7 @@ func (r *UserRepository) CreateFederated(ctx context.Context, username, email, p
 		RETURNING id`,
 		email, username, passwordHash, legacyRole, roleID).Scan(&id)
 	if err != nil {
-		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+		if dialect.IsUniqueViolation(err) {
 			return "", fmt.Errorf("an account with this username or email already exists")
 		}
 		return "", fmt.Errorf("failed to create federated user: %w", err)
@@ -234,12 +235,12 @@ func (r *UserRepository) GetDetail(ctx context.Context, userID string) (*model.U
 		d.TOTPVerifiedAt = &totpVerified.Time
 	}
 
-	// Identity providers this account can sign in through (#227). Guarded with
-	// to_regclass because SSO shipped later and migrations warn-and-continue: an
-	// install whose upgrade failed must still be able to open a user's detail.
+	// 이 계정이 로그인할 수 있는 아이덴티티 공급자들(#227). 테이블 존재 확인으로
+	// 감싼 이유는 SSO가 나중에 출시됐고 마이그레이션이 경고 후 계속 진행하기
+	// 때문이다. 업그레이드가 실패한 설치에서도 사용자 상세는 열려야 한다.
 	var ssoPresent bool
 	if err := r.db.QueryRowContext(ctx,
-		`SELECT to_regclass('public.user_identities') IS NOT NULL`).Scan(&ssoPresent); err == nil && ssoPresent {
+		tablesExistSQL("user_identities")).Scan(&ssoPresent); err == nil && ssoPresent {
 		idRows, err := r.db.QueryContext(ctx, `
 			SELECT p.name, p.slug, COALESCE(i.email, ''), i.last_login_at, i.created_at
 			FROM user_identities i

@@ -134,7 +134,7 @@ UDP를 통한 더 빠르고 안정적인 연결을 위한 최신 프로토콜 �
 | 기술 | 용도 |
 |------|------|
 | **Nginx 1.30.2** | HTTP/3 & QUIC을 지원하는 고성능 HTTP 및 stream 리버스 프록시 코어 |
-| **TimescaleDB (PostgreSQL 17)** | 로그 자동 압축을 위한 시계열 최적화 데이터베이스 |
+| **TimescaleDB (PostgreSQL 17)**, **MariaDB 11** _또는_ **MySQL 8** | 로그 자동 압축을 위한 시계열 최적화 데이터베이스. MariaDB와 MySQL도 대안으로 지원합니다 ([데이터베이스 엔진](#-데이터베이스-엔진) 참고) |
 | **Valkey 9** | Redis 호환 고속 캐싱 및 세션 관리 (선택) |
 | **Go 1.26 (Echo v4)** | 효율적인 리소스 관리와 동시성 처리 백엔드 API |
 | **React 19 & TypeScript 6** | 타입 안전성과 컴포넌트 기반의 모던 UI (Vite 8 + Tailwind 4) |
@@ -265,12 +265,84 @@ https://localhost:81/api/v1/swagger
 
 | 변수 | 설명 | 기본값 |
 |------|------|--------|
-| `DB_PASSWORD` | PostgreSQL 비밀번호 | (필수) |
+| `DB_PASSWORD` | 데이터베이스 비밀번호 | (필수) |
 | `JWT_SECRET` | JWT 토큰용 시크릿 | (필수) |
 | `TZ` | 시간대 | `UTC` |
-| `DB_USER` | PostgreSQL 사용자 | `postgres` |
+| `DB_USER` | 데이터베이스 사용자 | `postgres` |
 | `DB_NAME` | 데이터베이스 이름 | `nginx_proxy_guard` |
+| `DATABASE_URL` | 전체 접속 URL. 스킴으로 엔진이 결정됩니다 | 위 변수들로 자동 구성 |
 | `DOCKER_API_VERSION` | Docker API 버전 (시놀로지용) | 자동 감지 |
+
+---
+
+## 🗄 데이터베이스 엔진
+
+Nginx Proxy Guard는 **TimescaleDB/PostgreSQL**(기본), **MariaDB 11**, **MySQL 8**
+위에서 동작합니다. 엔진은 `DATABASE_URL`의 스킴으로 결정되며, 그 외 설정은
+동일합니다.
+
+**PostgreSQL**은 기본값이라 따로 설정할 것이 없습니다.
+
+**MariaDB나 MySQL**을 쓰려면 `db` 서비스를 교체하는 compose 오버레이를 함께
+지정합니다.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.mariadb.yml up -d
+# 또는
+docker compose -f docker-compose.yml -f docker-compose.mysql.yml up -d
+```
+
+스킴은 드라이버만 고릅니다. MariaDB인지 MySQL인지는 접속 후 서버에 직접 물어서
+판별하므로, `mysql://`로 MariaDB를 가리켜도(혹은 그 반대여도) 정상 동작합니다.
+
+`.env`에는 다음을 넣습니다.
+
+```ini
+DB_USER=npg
+DB_PASSWORD=change-me
+DB_ROOT_PASSWORD=change-me-too
+DATABASE_URL=mariadb://npg:change-me@db:3306/nginx_proxy_guard
+# 이후 docker compose 명령이 오버레이를 자동으로 인식하도록
+COMPOSE_FILE=docker-compose.yml:docker-compose.mariadb.yml
+```
+
+**엔진은 설치 시점에 한 번만 고르세요.** 두 엔진 간 무중단 마이그레이션은
+없습니다. 기존 설치를 옮기려면 빈 데이터베이스에서 새로 시작하거나 Nginx Proxy
+Guard 백업을 복원해야 합니다. 백업은 `pg_dump`가 아니라 API가 직접 내보내고
+가져오므로 엔진과 무관하게 호환됩니다.
+
+**MariaDB에서 달라지는 점**
+
+| | PostgreSQL / TimescaleDB | MariaDB / MySQL |
+|---|---|---|
+| 로그 저장 | 하이퍼테이블 | 네이티브 월별 `RANGE` 파티션 |
+| 압축 | TimescaleDB 청크 압축 | InnoDB 페이지 압축 (실측 약 5배) |
+| 보존 정책 | 오래된 청크 삭제 | 오래된 파티션 삭제 |
+| 로그 텍스트 검색 | 트라이그램(GIN) 인덱스 | 선택한 기간 범위 내 스캔 |
+
+프록시 호스트, 인증서, WAF, GeoIP, 알림, SSO, 백업 등 나머지 기능은 완전히
+동일하게 동작합니다. 현재 어떤 엔진을 쓰는지는 `GET /health/detailed`의
+`database.engine`에서 확인할 수 있습니다.
+
+**로그 압축.** 대용량 테이블(`logs_partitioned`, `logs`, `system_logs`,
+`audit_logs`)은 InnoDB 페이지 압축으로 생성됩니다(MariaDB는 zlib 레벨 1,
+MySQL은 `COMPRESSION='zlib'`). 실제 형태의
+액세스 로그 20만 건으로 측정했을 때 `logs_partitioned`는 논리 317MB 대비
+디스크 60MB — 5.3배입니다. 기본값 6이 아니라 레벨 1을 쓰는 이유는, 로그
+데이터에서는 두 레벨의 결과 크기가 같은데 레벨 6은 쓰기에 2.7배가 걸리고,
+로그 수집이 이 애플리케이션에서 가장 쓰기가 많은 경로이기 때문입니다.
+
+페이지 압축은 sparse 파일에 hole punch가 가능한 파일시스템이 필요합니다
+(ext4, xfs, btrfs 모두 가능). 지원하지 않는 환경에서는 InnoDB가 페이지를
+압축하되 전체 크기로 기록하므로, 오류가 아니라 약간의 CPU 낭비로 끝납니다.
+
+**로그 텍스트 검색**은 MariaDB/MySQL에 대응물이 없는 유일한 항목입니다.
+PostgreSQL은 `pg_trgm` GIN 인덱스로 임의의 `%부분문자열%` 매칭을 인덱스로
+처리하지만, 두 엔진에는 트라이그램 인덱스가 없고 FULLTEXT는 단어 단위라 부분
+토큰 질의를 아예 처리하지 못합니다(`sourc`로 `resource`를 찾을 수 없음).
+검색창의 동작을 조용히 바꾸는 대신 스캔하되, 질의가 선택한 기간 범위로 월별
+파티션이 프루닝됩니다. 기간 필터를 켜두는 것이 검색을 빠르게 유지하는
+방법입니다.
 
 ---
 

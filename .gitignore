@@ -59,6 +59,7 @@ temp/
 # Database
 *.sql
 !api/internal/database/migrations/*.sql
+!api/internal/database/migrations/mariadb/*.sql
 
 # Backups
 backups/
@@ -81,3 +82,6 @@ docs/superpowers/
 PLAN_DB_PERFORMANCE.md
 ARCHITECTURE.md
 MIGRATION-v2.md
+
+# Python bytecode from scripts/
+__pycache__/
