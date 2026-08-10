@@ -173,6 +173,8 @@ func (s *SSOService) CompleteLogin(ctx context.Context, slug, code, state, callb
 	if claims.Subject == "" {
 		return "", ErrSSOTokenInvalid
 	}
+	// Whatever the ID token did not carry, ask the provider for. (#238)
+	s.mergeUserInfoClaims(ctx, discovered, token, claims, p.GroupClaim)
 
 	userID, username, err := s.resolveUser(ctx, p, claims)
 	if err != nil {
@@ -439,7 +441,12 @@ func extractClaims(idToken *oidc.IDToken, groupClaim string) (*model.SSOClaims, 
 	if err := idToken.Claims(&raw); err != nil {
 		return nil, ErrSSOTokenInvalid
 	}
-	c := &model.SSOClaims{Subject: idToken.Subject}
+	return claimsFromMap(raw, idToken.Subject, groupClaim), nil
+}
+
+// claimsFromMap turns a decoded claim set into what the flow acts on.
+func claimsFromMap(raw map[string]any, subject, groupClaim string) *model.SSOClaims {
+	c := &model.SSOClaims{Subject: subject}
 	c.Email, _ = raw["email"].(string)
 	switch v := raw["email_verified"].(type) {
 	case bool:
@@ -463,7 +470,55 @@ func extractClaims(idToken *oidc.IDToken, groupClaim string) (*model.SSOClaims, 
 	case string:
 		c.Groups = []string{v}
 	}
-	return c, nil
+	return c
+}
+
+// mergeUserInfoClaims fills in what the ID token did not carry, by asking the
+// provider's UserInfo endpoint.
+//
+// Not an optimisation — for some providers it is the only way the claims
+// arrive. Authelia's default claims policy puts email, name and groups in the
+// UserInfo response and NOT in the ID token, so reading the ID token alone left
+// Email empty: account linking could never match, and JIT refused every sign-in
+// for a missing email. OIDC expects a client to fetch claims it needs from
+// UserInfo when they are absent from the token. (#238)
+//
+// Failure is not fatal. A provider may not implement UserInfo, or the token may
+// not carry the scope for it, and those installs worked before this existed.
+func (s *SSOService) mergeUserInfoClaims(ctx context.Context, provider *oidc.Provider, token *oauth2.Token, claims *model.SSOClaims, groupClaim string) {
+	info, err := provider.UserInfo(ctx, oauth2.StaticTokenSource(token))
+	if err != nil {
+		log.Printf("SSO: userinfo lookup skipped: %v", err)
+		return
+	}
+	// Required by the spec: a UserInfo response whose subject differs is not
+	// about this user and must not be applied.
+	if info.Subject != claims.Subject {
+		log.Printf("SSO: userinfo subject does not match the id_token subject — ignoring the response")
+		return
+	}
+
+	raw := map[string]any{}
+	if err := info.Claims(&raw); err != nil {
+		log.Printf("SSO: userinfo claims could not be decoded: %v", err)
+		return
+	}
+	extra := claimsFromMap(raw, claims.Subject, groupClaim)
+
+	// The ID token is signed and wins wherever it said something. UserInfo only
+	// fills gaps.
+	if claims.Email == "" && extra.Email != "" {
+		claims.Email, claims.EmailVerified = extra.Email, extra.EmailVerified
+	}
+	if claims.Name == "" {
+		claims.Name = extra.Name
+	}
+	if claims.Username == "" {
+		claims.Username = extra.Username
+	}
+	if len(claims.Groups) == 0 {
+		claims.Groups = extra.Groups
+	}
 }
 
 func randomToken(n int) (string, error) {
