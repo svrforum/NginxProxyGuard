@@ -40,7 +40,9 @@ fi
 
 # 2. Email addresses outside the allowlist.
 hits="$( { diff_cmd; msg_cmd; } | grep -inE '[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}' \
-        | grep -ivE 'example\.(com|org|net)|users\.noreply\.github|npg-test\.example' || true)"
+        | grep -ivE 'example\.(com|org|net)|users\.noreply\.github|npg-test\.example|support@github\.com' || true)"
+# support@github.com is Dependabot's Signed-off-by line on merged upstream
+# commits — a bot address, not a person's.
 if [[ -n "$hits" ]]; then report "FAIL" "email address:"; sed 's/^/    /' <<<"$hits" | head -5; fail=1
 else report "ok  " "no personal email"; fi
 
