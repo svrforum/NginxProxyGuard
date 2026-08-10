@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -216,11 +218,23 @@ func (h *WAFHandler) DisableRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse request body for additional info
+	// An empty body is allowed and means "disable this rule for the host", which
+	// is what the rule id in the path already says. A body that is present but
+	// malformed is not the same thing: swallowing it used to widen the request
+	// to a host-wide exclusion, so a caller asking to switch a rule off for one
+	// path got it switched off everywhere — the exact over-broad behaviour
+	// scoped exclusions exist to avoid. (#231)
 	var req model.CreateWAFRuleExclusionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		// Allow empty body, just use the rule ID from path
-		req = model.CreateWAFRuleExclusionRequest{}
+	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	if err != nil {
+		httpJSONError(w, "Could not read request body", http.StatusBadRequest)
+		return
+	}
+	if len(bytes.TrimSpace(body)) > 0 {
+		if err := json.Unmarshal(body, &req); err != nil {
+			httpJSONError(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
 	}
 	req.RuleID = ruleID
 	// The scope ends up inside a ModSecurity directive, so it is validated
