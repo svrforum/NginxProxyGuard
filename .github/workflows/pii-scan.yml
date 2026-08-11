@@ -33,10 +33,15 @@ jobs:
           ALLOW='example\.(com|org|net)|\.example([^a-z]|$)|\.test([^a-z]|$)|\.local([^a-z]|$)|\.invalid([^a-z]|$)|users\.noreply\.github\.com|noreply@'
           hits="$(git grep -InE "$EMAIL_RE" -- . | grep -ivE "$ALLOW" || true)"
           if [ -n "$hits" ]; then
-            echo "::error::Non-allowlisted email address(es) found in tracked files (possible PII leak):"
-            echo "$hits"
+            # Report WHERE, never WHAT. Logs on a public repository are public, and
+            # they survive a history rewrite — echoing the matched line would give
+            # the leak a second home that `git filter-repo` cannot reach.
+            echo "::error::Non-allowlisted email address(es) found in tracked files (possible PII leak)."
+            echo "Locations (value withheld — this log is public):"
+            echo "$hits" | cut -d: -f1,2 | sort -u
             echo ""
-            echo "If this is a legitimate placeholder, use an example.com / .test / .local address."
+            echo "Run scripts/pii-scan.sh locally to see the values, then replace them"
+            echo "with an example.com / .test / .local address."
             exit 1
           fi
           echo "✓ No non-allowlisted email addresses in tracked files."
@@ -64,10 +69,15 @@ jobs:
               RANGE="${PUSH_BEFORE}..${PUSH_SHA}"
             fi
           fi
-          bad="$(git log --format='%an <%ae>' "$RANGE" 2>/dev/null | grep -ivE 'noreply\.github\.com' || true)"
+          bad="$(git log --format='%H %ae' "$RANGE" 2>/dev/null | grep -ivE 'noreply\.github\.com' || true)"
           if [ -n "$bad" ]; then
-            echo "::error::Commit author(s) not using a GitHub noreply address:"
-            echo "$bad"
+            # Commit SHAs only, for the same reason: the address must not be
+            # reprinted into a log anyone can read.
+            echo "::error::Commit author(s) not using a GitHub noreply address."
+            echo "Offending commits (address withheld — this log is public):"
+            echo "$bad" | cut -d' ' -f1
+            echo ""
+            echo "Check locally with: git log --format='%an <%ae>' -1 <sha>"
             exit 1
           fi
           echo "✓ All new commit authors use a GitHub noreply address."
