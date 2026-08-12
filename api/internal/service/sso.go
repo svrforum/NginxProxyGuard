@@ -414,7 +414,7 @@ func (s *SSOService) discover(ctx context.Context, issuer string) (*oidc.Provide
 	}
 	s.mu.Unlock()
 
-	provider, err := oidc.NewProvider(ctx, strings.TrimRight(issuer, "/"))
+	provider, err := oidc.NewProvider(ctx, issuer)
 	if err != nil {
 		log.Printf("SSO: discovery failed for %s: %v", issuer, err)
 		return nil, ErrSSODiscovery
