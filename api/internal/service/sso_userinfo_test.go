@@ -146,3 +146,34 @@ func TestAFailingUserInfoLookupChangesNothing(t *testing.T) {
 		t.Errorf("a failed lookup damaged the token's own claims: %+v", claims)
 	}
 }
+
+func TestDiscoverPreservesTrailingSlashInIssuer(t *testing.T) {
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	//trailing slash가 있는 issuer
+	issuer := srv.URL + "/application/o/test/"
+
+	mux.HandleFunc("/application/o/test/.well-known/openid-configuration",
+		func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"issuer":                 issuer,
+				"authorization_endpoint": srv.URL + "/auth",
+				"token_endpoint":         srv.URL + "/token",
+				"jwks_uri":               srv.URL + "/keys",
+			})
+		},
+	)
+
+	s := NewSSOService(nil, nil, nil, nil, nil)
+
+	provider, err := s.discover(context.Background(), issuer)
+	if err != nil {
+		t.Fatalf("discovery failed for issuer with trailing slash: %v", err)
+	}
+	if provider == nil {
+		t.Fatal("discovery returned nil provider")
+	}
+}
