@@ -241,6 +241,14 @@ func (s *SSOService) resolveUser(ctx context.Context, p *model.SSOProvider, c *m
 	}
 
 	if !p.AllowJIT {
+		// Say which condition stopped it. "No account is linked" is true but
+		// useless on its own: the operator cannot tell whether the provider sent
+		// no email, sent one it did not mark verified, or sent one that matches
+		// no local account — and those need three different fixes. The address
+		// itself is never logged; this runs on a public-facing box.
+		log.Printf("SSO: no account for provider %q — email present=%t, verified=%t, jit=off. "+
+			"Linking requires a VERIFIED email matching an existing account.",
+			p.Slug, c.Email != "", c.EmailVerified)
 		// Refused for the commonest reason of all — JIT provisioning is off by
 		// default, so this is the branch a first SSO attempt actually takes.
 		// Reporting only the allowlist branch below meant the event could not
