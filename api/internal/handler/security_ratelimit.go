@@ -275,6 +275,35 @@ func (h *SecurityHandler) GetIPBanHistoryStats(c echo.Context) error {
 	return c.JSON(http.StatusOK, stats)
 }
 
+// GetBannedIPStats summarises one banned address for the ban detail view (#242).
+func (h *SecurityHandler) GetBannedIPStats(c echo.Context) error {
+	ip := c.Param("ip")
+	if ip == "" {
+		return badRequestError(c, "IP address is required")
+	}
+
+	days := model.DefaultBannedIPStatsWindowDays
+	if raw := c.QueryParam("days"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			return badRequestError(c, "days must be a number")
+		}
+		days = parsed
+	}
+
+	stats, err := h.securityService.GetBannedIPStats(c.Request().Context(), ip, days)
+	if err != nil {
+		// A bad address or window is the caller's mistake, not a server fault —
+		// the service rejects both before they reach the ::inet cast.
+		if strings.Contains(err.Error(), "invalid") {
+			return badRequestError(c, err.Error())
+		}
+		return databaseError(c, "get banned IP stats", err)
+	}
+
+	return c.JSON(http.StatusOK, stats)
+}
+
 // GetGlobalRateLimit returns the singleton global rate-limit default (#198 slice 5).
 func (h *SecurityHandler) GetGlobalRateLimit(c echo.Context) error {
 	g, err := h.securityService.GetGlobalRateLimit(c.Request().Context())

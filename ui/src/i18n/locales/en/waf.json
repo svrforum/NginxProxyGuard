@@ -156,6 +156,21 @@
       "hostsWithBans": "Hosts with Bans",
       "perHostTotal": "Per-Host Bans"
     },
+    "ipStats": {
+      "window": "{{days}}d",
+      "unknownCountry": "Country unknown",
+      "totalRequests": "Total requests",
+      "blockedRequests": "Blocked",
+      "banCount": "Times banned",
+      "times": "{{n}}",
+      "firstSeen": "First seen",
+      "today": "Today",
+      "daysAgo": "{{days}}d ago",
+      "topHosts": "Top targets",
+      "topURIs": "Top paths",
+      "noTrafficInWindow": "No requests recorded in this window — the ban is holding, or the logs have aged out.",
+      "fetchError": "Could not load statistics."
+    },
     "filter": {
       "host": "Host",
       "allHosts": "All Hosts",

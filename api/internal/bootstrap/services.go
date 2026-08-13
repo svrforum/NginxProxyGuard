@@ -225,6 +225,8 @@ func wireServiceCallbacks(svcs *Services, repos *Repositories) {
 	svcs.Security.SetGlobalSecHeadersRepo(repos.GlobalSecHeaders)
 	svcs.Security.SetGlobalRateLimitRepo(repos.GlobalRateLimit)
 	svcs.Security.SetGlobalWAFRepo(repos.GlobalWAF)
+	// Security: per-banned-IP statistics for the ban detail view (#242).
+	svcs.Security.SetBannedIPStatsRepo(repos.BannedIPStats)
 	// ProxyHost: resolve docker container-name targets to their current IP (#150).
 	svcs.ProxyHost.SetContainerResolver(svcs.DockerStats)
 	// AuthProvider: same resolver for container-backed verify endpoints (#181).

@@ -156,6 +156,21 @@
       "hostsWithBans": "차단 호스트 수",
       "perHostTotal": "호스트별 차단"
     },
+    "ipStats": {
+      "window": "{{days}}일",
+      "unknownCountry": "국가 정보 없음",
+      "totalRequests": "총 요청",
+      "blockedRequests": "차단된 요청",
+      "banCount": "누적 차단",
+      "times": "{{n}}회",
+      "firstSeen": "첫 목격",
+      "today": "오늘",
+      "daysAgo": "{{days}}일 전",
+      "topHosts": "주요 표적",
+      "topURIs": "주요 경로",
+      "noTrafficInWindow": "이 기간에는 기록된 요청이 없습니다. 차단이 유지되고 있거나 로그가 보관 기간을 지났습니다.",
+      "fetchError": "통계를 불러오지 못했습니다."
+    },
     "filter": {
       "host": "호스트",
       "allHosts": "모든 호스트",

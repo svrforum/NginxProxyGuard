@@ -28,6 +28,7 @@ type Repositories struct {
 	GlobalWAF          *repository.GlobalWAFRepository
 	RateLimit          *repository.RateLimitRepository
 	IPBanHistory       *repository.IPBanHistoryRepository
+	BannedIPStats      *repository.BannedIPStatsRepository
 	BotFilter          *repository.BotFilterRepository
 	SecurityHeaders    *repository.SecurityHeadersRepository
 	Upstream           *repository.UpstreamRepository
@@ -71,6 +72,7 @@ func InitRepositories(db *database.DB, redisCache *cache.RedisClient) *Repositor
 		GlobalGeo:          repository.NewGlobalGeoRepository(db),
 		RateLimit:          repository.NewRateLimitRepository(db.DB),
 		IPBanHistory:       repository.NewIPBanHistoryRepository(db.DB),
+		BannedIPStats:      repository.NewBannedIPStatsRepository(db.DB),
 		BotFilter:          repository.NewBotFilterRepository(db.DB),
 		GlobalBotFilter:    repository.NewGlobalBotFilterRepository(db.DB),
 		SecurityHeaders:    repository.NewSecurityHeadersRepository(db.DB),

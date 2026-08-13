@@ -6532,6 +6532,47 @@ paths:
               schema:
                 $ref: '#/components/schemas/IPBanHistoryListResponse'
 
+  /banned-ips/stats/ip/{ip}:
+    get:
+      tags: [Security]
+      summary: Traffic and ban summary for one IP address
+      description: |
+        Geolocation, request volume and top targets for the address over the
+        window, plus how many times it has been banned.
+
+        Traffic counts cover `days` only. Ban counts (`ban_count`,
+        `first_ban_at`, `last_ban_at`) cover all recorded history regardless of
+        the window.
+
+        `days` is restricted to 1, 7 or 30: a per-IP lookup cannot use the
+        client_ip index inside compressed log chunks, so an arbitrary range
+        would scan the whole hypertable. Any other value returns 400, as does a
+        malformed address.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: ip
+          in: path
+          required: true
+          schema:
+            type: string
+          example: 192.0.2.10
+        - name: days
+          in: query
+          schema:
+            type: integer
+            default: 7
+            enum: [1, 7, 30]
+      responses:
+        '200':
+          description: Summary for the address
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BannedIPStats'
+        '400':
+          description: Malformed IP address, or a window other than 1, 7 or 30
+
   # ============================================================================
   # Logs
   # ============================================================================
@@ -14079,6 +14120,57 @@ components:
           type: integer
         total_pages:
           type: integer
+    BannedIPTarget:
+      type: object
+      description: One host or path this address requested, with how often.
+      properties:
+        name:
+          type: string
+        count:
+          type: integer
+    BannedIPStats:
+      type: object
+      description: |
+        Summary for one banned address. Request counts and top targets cover the
+        requested window; ban counts cover all recorded history.
+      properties:
+        ip_address:
+          type: string
+        window_days:
+          type: integer
+          description: The window the traffic figures were computed over.
+        country:
+          type: string
+          description: Absent when the address has no geolocation in the logs.
+        country_code:
+          type: string
+        total_requests:
+          type: integer
+        blocked_requests:
+          type: integer
+        first_seen:
+          type: string
+          format: date-time
+        last_seen:
+          type: string
+          format: date-time
+        top_hosts:
+          type: array
+          items:
+            $ref: '#/components/schemas/BannedIPTarget'
+        top_uris:
+          type: array
+          items:
+            $ref: '#/components/schemas/BannedIPTarget'
+        ban_count:
+          type: integer
+          description: Bans recorded for this address, over all time.
+        first_ban_at:
+          type: string
+          format: date-time
+        last_ban_at:
+          type: string
+          format: date-time
     IPBanHistoryStats:
       type: object
       properties:

@@ -84,3 +84,35 @@ export async function fetchIPLogs(ip: string): Promise<LogListResponse> {
   const params = new URLSearchParams({ client_ip: ip, per_page: '100' })
   return apiGet<LogListResponse>(`${API_BASE}/logs?${params}`)
 }
+
+/** Windows the server accepts. Anything else is rejected with 400. (#242) */
+export const BANNED_IP_STATS_WINDOWS = [1, 7, 30] as const
+export type BannedIPStatsWindow = (typeof BANNED_IP_STATS_WINDOWS)[number]
+
+interface BannedIPTarget {
+  name: string
+  count: number
+}
+
+interface BannedIPStats {
+  ip_address: string
+  window_days: number
+  country?: string
+  country_code?: string
+  /** Traffic inside the window. Ban history below spans all time. */
+  total_requests: number
+  blocked_requests: number
+  first_seen?: string
+  last_seen?: string
+  top_hosts: BannedIPTarget[]
+  top_uris: BannedIPTarget[]
+  ban_count: number
+  first_ban_at?: string
+  last_ban_at?: string
+}
+
+export type { BannedIPStats, BannedIPTarget }
+
+export async function fetchBannedIPStats(ip: string, days: BannedIPStatsWindow): Promise<BannedIPStats> {
+  return apiGet<BannedIPStats>(`${API_BASE}/banned-ips/stats/ip/${encodeURIComponent(ip)}?days=${days}`)
+}

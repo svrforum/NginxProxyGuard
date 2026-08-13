@@ -608,6 +608,7 @@ func registerSecurityRoutes(v1 *echo.Group, h *handler.SecurityHandler) {
 	bannedIPs.GET("/history", h.GetIPBanHistory, proxyRead)
 	bannedIPs.GET("/history/stats", h.GetIPBanHistoryStats, proxyRead)
 	bannedIPs.GET("/history/ip/:ip", h.GetIPBanHistoryByIP, proxyRead)
+	bannedIPs.GET("/stats/ip/:ip", h.GetBannedIPStats, proxyRead)
 
 	// Bot filter (per proxy host)
 	v1.GET("/proxy-hosts/:proxyHostId/bot-filter", h.GetBotFilter, proxyRead)

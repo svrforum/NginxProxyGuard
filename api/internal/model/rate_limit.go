@@ -176,3 +176,44 @@ type IPBanCount struct {
 	IPAddress string `json:"ip_address"`
 	BanCount  int    `json:"ban_count"`
 }
+
+// BannedIPStatsWindowDays are the windows a caller may ask for. Traffic for one
+// IP cannot use the client_ip index inside compressed chunks, so the scan cost
+// grows with the window — the list is closed to keep an open-ended request from
+// walking the whole hypertable. (#242)
+var BannedIPStatsWindowDays = []int{1, 7, 30}
+
+// DefaultBannedIPStatsWindowDays is what the modal opens with.
+const DefaultBannedIPStatsWindowDays = 7
+
+// BannedIPStats answers "who is this address, and what has it been doing here?"
+// for one banned IP: where it geolocates, how much it asked for inside the
+// window, how much of that was refused, and how often it has been banned.
+type BannedIPStats struct {
+	IPAddress   string `json:"ip_address"`
+	WindowDays  int    `json:"window_days"`
+	Country     string `json:"country,omitempty"`
+	CountryCode string `json:"country_code,omitempty"`
+
+	// Traffic inside the window. Zero everywhere is a real answer: the ban is
+	// doing its job, or the logs have aged out.
+	TotalRequests   int        `json:"total_requests"`
+	BlockedRequests int        `json:"blocked_requests"`
+	FirstSeen       *time.Time `json:"first_seen,omitempty"`
+	LastSeen        *time.Time `json:"last_seen,omitempty"`
+
+	TopHosts []BannedIPTarget `json:"top_hosts"`
+	TopURIs  []BannedIPTarget `json:"top_uris"`
+
+	// Ban history spans all time, not the window — "banned 4 times before" is
+	// the point, and ip_ban_history is small enough to read in full.
+	BanCount   int        `json:"ban_count"`
+	FirstBanAt *time.Time `json:"first_ban_at,omitempty"`
+	LastBanAt  *time.Time `json:"last_ban_at,omitempty"`
+}
+
+// BannedIPTarget is one host or URI this address went after, with how often.
+type BannedIPTarget struct {
+	Name  string `json:"name"`
+	Count int    `json:"count"`
+}

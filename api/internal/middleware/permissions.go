@@ -147,6 +147,7 @@ var routePermissions = map[string]string{
 	"GET /api/v1/banned-ips/history": "waf:read",
 	"GET /api/v1/banned-ips/history/ip/:ip": "waf:read",
 	"GET /api/v1/banned-ips/history/stats": "waf:read",
+	"GET /api/v1/banned-ips/stats/ip/:ip":  "waf:read",
 	"GET /api/v1/bots/known": "waf:read",
 	"GET /api/v1/certificates": "certificate:read",
 	"POST /api/v1/certificates": "certificate:write",

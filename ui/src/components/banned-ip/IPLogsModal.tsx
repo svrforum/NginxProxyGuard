@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ModalShell } from '../common/ModalShell'
 import { fetchIPLogs } from '../../api/banned-ips'
 import type { BannedIP } from '../../api/banned-ips'
+import { IPStatsBand } from './IPStatsBand'
 
 function formatDate(dateStr: string, locale?: string): string {
   return new Date(dateStr).toLocaleString(locale || 'ko-KR')
@@ -72,6 +73,8 @@ export function IPLogsModal({ ip, hostName, onClose }: { ip: BannedIP; hostName?
             </span>
           )}
         </div>
+
+        <IPStatsBand ip={ip.ip_address} />
 
         {/* Logs Content */}
         <div className="flex-1 overflow-y-auto p-6">

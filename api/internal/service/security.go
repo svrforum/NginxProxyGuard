@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
+	"slices"
 	"time"
 
 	"nginx-proxy-guard/internal/config"
@@ -33,6 +35,35 @@ type SecurityService struct {
 	globalSecHeadersRepo *repository.GlobalSecurityHeadersRepository // global security-headers default (#198 slice 3)
 	globalRateLimitRepo  *repository.GlobalRateLimitRepository       // global rate-limit default (#198 slice 5)
 	globalWAFRepo        *repository.GlobalWAFRepository             // global WAF default (#198 slice 6)
+
+	bannedIPStatsRepo *repository.BannedIPStatsRepository // per-IP summary behind a banned address (#242)
+}
+
+// SetBannedIPStatsRepo wires the per-banned-IP statistics repository (#242).
+func (s *SecurityService) SetBannedIPStatsRepo(repo *repository.BannedIPStatsRepository) {
+	s.bannedIPStatsRepo = repo
+}
+
+// GetBannedIPStats summarises one banned address: where it geolocates, what it
+// asked for inside the window, and how often it has been banned.
+//
+// The address is parsed before it reaches SQL — it is cast to inet there, so an
+// unchecked value turns a bad request into a 500. The window is restricted to
+// the offered choices for cost, not tidiness: see model.BannedIPStatsWindowDays.
+func (s *SecurityService) GetBannedIPStats(ctx context.Context, ip string, windowDays int) (*model.BannedIPStats, error) {
+	// Validate before the wiring check: whether a repository happens to be
+	// injected has no bearing on whether the caller sent a usable address, and
+	// the handler answers 400 or 500 based on which error comes back.
+	if net.ParseIP(ip) == nil {
+		return nil, fmt.Errorf("invalid IP address")
+	}
+	if !slices.Contains(model.BannedIPStatsWindowDays, windowDays) {
+		return nil, fmt.Errorf("invalid window: days must be one of %v", model.BannedIPStatsWindowDays)
+	}
+	if s.bannedIPStatsRepo == nil {
+		return nil, fmt.Errorf("banned IP stats repository not initialized")
+	}
+	return s.bannedIPStatsRepo.GetStats(ctx, ip, windowDays)
 }
 
 // SetGlobalBotFilterRepo wires the global bot-filter default repository (#198).
