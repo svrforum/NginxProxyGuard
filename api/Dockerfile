@@ -2,7 +2,7 @@
 # Pinned to 1.26.5 to pick up Go stdlib security fixes reachable in our code
 # (GO-2026-5856 crypto/tls, GO-2026-5039 net/textproto, GO-2026-5037 crypto/x509
 # — confirmed reachable by govulncheck; fixed in go1.26.4/1.26.5). (#211)
-FROM golang:1.26.5-alpine AS builder
+FROM golang:1.27rc2-alpine AS builder
 
 WORKDIR /app
 
