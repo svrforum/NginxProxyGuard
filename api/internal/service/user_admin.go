@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	"golang.org/x/crypto/bcrypt"
 
@@ -29,9 +30,10 @@ type userAdminRepo interface {
 	List(ctx context.Context) ([]model.UserSummary, error)
 	GetSummary(ctx context.Context, userID string) (*model.UserSummary, error)
 	GetDetail(ctx context.Context, userID string) (*model.UserDetail, error)
-	Create(ctx context.Context, username, passwordHash, roleID string, isSuperuser bool) (string, error)
+	Create(ctx context.Context, username, email, passwordHash, roleID string, isSuperuser bool) (string, error)
 	AssignRole(ctx context.Context, userID, roleID string, isSuperuser bool) error
 	SetPassword(ctx context.Context, userID, passwordHash string) error
+	SetEmail(ctx context.Context, userID, email string) error
 	Delete(ctx context.Context, userID string) error
 	DeleteSessions(ctx context.Context, userID string) error
 }
@@ -189,7 +191,17 @@ func (s *UserAdminService) CreateUser(ctx context.Context, req *model.CreateUser
 	if err != nil {
 		return nil, fmt.Errorf("failed to hash password: %w", err)
 	}
-	id, err := s.users.Create(ctx, req.Username, string(hash), role.ID, role.IsSuperuser)
+	// An address is optional; without one the account gets the synthesised
+	// <username>@localhost and simply cannot be linked from an IdP later
+	// without an administrator setting one. (#240)
+	var email string
+	if strings.TrimSpace(req.Email) != "" {
+		email, err = model.NormalizeEmail(req.Email)
+		if err != nil {
+			return nil, err
+		}
+	}
+	id, err := s.users.Create(ctx, req.Username, email, string(hash), role.ID, role.IsSuperuser)
 	if err != nil {
 		return nil, err
 	}
@@ -245,6 +257,25 @@ func (s *UserAdminService) SetPassword(ctx context.Context, targetUserID, passwo
 		return err
 	}
 	return s.users.DeleteSessions(ctx, targetUserID)
+}
+
+// SetEmail changes the address an account is linked by when signing in through
+// an identity provider (#240).
+//
+// Admin-only by design. SSO matches a verified provider email to a local
+// account and then syncs the role from the provider's groups, so a user able to
+// set their own address could claim an administrator's provider address before
+// that administrator first signs in, and take the role with it. Assigning roles
+// is already user:write, so gating the address the same way grants nothing new.
+//
+// Sessions are deliberately left alone: unlike a password change this does not
+// invalidate the credential the account already signed in with.
+func (s *UserAdminService) SetEmail(ctx context.Context, targetUserID, email string) error {
+	normalized, err := model.NormalizeEmail(email)
+	if err != nil {
+		return err
+	}
+	return s.users.SetEmail(ctx, targetUserID, normalized)
 }
 
 // DeleteUser removes an account. Deleting cascades the account's API tokens and

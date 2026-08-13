@@ -45,8 +45,12 @@ else
 fi
 
 # 2. Email addresses outside the allowlist.
+#
+# nginx-guard.local is NPG's own seeded account address, not a person's: .local
+# is reserved by RFC 6762 and can never route anywhere, and the value is already
+# in the tree (database/migrations_backup). Everything else still stops the scan.
 hits="$( { diff_cmd; msg_cmd; } | grep -inE '[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}' \
-        | grep -ivE "example\.(com|org|net)|users\.noreply\.github|npg-test\.example|${BOT_SENDER}" || true)"
+        | grep -ivE "example\.(com|org|net)|users\.noreply\.github|npg-test\.example|nginx-guard\.local|${BOT_SENDER}" || true)"
 if [[ -n "$hits" ]]; then report "FAIL" "email address:"; sed 's/^/    /' <<<"$hits" | head -5; fail=1
 else report "ok  " "no personal email"; fi
 

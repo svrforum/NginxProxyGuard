@@ -1440,7 +1440,12 @@
     "tokenExpires": "Expires {{when}}",
     "tokenAllowedIPs": "Allowed IPs",
     "lastLoginAt": "Last login {{when}}",
-    "neverLoggedIn": "Never signed in"
+    "neverLoggedIn": "Never signed in",
+    "email": "Email",
+    "emailPlaceholder": "user@example.com",
+    "emailPlaceholderBadge": "No SSO",
+    "emailPlaceholderHint": "An address NPG made up, so it can never match an identity provider. Set a real one to let this account link an SSO sign-in.",
+    "emailSaveFailed": "Could not save the email address."
   },
   "sso": {
     "title": "SSO (OpenID Connect)",

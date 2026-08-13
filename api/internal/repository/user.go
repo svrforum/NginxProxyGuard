@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/lib/pq"
 
@@ -60,17 +61,17 @@ func (r *UserRepository) List(ctx context.Context) ([]model.UserSummary, error) 
 	return out, rows.Err()
 }
 
-// Create inserts an account.
-//
-// users.email is NOT NULL UNIQUE in the schema but absent from model.User and
-// from every other query, so a value must be supplied here. It is derived from
-// the username rather than asked for in the UI: NPG never sends mail, and adding
-// an email field would ask operators for data the product does not use. The
-// username is already unique, so the derived address is too.
-func (r *UserRepository) Create(ctx context.Context, username, passwordHash, roleID string, isSuperuser bool) (string, error) {
+// Create inserts an account. An empty email falls back to the synthesised
+// <username>@localhost, which is what every account held before an address
+// could be given — it keeps the column populated but can never match an
+// identity provider, so callers that want SSO linking pass a real one. (#240)
+func (r *UserRepository) Create(ctx context.Context, username, email, passwordHash, roleID string, isSuperuser bool) (string, error) {
 	legacyRole := "user"
 	if isSuperuser {
 		legacyRole = "admin" // keeps `server reset-password` able to find admins
+	}
+	if email == "" {
+		email = username + "@localhost"
 	}
 	var id string
 	err := r.db.QueryRowContext(ctx, `
@@ -78,9 +79,14 @@ func (r *UserRepository) Create(ctx context.Context, username, passwordHash, rol
 		                   is_initial_setup, must_change_password, language, font_family)
 		VALUES ($1, $2, $3, $4, $5, false, true, 'ko', 'system')
 		RETURNING id`,
-		username+"@localhost", username, passwordHash, legacyRole, roleID).Scan(&id)
+		email, username, passwordHash, legacyRole, roleID).Scan(&id)
 	if err != nil {
+		// Both columns are unique, and the caller now supplies both — say which
+		// one collided rather than blaming the username for an email clash.
 		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+			if strings.Contains(pqErr.Constraint, "email") {
+				return "", ErrEmailTaken
+			}
 			return "", fmt.Errorf("username already exists")
 		}
 		return "", fmt.Errorf("failed to create user: %w", err)
@@ -140,6 +146,27 @@ func (r *UserRepository) AssignRole(ctx context.Context, userID, roleID string, 
 		userID, roleID, legacyRole)
 	if err != nil {
 		return fmt.Errorf("failed to assign role: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// SetEmail changes the address SSO links this account by (#240).
+//
+// A unique violation means another account already holds the address, which is
+// a 409 the operator can act on — not a server fault. Both users_email_key and
+// the case-insensitive idx_users_email_lower can raise it.
+func (r *UserRepository) SetEmail(ctx context.Context, userID, email string) error {
+	res, err := r.db.ExecContext(ctx, `
+		UPDATE users SET email = $2, updated_at = now()
+		WHERE id = $1`, userID, email)
+	if err != nil {
+		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+			return ErrEmailTaken
+		}
+		return fmt.Errorf("failed to set email: %w", err)
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		return sql.ErrNoRows
@@ -224,9 +251,9 @@ func (r *UserRepository) GetDetail(ctx context.Context, userID string) (*model.U
 	var lastIP sql.NullString
 	var totpVerified sql.NullTime
 	if err := r.db.QueryRowContext(ctx, `
-		SELECT COALESCE(last_login_ip, ''), totp_verified_at, updated_at,
+		SELECT COALESCE(last_login_ip, ''), totp_verified_at, updated_at, COALESCE(email, ''),
 		       (SELECT count(*) FROM auth_sessions s WHERE s.user_id = u.id AND s.expires_at > now())
-		FROM users u WHERE u.id = $1`, userID).Scan(&lastIP, &totpVerified, &d.UpdatedAt, &d.ActiveSessions); err != nil {
+		FROM users u WHERE u.id = $1`, userID).Scan(&lastIP, &totpVerified, &d.UpdatedAt, &d.Email, &d.ActiveSessions); err != nil {
 		return nil, fmt.Errorf("failed to load user detail: %w", err)
 	}
 	d.LastLoginIP = lastIP.String

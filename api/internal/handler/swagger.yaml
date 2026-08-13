@@ -4755,6 +4755,15 @@ paths:
                   type: string
                   format: uuid
                   description: Must reference an existing role.
+                email:
+                  type: string
+                  format: email
+                  example: ops@example.com
+                  description: |
+                    Optional. Omitted, the account gets a synthesised
+                    `<username>@localhost`, which no identity provider can match when
+                    linking an SSO sign-in. Give a real address for an account that
+                    should be able to sign in that way.
       responses:
         '201':
           description: Account created
@@ -4922,6 +4931,77 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /users/{id}/email:
+    put:
+      tags: [Users & Roles]
+      summary: Set the address SSO links an account by
+      description: |
+        Requires `user:write`. This is the address an identity provider's verified
+        email is matched against when linking a sign-in to an existing account.
+
+        Accounts that were never given one hold a synthesised `<username>@localhost`,
+        which no provider can ever match — an account expected to sign in through SSO
+        needs a real address here.
+
+        Deliberately not self-service. SSO linking matches a verified provider email
+        to a local account and then syncs the role from the provider's groups, so a
+        user able to set their own address could claim an administrator's provider
+        address before that administrator first signs in, and take the role with it.
+
+        The address is stored lower-cased and trimmed, and must be unique
+        case-insensitively. Sessions are left alone: unlike a password reset this does
+        not invalidate the credential the account already holds.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: ops@example.com
+                  description: |
+                    The address on its own. A display name (`Ada <ada@example.com>`) is
+                    rejected — it would be stored whole and never match a provider's
+                    plain claim. Single-label domains (`me@lan`) are accepted.
+      responses:
+        '204':
+          description: Address updated
+        '400':
+          description: Malformed address
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Caller lacks user:write
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No such account
+        '409':
+          description: Another account already holds this address
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /users/{id}/password:
     put:
       tags: [Users & Roles]
@@ -12428,6 +12508,12 @@ components:
         - type: object
           description: GET /users/{id} — the summary plus sign-in history, sessions, tokens and both permission views.
           properties:
+            email:
+              type: string
+              description: |
+                The address SSO links this account by. A value ending in `@localhost` was
+                synthesised by NPG because the account was never given one, and can never
+                match an identity provider — see `PUT /users/{id}/email`.
             last_login_ip:
               type: string
             totp_verified_at:

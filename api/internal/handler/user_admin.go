@@ -4,10 +4,12 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 
 	"nginx-proxy-guard/internal/model"
+	"nginx-proxy-guard/internal/repository"
 	"nginx-proxy-guard/internal/service"
 )
 
@@ -28,7 +30,8 @@ func classifyAdminError(c echo.Context, action string, err error) error {
 	case errors.Is(err, service.ErrLastSuperuser),
 		errors.Is(err, service.ErrSelfMutation),
 		errors.Is(err, service.ErrBuiltinRole),
-		errors.Is(err, service.ErrRoleInUse):
+		errors.Is(err, service.ErrRoleInUse),
+		errors.Is(err, repository.ErrEmailTaken):
 		return c.JSON(http.StatusConflict, map[string]string{"error": err.Error()})
 	case errors.Is(err, service.ErrUnknownRole), errors.Is(err, sql.ErrNoRows):
 		return c.JSON(http.StatusNotFound, map[string]string{"error": err.Error()})
@@ -36,6 +39,11 @@ func classifyAdminError(c echo.Context, action string, err error) error {
 		errors.Is(err, service.ErrInvalidRoleName),
 		errors.Is(err, service.ErrInvalidUsername),
 		errors.Is(err, service.ErrWeakPassword):
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	// NormalizeEmail explains what is wrong with the address; that belongs in
+	// front of the operator as a 400, not buried in a 500. (#240)
+	if strings.HasPrefix(err.Error(), "invalid email address") {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 	if err.Error() == "role name already exists" || err.Error() == "username already exists" {
@@ -188,6 +196,26 @@ func (h *UserAdminHandler) SetPassword(c echo.Context) error {
 	if user != nil {
 		auditCtx := service.ContextWithAudit(c.Request().Context(), c)
 		h.audit.LogUserPasswordReset(auditCtx, user.Username)
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+// SetEmail changes the address SSO links an account by (#240).
+func (h *UserAdminHandler) SetEmail(c echo.Context) error {
+	targetID := c.Param("id")
+	var req model.SetUserEmailRequest
+	if err := c.Bind(&req); err != nil {
+		return badRequestError(c, "Invalid request body")
+	}
+	user, _ := h.service.GetUser(c.Request().Context(), targetID)
+	if err := h.service.SetEmail(c.Request().Context(), targetID, req.Email); err != nil {
+		return classifyAdminError(c, "set user email", err)
+	}
+	if user != nil {
+		auditCtx := service.ContextWithAudit(c.Request().Context(), c)
+		// The address itself stays out of the audit trail — the trail is
+		// exportable and this box faces the internet.
+		h.audit.LogUserEmailChange(auditCtx, user.Username)
 	}
 	return c.NoContent(http.StatusNoContent)
 }

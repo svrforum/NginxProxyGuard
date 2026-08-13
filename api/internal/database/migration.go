@@ -1333,6 +1333,16 @@ EXCEPTION WHEN duplicate_table OR duplicate_object THEN NULL; END $$;`,
 			desc: "v2.36.0: readable subject label on notification state (#221)",
 			sql:  `ALTER TABLE public.notification_state ADD COLUMN IF NOT EXISTS subject_label character varying(255);`,
 		},
+		{
+			// SSO links an identity to an account by lower(email), but
+			// users_email_key is case-sensitive: an address and the same one in
+			// another case can both exist, and the link then picks one of them
+			// arbitrarily — an account-takeover shape. Warn-and-continue
+			// applies here — on an install that already holds such a pair the
+			// index cannot be built, and FindUserByEmail refuses to guess.
+			desc: "v2.38.0: case-insensitive uniqueness on users.email (#240)",
+			sql:  `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower ON public.users (lower(email));`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

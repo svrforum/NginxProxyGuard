@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -488,9 +489,26 @@ func (s *AuthService) ChangeCredentials(ctx context.Context, userID string, req 
 		newUsername = user.Username
 	}
 
+	// Setting the address here is what lets SSO ever link this account. Do it
+	// before the credential write so a rejected address fails the whole call
+	// rather than leaving a renamed account behind. (#240)
+	var newEmail string
+	if strings.TrimSpace(req.NewEmail) != "" {
+		normalized, err := model.NormalizeEmail(req.NewEmail)
+		if err != nil {
+			return err
+		}
+		newEmail = normalized
+	}
+
 	// Update credentials
 	if err := s.repo.UpdateUserCredentials(ctx, userID, newUsername, string(hashedPassword)); err != nil {
 		return err
+	}
+	if newEmail != "" {
+		if err := s.repo.UpdateUserEmail(ctx, userID, newEmail); err != nil {
+			return err
+		}
 	}
 
 	// Invalidate all existing sessions (force re-login with new credentials)

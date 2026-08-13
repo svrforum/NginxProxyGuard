@@ -54,6 +54,13 @@ export async function setUserPassword(id: string, password: string): Promise<voi
   return apiPut<void>(`${API_BASE}/users/${id}/password`, { password })
 }
 
+/** Changes the address SSO links the account by. Admin-only on the server: a
+ *  user able to set their own could claim an administrator's provider address
+ *  before that administrator first signs in. (#240) */
+export async function setUserEmail(id: string, email: string): Promise<void> {
+  return apiPut<void>(`${API_BASE}/users/${id}/email`, { email })
+}
+
 export async function deleteUser(id: string): Promise<void> {
   return apiDelete(`${API_BASE}/users/${id}`)
 }

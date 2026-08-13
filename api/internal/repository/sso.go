@@ -224,16 +224,26 @@ func (r *SSORepository) FindUserBySubject(ctx context.Context, providerID, subje
 // FindUserByEmail backs the one-time link of an existing account. Callers must
 // only reach it with a verified email.
 func (r *SSORepository) FindUserByEmail(ctx context.Context, email string) (string, error) {
+	// Two rows can only happen on an install that held a case-differing pair
+	// before idx_users_email_lower existed, where the index could not be built.
+	// Handing back either one would link an identity to an account nobody chose,
+	// so refuse and let the operator resolve the duplicate. (#240)
 	var userID string
-	err := r.db.QueryRowContext(ctx,
-		`SELECT id FROM users WHERE lower(email) = lower($1)`, email).Scan(&userID)
-	if err == sql.ErrNoRows {
-		return "", nil
-	}
+	var matches int
+	err := r.db.QueryRowContext(ctx, `
+		SELECT count(*), coalesce(min(id::text), '')
+		FROM users WHERE lower(email) = lower($1)`, email).Scan(&matches, &userID)
 	if err != nil {
 		return "", fmt.Errorf("failed to look up user by email: %w", err)
 	}
-	return userID, nil
+	switch matches {
+	case 0:
+		return "", nil
+	case 1:
+		return userID, nil
+	default:
+		return "", fmt.Errorf("refusing to link: %d accounts share this email address (case-insensitively) — remove the duplicate", matches)
+	}
 }
 
 // LinkIdentity records the (provider, sub) → user link and stamps the sign-in.

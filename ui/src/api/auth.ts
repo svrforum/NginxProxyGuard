@@ -82,6 +82,9 @@ export interface ChangeCredentialsRequest {
   new_username: string
   new_password: string
   new_password_confirm: string
+  /** Optional. Without it the account keeps <username>@localhost, which no
+   *  identity provider can ever match when linking an SSO sign-in. (#240) */
+  new_email?: string
 }
 
 export interface ChangePasswordRequest {

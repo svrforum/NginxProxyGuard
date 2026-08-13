@@ -56,6 +56,9 @@ export interface CreateUserRequest {
   username: string
   password: string
   role_id: string
+  /** Optional. Without it the account gets <username>@localhost, which no
+   *  identity provider can match when linking an SSO sign-in. (#240) */
+  email?: string
 }
 
 /** GET /auth/me. effective_permissions is absent on installs where the RBAC
@@ -100,6 +103,8 @@ export interface UserIdentityInfo {
 }
 
 export interface UserDetail extends UserSummary {
+  /** The address SSO links this account by. (#240) */
+  email: string
   last_login_ip?: string
   totp_verified_at?: string
   updated_at: string

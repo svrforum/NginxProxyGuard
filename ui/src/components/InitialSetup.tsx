@@ -14,6 +14,7 @@ export function InitialSetup({ user, onComplete }: InitialSetupProps) {
   const [newUsername, setNewUsername] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [newEmail, setNewEmail] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -50,7 +51,8 @@ export function InitialSetup({ user, onComplete }: InitialSetupProps) {
         current_password: currentPassword,
         new_username: newUsername,
         new_password: newPassword,
-        new_password_confirm: confirmPassword
+        new_password_confirm: confirmPassword,
+        new_email: newEmail.trim() || undefined
       })
       onComplete()
     } catch (err) {
@@ -171,6 +173,22 @@ export function InitialSetup({ user, onComplete }: InitialSetupProps) {
                     placeholder={t('initialSetup.confirmPasswordPlaceholder')}
                     required
                   />
+                </div>
+
+                <div>
+                  <label htmlFor="newEmail" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                    {t('initialSetup.newEmail')}
+                    <span className="ml-1.5 text-xs font-normal text-slate-400">{t('initialSetup.optional')}</span>
+                  </label>
+                  <input
+                    type="email"
+                    id="newEmail"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                    placeholder={t('initialSetup.newEmailPlaceholder')}
+                  />
+                  <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">{t('initialSetup.newEmailHint')}</p>
                 </div>
               </div>
             </div>

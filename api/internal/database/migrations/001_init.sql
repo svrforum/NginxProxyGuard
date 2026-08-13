@@ -3128,6 +3128,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_proxy_hosts_stream_listener_unique
     ON public.proxy_hosts (stream_listen_host, stream_listen_port, stream_protocol)
     WHERE proxy_type = 'stream' AND enabled = true AND stream_listen_port > 0;
 CREATE INDEX IF NOT EXISTS idx_users_totp_enabled ON public.users USING btree (totp_enabled) WHERE (totp_enabled = true);
+-- SSO links an identity to an account by comparing lower(email), while
+-- users_email_key is case-sensitive — so two accounts differing only in case
+-- could both exist and the link would pick one of them arbitrarily. That is an
+-- account-takeover shape, not a tidiness issue. (#240)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower ON public.users USING btree (lower((email)::text));
 CREATE INDEX IF NOT EXISTS idx_waf_policy_history_proxy_host ON public.waf_policy_history USING btree (proxy_host_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_waf_policy_history_rule ON public.waf_policy_history USING btree (rule_id);
 CREATE INDEX IF NOT EXISTS idx_waf_rule_changes_proxy_host ON public.waf_rule_change_events USING btree (proxy_host_id, created_at DESC);
@@ -4377,3 +4382,10 @@ CREATE TABLE IF NOT EXISTS public.log_filter_presets (
     CONSTRAINT log_filter_presets_pkey PRIMARY KEY (id)
 );
 CREATE INDEX IF NOT EXISTS idx_log_filter_presets_log_type ON public.log_filter_presets USING btree (log_type);
+
+-- v2.38.0: case-insensitive uniqueness on users.email (#240)
+-- DOCUMENTATION ONLY — the executable copy is in database/migration.go.
+-- SSO account linking compares lower(email); the existing users_email_key is
+-- case-sensitive, so two accounts differing only in case could both exist and
+-- linking would pick one arbitrarily.
+--   CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower ON public.users (lower(email));

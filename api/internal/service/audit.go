@@ -331,6 +331,13 @@ func (s *AuditService) LogUserPasswordReset(ctx context.Context, username string
 	return s.logEntry(ctx, "user_password_reset", "user", "", username, nil)
 }
 
+// LogUserEmailChange records that an account's SSO linking address changed.
+// The address is not recorded: the audit trail is exportable and this runs on a
+// public-facing box, so who and when is what belongs here. (#240)
+func (s *AuditService) LogUserEmailChange(ctx context.Context, username string) error {
+	return s.logEntry(ctx, "user_email_changed", "user", "", username, nil)
+}
+
 // LogUserDelete records how many API tokens went with the account, because that
 // is the part of a deletion that silently breaks automation. (#222 D8)
 func (s *AuditService) LogUserDelete(ctx context.Context, username string, apiTokenCount int) error {

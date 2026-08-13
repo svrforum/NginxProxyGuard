@@ -1453,7 +1453,12 @@
     "tokenExpires": "만료 {{when}}",
     "tokenAllowedIPs": "허용 IP",
     "lastLoginAt": "마지막 로그인 {{when}}",
-    "neverLoggedIn": "로그인 이력 없음"
+    "neverLoggedIn": "로그인 이력 없음",
+    "email": "이메일",
+    "emailPlaceholder": "user@example.com",
+    "emailPlaceholderBadge": "SSO 불가",
+    "emailPlaceholderHint": "NPG가 만들어 넣은 주소라 SSO 공급자와 절대 일치하지 않습니다. 실제 주소로 바꾸면 이 계정으로 SSO 로그인을 연결할 수 있습니다.",
+    "emailSaveFailed": "이메일을 저장하지 못했습니다."
   },
   "sso": {
     "title": "SSO (OpenID Connect)",

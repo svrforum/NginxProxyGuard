@@ -50,6 +50,23 @@ type ChangeCredentialsRequest struct {
 	NewUsername        string `json:"new_username" validate:"required,min=3"`
 	NewPassword        string `json:"new_password" validate:"required,min=8"`
 	NewPasswordConfirm string `json:"new_password_confirm" validate:"required"`
+	// NewEmail is optional and kept as-is when blank. Setting it here matters
+	// because SSO links an identity to an account by verified email, and an
+	// account left on the synthesised <username>@localhost can never match a
+	// real identity provider. (#240)
+	NewEmail string `json:"new_email,omitempty"`
+}
+
+// SetUserEmailRequest changes the address an account is linked by.
+//
+// Deliberately admin-only (user:write). SSO linking matches a verified IdP
+// email to a local account and then syncs the role from the provider's groups,
+// so a user able to set their own address could claim an administrator's IdP
+// address before that administrator first signs in — and inherit the role when
+// they do. Assigning roles is already a user:write power, so gating the address
+// the same way adds no new authority. (#240)
+type SetUserEmailRequest struct {
+	Email string `json:"email" validate:"required"`
 }
 
 type ChangePasswordRequest struct {

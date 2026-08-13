@@ -291,6 +291,7 @@ func registerUserAdminRoutes(v1 *echo.Group, h *handler.UserAdminHandler) {
 	v1.POST("/users", h.CreateUser, userWrite)
 	v1.PUT("/users/:id/role", h.AssignRole, userWrite)
 	v1.PUT("/users/:id/password", h.SetPassword, userWrite)
+	v1.PUT("/users/:id/email", h.SetEmail, userWrite)
 	v1.DELETE("/users/:id", h.DeleteUser, userWrite)
 	v1.POST("/users/:id/end-sessions", h.EndSessions, userWrite)
 }

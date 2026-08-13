@@ -72,6 +72,10 @@ type CreateUserRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 	RoleID   string `json:"role_id"`
+	// Email is optional. Left blank the account gets <username>@localhost,
+	// which no identity provider can ever match — give a real address for an
+	// account that should be able to sign in through SSO. (#240)
+	Email string `json:"email,omitempty"`
 }
 
 type AssignRoleRequest struct {
@@ -118,6 +122,10 @@ type UserIdentityInfo struct {
 
 type UserDetail struct {
 	UserSummary
+	// Email is what SSO links this account by. Shown here because an account
+	// left on the synthesised <username>@localhost can never match an identity
+	// provider, and there was previously no way to see that. (#240)
+	Email                string          `json:"email"`
 	LastLoginIP          string          `json:"last_login_ip,omitempty"`
 	TOTPVerifiedAt       *time.Time      `json:"totp_verified_at,omitempty"`
 	UpdatedAt            time.Time       `json:"updated_at"`

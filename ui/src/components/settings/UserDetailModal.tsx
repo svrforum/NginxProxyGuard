@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { UserEmailRow } from './UserEmailRow'
 import { getUserDetail } from '../../api/rbac'
 import { ModalShell } from '../common/ModalShell'
 
@@ -70,6 +71,7 @@ export function UserDetailModal({ userId, onClose }: UserDetailModalProps) {
               </h4>
               <div className="divide-y divide-slate-100 dark:divide-slate-700/50">
                 <Row label={t('users.role')} value={roleLabel(data.role_name)} />
+                <UserEmailRow userId={data.id} email={data.email} />
                 <Row
                   label={t('users.twoFactor')}
                   value={data.totp_enabled ? t('users.enabled') : t('users.disabled')}

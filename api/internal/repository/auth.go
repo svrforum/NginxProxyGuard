@@ -3,12 +3,18 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/lib/pq"
 
 	"nginx-proxy-guard/internal/model"
 )
+
+// ErrEmailTaken reports that another account already holds the address. The
+// caller answers 409 with it — a 500 would read as "the server is broken" when
+// the operator simply picked an address that is in use. (#240)
+var ErrEmailTaken = errors.New("email address is already in use")
 
 type AuthRepository struct {
 	db *sql.DB
@@ -139,6 +145,21 @@ func (r *AuthRepository) UpdateUserCredentials(ctx context.Context, userID, user
 		WHERE id = $1
 	`
 	_, err := r.db.ExecContext(ctx, query, userID, username, passwordHash)
+	return err
+}
+
+// UpdateUserEmail sets the address an account is linked by.
+//
+// The unique violation is translated rather than surfaced raw: it is the one
+// outcome the caller must distinguish, because it means another account already
+// holds the address and the answer is 409, not 500. Both the case-sensitive
+// users_email_key and the case-insensitive idx_users_email_lower can raise it.
+func (r *AuthRepository) UpdateUserEmail(ctx context.Context, userID, email string) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE users SET email = $2, updated_at = NOW() WHERE id = $1`, userID, email)
+	if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+		return ErrEmailTaken
+	}
 	return err
 }
 
