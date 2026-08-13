@@ -414,6 +414,17 @@ func CallbackURL(requestBase string, p *model.SSOProvider) string {
 	return strings.TrimRight(base, "/") + "/api/v1/auth/sso/" + p.Slug + "/callback"
 }
 
+// toggleTrailingSlash returns the issuer in its other shape, or "" when there
+// is no second shape worth trying (an empty issuer, or one that is only "/").
+func toggleTrailingSlash(issuer string) string {
+	if trimmed := strings.TrimRight(issuer, "/"); trimmed == "" {
+		return ""
+	} else if trimmed != issuer {
+		return trimmed
+	}
+	return issuer + "/"
+}
+
 func (s *SSOService) discover(ctx context.Context, issuer string) (*oidc.Provider, error) {
 	s.mu.Lock()
 	if hit, ok := s.discovery[issuer]; ok && time.Since(hit.fetched) < discoveryTTL {
@@ -423,6 +434,19 @@ func (s *SSOService) discover(ctx context.Context, issuer string) (*oidc.Provide
 	s.mu.Unlock()
 
 	provider, err := oidc.NewProvider(ctx, issuer)
+	if err != nil {
+		// The spec makes the issuer an exact string, so a stray trailing slash
+		// is a mismatch rather than a typo the library can absorb — and which
+		// shape is right depends on the provider: Authentik's document carries
+		// the slash, Dex's does not. Rather than pick a side and break the
+		// other, try the value as configured, then the other shape.
+		if alt := toggleTrailingSlash(issuer); alt != "" {
+			if p, altErr := oidc.NewProvider(ctx, alt); altErr == nil {
+				log.Printf("SSO: issuer %q matched the provider only as %q — save it in that form to skip this retry", issuer, alt)
+				provider, err = p, nil
+			}
+		}
+	}
 	if err != nil {
 		log.Printf("SSO: discovery failed for %s: %v", issuer, err)
 		return nil, ErrSSODiscovery

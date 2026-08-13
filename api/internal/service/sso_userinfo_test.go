@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -194,5 +195,42 @@ func TestDiscoverStillWorksWithoutTrailingSlash(t *testing.T) {
 	s := NewSSOService(nil, nil, nil, nil, nil)
 	if _, err := s.discover(context.Background(), srv.URL); err != nil {
 		t.Fatalf("plain issuer broke: %v", err)
+	}
+}
+
+// Which shape is correct is the provider's choice, not ours: Authentik's
+// document carries the trailing slash, Dex's does not. Whichever way the
+// operator typed it into the form, discovery has to land — otherwise the fix
+// for one provider is a new outage for the other.
+func TestDiscoverAcceptsEitherTrailingSlashShape(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		path           string // what the provider's document calls itself
+		configuredWith string
+	}{
+		{"document has the slash, operator omitted it", "/app/o/npg/", "/app/o/npg"},
+		{"document omits the slash, operator added it", "/app/o/npg", "/app/o/npg/"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			srv := httptest.NewServer(mux)
+			defer srv.Close()
+
+			issuer := srv.URL + tc.path
+			mux.HandleFunc(strings.TrimRight(tc.path, "/")+"/.well-known/openid-configuration",
+				func(w http.ResponseWriter, r *http.Request) {
+					w.Header().Set("Content-Type", "application/json")
+					_ = json.NewEncoder(w).Encode(map[string]any{
+						"issuer": issuer, "authorization_endpoint": srv.URL + "/auth",
+						"token_endpoint": srv.URL + "/token", "jwks_uri": srv.URL + "/keys",
+					})
+				})
+
+			s := NewSSOService(nil, nil, nil, nil, nil)
+			if _, err := s.discover(context.Background(), srv.URL+tc.configuredWith); err != nil {
+				t.Fatalf("discovery refused %q when the document says %q: %v",
+					tc.configuredWith, tc.path, err)
+			}
+		})
 	}
 }
