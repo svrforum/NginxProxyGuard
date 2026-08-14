@@ -193,6 +193,12 @@ func registerProtectedAuthRoutes(v1 *echo.Group, c *Container) {
 	protected.PUT("/auth/language", c.Handlers.Auth.SetLanguage)
 	protected.GET("/auth/font", c.Handlers.Auth.GetFontFamily)
 	protected.PUT("/auth/font", c.Handlers.Auth.SetFontFamily)
+	// Stays session-only despite reading like a probe: a failing canary invokes
+	// the healer, which rewrites 00-raw-logging.conf and reloads nginx, and the
+	// heal budget it consumes is shared with the scheduled canary — three manual
+	// calls inside the window leave a real outage unable to self-heal. It also
+	// sits in PublicRoutes, so no scope would gate it. (#249)
+	protected.POST("/health/canary", c.Handlers.HealthDetailed.RunCanary)
 
 	// TOKEN OR SESSION. Read-only, and the three an automated caller actually
 	// needs: "whose token is this" plus the two operational probes. They were
@@ -209,7 +215,6 @@ func registerProtectedAuthRoutes(v1 *echo.Group, c *Container) {
 
 	probes.GET("/auth/me", c.Handlers.Auth.GetCurrentUser)
 	probes.GET("/health/detailed", c.Handlers.HealthDetailed.GetDetailed)
-	probes.POST("/health/canary", c.Handlers.HealthDetailed.RunCanary)
 
 	probes.GET("/status", func(ec echo.Context) error {
 		dbStatus := config.StatusOK

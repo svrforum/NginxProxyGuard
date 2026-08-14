@@ -10161,8 +10161,8 @@ components:
         Either credential: a session token from `POST /auth/login`, or an API
         token (`ng_...`) from `POST /api-tokens`.
 
-        A handful of endpoints take the session token **only** — see
-        `SessionAuth`. Everything declaring `BearerAuth` accepts both.
+        Endpoints that take the session token **only** declare `SessionAuth`
+        instead — see that scheme for which, and why.
     SessionAuth:
       type: http
       scheme: bearer

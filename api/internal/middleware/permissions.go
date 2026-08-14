@@ -45,13 +45,16 @@ var SelfRoutes = map[string]bool{
 	"POST /api/v1/auth/2fa/disable":        true,
 }
 
-// PublicRoutes need no PERMISSION. Two kinds live here: genuinely
+// PublicRoutes need no PERMISSION. Three kinds live here: genuinely
 // unauthenticated endpoints (login, the visitor-facing CAPTCHA, /metrics,
-// /health), and endpoints that require a session but no specific grant
-// (/api/v1/health/detailed and /api/v1/status are registered in
-// registerProtectedAuthRoutes, so AuthMiddleware still applies to them — they
-// simply carry no permission). Authentication is decided elsewhere; this map
-// only says "no permission needed".
+// /health); endpoints that require a session but no specific grant; and — since
+// #249 — /api/v1/status and /api/v1/health/detailed, which the `probes` group in
+// registerProtectedAuthRoutes accepts an API TOKEN for, of any scope. Because no
+// permission gates them, a token's scopes do not narrow what they return.
+// POST /api/v1/health/canary is the one entry here that CHANGES STATE (a failing
+// probe invokes the healer, which rewrites nginx config and reloads); it is kept
+// session-only in routes.go for exactly that reason. Authentication is decided
+// elsewhere; this map only says "no permission needed".
 var PublicRoutes = map[string]bool{
 	"GET /health":                    true,
 	"GET /metrics":                   true,

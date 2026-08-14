@@ -168,6 +168,20 @@ func (h *AuthHandler) GetCurrentUser(c echo.Context) error {
 		// Never fail who-am-I over this: the UI would be unable to render at all.
 		return c.JSON(http.StatusOK, user)
 	}
+	// An API token is capped by its own scopes as well as its owner's role —
+	// AuthzService.CanToken enforces the intersection. Reporting the owner's set
+	// to a token would tell a read-only caller it is a superuser, and this field
+	// exists precisely so a client can tell what it may reach. (#249)
+	if token, byToken := c.Get("api_token").(*model.APIToken); byToken && token != nil {
+		granted := make([]string, 0, len(perms))
+		for _, p := range perms {
+			if token.HasPermission(p) {
+				granted = append(granted, p)
+			}
+		}
+		perms = granted
+		isSuperuser = isSuperuser && token.HasPermission(model.PermissionAll)
+	}
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"id":                   user.ID,
 		"username":             user.Username,
