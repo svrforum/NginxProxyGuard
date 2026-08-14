@@ -578,6 +578,15 @@ func (s *AuthService) GetAuthStatus(ctx context.Context, token string) (*model.A
 }
 
 // GetAccountInfo returns account information
+// GetUserByID returns an account, or nil when it no longer exists.
+//
+// Exists so a caller authenticated by API token can still be identified: that
+// path sets only user_id in the request context, never the *model.User the
+// session path stores. (#249)
+func (s *AuthService) GetUserByID(ctx context.Context, userID string) (*model.User, error) {
+	return s.repo.GetUserByID(ctx, userID)
+}
+
 func (s *AuthService) GetAccountInfo(ctx context.Context, userID string) (*model.AccountInfo, error) {
 	user, err := s.repo.GetUserByID(ctx, userID)
 	if err != nil {

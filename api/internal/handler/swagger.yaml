@@ -209,7 +209,7 @@ paths:
         Strength rule: at least 10 characters with an uppercase letter, a lowercase
         letter, a digit and a special character, and not a common password.
       security:
-        - BearerAuth: []
+        - SessionAuth: []
       requestBody:
         required: true
         content:
@@ -4023,7 +4023,7 @@ paths:
       summary: Get own account info
       description: Sign-in metadata for the calling account. Self-service — authentication only.
       security:
-        - BearerAuth: []
+        - SessionAuth: []
       responses:
         '200':
           description: Account info
@@ -4048,7 +4048,7 @@ paths:
         `new_password` must be at least 10 characters and contain an uppercase letter, a
         lowercase letter, a digit and a special character, and must not be a common password.
       security:
-        - BearerAuth: []
+        - SessionAuth: []
       requestBody:
         required: true
         content:
@@ -4106,7 +4106,7 @@ paths:
       summary: Change own username
       description: Self-service — authentication only.
       security:
-        - BearerAuth: []
+        - SessionAuth: []
       requestBody:
         required: true
         content:
@@ -4161,7 +4161,7 @@ paths:
         account. Nothing is enabled until `POST /auth/2fa/enable` confirms a code.
         Self-service — authentication only. Takes no request body.
       security:
-        - BearerAuth: []
+        - SessionAuth: []
       responses:
         '200':
           description: Enrolment material
@@ -4183,7 +4183,7 @@ paths:
       summary: Enable 2FA
       description: Confirms the enrolment from `/auth/2fa/setup` with a current TOTP code. Self-service — authentication only.
       security:
-        - BearerAuth: []
+        - SessionAuth: []
       requestBody:
         required: true
         content:
@@ -4228,7 +4228,7 @@ paths:
       summary: Disable 2FA
       description: Requires both the account password and a current TOTP code. Self-service — authentication only.
       security:
-        - BearerAuth: []
+        - SessionAuth: []
       requestBody:
         required: true
         content:
@@ -4270,7 +4270,7 @@ paths:
       summary: Get own UI language
       description: Self-service — authentication only. Returns `ko` when the account has no language stored.
       security:
-        - BearerAuth: []
+        - SessionAuth: []
       responses:
         '200':
           description: Current language
@@ -4286,7 +4286,7 @@ paths:
       summary: Set own UI language
       description: Self-service — authentication only. Only `ko` and `en` are accepted.
       security:
-        - BearerAuth: []
+        - SessionAuth: []
       requestBody:
         required: true
         content:
@@ -4314,7 +4314,7 @@ paths:
       summary: Get own UI font family
       description: Self-service — authentication only. Returns the stored value verbatim, which may be an empty string for an account that never set one.
       security:
-        - BearerAuth: []
+        - SessionAuth: []
       responses:
         '200':
           description: Current font family
@@ -4330,7 +4330,7 @@ paths:
       summary: Set own UI font family
       description: Self-service — authentication only. The handler accepts only the five listed values.
       security:
-        - BearerAuth: []
+        - SessionAuth: []
       requestBody:
         required: true
         content:
@@ -10157,7 +10157,26 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: JWT token or API token (ng_xxx)
+      description: |
+        Either credential: a session token from `POST /auth/login`, or an API
+        token (`ng_...`) from `POST /api-tokens`.
+
+        A handful of endpoints take the session token **only** — see
+        `SessionAuth`. Everything declaring `BearerAuth` accepts both.
+    SessionAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Session token from `POST /auth/login` only. **API tokens (`ng_...`) are
+        rejected with 401 here.**
+
+        These are the endpoints that manage a human account's credentials and
+        interface preferences. A token is a long-lived secret that may be
+        pasted into a script or a monitoring system, so allowing one to change
+        a password or disable 2FA would turn a leaked read-only token into
+        account takeover. Identity and the operational probes (`/auth/me`,
+        `/status`, `/health/detailed`) are reachable with either credential. (#249)
 
   parameters:
     ProxyHostId:

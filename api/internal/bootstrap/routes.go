@@ -168,6 +168,11 @@ func registerPublicRoutes(v1 *echo.Group, c *Container) {
 }
 
 func registerProtectedAuthRoutes(v1 *echo.Group, c *Container) {
+	// SESSION ONLY. Everything here manages the credentials of a human account,
+	// and an API token must never be able to reach it: a leaked read-only token
+	// that could POST /auth/change-password would be full account takeover, not
+	// an information leak. That is why the token middleware is attached to the
+	// group below rather than to this one. (#249)
 	protected := v1.Group("")
 	protected.Use(authMiddleware.AuthMiddleware(c.Services.Auth))
 	// Server-side initial-setup gate: while the logged-in user still has the
@@ -175,7 +180,6 @@ func registerProtectedAuthRoutes(v1 *echo.Group, c *Container) {
 	// read-only auth status are reachable (H1). No-op for set-up users.
 	protected.Use(authMiddleware.InitialSetupRequired)
 
-	protected.GET("/auth/me", c.Handlers.Auth.GetCurrentUser)
 	protected.POST("/auth/change-credentials", c.Handlers.Auth.ChangeCredentials)
 	protected.POST("/auth/change-password", c.Handlers.Auth.ChangePassword)
 	protected.POST("/auth/change-username", c.Handlers.Auth.ChangeUsername)
@@ -183,15 +187,31 @@ func registerProtectedAuthRoutes(v1 *echo.Group, c *Container) {
 	protected.POST("/auth/2fa/setup", c.Handlers.Auth.Setup2FA)
 	protected.POST("/auth/2fa/enable", c.Handlers.Auth.Enable2FA)
 	protected.POST("/auth/2fa/disable", c.Handlers.Auth.Disable2FA)
+	// A person's interface preferences. A token has no language or font, and
+	// letting one rewrite a human's settings serves nobody.
 	protected.GET("/auth/language", c.Handlers.Auth.GetLanguage)
 	protected.PUT("/auth/language", c.Handlers.Auth.SetLanguage)
 	protected.GET("/auth/font", c.Handlers.Auth.GetFontFamily)
 	protected.PUT("/auth/font", c.Handlers.Auth.SetFontFamily)
 
-	protected.GET("/health/detailed", c.Handlers.HealthDetailed.GetDetailed)
-	protected.POST("/health/canary", c.Handlers.HealthDetailed.RunCanary)
+	// TOKEN OR SESSION. Read-only, and the three an automated caller actually
+	// needs: "whose token is this" plus the two operational probes. They were
+	// session-only by accident of grouping, while the spec advertised one bearer
+	// scheme for everything — so monitoring with an API token got a 401. (#249)
+	//
+	// Order matters: APITokenAuth handles an ng_ token and sets user_id, which
+	// makes AuthMiddleware fall through; a session token is ignored by the first
+	// and validated by the second.
+	probes := v1.Group("")
+	probes.Use(authMiddleware.APITokenAuth(c.Repositories.APIToken, c.Repositories.AuditLog))
+	probes.Use(authMiddleware.AuthMiddleware(c.Services.Auth))
+	probes.Use(authMiddleware.InitialSetupRequired)
 
-	protected.GET("/status", func(ec echo.Context) error {
+	probes.GET("/auth/me", c.Handlers.Auth.GetCurrentUser)
+	probes.GET("/health/detailed", c.Handlers.HealthDetailed.GetDetailed)
+	probes.POST("/health/canary", c.Handlers.HealthDetailed.RunCanary)
+
+	probes.GET("/status", func(ec echo.Context) error {
 		dbStatus := config.StatusOK
 		if err := c.DB.Health(); err != nil {
 			dbStatus = config.StatusError

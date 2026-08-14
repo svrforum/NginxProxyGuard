@@ -147,7 +147,18 @@ func (h *AuthHandler) GetStatus(c echo.Context) error {
 func (h *AuthHandler) GetCurrentUser(c echo.Context) error {
 	user, ok := getUserFromContext(c)
 	if !ok {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
+		// An API token authenticates too, and that path stores only user_id —
+		// the *model.User above belongs to the session path. Resolving it here
+		// is what lets an automated caller ask whose token it is holding. (#249)
+		userID, hasID := c.Get("user_id").(string)
+		if !hasID || userID == "" {
+			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
+		}
+		resolved, err := h.authService.GetUserByID(c.Request().Context(), userID)
+		if err != nil || resolved == nil {
+			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
+		}
+		user = resolved
 	}
 	if h.authzService == nil {
 		return c.JSON(http.StatusOK, user)
