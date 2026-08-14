@@ -1,8 +1,16 @@
 # Build stage
-# Pinned to 1.26.5 to pick up Go stdlib security fixes reachable in our code
-# (GO-2026-5856 crypto/tls, GO-2026-5039 net/textproto, GO-2026-5037 crypto/x509
-# — confirmed reachable by govulncheck; fixed in go1.26.4/1.26.5). (#211)
-FROM golang:1.26.5-alpine AS builder
+# Pinned to a stable patch release, and kept current, because the toolchain is
+# what compiles the stdlib into the binary users run:
+#   1.26.4/1.26.5 — GO-2026-5856 crypto/tls, GO-2026-5039 net/textproto,
+#                   GO-2026-5037 crypto/x509, all confirmed reachable here by
+#                   govulncheck (#211)
+#   1.26.6        — crypto/tls, encoding/asn1, encoding/xml, html/template, net,
+#                   net/http, net/url, and CVE-2026-56865 (sumdb tile forgery →
+#                   GOSUMDB bypass and module-cache poisoning)
+# Release candidates are refused on purpose: their tags are frozen rather than
+# patched, so an RC that outranks the stable line silently drops these fixes.
+# .github/dependabot.yml carries the matching ignore rule. (#245)
+FROM golang:1.26.6-alpine AS builder
 
 WORKDIR /app
 

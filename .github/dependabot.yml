@@ -25,6 +25,14 @@ updates:
     directory: "/api"
     schedule:
       interval: "weekly"
+    ignore:
+      # Go release candidates. Dependabot ranks 1.27rc2 above 1.26.5 and offered
+      # it as an upgrade (#245), which would have built the images users run on a
+      # toolchain Go labels unstable — and stepped away from the 1.26.6 security
+      # fixes at the same time, since RC tags are frozen rather than patched.
+      # Stable patch bumps on the 1.x line still come through.
+      - dependency-name: "golang"
+        versions: ["*rc*", "*beta*", "*alpha*"]
   - package-ecosystem: "docker"
     directory: "/ui"
     schedule:
