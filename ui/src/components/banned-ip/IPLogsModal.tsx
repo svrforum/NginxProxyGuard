@@ -17,11 +17,19 @@ function getStatusColor(statusCode?: number): string {
   return 'text-green-600 bg-green-50'
 }
 
-export function IPLogsModal({ ip, hostName, onClose }: { ip: BannedIP; hostName?: string; onClose: () => void }) {
+/**
+ * Activity for one address: the ban that is in force (when there is one), the
+ * traffic summary, and the recent log lines.
+ *
+ * `ban` is optional so the same modal serves the ban HISTORY tab, where a row
+ * describes a past event rather than a live ban and there is no expiry or fail
+ * count to show. (#250)
+ */
+export function IPLogsModal({ ipAddress, ban, hostName, onClose }: { ipAddress: string; ban?: BannedIP; hostName?: string; onClose: () => void }) {
   const { t, i18n } = useTranslation(['waf', 'common'])
   const { data, isLoading, error } = useQuery({
-    queryKey: ['ip-logs', ip.ip_address],
-    queryFn: () => fetchIPLogs(ip.ip_address),
+    queryKey: ['ip-logs', ipAddress],
+    queryFn: () => fetchIPLogs(ipAddress),
   })
 
   const logs = data?.data || []
@@ -33,11 +41,11 @@ export function IPLogsModal({ ip, hostName, onClose }: { ip: BannedIP; hostName?
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex items-center justify-between">
           <div>
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-              <span className="font-mono bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 px-2 py-0.5 rounded">{ip.ip_address}</span>
+              <span className="font-mono bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 px-2 py-0.5 rounded">{ipAddress}</span>
               {t('bannedIp.logs.title')}
             </h3>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              {ip.reason ? `${t('bannedIp.logs.reasonPrefix')}${ip.reason}` : t('bannedIp.logs.subtitle')}
+              {ban?.reason ? `${t('bannedIp.logs.reasonPrefix')}${ban.reason}` : t('bannedIp.logs.subtitle')}
             </p>
           </div>
           <button onClick={onClose} aria-label={t('common:buttons.close')} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg">
@@ -45,36 +53,39 @@ export function IPLogsModal({ ip, hostName, onClose }: { ip: BannedIP; hostName?
           </button>
         </div>
 
-        {/* Ban Info */}
-        <div className="px-6 py-3 bg-red-50 dark:bg-red-900/10 border-b border-red-100 dark:border-red-900/30 flex flex-wrap items-center gap-4 text-sm">
-          <div>
-            <span className="text-red-600 dark:text-red-400 font-medium">{t('bannedIp.logs.banTime')}</span>
-            <span className="ml-2 text-red-700 dark:text-red-300">{formatDate(ip.banned_at, i18n.language)}</span>
-          </div>
-          <div>
-            <span className="text-red-600 dark:text-red-400 font-medium">{t('bannedIp.logs.expires')}</span>
-            <span className="ml-2 text-red-700 dark:text-red-300">
-              {ip.is_permanent ? t('bannedIp.status.permanent') : ip.expires_at ? formatDate(ip.expires_at, i18n.language) : '-'}
-            </span>
-          </div>
-          <div>
-            <span className="text-red-600 dark:text-red-400 font-medium">{t('bannedIp.logs.failCount')}</span>
-            <span className="ml-2 text-red-700 dark:text-red-300">{ip.fail_count}</span>
-          </div>
-          {hostName && (
+        {/* The ban in force. Absent from the history tab, where a row is a past
+            event and there is no expiry or fail count to report. (#250) */}
+        {ban && (
+          <div className="px-6 py-3 bg-red-50 dark:bg-red-900/10 border-b border-red-100 dark:border-red-900/30 flex flex-wrap items-center gap-4 text-sm">
             <div>
-              <span className="text-red-600 dark:text-red-400 font-medium">{t('bannedIp.logs.host', { defaultValue: '호스트:' })}</span>
-              <span className="ml-2 text-red-700 dark:text-red-300">{hostName}</span>
+              <span className="text-red-600 dark:text-red-400 font-medium">{t('bannedIp.logs.banTime')}</span>
+              <span className="ml-2 text-red-700 dark:text-red-300">{formatDate(ban.banned_at, i18n.language)}</span>
             </div>
-          )}
-          {ip.is_auto_banned && (
-            <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-xs font-medium rounded">
-              {t('bannedIp.type.auto', { defaultValue: '자동 차단' })}
-            </span>
-          )}
-        </div>
+            <div>
+              <span className="text-red-600 dark:text-red-400 font-medium">{t('bannedIp.logs.expires')}</span>
+              <span className="ml-2 text-red-700 dark:text-red-300">
+                {ban.is_permanent ? t('bannedIp.status.permanent') : ban.expires_at ? formatDate(ban.expires_at, i18n.language) : '-'}
+              </span>
+            </div>
+            <div>
+              <span className="text-red-600 dark:text-red-400 font-medium">{t('bannedIp.logs.failCount')}</span>
+              <span className="ml-2 text-red-700 dark:text-red-300">{ban.fail_count}</span>
+            </div>
+            {hostName && (
+              <div>
+                <span className="text-red-600 dark:text-red-400 font-medium">{t('bannedIp.logs.host', { defaultValue: '호스트:' })}</span>
+                <span className="ml-2 text-red-700 dark:text-red-300">{hostName}</span>
+              </div>
+            )}
+            {ban.is_auto_banned && (
+              <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-xs font-medium rounded">
+                {t('bannedIp.type.auto', { defaultValue: '자동 차단' })}
+              </span>
+            )}
+          </div>
+        )}
 
-        <IPStatsBand ip={ip.ip_address} />
+        <IPStatsBand ip={ipAddress} />
 
         {/* Logs Content */}
         <div className="flex-1 overflow-y-auto p-6">

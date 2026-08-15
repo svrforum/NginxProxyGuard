@@ -569,7 +569,7 @@ export function BannedIPList() {
 
       {/* IP Details Modal */}
       {selectedIP && (
-        <IPLogsModal ip={selectedIP} hostName={selectedIP.proxy_host_id ? hostMap[selectedIP.proxy_host_id] : undefined} onClose={() => setSelectedIP(null)} />
+        <IPLogsModal ipAddress={selectedIP.ip_address} ban={selectedIP} hostName={selectedIP.proxy_host_id ? hostMap[selectedIP.proxy_host_id] : undefined} onClose={() => setSelectedIP(null)} />
       )}
         </>
       )}

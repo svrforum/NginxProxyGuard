@@ -300,7 +300,8 @@
       "noHistory": "No history found.",
       "system": "System",
       "topBanned": "Frequently Banned IPs",
-      "times": "times"
+      "times": "times",
+      "viewActivity": "View this IP's activity"
     },
     "pagination": {
       "prev": "Previous",

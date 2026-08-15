@@ -300,7 +300,8 @@
       "noHistory": "이력이 없습니다.",
       "system": "시스템",
       "topBanned": "자주 차단된 IP",
-      "times": "회"
+      "times": "회",
+      "viewActivity": "이 IP의 활동 보기"
     },
     "pagination": {
       "prev": "이전",

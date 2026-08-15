@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { getIPBanHistory, getIPBanHistoryStats } from '../../api/security'
+import { IPLogsModal } from './IPLogsModal'
 import type { BanEventType, BanSource } from '../../types/security'
 
 export function BanHistoryTab({ hostMap }: { hostMap: Record<string, string> }) {
@@ -9,6 +10,9 @@ export function BanHistoryTab({ hostMap }: { hostMap: Record<string, string> }) 
   const [page, setPage] = useState(1)
   const [eventTypeFilter, setEventTypeFilter] = useState<string>('all')
   const [sourceFilter, setSourceFilter] = useState<string>('all')
+  // Clicking an address opens the same activity view the ban list offers, minus
+  // the live-ban band: a history row is a past event. (#250)
+  const [selectedIP, setSelectedIP] = useState<string | null>(null)
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['ip-ban-history', page, eventTypeFilter, sourceFilter],
@@ -137,7 +141,15 @@ export function BanHistoryTab({ hostMap }: { hostMap: Record<string, string> }) 
                   <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
                     <td className="px-4 py-3"><span className="text-sm text-slate-600 dark:text-slate-300">{new Date(item.created_at).toLocaleString(i18n.language)}</span></td>
                     <td className="px-4 py-3"><span className={`px-2 py-0.5 text-xs font-medium rounded ${getEventTypeColor(item.event_type)}`}>{item.event_type === 'ban' ? t('bannedIp.history.event.ban', { defaultValue: '차단' }) : t('bannedIp.history.event.unban', { defaultValue: '해제' })}</span></td>
-                    <td className="px-4 py-3"><span className="font-mono text-sm text-slate-900 dark:text-slate-100">{item.ip_address}</span></td>
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={() => setSelectedIP(item.ip_address)}
+                        className="font-mono text-sm text-primary-600 dark:text-primary-400 hover:underline"
+                        title={t('bannedIp.history.viewActivity', { defaultValue: '이 IP의 활동 보기' })}
+                      >
+                        {item.ip_address}
+                      </button>
+                    </td>
                     <td className="px-4 py-3"><span className={`px-2 py-0.5 text-xs font-medium rounded ${getSourceColor(item.source)}`}>{getSourceLabel(item.source)}</span></td>
                     <td className="px-4 py-3">
                       {hostName ? (
@@ -182,6 +194,8 @@ export function BanHistoryTab({ hostMap }: { hostMap: Record<string, string> }) 
           </div>
         </div>
       )}
+
+      {selectedIP && <IPLogsModal ipAddress={selectedIP} onClose={() => setSelectedIP(null)} />}
     </div>
   )
 }
