@@ -166,7 +166,7 @@ func (s *SSOService) CompleteLogin(ctx context.Context, slug, code, state, callb
 		return "", ErrSSOTokenInvalid
 	}
 
-	claims, err := extractClaims(idToken, p.GroupClaim)
+	claims, idTokenStatedVerified, err := extractClaims(idToken, p.GroupClaim)
 	if err != nil {
 		return "", err
 	}
@@ -174,7 +174,7 @@ func (s *SSOService) CompleteLogin(ctx context.Context, slug, code, state, callb
 		return "", ErrSSOTokenInvalid
 	}
 	// Whatever the ID token did not carry, ask the provider for. (#238)
-	s.mergeUserInfoClaims(ctx, discovered, token, claims, p.GroupClaim)
+	s.mergeUserInfoClaims(ctx, discovered, token, claims, p.GroupClaim, idTokenStatedVerified)
 
 	userID, username, err := s.resolveUser(ctx, p, claims)
 	if err != nil {
@@ -468,23 +468,31 @@ func (s *SSOService) forgetDiscovery(issuer string) {
 // extractClaims reads the subset of the ID token the flow acts on. The group
 // claim is configurable, so claims are decoded generically rather than into a
 // fixed struct, and both a list and a single string are accepted — IdPs differ.
-func extractClaims(idToken *oidc.IDToken, groupClaim string) (*model.SSOClaims, error) {
+func extractClaims(idToken *oidc.IDToken, groupClaim string) (*model.SSOClaims, bool, error) {
 	raw := map[string]any{}
 	if err := idToken.Claims(&raw); err != nil {
-		return nil, ErrSSOTokenInvalid
+		return nil, false, ErrSSOTokenInvalid
 	}
-	return claimsFromMap(raw, idToken.Subject, groupClaim), nil
+	c, statedVerified := claimsFromMap(raw, idToken.Subject, groupClaim)
+	return c, statedVerified, nil
 }
 
 // claimsFromMap turns a decoded claim set into what the flow acts on.
-func claimsFromMap(raw map[string]any, subject, groupClaim string) *model.SSOClaims {
+//
+// The second return says whether email_verified was STATED, which is not the
+// same as it being true. The claim is optional in OIDC, and a provider that
+// omits it from the ID token may still assert it at UserInfo — so the caller
+// has to tell "said false" from "said nothing" to know whether it may look
+// elsewhere. (#248)
+func claimsFromMap(raw map[string]any, subject, groupClaim string) (*model.SSOClaims, bool) {
 	c := &model.SSOClaims{Subject: subject}
 	c.Email, _ = raw["email"].(string)
+	verifiedStated := false
 	switch v := raw["email_verified"].(type) {
 	case bool:
-		c.EmailVerified = v
+		c.EmailVerified, verifiedStated = v, true
 	case string:
-		c.EmailVerified = v == "true"
+		c.EmailVerified, verifiedStated = v == "true", true
 	}
 	c.Name, _ = raw["name"].(string)
 	if u, ok := raw["preferred_username"].(string); ok {
@@ -502,7 +510,7 @@ func claimsFromMap(raw map[string]any, subject, groupClaim string) *model.SSOCla
 	case string:
 		c.Groups = []string{v}
 	}
-	return c
+	return c, verifiedStated
 }
 
 // mergeUserInfoClaims fills in what the ID token did not carry, by asking the
@@ -517,7 +525,7 @@ func claimsFromMap(raw map[string]any, subject, groupClaim string) *model.SSOCla
 //
 // Failure is not fatal. A provider may not implement UserInfo, or the token may
 // not carry the scope for it, and those installs worked before this existed.
-func (s *SSOService) mergeUserInfoClaims(ctx context.Context, provider *oidc.Provider, token *oauth2.Token, claims *model.SSOClaims, groupClaim string) {
+func (s *SSOService) mergeUserInfoClaims(ctx context.Context, provider *oidc.Provider, token *oauth2.Token, claims *model.SSOClaims, groupClaim string, idTokenStatedVerified bool) {
 	info, err := provider.UserInfo(ctx, oauth2.StaticTokenSource(token))
 	if err != nil {
 		log.Printf("SSO: userinfo lookup skipped: %v", err)
@@ -535,12 +543,24 @@ func (s *SSOService) mergeUserInfoClaims(ctx context.Context, provider *oidc.Pro
 		log.Printf("SSO: userinfo claims could not be decoded: %v", err)
 		return
 	}
-	extra := claimsFromMap(raw, claims.Subject, groupClaim)
+	extra, extraStatedVerified := claimsFromMap(raw, claims.Subject, groupClaim)
 
 	// The ID token is signed and wins wherever it said something. UserInfo only
 	// fills gaps.
 	if claims.Email == "" && extra.Email != "" {
 		claims.Email, claims.EmailVerified = extra.Email, extra.EmailVerified
+	} else if claims.Email != "" && !idTokenStatedVerified && extraStatedVerified &&
+		strings.EqualFold(claims.Email, extra.Email) {
+		// The ID token carried the address but said nothing about whether it is
+		// verified — email_verified is optional in OIDC, and a provider may put
+		// the address in the token and the verification flag only at UserInfo.
+		// Treating "unstated" as "false" refused those sign-ins with no way for
+		// the operator to tell it from a genuinely unverified address. (#248)
+		//
+		// Only when the two addresses agree: a UserInfo response must not be
+		// able to mark a DIFFERENT address as verified, and an explicit false in
+		// the signed token is never overridden.
+		claims.EmailVerified = extra.EmailVerified
 	}
 	if claims.Name == "" {
 		claims.Name = extra.Name
