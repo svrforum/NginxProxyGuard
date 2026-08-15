@@ -353,20 +353,21 @@ func (r *BackupRepository) importSSOProviders(ctx context.Context, tx *sql.Tx, p
 
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO sso_providers (slug, name, issuer_url, client_id, client_secret, scopes,
-				callback_base_url, enabled, allow_jit, allowed_email_domains, allowed_emails,
+				callback_base_url, enabled, allow_jit, trust_provider_email, allowed_email_domains, allowed_emails,
 				group_claim, required_group, default_role_id, group_role_mappings)
-			VALUES ($1,$2,$3,$4,$5,$6,NULLIF($7,''),$8,$9,$10,$11,$12,NULLIF($13,''),$14,$15)
+			VALUES ($1,$2,$3,$4,$5,$6,NULLIF($7,''),$8,$9,$10,$11,$12,$13,NULLIF($14,''),$15,$16)
 			ON CONFLICT (lower((slug)::text)) DO UPDATE SET
 				name = EXCLUDED.name, issuer_url = EXCLUDED.issuer_url,
 				client_id = EXCLUDED.client_id, client_secret = EXCLUDED.client_secret,
 				scopes = EXCLUDED.scopes, callback_base_url = EXCLUDED.callback_base_url,
 				enabled = EXCLUDED.enabled, allow_jit = EXCLUDED.allow_jit,
+				trust_provider_email = EXCLUDED.trust_provider_email,
 				allowed_email_domains = EXCLUDED.allowed_email_domains,
 				allowed_emails = EXCLUDED.allowed_emails, group_claim = EXCLUDED.group_claim,
 				required_group = EXCLUDED.required_group, default_role_id = EXCLUDED.default_role_id,
 				group_role_mappings = EXCLUDED.group_role_mappings, updated_at = now()`,
 			e.Slug, e.Name, e.IssuerURL, e.ClientID, e.ClientSecret, scopes,
-			e.CallbackBaseURL, e.Enabled, allowJIT, pq.Array(e.AllowedEmailDomains), pq.Array(e.AllowedEmails),
+			e.CallbackBaseURL, e.Enabled, allowJIT, e.TrustProviderEmail, pq.Array(e.AllowedEmailDomains), pq.Array(e.AllowedEmails),
 			groupClaim, e.RequiredGroup, defaultRole, encoded); err != nil {
 			return fmt.Errorf("sso provider %s: %w", e.Slug, err)
 		}

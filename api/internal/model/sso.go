@@ -30,16 +30,25 @@ type GroupRoleMapping struct {
 }
 
 type SSOProvider struct {
-	ID                  string             `json:"id"`
-	Slug                string             `json:"slug"`
-	Name                string             `json:"name"`
-	IssuerURL           string             `json:"issuer_url"`
-	ClientID            string             `json:"client_id"`
-	ClientSecret        string             `json:"client_secret,omitempty"`
-	Scopes              string             `json:"scopes"`
-	CallbackBaseURL     string             `json:"callback_base_url"`
-	Enabled             bool               `json:"enabled"`
-	AllowJIT            bool               `json:"allow_jit"`
+	ID              string `json:"id"`
+	Slug            string `json:"slug"`
+	Name            string `json:"name"`
+	IssuerURL       string `json:"issuer_url"`
+	ClientID        string `json:"client_id"`
+	ClientSecret    string `json:"client_secret,omitempty"`
+	Scopes          string `json:"scopes"`
+	CallbackBaseURL string `json:"callback_base_url"`
+	Enabled         bool   `json:"enabled"`
+	AllowJIT        bool   `json:"allow_jit"`
+	// TrustProviderEmail lets an operator vouch for the provider's addresses
+	// when it will not assert email_verified. Authentik 2025.10 changed its
+	// default scope mapping to send false (goauthentik/authentik#16205), which
+	// refuses every attempt to link an SSO identity to an existing account.
+	//
+	// Off by default, and it should stay off unless the operator controls the
+	// provider AND its user enrollment: anyone who can set an arbitrary email
+	// address there can then sign in as the NPG account holding it. (#248)
+	TrustProviderEmail  bool               `json:"trust_provider_email"`
 	AllowedEmailDomains pq.StringArray     `json:"allowed_email_domains"`
 	AllowedEmails       pq.StringArray     `json:"allowed_emails"`
 	GroupClaim          string             `json:"group_claim"`
@@ -65,15 +74,24 @@ type PublicSSOProvider struct {
 }
 
 type CreateSSOProviderRequest struct {
-	Slug                string             `json:"slug"`
-	Name                string             `json:"name"`
-	IssuerURL           string             `json:"issuer_url"`
-	ClientID            string             `json:"client_id"`
-	ClientSecret        string             `json:"client_secret"`
-	Scopes              string             `json:"scopes"`
-	CallbackBaseURL     string             `json:"callback_base_url"`
-	Enabled             *bool              `json:"enabled"`
-	AllowJIT            bool               `json:"allow_jit"`
+	Slug            string `json:"slug"`
+	Name            string `json:"name"`
+	IssuerURL       string `json:"issuer_url"`
+	ClientID        string `json:"client_id"`
+	ClientSecret    string `json:"client_secret"`
+	Scopes          string `json:"scopes"`
+	CallbackBaseURL string `json:"callback_base_url"`
+	Enabled         *bool  `json:"enabled"`
+	AllowJIT        bool   `json:"allow_jit"`
+	// TrustProviderEmail lets an operator vouch for the provider's addresses
+	// when it will not assert email_verified. Authentik 2025.10 changed its
+	// default scope mapping to send false (goauthentik/authentik#16205), which
+	// refuses every attempt to link an SSO identity to an existing account.
+	//
+	// Off by default, and it should stay off unless the operator controls the
+	// provider AND its user enrollment: anyone who can set an arbitrary email
+	// address there can then sign in as the NPG account holding it. (#248)
+	TrustProviderEmail  bool               `json:"trust_provider_email"`
 	AllowedEmailDomains []string           `json:"allowed_email_domains"`
 	AllowedEmails       []string           `json:"allowed_emails"`
 	GroupClaim          string             `json:"group_claim"`
@@ -230,9 +248,15 @@ type SSOClaims struct {
 	Subject       string
 	Email         string
 	EmailVerified bool
-	Name          string
-	Username      string
-	Groups        []string
+	// EmailVerifiedStated separates "the provider said false" from "the provider
+	// said nothing". email_verified is optional in OIDC, and the two need
+	// different fixes: one is a user marked unverified at the IdP, the other is
+	// an IdP that never emits the claim at all. Collapsing both to false left
+	// operators with no way to tell which they had. (#248)
+	EmailVerifiedStated bool
+	Name                string
+	Username            string
+	Groups              []string
 }
 
 // AllowedByList reports whether the identity passes the provider's allowlist.

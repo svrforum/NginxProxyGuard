@@ -15,6 +15,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/oauth2"
 
+	"nginx-proxy-guard/internal/config"
 	"nginx-proxy-guard/internal/model"
 	"nginx-proxy-guard/internal/repository"
 )
@@ -166,7 +167,7 @@ func (s *SSOService) CompleteLogin(ctx context.Context, slug, code, state, callb
 		return "", ErrSSOTokenInvalid
 	}
 
-	claims, idTokenStatedVerified, err := extractClaims(idToken, p.GroupClaim)
+	claims, err := extractClaims(idToken, p.GroupClaim)
 	if err != nil {
 		return "", err
 	}
@@ -174,7 +175,7 @@ func (s *SSOService) CompleteLogin(ctx context.Context, slug, code, state, callb
 		return "", ErrSSOTokenInvalid
 	}
 	// Whatever the ID token did not carry, ask the provider for. (#238)
-	s.mergeUserInfoClaims(ctx, discovered, token, claims, p.GroupClaim, idTokenStatedVerified)
+	s.mergeUserInfoClaims(ctx, discovered, token, claims, p.GroupClaim)
 
 	userID, username, err := s.resolveUser(ctx, p, claims)
 	if err != nil {
@@ -223,7 +224,11 @@ func (s *SSOService) resolveUser(ctx context.Context, p *model.SSOProvider, c *m
 	// gains SSO without losing its history. An unverified address must never
 	// match: an IdP that lets a user set an arbitrary email would otherwise
 	// hand over any existing NPG account.
-	if c.Email != "" && c.EmailVerified {
+	// trust_provider_email is the operator saying "addresses from this provider
+	// are authoritative", which is the only way to link on a provider that will
+	// not assert email_verified — Authentik 2025.10 sends false by default. Off
+	// unless deliberately enabled. (#248)
+	if c.Email != "" && (c.EmailVerified || p.TrustProviderEmail) {
 		if id, err := s.repo.FindUserByEmail(ctx, c.Email); err != nil {
 			return "", "", err
 		} else if id != "" {
@@ -246,9 +251,20 @@ func (s *SSOService) resolveUser(ctx context.Context, p *model.SSOProvider, c *m
 		// no email, sent one it did not mark verified, or sent one that matches
 		// no local account — and those need three different fixes. The address
 		// itself is never logged; this runs on a public-facing box.
-		log.Printf("SSO: no account for provider %q — email present=%t, verified=%t, jit=off. "+
+		// "verified=false" was ambiguous in the field: an operator could not tell
+		// a user marked unverified at the IdP from an IdP that never emits the
+		// claim, and those need different fixes. The version is here because a
+		// pasted log line is otherwise silent about which build produced it.
+		verified := "false (the provider said so)"
+		switch {
+		case c.EmailVerified:
+			verified = "true"
+		case !c.EmailVerifiedStated:
+			verified = "false (no email_verified claim was sent, in the id_token or at UserInfo)"
+		}
+		log.Printf("SSO[%s]: no account for provider %q — email present=%t, verified=%s, jit=off. "+
 			"Linking requires a VERIFIED email matching an existing account.",
-			p.Slug, c.Email != "", c.EmailVerified)
+			config.AppVersion, p.Slug, c.Email != "", verified)
 		// Refused for the commonest reason of all — JIT provisioning is off by
 		// default, so this is the branch a first SSO attempt actually takes.
 		// Reporting only the allowlist branch below meant the event could not
@@ -468,31 +484,28 @@ func (s *SSOService) forgetDiscovery(issuer string) {
 // extractClaims reads the subset of the ID token the flow acts on. The group
 // claim is configurable, so claims are decoded generically rather than into a
 // fixed struct, and both a list and a single string are accepted — IdPs differ.
-func extractClaims(idToken *oidc.IDToken, groupClaim string) (*model.SSOClaims, bool, error) {
+func extractClaims(idToken *oidc.IDToken, groupClaim string) (*model.SSOClaims, error) {
 	raw := map[string]any{}
 	if err := idToken.Claims(&raw); err != nil {
-		return nil, false, ErrSSOTokenInvalid
+		return nil, ErrSSOTokenInvalid
 	}
-	c, statedVerified := claimsFromMap(raw, idToken.Subject, groupClaim)
-	return c, statedVerified, nil
+	return claimsFromMap(raw, idToken.Subject, groupClaim), nil
 }
 
 // claimsFromMap turns a decoded claim set into what the flow acts on.
 //
-// The second return says whether email_verified was STATED, which is not the
-// same as it being true. The claim is optional in OIDC, and a provider that
-// omits it from the ID token may still assert it at UserInfo — so the caller
-// has to tell "said false" from "said nothing" to know whether it may look
-// elsewhere. (#248)
-func claimsFromMap(raw map[string]any, subject, groupClaim string) (*model.SSOClaims, bool) {
+// EmailVerifiedStated on the result says whether email_verified was STATED,
+// which is not the same as it being true. The claim is optional in OIDC, and a
+// provider that omits it from the ID token may still assert it at UserInfo — so
+// the caller has to tell "said false" from "said nothing". (#248)
+func claimsFromMap(raw map[string]any, subject, groupClaim string) *model.SSOClaims {
 	c := &model.SSOClaims{Subject: subject}
 	c.Email, _ = raw["email"].(string)
-	verifiedStated := false
 	switch v := raw["email_verified"].(type) {
 	case bool:
-		c.EmailVerified, verifiedStated = v, true
+		c.EmailVerified, c.EmailVerifiedStated = v, true
 	case string:
-		c.EmailVerified, verifiedStated = v == "true", true
+		c.EmailVerified, c.EmailVerifiedStated = v == "true", true
 	}
 	c.Name, _ = raw["name"].(string)
 	if u, ok := raw["preferred_username"].(string); ok {
@@ -510,7 +523,7 @@ func claimsFromMap(raw map[string]any, subject, groupClaim string) (*model.SSOCl
 	case string:
 		c.Groups = []string{v}
 	}
-	return c, verifiedStated
+	return c
 }
 
 // mergeUserInfoClaims fills in what the ID token did not carry, by asking the
@@ -525,7 +538,7 @@ func claimsFromMap(raw map[string]any, subject, groupClaim string) (*model.SSOCl
 //
 // Failure is not fatal. A provider may not implement UserInfo, or the token may
 // not carry the scope for it, and those installs worked before this existed.
-func (s *SSOService) mergeUserInfoClaims(ctx context.Context, provider *oidc.Provider, token *oauth2.Token, claims *model.SSOClaims, groupClaim string, idTokenStatedVerified bool) {
+func (s *SSOService) mergeUserInfoClaims(ctx context.Context, provider *oidc.Provider, token *oauth2.Token, claims *model.SSOClaims, groupClaim string) {
 	info, err := provider.UserInfo(ctx, oauth2.StaticTokenSource(token))
 	if err != nil {
 		log.Printf("SSO: userinfo lookup skipped: %v", err)
@@ -543,13 +556,14 @@ func (s *SSOService) mergeUserInfoClaims(ctx context.Context, provider *oidc.Pro
 		log.Printf("SSO: userinfo claims could not be decoded: %v", err)
 		return
 	}
-	extra, extraStatedVerified := claimsFromMap(raw, claims.Subject, groupClaim)
+	extra := claimsFromMap(raw, claims.Subject, groupClaim)
 
 	// The ID token is signed and wins wherever it said something. UserInfo only
 	// fills gaps.
 	if claims.Email == "" && extra.Email != "" {
-		claims.Email, claims.EmailVerified = extra.Email, extra.EmailVerified
-	} else if claims.Email != "" && !idTokenStatedVerified && extraStatedVerified &&
+		claims.Email = extra.Email
+		claims.EmailVerified, claims.EmailVerifiedStated = extra.EmailVerified, extra.EmailVerifiedStated
+	} else if claims.Email != "" && !claims.EmailVerifiedStated && extra.EmailVerifiedStated &&
 		strings.EqualFold(claims.Email, extra.Email) {
 		// The ID token carried the address but said nothing about whether it is
 		// verified — email_verified is optional in OIDC, and a provider may put
@@ -560,7 +574,7 @@ func (s *SSOService) mergeUserInfoClaims(ctx context.Context, provider *oidc.Pro
 		// Only when the two addresses agree: a UserInfo response must not be
 		// able to mark a DIFFERENT address as verified, and an explicit false in
 		// the signed token is never overridden.
-		claims.EmailVerified = extra.EmailVerified
+		claims.EmailVerified, claims.EmailVerifiedStated = extra.EmailVerified, true
 	}
 	if claims.Name == "" {
 		claims.Name = extra.Name

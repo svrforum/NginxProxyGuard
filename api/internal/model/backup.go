@@ -579,15 +579,20 @@ type RoleExport struct {
 // different install has different role uuids, and a dangling uuid would make the
 // provider provision accounts with no role at all.
 type SSOProviderExport struct {
-	Slug                string                   `json:"slug"`
-	Name                string                   `json:"name"`
-	IssuerURL           string                   `json:"issuer_url"`
-	ClientID            string                   `json:"client_id"`
-	ClientSecret        string                   `json:"client_secret"`
-	Scopes              string                   `json:"scopes"`
-	CallbackBaseURL     string                   `json:"callback_base_url"`
-	Enabled             bool                     `json:"enabled"`
-	AllowJIT            bool                     `json:"allow_jit"`
+	Slug            string `json:"slug"`
+	Name            string `json:"name"`
+	IssuerURL       string `json:"issuer_url"`
+	ClientID        string `json:"client_id"`
+	ClientSecret    string `json:"client_secret"`
+	Scopes          string `json:"scopes"`
+	CallbackBaseURL string `json:"callback_base_url"`
+	Enabled         bool   `json:"enabled"`
+	AllowJIT        bool   `json:"allow_jit"`
+	// Restored as-is. It is a security decision the operator made about a
+	// specific provider, so silently dropping it on restore would either
+	// re-break their SSO or silently re-enable trust. Absent in backups taken
+	// before v2.41.0, where it decodes to false — the safe value. (#248)
+	TrustProviderEmail  bool                     `json:"trust_provider_email"`
 	AllowedEmailDomains []string                 `json:"allowed_email_domains"`
 	AllowedEmails       []string                 `json:"allowed_emails"`
 	GroupClaim          string                   `json:"group_claim"`

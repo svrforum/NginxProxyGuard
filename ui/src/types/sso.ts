@@ -28,6 +28,9 @@ export interface SSOProvider {
   callback_base_url: string
   enabled: boolean
   allow_jit: boolean
+  /** Link an SSO identity to an existing account even when the provider does
+   *  not assert email_verified. Off by default — see the form's warning. (#248) */
+  trust_provider_email: boolean
   allowed_email_domains: string[] | null
   allowed_emails: string[] | null
   group_claim: string
@@ -51,6 +54,9 @@ export interface SSOProviderRequest {
   callback_base_url: string
   enabled: boolean
   allow_jit: boolean
+  /** Link an SSO identity to an existing account even when the provider does
+   *  not assert email_verified. Off by default — see the form's warning. (#248) */
+  trust_provider_email: boolean
   allowed_email_domains: string[]
   allowed_emails: string[]
   group_claim: string

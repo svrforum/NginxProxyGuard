@@ -12662,6 +12662,18 @@ components:
           type: boolean
         allow_jit:
           type: boolean
+        trust_provider_email:
+          type: boolean
+          default: false
+          description: |
+            Link an SSO identity to an EXISTING account even when the provider
+            does not assert `email_verified`. Off by default.
+
+            Exists because Authentik 2025.10 changed its default email scope
+            mapping to send `email_verified: false`, which refuses every such
+            link. Enabling it means you vouch for the provider's addresses:
+            anyone able to set an arbitrary email address there can sign in as
+            the NPG account holding it.
           description: Create an NPG account on first successful sign-in. Requires at least one allowlist entry (allowed_emails, allowed_email_domains or required_group) and a default_role_id — an IdP such as Google authenticates every account on earth, so unrestricted provisioning would publish the panel.
         allowed_email_domains:
           type: array
@@ -12742,6 +12754,18 @@ components:
           description: Omitting this field means TRUE, on update as well as create — send `false` explicitly to keep a provider disabled.
         allow_jit:
           type: boolean
+        trust_provider_email:
+          type: boolean
+          default: false
+          description: |
+            Link an SSO identity to an EXISTING account even when the provider
+            does not assert `email_verified`. Off by default.
+
+            Exists because Authentik 2025.10 changed its default email scope
+            mapping to send `email_verified: false`, which refuses every such
+            link. Enabling it means you vouch for the provider's addresses:
+            anyone able to set an arbitrary email address there can sign in as
+            the NPG account holding it.
           description: Automatic account creation on first sign-in. Rejected unless at least one of allowed_emails / allowed_email_domains / required_group is set AND default_role_id is set.
         allowed_email_domains:
           type: array

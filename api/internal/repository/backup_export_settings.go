@@ -351,7 +351,7 @@ func (r *BackupRepository) exportSSOProviders(ctx context.Context) ([]model.SSOP
 
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT p.slug, p.name, p.issuer_url, p.client_id, p.client_secret, p.scopes,
-		       COALESCE(p.callback_base_url, ''), p.enabled, p.allow_jit,
+		       COALESCE(p.callback_base_url, ''), p.enabled, p.allow_jit, p.trust_provider_email,
 		       p.allowed_email_domains, p.allowed_emails, p.group_claim,
 		       COALESCE(p.required_group, ''), COALESCE(dr.name, ''), p.group_role_mappings
 		FROM sso_providers p
@@ -369,7 +369,7 @@ func (r *BackupRepository) exportSSOProviders(ctx context.Context) ([]model.SSOP
 		var domains, emails pq.StringArray
 		var mappings []byte
 		if err := rows.Scan(&e.Slug, &e.Name, &e.IssuerURL, &e.ClientID, &e.ClientSecret, &e.Scopes,
-			&e.CallbackBaseURL, &e.Enabled, &e.AllowJIT, &domains, &emails, &e.GroupClaim,
+			&e.CallbackBaseURL, &e.Enabled, &e.AllowJIT, &e.TrustProviderEmail, &domains, &emails, &e.GroupClaim,
 			&e.RequiredGroup, &e.DefaultRoleName, &mappings); err != nil {
 			return nil, err
 		}

@@ -60,7 +60,7 @@ func TestClaimsMissingFromTheIDTokenComeFromUserInfo(t *testing.T) {
 	s := &SSOService{}
 	// What the ID token gave us: a subject and nothing else.
 	claims := &model.SSOClaims{Subject: "user-1"}
-	s.mergeUserInfoClaims(ctx, provider, &oauth2.Token{AccessToken: "t"}, claims, "groups", false)
+	s.mergeUserInfoClaims(ctx, provider, &oauth2.Token{AccessToken: "t"}, claims, "groups")
 
 	if claims.Email != "ada@example.com" {
 		t.Errorf("email not taken from UserInfo: %q", claims.Email)
@@ -90,7 +90,7 @@ func TestTheIDTokenWinsOverUserInfo(t *testing.T) {
 
 	s := &SSOService{}
 	claims := &model.SSOClaims{Subject: "user-1", Email: "real@example.com", EmailVerified: true}
-	s.mergeUserInfoClaims(ctx, provider, &oauth2.Token{AccessToken: "t"}, claims, "groups", false)
+	s.mergeUserInfoClaims(ctx, provider, &oauth2.Token{AccessToken: "t"}, claims, "groups")
 
 	if claims.Email != "real@example.com" {
 		t.Errorf("UserInfo overrode the signed token: %q", claims.Email)
@@ -110,7 +110,7 @@ func TestUserInfoForAnotherSubjectIsIgnored(t *testing.T) {
 
 	s := &SSOService{}
 	claims := &model.SSOClaims{Subject: "user-1"}
-	s.mergeUserInfoClaims(ctx, provider, &oauth2.Token{AccessToken: "t"}, claims, "groups", false)
+	s.mergeUserInfoClaims(ctx, provider, &oauth2.Token{AccessToken: "t"}, claims, "groups")
 
 	if claims.Email != "" {
 		t.Errorf("claims from a different subject were applied: %q", claims.Email)
@@ -141,7 +141,7 @@ func TestAFailingUserInfoLookupChangesNothing(t *testing.T) {
 	provider, _ := oidc.NewProvider(ctx, srv.URL)
 	s := &SSOService{}
 	claims := &model.SSOClaims{Subject: "user-1", Email: "from-token@example.com", EmailVerified: true}
-	s.mergeUserInfoClaims(ctx, provider, &oauth2.Token{AccessToken: "t"}, claims, "groups", false)
+	s.mergeUserInfoClaims(ctx, provider, &oauth2.Token{AccessToken: "t"}, claims, "groups")
 
 	if claims.Email != "from-token@example.com" || !claims.EmailVerified {
 		t.Errorf("a failed lookup damaged the token's own claims: %+v", claims)
@@ -274,7 +274,7 @@ func TestVerifiedFlagIsTakenFromUserInfoWhenTheTokenDidNotSayIt(t *testing.T) {
 	s := &SSOService{}
 	// What the ID token gave us: subject and address, no verification flag.
 	claims := &model.SSOClaims{Subject: "user-1", Email: "ada@example.com"}
-	s.mergeUserInfoClaims(ctx, provider, &oauth2.Token{AccessToken: "t"}, claims, "groups", false)
+	s.mergeUserInfoClaims(ctx, provider, &oauth2.Token{AccessToken: "t"}, claims, "groups")
 
 	if !claims.EmailVerified {
 		t.Error("the provider asserted the address is verified at UserInfo; linking still refused it")
@@ -294,9 +294,10 @@ func TestAnExplicitFalseInTheTokenIsNotOverridden(t *testing.T) {
 	provider, _ := oidc.NewProvider(ctx, srv.URL)
 
 	s := &SSOService{}
-	claims := &model.SSOClaims{Subject: "user-1", Email: "ada@example.com", EmailVerified: false}
-	// true = the token stated it, and it stated false.
-	s.mergeUserInfoClaims(ctx, provider, &oauth2.Token{AccessToken: "t"}, claims, "groups", true)
+	// EmailVerifiedStated=true: the signed token stated it, and it stated false.
+	claims := &model.SSOClaims{Subject: "user-1", Email: "ada@example.com",
+		EmailVerified: false, EmailVerifiedStated: true}
+	s.mergeUserInfoClaims(ctx, provider, &oauth2.Token{AccessToken: "t"}, claims, "groups")
 
 	if claims.EmailVerified {
 		t.Error("UserInfo overrode an explicit email_verified=false in the signed token")
@@ -314,7 +315,7 @@ func TestUserInfoCannotVerifyADifferentAddress(t *testing.T) {
 
 	s := &SSOService{}
 	claims := &model.SSOClaims{Subject: "user-1", Email: "victim@example.com"}
-	s.mergeUserInfoClaims(ctx, provider, &oauth2.Token{AccessToken: "t"}, claims, "groups", false)
+	s.mergeUserInfoClaims(ctx, provider, &oauth2.Token{AccessToken: "t"}, claims, "groups")
 
 	if claims.EmailVerified {
 		t.Error("a UserInfo response about another address marked this one verified")

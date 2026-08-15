@@ -24,6 +24,7 @@ const emptyForm = (): SSOProviderRequest => ({
   callback_base_url: '',
   enabled: true,
   allow_jit: false,
+  trust_provider_email: false,
   allowed_email_domains: [],
   allowed_emails: [],
   group_claim: 'groups',
@@ -42,6 +43,7 @@ const toForm = (p: SSOProvider): SSOProviderRequest => ({
   callback_base_url: p.callback_base_url ?? '',
   enabled: p.enabled,
   allow_jit: p.allow_jit,
+  trust_provider_email: p.trust_provider_email,
   allowed_email_domains: p.allowed_email_domains ?? [],
   allowed_emails: p.allowed_emails ?? [],
   group_claim: p.group_claim,
@@ -535,6 +537,27 @@ export function SSOProviderManager() {
               <span>
                 {tr('sso.fields.allowJit')}
                 {!hasAllowlist && <span className="mt-0.5 block text-xs text-amber-600 dark:text-amber-400">{tr('sso.jitNeedsAllowlist')}</span>}
+              </span>
+            </label>
+
+            <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
+              <input
+                type="checkbox"
+                aria-label="sso-trust-provider-email"
+                checked={form.trust_provider_email}
+                onChange={(e) => setForm({ ...form, trust_provider_email: e.target.checked })}
+                className="mt-0.5 rounded"
+              />
+              <span>
+                {tr('sso.fields.trustProviderEmail')}
+                <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
+                  {tr('sso.fields.trustProviderEmailHint')}
+                </span>
+                {form.trust_provider_email && (
+                  <span className="mt-1 block text-xs text-amber-600 dark:text-amber-400">
+                    {tr('sso.trustProviderEmailWarning')}
+                  </span>
+                )}
               </span>
             </label>
 

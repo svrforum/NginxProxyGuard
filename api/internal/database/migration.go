@@ -1343,6 +1343,13 @@ EXCEPTION WHEN duplicate_table OR duplicate_object THEN NULL; END $$;`,
 			desc: "v2.38.0: case-insensitive uniqueness on users.email (#240)",
 			sql:  `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower ON public.users (lower(email));`,
 		},
+		{
+			// Appended last on purpose: the entry above that creates
+			// sso_providers is CREATE TABLE IF NOT EXISTS, so it is a no-op on an
+			// install that already has the table and cannot carry a new column.
+			desc: "v2.41.0: per-provider trust for unverified SSO emails (#248)",
+			sql:  `ALTER TABLE public.sso_providers ADD COLUMN IF NOT EXISTS trust_provider_email boolean DEFAULT false NOT NULL;`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

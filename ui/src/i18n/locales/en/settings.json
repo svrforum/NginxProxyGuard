@@ -1495,7 +1495,9 @@
       "noRole": "None",
       "groupMappings": "Group to role mappings",
       "addMapping": "Add mapping",
-      "groupPlaceholder": "Group name at the provider"
+      "groupPlaceholder": "Group name at the provider",
+      "trustProviderEmail": "Trust this provider's email addresses",
+      "trustProviderEmailHint": "Link to an existing account even when the provider does not mark the address as verified. Authentik 2025.10 changed its default to unverified, which blocks linking."
     },
     "steps": {
       "provider": "Which provider?",
@@ -1573,7 +1575,8 @@
     "guideTitle": "At {{provider}}, do this",
     "googleCallbackHttp": "Google will refuse this callback URL: it accepts only https (localhost excepted). Reach this panel on a real domain with a valid certificate before setting Google up.",
     "googleCallbackIP": "Google will refuse this callback URL: it does not accept IP addresses. Reach this panel on a real domain name with a valid certificate before setting Google up.",
-    "existingAccountLinking": "An existing account does not need to be linked by hand. If the provider reports a **verified** email that exactly matches one, signing in links that account automatically — its history, role and password sign-in all stay. The \"create accounts automatically\" option below only applies to people who have no account at all."
+    "existingAccountLinking": "An existing account does not need to be linked by hand. If the provider reports a **verified** email that exactly matches one, signing in links that account automatically — its history, role and password sign-in all stay. The \"create accounts automatically\" option below only applies to people who have no account at all.",
+    "trustProviderEmailWarning": "Only enable this if you control the provider and how users enrol there. Anyone able to set an arbitrary email address on it can then sign in as the NPG account holding that address."
   },
   "notifications": {
     "title": "Notifications",

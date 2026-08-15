@@ -24,7 +24,7 @@ func NewSSORepository(db *database.DB) *SSORepository {
 }
 
 const ssoProviderColumns = `id, slug, name, issuer_url, client_id, client_secret, scopes,
-	COALESCE(callback_base_url, ''), enabled, allow_jit, allowed_email_domains, allowed_emails,
+	COALESCE(callback_base_url, ''), enabled, allow_jit, trust_provider_email, allowed_email_domains, allowed_emails,
 	group_claim, COALESCE(required_group, ''), default_role_id, group_role_mappings, created_at, updated_at`
 
 func scanProvider(s interface{ Scan(...any) error }) (*model.SSOProvider, error) {
@@ -32,7 +32,7 @@ func scanProvider(s interface{ Scan(...any) error }) (*model.SSOProvider, error)
 	var defaultRole sql.NullString
 	var mappings []byte
 	if err := s.Scan(&p.ID, &p.Slug, &p.Name, &p.IssuerURL, &p.ClientID, &p.ClientSecret, &p.Scopes,
-		&p.CallbackBaseURL, &p.Enabled, &p.AllowJIT, &p.AllowedEmailDomains, &p.AllowedEmails,
+		&p.CallbackBaseURL, &p.Enabled, &p.AllowJIT, &p.TrustProviderEmail, &p.AllowedEmailDomains, &p.AllowedEmails,
 		&p.GroupClaim, &p.RequiredGroup, &defaultRole, &mappings, &p.CreatedAt, &p.UpdatedAt); err != nil {
 		return nil, err
 	}
@@ -63,7 +63,7 @@ func (r *SSORepository) List(ctx context.Context) ([]model.SSOProvider, error) {
 		var defaultRole sql.NullString
 		var mappings []byte
 		if err := rows.Scan(&p.ID, &p.Slug, &p.Name, &p.IssuerURL, &p.ClientID, &p.ClientSecret, &p.Scopes,
-			&p.CallbackBaseURL, &p.Enabled, &p.AllowJIT, &p.AllowedEmailDomains, &p.AllowedEmails,
+			&p.CallbackBaseURL, &p.Enabled, &p.AllowJIT, &p.TrustProviderEmail, &p.AllowedEmailDomains, &p.AllowedEmails,
 			&p.GroupClaim, &p.RequiredGroup, &defaultRole, &mappings, &p.CreatedAt, &p.UpdatedAt,
 			&p.LinkedUsers); err != nil {
 			return nil, fmt.Errorf("failed to scan sso provider: %w", err)
@@ -140,12 +140,12 @@ func (r *SSORepository) Create(ctx context.Context, req *model.CreateSSOProvider
 	var id string
 	err = r.db.QueryRowContext(ctx, `
 		INSERT INTO sso_providers (slug, name, issuer_url, client_id, client_secret, scopes,
-			callback_base_url, enabled, allow_jit, allowed_email_domains, allowed_emails,
+			callback_base_url, enabled, allow_jit, trust_provider_email, allowed_email_domains, allowed_emails,
 			group_claim, required_group, default_role_id, group_role_mappings)
-		VALUES ($1,$2,$3,$4,$5,$6,NULLIF($7,''),$8,$9,$10,$11,$12,NULLIF($13,''),$14,$15)
+		VALUES ($1,$2,$3,$4,$5,$6,NULLIF($7,''),$8,$9,$10,$11,$12,$13,NULLIF($14,''),$15,$16)
 		RETURNING id`,
 		req.Slug, req.Name, req.IssuerURL, req.ClientID, req.ClientSecret, req.Scopes,
-		req.CallbackBaseURL, enabled, req.AllowJIT, pq.Array(req.AllowedEmailDomains), pq.Array(req.AllowedEmails),
+		req.CallbackBaseURL, enabled, req.AllowJIT, req.TrustProviderEmail, pq.Array(req.AllowedEmailDomains), pq.Array(req.AllowedEmails),
 		req.GroupClaim, req.RequiredGroup, req.DefaultRoleID, mappings).Scan(&id)
 	if err != nil {
 		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
@@ -172,12 +172,13 @@ func (r *SSORepository) Update(ctx context.Context, id string, req *model.Update
 			slug = $2, name = $3, issuer_url = $4, client_id = $5,
 			client_secret = COALESCE(NULLIF($6, ''), client_secret),
 			scopes = $7, callback_base_url = NULLIF($8,''), enabled = $9, allow_jit = $10,
-			allowed_email_domains = $11, allowed_emails = $12, group_claim = $13,
-			required_group = NULLIF($14,''), default_role_id = $15, group_role_mappings = $16,
+			trust_provider_email = $11,
+			allowed_email_domains = $12, allowed_emails = $13, group_claim = $14,
+			required_group = NULLIF($15,''), default_role_id = $16, group_role_mappings = $17,
 			updated_at = now()
 		WHERE id = $1`,
 		id, req.Slug, req.Name, req.IssuerURL, req.ClientID, req.ClientSecret, req.Scopes,
-		req.CallbackBaseURL, enabled, req.AllowJIT, pq.Array(req.AllowedEmailDomains), pq.Array(req.AllowedEmails),
+		req.CallbackBaseURL, enabled, req.AllowJIT, req.TrustProviderEmail, pq.Array(req.AllowedEmailDomains), pq.Array(req.AllowedEmails),
 		req.GroupClaim, req.RequiredGroup, req.DefaultRoleID, mappings)
 	if err != nil {
 		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {

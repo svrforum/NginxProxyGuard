@@ -2578,6 +2578,13 @@ CREATE TABLE IF NOT EXISTS public.sso_providers (
     callback_base_url text,
     enabled boolean DEFAULT true NOT NULL,
     allow_jit boolean DEFAULT false NOT NULL,
+    -- Linking an SSO identity to an EXISTING account normally requires the
+    -- provider to assert email_verified. Authentik 2025.10 changed its default
+    -- scope mapping to send false (their issue #16205), which refuses every
+    -- such link. This lets an operator who controls the provider vouch for its
+    -- addresses instead. Off by default: on, anyone able to set an arbitrary
+    -- email at that provider can sign in as the NPG account holding it. (#248)
+    trust_provider_email boolean DEFAULT false NOT NULL,
     allowed_email_domains text[] DEFAULT '{}'::text[] NOT NULL,
     allowed_emails text[] DEFAULT '{}'::text[] NOT NULL,
     group_claim character varying(64) DEFAULT 'groups'::character varying NOT NULL,
@@ -3707,6 +3714,14 @@ CREATE INDEX IF NOT EXISTS idx_fsee_subscription ON public.filter_subscription_e
 --   CREATE TABLE IF NOT EXISTS public.user_identities (...);
 --   CREATE UNIQUE INDEX IF NOT EXISTS user_identities_user_provider_key ON public.user_identities (user_id, provider_id);
 --   CREATE TABLE IF NOT EXISTS public.sso_login_states (...);
+
+-- v2.41.0: sso_providers.trust_provider_email (#248)
+-- DOCUMENTATION ONLY — the executable copy is in database/migration.go.
+-- Authentik 2025.10 flipped its default email scope mapping to send
+-- email_verified=false, which refuses every attempt to link an SSO identity to
+-- an existing account. This lets an operator who controls the provider vouch
+-- for its addresses. Default false — see the column comment above for why.
+--   ALTER TABLE public.sso_providers ADD COLUMN IF NOT EXISTS trust_provider_email boolean DEFAULT false NOT NULL;
 --   ALTER TABLE sso_providers ADD CONSTRAINT sso_providers_default_role_id_fkey ... ON DELETE RESTRICT;
 --   ALTER TABLE user_identities ADD CONSTRAINT user_identities_{provider,user}_id_fkey ... ON DELETE CASCADE;
 --   ALTER TABLE sso_login_states ADD CONSTRAINT sso_login_states_provider_id_fkey ... ON DELETE CASCADE;
