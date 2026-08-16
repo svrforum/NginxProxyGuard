@@ -166,7 +166,7 @@ export class TestDataFactory {
   static createRedirectHost(overrides: Partial<CreateRedirectHostData> = {}): CreateRedirectHostData {
     return {
       domain_names: [this.generateDomain('redirect-e2e')],
-      forward_domain_name: 'https://target.example.com',
+      forward_domain_name: 'target.example.com',
       redirect_code: 301,
       preserve_path: true,
       enabled: true,

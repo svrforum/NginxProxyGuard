@@ -48,7 +48,7 @@ test.describe('Redirect Host CRUD', () => {
 
       await formPage.fillConfig({
         domain: testDomain,
-        forwardDomain: 'https://example.com',
+        forwardDomain: 'example.com',
         redirectCode: 301,
         preservePath: true,
       });
@@ -103,7 +103,7 @@ test.describe('Redirect Host CRUD', () => {
 
       await listPage.clickAddHost();
       await formPage.fillDomain('should-not-be-saved.example.local');
-      await formPage.fillForwardDomain('https://example.com');
+      await formPage.fillForwardDomain('example.com');
       await formPage.cancel();
 
       await formPage.expectClosed();
@@ -152,7 +152,7 @@ test.describe('Redirect Host CRUD', () => {
       await listPage.goto();
       await listPage.clickHost(testDomain);
 
-      const newTarget = 'https://new-target.example.com';
+      const newTarget = 'new-target.example.com';
       await formPage.fillForwardDomain(newTarget);
       await formPage.save();
 
@@ -252,7 +252,7 @@ test.describe('Redirect Host CRUD', () => {
 
       const testDomain = TestDataFactory.generateDomain('preserve-path-test');
       await formPage.fillDomain(testDomain);
-      await formPage.fillForwardDomain('https://example.com');
+      await formPage.fillForwardDomain('example.com');
       await formPage.togglePreservePath(true);
       await formPage.save();
 

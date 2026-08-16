@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 
 	"github.com/lib/pq"
 	"nginx-proxy-guard/internal/model"
@@ -353,6 +354,21 @@ func (r *BackupRepository) importUpstream(ctx context.Context, tx *sql.Tx, proxy
 }
 
 func (r *BackupRepository) importRedirectHost(ctx context.Context, tx *sql.Tx, rh *model.RedirectHostExport) error {
+	if err := model.ValidateRedirectHost(&model.RedirectHost{
+		DomainNames:       rh.RedirectHost.DomainNames,
+		ForwardScheme:     rh.RedirectHost.ForwardScheme,
+		ForwardDomainName: rh.RedirectHost.ForwardDomainName,
+		ForwardPath:       rh.RedirectHost.ForwardPath,
+		RedirectCode:      rh.RedirectHost.RedirectCode,
+	}); err != nil {
+		// Old releases allowed unrestricted values here. Do not make an otherwise
+		// usable full backup impossible to restore; omit only the unsafe redirect
+		// row and make the loss highly visible to the operator.
+		log.Printf("[ERROR] [Backup] SKIPPING unsafe redirect host during restore (domains=%q): %v",
+			rh.RedirectHost.DomainNames, err)
+		return nil
+	}
+
 	meta, _ := json.Marshal(rh.RedirectHost.Meta)
 
 	query := `
