@@ -60,15 +60,16 @@ export function TwoFactorTab({
                 <p className="text-gray-500 dark:text-gray-400 mb-4">
                   {t('account.twoFactor.scanQR')}
                 </p>
-                <div
-                  className="inline-block bg-white p-4 rounded"
-                  role="img"
-                  aria-label="2FA QR Code"
-                >
+                {/* The padding is the QR quiet zone: qrcode.react defaults
+                    marginSize to 0, so restyling this wrapper can make the code
+                    unscannable. QRCodeSVG emits its own role="img", so the label
+                    goes through its title prop rather than a second one here. */}
+                <div className="inline-block bg-white p-4 rounded">
                   <QRCodeSVG
                     value={setup2FAData.qr_code_url}
                     size={192}
                     level="M"
+                    title={t('account.twoFactor.qrAlt')}
                   />
                 </div>
               </div>
