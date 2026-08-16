@@ -257,6 +257,9 @@ type SSOClaims struct {
 	Name                string
 	Username            string
 	Groups              []string
+	// GroupsStated distinguishes a missing group claim (which UserInfo may fill)
+	// from an explicitly empty claim (which is authoritative revocation).
+	GroupsStated bool
 }
 
 // AllowedByList reports whether the identity passes the provider's allowlist.
@@ -290,6 +293,12 @@ func (p *SSOProvider) AllowedByList(c *SSOClaims) bool {
 	if !listed {
 		return false
 	}
+	return p.MeetsRequiredGroup(c)
+}
+
+// MeetsRequiredGroup applies the provider's required-group gate to every SSO
+// login, including identities that were linked during an earlier login.
+func (p *SSOProvider) MeetsRequiredGroup(c *SSOClaims) bool {
 	if p.RequiredGroup == "" {
 		return true
 	}

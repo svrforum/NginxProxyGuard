@@ -89,6 +89,20 @@ func TestAllowedByList(t *testing.T) {
 	}
 }
 
+func TestMeetsRequiredGroup(t *testing.T) {
+	p := &SSOProvider{RequiredGroup: "npg-admins"}
+	if !p.MeetsRequiredGroup(&SSOClaims{Groups: []string{"users", "NPG-ADMINS"}}) {
+		t.Fatal("expected case-insensitive required group match")
+	}
+	if p.MeetsRequiredGroup(&SSOClaims{Groups: []string{"users"}}) {
+		t.Fatal("expected missing required group to be rejected")
+	}
+	p.RequiredGroup = ""
+	if !p.MeetsRequiredGroup(&SSOClaims{}) {
+		t.Fatal("provider without a required group should allow the identity")
+	}
+}
+
 func TestRoleForClaims(t *testing.T) {
 	def := "role-default"
 	p := &SSOProvider{
