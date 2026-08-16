@@ -306,14 +306,29 @@ func (h *CertificateHandler) Download(c echo.Context) error {
 	// Check if certificate is issued
 	if cert.Status != model.CertStatusIssued {
 		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Certificate is not issued yet",
+			"error": fmt.Sprintf("This certificate is %s, not issued — wait for issuance to finish, or check its log for the failure.", cert.Status),
 		})
 	}
 
-	// Check if PEM data exists
+	// Issuance and renewal both write the status and the PEM in one update, so
+	// reaching here means the row predates that or was written some other way.
+	// The old message ("Certificate data not available") named the symptom and
+	// left the operator with nowhere to go, so say what is missing and what
+	// recovers it. (#253)
 	if cert.CertificatePEM == "" || cert.PrivateKeyPEM == "" {
+		missing := "the certificate and its private key are"
+		switch {
+		case cert.CertificatePEM == "":
+			missing = "the certificate is"
+		case cert.PrivateKeyPEM == "":
+			missing = "the private key is"
+		}
+		action := "Renew it to fetch the material again."
+		if cert.Provider == model.CertProviderCustom {
+			action = "Upload the certificate and key again."
+		}
 		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Certificate data not available",
+			"error": fmt.Sprintf("This certificate is marked issued but %s not stored, so there is nothing to download. %s", missing, action),
 		})
 	}
 

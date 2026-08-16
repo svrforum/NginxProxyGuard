@@ -28,6 +28,28 @@ import (
 func RegisterMiddleware(e *echo.Echo, cfg *config.Config) {
 	e.HideBanner = true
 
+	// Echo's default RealIP() trusts X-Forwarded-For unconditionally and reads
+	// its LEFTMOST entry — the one a client writes. That made the recorded
+	// address a caller-supplied string: sign-in attempts logged whatever the
+	// header said, and because the lockout counts failures per (ip, username),
+	// rotating the header defeated it entirely. Verified before this change by
+	// sending two forged values and finding both stored verbatim.
+	//
+	// Walk from the right instead, skipping hops we run, and take the first
+	// address we did not add. nginx appends the peer at each hop
+	// (proxy_add_x_forwarded_for), so that is the real client, and anything a
+	// client wrote sits further left and is never reached.
+	//
+	// Known limit: a caller already ON a private network is itself trusted, so
+	// its own hop is skipped and it can still supply the value. Closing that
+	// would mean refusing to trust the Docker bridge NPG's own proxy sits on.
+	// (#254)
+	e.IPExtractor = echo.ExtractIPFromXFFHeader(
+		echo.TrustLoopback(true),
+		echo.TrustLinkLocal(true),
+		echo.TrustPrivateNet(true),
+	)
+
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 

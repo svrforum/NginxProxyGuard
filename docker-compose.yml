@@ -4,6 +4,12 @@ services:
     image: timescale/timescaledb:latest-pg17
     container_name: npg-db
     restart: unless-stopped
+    # Log rotation caps, so container logs cannot fill the disk — the failure
+    # that actually bites a home server. Pinning the driver has a cost: Synology
+    # DSM's Container Manager reads its own log backend and shows nothing for a
+    # container that sets json-file explicitly. If you run DSM and want logs in
+    # its viewer, comment this block out; `docker logs` works either way, and
+    # you then rely on the daemon's own rotation settings. (#251)
     logging:
       driver: "json-file"
       options:
