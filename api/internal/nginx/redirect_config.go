@@ -3,6 +3,7 @@ package nginx
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -19,6 +20,34 @@ type RedirectHostConfigData struct {
 	HTTPPort   string
 	HTTPSPort  string
 	EnableIPv6 bool
+}
+
+// InvalidRedirectHostConfigError distinguishes an unsafe legacy/restored row
+// from operational render failures. Batch callers skip only this row while
+// still failing on I/O, template, and nginx errors.
+type InvalidRedirectHostConfigError struct {
+	HostID string
+	Err    error
+}
+
+func (e *InvalidRedirectHostConfigError) Error() string {
+	return fmt.Sprintf("invalid redirect host %q: %v", e.HostID, e.Err)
+}
+
+func (e *InvalidRedirectHostConfigError) Unwrap() error { return e.Err }
+
+func isInvalidRedirectHostConfig(err error) bool {
+	var validationErr *InvalidRedirectHostConfigError
+	return errors.As(err, &validationErr)
+}
+
+func (m *Manager) skipInvalidRedirectConfig(ctx context.Context, host *model.RedirectHost, err error) error {
+	log.Printf("[ERROR] [RedirectHost] SKIPPING unsafe redirect host id=%q; its nginx config will be removed: %v",
+		host.ID, err)
+	if removeErr := m.RemoveRedirectConfig(ctx, host); removeErr != nil {
+		return fmt.Errorf("remove config for skipped invalid redirect host %s: %w", host.ID, removeErr)
+	}
+	return nil
 }
 
 // Redirect host config template
@@ -102,6 +131,10 @@ server {
 
 // GenerateRedirectConfig generates nginx config for a redirect host
 func (m *Manager) GenerateRedirectConfig(ctx context.Context, host *model.RedirectHost) error {
+	if err := model.ValidateRedirectHost(host); err != nil {
+		return &InvalidRedirectHostConfigError{HostID: host.ID, Err: err}
+	}
+
 	funcMap := GetRedirectTemplateFuncMap()
 
 	tmpl, err := template.New("redirect_host").Funcs(funcMap).Parse(redirectHostTemplate)
@@ -138,7 +171,7 @@ func (m *Manager) GenerateRedirectConfig(ctx context.Context, host *model.Redire
 	}
 
 	configFile := filepath.Join(m.configPath, GetRedirectConfigFilename(host))
-	
+
 	// Use atomic write to prevent nginx from reading partial config
 	if err := m.writeFileAtomic(configFile, buf.Bytes(), 0644); err != nil {
 		return fmt.Errorf("failed to write redirect config file: %w", err)
@@ -162,9 +195,12 @@ func (m *Manager) RemoveRedirectConfig(ctx context.Context, host *model.Redirect
 	return nil
 }
 
-// GenerateAllRedirectConfigs generates nginx configs for all redirect hosts
+// GenerateAllRedirectConfigs generates nginx configs for all redirect hosts.
+// Invalid enabled rows are removed and skipped individually; operational errors
+// still abort because continuing after an I/O failure could leave a partial set.
 func (m *Manager) GenerateAllRedirectConfigs(ctx context.Context, hosts []model.RedirectHost) error {
-	// Remove all existing redirect_host configs
+	// Clear stale and disabled configs first. Active valid rows are recreated
+	// below, while invalid rows stay absent from the loaded nginx configuration.
 	files, err := filepath.Glob(filepath.Join(m.configPath, "redirect_host_*.conf"))
 	if err != nil {
 		return fmt.Errorf("failed to list redirect config files: %w", err)
@@ -176,9 +212,19 @@ func (m *Manager) GenerateAllRedirectConfigs(ctx context.Context, hosts []model.
 		}
 	}
 
-	// Generate configs for all hosts
-	for _, host := range hosts {
-		if err := m.GenerateRedirectConfig(ctx, &host); err != nil {
+	for i := range hosts {
+		host := &hosts[i]
+		// Disabled rows never reach an nginx directive context.
+		if !host.Enabled {
+			continue
+		}
+		if err := m.GenerateRedirectConfig(ctx, host); err != nil {
+			if isInvalidRedirectHostConfig(err) {
+				if skipErr := m.skipInvalidRedirectConfig(ctx, host, err); skipErr != nil {
+					return skipErr
+				}
+				continue
+			}
 			return fmt.Errorf("failed to generate redirect config for host %s: %w", host.ID, err)
 		}
 	}

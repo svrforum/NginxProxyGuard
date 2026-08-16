@@ -49,11 +49,8 @@ func (h *RedirectHostHandler) Create(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
 	}
 
-	if len(req.DomainNames) == 0 {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "At least one domain name is required"})
-	}
-	if req.ForwardDomainName == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Forward domain name is required"})
+	if err := req.Validate(); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 
 	host, err := h.repo.Create(c.Request().Context(), &req)
@@ -92,6 +89,10 @@ func (h *RedirectHostHandler) Update(c echo.Context) error {
 	var req model.UpdateRedirectHostRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
+	}
+
+	if err := req.Validate(); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 
 	host, err := h.repo.Update(c.Request().Context(), id, &req)

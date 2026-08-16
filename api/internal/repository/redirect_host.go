@@ -22,6 +22,10 @@ func NewRedirectHostRepository(db *database.DB) *RedirectHostRepository {
 }
 
 func (r *RedirectHostRepository) Create(ctx context.Context, req *model.CreateRedirectHostRequest) (*model.RedirectHost, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
 	forwardScheme := "auto"
 	if req.ForwardScheme != "" {
 		forwardScheme = req.ForwardScheme
@@ -177,6 +181,10 @@ func (r *RedirectHostRepository) Update(ctx context.Context, id string, req *mod
 	}
 	if req.BlockExploits != nil {
 		existing.BlockExploits = *req.BlockExploits
+	}
+
+	if err := model.ValidateRedirectHost(existing); err != nil {
+		return nil, err
 	}
 
 	metaJSON, _ := json.Marshal(existing.Meta)

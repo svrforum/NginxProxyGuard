@@ -100,6 +100,11 @@ func ValidateHostnameOrIP(host string) bool {
 	return ValidateDomainName(host)
 }
 
+// ValidatePort checks whether a TCP/UDP port is in the usable numeric range.
+func ValidatePort(port int) bool {
+	return port >= 1 && port <= 65535
+}
+
 // Dangerous nginx directives that should not be allowed in advanced config
 // ANYWHERE — code execution, config escape, security disable, traffic/log
 // redirection at any nesting depth. These are blocked regardless of context.

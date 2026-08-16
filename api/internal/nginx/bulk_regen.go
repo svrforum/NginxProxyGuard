@@ -122,6 +122,15 @@ func (m *Manager) RegenerateConfigsAtomicWithRedirects(ctx context.Context, rend
 		return nil
 	}
 	return m.executeWithLock(ctx, func() error {
+		invalidRedirects := make(map[*model.RedirectHost]error)
+		for _, rh := range redirectHosts {
+			if rh.Enabled {
+				if err := model.ValidateRedirectHost(rh); err != nil {
+					invalidRedirects[rh] = &InvalidRedirectHostConfigError{HostID: rh.ID, Err: err}
+				}
+			}
+		}
+
 		snap := newFileSnapshot()
 		for _, r := range renders {
 			for _, p := range m.hostRenderPaths(r) {
@@ -129,7 +138,11 @@ func (m *Manager) RegenerateConfigsAtomicWithRedirects(ctx context.Context, rend
 			}
 		}
 		for _, rh := range redirectHosts {
-			snap.capture(filepath.Join(m.configPath, GetRedirectConfigFilename(rh)))
+			// Unsafe stale configs must stay removed even if another host later
+			// causes the bulk operation to roll back.
+			if _, invalid := invalidRedirects[rh]; !invalid {
+				snap.capture(filepath.Join(m.configPath, GetRedirectConfigFilename(rh)))
+			}
 		}
 
 		rollback := func(cause error) error {
@@ -175,8 +188,23 @@ func (m *Manager) RegenerateConfigsAtomicWithRedirects(ctx context.Context, rend
 		}
 
 		for _, rh := range redirectHosts {
+			if validationErr, invalid := invalidRedirects[rh]; invalid {
+				if skipErr := m.skipInvalidRedirectConfig(ctx, rh, validationErr); skipErr != nil {
+					return rollback(skipErr)
+				}
+				continue
+			}
 			if rh.Enabled {
 				if err := m.GenerateRedirectConfig(ctx, rh); err != nil {
+					if isInvalidRedirectHostConfig(err) {
+						// Do not roll back unrelated proxy/redirect hosts because one
+						// legacy row is unsafe. Remove only that row's stale config so
+						// it cannot remain active, then continue the atomic fan-out.
+						if skipErr := m.skipInvalidRedirectConfig(ctx, rh, err); skipErr != nil {
+							return rollback(skipErr)
+						}
+						continue
+					}
 					return rollback(fmt.Errorf("failed to generate redirect config for host %s: %w", rh.ID, err))
 				}
 			} else if err := m.RemoveRedirectConfig(ctx, rh); err != nil {
@@ -208,9 +236,19 @@ func (m *Manager) RegenerateConfigsAtomicWithRedirects(ctx context.Context, rend
 // form leaves an invalid config on disk when -t fails.
 func (m *Manager) GenerateRedirectConfigAndReload(ctx context.Context, host *model.RedirectHost) error {
 	return m.executeWithLock(ctx, func() error {
+		var validationErr error
+		if host.Enabled {
+			if err := model.ValidateRedirectHost(host); err != nil {
+				validationErr = &InvalidRedirectHostConfigError{HostID: host.ID, Err: err}
+			}
+		}
+
 		configFile := filepath.Join(m.configPath, GetRedirectConfigFilename(host))
 		snap := newFileSnapshot()
-		snap.capture(configFile)
+		// Never restore a stale unsafe config after an unrelated reload failure.
+		if validationErr == nil {
+			snap.capture(configFile)
+		}
 
 		rollback := func(cause error) error {
 			log.Printf("[WARN] Nginx test failed for redirect host %s, rolling back: %v", host.ID, cause)
@@ -221,9 +259,19 @@ func (m *Manager) GenerateRedirectConfigAndReload(ctx context.Context, host *mod
 			return cause
 		}
 
-		if host.Enabled {
+		if validationErr != nil {
+			if skipErr := m.skipInvalidRedirectConfig(ctx, host, validationErr); skipErr != nil {
+				return rollback(skipErr)
+			}
+		} else if host.Enabled {
 			if err := m.GenerateRedirectConfig(ctx, host); err != nil {
-				return rollback(fmt.Errorf("failed to generate redirect config: %w", err))
+				if isInvalidRedirectHostConfig(err) {
+					if skipErr := m.skipInvalidRedirectConfig(ctx, host, err); skipErr != nil {
+						return rollback(skipErr)
+					}
+				} else {
+					return rollback(fmt.Errorf("failed to generate redirect config: %w", err))
+				}
 			}
 		} else {
 			if err := m.RemoveRedirectConfig(ctx, host); err != nil {

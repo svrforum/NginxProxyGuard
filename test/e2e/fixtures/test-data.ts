@@ -170,13 +170,13 @@ export const TEST_PROXY_HOST = {
 export const TEST_REDIRECT_HOST = {
   valid: {
     domain: 'redirect-e2e-{timestamp}.example.local',
-    forwardDomain: 'https://target.example.com',
+    forwardDomain: 'target.example.com',
     redirectCode: 301 as const,
     preservePath: true,
   },
   temporary: {
     domain: 'temp-redirect-e2e-{timestamp}.example.local',
-    forwardDomain: 'https://temp-target.example.com',
+    forwardDomain: 'temp-target.example.com',
     redirectCode: 302 as const,
     preservePath: false,
   },
