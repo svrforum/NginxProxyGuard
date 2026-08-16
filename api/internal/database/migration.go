@@ -111,6 +111,13 @@ BEGIN
         RETURN;
     END IF;
 
+    -- Read through timescaledb_information, the documented views, rather than
+    -- _timescaledb_catalog. The private catalog's shape is not part of
+    -- TimescaleDB's API and does change: an install on a newer release than
+    -- ours reported "column ch.schema_name does not exist" from this very
+    -- statement, which turned a housekeeping step into a scary boot error on
+    -- every start. The views have carried chunk_schema/chunk_name and
+    -- hypertable_schema/hypertable_name across releases. (#251)
     FOR orphan IN
         SELECT
             i.inhrelid::regclass AS child,
@@ -118,12 +125,12 @@ BEGIN
         FROM pg_inherits i
         JOIN pg_class child_c ON child_c.oid = i.inhrelid
         JOIN pg_namespace child_n ON child_n.oid = child_c.relnamespace
-        JOIN _timescaledb_catalog.hypertable h
-          ON format('%I.%I', h.schema_name, h.table_name)::regclass = i.inhparent
+        JOIN timescaledb_information.hypertables h
+          ON format('%I.%I', h.hypertable_schema, h.hypertable_name)::regclass = i.inhparent
         WHERE NOT EXISTS (
-            SELECT 1 FROM _timescaledb_catalog.chunk ch
-            WHERE ch.schema_name = child_n.nspname
-              AND ch.table_name  = child_c.relname
+            SELECT 1 FROM timescaledb_information.chunks ch
+            WHERE ch.chunk_schema = child_n.nspname
+              AND ch.chunk_name   = child_c.relname
         )
     LOOP
         BEGIN
@@ -137,6 +144,12 @@ BEGIN
     IF detached_count > 0 THEN
         RAISE NOTICE '[Migration] Detached % orphan chunk inheritance entries', detached_count;
     END IF;
+EXCEPTION WHEN OTHERS THEN
+    -- This step only tidies inheritance rows left behind by earlier TimescaleDB
+    -- versions; nothing downstream needs it to have run. A future catalog or
+    -- view change must therefore degrade to a note, not to the "schema may be
+    -- partially migrated" error an operator sees on every boot. (#251)
+    RAISE NOTICE '[Migration] Orphan-chunk check skipped on this TimescaleDB build: %', SQLERRM;
 END $$`,
 		},
 

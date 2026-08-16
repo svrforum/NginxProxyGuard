@@ -41,7 +41,12 @@ func (r *DashboardRepository) GetSummary(ctx context.Context) (*model.DashboardS
 	row := r.db.QueryRowContext(ctx, `
 		SELECT COALESCE(SUM(total_requests), 0),
 		       COALESCE(SUM(bytes_sent + bytes_received), 0),
-		       COALESCE(AVG(avg_response_time), 0),
+		       -- Weighted by request count. AVG(avg_response_time) averaged the
+		       -- hourly averages, so an hour with two requests counted as much
+		       -- as an hour with a hundred thousand — one slow request in a
+		       -- quiet hour dragged the whole 24h figure into the seconds. (#251)
+		       COALESCE(SUM(avg_response_time * total_requests)
+		                / NULLIF(SUM(total_requests), 0), 0),
 		       COALESCE(SUM(status_4xx + status_5xx), 0),
 		       COALESCE(SUM(total_requests), 1)
 		FROM dashboard_stats_hourly
@@ -938,7 +943,12 @@ func (r *DashboardRepository) AggregateToDaily(ctx context.Context, date time.Ti
 		       waf_blocked, rate_limited, bot_blocked)
 		SELECT proxy_host_id, DATE($1), SUM(total_requests),
 		       SUM(status_2xx), SUM(status_3xx), SUM(status_4xx), SUM(status_5xx),
-		       AVG(avg_response_time), MAX(max_response_time), SUM(bytes_sent), SUM(bytes_received),
+		       -- Weighted, for the same reason as the 24h summary above (#251);
+		       -- here it also PERSISTS, so an unweighted value would keep
+		       -- misreporting that day forever.
+		       COALESCE(SUM(avg_response_time * total_requests)
+		                / NULLIF(SUM(total_requests), 0), 0),
+		       MAX(max_response_time), SUM(bytes_sent), SUM(bytes_received),
 		       SUM(waf_blocked), SUM(rate_limited), SUM(bot_blocked)
 		FROM dashboard_stats_hourly
 		WHERE DATE(hour_bucket) = DATE($1)
