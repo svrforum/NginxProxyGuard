@@ -97,6 +97,43 @@ func TestTheIDTokenWinsOverUserInfo(t *testing.T) {
 	}
 }
 
+func TestExplicitEmptyIDTokenGroupsAreNotOverriddenByUserInfo(t *testing.T) {
+	srv := fakeIdP(t, map[string]any{
+		"sub":    "user-1",
+		"groups": []string{"admins"},
+	})
+	ctx := context.Background()
+	provider, _ := oidc.NewProvider(ctx, srv.URL)
+
+	s := &SSOService{}
+	claims := claimsFromMap(map[string]any{"groups": []string{}}, "user-1", "groups")
+	s.mergeUserInfoClaims(ctx, provider, &oauth2.Token{AccessToken: "t"}, claims, "groups")
+
+	if !claims.GroupsStated || len(claims.Groups) != 0 {
+		t.Fatalf("explicit empty ID-token groups were overwritten: %+v", claims.Groups)
+	}
+}
+
+func TestNullIDTokenGroupsCanBeFilledByUserInfo(t *testing.T) {
+	srv := fakeIdP(t, map[string]any{
+		"sub":    "user-1",
+		"groups": []string{"admins"},
+	})
+	ctx := context.Background()
+	provider, _ := oidc.NewProvider(ctx, srv.URL)
+
+	s := &SSOService{}
+	claims := claimsFromMap(map[string]any{"groups": nil}, "user-1", "groups")
+	if claims.GroupsStated {
+		t.Fatal("groups:null must be treated as an absent group claim")
+	}
+	s.mergeUserInfoClaims(ctx, provider, &oauth2.Token{AccessToken: "t"}, claims, "groups")
+
+	if !claims.GroupsStated || len(claims.Groups) != 1 || claims.Groups[0] != "admins" {
+		t.Fatalf("UserInfo groups were not used after groups:null: %+v", claims.Groups)
+	}
+}
+
 // Required by the spec: a response about a different subject is not about this
 // user. Applying it would hand one account another's identity.
 func TestUserInfoForAnotherSubjectIsIgnored(t *testing.T) {

@@ -206,6 +206,16 @@ func (s *SSOService) CompleteLogin(ctx context.Context, slug, code, state, callb
 // the stable subject first, then a one-time link by verified email, then
 // creation, then refusal.
 func (s *SSOService) resolveUser(ctx context.Context, p *model.SSOProvider, c *model.SSOClaims) (userID, username string, err error) {
+	// RequiredGroup is an authorization gate, not only a JIT provisioning
+	// filter. Re-check it before resolving an existing identity so removing a
+	// user from the IdP group revokes their next login.
+	if !p.MeetsRequiredGroup(c) {
+		reason, detail := requiredGroupRefusal(c)
+		log.Printf("SSO[%s]: refusing login for provider %q — %s", config.AppVersion, p.Slug, detail)
+		s.emitRefusal(ctx, p.Slug, reason)
+		return "", "", ErrSSONotAllowed
+	}
+
 	if id, err := s.repo.FindUserBySubject(ctx, p.ID, c.Subject); err != nil {
 		return "", "", err
 	} else if id != "" {
@@ -216,7 +226,9 @@ func (s *SSOService) resolveUser(ctx context.Context, p *model.SSOProvider, c *m
 		if u == nil {
 			return "", "", ErrSSONoAccount
 		}
-		s.syncRole(ctx, p, c, u)
+		if err := s.syncRoleForLogin(ctx, p, c, u); err != nil {
+			return "", "", err
+		}
 		return id, u.Username, nil
 	}
 
@@ -240,7 +252,9 @@ func (s *SSOService) resolveUser(ctx context.Context, p *model.SSOProvider, c *m
 				return "", "", ErrSSONoAccount
 			}
 			log.Printf("SSO: linking existing account %q to provider %q by verified email", u.Username, p.Slug)
-			s.syncRole(ctx, p, c, u)
+			if err := s.syncRoleForLogin(ctx, p, c, u); err != nil {
+				return "", "", err
+			}
 			return id, u.Username, nil
 		}
 	}
@@ -326,40 +340,91 @@ func (s *SSOService) provision(ctx context.Context, p *model.SSOProvider, c *mod
 }
 
 // syncRole re-applies a group mapping on every login, which is what makes
-// revoking a group at the IdP take effect. It is a no-op unless the provider
-// actually has mappings — otherwise NPG stays the authority on roles.
-func (s *SSOService) syncRole(ctx context.Context, p *model.SSOProvider, c *model.SSOClaims, u *model.UserSummary) {
-	if len(p.GroupRoleMappings) == 0 {
-		return
+// revoking a group at the IdP take effect. Providers without mappings leave NPG
+// authoritative. A provider with a default role falls back to it after group
+// removal; a legacy non-JIT provider without one keeps the existing role and
+// emits a warning rather than locking out a previously valid installation.
+func (s *SSOService) syncRole(ctx context.Context, p *model.SSOProvider, c *model.SSOClaims, u *model.UserSummary) error {
+	roleID, enforce, err := roleToSync(p, c)
+	if err != nil {
+		return err
 	}
-	roleID, fromGroup := p.RoleForClaims(c)
-	if !fromGroup || roleID == "" {
-		return
+	if !enforce {
+		if len(p.GroupRoleMappings) > 0 {
+			log.Printf("SSO[%s]: provider %q has group-role mappings but no matching group or default role; "+
+				"preserving the existing role for %q to avoid locking out a previously valid installation",
+				config.AppVersion, p.Slug, u.Username)
+		}
+		return nil
 	}
 	if u.RoleID != nil && *u.RoleID == roleID {
-		return
+		return nil
 	}
 	role, err := s.roles.GetByID(ctx, roleID)
-	if err != nil || role == nil {
-		log.Printf("SSO: cannot sync role for %q: mapped role is missing", u.Username)
-		return
+	if err != nil {
+		return fmt.Errorf("sync SSO role for %q: %w", u.Username, err)
 	}
-	// Reuse the #222 invariant: the install must keep at least one superuser, so
-	// a group change must not be able to strand it.
+	if role == nil {
+		return fmt.Errorf("sync SSO role for %q: selected role %q is missing", u.Username, roleID)
+	}
+	// Keep the invariant that the install has a superuser, but fail this login
+	// instead of retaining revoked superuser access.
 	if u.IsSuperuser && !role.IsSuperuser {
-		if n, err := s.roles.CountSuperusers(ctx); err == nil && n <= 1 {
-			log.Printf("SSO: keeping %q as a superuser — demoting the last one would lock the install out", u.Username)
-			return
+		n, err := s.roles.CountSuperusers(ctx)
+		if err != nil {
+			return fmt.Errorf("count superusers before SSO role sync: %w", err)
+		}
+		if n <= 1 {
+			log.Printf("SSO: refusing login for %q — IdP role change would demote the last superuser", u.Username)
+			return ErrSSONotAllowed
 		}
 	}
 	if err := s.users.AssignRole(ctx, u.ID, roleID, role.IsSuperuser); err != nil {
-		log.Printf("SSO: failed to sync role for %q: %v", u.Username, err)
-		return
+		return fmt.Errorf("sync SSO role for %q: %w", u.Username, err)
 	}
 	log.Printf("SSO: %q moved to role %q by group mapping", u.Username, role.Name)
 	if s.audit != nil {
 		_ = s.audit.LogUserRoleAssign(ctx, u.Username, role.Name)
 	}
+	return nil
+}
+
+// syncRoleForLogin makes every fail-closed role-sync path diagnosable. Without
+// this wrapper CompleteLogin returns only #error=failed and does not log the
+// resolveUser error, leaving operators unable to distinguish a revoked mapping
+// from a repository or role configuration failure.
+func (s *SSOService) syncRoleForLogin(ctx context.Context, p *model.SSOProvider, c *model.SSOClaims, u *model.UserSummary) error {
+	if err := s.syncRole(ctx, p, c, u); err != nil {
+		log.Printf("SSO[%s]: refusing login for provider %q — role sync failed for %q: %v",
+			config.AppVersion, p.Slug, u.Username, err)
+		s.emitRefusal(ctx, p.Slug, "role_sync_failed")
+		return err
+	}
+	return nil
+}
+
+func roleToSync(p *model.SSOProvider, c *model.SSOClaims) (roleID string, enforce bool, err error) {
+	if len(p.GroupRoleMappings) == 0 {
+		return "", false, nil
+	}
+	roleID, fromGroup := p.RoleForClaims(c)
+	if fromGroup {
+		return roleID, true, nil
+	}
+	if strings.TrimSpace(roleID) == "" {
+		// Default roles are required only for JIT providers. Existing non-JIT
+		// installations may legitimately have mappings without a fallback; keep
+		// their current role rather than turning this security fix into a lockout.
+		return "", false, nil
+	}
+	return roleID, true, nil
+}
+
+func requiredGroupRefusal(c *model.SSOClaims) (reason, detail string) {
+	if !c.GroupsStated {
+		return "required_group_claim_missing", "the configured group claim was absent from both the id_token and UserInfo"
+	}
+	return "required_group", "the identity is not a member of the configured required group"
 }
 
 // uniqueUsername derives a username from the claims and disambiguates it, since
@@ -511,17 +576,22 @@ func claimsFromMap(raw map[string]any, subject, groupClaim string) *model.SSOCla
 	if u, ok := raw["preferred_username"].(string); ok {
 		c.Username = u
 	}
-	switch v := raw[groupClaim].(type) {
-	case []any:
-		for _, g := range v {
-			if s, ok := g.(string); ok {
-				c.Groups = append(c.Groups, s)
+	if value, ok := raw[groupClaim]; ok {
+		switch v := value.(type) {
+		case []any:
+			c.GroupsStated = true
+			for _, g := range v {
+				if s, ok := g.(string); ok {
+					c.Groups = append(c.Groups, s)
+				}
 			}
+		case []string:
+			c.GroupsStated = true
+			c.Groups = v
+		case string:
+			c.GroupsStated = true
+			c.Groups = []string{v}
 		}
-	case []string:
-		c.Groups = v
-	case string:
-		c.Groups = []string{v}
 	}
 	return c
 }
@@ -582,8 +652,9 @@ func (s *SSOService) mergeUserInfoClaims(ctx context.Context, provider *oidc.Pro
 	if claims.Username == "" {
 		claims.Username = extra.Username
 	}
-	if len(claims.Groups) == 0 {
+	if !claims.GroupsStated && extra.GroupsStated {
 		claims.Groups = extra.Groups
+		claims.GroupsStated = true
 	}
 }
 
