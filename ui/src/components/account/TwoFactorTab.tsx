@@ -1,4 +1,5 @@
 import { Trans, useTranslation } from 'react-i18next';
+import { QRCodeSVG } from 'qrcode.react';
 import type { AccountInfo, Setup2FAResponse, Disable2FARequest } from '../../api/auth';
 
 interface TwoFactorTabProps {
@@ -59,11 +60,15 @@ export function TwoFactorTab({
                 <p className="text-gray-500 dark:text-gray-400 mb-4">
                   {t('account.twoFactor.scanQR')}
                 </p>
-                <div className="inline-block bg-white p-4 rounded">
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(setup2FAData.qr_code_url)}`}
-                    alt="2FA QR Code"
-                    className="w-48 h-48"
+                <div
+                  className="inline-block bg-white p-4 rounded"
+                  role="img"
+                  aria-label="2FA QR Code"
+                >
+                  <QRCodeSVG
+                    value={setup2FAData.qr_code_url}
+                    size={192}
+                    level="M"
                   />
                 </div>
               </div>
