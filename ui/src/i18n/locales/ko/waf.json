@@ -247,6 +247,16 @@
         "permanent": "영구 차단"
       }
     },
+    "durations": {
+      "5m": "5분",
+      "10m": "10분",
+      "30m": "30분",
+      "1h": "1시간",
+      "24h": "24시간",
+      "7d": "7일",
+      "30d": "30일",
+      "permanent": "영구 차단"
+    },
     "messages": {
       "saveFailed": "차단에 실패했습니다."
     },
@@ -316,6 +326,12 @@
       "unbanAll": "전체 해제 ({{count}}건)",
       "unbanAllProgress": "{{done}}/{{total}} 해제 중...",
       "unbanAllHint": "현재 필터에 매칭되는 모든 IP를 해제합니다"
+    },
+    "duration": {
+      "edit": "기간 변경",
+      "editPermanent": "기간 지정",
+      "saveFailed": "기간을 변경하지 못했습니다.",
+      "fromNowHint": "선택한 기간은 지금부터 계산됩니다. \"영구 차단\"을 고르면 만료가 없어집니다."
     }
   },
   "hostList": {

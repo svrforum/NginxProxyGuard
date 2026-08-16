@@ -652,6 +652,7 @@ func registerSecurityRoutes(v1 *echo.Group, h *handler.SecurityHandler) {
 	bannedIPs.POST("", h.BanIP, proxyWrite)
 	bannedIPs.POST("/bulk-unban", h.UnbanIPsBulk, proxyWrite)
 	bannedIPs.DELETE("/:id", h.UnbanIP, proxyDelete)
+	bannedIPs.PUT("/:id/duration", h.UpdateBanDuration, proxyWrite)
 	bannedIPs.DELETE("", h.UnbanIPByAddress, proxyDelete)
 	bannedIPs.GET("/history", h.GetIPBanHistory, proxyRead)
 	bannedIPs.GET("/history/stats", h.GetIPBanHistoryStats, proxyRead)

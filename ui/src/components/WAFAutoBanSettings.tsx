@@ -4,12 +4,19 @@ import { useTranslation } from 'react-i18next';
 import { getSystemSettings, updateSystemSettings } from '../api/settings';
 import type { SystemSettings, UpdateSystemSettingsRequest } from '../types/settings';
 import { HelpTip } from './common/HelpTip';
+import { BAN_DURATIONS, CUSTOM_DURATION, isCustomDuration } from './banned-ip/banDurations';
 
 export default function WAFAutoBanSettings() {
-  const { t } = useTranslation('settings');
+  // The duration labels live in the waf namespace beside the ban list they
+  // are shared with, so both screens read one set of strings. (#252)
+  const { t } = useTranslation(['settings', 'waf']);
   const queryClient = useQueryClient();
   const [editedSettings, setEditedSettings] = useState<UpdateSystemSettingsRequest>({});
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  // Opens on the free-text field when the stored value is not one of the
+  // offered durations, so an existing custom setting is not silently rounded
+  // to whichever option happens to render first. (#252)
+  const [customDuration, setCustomDuration] = useState(false);
 
   const { data: settings, isLoading } = useQuery({
     queryKey: ['systemSettings'],
@@ -198,15 +205,43 @@ export default function WAFAutoBanSettings() {
                 {t('system.waf.config.duration.description')}
               </p>
             </div>
-            <div className="w-24">
-              <input
-                type="number"
-                min="0"
-                max="604800"
-                value={getValue('waf_auto_ban_duration') ?? 3600}
-                onChange={(e) => handleChange('waf_auto_ban_duration', e.target.value === '' ? 3600 : parseInt(e.target.value))}
+            <div className="w-44">
+              <select
+                aria-label="waf-auto-ban-duration"
+                value={
+                  customDuration || isCustomDuration(getValue('waf_auto_ban_duration') ?? 3600)
+                    ? CUSTOM_DURATION
+                    : (getValue('waf_auto_ban_duration') ?? 3600)
+                }
+                onChange={(e) => {
+                  const picked = parseInt(e.target.value);
+                  if (picked === CUSTOM_DURATION) {
+                    setCustomDuration(true);
+                    return;
+                  }
+                  setCustomDuration(false);
+                  handleChange('waf_auto_ban_duration', picked);
+                }}
                 className={inputClass}
-              />
+              >
+                {BAN_DURATIONS.map((d) => (
+                  <option key={d.key} value={d.seconds}>
+                    {t(`bannedIp.durations.${d.key}`, { ns: 'waf' })}
+                  </option>
+                ))}
+                <option value={CUSTOM_DURATION}>{t('system.waf.config.duration.custom')}</option>
+              </select>
+              {(customDuration || isCustomDuration(getValue('waf_auto_ban_duration') ?? 3600)) && (
+                <input
+                  type="number"
+                  min="0"
+                  aria-label="waf-auto-ban-duration-seconds"
+                  value={getValue('waf_auto_ban_duration') ?? 3600}
+                  onChange={(e) => handleChange('waf_auto_ban_duration', e.target.value === '' ? 0 : parseInt(e.target.value))}
+                  className={inputClass}
+                  placeholder={t('system.waf.config.duration.secondsPlaceholder')}
+                />
+              )}
             </div>
           </div>
         </div>

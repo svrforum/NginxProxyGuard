@@ -247,6 +247,16 @@
         "permanent": "Permanent Ban"
       }
     },
+    "durations": {
+      "5m": "5 minutes",
+      "10m": "10 minutes",
+      "30m": "30 minutes",
+      "1h": "1 hour",
+      "24h": "24 hours",
+      "7d": "7 days",
+      "30d": "30 days",
+      "permanent": "Permanent Ban"
+    },
     "messages": {
       "saveFailed": "Failed to ban IP."
     },
@@ -316,6 +326,12 @@
       "unbanAll": "Unban all ({{count}})",
       "unbanAllProgress": "Unbanning {{done}}/{{total}}...",
       "unbanAllHint": "Unbans every IP matching the current filter"
+    },
+    "duration": {
+      "edit": "Change duration",
+      "editPermanent": "Set a duration",
+      "saveFailed": "Could not change the duration.",
+      "fromNowHint": "The duration you pick counts from now. Choosing permanent removes the expiry."
     }
   },
   "hostList": {

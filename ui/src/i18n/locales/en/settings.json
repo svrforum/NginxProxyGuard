@@ -361,7 +361,9 @@
         },
         "duration": {
           "label": "Ban Duration (Seconds)",
-          "description": "Duration to ban the IP. 0 means permanent ban. (Default: 3600s = 1h)"
+          "description": "Duration to ban the IP. 0 means permanent ban. (Default: 3600s = 1h)",
+          "custom": "Custom (seconds)",
+          "secondsPlaceholder": "seconds, 0 = permanent"
         }
       },
       "info": {

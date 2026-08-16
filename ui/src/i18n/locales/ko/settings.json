@@ -365,7 +365,9 @@
         },
         "duration": {
           "label": "차단 기간 (초)",
-          "description": "IP를 차단하는 기간입니다. 0은 영구 차단입니다. (기본: 3600초 = 1시간)"
+          "description": "IP를 차단하는 기간입니다. 0은 영구 차단입니다. (기본: 3600초 = 1시간)",
+          "custom": "직접 입력 (초)",
+          "secondsPlaceholder": "초 단위, 0 = 영구"
         }
       },
       "info": {

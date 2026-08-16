@@ -6580,6 +6580,58 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/IPBanHistoryStats'
+  /banned-ips/{id}/duration:
+    put:
+      tags: [Security]
+      summary: Change how long an existing ban still runs
+      description: |
+        Re-dates a ban. `ban_time` counts **from now**, not from when the ban
+        started — "give this one another day" is the operation, and re-dating
+        from the original start would silently expire a ban whose window has
+        already passed.
+
+        `0` makes the ban permanent, the same convention the ban form and the
+        Fail2ban automatic-ban setting use. The field is required: omitting it
+        is rejected rather than read as 0, so a malformed request cannot turn a
+        temporary ban into a permanent one.
+
+        The change is recorded in the ban history. nginx configs are not
+        regenerated — they carry the set of banned addresses, which this does
+        not alter.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ban_time]
+              properties:
+                ban_time:
+                  type: integer
+                  minimum: 0
+                  example: 86400
+                  description: Seconds from now; 0 for a permanent ban.
+      responses:
+        '200':
+          description: The updated ban
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BannedIP'
+        '400':
+          description: ban_time missing or negative
+        '404':
+          description: No such ban
+
   /banned-ips/history/ip/{ip}:
     get:
       tags: [Security]

@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiDelete } from './client'
+import { apiGet, apiPost, apiPut, apiDelete } from './client'
 
 interface BannedIP {
   id: string
@@ -61,6 +61,13 @@ export async function fetchBannedIPs(page = 1, perPage = 50, proxyHostId?: strin
 
 export async function fetchProxyHostsForBan(): Promise<ProxyHostListResponse> {
   return apiGet<ProxyHostListResponse>(`${API_BASE}/proxy-hosts?page=1&per_page=100`)
+}
+
+/** Re-dates an existing ban. Seconds count from NOW, 0 means permanent —
+ *  "give this one another day" is the operation, not "recompute from when it
+ *  started". (#252) */
+export async function updateBanDuration(id: string, banTime: number): Promise<BannedIP> {
+  return apiPut<BannedIP>(`${API_BASE}/banned-ips/${id}/duration`, { ban_time: banTime })
 }
 
 export async function unbanIP(id: string): Promise<void> {

@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"database/sql"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -83,6 +85,50 @@ func (h *SecurityHandler) BanIP(c echo.Context) error {
 	h.audit.LogIPBanned(auditCtx, req.IPAddress, req.Reason, req.BanTime)
 
 	return c.JSON(http.StatusCreated, bannedIP)
+}
+
+// UpdateBanDuration re-dates an existing ban. Body: {"ban_time": <seconds>},
+// counted from now, 0 for permanent — the same values the ban form offers.
+// (#252)
+func (h *SecurityHandler) UpdateBanDuration(c echo.Context) error {
+	id := c.Param("id")
+
+	var req struct {
+		BanTime *int `json:"ban_time"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return badRequestError(c, "Invalid request body")
+	}
+	// A pointer so an absent field is refused rather than silently read as 0,
+	// which would make a malformed request a permanent ban.
+	if req.BanTime == nil {
+		return badRequestError(c, "ban_time is required (seconds from now, 0 for permanent)")
+	}
+	if *req.BanTime < 0 {
+		return badRequestError(c, "ban_time must be 0 (permanent) or a positive number of seconds")
+	}
+
+	var userID *string
+	var userEmail string
+	if uid, ok := c.Get("user_id").(string); ok && uid != "" {
+		userID = &uid
+	}
+	if email, ok := c.Get("username").(string); ok {
+		userEmail = email
+	}
+
+	updated, err := h.securityService.UpdateBanDuration(c.Request().Context(), id, *req.BanTime, userID, userEmail)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return notFoundError(c, "Banned IP")
+		}
+		return databaseError(c, "update ban duration", err)
+	}
+
+	auditCtx := service.ContextWithAudit(c.Request().Context(), c)
+	h.audit.LogIPBanDurationChanged(auditCtx, updated.IPAddress, *req.BanTime)
+
+	return c.JSON(http.StatusOK, updated)
 }
 
 func (h *SecurityHandler) UnbanIP(c echo.Context) error {

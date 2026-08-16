@@ -564,6 +564,14 @@ func (s *AuditService) LogIPUnbanned(ctx context.Context, ipAddress string) erro
 	return s.logEntry(ctx, "ip_unbanned", "banned_ip", "", ipAddress, nil)
 }
 
+// LogIPBanDurationChanged records a re-dated ban. The duration is recorded, not
+// the resulting timestamp, because "made permanent" and "extended by a day" are
+// what an auditor is looking for. (#252)
+func (s *AuditService) LogIPBanDurationChanged(ctx context.Context, ipAddress string, seconds int) error {
+	return s.logEntry(ctx, "ip_ban_duration_changed", "banned_ip", "", ipAddress,
+		map[string]interface{}{"ban_time_seconds": seconds, "permanent": seconds == 0})
+}
+
 // LogIPsBulkUnbanned logs a bulk unban action with the count of IPs removed.
 func (s *AuditService) LogIPsBulkUnbanned(ctx context.Context, count int64) error {
 	return s.logEntry(ctx, "ip_bulk_unbanned", "banned_ip", "", "", map[string]interface{}{

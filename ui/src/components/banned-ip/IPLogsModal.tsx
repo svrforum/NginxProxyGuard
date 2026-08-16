@@ -4,6 +4,7 @@ import { ModalShell } from '../common/ModalShell'
 import { fetchIPLogs } from '../../api/banned-ips'
 import type { BannedIP } from '../../api/banned-ips'
 import { IPStatsBand } from './IPStatsBand'
+import { BanDurationEditor } from './BanDurationEditor'
 
 function formatDate(dateStr: string, locale?: string): string {
   return new Date(dateStr).toLocaleString(locale || 'ko-KR')
@@ -61,11 +62,12 @@ export function IPLogsModal({ ipAddress, ban, hostName, onClose }: { ipAddress: 
               <span className="text-red-600 dark:text-red-400 font-medium">{t('bannedIp.logs.banTime')}</span>
               <span className="ml-2 text-red-700 dark:text-red-300">{formatDate(ban.banned_at, i18n.language)}</span>
             </div>
-            <div>
+            <div className="flex flex-wrap items-center gap-2">
               <span className="text-red-600 dark:text-red-400 font-medium">{t('bannedIp.logs.expires')}</span>
-              <span className="ml-2 text-red-700 dark:text-red-300">
+              <span className="text-red-700 dark:text-red-300">
                 {ban.is_permanent ? t('bannedIp.status.permanent') : ban.expires_at ? formatDate(ban.expires_at, i18n.language) : '-'}
               </span>
+              <BanDurationEditor banId={ban.id} isPermanent={ban.is_permanent} />
             </div>
             <div>
               <span className="text-red-600 dark:text-red-400 font-medium">{t('bannedIp.logs.failCount')}</span>

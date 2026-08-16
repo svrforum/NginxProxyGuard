@@ -528,6 +528,47 @@ func (s *SecurityService) regenerateAllConfigsForBan() {
 	}
 }
 
+// UpdateBanDuration re-dates an existing ban. seconds counts from now, and 0
+// makes it permanent — matching the values the ban form offers. (#252)
+//
+// The nginx configs are NOT regenerated: the ban list they render is the set of
+// addresses, and this changes only when one leaves it. The cache is refreshed
+// by the repository, and expiry is evaluated from the row.
+func (s *SecurityService) UpdateBanDuration(ctx context.Context, id string, seconds int, userID *string, userEmail string) (*model.BannedIP, error) {
+	if seconds < 0 {
+		return nil, fmt.Errorf("invalid duration: must be 0 (permanent) or a positive number of seconds")
+	}
+	updated, err := s.rateLimitRepo.UpdateBanDuration(ctx, id, seconds)
+	if err != nil {
+		return nil, err
+	}
+
+	// Recorded as a ban event so the history shows the change rather than the
+	// address silently gaining a new expiry.
+	if s.historyRepo != nil && updated != nil {
+		reason := fmt.Sprintf("Ban duration changed to %d seconds", seconds)
+		if seconds == 0 {
+			reason = "Ban changed to permanent"
+		}
+		event := &model.IPBanHistory{
+			EventType:   model.BanEventTypeBan,
+			IPAddress:   updated.IPAddress,
+			ProxyHostID: updated.ProxyHostID,
+			Reason:      reason,
+			Source:      model.BanSourceManual,
+			IsPermanent: updated.IsPermanent,
+			ExpiresAt:   updated.ExpiresAt,
+			IsAuto:      false,
+			UserID:      userID,
+			UserEmail:   userEmail,
+		}
+		if err := s.historyRepo.RecordBanEvent(ctx, event); err != nil {
+			log.Printf("[SecurityService] Failed to record ban duration change: %v", err)
+		}
+	}
+	return updated, nil
+}
+
 func (s *SecurityService) UnbanIP(ctx context.Context, id string, userID *string, userEmail string) error {
 	// Get banned IP info before deleting (for history and cache removal)
 	bannedIP, _ := s.rateLimitRepo.GetBannedIPByID(ctx, id)

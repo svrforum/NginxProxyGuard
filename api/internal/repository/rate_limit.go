@@ -580,6 +580,42 @@ func (r *RateLimitRepository) GetBannedIPByID(ctx context.Context, id string) (*
 	return &b, nil
 }
 
+// UpdateBanDuration re-dates an existing ban. banTime is seconds from NOW, and
+// 0 means permanent — the same convention BanIP uses.
+//
+// Relative to now rather than to when the ban started: "give this one another
+// day" is the operation people actually perform, and dating from the original
+// ban would silently expire a ban whose window has already passed. (#252)
+func (r *RateLimitRepository) UpdateBanDuration(ctx context.Context, id string, banTime int) (*model.BannedIP, error) {
+	var expiresAt *time.Time
+	isPermanent := banTime == 0
+	if !isPermanent {
+		t := time.Now().Add(time.Duration(banTime) * time.Second)
+		expiresAt = &t
+	}
+
+	var phID sql.NullString
+	err := r.db.QueryRowContext(ctx, `
+		UPDATE banned_ips SET expires_at = $2, is_permanent = $3
+		WHERE id = $1 RETURNING proxy_host_id`, id, expiresAt, isPermanent).Scan(&phID)
+	if err == sql.ErrNoRows {
+		return nil, sql.ErrNoRows
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	var phPtr *string
+	if phID.Valid {
+		phPtr = &phID.String
+	}
+	// The ban list is cached per host; a stale entry would keep serving the old
+	// expiry until the TTL lapsed.
+	r.invalidateBans(ctx, phPtr)
+
+	return r.GetBannedIPByID(ctx, id)
+}
+
 func (r *RateLimitRepository) UnbanIP(ctx context.Context, id string) error {
 	// DELETE ... RETURNING lets us discover which host's cache to invalidate
 	// without a separate SELECT round-trip.

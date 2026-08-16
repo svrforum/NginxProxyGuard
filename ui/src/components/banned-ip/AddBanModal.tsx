@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { BAN_DURATIONS } from './banDurations'
 import { HelpTip } from '../common/HelpTip'
 import { ModalShell } from '../common/ModalShell'
 
@@ -97,14 +98,11 @@ export function AddBanModal({ newBan, proxyHosts, isError, isPending, onChange, 
               onChange={(e) => onChange({ ...newBan, ban_time: parseInt(e.target.value) })}
               className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white"
             >
-              <option value={300}>{t('bannedIp.modal.durations.5m')}</option>
-              <option value={600}>{t('bannedIp.modal.durations.10m')}</option>
-              <option value={1800}>{t('bannedIp.modal.durations.30m')}</option>
-              <option value={3600}>{t('bannedIp.modal.durations.1h')}</option>
-              <option value={86400}>{t('bannedIp.modal.durations.24h')}</option>
-              <option value={604800}>{t('bannedIp.modal.durations.7d')}</option>
-              <option value={2592000}>{t('bannedIp.modal.durations.30d')}</option>
-              <option value={0}>{t('bannedIp.modal.durations.permanent')}</option>
+              {BAN_DURATIONS.map((d) => (
+                <option key={d.key} value={d.seconds}>
+                  {t(`bannedIp.durations.${d.key}`)}
+                </option>
+              ))}
             </select>
           </div>
           {isError && (
