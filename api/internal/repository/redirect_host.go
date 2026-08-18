@@ -147,6 +147,7 @@ func (r *RedirectHostRepository) Update(ctx context.Context, id string, req *mod
 	if existing == nil {
 		return nil, nil
 	}
+	previous := *existing
 
 	// Apply updates
 	if len(req.DomainNames) > 0 {
@@ -183,7 +184,7 @@ func (r *RedirectHostRepository) Update(ctx context.Context, id string, req *mod
 		existing.BlockExploits = *req.BlockExploits
 	}
 
-	if err := model.ValidateRedirectHost(existing); err != nil {
+	if err := model.ValidateRedirectHostUpdate(&previous, existing, req); err != nil {
 		return nil, err
 	}
 
