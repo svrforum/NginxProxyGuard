@@ -19,6 +19,17 @@ updates:
     groups:
       npm-minor-patch:
         update-types: ["minor", "patch"]
+    ignore:
+      # TypeScript majors. 7.x is the native Go port and its npm package no longer
+      # ships the in-process compiler API, so `npm run lint` dies with
+      # "ts.createSourceFile is not a function" (#201) — and ui/.npmrc's
+      # legacy-peer-deps swallows the ERESOLVE, so the install looks fine.
+      # typescript-eslint has no release that accepts 7.x yet; check with
+      #   npm view typescript-eslint@latest peerDependencies.typescript
+      # (today ">=4.8.4 <6.1.0") and drop this ignore once it admits 7.x.
+      # Minor/patch bumps on the 6.x line still come through.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
 
   # Dockerfiles (base images)
   - package-ecosystem: "docker"
