@@ -33,6 +33,7 @@ var (
 	ErrSSOStateInvalid  = errors.New("the sign-in request expired or was already used")
 	ErrSSONoAccount     = errors.New("no account is linked to this identity")
 	ErrSSONotAllowed    = errors.New("this identity is not permitted to sign in")
+	ErrSSONoRoleMapping = fmt.Errorf("%w: no group-role mapping matches and no default role is configured", ErrSSONotAllowed)
 	ErrSSOEmailMissing  = errors.New("the provider returned no email address")
 	ErrSSODiscovery     = errors.New("could not reach the identity provider")
 	ErrSSOTokenInvalid  = errors.New("the identity provider's response could not be verified")
@@ -341,18 +342,17 @@ func (s *SSOService) provision(ctx context.Context, p *model.SSOProvider, c *mod
 
 // syncRole re-applies a group mapping on every login, which is what makes
 // revoking a group at the IdP take effect. Providers without mappings leave NPG
-// authoritative. A provider with a default role falls back to it after group
-// removal; a legacy non-JIT provider without one keeps the existing role and
-// emits a warning rather than locking out a previously valid installation.
+// authoritative. An explicitly stated but unmatched group claim falls back to
+// the default role or refuses login when no fallback exists. A missing claim is
+// not evidence of revocation, so the existing role is preserved.
 func (s *SSOService) syncRole(ctx context.Context, p *model.SSOProvider, c *model.SSOClaims, u *model.UserSummary) error {
 	roleID, enforce, err := roleToSync(p, c)
 	if err != nil {
 		return err
 	}
 	if !enforce {
-		if len(p.GroupRoleMappings) > 0 {
-			log.Printf("SSO[%s]: provider %q has group-role mappings but no matching group or default role; "+
-				"preserving the existing role for %q to avoid locking out a previously valid installation",
+		if len(p.GroupRoleMappings) > 0 && !c.GroupsStated {
+			log.Printf("SSO[%s]: provider %q supplied no group claim in the ID token or UserInfo; preserving the existing role for %q and skipping role sync",
 				config.AppVersion, p.Slug, u.Username)
 		}
 		return nil
@@ -395,9 +395,13 @@ func (s *SSOService) syncRole(ctx context.Context, p *model.SSOProvider, c *mode
 // from a repository or role configuration failure.
 func (s *SSOService) syncRoleForLogin(ctx context.Context, p *model.SSOProvider, c *model.SSOClaims, u *model.UserSummary) error {
 	if err := s.syncRole(ctx, p, c, u); err != nil {
+		reason := "role_sync_failed"
+		if errors.Is(err, ErrSSONoRoleMapping) {
+			reason = "role_not_mapped"
+		}
 		log.Printf("SSO[%s]: refusing login for provider %q — role sync failed for %q: %v",
 			config.AppVersion, p.Slug, u.Username, err)
-		s.emitRefusal(ctx, p.Slug, "role_sync_failed")
+		s.emitRefusal(ctx, p.Slug, reason)
 		return err
 	}
 	return nil
@@ -407,15 +411,15 @@ func roleToSync(p *model.SSOProvider, c *model.SSOClaims) (roleID string, enforc
 	if len(p.GroupRoleMappings) == 0 {
 		return "", false, nil
 	}
+	if !c.GroupsStated {
+		return "", false, nil
+	}
 	roleID, fromGroup := p.RoleForClaims(c)
 	if fromGroup {
 		return roleID, true, nil
 	}
 	if strings.TrimSpace(roleID) == "" {
-		// Default roles are required only for JIT providers. Existing non-JIT
-		// installations may legitimately have mappings without a fallback; keep
-		// their current role rather than turning this security fix into a lockout.
-		return "", false, nil
+		return "", false, ErrSSONoRoleMapping
 	}
 	return roleID, true, nil
 }

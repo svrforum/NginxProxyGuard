@@ -1506,7 +1506,7 @@
       "requiredGroupHint": "지정하면 이 그룹 구성원만 로그인할 수 있습니다.",
       "allowJit": "처음 로그인하는 사람의 계정을 자동으로 만듭니다",
       "defaultRole": "기본 역할",
-      "defaultRoleHint": "자동 생성된 계정이 받을 역할",
+      "defaultRoleHint": "자동 생성 계정에 부여하고, 전달된 그룹이 어떤 매핑에도 일치하지 않을 때 적용할 역할입니다. 비워 둔 non-JIT 공급자는 매핑 불일치 시 로그인을 거부합니다.",
       "noRole": "선택 안 함",
       "groupMappings": "그룹 → 역할 매핑",
       "addMapping": "매핑 추가",
