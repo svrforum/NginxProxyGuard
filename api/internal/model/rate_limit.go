@@ -78,7 +78,7 @@ type CreateFail2banRequest struct {
 	Enabled    *bool  `json:"enabled,omitempty"`
 	MaxRetries int    `json:"max_retries,omitempty"`
 	FindTime   int    `json:"find_time,omitempty"`
-	BanTime    int    `json:"ban_time,omitempty"`
+	BanTime    *int   `json:"ban_time,omitempty"` // pointer: absent keeps the stored value, 0 means permanent
 	FailCodes  string `json:"fail_codes,omitempty"`
 	Action     string `json:"action,omitempty"`
 }

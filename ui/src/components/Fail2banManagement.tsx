@@ -8,6 +8,9 @@ import type { CreateFail2banRequest } from '../types/security';
 import { Link } from 'react-router-dom';
 import { ModalShell } from './common/ModalShell';
 import { EntityCard, IconButton, EmptyState, StatusPill, PencilIcon } from './common/listui';
+// One duration list for every ban screen — Fail2ban offers the same choices as
+// a manual ban, permanent included. (#252)
+import { BAN_DURATIONS, CUSTOM_DURATION, isCustomDuration } from './banned-ip/banDurations';
 
 export function Fail2banManagement() {
   const { t } = useTranslation('fail2ban');
@@ -119,7 +122,7 @@ function HostFail2banRow({
   host: ProxyHost;
   onEdit: (settings: CreateFail2banRequest) => void;
 }) {
-  const { t } = useTranslation('fail2ban');
+  const { t } = useTranslation(['fail2ban', 'waf']);
   const queryClient = useQueryClient();
 
   const settingsQuery = useQuery({
@@ -182,7 +185,12 @@ function HostFail2banRow({
             <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
               <span>{t('settings.maxRetries')}: {settings?.max_retries}</span>
               <span>•</span>
-              <span>{t('settings.banTime')}: {settings?.ban_time}s</span>
+              <span>
+                {t('settings.banTime')}:{' '}
+                {settings?.ban_time === 0
+                  ? t('bannedIp.durations.permanent', { ns: 'waf' })
+                  : `${settings?.ban_time}s`}
+              </span>
             </div>
           )}
         </div>
@@ -227,8 +235,14 @@ function Fail2banEditModal({
   onClose: () => void;
   onSave: () => void;
 }) {
-  const { t } = useTranslation('fail2ban');
+  const { t } = useTranslation(['fail2ban', 'waf']);
   const [formData, setFormData] = useState<CreateFail2banRequest>(settings);
+  // Opens on the free-text field when the stored value is not one of the
+  // offered durations, so an existing custom setting is not silently shown as
+  // whichever option happens to render first. (#252)
+  const [customDuration, setCustomDuration] = useState(false);
+  const banTime = formData.ban_time ?? 3600;
+  const showCustomDuration = customDuration || isCustomDuration(banTime);
 
   const mutation = useMutation({
     mutationFn: () => updateFail2ban(host.id, formData),
@@ -275,12 +289,38 @@ function Fail2banEditModal({
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                 {t('settings.banTime')}
               </label>
-              <input
-                type="number"
-                value={formData.ban_time}
-                onChange={(e) => setFormData({ ...formData, ban_time: Number(e.target.value) })}
+              <select
+                aria-label="fail2ban-ban-time"
+                value={showCustomDuration ? CUSTOM_DURATION : banTime}
+                onChange={(e) => {
+                  const picked = Number(e.target.value);
+                  if (picked === CUSTOM_DURATION) {
+                    setCustomDuration(true);
+                    return;
+                  }
+                  setCustomDuration(false);
+                  setFormData({ ...formData, ban_time: picked });
+                }}
                 className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
-              />
+              >
+                {BAN_DURATIONS.map((d) => (
+                  <option key={d.key} value={d.seconds}>
+                    {t(`bannedIp.durations.${d.key}`, { ns: 'waf' })}
+                  </option>
+                ))}
+                <option value={CUSTOM_DURATION}>{t('settings.banTimeCustom')}</option>
+              </select>
+              {showCustomDuration && (
+                <input
+                  type="number"
+                  min={0}
+                  aria-label="fail2ban-ban-time-seconds"
+                  value={banTime}
+                  onChange={(e) => setFormData({ ...formData, ban_time: e.target.value === '' ? 0 : Number(e.target.value) })}
+                  placeholder={t('settings.banTimeSecondsPlaceholder')}
+                  className="mt-2 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                />
+              )}
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('settings.banTimeHelp')}</p>
             </div>
             <div>

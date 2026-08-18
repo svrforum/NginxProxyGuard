@@ -157,12 +157,12 @@ func (r *RateLimitRepository) UpsertFail2ban(ctx context.Context, proxyHostID st
 	query := `
 		INSERT INTO fail2ban_configs (proxy_host_id, enabled, max_retries, find_time, ban_time, fail_codes, action)
 		VALUES ($1, COALESCE($2, TRUE), COALESCE(NULLIF($3, 0), 5), COALESCE(NULLIF($4, 0), 600),
-		        COALESCE(NULLIF($5, 0), 3600), COALESCE(NULLIF($6, ''), '401,403'), COALESCE(NULLIF($7, ''), 'block'))
+		        COALESCE($5, 3600), COALESCE(NULLIF($6, ''), '401,403'), COALESCE(NULLIF($7, ''), 'block'))
 		ON CONFLICT (proxy_host_id) DO UPDATE SET
 			enabled = COALESCE($2, fail2ban_configs.enabled),
 			max_retries = CASE WHEN $3 > 0 THEN $3 ELSE fail2ban_configs.max_retries END,
 			find_time = CASE WHEN $4 > 0 THEN $4 ELSE fail2ban_configs.find_time END,
-			ban_time = CASE WHEN $5 >= 0 THEN $5 ELSE fail2ban_configs.ban_time END,
+			ban_time = COALESCE($5, fail2ban_configs.ban_time),
 			fail_codes = CASE WHEN $6 != '' THEN $6 ELSE fail2ban_configs.fail_codes END,
 			action = CASE WHEN $7 != '' THEN $7 ELSE fail2ban_configs.action END,
 			updated_at = NOW()

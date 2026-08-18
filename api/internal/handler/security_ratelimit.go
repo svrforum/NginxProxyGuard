@@ -86,6 +86,11 @@ func (h *SecurityHandler) UpsertFail2ban(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return badRequestError(c, "Invalid request body")
 	}
+	// BanTime is a pointer so an absent field keeps the stored duration instead of
+	// being read as 0, which would silently turn a partial update into a permanent ban.
+	if req.BanTime != nil && *req.BanTime < 0 {
+		return badRequestError(c, "ban_time must be 0 (permanent) or a positive number of seconds")
+	}
 
 	config, err := h.securityService.UpsertFail2ban(c.Request().Context(), proxyHostID, &req)
 	if err != nil {
