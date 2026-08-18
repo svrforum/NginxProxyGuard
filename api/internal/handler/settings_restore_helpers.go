@@ -44,6 +44,11 @@ func secureFileMode(destPath string) os.FileMode {
 // into. Both config (conf.d) and certificate restores live under it.
 const restoreRootDir = "/etc/nginx"
 
+// chmodFile applies mode to an already-open file. It is a package-level
+// variable only so tests can force the chmod failure that restoreFileAtomic
+// has to survive without damaging the destination.
+var chmodFile = func(f *os.File, mode os.FileMode) error { return f.Chmod(mode) }
+
 func (h *SettingsHandler) extractFile(tarReader *tar.Reader, destPath string, header *tar.Header) error {
 	// Defense-in-depth: reject any destination that escapes the nginx tree,
 	// even if a caller forgot to sanitize the relative path (path traversal).
@@ -52,8 +57,34 @@ func (h *SettingsHandler) extractFile(tarReader *tar.Reader, destPath string, he
 		return fmt.Errorf("path traversal blocked: %q escapes %q", destPath, restoreRootDir)
 	}
 
+	return restoreFileAtomic(tarReader, destPath, header.Size)
+}
+
+// restoreFileAtomic writes size bytes from src to destPath without ever
+// truncating destPath first: the bytes go into a temporary file in the same
+// directory, which is then renamed over the destination. The destination is
+// touched only by that final rename, so every failure path leaves the previous
+// file byte-for-byte intact.
+//
+// This ordering is load-bearing. The API container runs with cap_drop ALL +
+// cap_add DAC_OVERRIDE, so it may write files it does not own — but chmod on a
+// file owned by another uid needs CAP_FOWNER, which is dropped, and
+// certs/default-selfsigned.{crt,key} are owned by the nginx container's uid
+// 101. The previous open(O_TRUNC)-then-chmod order therefore emptied those two
+// files and returned the chmod error before copying a single byte, leaving
+// 0-byte certificates that break `nginx -t` for the whole proxy.
+//
+// Writing into a temp file we own keeps the security guarantee (the mode from
+// secureFileMode is applied before any bytes land, so a restored private key is
+// never world-readable, not even briefly) because chmod on our own file always
+// succeeds. Renaming over a file owned by someone else only needs write+search
+// on the directory, which DAC_OVERRIDE grants — the cert/conf.d dirs are mode
+// 755 and not sticky, so no CAP_FOWNER is involved.
+func restoreFileAtomic(src io.Reader, destPath string, size int64) error {
+	destDir := filepath.Dir(destPath)
+
 	// Ensure parent directory exists
-	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+	if err := os.MkdirAll(destDir, 0755); err != nil {
 		return err
 	}
 
@@ -68,31 +99,52 @@ func (h *SettingsHandler) extractFile(tarReader *tar.Reader, destPath string, he
 		}
 	}
 
-	// Create destination file. Force secure permissions regardless of the
-	// archive header mode so restored private keys are never world-readable.
+	// Force secure permissions regardless of the archive header mode so
+	// restored private keys are never world-readable.
 	mode := secureFileMode(destPath)
-	outFile, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
+
+	// Same directory as the destination => same filesystem => atomic rename.
+	// The dot prefix and .tmp suffix keep a leftover from ever being mistaken
+	// for a real certificate, and os.CreateTemp's random suffix keeps
+	// concurrent restores from colliding.
+	tmpFile, err := os.CreateTemp(destDir, ".npg-restore-*.tmp")
 	if err != nil {
 		return err
 	}
-	defer outFile.Close()
+	tmpPath := tmpFile.Name()
+	renamed := false
+	defer func() {
+		tmpFile.Close() // no-op after the explicit Close on the success path
+		if !renamed {
+			os.Remove(tmpPath)
+		}
+	}()
 
-	// O_TRUNC keeps the existing file's permission bits when the file already
-	// exists, so enforce the secure mode explicitly (private keys -> 0600).
-	if err := outFile.Chmod(mode); err != nil {
-		return err
+	// os.CreateTemp always creates with 0600, so apply the restore policy mode
+	// explicitly. This file is ours, so a failure here is a real one — and it
+	// still leaves the destination untouched.
+	if err := chmodFile(tmpFile, mode); err != nil {
+		return fmt.Errorf("chmod temp file: %w", err)
 	}
 
 	// Use LimitReader to read exactly the expected amount
-	limitReader := io.LimitReader(tarReader, header.Size)
-	written, err := io.Copy(outFile, limitReader)
+	written, err := io.Copy(tmpFile, io.LimitReader(src, size))
 	if err != nil {
-		return fmt.Errorf("copy error after %d bytes (expected %d): %w", written, header.Size, err)
+		return fmt.Errorf("copy error after %d bytes (expected %d): %w", written, size, err)
 	}
 
-	if written != header.Size {
-		return fmt.Errorf("size mismatch: wrote %d bytes, expected %d", written, header.Size)
+	if written != size {
+		return fmt.Errorf("size mismatch: wrote %d bytes, expected %d", written, size)
 	}
+
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("close temp file: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, destPath); err != nil {
+		return fmt.Errorf("rename into place: %w", err)
+	}
+	renamed = true
 
 	return nil
 }
