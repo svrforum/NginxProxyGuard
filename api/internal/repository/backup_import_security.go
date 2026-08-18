@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"log"
 
 	"github.com/lib/pq"
 	"nginx-proxy-guard/internal/model"
@@ -278,23 +279,39 @@ func (r *BackupRepository) importCloudProvider(ctx context.Context, tx *sql.Tx, 
 func (r *BackupRepository) importExploitBlockRule(ctx context.Context, tx *sql.Tx, rule *model.ExploitBlockRuleExport) (string, error) {
 	// Skip system rules - they're already in the database
 	if rule.IsBuiltin {
-		// Just update enabled status for system rules and return the same ID
+		// Just update enabled status for system rules and keep the same ID.
+		// Built-in IDs are hardcoded and seeded by the migrations, so a backup
+		// taken on a NEWER version can name a built-in this install does not
+		// have. Returning its ID anyway put a dangling entry in the caller's
+		// rule map and the following exclusion INSERT then failed the FK,
+		// killing the whole restore — so report "not found" (empty ID) when the
+		// UPDATE matched nothing, which makes the caller skip its exclusions.
 		query := `UPDATE exploit_block_rules SET enabled = $1, updated_at = NOW() WHERE id = $2 AND is_system = true`
-		_, _ = tx.ExecContext(ctx, query, rule.Enabled, rule.ID)
+		res, err := tx.ExecContext(ctx, query, rule.Enabled, rule.ID)
+		if err != nil {
+			return "", err
+		}
+		affected, err := res.RowsAffected()
+		if err != nil {
+			return "", err
+		}
+		if affected == 0 {
+			log.Printf("[Backup Import] built-in exploit rule %q (%s) does not exist on this version — skipping it and any exclusions referencing it", rule.Name, rule.ID)
+			return "", nil
+		}
 		// For system rules, the ID remains the same
 		return rule.ID, nil
 	}
 
+	// Plain INSERT, no upsert: ImportAllData runs clearExistingData in this same
+	// transaction, and that does `DELETE FROM exploit_block_rules WHERE
+	// is_system = false`, so no user rule can survive to conflict with. An
+	// ON CONFLICT (name, category) clause used to sit here and there is no
+	// unique index behind those columns, so Postgres rejected it at plan time
+	// (42P10) — every restore carrying a user-created rule failed (#259).
 	query := `
 		INSERT INTO exploit_block_rules (name, category, pattern, pattern_type, description, severity, enabled, is_system)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, false)
-		ON CONFLICT (name, category) DO UPDATE SET
-			pattern = EXCLUDED.pattern,
-			pattern_type = EXCLUDED.pattern_type,
-			description = EXCLUDED.description,
-			severity = EXCLUDED.severity,
-			enabled = EXCLUDED.enabled,
-			updated_at = NOW()
 		RETURNING id
 	`
 	var newID string
