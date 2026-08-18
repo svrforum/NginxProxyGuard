@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 
@@ -310,25 +311,43 @@ func (h *CertificateHandler) Download(c echo.Context) error {
 		})
 	}
 
-	// Issuance and renewal both write the status and the PEM in one update, so
-	// reaching here means the row predates that or was written some other way.
-	// The old message ("Certificate data not available") named the symptom and
-	// left the operator with nowhere to go, so say what is missing and what
-	// recovers it. (#253)
+	// Rows damaged by the pre-v2.45.0 write path are marked issued but have no
+	// key material in the database. nginx is still serving them from disk, so
+	// read the files back and repair the row before giving up. (#253)
+	if cert.CertificatePEM == "" || cert.PrivateKeyPEM == "" {
+		if _, err := h.service.RecoverMaterialFromDisk(c.Request().Context(), cert); err != nil {
+			// A row we cannot repair is not a server fault: fall through to the
+			// message that tells the operator what to do. Only a genuine failure
+			// (e.g. the repair write itself) is a 500.
+			if !errors.Is(err, service.ErrCertMaterialUnrecoverable) {
+				return internalError(c, "recover certificate material", err)
+			}
+			log.Printf("[Certificate] self-heal skipped for %s: %v", cert.ID, err)
+		}
+	}
+
+	// Still empty: the files are gone too, so nothing on this server can
+	// reconstruct the key. Name what is missing and the action that actually
+	// works — the previous wording sent Let's Encrypt users to Renew (the very
+	// action that was destroying the row) and custom-certificate users to the
+	// New Certificate form, which creates a separate entry instead of fixing
+	// this one. (#253)
 	if cert.CertificatePEM == "" || cert.PrivateKeyPEM == "" {
 		missing := "the certificate and its private key are"
 		switch {
+		case cert.CertificatePEM == "" && cert.PrivateKeyPEM == "":
+			// both are gone: keep the default wording
 		case cert.CertificatePEM == "":
 			missing = "the certificate is"
-		case cert.PrivateKeyPEM == "":
+		default:
 			missing = "the private key is"
 		}
-		action := "Renew it to fetch the material again."
+		action := "Renew it to issue a fresh certificate."
 		if cert.Provider == model.CertProviderCustom {
-			action = "Upload the certificate and key again."
+			action = "Open this certificate and use Update to upload the certificate and key again — adding a new certificate would create a separate entry instead of restoring this one."
 		}
 		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": fmt.Sprintf("This certificate is marked issued but %s not stored, so there is nothing to download. %s", missing, action),
+			"error": fmt.Sprintf("This certificate is marked issued but %s not stored, and the files on disk could not restore it, so there is nothing to download. %s", missing, action),
 		})
 	}
 

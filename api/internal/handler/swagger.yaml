@@ -6404,6 +6404,10 @@ paths:
         Only issued certificates with stored PEM data can be downloaded. `type=all`
         returns a ZIP; every other type returns a single PEM file. `chain` requires an
         issuer certificate to be present.
+
+        If the stored PEM data is missing but the certificate files are still on disk
+        (rows damaged by the pre-2.45.0 write path), the material is read back from
+        those files, saved to the certificate, and served — no separate repair step.
       security:
         - BearerAuth: []
       parameters:

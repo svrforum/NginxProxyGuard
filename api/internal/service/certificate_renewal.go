@@ -284,17 +284,21 @@ func (s *CertificateService) renewLetsEncrypt(ctx context.Context, cert *model.C
 	cert.PrivateKeyPath = &keyPath
 	cert.ErrorMessage = nil
 
-	// Save new ACME account if we created one
-	if newUser != nil {
-		acmeAccount, err := newUser.ToJSON()
-		if err == nil {
-			cert.AcmeAccount = acmeAccount
-		}
-	}
-
-	if err := s.repo.Update(ctx, cert); err != nil {
+	if err := s.repo.UpdateWithMaterial(ctx, cert); err != nil {
 		s.updateRenewalError(ctx, cert.ID, fmt.Sprintf("failed to update renewed certificate: %v", err))
 		return
+	}
+
+	// Save new ACME account if we created one. Only this branch has an account
+	// to write; the stored one is otherwise left untouched, so a renewal can
+	// never blank it and force a fresh registration next time (#253).
+	if newUser != nil {
+		if acmeAccount, err := newUser.ToJSON(); err == nil && len(acmeAccount) > 0 {
+			cert.AcmeAccount = acmeAccount
+			if err := s.repo.SetAcmeAccount(ctx, cert.ID, acmeAccount); err != nil {
+				log.Printf("[CertificateService] Failed to store ACME account for %s: %v", cert.ID, err)
+			}
+		}
 	}
 
 	s.addCertLog(cert.ID, "success", fmt.Sprintf("Certificate renewed successfully! Expires: %s", result.ExpiresAt.Format("2006-01-02")), "complete")

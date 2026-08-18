@@ -23,7 +23,16 @@ const (
 	CertProviderCustom      = "custom"
 )
 
-// Certificate represents an SSL certificate
+// Certificate represents an SSL certificate.
+//
+// CertificatePEM, PrivateKeyPEM, IssuerCertificatePEM and AcmeAccount are key
+// material and stay out of every JSON representation (`json:"-"`). That makes a
+// marshalled Certificate a LOSSY copy, so it must never be round-tripped
+// through a cache, a backup body or an API response and then written back: a
+// struct that lost its key material used to overwrite the real one and destroy
+// the certificate (#253). Reads that need the material come from
+// CertificateRepository.GetByID; writes that carry it go through
+// UpdateWithMaterial.
 type Certificate struct {
 	ID                   string         `json:"id"`
 	DomainNames          pq.StringArray `json:"domain_names"`

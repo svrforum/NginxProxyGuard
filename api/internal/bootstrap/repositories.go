@@ -113,7 +113,8 @@ func InitRepositories(db *database.DB, redisCache *cache.RedisClient) *Repositor
 		repos.ExploitBlockRule.SetCache(redisCache)
 		repos.RateLimit.SetCache(redisCache)
 		repos.FilterSubscription.SetCache(redisCache)
-		repos.Certificate.SetCache(redisCache)
+		// Certificate is intentionally absent: its rows carry private key
+		// material that a JSON cache round-trip silently drops (#253).
 		repos.Geo.SetCache(redisCache)
 		repos.BotFilter.SetCache(redisCache)
 		log.Println("Valkey cache wired to repositories")

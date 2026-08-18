@@ -2,8 +2,13 @@ package service
 
 import (
 	"context"
+	"crypto/tls"
+	"encoding/pem"
+	"errors"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -257,9 +262,19 @@ func (s *CertificateService) obtainLetsEncryptCert(certID string, domains []stri
 	cert.AcmeAccount = acmeAccount
 	cert.ErrorMessage = nil
 
-	if err := s.repo.Update(ctx, cert); err != nil {
+	if err := s.repo.UpdateWithMaterial(ctx, cert); err != nil {
 		s.updateCertError(ctx, certID, fmt.Sprintf("failed to update certificate: %v", err))
 		return
+	}
+
+	// The ACME account is stored separately (it has its own statement so no
+	// other write can blank it). Losing it does not invalidate the certificate,
+	// it only forces the next renewal to register a new account, so a failure
+	// here is logged rather than failing the issuance.
+	if len(acmeAccount) > 0 {
+		if err := s.repo.SetAcmeAccount(ctx, certID, acmeAccount); err != nil {
+			log.Printf("[CertificateService] Failed to store ACME account for %s: %v", certID, err)
+		}
 	}
 
 	s.addCertLog(certID, "success", fmt.Sprintf("Certificate issued successfully! Expires: %s", result.ExpiresAt.Format("2006-01-02")), "complete")
@@ -317,7 +332,7 @@ func (s *CertificateService) generateSelfSignedCert(certID string, domains []str
 	cert.PrivateKeyPath = &keyPath
 	cert.ErrorMessage = nil
 
-	if err := s.repo.Update(ctx, cert); err != nil {
+	if err := s.repo.UpdateWithMaterial(ctx, cert); err != nil {
 		s.updateCertError(ctx, certID, fmt.Sprintf("failed to update certificate: %v", err))
 		return
 	}
@@ -358,7 +373,9 @@ func (s *CertificateService) UploadCustom(ctx context.Context, req *model.Upload
 	now := time.Now()
 	cert.IssuedAt = &now
 
-	// Create record
+	// Create record. Create returns the key material it stored, so the struct
+	// used for the follow-up path write is still complete — before #253 it was
+	// not, and the follow-up write put the empty PEMs back into the row.
 	cert, err = s.repo.Create(ctx, cert)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create certificate record: %w", err)
@@ -374,6 +391,7 @@ func (s *CertificateService) UploadCustom(ctx context.Context, req *model.Upload
 	cert.CertificatePath = &certPath
 	cert.PrivateKeyPath = &keyPath
 
+	// Paths only — the material was written by Create and must not be rewritten.
 	if err := s.repo.Update(ctx, cert); err != nil {
 		return nil, fmt.Errorf("failed to update certificate paths: %w", err)
 	}
@@ -440,7 +458,7 @@ func (s *CertificateService) UpdateCustom(ctx context.Context, certID string, re
 	cert.Status = model.CertStatusIssued
 	cert.ErrorMessage = nil
 
-	if err := s.repo.Update(ctx, cert); err != nil {
+	if err := s.repo.UpdateWithMaterial(ctx, cert); err != nil {
 		return nil, fmt.Errorf("failed to update certificate: %w", err)
 	}
 
@@ -453,6 +471,105 @@ func (s *CertificateService) UpdateCustom(ctx context.Context, certID string, re
 // GetByID retrieves a certificate by ID
 func (s *CertificateService) GetByID(ctx context.Context, id string) (*model.Certificate, error) {
 	return s.repo.GetByID(ctx, id)
+}
+
+// RecoverMaterialFromDisk repairs a certificate whose key material was emptied
+// in the database by the pre-fix write path (#253) but whose files are still on
+// disk, which is the common case: nginx keeps serving from
+// <certs>/<id>/fullchain.pem + privkey.pem, so the row is recoverable byte for
+// byte. It reads those files back, verifies the key still matches the
+// certificate, persists them, and fills the passed struct in.
+//
+// Returns false (with no error) when there is nothing to recover — the row is
+// intact, or its files are gone and only a fresh issuance/upload can fix it.
+// ErrCertMaterialUnrecoverable means the files on disk cannot restore this row —
+// a data condition (path outside the certs dir, or a mismatched pair), not a
+// server fault. Callers should report the actionable message, not a 500.
+var ErrCertMaterialUnrecoverable = errors.New("certificate material cannot be recovered from disk")
+
+func (s *CertificateService) RecoverMaterialFromDisk(ctx context.Context, cert *model.Certificate) (bool, error) {
+	if cert == nil || (cert.CertificatePEM != "" && cert.PrivateKeyPEM != "") {
+		return false, nil
+	}
+	if cert.CertificatePath == nil || cert.PrivateKeyPath == nil ||
+		*cert.CertificatePath == "" || *cert.PrivateKeyPath == "" {
+		return false, nil
+	}
+
+	certPath, err := s.certFileUnderCertsDir(*cert.CertificatePath)
+	if err != nil {
+		return false, fmt.Errorf("%w: %v", ErrCertMaterialUnrecoverable, err)
+	}
+	keyPath, err := s.certFileUnderCertsDir(*cert.PrivateKeyPath)
+	if err != nil {
+		return false, fmt.Errorf("%w: %v", ErrCertMaterialUnrecoverable, err)
+	}
+
+	fullchain, err := os.ReadFile(certPath)
+	if err != nil {
+		return false, nil // no file on disk: nothing to recover from
+	}
+	keyPEM, err := os.ReadFile(keyPath)
+	if err != nil {
+		return false, nil
+	}
+
+	// The file stores the fullchain: the leaf first, then the issuer chain.
+	leafPEM, issuerPEM := splitFullchain(string(fullchain))
+	if leafPEM == "" || len(keyPEM) == 0 {
+		return false, nil
+	}
+
+	// Only persist material that actually belongs together — a mismatched pair
+	// would replace "nothing to download" with a download that cannot be used.
+	if _, err := tls.X509KeyPair([]byte(leafPEM), keyPEM); err != nil {
+		return false, fmt.Errorf("%w: files on disk do not form a valid key pair: %v", ErrCertMaterialUnrecoverable, err)
+	}
+
+	if err := s.repo.RestoreMaterial(ctx, cert.ID, leafPEM, string(keyPEM), issuerPEM); err != nil {
+		return false, err
+	}
+
+	cert.CertificatePEM = leafPEM
+	cert.PrivateKeyPEM = string(keyPEM)
+	cert.IssuerCertificatePEM = issuerPEM
+
+	log.Printf("[CertificateService] Restored certificate material for %s from %s", cert.ID, certPath)
+	return true, nil
+}
+
+// certFileUnderCertsDir resolves a stored certificate file path and refuses
+// anything outside the configured certificates directory. The paths come from
+// our own writes, never from user input, but this is the one place that turns a
+// database string into a file read, so it stays bounded.
+func (s *CertificateService) certFileUnderCertsDir(path string) (string, error) {
+	clean := filepath.Clean(path)
+	base := filepath.Clean(s.certsPath)
+	if !strings.HasPrefix(clean, base+string(filepath.Separator)) {
+		return "", fmt.Errorf("certificate file %q is outside the certificates directory", path)
+	}
+	return clean, nil
+}
+
+// splitFullchain splits a fullchain PEM into the leaf certificate and the
+// remaining issuer chain, the same layout SaveCertificateFiles writes.
+func splitFullchain(fullchain string) (leafPEM, issuerPEM string) {
+	rest := []byte(fullchain)
+	var leaf strings.Builder
+	var issuer strings.Builder
+	for {
+		block, remainder := pem.Decode(rest)
+		if block == nil {
+			break
+		}
+		rest = remainder
+		if leaf.Len() == 0 {
+			pem.Encode(&leaf, block)
+			continue
+		}
+		pem.Encode(&issuer, block)
+	}
+	return leaf.String(), issuer.String()
 }
 
 // List retrieves certificates with pagination, search, sort, and filters

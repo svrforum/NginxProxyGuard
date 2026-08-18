@@ -4,45 +4,29 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
 	"github.com/lib/pq"
 	"nginx-proxy-guard/internal/database"
 	"nginx-proxy-guard/internal/model"
-	"nginx-proxy-guard/pkg/cache"
 )
 
+// CertificateRepository is deliberately NOT cached. A certificate row carries
+// private key material in columns the model tags `json:"-"` (certificate_pem,
+// private_key_pem, issuer_certificate_pem, acme_account), so a JSON round-trip
+// through Valkey returned a certificate with the key material silently missing —
+// and the callers that then wrote that struct back destroyed the row (#253).
+// The cache also had no hot path left to serve: nginx config generation does not
+// look certificates up per host (SyncAllConfigs never calls GetByID); the only
+// callers are proxy-host validation and the certificate screens themselves.
+// Caching key material would be the wrong fix, so there is no cache here.
 type CertificateRepository struct {
-	db    *database.DB
-	cache *cache.RedisClient
+	db *database.DB
 }
 
 func NewCertificateRepository(db *database.DB) *CertificateRepository {
 	return &CertificateRepository{db: db}
-}
-
-// SetCache wires Valkey caching for GetByID, the hot-path lookup during
-// nginx config generation. SyncAllConfigs calls GetByID once per host that
-// has a certificate attached; the cache collapses repeat lookups.
-func (r *CertificateRepository) SetCache(c *cache.RedisClient) {
-	r.cache = c
-}
-
-const certCacheTTL = 60 * time.Second
-
-func (r *CertificateRepository) cacheKey(id string) string {
-	return "certificate:id:" + id
-}
-
-func (r *CertificateRepository) invalidateCert(ctx context.Context, id string) {
-	if r.cache == nil {
-		return
-	}
-	if err := r.cache.Delete(ctx, r.cacheKey(id)); err != nil {
-		log.Printf("[Cache] certificate invalidate failed for %s: %v", id, err)
-	}
 }
 
 func (r *CertificateRepository) Create(ctx context.Context, cert *model.Certificate) (*model.Certificate, error) {
@@ -55,13 +39,20 @@ func (r *CertificateRepository) Create(ctx context.Context, cert *model.Certific
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		RETURNING id, domain_names, dns_provider_id, status, provider, auto_renew,
 			expires_at, issued_at, renewal_attempted_at, error_message,
-			certificate_path, private_key_path, created_at, updated_at
+			certificate_path, private_key_path,
+			certificate_pem, private_key_pem, issuer_certificate_pem, acme_account,
+			created_at, updated_at
 	`
 
 	result := &model.Certificate{}
 	var dnsProviderID sql.NullString
 	var expiresAt, issuedAt, renewalAttemptedAt sql.NullTime
 	var errorMessage, certPath, keyPath sql.NullString
+	// The PEM columns MUST come back: callers reassign cert = repo.Create(...)
+	// and a partial RETURNING left them holding a certificate with no key
+	// material, which the follow-up write then persisted (#253).
+	var certPEM, keyPEM, issuerPEM sql.NullString
+	var acmeAccountOut []byte
 
 	// Ensure acme_account is valid JSON
 	acmeAccount := cert.AcmeAccount
@@ -96,6 +87,10 @@ func (r *CertificateRepository) Create(ctx context.Context, cert *model.Certific
 		&errorMessage,
 		&certPath,
 		&keyPath,
+		&certPEM,
+		&keyPEM,
+		&issuerPEM,
+		&acmeAccountOut,
 		&result.CreatedAt,
 		&result.UpdatedAt,
 	)
@@ -111,24 +106,25 @@ func (r *CertificateRepository) Create(ctx context.Context, cert *model.Certific
 	result.ErrorMessage = fromNullString(errorMessage)
 	result.CertificatePath = fromNullString(certPath)
 	result.PrivateKeyPath = fromNullString(keyPath)
+	result.CertificatePEM = fromNullStringValue(certPEM)
+	result.PrivateKeyPEM = fromNullStringValue(keyPEM)
+	result.IssuerCertificatePEM = fromNullStringValue(issuerPEM)
+	result.AcmeAccount = acmeAccountOut
 
 	return result, nil
 }
 
+// GetByID returns the full certificate row, key material included. It is the
+// only read that carries the PEMs and the ACME account, so it must stay
+// complete: acme_account was previously left out of the SELECT, which made
+// every renewal register a brand-new Let's Encrypt account (10 per IP per 3
+// hours) and let the follow-up write blank the stored one (#253).
 func (r *CertificateRepository) GetByID(ctx context.Context, id string) (*model.Certificate, error) {
-	key := r.cacheKey(id)
-	if r.cache != nil {
-		var cached model.Certificate
-		if err := r.cache.Get(ctx, key, &cached); err == nil {
-			return &cached, nil
-		}
-	}
-
 	query := `
 		SELECT c.id, c.domain_names, c.dns_provider_id, c.status, c.provider, c.auto_renew,
 			c.expires_at, c.issued_at, c.renewal_attempted_at, c.error_message,
 			c.certificate_path, c.private_key_path,
-			c.certificate_pem, c.private_key_pem, c.issuer_certificate_pem,
+			c.certificate_pem, c.private_key_pem, c.issuer_certificate_pem, c.acme_account,
 			c.created_at, c.updated_at,
 			d.id, d.name, d.provider_type, d.is_default, d.created_at, d.updated_at
 		FROM certificates c
@@ -141,6 +137,7 @@ func (r *CertificateRepository) GetByID(ctx context.Context, id string) (*model.
 	var expiresAt, issuedAt, renewalAttemptedAt sql.NullTime
 	var errorMessage, certPath, keyPath sql.NullString
 	var certPEM, keyPEM, issuerPEM sql.NullString
+	var acmeAccount []byte
 
 	// DNS Provider fields (nullable)
 	var dpID, dpName, dpType sql.NullString
@@ -163,6 +160,7 @@ func (r *CertificateRepository) GetByID(ctx context.Context, id string) (*model.
 		&certPEM,
 		&keyPEM,
 		&issuerPEM,
+		&acmeAccount,
 		&cert.CreatedAt,
 		&cert.UpdatedAt,
 		&dpID,
@@ -190,6 +188,7 @@ func (r *CertificateRepository) GetByID(ctx context.Context, id string) (*model.
 	cert.CertificatePEM = fromNullStringValue(certPEM)
 	cert.PrivateKeyPEM = fromNullStringValue(keyPEM)
 	cert.IssuerCertificatePEM = fromNullStringValue(issuerPEM)
+	cert.AcmeAccount = acmeAccount
 
 	// Attach DNS provider if exists
 	if dpID.Valid {
@@ -203,11 +202,6 @@ func (r *CertificateRepository) GetByID(ctx context.Context, id string) (*model.
 		}
 	}
 
-	if r.cache != nil {
-		if err := r.cache.Set(ctx, key, cert, certCacheTTL); err != nil {
-			log.Printf("[Cache] Failed to cache certificate %s: %v", id, err)
-		}
-	}
 	return cert, nil
 }
 
@@ -349,25 +343,12 @@ func (r *CertificateRepository) List(ctx context.Context, page, perPage int, sea
 }
 
 func (r *CertificateRepository) DeleteByErrorStatus(ctx context.Context) (int64, error) {
-	// RETURNING id gives us the rows actually deleted so we can drop each one's
-	// per-id cache entry. Skipping invalidation would let GetByID return a
-	// deleted cert for up to 60s after this admin-triggered cleanup runs.
-	rows, err := r.db.QueryContext(ctx, `DELETE FROM certificates WHERE status = 'error' RETURNING id`)
+	result, err := r.db.ExecContext(ctx, `DELETE FROM certificates WHERE status = 'error'`)
 	if err != nil {
 		return 0, fmt.Errorf("failed to delete error certificates: %w", err)
 	}
-	defer rows.Close()
-
-	var deleted int64
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return deleted, fmt.Errorf("failed to scan deleted cert id: %w", err)
-		}
-		r.invalidateCert(ctx, id)
-		deleted++
-	}
-	return deleted, rows.Err()
+	deleted, _ := result.RowsAffected()
+	return deleted, nil
 }
 
 func (r *CertificateRepository) ListByStatus(ctx context.Context, status string) ([]model.Certificate, error) {
@@ -422,21 +403,65 @@ func (r *CertificateRepository) ListByStatus(ctx context.Context, status string)
 	return certs, nil
 }
 
+// Update writes a certificate's metadata: status, timestamps, error message,
+// file paths and auto-renew. It deliberately does NOT touch the key material
+// (certificate_pem, private_key_pem, issuer_certificate_pem, acme_account).
+//
+// Most callers — "mark as renewing", "record a renewal error", "store the file
+// paths" — carry no key material, and rewriting those columns from the struct
+// they happen to hold is what destroyed certificates in #253. Issuance and
+// successful renewal, the only paths that legitimately produce new material,
+// call UpdateWithMaterial instead; the download self-heal calls RestoreMaterial.
 func (r *CertificateRepository) Update(ctx context.Context, cert *model.Certificate) error {
 	query := `
 		UPDATE certificates
 		SET status = $1, expires_at = $2, issued_at = $3, renewal_attempted_at = $4,
 			error_message = $5, certificate_path = $6, private_key_path = $7,
-			certificate_pem = $8, private_key_pem = $9, issuer_certificate_pem = $10,
-			auto_renew = $11, acme_account = $12
-		WHERE id = $13
+			auto_renew = $8
+		WHERE id = $9
 	`
 
-	// Ensure acme_account is valid JSON
-	acmeAccount := cert.AcmeAccount
-	if acmeAccount == nil || len(acmeAccount) == 0 {
-		acmeAccount = []byte("{}")
+	_, err := r.db.ExecContext(ctx, query,
+		cert.Status,
+		toNullTime(cert.ExpiresAt),
+		toNullTime(cert.IssuedAt),
+		toNullTime(cert.RenewalAttemptedAt),
+		toNullString(cert.ErrorMessage),
+		toNullString(cert.CertificatePath),
+		toNullString(cert.PrivateKeyPath),
+		cert.AutoRenew,
+		cert.ID,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to update certificate: %w", err)
 	}
+
+	return nil
+}
+
+// UpdateWithMaterial writes the metadata Update writes plus the certificate's
+// key material. Only issuance, successful renewal and a custom-certificate
+// replacement have new material to store, so only those call it. The ACME
+// account is not part of it — that has its own statement, SetAcmeAccount.
+//
+// It refuses an empty certificate or private key rather than persisting one:
+// every historical instance of the certificate/key columns being emptied came
+// from a caller that had lost the material, never from an operator asking for
+// it. Deleting a certificate is how material is removed.
+func (r *CertificateRepository) UpdateWithMaterial(ctx context.Context, cert *model.Certificate) error {
+	if cert.CertificatePEM == "" || cert.PrivateKeyPEM == "" {
+		return fmt.Errorf("refusing to store certificate %s without certificate and private key material", cert.ID)
+	}
+
+	query := `
+		UPDATE certificates
+		SET status = $1, expires_at = $2, issued_at = $3, renewal_attempted_at = $4,
+			error_message = $5, certificate_path = $6, private_key_path = $7,
+			certificate_pem = $8, private_key_pem = $9, issuer_certificate_pem = $10,
+			auto_renew = $11
+		WHERE id = $12
+	`
 
 	_, err := r.db.ExecContext(ctx, query,
 		cert.Status,
@@ -450,7 +475,6 @@ func (r *CertificateRepository) Update(ctx context.Context, cert *model.Certific
 		cert.PrivateKeyPEM,
 		cert.IssuerCertificatePEM,
 		cert.AutoRenew,
-		acmeAccount,
 		cert.ID,
 	)
 
@@ -458,7 +482,52 @@ func (r *CertificateRepository) Update(ctx context.Context, cert *model.Certific
 		return fmt.Errorf("failed to update certificate: %w", err)
 	}
 
-	r.invalidateCert(ctx, cert.ID)
+	return nil
+}
+
+// SetAcmeAccount stores the serialized ACME account for a certificate. It is
+// its own statement because only the two paths that actually register an
+// account (initial issuance, and a renewal that had to create a new one) have
+// one to write — everything else must leave the column alone. Blanking it made
+// every later renewal register a fresh Let's Encrypt account, which the CA rate
+// limits to 10 per IP per 3 hours (#253).
+func (r *CertificateRepository) SetAcmeAccount(ctx context.Context, id string, account []byte) error {
+	if len(account) == 0 {
+		return fmt.Errorf("refusing to store an empty ACME account for certificate %s", id)
+	}
+
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE certificates SET acme_account = $1 WHERE id = $2`, account, id)
+	if err != nil {
+		return fmt.Errorf("failed to update ACME account: %w", err)
+	}
+	return nil
+}
+
+// RestoreMaterial writes only the key material, for the download path's
+// self-heal: a row damaged by the pre-fix Update whose files are still on disk
+// gets its PEM columns filled back in without touching status, paths or the
+// ACME account. Empty material is refused for the same reason as in
+// UpdateWithMaterial.
+func (r *CertificateRepository) RestoreMaterial(ctx context.Context, id, certPEM, keyPEM, issuerPEM string) error {
+	if certPEM == "" || keyPEM == "" {
+		return fmt.Errorf("refusing to restore certificate %s without certificate and private key material", id)
+	}
+
+	result, err := r.db.ExecContext(ctx, `
+		UPDATE certificates
+		SET certificate_pem = $1, private_key_pem = $2, issuer_certificate_pem = $3,
+			updated_at = NOW()
+		WHERE id = $4
+	`, certPEM, keyPEM, issuerPEM, id)
+	if err != nil {
+		return fmt.Errorf("failed to restore certificate material: %w", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return model.ErrNotFound
+	}
 	return nil
 }
 
@@ -471,7 +540,6 @@ func (r *CertificateRepository) ClearError(ctx context.Context, id string) error
 	if rowsAffected == 0 {
 		return fmt.Errorf("certificate not found")
 	}
-	r.invalidateCert(ctx, id)
 	return nil
 }
 
@@ -486,7 +554,6 @@ func (r *CertificateRepository) Delete(ctx context.Context, id string) error {
 		return model.ErrNotFound
 	}
 
-	r.invalidateCert(ctx, id)
 	return nil
 }
 
@@ -608,29 +675,24 @@ func (r *CertificateRepository) GetExpiringSoon(ctx context.Context, days int) (
 // Assumes a single API instance (the deployment model): at boot no goroutine
 // of this process can be mid-renewal.
 func (r *CertificateRepository) RecoverInterruptedStates(ctx context.Context) (recovered int64, failed int64, err error) {
-	// RETURNING id + per-row invalidation mirrors DeleteByErrorStatus: these
-	// raw UPDATEs change status/error_message, so a stale GetByID cache entry
-	// would otherwise serve the pre-restart status for up to 60s after recovery.
-	recovered, err = r.updateAndInvalidate(ctx, `
+	recovered, err = r.updateAndCount(ctx, `
 		UPDATE certificates
 		SET status = 'issued',
 			error_message = 'renewal interrupted by API restart; will retry on schedule',
 			updated_at = NOW()
 		WHERE status = 'renewing' AND certificate_pem IS NOT NULL AND certificate_pem != ''
-		RETURNING id
 	`)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to recover interrupted renewals: %w", err)
 	}
 
-	failed, err = r.updateAndInvalidate(ctx, `
+	failed, err = r.updateAndCount(ctx, `
 		UPDATE certificates
 		SET status = 'error',
 			error_message = 'issuance interrupted by API restart; please retry',
 			updated_at = NOW()
 		WHERE status IN ('pending', 'renewing')
 			AND (certificate_pem IS NULL OR certificate_pem = '')
-		RETURNING id
 	`)
 	if err != nil {
 		return recovered, 0, fmt.Errorf("failed to fail interrupted issuances: %w", err)
@@ -639,25 +701,14 @@ func (r *CertificateRepository) RecoverInterruptedStates(ctx context.Context) (r
 	return recovered, failed, nil
 }
 
-// updateAndInvalidate runs an UPDATE ... RETURNING id query, drops each
-// affected row's per-id cache entry, and returns the number of rows changed.
-func (r *CertificateRepository) updateAndInvalidate(ctx context.Context, query string) (int64, error) {
-	rows, err := r.db.QueryContext(ctx, query)
+// updateAndCount runs an UPDATE and returns the number of rows changed.
+func (r *CertificateRepository) updateAndCount(ctx context.Context, query string) (int64, error) {
+	result, err := r.db.ExecContext(ctx, query)
 	if err != nil {
 		return 0, err
 	}
-	defer rows.Close()
-
-	var affected int64
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return affected, fmt.Errorf("failed to scan recovered cert id: %w", err)
-		}
-		r.invalidateCert(ctx, id)
-		affected++
-	}
-	return affected, rows.Err()
+	affected, _ := result.RowsAffected()
+	return affected, nil
 }
 
 // Helper functions
