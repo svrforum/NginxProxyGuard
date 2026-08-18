@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"text/template"
 
@@ -230,4 +231,51 @@ func (m *Manager) GenerateAllRedirectConfigs(ctx context.Context, hosts []model.
 	}
 
 	return nil
+}
+
+// GenerateAllRedirectConfigsAndReload reconciles every redirect config and
+// applies the resulting set to the running nginx instance. Generation and the
+// test/reload are serialized under the global nginx lock so another config
+// operation cannot interleave between the file sweep and reload. The reload
+// runs through the retrying path, which also performs the post-reload health
+// probe (SyncAllConfigs' plain ReloadNginx does not), so a probe failure at
+// boot surfaces here as an error.
+//
+// Unlike normal user-driven updates, this startup reconciliation deliberately
+// does not restore swept files when applying the new set fails: an old file may
+// belong to an unsafe legacy redirect row. Keeping it absent on disk ensures a
+// later successful reload cannot reactivate it.
+func (m *Manager) GenerateAllRedirectConfigsAndReload(ctx context.Context, hosts []model.RedirectHost) error {
+	return m.executeWithLock(ctx, func() error {
+		if err := m.GenerateAllRedirectConfigs(ctx, hosts); err != nil {
+			return err
+		}
+		if err := m.testAndReloadNginxWithRetry(ctx); err != nil {
+			return fmt.Errorf("failed to apply redirect config sync to nginx: %w", err)
+		}
+		return nil
+	})
+}
+
+// nginxUnreachablePattern matches docker/exec failures that mean there is no
+// nginx container to talk to, as opposed to a configuration problem. At API
+// boot this is the normal case for production compose, where nginx has
+// `depends_on: api` and therefore starts only afterwards.
+var nginxUnreachablePattern = regexp.MustCompile(
+	// Only signals that actually prove nginx is NOT running belong here. A dead
+	// docker socket or a missing binary can happen while nginx is up and serving
+	// stale config, and that case must stay loud.
+	`(?i)(is not running|no such container)`,
+)
+
+// IsNginxUnreachableError reports whether err comes from nginx being
+// unreachable rather than from a bad configuration. Callers use it to choose a
+// log level: a failed apply against a *running* nginx leaves it serving stale
+// config, while an unreachable nginx simply reads the synced files when it
+// starts.
+func IsNginxUnreachableError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return nginxUnreachablePattern.MatchString(err.Error())
 }

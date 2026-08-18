@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"nginx-proxy-guard/internal/config"
+	"nginx-proxy-guard/internal/nginx"
 	"nginx-proxy-guard/internal/service"
 )
 
@@ -111,23 +112,34 @@ func runStartup(ctx context.Context, c *Container) error {
 		log.Printf("[CloudflareTunnel] startup token sync failed: %v", err)
 	}
 
-	// Sync redirect host configs.
-	log.Println("[Startup] Syncing all redirect host configs...")
-	redirectHosts, _, err := c.Repositories.RedirectHost.List(ctx, 1, config.MaxWAFRulesLimit)
-	if err != nil {
-		log.Printf("[Startup] Warning: failed to list redirect hosts: %v", err)
-	} else if err := c.Nginx.GenerateAllRedirectConfigs(ctx, redirectHosts); err != nil {
-		log.Printf("[Startup] Warning: failed to sync redirect host configs: %v", err)
-	} else {
-		log.Println("[Startup] Redirect host configs synced successfully")
-	}
-
 	// Regenerate default server config.
 	log.Println("[Startup] Regenerating default server config...")
 	if err := c.Nginx.GenerateDefaultServerConfig(ctx, directIPAction); err != nil {
 		log.Printf("[Startup] Warning: failed to regenerate default server config: %v", err)
 	} else {
 		log.Printf("[Startup] Default server config regenerated successfully (action: %s)\n", directIPAction)
+	}
+
+	// Sync redirect host configs. This is the last nginx-touching step of
+	// startup on purpose: it sweeps every redirect_host_*.conf before
+	// regenerating the valid enabled ones, and applies the result itself
+	// (test + reload). Anything writing nginx config after it would ride an
+	// unreloaded disk state again.
+	log.Println("[Startup] Syncing all redirect host configs...")
+	redirectHosts, _, err := c.Repositories.RedirectHost.List(ctx, 1, config.MaxWAFRulesLimit)
+	if err != nil {
+		log.Printf("[Startup] Warning: failed to list redirect hosts: %v", err)
+	} else if err := c.Nginx.GenerateAllRedirectConfigsAndReload(ctx, redirectHosts); err != nil {
+		if nginx.IsNginxUnreachableError(err) {
+			// Expected on a production cold start: compose has nginx
+			// depends_on: api, so nginx is not up yet and will read the
+			// freshly synced files when it starts.
+			log.Printf("[Startup] Redirect host configs synced on disk; nginx is not reachable yet, so it will pick them up when it starts: %v", err)
+		} else {
+			log.Printf("[Startup] ERROR: failed to apply redirect host config sync — if nginx is already running it may still be serving removed redirect configs until the next successful reload: %v", err)
+		}
+	} else {
+		log.Println("[Startup] Redirect host configs synced and applied successfully")
 	}
 
 	// Surface the default-credentials risk in container logs (H1). The
