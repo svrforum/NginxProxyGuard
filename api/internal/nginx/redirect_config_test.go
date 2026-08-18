@@ -59,6 +59,47 @@ func TestGenerateAllRedirectConfigsSkipsOnlyInvalidEnabledHost(t *testing.T) {
 	}
 }
 
+func TestGenerateAllRedirectConfigsAndReloadAppliesStaleRemoval(t *testing.T) {
+	configDir := t.TempDir()
+	stale := filepath.Join(configDir, "redirect_host_legacy.example.com.conf")
+	if err := os.WriteFile(stale, []byte("# stale legacy config\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cli := &fakeNginxCLI{}
+	manager := &Manager{configPath: configDir, httpPort: "80", httpsPort: "443", cli: cli}
+	if err := manager.GenerateAllRedirectConfigsAndReload(context.Background(), nil); err != nil {
+		t.Fatalf("startup redirect sync failed: %v", err)
+	}
+	if _, err := os.Stat(stale); !os.IsNotExist(err) {
+		t.Fatalf("stale redirect config was not removed: %v", err)
+	}
+	if cli.testCalls != 1 || cli.reloadCalls != 1 {
+		t.Fatalf("nginx calls = test:%d reload:%d, want test:1 reload:1", cli.testCalls, cli.reloadCalls)
+	}
+}
+
+func TestGenerateAllRedirectConfigsAndReloadReturnsApplyFailure(t *testing.T) {
+	configDir := t.TempDir()
+	stale := filepath.Join(configDir, "redirect_host_unsafe.example.com.conf")
+	if err := os.WriteFile(stale, []byte("# stale unsafe config\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cli := &fakeNginxCLI{reloadErrs: []error{errors.New("reload failed: permission denied")}}
+	manager := &Manager{configPath: configDir, httpPort: "80", httpsPort: "443", cli: cli}
+	err := manager.GenerateAllRedirectConfigsAndReload(context.Background(), nil)
+	if err == nil {
+		t.Fatal("expected reload failure")
+	}
+	if cli.testCalls != 1 || cli.reloadCalls != 1 {
+		t.Fatalf("nginx calls = test:%d reload:%d, want test:1 reload:1", cli.testCalls, cli.reloadCalls)
+	}
+	if _, statErr := os.Stat(stale); !os.IsNotExist(statErr) {
+		t.Fatalf("failed apply restored an unsafe stale config: %v", statErr)
+	}
+}
+
 func TestBulkRollbackDoesNotRestoreUnsafeRedirectConfig(t *testing.T) {
 	configDir := t.TempDir()
 	cli := &fakeNginxCLI{testErrs: []error{

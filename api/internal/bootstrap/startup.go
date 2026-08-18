@@ -116,10 +116,10 @@ func runStartup(ctx context.Context, c *Container) error {
 	redirectHosts, _, err := c.Repositories.RedirectHost.List(ctx, 1, config.MaxWAFRulesLimit)
 	if err != nil {
 		log.Printf("[Startup] Warning: failed to list redirect hosts: %v", err)
-	} else if err := c.Nginx.GenerateAllRedirectConfigs(ctx, redirectHosts); err != nil {
-		log.Printf("[Startup] Warning: failed to sync redirect host configs: %v", err)
+	} else if err := c.Nginx.GenerateAllRedirectConfigsAndReload(ctx, redirectHosts); err != nil {
+		log.Printf("[Startup] ERROR: failed to sync and apply redirect host configs; running nginx may still have stale redirects: %v", err)
 	} else {
-		log.Println("[Startup] Redirect host configs synced successfully")
+		log.Println("[Startup] Redirect host configs synced and applied successfully")
 	}
 
 	// Regenerate default server config.

@@ -231,3 +231,24 @@ func (m *Manager) GenerateAllRedirectConfigs(ctx context.Context, hosts []model.
 
 	return nil
 }
+
+// GenerateAllRedirectConfigsAndReload reconciles every redirect config and
+// applies the resulting set to the running nginx instance. Generation and the
+// test/reload are serialized under the global nginx lock so another config
+// operation cannot interleave between the file sweep and reload.
+//
+// Unlike normal user-driven updates, this startup reconciliation deliberately
+// does not restore swept files when applying the new set fails: an old file may
+// belong to an unsafe legacy redirect row. Keeping it absent on disk ensures a
+// later successful reload cannot reactivate it.
+func (m *Manager) GenerateAllRedirectConfigsAndReload(ctx context.Context, hosts []model.RedirectHost) error {
+	return m.executeWithLock(ctx, func() error {
+		if err := m.GenerateAllRedirectConfigs(ctx, hosts); err != nil {
+			return err
+		}
+		if err := m.testAndReloadNginxWithRetry(ctx); err != nil {
+			return fmt.Errorf("failed to apply redirect config sync to nginx: %w", err)
+		}
+		return nil
+	})
+}
