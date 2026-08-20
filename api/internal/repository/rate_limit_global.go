@@ -68,8 +68,11 @@ func (r *GlobalRateLimitRepository) Upsert(ctx context.Context, req *model.Updat
 	if req.LimitResponse > 0 {
 		cur.LimitResponse = req.LimitResponse
 	}
-	// Whitelist can legitimately be cleared to empty.
-	cur.WhitelistIPs = req.WhitelistIPs
+	// Absent keeps the stored list; "" clears it. Assigning unconditionally meant
+	// any partial update that left the field out silently wiped it (#263).
+	if req.WhitelistIPs != nil {
+		cur.WhitelistIPs = *req.WhitelistIPs
+	}
 
 	whitelist := sql.NullString{String: cur.WhitelistIPs, Valid: cur.WhitelistIPs != ""}
 	if cur.ID == "" {

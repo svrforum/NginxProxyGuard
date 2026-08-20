@@ -5,15 +5,30 @@ map $request_uri $rate_limit_key_{{sanitizeID .Host.ID}} {
     ~*\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot|webp|avif|mp4|webm|pdf|zip|tar|gz|rar)(\?.*)?$  "";
     default  ${{if eq .RateLimit.LimitBy "uri"}}request_uri{{else if eq .RateLimit.LimitBy "ip_uri"}}binary_remote_addr$request_uri{{else}}binary_remote_addr{{end}};
 }
-{{if $.GlobalTrustedIPs}}
-# Global trusted IPs bypass rate limiting (empty key = no rate limit)
-map $trusted_ip_{{sanitizeID .Host.ID}} $rate_final_key_{{sanitizeID .Host.ID}} {
-    1       "";
-    default $rate_limit_key_{{sanitizeID .Host.ID}};
+{{$id := sanitizeID .Host.ID}}{{$rateKey := printf "$rate_limit_key_%s" $id}}{{$exceptions := ipWhitelist .RateLimit.WhitelistIPs}}
+{{- if $exceptions}}
+# Rate limit exceptions bypass the zone (empty key = no rate limit)
+geo $rate_wl_{{$id}} {
+    default 0;
+{{- range $exceptions}}
+    {{.}} 1;
+{{- end}}
 }
-limit_req_zone $rate_final_key_{{sanitizeID .Host.ID}} zone=rate_{{sanitizeID .Host.ID}}:{{.RateLimit.ZoneSize}} rate={{.RateLimit.RequestsPerSecond}}r/s;
-{{else}}
-limit_req_zone $rate_limit_key_{{sanitizeID .Host.ID}} zone=rate_{{sanitizeID .Host.ID}}:{{.RateLimit.ZoneSize}} rate={{.RateLimit.RequestsPerSecond}}r/s;
-{{end}}
+map $rate_wl_{{$id}} $rate_wl_key_{{$id}} {
+    1       "";
+    default {{$rateKey}};
+}
+{{- $rateKey = printf "$rate_wl_key_%s" $id}}
+{{- end}}
+{{- if $.GlobalTrustedIPs}}
+# Global trusted IPs bypass rate limiting (empty key = no rate limit)
+map $trusted_ip_{{$id}} $rate_final_key_{{$id}} {
+    1       "";
+    default {{$rateKey}};
+}
+{{- $rateKey = printf "$rate_final_key_%s" $id}}
+{{- end}}
+limit_req_zone {{$rateKey}} zone=rate_{{$id}}:{{.RateLimit.ZoneSize}} rate={{.RateLimit.RequestsPerSecond}}r/s;
+
 {{end}}{{end}}
 

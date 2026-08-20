@@ -3522,8 +3522,10 @@ paths:
         ignored when `<= 0` and string fields when empty, so those keep their
         stored value.
 
-        `whitelist_ips` is the exception — it is always written from the request,
-        so omitting it **clears** the stored whitelist.
+        `whitelist_ips` is nullable like `enabled`: omit it to keep the stored
+        list, or send `""` to clear it. Entries must be IP addresses or CIDR
+        ranges — anything else is rejected with 400, because the list is now
+        rendered into the nginx config rather than stored and ignored.
 
         On success all proxy host configs are regenerated before the response is
         sent.
@@ -10923,7 +10925,10 @@ components:
           description: HTTP status returned to limited requests, e.g. 429.
         whitelist_ips:
           type: string
-          description: IPs exempt from the limit. Free-form text, not an array.
+          description: >-
+            Comma- or newline-separated IPs and CIDR ranges exempt from the
+            limit. Stored as text, not an array. A `# comment` suffix is
+            allowed; entries are normalized to their network address.
         disable_global:
           type: boolean
           description: |
@@ -12039,10 +12044,10 @@ components:
     UpdateGlobalRateLimit:
       type: object
       description: |
-        Partial update of the global rate limit default. Only `enabled` is
-        nullable: numeric fields are ignored when `<= 0` and string fields when
-        empty. `whitelist_ips` is always written from the request, so omitting
-        it clears the stored value.
+        Partial update of the global rate limit default. `enabled` and
+        `whitelist_ips` are nullable: numeric fields are ignored when `<= 0` and
+        other string fields when empty. Omitting `whitelist_ips` keeps the stored
+        list; sending `""` clears it.
       properties:
         enabled:
           type: boolean
@@ -12065,7 +12070,11 @@ components:
           description: Omit or send `0` to keep the stored value
         whitelist_ips:
           type: string
-          description: Always overwrites — omitting this field clears the stored whitelist
+          nullable: true
+          description: >-
+            Comma- or newline-separated IPs and CIDR ranges exempt from the
+            limit. Omit to keep the stored list, send "" to clear it. Invalid
+            entries are rejected with 400.
     GlobalSecurityHeaders:
       type: object
       description: |
@@ -15265,7 +15274,9 @@ components:
         non-zero — sending 0 (or "" for the strings) leaves the stored value
         alone, and on first write falls back to requests_per_second 50,
         burst_size 100, zone_size "10m", limit_by "ip", limit_response 429.
-        There is therefore no way to clear whitelist_ips through this endpoint.
+
+        `whitelist_ips` is nullable and does not follow that rule: omitting it
+        keeps the stored list, and sending `""` clears it.
       properties:
         enabled:
           type: boolean
@@ -15282,6 +15293,11 @@ components:
           type: integer
         whitelist_ips:
           type: string
+          nullable: true
+          description: >-
+            Comma- or newline-separated IPs and CIDR ranges exempt from the
+            limit. Omit to keep the stored list, send "" to clear it. Invalid
+            entries are rejected with 400.
         disable_global:
           type: boolean
           description: See RateLimit.disable_global.

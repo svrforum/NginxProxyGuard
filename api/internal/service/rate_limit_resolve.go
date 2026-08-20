@@ -7,6 +7,16 @@ import "nginx-proxy-guard/internal/model"
 // Same 3-state as the other features. The nginx limit_req zone is per-host, so
 // the inherited result carries the host's ID (for a unique zone name) but the
 // global's values.
+//
+// WhitelistIPs follows the same all-or-nothing rule as every other field here
+// and is deliberately NOT unioned: an overriding host uses only its own
+// exception list, an inheriting host only the global one. resolveGeo does union
+// its address list, but for a different reason — those addresses are read by the
+// cloud and bot sections even when geo itself is off, so they have consumers
+// outside the resolved object. The rate-limit list has no such consumer, and
+// unioning would take away an overriding host's ability to narrow the
+// exceptions it grants. Operators wanting a bypass that survives an override
+// have one already: the global trusted-IP list (#263).
 func resolveRateLimit(global *model.GlobalRateLimit, host *model.RateLimit, hostID string) *model.RateLimit {
 	// Override: host runs its own rate limit.
 	if host != nil && host.Enabled {

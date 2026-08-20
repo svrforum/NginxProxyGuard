@@ -384,6 +384,13 @@ function RateLimitSection({ hostId }: { hostId: string }) {
               {t('common:status.saving')}
             </div>
           )}
+          {/* Rejected saves used to vanish into console.error, so a 400 on the
+              exception list read as "the toggle silently doesn't work" (#263). */}
+          {mutation.isError && (
+            <p className="text-xs text-red-600 dark:text-red-400">
+              {mutation.error instanceof Error ? mutation.error.message : t('common:status.error')}
+            </p>
+          )}
         </div>
       )}
     </div>

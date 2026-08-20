@@ -150,6 +150,12 @@ export default function RateLimitTab({ proxyHostId }: SecurityTabProps) {
       >
         {mutation.isPending ? 'Saving...' : 'Save'}
       </button>
+      {mutation.isError && (
+        <p className="text-xs text-red-600 dark:text-red-400">
+          {mutation.error instanceof Error ? mutation.error.message : 'Save failed'}
+        </p>
+      )}
+
     </form>
   );
 }

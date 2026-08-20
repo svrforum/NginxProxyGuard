@@ -874,6 +874,77 @@ func goldenCases() []goldenCase {
 		})
 	}
 
+	// 13-16) rate limiting. Nothing pinned limit_req at all before this, which is
+	// how the exception list shipped for every release without ever being
+	// rendered (#263). The four cases cover the whole key chain: static-file
+	// exclusion alone, plus the global trusted-IP bypass, plus the per-host
+	// exception list, and both bypasses at once.
+	{
+		mkRateLimit := func(whitelist string) *model.RateLimit {
+			return &model.RateLimit{
+				ID:                "00000000-0000-0000-0000-0000000000r1",
+				Enabled:           true,
+				RequestsPerSecond: 10,
+				BurstSize:         20,
+				ZoneSize:          "10m",
+				LimitBy:           "ip",
+				LimitResponse:     429,
+				WhitelistIPs:      whitelist,
+				CreatedAt:         fixtureNow,
+				UpdatedAt:         fixtureNow,
+			}
+		}
+
+		// A deliberately messy list: comma AND newline separated, a duplicate, a
+		// prefix with host bits set (nginx rejects those), a trailing comment, and
+		// one entry that is not an address at all. Rows written before validation
+		// existed can hold exactly this, and every one of them must be handled at
+		// render time rather than reaching nginx.
+		const messyWhitelist = "192.0.2.10, 198.51.100.0/24\n192.0.2.10\n10.1.2.3/8 # office\nnot-an-ip"
+
+		host := goldenBaseHost("00000000-0000-0000-0000-000000000a0d", "ratelimit.example.com")
+		cases = append(cases, goldenCase{
+			name: "rate_limit_basic",
+			data: ProxyHostConfigData{
+				Host:           host,
+				GlobalSettings: baseGlobalSettings(),
+				RateLimit:      mkRateLimit(""),
+			},
+		})
+
+		hostTrusted := goldenBaseHost("00000000-0000-0000-0000-000000000a0e", "ratelimit-trusted.example.com")
+		cases = append(cases, goldenCase{
+			name: "rate_limit_trusted_ips",
+			data: ProxyHostConfigData{
+				Host:             hostTrusted,
+				GlobalSettings:   baseGlobalSettings(),
+				GlobalTrustedIPs: []string{"192.0.2.10", "192.0.2.0/24"},
+				RateLimit:        mkRateLimit(""),
+			},
+		})
+
+		hostWL := goldenBaseHost("00000000-0000-0000-0000-000000000a0f", "ratelimit-whitelist.example.com")
+		cases = append(cases, goldenCase{
+			name: "rate_limit_whitelist",
+			data: ProxyHostConfigData{
+				Host:           hostWL,
+				GlobalSettings: baseGlobalSettings(),
+				RateLimit:      mkRateLimit(messyWhitelist),
+			},
+		})
+
+		hostBoth := goldenBaseHost("00000000-0000-0000-0000-000000000a10", "ratelimit-both.example.com")
+		cases = append(cases, goldenCase{
+			name: "rate_limit_whitelist_and_trusted",
+			data: ProxyHostConfigData{
+				Host:             hostBoth,
+				GlobalSettings:   baseGlobalSettings(),
+				GlobalTrustedIPs: []string{"192.0.2.10"},
+				RateLimit:        mkRateLimit("203.0.113.5"),
+			},
+		})
+	}
+
 	return cases
 }
 

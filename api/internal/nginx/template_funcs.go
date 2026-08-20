@@ -33,6 +33,14 @@ func GetTemplateFuncMap(apiHost string) template.FuncMap {
 			// Return per-host WAF config file
 			return fmt.Sprintf("host_%s.conf", h.ID)
 		},
+		"ipWhitelist": func(s string) []string {
+			// Entries nginx can actually put in a geo block. Anything else is
+			// dropped here rather than at nginx: this column predates its own
+			// validation, so old rows can hold junk, and one bad token inside a
+			// geo block is an [emerg] that blocks the reload for every host.
+			valid, _ := model.ParseIPWhitelist(s)
+			return valid
+		},
 		"sanitizeID": func(id string) string {
 			// Replace hyphens with underscores for nginx zone names
 			return strings.ReplaceAll(id, "-", "_")

@@ -84,6 +84,17 @@ func (r *RateLimitRepository) GetByProxyHostID(ctx context.Context, proxyHostID 
 	return &rl, nil
 }
 
+// whitelistParam maps the request's tri-state exception list onto the SQL
+// parameter the COALESCE in Upsert expects: NULL keeps whatever is stored, any
+// non-NULL value — the empty string included — replaces it. Mapping "" to NULL
+// is what made the list impossible to clear (#263).
+func whitelistParam(v *string) interface{} {
+	if v == nil {
+		return nil
+	}
+	return *v
+}
+
 func (r *RateLimitRepository) Upsert(ctx context.Context, proxyHostID string, req *model.CreateRateLimitRequest) (*model.RateLimit, error) {
 	query := `
 		INSERT INTO rate_limits (proxy_host_id, enabled, requests_per_second, burst_size,
@@ -109,7 +120,7 @@ func (r *RateLimitRepository) Upsert(ctx context.Context, proxyHostID string, re
 
 	err := r.db.QueryRowContext(ctx, query,
 		proxyHostID, req.Enabled, req.RequestsPerSecond, req.BurstSize,
-		req.ZoneSize, req.LimitBy, req.LimitResponse, sql.NullString{String: req.WhitelistIPs, Valid: req.WhitelistIPs != ""},
+		req.ZoneSize, req.LimitBy, req.LimitResponse, whitelistParam(req.WhitelistIPs),
 		req.DisableGlobal,
 	).Scan(
 		&rl.ID, &rl.ProxyHostID, &rl.Enabled, &rl.RequestsPerSecond, &rl.BurstSize,

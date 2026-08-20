@@ -33,6 +33,27 @@ func (h *SecurityHandler) UpsertRateLimit(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return badRequestError(c, "Invalid request body")
 	}
+	// The exception list is spliced into an nginx geo block, so it stops being
+	// free-form the moment it is rendered. Reject bad entries here rather than
+	// letting one reach nginx (#263) — but only entries the caller CHANGED.
+	// This column was never validated before, so pre-upgrade rows can hold
+	// anything, and the UI echoes the stored value back on every save. Strict
+	// validation of the echo froze the whole form for such rows: enabled,
+	// disable_global, every field 400'd until the operator fixed a value the
+	// error message was the first to ever mention. Unchanged values pass
+	// through — render-time filtering already keeps them out of nginx — and the
+	// moment the operator edits the field, the strict check applies.
+	if req.WhitelistIPs != nil {
+		stored := ""
+		if cur, err := h.securityService.GetRateLimit(c.Request().Context(), proxyHostID); err == nil && cur != nil {
+			stored = cur.WhitelistIPs
+		}
+		if *req.WhitelistIPs != stored {
+			if err := model.ValidateIPWhitelist(*req.WhitelistIPs); err != nil {
+				return badRequestError(c, err.Error())
+			}
+		}
+	}
 
 	rateLimit, err := h.securityService.UpsertRateLimit(c.Request().Context(), proxyHostID, &req)
 	if err != nil {
@@ -324,6 +345,19 @@ func (h *SecurityHandler) UpdateGlobalRateLimit(c echo.Context) error {
 	var req model.UpdateGlobalRateLimitRequest
 	if err := c.Bind(&req); err != nil {
 		return badRequestError(c, "Invalid request body")
+	}
+	// Same grandfather rule as the per-host endpoint: validate only a CHANGED
+	// list, so a pre-validation row cannot freeze the Global Rate Limit form.
+	if req.WhitelistIPs != nil {
+		stored := ""
+		if cur, err := h.securityService.GetGlobalRateLimit(c.Request().Context()); err == nil && cur != nil {
+			stored = cur.WhitelistIPs
+		}
+		if *req.WhitelistIPs != stored {
+			if err := model.ValidateIPWhitelist(*req.WhitelistIPs); err != nil {
+				return badRequestError(c, err.Error())
+			}
+		}
 	}
 
 	g, err := h.securityService.UpdateGlobalRateLimit(c.Request().Context(), &req)

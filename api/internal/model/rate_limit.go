@@ -1,6 +1,11 @@
 package model
 
-import "time"
+import (
+	"fmt"
+	"net"
+	"strings"
+	"time"
+)
 
 // RateLimit represents rate limiting configuration for a proxy host
 type RateLimit struct {
@@ -28,8 +33,12 @@ type CreateRateLimitRequest struct {
 	ZoneSize          string `json:"zone_size,omitempty"`
 	LimitBy           string `json:"limit_by,omitempty"`
 	LimitResponse     int    `json:"limit_response,omitempty"`
-	WhitelistIPs      string `json:"whitelist_ips,omitempty"`
-	DisableGlobal     *bool  `json:"disable_global,omitempty"`
+	// WhitelistIPs is a pointer so "" can mean "clear it". As a plain string the
+	// repository could not tell an omitted field from a cleared one, mapped both
+	// to NULL, and COALESCE brought the old list back — the per-host exception
+	// list could never be emptied once set (#263).
+	WhitelistIPs  *string `json:"whitelist_ips,omitempty"`
+	DisableGlobal *bool   `json:"disable_global,omitempty"`
 }
 
 // GlobalRateLimit is the singleton global rate-limit default hosts inherit
@@ -56,7 +65,85 @@ type UpdateGlobalRateLimitRequest struct {
 	ZoneSize          string `json:"zone_size,omitempty"`
 	LimitBy           string `json:"limit_by,omitempty"`
 	LimitResponse     int    `json:"limit_response,omitempty"`
-	WhitelistIPs      string `json:"whitelist_ips,omitempty"`
+	// Pointer for the same reason as the per-host request: absent keeps the
+	// stored list, "" clears it. Previously an absent field silently wiped it.
+	WhitelistIPs *string `json:"whitelist_ips,omitempty"`
+}
+
+// ParseIPWhitelist splits a rate-limit exception list into entries an nginx geo
+// block can hold, returning the usable ones and the rejects separately.
+//
+// The two inputs disagree on shape: the per-host field is a textarea while its
+// placeholder shows a comma-separated list, so commas, newlines and stray
+// whitespace all have to work. A trailing `# comment` is dropped, matching the
+// global trusted-IP list operators already know.
+//
+// Entries are normalized to their network address (10.0.0.1/8 -> 10.0.0.0/8)
+// and de-duplicated. nginx does accept a prefix with host bits set — it warns
+// ("low address bits are meaningless") and matches the same network — so this
+// is about keeping the stored value equal to what nginx enforces, silencing
+// that warn, and making the de-dup see 10.1.2.3/8 and 10.0.0.0/8 as one entry.
+//
+// Rejects come back to the caller instead of being dropped quietly. Both
+// callers need them: the write path answers 400, and the render path skips
+// them. The render-side skip is not optional — this column was never validated
+// before, so rows written by earlier versions can hold anything, and one bad
+// token inside a geo block is an [emerg] that blocks the reload for every host
+// on the instance, not just this one.
+func ParseIPWhitelist(raw string) (valid, invalid []string) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
+	seen := make(map[string]struct{})
+	fields := strings.FieldsFunc(raw, func(r rune) bool {
+		return r == ',' || r == '\n' || r == '\r' || r == ';'
+	})
+	for _, field := range fields {
+		entry := strings.TrimSpace(field)
+		if idx := strings.Index(entry, "#"); idx >= 0 {
+			entry = strings.TrimSpace(entry[:idx])
+		}
+		if entry == "" {
+			continue
+		}
+		normalized, ok := normalizeIPOrCIDR(entry)
+		if !ok {
+			invalid = append(invalid, entry)
+			continue
+		}
+		if _, dup := seen[normalized]; dup {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		valid = append(valid, normalized)
+	}
+	return valid, invalid
+}
+
+// ValidateIPWhitelist names the first entry nginx could not use, so the API can
+// say which value it rejected rather than failing the whole save anonymously.
+func ValidateIPWhitelist(raw string) error {
+	if _, invalid := ParseIPWhitelist(raw); len(invalid) > 0 {
+		return fmt.Errorf("invalid rate limit exception %q: expected an IP address or CIDR range", invalid[0])
+	}
+	return nil
+}
+
+// normalizeIPOrCIDR accepts a bare address or a prefix and returns the form
+// nginx wants, or ok=false for anything else.
+func normalizeIPOrCIDR(entry string) (string, bool) {
+	if strings.Contains(entry, "/") {
+		_, ipNet, err := net.ParseCIDR(entry)
+		if err != nil {
+			return "", false
+		}
+		return ipNet.String(), true
+	}
+	ip := net.ParseIP(entry)
+	if ip == nil {
+		return "", false
+	}
+	return ip.String(), true
 }
 
 // Fail2banConfig represents fail2ban-style auto blocking configuration

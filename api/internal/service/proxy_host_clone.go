@@ -265,7 +265,7 @@ func (s *ProxyHostService) cloneRelatedConfigs(ctx context.Context, sourceID, ta
 				ZoneSize:          rl.ZoneSize,
 				LimitBy:           rl.LimitBy,
 				LimitResponse:     rl.LimitResponse,
-				WhitelistIPs:      rl.WhitelistIPs,
+				WhitelistIPs:      &rl.WhitelistIPs,
 			}
 			if _, err := s.rateLimitRepo.Upsert(ctx, targetID, rlReq); err != nil {
 				log.Printf("[Clone] Failed to clone rate limit: %v", err)

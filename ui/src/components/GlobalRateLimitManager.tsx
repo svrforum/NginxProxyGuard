@@ -63,9 +63,12 @@ export function GlobalRateLimitManager() {
       setSaveMessage({ type: 'success', message: t('globalRateLimit.saveSuccess') })
       setTimeout(() => setSaveMessage(null), 5000)
     },
-    onError: () => {
-      setSaveMessage({ type: 'error', message: t('globalRateLimit.saveFailed') })
-      setTimeout(() => setSaveMessage(null), 5000)
+    onError: (err) => {
+      // Keep the translated headline; append the server's reason (which names
+      // the rejected whitelist entry) so a 400 is actionable, not mute (#263).
+      const detail = err instanceof Error && err.message ? `: ${err.message}` : ''
+      setSaveMessage({ type: 'error', message: t('globalRateLimit.saveFailed') + detail })
+      setTimeout(() => setSaveMessage(null), 8000)
     },
   })
 
