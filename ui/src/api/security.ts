@@ -41,7 +41,13 @@ export async function updateRateLimit(proxyHostId: string, data: CreateRateLimit
     headers: getAuthHeaders(),
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error('Failed to update rate limit config');
+  if (!res.ok) {
+    // A 400 here names the exception-list entry the server rejected (#263) —
+    // dropping the body left the operator staring at a generic failure with a
+    // value only the error message had ever mentioned.
+    const body = await res.json().catch(() => ({}) as { error?: string });
+    throw new Error(body.error || 'Failed to update rate limit config');
+  }
   return res.json();
 }
 
