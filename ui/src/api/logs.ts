@@ -1,5 +1,6 @@
 import type { LogListResponse, LogStats, LogSettings, LogFilter, CountryStat } from '../types/log';
-import { getAuthHeaders, clearToken } from './auth';
+import { getAuthHeaders } from './auth';
+import { handleSessionExpired } from './client';
 
 const API_BASE = '/api/v1';
 
@@ -7,8 +8,7 @@ const API_BASE = '/api/v1';
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     if (res.status === 401) {
-      clearToken();
-      window.location.reload();
+      handleSessionExpired();
     }
     throw new Error(`HTTP ${res.status}`);
   }

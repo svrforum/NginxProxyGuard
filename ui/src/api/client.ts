@@ -1,5 +1,22 @@
 import { getToken, clearToken } from './auth'
 
+// A 401 means the session died. Reloading hands control to the login screen —
+// but a dashboard fires dozens of parallel queries, so an expired session used
+// to schedule dozens of reloads, and each reload re-issued the whole boot
+// request set. During the #258 API-limiter lockout that loop kept re-spending
+// the budget that caused it. Reload once, and only if we actually held a
+// token: without one we are already on the login screen, where a stray 401
+// must not reboot the page under the operator's hands.
+let sessionExpiryHandled = false
+export function handleSessionExpired(): void {
+  const hadToken = !!getToken()
+  clearToken()
+  if (hadToken && !sessionExpiryHandled) {
+    sessionExpiryHandled = true
+    window.location.reload()
+  }
+}
+
 export function getAuthHeaders(): HeadersInit {
   const token = getToken()
   const headers: HeadersInit = {
@@ -35,8 +52,7 @@ export class ApiError extends Error {
 export async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     if (response.status === 401) {
-      clearToken()
-      window.location.reload()
+      handleSessionExpired()
     }
     // Gateway errors return HTML (nginx error page), not JSON
     if (response.status === 502 || response.status === 503 || response.status === 504) {
@@ -110,8 +126,7 @@ export async function apiDelete(url: string): Promise<void> {
   })
   if (!response.ok) {
     if (response.status === 401) {
-      clearToken()
-      window.location.reload()
+      handleSessionExpired()
     }
     if (response.status === 502 || response.status === 503 || response.status === 504) {
       throw new ApiError(
