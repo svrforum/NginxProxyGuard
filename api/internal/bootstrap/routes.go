@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -40,15 +41,22 @@ func RegisterMiddleware(e *echo.Echo, cfg *config.Config) {
 	// (proxy_add_x_forwarded_for), so that is the real client, and anything a
 	// client wrote sits further left and is never reached.
 	//
-	// Known limit: a caller already ON a private network is itself trusted, so
-	// its own hop is skipped and it can still supply the value. Closing that
-	// would mean refusing to trust the Docker bridge NPG's own proxy sits on.
-	// (#254)
-	e.IPExtractor = echo.ExtractIPFromXFFHeader(
-		echo.TrustLoopback(true),
-		echo.TrustLinkLocal(true),
-		echo.TrustPrivateNet(true),
-	)
+	// This is the ONLY place the extractor is set. An earlier hardened variant
+	// in cmd/server/main.go trusted just loopback + 172.16.0.0/12, and the #254
+	// fix added this one without noticing it — the later assignment won, which
+	// was accidentally correct: npg-proxy runs in host network mode, so panel
+	// traffic proxied through NPG reaches the API from the HOST's LAN address,
+	// outside any docker range. A narrow default hands every such client the
+	// proxy's own IP — one shared login-lockout key for everyone (#254's bug).
+	//
+	// Known limit of the default: a caller already ON a private network is
+	// itself trusted, so its own hop is skipped and it can still supply the
+	// value. Operators who want that closed set TRUSTED_PROXY_CIDR to exactly
+	// the addresses their proxies connect from (comma-separated CIDRs; for the
+	// stock compose that is the docker bridge range plus the host's own
+	// address). Login lockout, token IP allow-lists, rate-limit keys and audit
+	// logs all follow whatever this returns.
+	e.IPExtractor = buildIPExtractor()
 
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
@@ -77,6 +85,54 @@ func RegisterMiddleware(e *echo.Echo, cfg *config.Config) {
 		}
 		e.Use(middleware.RateLimiter(middleware.NewRateLimiterMemoryStore(rate.Limit(rateLimit))))
 	}
+}
+
+// buildIPExtractor returns the X-Forwarded-For right-walk extractor. With
+// TRUSTED_PROXY_CIDR unset every private/loopback/link-local hop is skipped
+// (the released default). When set, ONLY loopback plus the listed CIDRs are
+// treated as proxy hops — anything else, private or not, is taken as the
+// client. Invalid entries are logged and ignored; if nothing usable remains
+// the default trust set is kept, since silently narrowing to loopback-only
+// would hand the proxy's address to every client and share one lockout key.
+func buildIPExtractor() echo.IPExtractor {
+	raw := strings.TrimSpace(os.Getenv("TRUSTED_PROXY_CIDR"))
+	if raw == "" {
+		return echo.ExtractIPFromXFFHeader(
+			echo.TrustLoopback(true),
+			echo.TrustLinkLocal(true),
+			echo.TrustPrivateNet(true),
+		)
+	}
+
+	opts := []echo.TrustOption{
+		echo.TrustLoopback(true),
+		echo.TrustLinkLocal(false),
+		echo.TrustPrivateNet(false),
+	}
+	usable := 0
+	for _, entry := range strings.Split(raw, ",") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		_, ipNet, err := net.ParseCIDR(entry)
+		if err != nil {
+			log.Printf("[Startup] Warning: ignoring invalid TRUSTED_PROXY_CIDR entry %q: %v", entry, err)
+			continue
+		}
+		opts = append(opts, echo.TrustIPRange(ipNet))
+		usable++
+	}
+	if usable == 0 {
+		log.Printf("[Startup] Warning: TRUSTED_PROXY_CIDR %q has no usable entries; keeping the default trust set", raw)
+		return echo.ExtractIPFromXFFHeader(
+			echo.TrustLoopback(true),
+			echo.TrustLinkLocal(true),
+			echo.TrustPrivateNet(true),
+		)
+	}
+	log.Printf("[Startup] Trusted proxy ranges restricted to loopback + %s", raw)
+	return echo.ExtractIPFromXFFHeader(opts...)
 }
 
 // resolveCORSOrigins parses CORS_ALLOWED_ORIGINS and falls back to the

@@ -107,6 +107,10 @@ services:
       # never lock the operator out of the sign-in screen (#258).
       API_RATE_LIMIT_PER_MINUTE: ${API_RATE_LIMIT_PER_MINUTE:-}
       AUTH_RATE_LIMIT_PER_MINUTE: ${AUTH_RATE_LIMIT_PER_MINUTE:-}
+      # Restrict which peers count as trusted proxy hops when resolving the
+      # client IP from X-Forwarded-For (comma-separated CIDRs). Unset = trust
+      # loopback/link-local/private ranges, which any stock install needs.
+      TRUSTED_PROXY_CIDR: ${TRUSTED_PROXY_CIDR:-}
       NGINX_CONTAINER: npg-proxy
       NGINX_SKIP_TEST: "false"
       # nginx is in host mode, so use host.docker.internal to reach it
