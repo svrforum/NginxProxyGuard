@@ -140,6 +140,16 @@ http {
     }
 
     # ==========================================================================
+    # Redirect handling
+    # Keep Location headers relative. nginx otherwise absolutizes them with its
+    # own listen port, which leaks an internal port when NPG sits behind a
+    # router forwarding 443 to a non-standard port (#264). port_in_redirect is
+    # deliberately left on so a client that really did connect on that port
+    # still gets it back.
+    # ==========================================================================
+    absolute_redirect off;
+
+    # ==========================================================================
     # Performance
     # ==========================================================================
 {{if .Sendfile}}    sendfile on;

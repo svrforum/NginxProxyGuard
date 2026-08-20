@@ -823,6 +823,57 @@ func goldenCases() []goldenCase {
 		})
 	}
 
+	// 12) authentik_block_exploits — pins #265: the Authentik signin redirect is
+	// emitted by NPG itself, and the exploit stanza renders at SERVER level, so a
+	// literal "rd=https://" in that redirect matches the seeded RFI rule
+	// ([a-zA-Z0-9_]=https?://) and 403s before any location is chosen. The rule
+	// below is the real seeded row from 001_init.sql, not a synthetic pattern.
+	{
+		host := goldenBaseHost("00000000-0000-0000-0000-000000000a0c", "authentik-exploits.example.com")
+		host.SSLEnabled = true
+		host.SSLForceHTTPS = false
+		certID := "00000000-0000-0000-0000-0000000000ce"
+		host.CertificateID = &certID
+		host.BlockExploits = true
+		apID := "00000000-0000-0000-0000-0000000000f3"
+		host.AuthProviderID = &apID
+		cases = append(cases, goldenCase{
+			name: "authentik_block_exploits",
+			data: ProxyHostConfigData{
+				Host:           host,
+				GlobalSettings: baseGlobalSettings(),
+				AuthProvider: &model.AuthProvider{
+					ID:          apID,
+					Name:        "authentik",
+					Type:        "authentik",
+					ProviderURL: "http://127.0.0.1:9000",
+					TimeoutMs:   5000,
+					Enabled:     true,
+					CreatedAt:   fixtureNow,
+					UpdatedAt:   fixtureNow,
+				},
+				ExploitBlockRules: []model.ExploitBlockRuleForRender{
+					{
+						ExploitBlockRule: model.ExploitBlockRule{
+							ID:          "23b31cc1-0e43-49af-b9c9-4093fd0cbcdc",
+							Category:    "rfi",
+							Name:        "URL Parameter Injection",
+							Pattern:     "[a-zA-Z0-9_]=https?://",
+							PatternType: "query_string",
+							Severity:    "critical",
+							Enabled:     true,
+							IsSystem:    true,
+							SortOrder:   20,
+							CreatedAt:   fixtureNow,
+							UpdatedAt:   fixtureNow,
+						},
+						IDSanitized: "23b31cc1_0e43_49af_b9c9_4093fd0cbcdc",
+					},
+				},
+			},
+		})
+	}
+
 	return cases
 }
 

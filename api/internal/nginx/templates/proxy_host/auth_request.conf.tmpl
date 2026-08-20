@@ -134,7 +134,7 @@
     location @forwardauth_signin {
         internal;
         add_header Set-Cookie $auth_cookie;
-        return 302 /outpost.goauthentik.io/start?rd={{if .Host.SSLEnabled}}https{{else}}$scheme{{end}}://$http_host$request_uri;
+        return 302 /outpost.goauthentik.io/start?rd={{if .Host.SSLEnabled}}https{{else}}$scheme{{end}}%3A%2F%2F$http_host$request_uri;
     }
 {{- else if and (eq .AuthProvider.Type "custom") (ne .AuthProvider.Config.SigninMode "location_header")}}
     location @forwardauth_signin {

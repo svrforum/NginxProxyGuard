@@ -108,6 +108,21 @@ func TestMainConfig_BrotliOffRendersOff(t *testing.T) {
 	}
 }
 
+// Issue #264: nginx absolutizes relative Location headers using its own listen
+// port, so an operator whose router forwards 443 to a non-standard port got
+// that internal port handed back to the browser. absolute_redirect off keeps
+// those Location headers relative. port_in_redirect is deliberately NOT turned
+// off: a client that really did connect on the alternate port still needs it.
+func TestMainConfig_AbsoluteRedirectOff(t *testing.T) {
+	out := renderOnly(t, baselineSettings())
+	if !strings.Contains(out, "absolute_redirect off;") {
+		t.Errorf("expected `absolute_redirect off;` in output; got:\n%s", out)
+	}
+	if strings.Contains(out, "port_in_redirect off;") {
+		t.Errorf("did not expect `port_in_redirect off;` — it breaks direct access on the alternate port; got:\n%s", out)
+	}
+}
+
 // Issue #121: operator-supplied custom_http_config must be injected verbatim
 // inside the http { } block. Previously it stayed in DB with no effect.
 func TestMainConfig_CustomHTTPConfigInjected(t *testing.T) {
