@@ -266,6 +266,11 @@ func (s *ProxyHostService) cloneRelatedConfigs(ctx context.Context, sourceID, ta
 				LimitBy:           rl.LimitBy,
 				LimitResponse:     rl.LimitResponse,
 				WhitelistIPs:      &rl.WhitelistIPs,
+				// Without this the insert's COALESCE($9, FALSE) put every clone
+				// of a Disable-mode host (enabled=false, disable_global=true)
+				// into INHERIT: the copy silently picked the global rate limit
+				// back up while looking identical in the UI list.
+				DisableGlobal: &rl.DisableGlobal,
 			}
 			if _, err := s.rateLimitRepo.Upsert(ctx, targetID, rlReq); err != nil {
 				log.Printf("[Clone] Failed to clone rate limit: %v", err)
