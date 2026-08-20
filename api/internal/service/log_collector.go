@@ -764,6 +764,29 @@ func (c *LogCollector) addLogToMemoryBuffer(logReq model.CreateLogRequest) {
 	}
 }
 
+// applyBlockReasonFallback labels lines that nginx itself did not tag.
+//
+// The 429 branch is deliberately narrow. nginx rejects at the PREACCESS phase,
+// so a request blocked by its own limit_req never reaches an upstream and logs
+// ua="-", which the parser turns into an empty UpstreamAddr. A 429 that DOES
+// carry an upstream address came from the backend application — including NPG's
+// own API rate limiter when the admin panel is proxied through NPG — and calling
+// that "rate_limit" pointed issue #258 at the wrong subsystem entirely.
+func (c *LogCollector) applyBlockReasonFallback(logReq *model.CreateLogRequest) {
+	if logReq == nil || logReq.BlockReason != "" {
+		return
+	}
+	if logReq.StatusCode == 403 && logReq.HTTPUserAgent != "" {
+		if category, matched := c.botMatcher.MatchBot(logReq.HTTPUserAgent); matched {
+			logReq.BlockReason = model.BlockReasonBotFilter
+			logReq.BotCategory = category
+		}
+	}
+	if logReq.StatusCode == 429 && logReq.UpstreamAddr == "" {
+		logReq.BlockReason = model.BlockReasonRateLimit
+	}
+}
+
 // handleAccessLine processes a single nginx access log line.
 // Shared by streamFileAccessLogs (file-tail source) and any other access log path.
 func (c *LogCollector) handleAccessLine(ctx context.Context, line string) {
@@ -775,17 +798,7 @@ func (c *LogCollector) handleAccessLine(ctx context.Context, line string) {
 
 	// Block reason is now extracted from nginx log format directly in parseAccessLog().
 	// Only use fallback pattern matching if nginx didn't provide block_reason.
-	if logReq.BlockReason == "" {
-		if logReq.StatusCode == 403 && logReq.HTTPUserAgent != "" {
-			if category, matched := c.botMatcher.MatchBot(logReq.HTTPUserAgent); matched {
-				logReq.BlockReason = model.BlockReasonBotFilter
-				logReq.BotCategory = category
-			}
-		}
-		if logReq.StatusCode == 429 {
-			logReq.BlockReason = model.BlockReasonRateLimit
-		}
-	}
+	c.applyBlockReasonFallback(logReq)
 
 	if logReq.Host != "" {
 		if hostID := c.getHostIDByDomain(ctx, logReq.Host); hostID != "" {

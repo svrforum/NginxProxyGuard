@@ -45,14 +45,43 @@ func TestParseAccessLog_RateLimitTaggingFor429(t *testing.T) {
 		t.Errorf("expected empty BlockReason from parser when block=\"-\", got %q", logReq.BlockReason)
 	}
 
-	// Apply the same fallback the live collector uses (log_collector.go:625-628).
-	// nginx returns 429 → parser leaves BlockReason="" → fallback fires → DB row
-	// stores "rate_limit" via the log_insert.go INSERT path.
-	if logReq.BlockReason == "" && logReq.StatusCode == 429 {
-		logReq.BlockReason = model.BlockReasonRateLimit
-	}
+	// Run the collector's real fallback instead of a copy of it, so this test
+	// keeps failing if that logic changes. ua="-" above means nginx rejected the
+	// request itself, which is the only shape allowed to be tagged "rate_limit".
+	c.applyBlockReasonFallback(logReq)
 	if logReq.BlockReason != model.BlockReasonRateLimit {
 		t.Errorf("expected BlockReasonRateLimit after fallback, got %q", logReq.BlockReason)
+	}
+}
+
+// Issue #258: a 429 that carries an upstream address came from the backend
+// application, not from nginx's limit_req — nginx rejects at the PREACCESS
+// phase, so anything it blocks logs ua="-". Tagging these "Rate Limit" made a
+// reporter's NPG-API rate-limit lockout look like an nginx rate-limit problem,
+// and the Global Rate Limit exception list was tuned for two rounds against a
+// limiter that was never involved.
+func TestParseAccessLog_429FromUpstreamIsNotTaggedRateLimit(t *testing.T) {
+	c := &LogCollector{}
+
+	// Shape of the reporter's rows: NPG's own admin UI proxied through NPG, the
+	// 429 produced by the API's per-IP limiter behind an upstream.
+	const line = `192.0.2.10 - - [28/Apr/2026:00:00:00 +0900] "npg.example.com" "GET /api/v1/auth/sso/providers HTTP/2.0" 429 48 "-" "Mozilla/5.0" "-" rt=0.011 uct="-" uht="-" urt="0.011" ua="192.0.2.6:81" us="429" geo="-" asn="-" block="-" bot="-" exploit_rule="-"`
+
+	logReq, err := c.parseAccessLog(line)
+	if err != nil {
+		t.Fatalf("parseAccessLog: %v", err)
+	}
+	if logReq.StatusCode != 429 {
+		t.Fatalf("expected 429, got %d", logReq.StatusCode)
+	}
+	if logReq.UpstreamAddr == "" {
+		t.Fatal("test line lost its ua= field; this test is now meaningless")
+	}
+
+	c.applyBlockReasonFallback(logReq)
+
+	if logReq.BlockReason != "" {
+		t.Errorf("a 429 answered by an upstream must stay untagged, got %q", logReq.BlockReason)
 	}
 }
 
@@ -92,10 +121,8 @@ func TestParseAccessLog_RateLimitFallbackIgnores503(t *testing.T) {
 	if logReq.StatusCode != 503 {
 		t.Errorf("expected 503, got %d", logReq.StatusCode)
 	}
-	// Apply the same fallback. 503 must NOT be tagged — that was the bug.
-	if logReq.BlockReason == "" && logReq.StatusCode == 429 {
-		logReq.BlockReason = model.BlockReasonRateLimit
-	}
+	// Run the collector's real fallback. 503 must NOT be tagged — that was the bug.
+	c.applyBlockReasonFallback(logReq)
 	if logReq.BlockReason != "" {
 		t.Errorf("503 must remain untagged so the regression that motivated the fix stays visible; got %q", logReq.BlockReason)
 	}

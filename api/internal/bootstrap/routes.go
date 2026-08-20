@@ -159,6 +159,12 @@ func registerSwagger(e *echo.Echo, swagger *handler.SwaggerHandler) {
 
 func registerPublicRoutes(v1 *echo.Group, c *Container) {
 	auth := v1.Group("/auth")
+	// Signing in gets its own rate-limit budget. Sharing one per-IP counter with
+	// the rest of /api/v1 meant the panel's own polling could spend it and then
+	// lock the operator out of the login screen for the rest of the minute
+	// (#258). Registered before the routes below — Echo snapshots group
+	// middleware at Add time.
+	auth.Use(authMiddleware.APIRateLimit(c.Cache, authMiddleware.AuthAPIRateLimitConfig()))
 	{
 		auth.POST("/login", c.Handlers.Auth.Login)
 		auth.POST("/logout", c.Handlers.Auth.Logout)
