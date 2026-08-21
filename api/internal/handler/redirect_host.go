@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -91,12 +92,20 @@ func (h *RedirectHostHandler) Update(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
 	}
 
-	if err := req.Validate(); err != nil {
+	// A disable request may echo stored legacy values that fail today's field
+	// validation — the UI's edit form sends the whole object back. Rejecting it
+	// here made the repository's disable-only carve-out (#262) unreachable from
+	// the panel, so the merged validation below decides instead; it still
+	// rejects every actual edit, now as a 400 that names the field.
+	if err := req.Validate(); err != nil && !req.DisablesHost() {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 
 	host, err := h.repo.Update(c.Request().Context(), id, &req)
 	if err != nil {
+		if errors.Is(err, model.ErrRedirectHostInvalid) {
+			return badRequestError(c, err.Error())
+		}
 		return databaseError(c, "update redirect host", err)
 	}
 	if host == nil {

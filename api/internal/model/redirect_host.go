@@ -2,6 +2,7 @@ package model
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"reflect"
@@ -87,6 +88,12 @@ func ValidateRedirectHost(host *RedirectHost) error {
 	return nil
 }
 
+// ErrRedirectHostInvalid marks a merged-update validation failure so the
+// handler can answer 400 with the reason instead of reporting a database
+// fault. Field validation and database access share one error path out of the
+// repository; without the sentinel every rejected value surfaced as a 500.
+var ErrRedirectHostInvalid = errors.New("redirect host validation failed")
+
 // ValidateRedirectHostUpdate validates the merged update while allowing one
 // narrow recovery action for unsafe legacy rows: an enabled row may be changed
 // to disabled when Enabled is the only effective change. Requests may repeat
@@ -100,7 +107,7 @@ func ValidateRedirectHostUpdate(existing, updated *RedirectHost, req *UpdateRedi
 	if isDisableOnlyRedirectHostUpdate(existing, updated, req) {
 		return nil
 	}
-	return err
+	return fmt.Errorf("%w: %w", ErrRedirectHostInvalid, err)
 }
 
 func isDisableOnlyRedirectHostUpdate(existing, updated *RedirectHost, req *UpdateRedirectHostRequest) bool {
@@ -135,6 +142,15 @@ func (r *CreateRedirectHostRequest) Validate() error {
 // Validate checks only fields present in a partial update. The repository also
 // validates the merged RedirectHost before writing it, which protects non-HTTP
 // callers and combinations with existing values.
+// DisablesHost reports whether the request asks to switch the host off. Such
+// a request may carry stored legacy values that fail today's field validation
+// (the UI's edit form echoes them back), so the handler routes it past the
+// early gate to the merged validation, whose disable-only carve-out is the
+// mechanism that lets an operator retire an unsafe legacy row (#262).
+func (r *UpdateRedirectHostRequest) DisablesHost() bool {
+	return r.Enabled != nil && !*r.Enabled
+}
+
 func (r *UpdateRedirectHostRequest) Validate() error {
 	if len(r.DomainNames) > 0 {
 		if err := validateRedirectDomains(r.DomainNames); err != nil {

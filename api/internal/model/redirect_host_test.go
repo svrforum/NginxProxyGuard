@@ -1,6 +1,10 @@
 package model
 
-import "testing"
+import (
+	"errors"
+	"strings"
+	"testing"
+)
 
 func TestValidateRedirectHost(t *testing.T) {
 	valid := &RedirectHost{
@@ -171,3 +175,43 @@ func TestValidateRedirectHostUpdateAllowsOnlyDisablingInvalidLegacyHost(t *testi
 func boolPtr(value bool) *bool       { return &value }
 func intPtr(value int) *int          { return &value }
 func stringPtr(value string) *string { return &value }
+
+// The handler classifies repository failures by this sentinel: without it a
+// rejected value surfaced as a 500 "database error". Every rejection out of
+// the merged validation must carry it, and the reason must stay readable.
+func TestValidateRedirectHostUpdateWrapsRejectionsInSentinel(t *testing.T) {
+	legacy := &RedirectHost{
+		DomainNames:       []string{"legacy.example.com"},
+		ForwardScheme:     "https",
+		ForwardDomainName: "target.example.com",
+		ForwardPath:       "/$http_authorization",
+		RedirectCode:      301,
+		Enabled:           true,
+	}
+	edited := *legacy
+	edited.Enabled = false
+	edited.ForwardPath = "/$request_uri"
+
+	err := ValidateRedirectHostUpdate(legacy, &edited, &UpdateRedirectHostRequest{
+		Enabled:     boolPtr(false),
+		ForwardPath: stringPtr("/$request_uri"),
+	})
+	if !errors.Is(err, ErrRedirectHostInvalid) {
+		t.Fatalf("rejection must wrap ErrRedirectHostInvalid, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "forward_path") {
+		t.Fatalf("rejection must still name the field, got %q", err.Error())
+	}
+}
+
+func TestUpdateRedirectHostRequestDisablesHost(t *testing.T) {
+	if (&UpdateRedirectHostRequest{}).DisablesHost() {
+		t.Fatal("absent enabled must not read as a disable request")
+	}
+	if (&UpdateRedirectHostRequest{Enabled: boolPtr(true)}).DisablesHost() {
+		t.Fatal("enabled=true must not read as a disable request")
+	}
+	if !(&UpdateRedirectHostRequest{Enabled: boolPtr(false)}).DisablesHost() {
+		t.Fatal("enabled=false must read as a disable request")
+	}
+}
