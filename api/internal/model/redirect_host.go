@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -84,6 +85,32 @@ func ValidateRedirectHost(host *RedirectHost) error {
 		return fmt.Errorf("redirect_code must be one of 301, 302, 307 or 308")
 	}
 	return nil
+}
+
+// ValidateRedirectHostUpdate validates the merged update while allowing one
+// narrow recovery action for unsafe legacy rows: an enabled row may be changed
+// to disabled when Enabled is the only effective change. Requests may repeat
+// existing values (as the UI's full edit form does), but every actual edit or
+// re-enable must pass the normal full-host validation.
+func ValidateRedirectHostUpdate(existing, updated *RedirectHost, req *UpdateRedirectHostRequest) error {
+	err := ValidateRedirectHost(updated)
+	if err == nil {
+		return nil
+	}
+	if isDisableOnlyRedirectHostUpdate(existing, updated, req) {
+		return nil
+	}
+	return err
+}
+
+func isDisableOnlyRedirectHostUpdate(existing, updated *RedirectHost, req *UpdateRedirectHostRequest) bool {
+	if existing == nil || updated == nil || req == nil ||
+		!existing.Enabled || updated.Enabled || req.Enabled == nil || *req.Enabled {
+		return false
+	}
+	existingWithUpdatedEnabled := *existing
+	existingWithUpdatedEnabled.Enabled = updated.Enabled
+	return reflect.DeepEqual(&existingWithUpdatedEnabled, updated)
 }
 
 // Validate applies defaults and validates a complete create request.

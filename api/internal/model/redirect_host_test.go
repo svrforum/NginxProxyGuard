@@ -92,3 +92,82 @@ func TestRedirectHostRequestValidationUsesDefaults(t *testing.T) {
 		t.Fatal("expected unsafe partial update to be rejected")
 	}
 }
+
+func TestValidateRedirectHostUpdateAllowsOnlyDisablingInvalidLegacyHost(t *testing.T) {
+	legacy := &RedirectHost{
+		DomainNames:       []string{"legacy.example.com"},
+		ForwardScheme:     "https",
+		ForwardDomainName: "target.example.com",
+		ForwardPath:       "/$http_authorization",
+		RedirectCode:      301,
+		Enabled:           true,
+	}
+	if err := ValidateRedirectHost(legacy); err == nil {
+		t.Fatal("test fixture must be invalid")
+	}
+
+	disabled := *legacy
+	disabled.Enabled = false
+	if err := ValidateRedirectHostUpdate(legacy, &disabled, &UpdateRedirectHostRequest{Enabled: boolPtr(false)}); err != nil {
+		t.Fatalf("disable-only transition rejected: %v", err)
+	}
+	if err := ValidateRedirectHostUpdate(legacy, &disabled, &UpdateRedirectHostRequest{
+		DomainNames:       append([]string(nil), legacy.DomainNames...),
+		ForwardScheme:     stringPtr(legacy.ForwardScheme),
+		ForwardDomainName: stringPtr(legacy.ForwardDomainName),
+		ForwardPath:       stringPtr(legacy.ForwardPath),
+		RedirectCode:      intPtr(legacy.RedirectCode),
+		Enabled:           boolPtr(false),
+	}); err != nil {
+		t.Fatalf("full-form disable with unchanged values rejected: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		existing *RedirectHost
+		updated  *RedirectHost
+		request  *UpdateRedirectHostRequest
+	}{
+		{
+			name:     "unsafe edit while disabling",
+			existing: legacy,
+			updated: func() *RedirectHost {
+				host := disabled
+				host.ForwardPath = "/$request_uri"
+				return &host
+			}(),
+			request: &UpdateRedirectHostRequest{Enabled: boolPtr(false), ForwardPath: stringPtr("/$request_uri")},
+		},
+		{
+			name:     "changed merged value hidden from request",
+			existing: legacy,
+			updated: func() *RedirectHost {
+				host := disabled
+				host.ForwardPath = "/$request_uri"
+				return &host
+			}(),
+			request: &UpdateRedirectHostRequest{Enabled: boolPtr(false)},
+		},
+		{
+			name: "re-enable invalid disabled host",
+			existing: func() *RedirectHost {
+				host := disabled
+				return &host
+			}(),
+			updated: legacy,
+			request: &UpdateRedirectHostRequest{Enabled: boolPtr(true)},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := ValidateRedirectHostUpdate(tt.existing, tt.updated, tt.request); err == nil {
+				t.Fatal("expected invalid legacy update to be rejected")
+			}
+		})
+	}
+}
+
+func boolPtr(value bool) *bool       { return &value }
+func intPtr(value int) *int          { return &value }
+func stringPtr(value string) *string { return &value }
