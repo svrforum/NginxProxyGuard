@@ -40,25 +40,54 @@ func TestRoleToSync(t *testing.T) {
 	}
 
 	t.Run("matching group selects mapped role", func(t *testing.T) {
-		roleID, enforce, err := roleToSync(provider, &model.SSOClaims{Groups: []string{"npg-admins"}})
+		roleID, enforce, err := roleToSync(provider, &model.SSOClaims{Groups: []string{"npg-admins"}, GroupsStated: true})
 		if err != nil || !enforce || roleID != "role-admin" {
 			t.Fatalf("got role=%q enforce=%v err=%v", roleID, enforce, err)
 		}
 	})
 
 	t.Run("removed group falls back to default role", func(t *testing.T) {
-		roleID, enforce, err := roleToSync(provider, &model.SSOClaims{Groups: []string{"users"}})
+		roleID, enforce, err := roleToSync(provider, &model.SSOClaims{Groups: []string{"users"}, GroupsStated: true})
 		if err != nil || !enforce || roleID != defaultRole {
 			t.Fatalf("got role=%q enforce=%v err=%v", roleID, enforce, err)
 		}
 	})
 
-	t.Run("removed group without fallback preserves existing role", func(t *testing.T) {
+	t.Run("removed group without fallback refuses login", func(t *testing.T) {
 		withoutDefault := *provider
 		withoutDefault.DefaultRoleID = nil
-		roleID, enforce, err := roleToSync(&withoutDefault, &model.SSOClaims{Groups: []string{"users"}})
-		if err != nil || enforce || roleID != "" {
-			t.Fatalf("got role=%q enforce=%v err=%v, want existing role preserved", roleID, enforce, err)
+		roleID, enforce, err := roleToSync(&withoutDefault, &model.SSOClaims{Groups: []string{"users"}, GroupsStated: true})
+		if !errors.Is(err, ErrSSONoRoleMapping) || !errors.Is(err, ErrSSONotAllowed) || enforce || roleID != "" {
+			t.Fatalf("got role=%q enforce=%v err=%v, want explicit not-allowed mapping refusal", roleID, enforce, err)
+		}
+
+		oldRole := "role-admin"
+		err = (&SSOService{}).syncRole(context.Background(), &withoutDefault,
+			&model.SSOClaims{Groups: []string{"users"}, GroupsStated: true},
+			&model.UserSummary{Username: "former-admin", RoleID: &oldRole, IsSuperuser: true})
+		if !errors.Is(err, ErrSSONoRoleMapping) {
+			t.Fatalf("syncRole error = %v, want ErrSSONoRoleMapping", err)
+		}
+	})
+
+	t.Run("missing group claim preserves role with or without fallback", func(t *testing.T) {
+		providers := []*model.SSOProvider{provider}
+		withoutDefault := *provider
+		withoutDefault.DefaultRoleID = nil
+		providers = append(providers, &withoutDefault)
+
+		for _, p := range providers {
+			roleID, enforce, err := roleToSync(p, &model.SSOClaims{GroupsStated: false})
+			if err != nil || enforce || roleID != "" {
+				t.Fatalf("default=%v: got role=%q enforce=%v err=%v, want existing role preserved", p.DefaultRoleID, roleID, enforce, err)
+			}
+		}
+
+		oldRole := "role-admin"
+		if err := (&SSOService{}).syncRole(context.Background(), provider,
+			&model.SSOClaims{GroupsStated: false},
+			&model.UserSummary{Username: "userinfo-outage", RoleID: &oldRole, IsSuperuser: true}); err != nil {
+			t.Fatalf("missing group claim changed or refused existing role: %v", err)
 		}
 	})
 

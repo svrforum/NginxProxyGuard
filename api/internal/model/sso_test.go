@@ -165,13 +165,14 @@ func TestValidateRefusesJITWithoutAllowlist(t *testing.T) {
 		}
 	})
 
-	t.Run("JIT without a role is refused", func(t *testing.T) {
+	t.Run("JIT cannot reach role sync without a default role", func(t *testing.T) {
 		r := base()
 		r.AllowJIT = true
 		r.AllowedEmailDomains = []string{"example.com"}
 		r.DefaultRoleID = nil
+		r.GroupRoleMappings = []GroupRoleMapping{{Group: "npg-admins", RoleID: "role-admin"}}
 		if err := r.Validate(true); err == nil {
-			t.Fatal("expected a missing default role to be refused")
+			t.Fatal("expected JIT provider without a default role to be refused before login")
 		}
 	})
 

@@ -1493,7 +1493,7 @@
       "requiredGroupHint": "When set, only members of this group may sign in.",
       "allowJit": "Create an account the first time someone signs in",
       "defaultRole": "Default role",
-      "defaultRoleHint": "The role a newly created account receives",
+      "defaultRoleHint": "Role for newly created accounts and fallback when stated groups match no mapping. Without one, non-JIT sign-in is denied when no mapping matches.",
       "noRole": "None",
       "groupMappings": "Group to role mappings",
       "addMapping": "Add mapping",
