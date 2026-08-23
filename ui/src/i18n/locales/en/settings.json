@@ -1209,6 +1209,26 @@
     "tokenPasteHint": "Paste the full install command — the token is extracted automatically.",
     "replaceToken": "Replace",
     "cancelReplace": "Cancel",
+    "mode": {
+      "title": "Operating mode",
+      "tokenOnly": "Token only",
+      "tokenOnlyDesc": "Ingress and Public Hostnames are managed in the Cloudflare dashboard. NPG only runs the connector.",
+      "managed": "Managed",
+      "managedDesc": "NPG additionally maintains the tunnel's catch-all rule via the Cloudflare API, so hostnames that are not registered as Public Hostnames still reach NPG and are routed by Host header — add a proxy host and a CNAME, nothing else.",
+      "apiToken": "Cloudflare API token",
+      "apiTokenDesc": "A separate API token with the single permission Account / Cloudflare Tunnel / Edit. This is not the connector token above.",
+      "apiTokenPlaceholder": "Paste your Cloudflare API token",
+      "replaceApiToken": "Replace",
+      "catchall": "Catch-all: route unmatched hostnames to NginxProxyGuard",
+      "catchallDesc": "Sets the tunnel's last ingress rule to NPG. Only the default http_status:404 rule, or a rule NPG itself wrote, is ever replaced — a catch-all managed elsewhere is left untouched and reported as a conflict.",
+      "catchallState": {
+        "applied": "Catch-all active",
+        "not_applied": "Catch-all not set",
+        "conflict": "Conflict",
+        "invalid_remote": "Remote config invalid",
+        "unreachable": "Cloudflare unreachable"
+      }
+    },
     "save": "Save",
     "saving": "Saving...",
     "status": {

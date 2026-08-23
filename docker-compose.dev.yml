@@ -111,6 +111,9 @@ services:
       # client IP from X-Forwarded-For (comma-separated CIDRs). Unset = trust
       # loopback/link-local/private ranges, which any stock install needs.
       TRUSTED_PROXY_CIDR: ${TRUSTED_PROXY_CIDR:-}
+      # Test hook (dev compose only): point the managed-tunnel Cloudflare API
+      # client at a mock server; unset = the real API.
+      NPG_CF_API_BASE: ${NPG_CF_API_BASE:-}
       NGINX_CONTAINER: npg-proxy
       NGINX_SKIP_TEST: "false"
       # nginx is in host mode, so use host.docker.internal to reach it

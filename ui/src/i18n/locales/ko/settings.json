@@ -1213,6 +1213,26 @@
     "tokenPasteHint": "설치 명령 전체를 붙여넣어도 토큰만 자동으로 추출됩니다.",
     "replaceToken": "교체",
     "cancelReplace": "취소",
+    "mode": {
+      "title": "운영 모드",
+      "tokenOnly": "Token 전용",
+      "tokenOnlyDesc": "Ingress·Public Hostname을 Cloudflare 대시보드에서 관리합니다. NPG는 커넥터만 실행합니다.",
+      "managed": "Managed",
+      "managedDesc": "NPG가 Cloudflare API로 터널의 catch-all 규칙까지 유지합니다. Public Hostname에 등록하지 않은 호스트네임도 NPG에 도달해 Host 헤더로 라우팅되므로, 프록시 호스트 추가와 CNAME 한 줄이면 됩니다.",
+      "apiToken": "Cloudflare API 토큰",
+      "apiTokenDesc": "Account / Cloudflare Tunnel / Edit 권한 하나만 있는 별도의 API 토큰입니다. 위의 커넥터 토큰과 다릅니다.",
+      "apiTokenPlaceholder": "Cloudflare API 토큰을 붙여넣으세요",
+      "replaceApiToken": "교체",
+      "catchall": "Catch-all: 매칭되지 않은 호스트네임을 NginxProxyGuard로 전달",
+      "catchallDesc": "터널의 마지막 ingress 규칙을 NPG로 설정합니다. 기본값 http_status:404 이거나 NPG가 직접 쓴 규칙만 교체하며, 다른 곳에서 관리 중인 catch-all은 건드리지 않고 충돌로 표시합니다.",
+      "catchallState": {
+        "applied": "Catch-all 적용됨",
+        "not_applied": "Catch-all 미설정",
+        "conflict": "충돌",
+        "invalid_remote": "원격 설정 이상",
+        "unreachable": "Cloudflare 연결 불가"
+      }
+    },
     "save": "저장",
     "saving": "저장 중...",
     "status": {

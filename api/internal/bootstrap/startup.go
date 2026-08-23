@@ -111,6 +111,9 @@ func runStartup(ctx context.Context, c *Container) error {
 	if err := c.Services.CloudflareTunnel.SyncTokenFile(ctx); err != nil {
 		log.Printf("[CloudflareTunnel] startup token sync failed: %v", err)
 	}
+	// Managed mode: re-converge the remote catch-all rule in the background —
+	// this is what follows an NGINX_HTTPS_PORT change without operator action.
+	c.Services.CloudflareTunnel.SyncCatchallAtStartup(ctx)
 
 	// Regenerate default server config.
 	log.Println("[Startup] Regenerating default server config...")

@@ -342,6 +342,11 @@ func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Back
 		if err := h.tunnelService.SyncTokenFile(ctx); err != nil {
 			log.Printf("[Backup] Warning: failed to sync cloudflared token file after restore: %v", err)
 		}
+		// The restored row may carry a managed-mode catch-all recorded against a
+		// DIFFERENT https port; without this the badge would read "applied"
+		// while the remote rule points at the old install's port. Fire-and-
+		// forget — the goroutine runs on its own context.
+		h.tunnelService.SyncCatchallAtStartup(ctx)
 	}
 
 	result.DetermineStatus()

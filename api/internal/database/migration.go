@@ -1363,6 +1363,12 @@ EXCEPTION WHEN duplicate_table OR duplicate_object THEN NULL; END $$;`,
 			desc: "v2.41.0: per-provider trust for unverified SSO emails (#248)",
 			sql:  `ALTER TABLE public.sso_providers ADD COLUMN IF NOT EXISTS trust_provider_email boolean DEFAULT false NOT NULL;`,
 		},
+		{
+			desc: "v2.48.0: Cloudflare Tunnel managed mode — API token + catch-all state (#267)",
+			sql: `ALTER TABLE public.cloudflare_tunnel ADD COLUMN IF NOT EXISTS api_token text DEFAULT ''::text NOT NULL;
+ALTER TABLE public.cloudflare_tunnel ADD COLUMN IF NOT EXISTS catchall_enabled boolean DEFAULT false NOT NULL;
+ALTER TABLE public.cloudflare_tunnel ADD COLUMN IF NOT EXISTS catchall_applied_service text DEFAULT ''::text NOT NULL;`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

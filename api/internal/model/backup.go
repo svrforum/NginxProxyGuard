@@ -553,6 +553,12 @@ type CloudflareTunnelExport struct {
 	Enabled bool   `json:"enabled"`
 	Token   string `json:"token"`
 	Mode    string `json:"mode"`
+	// Managed mode (#267). Plaintext like the connector token above — the
+	// backup's whole point is full restore, and secrets are stored plaintext
+	// project-wide (at-rest encryption is a tracked follow-up).
+	APIToken               string `json:"api_token,omitempty"`
+	CatchallEnabled        bool   `json:"catchall_enabled,omitempty"`
+	CatchallAppliedService string `json:"catchall_applied_service,omitempty"`
 }
 
 // RoleExport represents one RBAC role and its permission strings (#222).

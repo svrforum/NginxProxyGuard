@@ -3724,6 +3724,29 @@ paths:
         On success the token file the in-container supervisor watches is
         rewritten (or removed when disabled) and the cached status is
         invalidated.
+
+        Managed mode (#267): `mode` switches between `token` (ingress managed
+        in the Cloudflare dashboard) and `managed` (NPG maintains the tunnel's
+        trailing catch-all ingress rule via the Cloudflare API). Managed mode
+        requires `api_token` — a separate Cloudflare API token with the single
+        permission Account / Cloudflare Tunnel / Edit (`api_token` omitted
+        keeps the stored one, `""` clears it) — and a stored connector token,
+        whose account/tunnel identity NPG decodes to address the API.
+        `catchall_enabled=true` requires managed mode; switching `mode` to
+        `token` automatically clears a stored catch-all intent (and removes
+        NPG's remote rule) in the same save. After a successful save the remote
+        catch-all rule is converged: only the default `http_status:404` rule or
+        a rule NPG itself wrote is ever replaced; a catch-all managed elsewhere
+        is left untouched and surfaces as `catchall_state=conflict` in the
+        status endpoint rather than failing the save. A background reconciler
+        (piggybacked on the status refresh) retries pending applies/removals,
+        so a conflict resolved in the dashboard or a save made while Cloudflare
+        was down takes effect without a re-save.
+
+        Note the settings are persisted BEFORE the Cloudflare convergence: a
+        400 from a refused API token, or a 502 from an unreachable API, can
+        arrive with the settings already saved — the status endpoint shows the
+        real remote state either way.
       security:
         - BearerAuth: []
       requestBody:
@@ -3740,11 +3763,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/CloudflareTunnel'
         '400':
-          description: Malformed body, or an invalid/absent token while enabling
+          description: |
+            Malformed body, an invalid/absent token while enabling, or a
+            managed-mode invariant violation (missing api_token, catch-all
+            outside managed mode, undecodable connector token)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '502':
+          description: |
+            Settings were saved but the Cloudflare API could not be reached to
+            converge the catch-all rule; startup retries the convergence.
         '500':
           description: |
             Settings were saved but writing or removing the connector token file
@@ -12232,13 +12262,24 @@ components:
         mode:
           type: string
           enum: [token, managed]
-          description: Always `token` in the current implementation; `managed` is reserved
+          description: |
+            `token` — ingress is managed in the Cloudflare dashboard; `managed`
+            — NPG additionally maintains the tunnel's catch-all rule (#267)
         has_token:
           type: boolean
           description: Whether a connector token is stored
         token_masked:
           type: string
           description: First 4 characters plus `****`, or `****` for tokens of 4 characters or fewer, or `""` when unset. Not usable as a token.
+        has_api_token:
+          type: boolean
+          description: Whether a Cloudflare API token is stored (managed mode)
+        api_token_masked:
+          type: string
+          description: Masked like `token_masked`. Not usable as a token.
+        catchall_enabled:
+          type: boolean
+          description: Operator intent; whether the rule is actually in place is `catchall_state` in the status endpoint
         origin_service_url:
           type: string
           description: HTTPS origin URL to enter as the Public Hostname service in the Cloudflare dashboard, built from the proxy's configured HTTPS port
@@ -12264,6 +12305,21 @@ components:
             Omit to keep the stored token; send a value to replace it. Must be
             base64url characters only and at most 4096 bytes. `""` is accepted
             only when the result is a disabled tunnel.
+        mode:
+          type: string
+          enum: [token, managed]
+          description: Omit to keep the stored mode. `managed` requires an API token and a decodable connector token.
+        api_token:
+          type: string
+          description: |
+            Cloudflare API token for managed mode (permission: Account /
+            Cloudflare Tunnel / Edit). Omit to keep the stored one; `""` clears
+            it (only valid outside managed mode).
+        catchall_enabled:
+          type: boolean
+          description: |
+            `true` requires managed mode. Omit to keep the stored value —
+            except that switching `mode` to `token` clears it automatically.
     TunnelStatus:
       type: object
       description: Connector runtime state, recomputed at most every 15 seconds.
@@ -12274,6 +12330,16 @@ components:
         connections:
           type: integer
           description: Registered connector connections; 0 unless `state` is `connected`
+        catchall_state:
+          type: string
+          enum: [applied, not_applied, conflict, invalid_remote, unreachable]
+          description: |
+            Managed mode only (omitted otherwise); cached for 60 seconds and
+            refreshed in the background. `conflict` = the tunnel's last ingress
+            rule is managed by someone else and NPG will not touch it.
+        catchall_detail:
+          type: string
+          description: Operator-readable explanation for conflict/invalid_remote/unreachable
     GlobalURIBlock:
       type: object
       description: |

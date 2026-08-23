@@ -7,7 +7,7 @@ import {
   updateCloudflareTunnel,
   fetchTunnelStatus,
 } from '../../api/cloudflare-tunnel'
-import type { TunnelStatus, UpdateCloudflareTunnelRequest } from '../../types/cloudflare-tunnel'
+import type { CatchallState, TunnelStatus, UpdateCloudflareTunnelRequest } from '../../types/cloudflare-tunnel'
 
 const badgeClasses: Record<TunnelStatus['state'], string> = {
   disabled: 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300',
@@ -21,6 +21,14 @@ const dotClasses: Record<TunnelStatus['state'], string> = {
   starting: 'bg-amber-500',
   connected: 'bg-green-500',
   error: 'bg-red-500',
+}
+
+const catchallBadgeClasses: Record<CatchallState, string> = {
+  applied: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
+  not_applied: 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300',
+  conflict: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
+  invalid_remote: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400',
+  unreachable: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400',
 }
 
 // The Cloudflare dashboard shows the connector token embedded in a full
@@ -45,6 +53,10 @@ export default function CloudflareTunnelSettings() {
   const [enabledEdit, setEnabledEdit] = useState<boolean | null>(null)
   const [tokenInput, setTokenInput] = useState('')
   const [replacingToken, setReplacingToken] = useState(false)
+  const [modeEdit, setModeEdit] = useState<'token' | 'managed' | null>(null)
+  const [apiTokenInput, setApiTokenInput] = useState('')
+  const [replacingApiToken, setReplacingApiToken] = useState(false)
+  const [catchallEdit, setCatchallEdit] = useState<boolean | null>(null)
   const [guideOpen, setGuideOpen] = useState(false)
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
@@ -69,6 +81,10 @@ export default function CloudflareTunnelSettings() {
       setEnabledEdit(null)
       setTokenInput('')
       setReplacingToken(false)
+      setModeEdit(null)
+      setApiTokenInput('')
+      setReplacingApiToken(false)
+      setCatchallEdit(null)
       setSaveMessage({ type: 'success', text: t('messages.saveSuccess') })
       setTimeout(() => setSaveMessage(null), 3000)
     },
@@ -80,8 +96,15 @@ export default function CloudflareTunnelSettings() {
 
   const effEnabled = enabledEdit ?? settings?.enabled ?? false
   const typedToken = tokenInput.trim()
+  const effMode = modeEdit ?? settings?.mode ?? 'token'
+  const typedApiToken = apiTokenInput.trim()
+  const effCatchall = catchallEdit ?? settings?.catchall_enabled ?? false
   const hasChanges =
-    (enabledEdit !== null && enabledEdit !== settings?.enabled) || typedToken !== ''
+    (enabledEdit !== null && enabledEdit !== settings?.enabled) ||
+    typedToken !== '' ||
+    (modeEdit !== null && modeEdit !== settings?.mode) ||
+    typedApiToken !== '' ||
+    (catchallEdit !== null && catchallEdit !== settings?.catchall_enabled)
 
   const handleSave = () => {
     if (!hasChanges || updateMutation.isPending) return
@@ -94,6 +117,16 @@ export default function CloudflareTunnelSettings() {
     // here too, even though the input is already normalized on change.
     if (typedToken !== '') {
       payload.token = extractTunnelToken(typedToken)
+    }
+    if (modeEdit !== null && modeEdit !== settings?.mode) {
+      payload.mode = modeEdit
+    }
+    // Same rule as the connector token: the masked value never round-trips.
+    if (typedApiToken !== '') {
+      payload.api_token = typedApiToken
+    }
+    if (catchallEdit !== null && catchallEdit !== settings?.catchall_enabled) {
+      payload.catchall_enabled = catchallEdit
     }
     updateMutation.mutate(payload)
   }
@@ -109,6 +142,8 @@ export default function CloudflareTunnelSettings() {
       : t(`cloudflareTunnel.status.${badgeState}`)
 
   const showTokenInput = !settings?.has_token || replacingToken
+  const showApiTokenInput = !settings?.has_api_token || replacingApiToken
+  const catchallState = status?.catchall_state
 
   // Origin service URL for the CF dashboard's Public Hostname — reflects the
   // actual NGINX_HTTPS_PORT (e.g. https://localhost:8443), not a hardcoded 443.
@@ -252,6 +287,108 @@ export default function CloudflareTunnelSettings() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Operating Mode (managed / catch-all, #267) */}
+      <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6 space-y-4">
+        <div>
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+            {t('cloudflareTunnel.mode.title')}
+            {effMode === 'managed' && catchallState && (
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${catchallBadgeClasses[catchallState]}`}>
+                {t(`cloudflareTunnel.mode.catchallState.${catchallState}`)}
+              </span>
+            )}
+          </h3>
+        </div>
+
+        <div role="radiogroup" aria-label={t('cloudflareTunnel.mode.title')} className="space-y-3">
+          {(['token', 'managed'] as const).map((m) => (
+            <label key={m} className={`flex gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+              effMode === m
+                ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+            }`}>
+              <input
+                type="radio"
+                name="tunnel-mode"
+                checked={effMode === m}
+                onChange={() => setModeEdit(m)}
+                className="mt-1"
+              />
+              <div>
+                <span className="text-sm font-medium text-slate-800 dark:text-white">
+                  {t(m === 'token' ? 'cloudflareTunnel.mode.tokenOnly' : 'cloudflareTunnel.mode.managed')}
+                </span>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  {t(m === 'token' ? 'cloudflareTunnel.mode.tokenOnlyDesc' : 'cloudflareTunnel.mode.managedDesc')}
+                </p>
+              </div>
+            </label>
+          ))}
+        </div>
+
+        {effMode === 'managed' && (
+          <div className="border-t border-slate-200 dark:border-slate-700 pt-4 space-y-4">
+            <div>
+              <label className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">
+                {t('cloudflareTunnel.mode.apiToken')}
+              </label>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                {t('cloudflareTunnel.mode.apiTokenDesc')}
+              </p>
+              {showApiTokenInput ? (
+                <input
+                  type="password"
+                  value={apiTokenInput}
+                  onChange={(e) => setApiTokenInput(e.target.value)}
+                  autoComplete="off"
+                  placeholder={t('cloudflareTunnel.mode.apiTokenPlaceholder')}
+                  className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-sm text-slate-700 dark:text-slate-300 font-mono placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                />
+              ) : (
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-500 dark:text-slate-400 font-mono">
+                    {settings?.api_token_masked}
+                  </div>
+                  <button
+                    onClick={() => setReplacingApiToken(true)}
+                    className="px-3 py-2 text-sm font-medium text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors"
+                  >
+                    {t('cloudflareTunnel.mode.replaceApiToken')}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <label className="flex gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={effCatchall}
+                onChange={(e) => setCatchallEdit(e.target.checked)}
+                className="mt-1 rounded border-slate-300"
+              />
+              <div>
+                <span className="text-sm font-medium text-slate-800 dark:text-white">
+                  {t('cloudflareTunnel.mode.catchall')}
+                </span>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  {t('cloudflareTunnel.mode.catchallDesc')}
+                </p>
+              </div>
+            </label>
+
+          </div>
+        )}
+
+        {/* Warning lives OUTSIDE the managed-only block: after switching back
+            to token mode a leftover rule's cleanup status must stay visible. */}
+        {(catchallState === 'conflict' || catchallState === 'invalid_remote' || catchallState === 'unreachable') &&
+          status?.catchall_detail && (
+            <div className="p-3 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-lg">
+              <p className="text-xs text-amber-700 dark:text-amber-400">{status.catchall_detail}</p>
+            </div>
+          )}
       </div>
 
       {/* Setup Guide Accordion */}

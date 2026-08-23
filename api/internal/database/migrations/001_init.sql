@@ -2084,6 +2084,9 @@ CREATE TABLE IF NOT EXISTS public.cloudflare_tunnel (
     enabled boolean DEFAULT false,
     token text DEFAULT ''::text NOT NULL,
     mode character varying(20) DEFAULT 'token'::character varying NOT NULL,
+    api_token text DEFAULT ''::text NOT NULL,
+    catchall_enabled boolean DEFAULT false NOT NULL,
+    catchall_applied_service text DEFAULT ''::text NOT NULL,
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now(),
     CONSTRAINT chk_cloudflare_tunnel_mode CHECK (((mode)::text = ANY ((ARRAY['token'::character varying, 'managed'::character varying])::text[])))
@@ -4380,6 +4383,9 @@ CREATE TABLE IF NOT EXISTS public.cloudflare_tunnel (
     enabled boolean DEFAULT false,
     token text DEFAULT ''::text NOT NULL,
     mode character varying(20) DEFAULT 'token'::character varying NOT NULL,
+    api_token text DEFAULT ''::text NOT NULL,
+    catchall_enabled boolean DEFAULT false NOT NULL,
+    catchall_applied_service text DEFAULT ''::text NOT NULL,
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now(),
     CONSTRAINT chk_cloudflare_tunnel_mode CHECK (((mode)::text = ANY ((ARRAY['token'::character varying, 'managed'::character varying])::text[])))
@@ -4404,3 +4410,11 @@ CREATE INDEX IF NOT EXISTS idx_log_filter_presets_log_type ON public.log_filter_
 -- case-sensitive, so two accounts differing only in case could both exist and
 -- linking would pick one arbitrarily.
 --   CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower ON public.users (lower(email));
+
+-- v2.48.0: Cloudflare Tunnel managed mode (#267)
+-- Cloudflare API token, catch-all toggle, and the service URL NPG last wrote
+-- into the tunnel's hostname-less catch-all rule — stored so "our" rule stays
+-- identifiable for safe restore even after NGINX_HTTPS_PORT changes.
+ALTER TABLE public.cloudflare_tunnel ADD COLUMN IF NOT EXISTS api_token text DEFAULT ''::text NOT NULL;
+ALTER TABLE public.cloudflare_tunnel ADD COLUMN IF NOT EXISTS catchall_enabled boolean DEFAULT false NOT NULL;
+ALTER TABLE public.cloudflare_tunnel ADD COLUMN IF NOT EXISTS catchall_applied_service text DEFAULT ''::text NOT NULL;

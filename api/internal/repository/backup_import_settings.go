@@ -387,9 +387,13 @@ func (r *BackupRepository) importCloudflareTunnel(ctx context.Context, tx *sql.T
 		mode = "token"
 	}
 	query := `
-		INSERT INTO cloudflare_tunnel (enabled, token, mode)
-		VALUES ($1, $2, $3)
+		INSERT INTO cloudflare_tunnel (enabled, token, mode, api_token, catchall_enabled, catchall_applied_service)
+		VALUES ($1, $2, $3, $4, $5, $6)
 	`
-	_, err := tx.ExecContext(ctx, query, e.Enabled, e.Token, mode)
+	// Older backups leave the managed fields zero-valued, which is exactly the
+	// pre-#267 state. Stored tokens are re-validated at every point of use
+	// (service Update / converge), so no validation is needed here.
+	_, err := tx.ExecContext(ctx, query, e.Enabled, e.Token, mode,
+		e.APIToken, e.CatchallEnabled, e.CatchallAppliedService)
 	return err
 }

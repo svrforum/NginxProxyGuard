@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -39,8 +40,16 @@ func (h *CloudflareTunnelHandler) Update(c echo.Context) error {
 
 	t, err := h.service.Update(c.Request().Context(), &req)
 	if err != nil {
-		if strings.Contains(err.Error(), "invalid tunnel token") {
+		// Validation refusals ("invalid tunnel token/mode/api token") are the
+		// operator's to fix — answer 400 with the reason. A Cloudflare API the
+		// service could not reach is an upstream fault — 502, message intact,
+		// and the settings may already be persisted (the converge step runs
+		// after the upsert; startup retries it).
+		if strings.HasPrefix(err.Error(), "invalid ") {
 			return badRequestError(c, err.Error())
+		}
+		if errors.Is(err, service.ErrCFUnreachable) {
+			return c.JSON(http.StatusBadGateway, map[string]string{"error": err.Error()})
 		}
 		return internalError(c, "update cloudflare tunnel settings", err)
 	}

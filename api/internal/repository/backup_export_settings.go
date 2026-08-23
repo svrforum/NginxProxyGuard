@@ -407,11 +407,12 @@ func (r *BackupRepository) exportSSOProviders(ctx context.Context) ([]model.SSOP
 // (Phase 1 token mode). Returns nil when no row exists.
 func (r *BackupRepository) exportCloudflareTunnel(ctx context.Context) (*model.CloudflareTunnelExport, error) {
 	query := `
-		SELECT enabled, token, mode
+		SELECT enabled, token, mode, api_token, catchall_enabled, catchall_applied_service
 		FROM cloudflare_tunnel LIMIT 1
 	`
 	var e model.CloudflareTunnelExport
-	err := r.db.QueryRowContext(ctx, query).Scan(&e.Enabled, &e.Token, &e.Mode)
+	err := r.db.QueryRowContext(ctx, query).Scan(&e.Enabled, &e.Token, &e.Mode,
+		&e.APIToken, &e.CatchallEnabled, &e.CatchallAppliedService)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
