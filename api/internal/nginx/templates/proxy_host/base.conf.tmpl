@@ -39,6 +39,26 @@ server {
     # Challenge validation endpoint (internal)
     location = /_challenge/validate {
         internal;
+        # Local decision for cookieless geo-blocked visitors: 401 here (the
+        # caller's error_page 401 turns it into the challenge redirect) with
+        # no API round-trip. Everyone else falls through to token validation.
+        set $challenge_gate 0;
+        if ($geo_blocked = 1) {
+            set $challenge_gate 1;
+        }
+{{if .GeoRestriction.AllowSearchBots}}
+        # Search bots bypass challenge completely
+        if ($is_search_bot = 1) {
+            set $challenge_gate 0;
+        }
+{{end}}
+        set $challenge_gate_final $challenge_gate;
+        if ($cookie_ng_challenge = "") {
+            set $challenge_gate_final "${challenge_gate}1";
+        }
+        if ($challenge_gate_final = 11) {
+            return 401;
+        }
         proxy_pass http://{{apiHost}}/api/v1/challenge/validate;
         proxy_pass_request_body off;
         proxy_set_header Content-Length "";

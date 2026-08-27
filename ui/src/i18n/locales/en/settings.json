@@ -860,7 +860,7 @@
       },
       "proxy_request_buffering": {
         "label": "Proxy Request Buffering",
-        "description": "When on, nginx buffers the entire request body to disk before forwarding. Turn off to stream uploads directly without creating temp files."
+        "description": "When on, nginx buffers the entire request body to disk before forwarding. Turn off to stream uploads to the upstream as they arrive. On WAF-enabled hosts the body is still read for inspection."
       },
       "open_file_cache_enabled": {
         "label": "Enable Open File Cache",
@@ -1300,7 +1300,7 @@
       "proxy_max_temp_file_size": "Maximum size of temp file for storing response when buffers are full. Set to 0 to disable temp files.",
       "proxy_temp_file_write_size": "Size of data written to temp file at once.",
       "proxy_buffering": "When on, nginx buffers the entire upstream response before sending to client. Turn off for SSE, large downloads, or real-time streaming to avoid temp files.",
-      "proxy_request_buffering": "When on, nginx buffers the entire request body to disk before forwarding to upstream. Turn off to stream uploads directly without creating temp files. Recommended for large file uploads (10GB+).",
+      "proxy_request_buffering": "When on, nginx buffers the entire request body to disk before forwarding to upstream. Turn off to stream uploads to the upstream as they arrive. On WAF-enabled hosts ModSecurity still reads the whole body for inspection.",
       "open_file_cache_enabled": "Cache file descriptors and metadata for static files. Improves performance for sites with many static files.",
       "open_file_cache_max": "Maximum number of entries to store in cache.",
       "open_file_cache_inactive": "Cache entries not accessed within this time are removed.",
@@ -1728,6 +1728,10 @@
       "ip.banned": {
         "label": "IP banned",
         "desc": "fail2ban or WAF auto-ban blocked an address. These arrive in bursts, so they are coalesced every five minutes."
+      },
+      "ip.detected": {
+        "label": "IP detected (not banned)",
+        "desc": "A fail2ban rule set to Notify Only hit its threshold. The address was NOT banned - this is the alert that action promises. Coalesced every five minutes."
       },
       "sso.login_refused": {
         "label": "SSO sign-in refused",

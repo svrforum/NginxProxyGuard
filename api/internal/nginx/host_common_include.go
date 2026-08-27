@@ -52,6 +52,13 @@ error_page 403 @blocked;
 location @blocked {
     root /etc/nginx/html;
     default_type text/html;
+    # try_files hands the request to the static module, which answers any
+    # method other than GET/HEAD with 405 - so a blocked POST leaked out as
+    # "405 Not Allowed" and was logged as 405, skewing fail2ban rules and
+    # dashboards that count 403s. Non-GET blocks get a bare 403 instead.
+    if ($request_method !~ ^(GET|HEAD)$) {
+        return 403;
+    }
     try_files /403.html =403;
 }
 `, m.dnsResolver))

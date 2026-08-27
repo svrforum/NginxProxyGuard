@@ -34,27 +34,12 @@
 {{if not .HasCustomLocationRoot}}
     location / {
 {{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}
-        # Check challenge token for geo-blocked users (skip for search bots)
-        set $challenge_check 0;
-        if ($geo_blocked = 1) {
-            set $challenge_check 1;
-        }
-{{if .GeoRestriction.AllowSearchBots}}
-        # Search bots bypass challenge completely
-        if ($is_search_bot = 1) {
-            set $challenge_check 0;
-        }
-{{end}}
-        set $challenge_check_final $challenge_check;
-        if ($cookie_ng_challenge = "") {
-            set $challenge_check_final "${challenge_check}1";
-        }
-        if ($challenge_check_final = 11) {
-            # No token, redirect to challenge page
-            return 302 /api/v1/challenge/page?host={{.Host.ID}}&reason=geo_restriction&return={{if .Host.SSLEnabled}}https{{else}}$scheme{{end}}://$host$request_uri;
-        }
-        # Validate existing token for geo-blocked users
-        # Note: API returns 200 for search bots, so they won't be redirected
+        # Challenge decision happens inside the /_challenge/validate gate, which
+        # runs as an auth_request subrequest (ACCESS phase) - so ModSecurity
+        # phase 2 inspects the request BEFORE any challenge redirect. A
+        # rewrite-phase `return 302` here would silently skip phase 2.
+        # Cookieless geo-blocked visitors get a local 401 from the gate (no API
+        # round-trip); API returns 200 for search bots, so they aren't redirected.
         auth_request /_challenge/validate;
         error_page 401 = @challenge_redirect;
         error_page 500 502 503 504 = @api_fallback;
@@ -78,11 +63,6 @@
         {{if not (hasDirective .AdvancedConfigDirectives "client_max_body_size")}}{{if .Host.ClientMaxBodySize}}client_max_body_size {{.Host.ClientMaxBodySize}};{{else if .GlobalSettings.ClientMaxBodySize}}client_max_body_size {{.GlobalSettings.ClientMaxBodySize}};{{end}}{{end}}
         {{if not (hasDirective .AdvancedConfigDirectives "proxy_buffering")}}{{if .Host.ProxyBuffering}}proxy_buffering {{.Host.ProxyBuffering}};{{else if .GlobalSettings.ProxyBuffering}}proxy_buffering {{.GlobalSettings.ProxyBuffering}};{{end}}{{end}}
         {{if not (hasDirective .AdvancedConfigDirectives "proxy_request_buffering")}}{{if .Host.ProxyRequestBuffering}}proxy_request_buffering {{.Host.ProxyRequestBuffering}};{{else if .GlobalSettings.ProxyRequestBuffering}}proxy_request_buffering {{.GlobalSettings.ProxyRequestBuffering}};{{end}}{{end}}
-        {{if and .Host.WAFEnabled (or (eq .Host.ProxyRequestBuffering "off") (and (eq .Host.ProxyRequestBuffering "") (eq .GlobalSettings.ProxyRequestBuffering "off")))}}
-        # Disable ModSecurity request body inspection for large file upload support
-        # WAF still protects headers, URL patterns, and response inspection
-        modsecurity_rules 'SecRequestBodyAccess Off';
-        {{end}}
         # Proxy buffer settings (from Global Settings)
         {{if not (hasDirective .AdvancedConfigDirectives "proxy_buffer_size")}}{{if .GlobalSettings.ProxyBufferSize}}proxy_buffer_size {{.GlobalSettings.ProxyBufferSize}};{{end}}{{end}}
         {{if not (hasDirective .AdvancedConfigDirectives "proxy_buffers")}}{{if .GlobalSettings.ProxyBuffers}}proxy_buffers {{.GlobalSettings.ProxyBuffers}};{{end}}{{end}}
@@ -163,27 +143,12 @@
 {{if not .HasCustomLocationRoot}}
     location / {
 {{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}
-        # Check challenge token for geo-blocked users (skip for search bots)
-        set $challenge_check 0;
-        if ($geo_blocked = 1) {
-            set $challenge_check 1;
-        }
-{{if .GeoRestriction.AllowSearchBots}}
-        # Search bots bypass challenge completely
-        if ($is_search_bot = 1) {
-            set $challenge_check 0;
-        }
-{{end}}
-        set $challenge_check_final $challenge_check;
-        if ($cookie_ng_challenge = "") {
-            set $challenge_check_final "${challenge_check}1";
-        }
-        if ($challenge_check_final = 11) {
-            # No token, redirect to challenge page
-            return 302 /api/v1/challenge/page?host={{.Host.ID}}&reason=geo_restriction&return={{if .Host.SSLEnabled}}https{{else}}$scheme{{end}}://$host$request_uri;
-        }
-        # Validate existing token for geo-blocked users
-        # Note: API returns 200 for search bots, so they won't be redirected
+        # Challenge decision happens inside the /_challenge/validate gate, which
+        # runs as an auth_request subrequest (ACCESS phase) - so ModSecurity
+        # phase 2 inspects the request BEFORE any challenge redirect. A
+        # rewrite-phase `return 302` here would silently skip phase 2.
+        # Cookieless geo-blocked visitors get a local 401 from the gate (no API
+        # round-trip); API returns 200 for search bots, so they aren't redirected.
         auth_request /_challenge/validate;
         error_page 401 = @challenge_redirect;
         error_page 500 502 503 504 = @api_fallback;
@@ -207,11 +172,6 @@
         {{if not (hasDirective .AdvancedConfigDirectives "client_max_body_size")}}{{if .Host.ClientMaxBodySize}}client_max_body_size {{.Host.ClientMaxBodySize}};{{else if .GlobalSettings.ClientMaxBodySize}}client_max_body_size {{.GlobalSettings.ClientMaxBodySize}};{{end}}{{end}}
         {{if not (hasDirective .AdvancedConfigDirectives "proxy_buffering")}}{{if .Host.ProxyBuffering}}proxy_buffering {{.Host.ProxyBuffering}};{{else if .GlobalSettings.ProxyBuffering}}proxy_buffering {{.GlobalSettings.ProxyBuffering}};{{end}}{{end}}
         {{if not (hasDirective .AdvancedConfigDirectives "proxy_request_buffering")}}{{if .Host.ProxyRequestBuffering}}proxy_request_buffering {{.Host.ProxyRequestBuffering}};{{else if .GlobalSettings.ProxyRequestBuffering}}proxy_request_buffering {{.GlobalSettings.ProxyRequestBuffering}};{{end}}{{end}}
-        {{if and .Host.WAFEnabled (or (eq .Host.ProxyRequestBuffering "off") (and (eq .Host.ProxyRequestBuffering "") (eq .GlobalSettings.ProxyRequestBuffering "off")))}}
-        # Disable ModSecurity request body inspection for large file upload support
-        # WAF still protects headers, URL patterns, and response inspection
-        modsecurity_rules 'SecRequestBodyAccess Off';
-        {{end}}
         # Proxy buffer settings (from Global Settings)
         {{if not (hasDirective .AdvancedConfigDirectives "proxy_buffer_size")}}{{if .GlobalSettings.ProxyBufferSize}}proxy_buffer_size {{.GlobalSettings.ProxyBufferSize}};{{end}}{{end}}
         {{if not (hasDirective .AdvancedConfigDirectives "proxy_buffers")}}{{if .GlobalSettings.ProxyBuffers}}proxy_buffers {{.GlobalSettings.ProxyBuffers}};{{end}}{{end}}

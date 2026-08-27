@@ -36,6 +36,19 @@ SecAction "id:900000,phase:1,pass,t:none,nolog,setvar:tx.blocking_paranoia_level
 # Set Anomaly Score Threshold
 SecAction "id:900110,phase:1,pass,t:none,nolog,setvar:tx.inbound_anomaly_score_threshold={{.AnomalyThreshold}},setvar:tx.outbound_anomaly_score_threshold={{.AnomalyThreshold}}"
 
+# ModSecurity v3's multipart parser flags RFC-compliant bodies as strict-error /
+# unmatched-boundary, 403-ing ordinary file uploads on every WAF host. These two
+# are soft flags the parser sets while still parsing the body into ARGS/FILES,
+# so dropping them costs no inspection: CRS multipart-evasion scoring (922xxx)
+# and every phase-2 rule still run against the parsed body.
+#
+# Deliberately NOT removed: 200002 (REQBODY_ERROR). That one fires when the body
+# could not be parsed AT ALL — malformed JSON and XML included, not just
+# multipart — and a body that failed to parse populates no ARGS for CRS to
+# inspect, so its hard deny is the only thing standing between an unparseable
+# payload and the upstream.
+SecRuleRemoveById 200003 200004
+
 {{if .AllowedIPs}}
 # Priority Allow IPs - Bypass WAF completely for these IPs
 SecRule REMOTE_ADDR "@ipMatch {{joinComma .AllowedIPs}}" "id:900900,phase:1,pass,nolog,ctl:ruleEngine=Off"

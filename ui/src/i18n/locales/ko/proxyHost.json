@@ -444,14 +444,14 @@
         "bufferingOn": "켜기 (응답 버퍼링)",
         "bufferingOff": "끄기 (직접 스트리밍)",
         "proxyRequestBuffering": "프록시 요청 버퍼링",
-        "proxyRequestBufferingDesc": "대용량 파일 업로드(10GB+) 시 임시 파일 없이 직접 스트리밍하려면 요청 버퍼링을 비활성화하세요.",
+        "proxyRequestBufferingDesc": "요청 버퍼링을 끄면 업로드를 받는 대로 업스트림에 전달합니다. WAF가 켜진 호스트는 검사를 위해 본문을 여전히 읽습니다.",
         "requestBufferingOn": "켜기 (전체 요청 버퍼링)",
         "requestBufferingOff": "끄기 (업스트림으로 스트리밍)",
         "infoTitle": "대용량 파일 전송 팁:",
         "infoUpload": "대용량 업로드: client_max_body_size를 늘리세요 (예: 10g 또는 무제한은 0)",
         "infoDownload": "대용량 다운로드: proxy_buffering을 off로 설정하거나, proxy_max_temp_file_size를 늘리세요",
         "infoStreaming": "스트리밍: proxy_buffering을 off로 설정하세요",
-        "infoRequestBuffering": "대용량 업로드(10GB+): proxy_request_buffering을 off, client_max_body_size를 0으로 설정하세요 (WAF 요청 본문 검사가 자동으로 비활성화됩니다)"
+        "infoRequestBuffering": "대용량 업로드(10GB+): proxy_request_buffering을 off, client_max_body_size를 0으로 설정하세요. 참고: 이 호스트에 WAF가 켜져 있으면 검사 때문에 nginx가 본문 전체를 여전히 읽습니다. 초대용량 업로드를 진짜 스트리밍하려면 이 호스트의 WAF를 끄세요."
       }
     },
     "advanced": {
@@ -560,7 +560,7 @@
       "clientMaxBodySize": "업로드 최대 허용 크기를 설정합니다. 무제한은 0, 또는 100m, 1g 같은 값을 사용하세요. 파일 업로드 및 대용량 API 요청에 영향을 줍니다.",
       "proxyMaxTempFileSize": "버퍼링 중 임시 파일이 커질 수 있는 최대 크기입니다. 0으로 설정하면 임시 파일을 사용하지 않습니다 (메모리 버퍼만 사용). 대용량 다운로드는 proxy_buffering을 끄는 것을 권장합니다. proxy_buffering이 켜져 있을 때만 사용됩니다.",
       "proxyBuffering": "켜면 nginx가 전체 응답을 버퍼링한 후 클라이언트에 전송합니다. 끄면 응답이 직접 스트리밍됩니다. SSE, 대용량 다운로드, 실시간 스트리밍에는 끄세요.",
-      "proxyRequestBuffering": "켜면 nginx가 전체 요청 본문을 버퍼링한 후 업스트림으로 전달합니다. 끄면 요청 본문이 직접 스트리밍됩니다. 대용량 업로드(10GB+) 시 과도한 메모리 사용을 방지하려면 끄세요."
+      "proxyRequestBuffering": "켜면 nginx가 전체 요청 본문을 버퍼링한 후 업스트림으로 전달합니다. 끄면 요청 본문이 직접 스트리밍됩니다. 참고: WAF가 켜진 호스트는 ModSecurity가 본문 전체를 어차피 읽으므로 이 설정으로 WAF를 우회한 스트리밍은 되지 않습니다."
     },
     "advanced": {
       "customConfig": "지시자는 location / { ... } 블록 안에 배치됩니다. location 지시자가 포함되면 server { ... } 블록에 배치됩니다."

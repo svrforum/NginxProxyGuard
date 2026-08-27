@@ -864,7 +864,7 @@
       },
       "proxy_request_buffering": {
         "label": "프록시 요청 버퍼링",
-        "description": "켜면 nginx가 전체 요청 본문을 디스크에 버퍼링한 후 업스트림으로 전달합니다. 임시 파일 없이 직접 스트리밍하려면 끄세요."
+        "description": "켜면 nginx가 전체 요청 본문을 디스크에 버퍼링한 후 업스트림으로 전달합니다. 끄면 업로드를 받는 대로 업스트림에 전달합니다. WAF가 켜진 호스트는 검사를 위해 본문을 여전히 읽습니다."
       },
       "open_file_cache_enabled": {
         "label": "Open File Cache 활성화",
@@ -1304,7 +1304,7 @@
       "proxy_max_temp_file_size": "버퍼가 가득 찬 경우 응답을 저장할 임시 파일의 최대 크기입니다. 0으로 설정하면 임시 파일을 사용하지 않습니다.",
       "proxy_temp_file_write_size": "임시 파일에 한 번에 쓸 수 있는 데이터 크기입니다.",
       "proxy_buffering": "켜면 nginx가 전체 업스트림 응답을 버퍼링한 후 클라이언트에 전송합니다. SSE, 대용량 다운로드, 실시간 스트리밍 시 임시 파일을 방지하려면 끄세요.",
-      "proxy_request_buffering": "켜면 nginx가 전체 요청 본문을 디스크에 버퍼링한 후 업스트림으로 전달합니다. 대용량 파일 업로드(10GB+) 시 임시 파일 없이 직접 스트리밍하려면 끄세요.",
+      "proxy_request_buffering": "켜면 nginx가 전체 요청 본문을 디스크에 버퍼링한 후 업스트림으로 전달합니다. 끄면 업로드를 받는 대로 업스트림에 전달합니다. WAF가 켜진 호스트는 ModSecurity가 검사를 위해 본문을 여전히 읽습니다.",
       "open_file_cache_enabled": "정적 파일에 대한 파일 디스크립터와 메타데이터를 캐시합니다. 정적 콘텐츠가 많은 사이트에서 성능이 향상됩니다.",
       "open_file_cache_max": "캐시에 저장할 최대 항목 수입니다.",
       "open_file_cache_inactive": "이 시간 동안 접근하지 않은 캐시 항목은 제거됩니다.",
@@ -1741,6 +1741,10 @@
       "ip.banned": {
         "label": "IP 차단",
         "desc": "fail2ban 또는 WAF 자동차단이 IP를 막았습니다. 몰아칠 수 있어 5분 단위로 묶어서 보냅니다."
+      },
+      "ip.detected": {
+        "label": "IP 감지 (차단 안 함)",
+        "desc": "\"알림만\"으로 설정한 fail2ban 규칙이 임계값에 도달했습니다. IP는 차단하지 않고 알림만 보냅니다. 5분 단위로 묶어서 보냅니다."
       },
       "sso.login_refused": {
         "label": "SSO 로그인 거부",

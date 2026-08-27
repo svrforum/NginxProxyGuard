@@ -442,14 +442,14 @@
         "bufferingOn": "On (buffer responses)",
         "bufferingOff": "Off (stream directly)",
         "proxyRequestBuffering": "Proxy Request Buffering",
-        "proxyRequestBufferingDesc": "Disable request buffering to stream uploads directly without creating temp files. Recommended for large file uploads (10GB+).",
+        "proxyRequestBufferingDesc": "Disable request buffering to stream uploads to the upstream as they arrive. On WAF-enabled hosts the body is still read for inspection.",
         "requestBufferingOn": "On (buffer entire request)",
         "requestBufferingOff": "Off (stream to upstream)",
         "infoTitle": "Large file transfer tips:",
         "infoUpload": "For large uploads: increase client_max_body_size (e.g., 10g or 0 for unlimited)",
         "infoDownload": "For large downloads: set proxy_buffering to off, or increase proxy_max_temp_file_size",
         "infoStreaming": "For streaming: set proxy_buffering to off",
-        "infoRequestBuffering": "For large uploads (10GB+): set proxy_request_buffering to off and client_max_body_size to 0 (WAF request body inspection is automatically disabled)"
+        "infoRequestBuffering": "For large uploads (10GB+): set proxy_request_buffering to off and client_max_body_size to 0. Note: if the WAF is enabled on this host, nginx still reads the whole body for inspection - for true streaming of huge uploads, disable the WAF on this host."
       }
     },
     "advanced": {
@@ -558,7 +558,7 @@
       "clientMaxBodySize": "Controls the maximum allowed size for uploads. Set to 0 for unlimited, or use values like 100m, 1g. Affects file uploads and API requests with large payloads.",
       "proxyMaxTempFileSize": "Controls how large a temp file can grow during buffering. Set to 0 to disable temp files (responses use memory buffers only). For large downloads, set proxy_buffering to off instead. Only used when proxy_buffering is on.",
       "proxyBuffering": "When ON, nginx buffers the entire response before sending to client. When OFF, responses stream directly. Turn OFF for SSE, large downloads, or real-time streaming.",
-      "proxyRequestBuffering": "When ON, nginx buffers the entire request body before forwarding to upstream. When OFF, the request body is streamed directly. Turn OFF for very large uploads (10GB+) to prevent excessive memory usage."
+      "proxyRequestBuffering": "When ON, nginx buffers the entire request body before forwarding to upstream. When OFF, the request body is streamed directly. Note: on WAF-enabled hosts ModSecurity reads the whole body regardless, so this setting cannot stream around the WAF."
     },
     "advanced": {
       "customConfig": "Directives are placed inside the location / { ... } block. If you include a location directive, the config is placed in the server { ... } block instead."
