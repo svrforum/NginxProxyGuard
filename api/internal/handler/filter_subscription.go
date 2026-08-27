@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net"
 	"net/http"
 	"strconv"
@@ -143,6 +144,9 @@ func (h *FilterSubscriptionHandler) Refresh(c echo.Context) error {
 
 	sub, err := h.service.Refresh(c.Request().Context(), id)
 	if err != nil {
+		if isValidationError(err) {
+			return badRequestError(c, err.Error())
+		}
 		return databaseError(c, "refresh filter subscription", err)
 	}
 
@@ -176,6 +180,9 @@ func (h *FilterSubscriptionHandler) SubscribeFromCatalog(c echo.Context) error {
 
 	subscribed, err := h.service.SubscribeFromCatalog(c.Request().Context(), &req)
 	if err != nil {
+		if isValidationError(err) {
+			return badRequestError(c, err.Error())
+		}
 		return databaseError(c, "subscribe from catalog", err)
 	}
 
@@ -283,8 +290,19 @@ func isConflictError(err error) bool {
 	return contains(msg, "already exist") || contains(msg, "already subscribed")
 }
 
-// isValidationError checks if an error is a validation error
+// isValidationError reports whether an error is the caller's to fix.
+//
+// The sentinel is authoritative — fetch failures against a caller-supplied URL
+// carry it, and used to fall through to databaseError, reporting "A database
+// error occurred" for a request that never touched the database (#270). The
+// substring tests below remain for this package's older validators, which
+// spell their own messages; they are a fallback, not the contract, because
+// matching on text classified by accident (a host containing "invalid"
+// answered 400 while an identical DNS failure elsewhere answered 500).
 func isValidationError(err error) bool {
+	if errors.Is(err, model.ErrInvalidInput) {
+		return true
+	}
 	msg := err.Error()
 	return contains(msg, "invalid") || contains(msg, "required") || contains(msg, "private") || contains(msg, "limit reached")
 }

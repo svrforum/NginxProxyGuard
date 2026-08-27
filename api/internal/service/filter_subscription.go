@@ -495,12 +495,15 @@ func (s *FilterSubscriptionService) fetchAndParse(ctx context.Context, fetchURL 
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return nil, "", "", "", "", fmt.Errorf("failed to fetch URL: %w", err)
+		// The subscription URL is caller input, so a transport failure is the
+		// caller's to fix — the sentinel makes the handler answer 400 instead
+		// of labelling it "a database error" (#270).
+		return nil, "", "", "", "", fmt.Errorf("%w: could not fetch the list URL: %v", model.ErrInvalidInput, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, "", "", "", "", fmt.Errorf("URL returned status %d", resp.StatusCode)
+		return nil, "", "", "", "", fmt.Errorf("%w: the list URL returned HTTP %d", model.ErrInvalidInput, resp.StatusCode)
 	}
 
 	// Read with size limit
