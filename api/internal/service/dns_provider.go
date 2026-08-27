@@ -42,7 +42,12 @@ func (s *DNSProviderService) SetInUseChecker(cb DNSProviderInUseChecker) {
 func (s *DNSProviderService) Create(ctx context.Context, req *model.CreateDNSProviderRequest) (*model.DNSProvider, error) {
 	// Validate credentials format
 	if err := s.repo.TestConnection(ctx, req.ProviderType, req.Credentials); err != nil {
-		return nil, fmt.Errorf("invalid credentials: %w", err)
+		// Pass the error through unchanged: it already carries a sentinel
+		// (ErrInvalidCredentials / ErrInvalidInput) plus a reason the operator
+		// can act on. The old "invalid credentials: %w" wrap added nothing but
+		// a duplicated phrase, and the handler classified everything as 500
+		// regardless (#268).
+		return nil, err
 	}
 
 	provider, err := s.repo.Create(ctx, req)
@@ -100,7 +105,7 @@ func (s *DNSProviderService) Update(ctx context.Context, id string, req *model.U
 		}
 
 		if err := s.repo.TestConnection(ctx, existing.ProviderType, *req.Credentials); err != nil {
-			return nil, fmt.Errorf("invalid credentials: %w", err)
+			return nil, err
 		}
 	}
 

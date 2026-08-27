@@ -245,7 +245,7 @@ func (r *DNSProviderRepository) TestConnection(ctx context.Context, providerType
 	case model.DNSProviderCloudflare:
 		var creds model.CloudflareCredentials
 		if err := json.Unmarshal(credentials, &creds); err != nil {
-			return fmt.Errorf("invalid cloudflare credentials: %w", err)
+			return fmt.Errorf("%w: cloudflare credentials are not valid JSON: %v", model.ErrInvalidCredentials, err)
 		}
 		if creds.APIToken == "" && (creds.APIKey == "" || creds.Email == "") {
 			return model.ErrInvalidCredentials
@@ -256,7 +256,7 @@ func (r *DNSProviderRepository) TestConnection(ctx context.Context, providerType
 	case model.DNSProviderRoute53:
 		var creds model.Route53Credentials
 		if err := json.Unmarshal(credentials, &creds); err != nil {
-			return fmt.Errorf("invalid route53 credentials: %w", err)
+			return fmt.Errorf("%w: route53 credentials are not valid JSON: %v", model.ErrInvalidCredentials, err)
 		}
 		if creds.AccessKeyID == "" || creds.SecretAccessKey == "" {
 			return model.ErrInvalidCredentials
@@ -264,7 +264,7 @@ func (r *DNSProviderRepository) TestConnection(ctx context.Context, providerType
 	case model.DNSProviderDuckDNS:
 		var creds model.DuckDNSCredentials
 		if err := json.Unmarshal(credentials, &creds); err != nil {
-			return fmt.Errorf("invalid duckdns credentials: %w", err)
+			return fmt.Errorf("%w: duckdns credentials are not valid JSON: %v", model.ErrInvalidCredentials, err)
 		}
 		if creds.Token == "" {
 			return model.ErrInvalidCredentials
@@ -272,11 +272,24 @@ func (r *DNSProviderRepository) TestConnection(ctx context.Context, providerType
 	case model.DNSProviderDynu:
 		var creds model.DynuCredentials
 		if err := json.Unmarshal(credentials, &creds); err != nil {
-			return fmt.Errorf("invalid dynu credentials: %w", err)
+			return fmt.Errorf("%w: dynu credentials are not valid JSON: %v", model.ErrInvalidCredentials, err)
 		}
 		if creds.APIKey == "" {
 			return model.ErrInvalidCredentials
 		}
+	case model.DNSProviderManual:
+		// Manual DNS has no credentials to verify — the operator creates the
+		// TXT record themselves. Listed explicitly so the default branch below
+		// cannot mistake a supported type for a typo.
+	default:
+		// Previously an unknown type fell through and the provider was created
+		// with a value nothing can use — the failure only appeared later, at
+		// certificate issuance ("unsupported DNS provider type"). provider_type
+		// is immutable, so the row could only be deleted, never corrected.
+		return fmt.Errorf("%w: unsupported provider_type %q — supported: %s, %s, %s, %s, %s",
+			model.ErrInvalidInput, providerType,
+			model.DNSProviderCloudflare, model.DNSProviderRoute53,
+			model.DNSProviderDuckDNS, model.DNSProviderDynu, model.DNSProviderManual)
 	}
 	return nil
 }
@@ -309,15 +322,26 @@ func testCloudflareConnection(creds model.CloudflareCredentials) error {
 
 	body, _ := io.ReadAll(resp.Body)
 
+	// 4xx from Cloudflare means the operator's credentials are wrong — the
+	// sentinel makes the handler answer 400 instead of reporting a server fault
+	// (#268). 5xx keeps the bare error so it still surfaces as 500.
 	if resp.StatusCode == 401 {
 		if creds.APIToken != "" {
-			return fmt.Errorf("invalid or expired API token. Please verify the token is active in your Cloudflare dashboard")
+			return fmt.Errorf("%w: the API token is invalid or expired — verify it is active in your Cloudflare dashboard", model.ErrInvalidCredentials)
 		}
-		return fmt.Errorf("invalid API key or email. Please check your Global API Key and account email")
+		return fmt.Errorf("%w: the API key or email is wrong — check your Global API Key and account email", model.ErrInvalidCredentials)
 	}
 
 	if resp.StatusCode == 403 {
-		return fmt.Errorf("insufficient permissions. API token requires Zone:DNS:Edit and Zone:Zone:Read permissions")
+		return fmt.Errorf("%w: the API token lacks permissions — it requires Zone:DNS:Edit and Zone:Zone:Read", model.ErrInvalidCredentials)
+	}
+
+	if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+		// Cloudflare's own body is deliberately NOT echoed: it reached the
+		// client verbatim before, and it carries nothing the operator can act
+		// on beyond "the credentials were rejected". It is logged by the
+		// handler's 500 path only when this is not a credential problem.
+		return fmt.Errorf("%w: Cloudflare rejected the credentials (HTTP %d)", model.ErrInvalidCredentials, resp.StatusCode)
 	}
 
 	if resp.StatusCode != 200 {

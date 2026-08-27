@@ -21,6 +21,23 @@ var (
 	nginxVarRe = regexp.MustCompile(`^[A-Za-z0-9_]+$`)
 )
 
+// AuthProviderTypes is the set the database CHECK constraint enforces
+// (auth_providers_type_check). Kept here so the API can refuse a bad value
+// before the INSERT does.
+var AuthProviderTypes = []string{"authelia", "authentik", "custom"}
+
+// ValidateAuthProviderType rejects an out-of-enum provider type. Without it the
+// DB CHECK was the only line of defense, so a typo came back as a 500 carrying
+// the raw driver message instead of a 400 naming the allowed values (#269).
+func ValidateAuthProviderType(t string) error {
+	for _, allowed := range AuthProviderTypes {
+		if t == allowed {
+			return nil
+		}
+	}
+	return fmt.Errorf("%w: type must be one of %s", ErrInvalidInput, strings.Join(AuthProviderTypes, ", "))
+}
+
 // ValidateProviderURL rejects provider URLs that aren't plain http(s) targets or
 // that contain characters which would break the generated proxy_pass directive.
 func ValidateProviderURL(u string) error {

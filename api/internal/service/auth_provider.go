@@ -79,6 +79,9 @@ func (s *AuthProviderService) Create(ctx context.Context, req *model.CreateAuthP
 		req.ProviderURL = url
 	}
 	req.ProviderURL = normalizeAuthProviderURL(req.ProviderURL)
+	if err := model.ValidateAuthProviderType(req.Type); err != nil {
+		return nil, err
+	}
 	if err := model.ValidateProviderURL(req.ProviderURL); err != nil {
 		return nil, err
 	}
@@ -111,6 +114,11 @@ func (s *AuthProviderService) Update(ctx context.Context, id string, req *model.
 	} else if req.ProviderURL != nil {
 		u := normalizeAuthProviderURL(*req.ProviderURL)
 		req.ProviderURL = &u
+	}
+	if req.Type != nil {
+		if err := model.ValidateAuthProviderType(*req.Type); err != nil {
+			return nil, err
+		}
 	}
 	if req.ProviderURL != nil {
 		if err := model.ValidateProviderURL(*req.ProviderURL); err != nil {

@@ -49,6 +49,15 @@ func (h *DNSProviderHandler) Get(c echo.Context) error {
 }
 
 // Create handles POST /api/v1/dns-providers
+// isDNSProviderInputError reports whether an error is the caller's to fix —
+// credentials the provider rejected, malformed credential JSON, or an
+// unsupported provider_type. A network failure reaching the provider is NOT
+// one of these and stays a 500, so a Cloudflare outage is never reported to
+// the operator as "your credentials are wrong".
+func isDNSProviderInputError(err error) bool {
+	return errors.Is(err, model.ErrInvalidCredentials) || errors.Is(err, model.ErrInvalidInput)
+}
+
 func (h *DNSProviderHandler) Create(c echo.Context) error {
 	var req model.CreateDNSProviderRequest
 	if err := c.Bind(&req); err != nil {
@@ -71,6 +80,13 @@ func (h *DNSProviderHandler) Create(c echo.Context) error {
 
 	provider, err := h.service.Create(c.Request().Context(), &req)
 	if err != nil {
+		// Credentials the provider rejected, or an unsupported provider_type,
+		// are the caller's to fix — 400, not a server fault (#268). The
+		// sibling POST /dns-providers/test already answered 400 for the very
+		// same check, so this also removes that contradiction.
+		if isDNSProviderInputError(err) {
+			return badRequestError(c, err.Error())
+		}
 		return internalError(c, "create DNS provider", err)
 	}
 
@@ -94,6 +110,9 @@ func (h *DNSProviderHandler) Update(c echo.Context) error {
 	if err != nil {
 		if err == model.ErrNotFound {
 			return notFoundError(c, "DNS provider")
+		}
+		if isDNSProviderInputError(err) {
+			return badRequestError(c, err.Error())
 		}
 		return internalError(c, "update DNS provider", err)
 	}

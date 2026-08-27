@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -52,6 +53,22 @@ func (h *AuthProviderHandler) Get(c echo.Context) error {
 	return c.JSON(http.StatusOK, ap)
 }
 
+// isAuthProviderInputError reports whether an error is the caller's to fix.
+//
+// It replaces a strings.Contains(err, "invalid") test that was wrong in both
+// directions: the database's CHECK-constraint message for a bad `type` carries
+// no "invalid", so a typo'd type answered 500 with the raw driver text (#269),
+// while pq's "invalid input syntax for type uuid" DID match, turning a
+// malformed :id into a 400 that echoed internals. The sentinel is authoritative;
+// the prefix check only covers this package's own older validators, which spell
+// their messages "invalid: ...".
+func isAuthProviderInputError(err error) bool {
+	if errors.Is(err, model.ErrInvalidInput) {
+		return true
+	}
+	return strings.HasPrefix(err.Error(), "invalid: ")
+}
+
 func (h *AuthProviderHandler) Create(c echo.Context) error {
 	var req model.CreateAuthProviderRequest
 	if err := c.Bind(&req); err != nil {
@@ -59,7 +76,7 @@ func (h *AuthProviderHandler) Create(c echo.Context) error {
 	}
 	ap, err := h.service.Create(c.Request().Context(), &req)
 	if err != nil {
-		if strings.Contains(err.Error(), "invalid") {
+		if isAuthProviderInputError(err) {
 			return badRequestError(c, err.Error())
 		}
 		return internalError(c, "create auth provider", err)
@@ -74,7 +91,7 @@ func (h *AuthProviderHandler) Update(c echo.Context) error {
 	}
 	ap, err := h.service.Update(c.Request().Context(), c.Param("id"), &req)
 	if err != nil {
-		if strings.Contains(err.Error(), "invalid") {
+		if isAuthProviderInputError(err) {
 			return badRequestError(c, err.Error())
 		}
 		return internalError(c, "update auth provider", err)
