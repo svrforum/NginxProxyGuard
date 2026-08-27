@@ -200,6 +200,13 @@ type CreateLogRequest struct {
 	RuleData     string `json:"rule_data,omitempty"`
 	AttackType   string `json:"attack_type,omitempty"`
 	ActionTaken  string `json:"action_taken,omitempty"`
+	// WAFEngineBlocking reports whether ModSecurity was actually enforcing for
+	// this request (SecRuleEngine On), as opposed to DetectionOnly. It is NOT
+	// persisted — it exists so downstream consumers can tell "the WAF was
+	// enforcing but something else ended the request first" from "the WAF was
+	// only observing". ActionTaken cannot express that: it says "logged" for
+	// both (#272).
+	WAFEngineBlocking bool `json:"-"`
 
 	// Block reason fields
 	BlockReason BlockReason `json:"block_reason,omitempty"`

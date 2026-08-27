@@ -62,17 +62,28 @@ func ExtractGeoIPUpdateError(output string, exitErr error) string {
 }
 
 // GeoIPScheduler handles automatic GeoIP database updates
+// GeoIPNginxReloader is the slice of nginx.Manager this scheduler needs
+// (narrow interface dep, matching the other services).
+type GeoIPNginxReloader interface {
+	TestAndReload(ctx context.Context) error
+}
+
 type GeoIPScheduler struct {
 	settingsRepo         *repository.SystemSettingsRepository
 	historyRepo          *repository.GeoIPHistoryRepository
 	geoipService         *GeoIPService
 	cloudProviderService *CloudProviderService
+	nginx                GeoIPNginxReloader
 	stopCh               chan struct{}
 	wg                   sync.WaitGroup
 	mu                   sync.Mutex
 	running              bool
 	checkInterval        time.Duration
 }
+
+// SetNginxReloader wires the nginx manager so a completed database update can
+// take effect immediately instead of at the next unrelated reload.
+func (s *GeoIPScheduler) SetNginxReloader(n GeoIPNginxReloader) { s.nginx = n }
 
 // NewGeoIPScheduler creates a new GeoIP scheduler
 func NewGeoIPScheduler(
@@ -223,6 +234,20 @@ func (s *GeoIPScheduler) RunUpdate(ctx context.Context, triggerType model.GeoIPT
 	// Reload GeoIP databases in memory
 	if s.geoipService != nil {
 		s.geoipService.LoadDatabases()
+	}
+
+	// Reload nginx too. The update above swaps geoip-active.conf from the
+	// disabled placeholder to the real geoip2 blocks, but nginx keeps the OLD
+	// maps until it reloads — and the placeholder resolves EVERY address to
+	// "--", which the country whitelist deliberately allows. So between a
+	// successful database install and the next unrelated reload, a
+	// country-whitelist host silently accepts the whole internet (#272).
+	if s.nginx != nil {
+		if err := s.nginx.TestAndReload(ctx); err != nil {
+			log.Printf("[GeoIP Scheduler] Warning: nginx reload after GeoIP update failed, geo rules stay on the previous database until the next reload: %v", err)
+		} else {
+			log.Println("[GeoIP Scheduler] nginx reloaded — geo rules now use the updated database")
+		}
 	}
 
 	// Seed cloud providers when GeoIP is successfully updated

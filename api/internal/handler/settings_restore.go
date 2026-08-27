@@ -235,8 +235,14 @@ func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Back
 						failedHosts = append(failedHosts, host)
 						continue
 					}
-					// Generate WAF config if enabled
-					if host.WAFEnabled {
+					// Generate WAF config if enabled. Both the gate and the
+					// write use configData.Host — the RESOLVED host — because a
+					// host inheriting an enabled global default has
+					// host.WAFEnabled=false on the raw row while
+					// GenerateConfigFull has already emitted its
+					// modsecurity_rules_file reference (#202), and writing the
+					// raw row would pin its mode to a stale column (#272).
+					if configData.Host.WAFEnabled {
 						// Get merged WAF exclusions (host + global) from database
 						exclusions := h.getMergedWAFExclusions(ctx, host.ID)
 						// Get Priority Allow IPs from configData
@@ -244,7 +250,7 @@ func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Back
 						if configData.GeoRestriction != nil {
 							allowedIPs = configData.GeoRestriction.AllowedIPs
 						}
-						if err := h.nginxManager.GenerateHostWAFConfig(ctx, &host, exclusions, allowedIPs); err != nil {
+						if err := h.nginxManager.GenerateHostWAFConfig(ctx, configData.Host, exclusions, allowedIPs); err != nil {
 							log.Printf("[Backup] Warning: failed to regenerate WAF config for host %s: %v", host.ID, err)
 							// Remove the main config if WAF config fails
 							_ = h.nginxManager.RemoveConfig(ctx, &host)

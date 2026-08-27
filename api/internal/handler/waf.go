@@ -21,16 +21,33 @@ type WAFHandler struct {
 	wafRepo       *repository.WAFRepository
 	proxyHostRepo *repository.ProxyHostRepository
 	geoRepo       *repository.GeoRepository
+	globalWAFRepo *repository.GlobalWAFRepository
 	nginxManager  *nginx.Manager
 	crsPath       string
 }
 
-func NewWAFHandler(wafRepo *repository.WAFRepository, proxyHostRepo *repository.ProxyHostRepository, geoRepo *repository.GeoRepository, nginxManager *nginx.Manager) *WAFHandler {
+// resolvedHost applies the global WAF default to a stored row before its
+// modsec file is written. Without it, regenerating an inheriting host from the
+// raw row pins it to its own stale waf_mode — a host shown as "blocking" then
+// runs DetectionOnly until the next full sync flips it back (#272).
+func (h *WAFHandler) resolvedHost(ctx context.Context, host *model.ProxyHost) *model.ProxyHost {
+	if h.globalWAFRepo == nil {
+		return host
+	}
+	g, err := h.globalWAFRepo.GetGlobal(ctx)
+	if err != nil {
+		return host
+	}
+	return model.ResolveWAF(g, host)
+}
+
+func NewWAFHandler(wafRepo *repository.WAFRepository, proxyHostRepo *repository.ProxyHostRepository, geoRepo *repository.GeoRepository, globalWAFRepo *repository.GlobalWAFRepository, nginxManager *nginx.Manager) *WAFHandler {
 	crsPath := os.Getenv("CRS_PATH")
 	if crsPath == "" {
 		crsPath = "/etc/nginx/owasp-crs"
 	}
 	return &WAFHandler{
+		globalWAFRepo: globalWAFRepo,
 		wafRepo:       wafRepo,
 		proxyHostRepo: proxyHostRepo,
 		geoRepo:       geoRepo,
@@ -124,17 +141,23 @@ func (h *WAFHandler) GetHostConfigs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var configs []model.WAFHostConfig
-	for _, host := range hosts {
+	for i := range hosts {
+		host := hosts[i]
 		hostName := ""
 		if len(host.DomainNames) > 0 {
 			hostName = host.DomainNames[0]
 		}
 
+		// Report the EFFECTIVE settings. Showing the raw columns made an
+		// inheriting host display "blocking" while it actually ran whatever the
+		// global default said — an operator reading that badge believed the WAF
+		// was enforcing when it was only observing (#272).
+		eff := h.resolvedHost(ctx, &hosts[i])
 		config := model.WAFHostConfig{
 			ProxyHostID:    host.ID,
 			ProxyHostName:  hostName,
-			WAFEnabled:     host.WAFEnabled,
-			WAFMode:        host.WAFMode,
+			WAFEnabled:     eff.WAFEnabled,
+			WAFMode:        eff.WAFMode,
 			ExclusionCount: exclusionCounts[host.ID],
 		}
 		configs = append(configs, config)
@@ -182,11 +205,12 @@ func (h *WAFHandler) GetHostConfig(w http.ResponseWriter, r *http.Request) {
 		hostName = host.DomainNames[0]
 	}
 
+	eff := h.resolvedHost(ctx, host)
 	config := model.WAFHostConfig{
 		ProxyHostID:    host.ID,
 		ProxyHostName:  hostName,
-		WAFEnabled:     host.WAFEnabled,
-		WAFMode:        host.WAFMode,
+		WAFEnabled:     eff.WAFEnabled,
+		WAFMode:        eff.WAFMode,
 		Exclusions:     exclusions,
 		ExclusionCount: len(exclusions),
 	}
@@ -518,5 +542,5 @@ func (h *WAFHandler) regenerateHostConfig(ctx context.Context, proxyHostID strin
 	}
 
 	// Atomic: generate WAF config + test + reload (with global lock and rollback)
-	return h.nginxManager.GenerateHostWAFConfigAndReload(ctx, host, mergedExclusions, allowedIPs)
+	return h.nginxManager.GenerateHostWAFConfigAndReload(ctx, h.resolvedHost(ctx, host), mergedExclusions, allowedIPs)
 }

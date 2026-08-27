@@ -57,7 +57,7 @@ func InitHandlers(
 	h.Certificate = handler.NewCertificateHandler(svcs.Certificate, svcs.Audit)
 	h.Log = handler.NewLogHandler(repos.Log, redisCache, repos.RateLimit)
 	h.WAFTest = handler.NewWAFTestHandler()
-	h.WAF = handler.NewWAFHandler(repos.WAF, repos.ProxyHost, repos.Geo, nginxManager)
+	h.WAF = handler.NewWAFHandler(repos.WAF, repos.ProxyHost, repos.Geo, repos.GlobalWAF, nginxManager)
 	h.ExploitBlockRule = handler.NewExploitBlockRuleHandler(repos.ExploitBlockRule, repos.ProxyHost, svcs.ProxyHost)
 	h.AccessList = handler.NewAccessListHandler(repos.AccessList, svcs.ProxyHost)
 	h.AuthProvider = handler.NewAuthProviderHandler(svcs.AuthProvider)

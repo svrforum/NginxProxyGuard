@@ -255,13 +255,13 @@ func (v *modsecHTTPVersion) UnmarshalJSON(data []byte) error {
 // ModSecAuditLog represents ModSecurity audit log in JSON format
 type ModSecAuditLog struct {
 	Transaction struct {
-		TimeStamp     string  `json:"time_stamp"`
-		ClientIP      string  `json:"client_ip"`
-		ClientPort    int     `json:"client_port"`
-		HostIP        string  `json:"host_ip"`
-		HostPort      int     `json:"host_port"`
-		UniqueID      string  `json:"unique_id"`
-		Request       struct {
+		TimeStamp  string `json:"time_stamp"`
+		ClientIP   string `json:"client_ip"`
+		ClientPort int    `json:"client_port"`
+		HostIP     string `json:"host_ip"`
+		HostPort   int    `json:"host_port"`
+		UniqueID   string `json:"unique_id"`
+		Request    struct {
 			Method      string            `json:"method"`
 			URI         string            `json:"uri"`
 			HTTPVersion modsecHTTPVersion `json:"http_version"`
@@ -272,9 +272,9 @@ type ModSecAuditLog struct {
 			Headers  map[string]string `json:"headers"`
 		} `json:"response"`
 		Producer struct {
-			ModSecurity string   `json:"modsecurity"`
-			Connector   string   `json:"connector"`
-			SeqRules    string   `json:"secrules_engine"`
+			ModSecurity string `json:"modsecurity"`
+			Connector   string `json:"connector"`
+			SeqRules    string `json:"secrules_engine"`
 		} `json:"producer"`
 		Messages []struct {
 			Message string `json:"message"`
@@ -441,22 +441,23 @@ func (c *LogCollector) parseModSecLog(line string) (*model.CreateLogRequest, err
 	}
 
 	return &model.CreateLogRequest{
-		LogType:         model.LogTypeModSec,
-		Timestamp:       timestamp,
-		Host:            host,
-		ClientIP:        tx.ClientIP,
-		RequestMethod:   tx.Request.Method,
-		RequestURI:      tx.Request.URI,
-		RequestProtocol: "HTTP/" + string(tx.Request.HTTPVersion),
-		StatusCode:      tx.Response.HTTPCode,
-		RuleID:          ruleID,
-		RuleMessage:     ruleMessage,
-		RuleSeverity:    ruleSeverity,
-		RuleData:        ruleData,
-		AttackType:      attackType,
-		ActionTaken:     actionTaken,
-		BlockReason:     blockReason,
-		RawLog:          line,
+		LogType:           model.LogTypeModSec,
+		Timestamp:         timestamp,
+		Host:              host,
+		ClientIP:          tx.ClientIP,
+		RequestMethod:     tx.Request.Method,
+		RequestURI:        tx.Request.URI,
+		RequestProtocol:   "HTTP/" + string(tx.Request.HTTPVersion),
+		StatusCode:        tx.Response.HTTPCode,
+		RuleID:            ruleID,
+		RuleMessage:       ruleMessage,
+		RuleSeverity:      ruleSeverity,
+		RuleData:          ruleData,
+		AttackType:        attackType,
+		ActionTaken:       actionTaken,
+		WAFEngineBlocking: !isDetectionOnly,
+		BlockReason:       blockReason,
+		RawLog:            line,
 	}, nil
 }
 

@@ -281,3 +281,26 @@ type WAFRuleChangeEventListResponse struct {
 	Events []WAFRuleChangeEvent `json:"events"`
 	Total  int                  `json:"total"`
 }
+
+// ResolveWAF collapses the global WAF default and a host's own WAF columns into
+// the effective host used for config generation (#198 slice 6).
+//
+//	waf_use_global=false → the host's own columns (override, or disable)
+//	waf_use_global=true  → the global enabled/mode/paranoia/threshold
+//
+// It returns a COPY; the stored row is never mutated. Every path that writes a
+// per-host modsec file must call this first — writing the raw row silently
+// pins an inheriting host to whatever its stale column says, which is how a
+// host displayed as "blocking" ended up running DetectionOnly (#272, same
+// class as #202).
+func ResolveWAF(global *GlobalWAF, host *ProxyHost) *ProxyHost {
+	if host == nil || !host.WAFUseGlobal || global == nil {
+		return host
+	}
+	c := *host
+	c.WAFEnabled = global.Enabled
+	c.WAFMode = global.Mode
+	c.WAFParanoiaLevel = global.ParanoiaLevel
+	c.WAFAnomalyThreshold = global.AnomalyThreshold
+	return &c
+}

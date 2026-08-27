@@ -11,13 +11,5 @@ import "nginx-proxy-guard/internal/model"
 //	waf_use_global=false → host's own WAF columns (override, or disable via waf_enabled=false)
 //	waf_use_global=true  → global enabled/mode/paranoia/threshold (inherit)
 func resolveWAF(global *model.GlobalWAF, host *model.ProxyHost) *model.ProxyHost {
-	if host == nil || !host.WAFUseGlobal || global == nil {
-		return host
-	}
-	c := *host
-	c.WAFEnabled = global.Enabled
-	c.WAFMode = global.Mode
-	c.WAFParanoiaLevel = global.ParanoiaLevel
-	c.WAFAnomalyThreshold = global.AnomalyThreshold
-	return &c
+	return model.ResolveWAF(global, host)
 }

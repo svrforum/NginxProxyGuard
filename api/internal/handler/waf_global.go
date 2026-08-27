@@ -272,7 +272,10 @@ func (h *WAFHandler) regenerateAllHostConfigs(ctx context.Context) error {
 		}
 
 		wafHosts = append(wafHosts, hostWAFData{
-			Host:       &hosts[i],
+			// Resolved, not the raw row: this loop rewrites EVERY host's modsec
+			// file, so using stored columns would pin every inheriting host to
+			// its own stale waf_mode (#272).
+			Host:       h.resolvedHost(ctx, &hosts[i]),
 			Exclusions: mergedExclusions,
 			AllowedIPs: allowedIPs,
 		})

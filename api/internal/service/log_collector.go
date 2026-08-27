@@ -840,9 +840,19 @@ func (c *LogCollector) handleModSecLine(ctx context.Context, line string) {
 	}
 	c.addLog(*logReq)
 
-	// Notify WAF auto-ban service (only for blocked requests, not logged/detection mode).
-	// Skip for globally trusted IPs.
-	if c.wafAutoBan != nil && logReq.ClientIP != "" && logReq.ActionTaken == "blocked" && !c.isTrustedIP(ctx, logReq.ClientIP) {
+	// Notify WAF auto-ban service. The gate is "was the WAF enforcing", NOT
+	// "did the response end up 403": a host in blocking mode still answers 302
+	// (geo challenge), 429 (rate limit) or 301 (force-HTTPS) for requests that
+	// tripped WAF rules, because those terminate in nginx's rewrite phase
+	// before ModSecurity's phase-2 evaluation. Counting only 403s starved the
+	// counter — an operator with auto-ban at 5 events watched thousands of real
+	// rule matches contribute exactly zero (#272).
+	//
+	// Detection mode still never bans: observing must not enforce. Rules the
+	// operator deliberately excluded do not count either.
+	if c.wafAutoBan != nil && logReq.ClientIP != "" &&
+		logReq.WAFEngineBlocking && logReq.ActionTaken != "excluded" &&
+		!c.isTrustedIP(ctx, logReq.ClientIP) {
 		c.wafAutoBan.RecordWAFEvent(ctx, logReq.ClientIP, logReq.Host, logReq.RuleID, logReq.RuleMessage)
 	}
 }

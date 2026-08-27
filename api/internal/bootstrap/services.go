@@ -156,6 +156,10 @@ func InitServices(
 		repos.GeoIPHistory,
 		svcs.GeoIP,
 	)
+	// A completed GeoIP database update must reach nginx: until it reloads,
+	// the disabled placeholder maps every address to "--", which the country
+	// whitelist allows (#272).
+	svcs.GeoIPScheduler.SetNginxReloader(nginxManager)
 
 	if cfg.LogCollection {
 		svcs.LogCollector = service.NewLogCollector(
