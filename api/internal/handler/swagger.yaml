@@ -19,7 +19,7 @@ info:
     - `X-RateLimit-Remaining`: Remaining requests
     - `X-RateLimit-Reset`: Window reset time
 
-  version: 2.48.0
+  version: 2.49.0
   contact:
     name: Nginx Proxy Guard Support
     url: https://github.com/svrforum/nginxproxyguard
