@@ -170,32 +170,41 @@ func (s *Fail2banService) RecordFailedRequest(ctx context.Context, hostID string
 			hostDomain = host.DomainNames[0]
 		}
 
-		// Ban the IP
 		reason := fmt.Sprintf("Fail2ban: %d failed requests (%d status) in %d seconds on %s",
 			eventCount, statusCode, config.FindTime, hostDomain)
 
-		if err := s.banIP(ctx, clientIP, hostID, reason, eventCount, config.BanTime, config.Action); err != nil {
-			log.Printf("[Fail2ban] Failed to ban IP %s: %v", clientIP, err)
-		} else {
-			log.Printf("[Fail2ban] Banned IP %s on %s: %s", clientIP, hostDomain, reason)
-
-			// Batched (#221): the peak measured hour held 1,566 blocked
-			// requests, so bans are coalesced into one message with a count
-			// rather than sent one by one.
+		// The dropdown promises: block = ban, notify = alert only, log = log only.
+		// "notify" used to fall through to a real ban — honor the promise here.
+		switch config.Action {
+		case "log":
+			log.Printf("[Fail2ban] Would ban IP %s on %s (action=log, not banned): %s", clientIP, hostDomain, reason)
+			s.clearIPEvents(ctx, clientIP, hostID)
+		case "notify":
+			log.Printf("[Fail2ban] Threshold reached for IP %s on %s (action=notify, not banned): %s", clientIP, hostDomain, reason)
 			if s.notify != nil {
-				_ = s.notify.EmitBatched(ctx, "ip.banned", map[string]string{
+				_ = s.notify.EmitBatched(ctx, "ip.detected", map[string]string{
 					"ip": clientIP, "host": hostDomain, "reason": "fail2ban",
 				})
 			}
+			s.clearIPEvents(ctx, clientIP, hostID)
+		default: // block
+			if err := s.banIP(ctx, clientIP, hostID, reason, eventCount, config.BanTime); err != nil {
+				log.Printf("[Fail2ban] Failed to ban IP %s: %v", clientIP, err)
+			} else {
+				log.Printf("[Fail2ban] Banned IP %s on %s: %s", clientIP, hostDomain, reason)
 
-			// Clear events for this IP after banning
-			if s.redisCache != nil && s.redisCache.IsReady() {
-				key := fmt.Sprintf("%s:%s", hostID, clientIP)
-				s.redisCache.ResetCounter(ctx, key)
+				// Batched (#221): the peak measured hour held 1,566 blocked
+				// requests, so bans are coalesced into one message with a count
+				// rather than sent one by one.
+				if s.notify != nil {
+					_ = s.notify.EmitBatched(ctx, "ip.banned", map[string]string{
+						"ip": clientIP, "host": hostDomain, "reason": "fail2ban",
+					})
+				}
+
+				// Clear events for this IP after banning
+				s.clearIPEvents(ctx, clientIP, hostID)
 			}
-			s.mu.Lock()
-			delete(s.ipEvents[hostID], clientIP)
-			s.mu.Unlock()
 		}
 	}
 }
@@ -275,14 +284,22 @@ func (s *Fail2banService) isIPBanned(ctx context.Context, ip string, hostID stri
 	return count > 0
 }
 
-// banIP adds an IP to the banned list
-func (s *Fail2banService) banIP(ctx context.Context, ip string, hostID string, reason string, failCount int, banTime int, action string) error {
-	// If action is "log", just log and don't ban
-	if action == "log" {
-		log.Printf("[Fail2ban] Would ban IP %s (action=log): %s", ip, reason)
-		return nil
+// clearIPEvents resets the failure counter for an IP after the configured
+// action has fired, so notify/log actions alert once per threshold window
+// instead of on every subsequent failed request.
+func (s *Fail2banService) clearIPEvents(ctx context.Context, ip string, hostID string) {
+	if s.redisCache != nil && s.redisCache.IsReady() {
+		key := fmt.Sprintf("%s:%s", hostID, ip)
+		s.redisCache.ResetCounter(ctx, key)
 	}
+	s.mu.Lock()
+	delete(s.ipEvents[hostID], ip)
+	s.mu.Unlock()
+}
 
+// banIP adds an IP to the banned list (action=block only — notify/log are
+// handled by the caller and never reach here)
+func (s *Fail2banService) banIP(ctx context.Context, ip string, hostID string, reason string, failCount int, banTime int) error {
 	id := uuid.New().String()
 	now := time.Now()
 

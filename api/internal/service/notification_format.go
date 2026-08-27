@@ -311,6 +311,13 @@ func SampleMessage(lang, eventKey string) model.RenderedMessage {
 		fields["count"] = "3"
 		fields["reason"] = "fail2ban"
 		fields["subject"] = "192.0.2.5 " + tr(lang, "sample.andMore")
+	case "ip.detected":
+		severity = "warning"
+		fields["ip"] = "192.0.2.5"
+		fields["host"] = "app.example.com"
+		fields["count"] = "3"
+		fields["reason"] = "fail2ban"
+		fields["subject"] = "192.0.2.5 " + tr(lang, "sample.andMore")
 	case "sso.login_refused":
 		severity = "warning"
 		fields["subject"] = "google"

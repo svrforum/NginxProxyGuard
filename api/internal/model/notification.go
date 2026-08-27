@@ -62,6 +62,9 @@ var EventCatalogue = []EventDescriptor{
 	// lockout.
 	{Key: "auth.login_failed", Severity: "warning", Batched: true},
 	{Key: "ip.banned", Severity: "warning", Batched: true},
+	// Fail2ban action "Notify Only": threshold reached but deliberately not
+	// banned. A separate key from ip.banned, which promises a real ban.
+	{Key: "ip.detected", Severity: "warning", Batched: true},
 	{Key: "sso.login_refused", Severity: "warning", Batched: true},
 }
 

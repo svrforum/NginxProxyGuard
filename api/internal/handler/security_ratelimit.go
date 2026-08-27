@@ -112,6 +112,11 @@ func (h *SecurityHandler) UpsertFail2ban(c echo.Context) error {
 	if req.BanTime != nil && *req.BanTime < 0 {
 		return badRequestError(c, "ban_time must be 0 (permanent) or a positive number of seconds")
 	}
+	// A typo'd fail code ("4o1", "401;403") used to save fine and then silently
+	// never match — reject it here so the operator learns at save time.
+	if err := model.ValidateFail2banRequest(&req); err != nil {
+		return badRequestError(c, err.Error())
+	}
 
 	config, err := h.securityService.UpsertFail2ban(c.Request().Context(), proxyHostID, &req)
 	if err != nil {

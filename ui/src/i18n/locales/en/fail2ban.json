@@ -24,7 +24,7 @@
     "banTimeCustom": "Custom (seconds)",
     "banTimeSecondsPlaceholder": "seconds, 0 = permanent",
     "failCodes": "Fail Codes",
-    "failCodesHelp": "HTTP status codes that count as failures",
+    "failCodesHelp": "HTTP status codes that count as failures. Only responses this host itself answers are counted - 444 from the direct-IP catch-all server belongs to no host and never counts.",
     "action": "Action",
     "actionOptions": {
       "block": "Block IP",

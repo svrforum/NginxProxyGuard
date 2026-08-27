@@ -3,6 +3,7 @@ package model
 import (
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -125,6 +126,40 @@ func ParseIPWhitelist(raw string) (valid, invalid []string) {
 func ValidateIPWhitelist(raw string) error {
 	if _, invalid := ParseIPWhitelist(raw); len(invalid) > 0 {
 		return fmt.Errorf("invalid rate limit exception %q: expected an IP address or CIDR range", invalid[0])
+	}
+	return nil
+}
+
+// Fail2banActions are the accepted values of Fail2banConfig.Action.
+var Fail2banActions = []string{"block", "log", "notify"}
+
+// ValidateFail2banRequest rejects fail codes and actions that would be
+// accepted with HTTP 200 and then silently never match ("4o1", "401;403",
+// "4xx") — the operator's "why doesn't fail2ban fire" experience. An empty
+// FailCodes/Action is allowed: the upsert keeps the stored value.
+func ValidateFail2banRequest(req *CreateFail2banRequest) error {
+	if req.FailCodes != "" {
+		if len(req.FailCodes) > 100 {
+			return fmt.Errorf("fail_codes is too long (max 100 characters)")
+		}
+		for _, part := range strings.Split(req.FailCodes, ",") {
+			code, err := strconv.Atoi(strings.TrimSpace(part))
+			if err != nil || code < 100 || code > 599 {
+				return fmt.Errorf("invalid fail code %q: expected comma-separated HTTP status codes (e.g. 401,403,429)", strings.TrimSpace(part))
+			}
+		}
+	}
+	if req.Action != "" {
+		valid := false
+		for _, a := range Fail2banActions {
+			if req.Action == a {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			return fmt.Errorf("invalid action %q: must be one of block, log, notify", req.Action)
+		}
 	}
 	return nil
 }

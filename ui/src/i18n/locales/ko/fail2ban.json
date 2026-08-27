@@ -24,7 +24,7 @@
     "banTimeCustom": "직접 입력 (초)",
     "banTimeSecondsPlaceholder": "초 단위, 0 = 영구",
     "failCodes": "실패 코드",
-    "failCodesHelp": "실패로 간주되는 HTTP 상태 코드",
+    "failCodesHelp": "실패로 간주되는 HTTP 상태 코드입니다. 이 호스트가 직접 응답한 코드만 셉니다. IP 직접 접속 차단(444)은 어느 호스트에도 속하지 않아 카운트되지 않습니다.",
     "action": "액션",
     "actionOptions": {
       "block": "IP 차단",
