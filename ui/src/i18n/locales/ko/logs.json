@@ -114,7 +114,8 @@
     "statusCodeInvalid": "\"{{value}}\"은(는) 상태 코드나 분류가 아닙니다 (100~599 또는 1xx~5xx)",
     "excludeStatusCodes": "상태 코드 제외",
     "excludeStatusCodesHelp": "해당 응답을 숨깁니다. WAF에 차단된 요청은 403이므로 403을 제외하면 함께 숨겨집니다. 오류 로그는 상태 코드가 없어 항상 표시됩니다.",
-    "remove": "제거"
+    "remove": "제거",
+    "statusCodeTooMany": "개별 코드는 최대 {{max}}개까지입니다. 4xx 같은 분류를 사용해 주세요."
   },
   "presets": {
     "label": "프리셋",

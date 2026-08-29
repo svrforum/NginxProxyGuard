@@ -59,8 +59,13 @@ export default function TrustedProxySettings() {
   }
 
   const builtins: string[] = settings?.trusted_proxy_builtins || []
-  const presetRanges: string[] = settings?.trusted_proxy_preset_ranges || []
   const cfUpdated = settings?.cloudflare_ranges_updated
+  // The count must follow the dropdown, not the saved row: read from the saved
+  // settings it says "Includes 0 ranges" at the exact moment the operator is
+  // deciding whether to turn the preset on.
+  const savedPreset = settings?.trusted_proxy_preset || 'none'
+  const savedPresetRanges: string[] = settings?.trusted_proxy_preset_ranges || []
+  const presetRangeCount = preset === savedPreset ? savedPresetRanges.length : null
 
   return (
     <div className="space-y-6">
@@ -73,6 +78,11 @@ export default function TrustedProxySettings() {
         <div className="mt-4 p-4 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20">
           <p className="text-sm text-amber-800 dark:text-amber-200">{t('trustedProxies.safetyWarning')}</p>
         </div>
+
+        {/* NPG has a second, unrelated setting with almost the same name — the
+            TRUSTED_PROXY_CIDR env var, which governs the admin panel. Saying so
+            here is cheaper than the support thread. */}
+        <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">{t('trustedProxies.envVarNote')}</p>
       </div>
 
       <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 space-y-5">
@@ -92,7 +102,9 @@ export default function TrustedProxySettings() {
           </select>
           {preset === 'cloudflare' && (
             <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-              {t('trustedProxies.cloudflareRanges', { count: presetRanges.length, date: cfUpdated })}
+              {presetRangeCount === null
+                ? t('trustedProxies.cloudflareRangesPending', { date: cfUpdated })
+                : t('trustedProxies.cloudflareRanges', { count: presetRangeCount, date: cfUpdated })}
             </p>
           )}
           <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{t('trustedProxies.tunnelNote')}</p>

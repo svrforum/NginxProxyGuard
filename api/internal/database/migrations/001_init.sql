@@ -2460,9 +2460,9 @@ geckodriver'::text,
     waf_auto_ban_duration integer DEFAULT 3600,
     direct_ip_access_action character varying(20) DEFAULT 'allow'::character varying,
     system_logs_enabled boolean DEFAULT true NOT NULL,
-    system_logs_levels jsonb DEFAULT '{"npm-guard-db": "warn", "npm-guard-ui": "warn", "npm-guard-api": "info", "npm-guard-proxy": "info"}'::jsonb,
+    system_logs_levels jsonb DEFAULT '{"npg-db": "warn", "npg-ui": "warn", "npg-api": "info", "npg-proxy": "info"}'::jsonb,
     system_logs_exclude_patterns text[] DEFAULT ARRAY['/health'::text, '/nginx_status'::text, '/.well-known/'::text, 'HEAD /'::text],
-    system_logs_stdout_excluded text[] DEFAULT ARRAY['npm-guard-proxy'::text],
+    system_logs_stdout_excluded text[] DEFAULT ARRAY['npg-proxy'::text],
     ui_font_family character varying(50) DEFAULT 'system'::character varying,
     ui_error_page_language character varying(10) DEFAULT 'auto'::character varying,
     global_block_exploits_exceptions text DEFAULT '^/wp-json/
@@ -4122,6 +4122,14 @@ ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS global_trusted_ips_b
 ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS trusted_proxy_cidrs text DEFAULT ''::text NOT NULL;
 ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS trusted_proxy_preset text DEFAULT 'none'::text NOT NULL;
 ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS real_ip_header text DEFAULT 'X-Forwarded-For'::text NOT NULL;
+
+-- v2.51.0: the shipped defaults for per-container log levels / stdout exclusion
+-- still named the pre-rename containers (npm-guard-*), so on a fresh install the
+-- map matched nothing and npg-db / npg-ui silently fell through to 'info'.
+-- Rewrites ONLY rows still holding the exact stale default — a row an operator
+-- has customized is left alone. Canonical execution lives in migration.go upgrades.
+ALTER TABLE public.system_settings ALTER COLUMN system_logs_levels SET DEFAULT '{"npg-db": "warn", "npg-ui": "warn", "npg-api": "info", "npg-proxy": "info"}'::jsonb;
+ALTER TABLE public.system_settings ALTER COLUMN system_logs_stdout_excluded SET DEFAULT ARRAY['npg-proxy'::text];
 
 -- v2.8.4: Default language for public error pages (403, etc.) - Issue #105
 ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS ui_error_page_language character varying(10) DEFAULT 'auto'::character varying;

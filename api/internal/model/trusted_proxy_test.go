@@ -61,10 +61,18 @@ func TestValidateTrustedProxyCIDRs(t *testing.T) {
 	}
 
 	// Trusting everything is the one shape that makes the header forgeable by
-	// anyone who can reach the box.
-	for _, bad := range []string{"0.0.0.0/0", "::/0"} {
+	// anyone who can reach the box. ::/1 matters as much as ::/0 — rejecting
+	// only the literal catch-all would wave through half the address space.
+	for _, bad := range []string{"0.0.0.0/0", "::/0", "::/1", "2000::/3", "2606:4700::/16"} {
 		if err := ValidateTrustedProxyCIDRs(bad); err == nil {
 			t.Errorf("%q should be rejected", bad)
+		}
+	}
+
+	// Real CDN IPv6 allocations must fit: Cloudflare's broadest is a /29.
+	for _, ok := range []string{"2a06:98c0::/29", "2606:4700::/32", "2001:db8::/64", "2001:db8::1"} {
+		if err := ValidateTrustedProxyCIDRs(ok); err != nil {
+			t.Errorf("IPv6 range %q rejected: %v", ok, err)
 		}
 	}
 
@@ -88,6 +96,31 @@ func TestValidateTrustedProxyCIDRs(t *testing.T) {
 	// A realistic operator allocation must still fit.
 	if err := ValidateTrustedProxyCIDRs("203.0.113.0/24\n198.51.100.0/22"); err != nil {
 		t.Errorf("ordinary allocation rejected: %v", err)
+	}
+
+	// Private space does not count against the budget. Found by the e2e spec:
+	// 10.0.0.0/8 is 16.7M addresses and was rejected — while being a range NPG
+	// already trusts by default, and the single most ordinary answer to "where
+	// is my internal reverse proxy". An internet client cannot send from these,
+	// so trusting them cannot enable forgery.
+	for _, lan := range []string{
+		"10.0.0.0/8",
+		"172.16.0.0/12",
+		"192.168.0.0/16",
+		"127.0.0.0/8",
+		"169.254.0.0/16",
+		"100.64.0.0/10",
+		"10.0.0.0/8\n172.16.0.0/12\n192.168.0.0/16",
+	} {
+		if err := ValidateTrustedProxyCIDRs(lan); err != nil {
+			t.Errorf("non-routable range %q rejected: %v", lan, err)
+		}
+	}
+
+	// The exemption must not leak: a public range stays budgeted even when
+	// listed next to private ones.
+	if err := ValidateTrustedProxyCIDRs("10.0.0.0/8\n240.0.0.0/4"); err == nil {
+		t.Error("a public oversized block must still be rejected alongside private ranges")
 	}
 }
 

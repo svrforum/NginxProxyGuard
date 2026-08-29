@@ -124,6 +124,16 @@ func (r *BackupRepository) importSystemSettings(ctx context.Context, tx *sql.Tx,
 	// nginx.conf. Coerce rather than fail the whole restore.
 	trustedProxyPreset := coerceBackupString(ss.TrustedProxyPreset, model.NormalizeTrustedProxyPreset)
 	realIPHeader := coerceBackupString(ss.RealIPHeader, model.NormalizeRealIPHeader)
+	// The CIDR list needs the same guard as the two above. Without it a
+	// hand-edited backup restores 0.0.0.0/0 — which the API's own write path
+	// refuses — and the restore then regenerates nginx.conf and reloads,
+	// leaving the forwarded-address header forgeable by any client.
+	trustedProxyCIDRs := coerceBackupString(ss.TrustedProxyCIDRs, func(v string) (string, error) {
+		if err := model.ValidateTrustedProxyCIDRs(v); err != nil {
+			return "", err
+		}
+		return v, nil
+	})
 
 	_, err := tx.ExecContext(ctx, query,
 		ss.GeoIPEnabled, ss.GeoIPAutoUpdate, ss.GeoIPUpdateInterval,
@@ -149,7 +159,7 @@ func (r *BackupRepository) importSystemSettings(ctx context.Context, tx *sql.Tx,
 		ss.UIFontFamily, ss.UIErrorPageLanguage,
 		systemLogsLevels, systemLogsExcludePatterns, systemLogsStdoutExcluded,
 		ss.GlobalTrustedIPsBypassWAF,
-		ss.TrustedProxyCIDRs, trustedProxyPreset, realIPHeader,
+		trustedProxyCIDRs, trustedProxyPreset, realIPHeader,
 	)
 	return err
 }

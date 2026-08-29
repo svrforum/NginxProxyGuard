@@ -43,6 +43,11 @@ const (
 	// 4,194,304 is a /10 — comfortably more than any home or business
 	// allocation, far less than a meaningful slice of the internet.
 	maxTrustedProxyAddresses = 1 << 22
+
+	// minIPv6TrustedPrefix is the shortest IPv6 prefix accepted. Cloudflare's
+	// broadest published range is a /29, so this admits every real CDN while
+	// refusing ::/0 and its near neighbours.
+	minIPv6TrustedPrefix = 29
 )
 
 // AlwaysTrustedProxyRanges are the private/loopback networks NPG has always
@@ -162,16 +167,29 @@ func ValidateTrustedProxyCIDRs(raw string) error {
 	total := new(big.Int)
 	for _, entry := range valid {
 		if strings.Contains(entry, ":") {
-			// IPv6 allocations are enormous by design and a /64 per site is
-			// normal, so counting addresses is meaningless there. Reject only
-			// the catch-all.
-			if entry == "::/0" {
-				return fmt.Errorf("%w: trusted proxy entry ::/0 would trust every client", ErrInvalidInput)
+			// Counting IPv6 addresses is meaningless — a /64 per site is normal —
+			// so the budget is expressed as a prefix floor instead. /29 is the
+			// widest allocation a real CDN publishes (Cloudflare's broadest is a
+			// /29); anything shorter is a slice of the internet, and rejecting
+			// only the literal ::/0 would wave through ::/1.
+			if !ipv6PrefixAtLeast(entry, minIPv6TrustedPrefix) {
+				return fmt.Errorf("%w: trusted proxy entry %q is broader than /%d and would trust too much of the internet",
+					ErrInvalidInput, entry, minIPv6TrustedPrefix)
 			}
 			continue
 		}
 		if entry == "0.0.0.0/0" {
 			return fmt.Errorf("%w: trusted proxy entry 0.0.0.0/0 would trust every client", ErrInvalidInput)
+		}
+		// Private, loopback, link-local and CGNAT space does not count against
+		// the budget. The budget exists to stop an operator trusting a slice of
+		// the public internet, where anyone can send packets from; a LAN range
+		// is not reachable by an internet client, and NPG already trusts the
+		// RFC1918 blocks by default. Counting them would reject 10.0.0.0/8 —
+		// a completely ordinary answer to "where is my internal proxy" — while
+		// that exact range is trusted out of the box.
+		if isNonRoutableIPv4Network(entry) {
+			continue
 		}
 		total.Add(total, big.NewInt(ipv4AddressCount(entry)))
 	}
@@ -197,4 +215,70 @@ func ipv4AddressCount(entry string) int64 {
 		return 1
 	}
 	return int64(1) << uint(bits-ones)
+}
+
+// nonRoutableIPv4Blocks are the IPv4 ranges an internet client cannot send
+// from, so trusting them cannot let a remote attacker forge a client address.
+var nonRoutableIPv4Blocks = []string{
+	"10.0.0.0/8",     // RFC 1918
+	"172.16.0.0/12",  // RFC 1918
+	"192.168.0.0/16", // RFC 1918
+	"127.0.0.0/8",    // loopback
+	"169.254.0.0/16", // link-local
+	"100.64.0.0/10",  // CGNAT, RFC 6598
+}
+
+// isNonRoutableIPv4Network reports whether an entry lies wholly inside private,
+// loopback, link-local or CGNAT space.
+func isNonRoutableIPv4Network(entry string) bool {
+	first, last, ok := ipv4Bounds(entry)
+	if !ok {
+		return false
+	}
+	for _, block := range nonRoutableIPv4Blocks {
+		_, blockNet, err := net.ParseCIDR(block)
+		if err != nil {
+			continue
+		}
+		if blockNet.Contains(first) && blockNet.Contains(last) {
+			return true
+		}
+	}
+	return false
+}
+
+// ipv4Bounds returns the first and last address an entry covers.
+func ipv4Bounds(entry string) (first, last net.IP, ok bool) {
+	if !strings.Contains(entry, "/") {
+		ip := net.ParseIP(entry).To4()
+		if ip == nil {
+			return nil, nil, false
+		}
+		return ip, ip, true
+	}
+	_, ipNet, err := net.ParseCIDR(entry)
+	if err != nil || ipNet.IP.To4() == nil {
+		return nil, nil, false
+	}
+	base := ipNet.IP.To4()
+	end := make(net.IP, len(base))
+	copy(end, base)
+	for i := range end {
+		end[i] |= ^ipNet.Mask[i]
+	}
+	return base, end, true
+}
+
+// ipv6PrefixAtLeast reports whether an IPv6 entry is at least as narrow as the
+// given prefix length. A bare address counts as a /128.
+func ipv6PrefixAtLeast(entry string, minPrefix int) bool {
+	if !strings.Contains(entry, "/") {
+		return net.ParseIP(entry) != nil
+	}
+	_, ipNet, err := net.ParseCIDR(entry)
+	if err != nil {
+		return false
+	}
+	ones, _ := ipNet.Mask.Size()
+	return ones >= minPrefix
 }

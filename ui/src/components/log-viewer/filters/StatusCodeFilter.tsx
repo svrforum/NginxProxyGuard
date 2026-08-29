@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 const STATUS_CLASSES = ['1xx', '2xx', '3xx', '4xx', '5xx'] as const;
+// Mirrors maxStatusCodeTokens in api/internal/model/log_status_filter.go.
+const MAX_CODES = 100;
 
 interface StatusCodeFilterProps {
   /** Explicit codes the operator typed or picked. */
@@ -53,6 +55,13 @@ export function StatusCodeFilter({ codes, classes, onChange, quickCodes, variant
     const nextCodes = [...codes];
     const nextClasses = [...classes];
     for (const token of tokens) {
+      // The server accepts at most 100 explicit code tokens; stopping here
+      // means a long paste is reported in place instead of coming back as a
+      // 400 the log table has no way to display.
+      if (nextCodes.length >= MAX_CODES) {
+        setError(t('filters.statusCodeTooMany', { max: MAX_CODES }));
+        return;
+      }
       if (/^[1-5]xx$/i.test(token)) {
         const cls = token.toLowerCase();
         if (!nextClasses.includes(cls)) nextClasses.push(cls);

@@ -1375,6 +1375,17 @@ ALTER TABLE public.cloudflare_tunnel ADD COLUMN IF NOT EXISTS catchall_applied_s
 ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS trusted_proxy_preset text DEFAULT 'none'::text NOT NULL;
 ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS real_ip_header text DEFAULT 'X-Forwarded-For'::text NOT NULL;`,
 		},
+		{
+			desc: "v2.51.0: system log defaults still named the pre-rename containers (npm-guard-*)",
+			sql: `ALTER TABLE public.system_settings ALTER COLUMN system_logs_levels SET DEFAULT '{"npg-db": "warn", "npg-ui": "warn", "npg-api": "info", "npg-proxy": "info"}'::jsonb;
+ALTER TABLE public.system_settings ALTER COLUMN system_logs_stdout_excluded SET DEFAULT ARRAY['npg-proxy'::text];
+UPDATE public.system_settings
+   SET system_logs_levels = '{"npg-db": "warn", "npg-ui": "warn", "npg-api": "info", "npg-proxy": "info"}'::jsonb
+ WHERE system_logs_levels = '{"npm-guard-db": "warn", "npm-guard-ui": "warn", "npm-guard-api": "info", "npm-guard-proxy": "info"}'::jsonb;
+UPDATE public.system_settings
+   SET system_logs_stdout_excluded = ARRAY['npg-proxy'::text]
+ WHERE system_logs_stdout_excluded = ARRAY['npm-guard-proxy'::text];`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

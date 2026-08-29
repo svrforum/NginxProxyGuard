@@ -19,7 +19,7 @@ info:
     - `X-RateLimit-Remaining`: Remaining requests
     - `X-RateLimit-Reset`: Window reset time
 
-  version: 2.50.0
+  version: 2.51.0
   contact:
     name: Nginx Proxy Guard Support
     url: https://github.com/svrforum/nginxproxyguard
@@ -2785,10 +2785,14 @@ paths:
         window ending now (truncated to the minute). Set `start_time` explicitly to look
         further back.
 
-        **Invalid values are dropped, not rejected**: `log_type`, `severity` and
+        **Most invalid values are dropped, not rejected**: `log_type`, `severity` and
         `block_reason` outside their enum, and unparseable numbers/timestamps, are
-        silently ignored — the response is then *less* filtered than requested, never a
-        400. The one exception is `proxy_host_id`: a non-UUID matches nothing.
+        silently ignored — the response is then *less* filtered than requested. The
+        exceptions are `proxy_host_id`, where a non-UUID matches nothing, and the
+        status-code filters (`status_codes`, `status_classes`, `exclude_status_codes`,
+        `exclude_status_classes`), which answer **400** naming the offending token. A
+        silently dropped status filter returns an unfiltered page that looks filtered,
+        so those are validated instead.
 
         **Array parameters** are repeated (`?hosts=a&hosts=b`) and capped at 100 entries;
         extra entries are discarded. `exclude_ips` additionally drops any entry that is
@@ -2899,13 +2903,49 @@ paths:
             type: integer
         - name: status_codes
           in: query
-          description: Multi-select exact match; non-numeric entries are dropped.
+          description: >-
+            Multi-select exact match. Each entry must be 100-599; anything else
+            answers 400. At most 100 entries.
           style: form
           explode: true
           schema:
             type: array
             items:
               type: integer
+        - name: status_classes
+          in: query
+          description: >-
+            Whole status classes, expanded server-side into explicit codes
+            (`4xx` -> 400-499). Combines with `status_codes`. Anything other
+            than 1xx-5xx answers 400.
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [1xx, 2xx, 3xx, 4xx, 5xx]
+        - name: exclude_status_codes
+          in: query
+          description: >-
+            Hide these status codes. Rows with no status code (error-log rows)
+            are always kept. Same validation as `status_codes`.
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: integer
+        - name: exclude_status_classes
+          in: query
+          description: Hide whole status classes. Same validation as `status_classes`.
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [1xx, 2xx, 3xx, 4xx, 5xx]
         - name: severity
           in: query
           description: Error-log severity.
@@ -11215,6 +11255,42 @@ components:
     SystemSettings:
       type: object
       properties:
+        trusted_proxy_cidrs:
+          type: string
+          description: >-
+            Newline-separated IP/CIDR entries for proxies in front of NPG whose
+            forwarded client address should be believed. Additive to the
+            always-trusted private and loopback ranges. Rejected with 400 if an
+            entry is unparseable or the list covers too much of the internet.
+        trusted_proxy_preset:
+          type: string
+          enum: [none, cloudflare]
+          default: none
+          description: Adds a well-known CDN's published ranges to the trusted list.
+        real_ip_header:
+          type: string
+          enum: [X-Forwarded-For, X-Real-IP, CF-Connecting-IP, True-Client-IP]
+          default: X-Forwarded-For
+          description: >-
+            Header the client address is read from on requests arriving through a
+            trusted proxy. Changing it away from the default means requests
+            without that header keep the proxy's address.
+        trusted_proxy_builtins:
+          type: array
+          items:
+            type: string
+          readOnly: true
+          description: Always-trusted private/loopback ranges. Not removable.
+        trusted_proxy_preset_ranges:
+          type: array
+          items:
+            type: string
+          readOnly: true
+          description: Ranges contributed by the selected preset.
+        cloudflare_ranges_updated:
+          type: string
+          readOnly: true
+          description: Date the shipped Cloudflare range list was taken.
         geoip_enabled:
           type: boolean
         maxmind_account_id:

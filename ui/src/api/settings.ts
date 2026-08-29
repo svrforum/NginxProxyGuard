@@ -277,7 +277,13 @@ export async function updateSystemSettings(data: UpdateSystemSettingsRequest): P
     headers: getAuthHeaders(),
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error('Failed to update system settings');
+  if (!res.ok) {
+    // Keep the server's sentence: the trusted-proxy validation answers 400 with
+    // the offending value and why it was refused, and a generic message here
+    // would make every one of those invisible.
+    const error = await res.json().catch(() => ({ error: 'Failed to update system settings' }));
+    throw new Error(error.error || 'Failed to update system settings');
+  }
   return res.json();
 }
 

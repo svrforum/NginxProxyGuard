@@ -114,7 +114,8 @@
     "statusCodeInvalid": "\"{{value}}\" is not a status code or class (100-599, or 1xx-5xx)",
     "excludeStatusCodes": "Exclude Status Codes",
     "excludeStatusCodesHelp": "Hide these responses. Note that WAF-blocked requests are 403, so excluding 403 hides them too. Error-log rows have no status code and are always kept.",
-    "remove": "Remove"
+    "remove": "Remove",
+    "statusCodeTooMany": "At most {{max}} individual codes. Use a class such as 4xx instead."
   },
   "presets": {
     "label": "Presets",

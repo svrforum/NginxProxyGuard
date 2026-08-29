@@ -26,15 +26,11 @@ import (
 // unusual codes somebody is filtering for.
 const (
 	// maxStatusCodeTokens bounds the explicit codes accepted per parameter.
-	// The expanded set is bounded separately (see maxExpandedStatusCodes) —
-	// capping the expansion here would silently truncate "4xx and 5xx" to
-	// just 4xx, leaving the caller with a filtered view and no error.
+	// It applies to the INPUT only — see the note in ParseStatusFilter for why
+	// the expanded set must not be capped.
 	maxStatusCodeTokens = 100
 	// maxStatusClassTokens is generous: only 1xx-5xx exist.
 	maxStatusClassTokens = 8
-	// maxExpandedStatusCodes bounds the merged result. Every class expands to
-	// 100 codes, so all five classes plus explicit codes still fit.
-	maxExpandedStatusCodes = 600
 
 	statusCodeMin = 100
 	statusCodeMax = 599
@@ -72,7 +68,11 @@ func ParseStatusFilter(codeTokens, classTokens []string) ([]int, error) {
 		return nil, fmt.Errorf("%w: too many status classes (max %d)", ErrInvalidInput, maxStatusClassTokens)
 	}
 
-	seen := make(map[int]struct{}, maxExpandedStatusCodes)
+	// The expanded set needs no cap of its own: every entry is a distinct code
+	// in [100,599], so it can never exceed 500 however many tokens arrive. What
+	// must NOT happen is capping it at the input limit — that would silently
+	// truncate "4xx and 5xx" to 4xx with the 5xx chip still lit.
+	seen := make(map[int]struct{}, statusCodeMax-statusCodeMin+1)
 	add := func(code int) {
 		seen[code] = struct{}{}
 	}
@@ -104,9 +104,6 @@ func ParseStatusFilter(codeTokens, classTokens []string) ([]int, error) {
 
 	if len(seen) == 0 {
 		return nil, nil
-	}
-	if len(seen) > maxExpandedStatusCodes {
-		return nil, fmt.Errorf("%w: status filter expands to too many codes (max %d)", ErrInvalidInput, maxExpandedStatusCodes)
 	}
 
 	out := make([]int, 0, len(seen))

@@ -706,6 +706,13 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 			}
 			if *filter.SortBy == "created_at" {
 				orderBy = fmt.Sprintf("created_at %s, id %s", sortOrder, sortOrder)
+				// The cursor predicate is `(created_at, id) < (...)`, which only
+				// walks DESC. Ascending order kept minting a cursor the server
+				// then refused to honour, so a client following next_cursor —
+				// the documented keyset pattern — received page 1 forever.
+				if sortOrder == "ASC" {
+					customSort = true
+				}
 			} else {
 				// Any other explicit sort (incl. timestamp) can't keyset on
 				// (created_at, id), so it falls back to OFFSET pagination.
@@ -880,9 +887,11 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 		total++
 	}
 
-	// Mint the next-page cursor only when there's something to fetch next.
-	// Custom sorts skip this (cursor encodes created_at+id, not the custom
-	// column) so the client falls back to OFFSET on the next request.
+	// Mint the next-page cursor only when there's something to fetch next AND
+	// the ordering is the DESC keyset the cursor encodes. Custom sorts and
+	// ascending order skip it, so the client falls back to OFFSET — handing out
+	// a cursor the request path will not honour is worse than handing out none,
+	// because the client loops on page 1 with no error.
 	var nextCursor string
 	if hasMore && !customSort && len(logs) > 0 {
 		last := logs[len(logs)-1]

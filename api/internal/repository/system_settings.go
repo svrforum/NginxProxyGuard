@@ -277,7 +277,22 @@ func (r *SystemSettingsRepository) createDefault(ctx context.Context) (*model.Sy
 		return nil, fmt.Errorf("failed to create default system settings: %w", err)
 	}
 
-	return settings, nil
+	// Read the row back instead of returning the struct built above. The INSERT
+	// names a subset of the columns, so every DB-DEFAULT column would otherwise
+	// reach the caller as its Go zero value — and the caller on a fresh install
+	// is whoever asked first, not necessarily a later request that would see the
+	// real row. That cost the first boot its system logs: system_logs_enabled
+	// defaults to true in the schema, DockerLogCollector received false with nil
+	// level maps, and shouldLog dropped every line until the next restart.
+	//
+	// The re-read goes through the same COALESCE'd SELECT every other caller
+	// uses, so there is exactly one definition of "the defaults".
+	fresh, err := r.getFromDB(ctx)
+	if err != nil {
+		log.Printf("[SystemSettings] created defaults but could not read them back (%v); using in-memory defaults for this call", err)
+		return settings, nil
+	}
+	return fresh, nil
 }
 
 // Update updates system settings
