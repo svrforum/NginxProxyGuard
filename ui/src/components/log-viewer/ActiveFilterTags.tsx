@@ -26,6 +26,7 @@ export function ActiveFilterTags({ filter, onRemove }: ActiveFilterTagsProps) {
   if (filter.method) tags.push({ key: 'method', label: t('filters.method'), value: filter.method });
   if (filter.geo_country_code) tags.push({ key: 'geo_country_code', label: t('filters.country'), value: filter.geo_country_code });
   if (filter.status_codes?.length) tags.push({ key: 'status_codes', label: t('filters.statusCodes'), value: filter.status_codes.join(', ') });
+  if (filter.status_classes?.length) tags.push({ key: 'status_classes', label: t('filters.statusClass'), value: filter.status_classes.join(', ') });
   if (filter.min_size) tags.push({ key: 'min_size', label: t('filters.minSize'), value: formatBytes(filter.min_size) });
   if (filter.max_size) tags.push({ key: 'max_size', label: t('filters.maxSize'), value: formatBytes(filter.max_size) });
   if (filter.min_request_time) tags.push({ key: 'min_request_time', label: t('filters.minRequestTime'), value: `>${filter.min_request_time}s` });
@@ -61,6 +62,8 @@ export function ActiveFilterTags({ filter, onRemove }: ActiveFilterTagsProps) {
   if (filter.exclude_uris?.length) tags.push({ key: 'exclude_uris', label: t('filters.excludeUris'), value: filter.exclude_uris.join(', '), isExclude: true });
   if (filter.exclude_hosts?.length) tags.push({ key: 'exclude_hosts', label: t('filters.excludeHosts'), value: filter.exclude_hosts.join(', '), isExclude: true });
   if (filter.exclude_countries?.length) tags.push({ key: 'exclude_countries', label: t('filters.excludeCountries'), value: filter.exclude_countries.join(', '), isExclude: true });
+  if (filter.exclude_status_codes?.length) tags.push({ key: 'exclude_status_codes', label: t('filters.excludeStatusCodes'), value: filter.exclude_status_codes.join(', '), isExclude: true });
+  if (filter.exclude_status_classes?.length) tags.push({ key: 'exclude_status_classes', label: t('filters.excludeStatusCodes'), value: filter.exclude_status_classes.join(', '), isExclude: true });
 
   if (tags.length === 0) return null;
 

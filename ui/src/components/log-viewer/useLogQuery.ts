@@ -94,6 +94,7 @@ export function useLogQuery({ logType, defaultBlockReason }: UseLogQueryArgs) {
     if (filter.method) count++;
     if (filter.geo_country_code) count++;
     if (filter.status_codes?.length) count++;
+    if (filter.status_classes?.length) count++;
     if (filter.min_size) count++;
     if (filter.max_size) count++;
     if (filter.min_request_time) count++;
@@ -104,6 +105,7 @@ export function useLogQuery({ logType, defaultBlockReason }: UseLogQueryArgs) {
     if (filter.exclude_uris?.length) count++;
     if (filter.exclude_hosts?.length) count++;
     if (filter.exclude_countries?.length) count++;
+    if (filter.exclude_status_codes?.length || filter.exclude_status_classes?.length) count++;
     return count;
   }, [filter]);
 

@@ -661,6 +661,17 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 			}
 			conditions = append(conditions, fmt.Sprintf("(geo_country_code IS NULL OR geo_country_code NOT IN (%s))", strings.Join(placeholders, ",")))
 		}
+		if len(filter.ExcludeStatusCodes) > 0 {
+			placeholders := make([]string, len(filter.ExcludeStatusCodes))
+			for i, code := range filter.ExcludeStatusCodes {
+				placeholders[i] = fmt.Sprintf("$%d", argIndex)
+				args = append(args, code)
+				argIndex++
+			}
+			// `error` rows carry a NULL status_code; without the IS NULL arm
+			// they would vanish from the error tab whenever any code is excluded.
+			conditions = append(conditions, fmt.Sprintf("(status_code IS NULL OR status_code NOT IN (%s))", strings.Join(placeholders, ",")))
+		}
 	}
 
 	whereClause := ""

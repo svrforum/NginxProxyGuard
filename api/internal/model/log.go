@@ -259,6 +259,11 @@ type LogFilter struct {
 	ExcludeURIs       []string `json:"exclude_uris,omitempty"`        // Exclude specific URIs (contains)
 	ExcludeHosts      []string `json:"exclude_hosts,omitempty"`       // Exclude specific hosts
 	ExcludeCountries  []string `json:"exclude_countries,omitempty"`   // Exclude specific country codes
+	// ExcludeStatusCodes holds codes already expanded from any class tokens
+	// (see ParseStatusFilter). Rows with a NULL status_code are kept: only
+	// `error` log rows have one, and dropping them would empty the error tab
+	// as soon as any status is excluded.
+	ExcludeStatusCodes []int `json:"exclude_status_codes,omitempty"`
 
 	// Sorting
 	SortBy    *string `json:"sort_by,omitempty"`    // timestamp, body_bytes_sent, request_time, status_code

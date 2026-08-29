@@ -109,6 +109,8 @@ export interface LogFilter {
   method?: string;
   geo_country_code?: string;
   status_codes?: number[];
+  /** Class tokens ('4xx'); expanded server-side into explicit codes. */
+  status_classes?: string[];
   min_size?: number;
   max_size?: number;
   min_request_time?: number;
@@ -126,6 +128,8 @@ export interface LogFilter {
   exclude_uris?: string[];
   exclude_hosts?: string[];
   exclude_countries?: string[];
+  exclude_status_codes?: number[];
+  exclude_status_classes?: string[];
 
   // Sorting
   sort_by?:

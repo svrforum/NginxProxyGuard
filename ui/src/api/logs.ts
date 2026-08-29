@@ -53,6 +53,9 @@ function buildFilterParams(filter: LogFilter, params: URLSearchParams): void {
   if (filter.status_codes && filter.status_codes.length > 0) {
     filter.status_codes.forEach(code => params.append('status_codes', code.toString()));
   }
+  if (filter.status_classes && filter.status_classes.length > 0) {
+    filter.status_classes.forEach(cls => params.append('status_classes', cls));
+  }
   if (filter.min_size) params.set('min_size', filter.min_size.toString());
   if (filter.max_size) params.set('max_size', filter.max_size.toString());
   if (filter.min_request_time) params.set('min_request_time', filter.min_request_time.toString());
@@ -69,6 +72,12 @@ function buildFilterParams(filter: LogFilter, params: URLSearchParams): void {
   }
   if (filter.exclude_hosts && filter.exclude_hosts.length > 0) {
     filter.exclude_hosts.forEach(host => params.append('exclude_hosts', host));
+  }
+  if (filter.exclude_status_codes && filter.exclude_status_codes.length > 0) {
+    filter.exclude_status_codes.forEach(code => params.append('exclude_status_codes', code.toString()));
+  }
+  if (filter.exclude_status_classes && filter.exclude_status_classes.length > 0) {
+    filter.exclude_status_classes.forEach(cls => params.append('exclude_status_classes', cls));
   }
   if (filter.exclude_countries && filter.exclude_countries.length > 0) {
     filter.exclude_countries.forEach(country => params.append('exclude_countries', country));

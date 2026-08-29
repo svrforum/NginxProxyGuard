@@ -9,7 +9,7 @@ import {
   fetchDistinctCountries, fetchDistinctURIs, fetchDistinctMethods
 } from '../../api/logs';
 import type { LogFilter, CountryStat } from '../../types/log';
-import { TagInput } from './filters';
+import { TagInput, StatusCodeFilter } from './filters';
 import { LogFilterPresets } from './LogFilterPresets';
 import { getDefaultDateRange } from './utils';
 
@@ -25,7 +25,8 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
   const [localFilter, setLocalFilter] = useState<LogFilter>(filter);
   const [showExcludeFilters, setShowExcludeFilters] = useState(
     !!(filter.exclude_ips?.length || filter.exclude_user_agents?.length ||
-      filter.exclude_uris?.length || filter.exclude_hosts?.length || filter.exclude_countries?.length)
+      filter.exclude_uris?.length || filter.exclude_hosts?.length || filter.exclude_countries?.length ||
+      filter.exclude_status_codes?.length || filter.exclude_status_classes?.length)
   );
 
   const countriesQuery = useQuery({
@@ -75,12 +76,10 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
   };
 
   // Status code options
-  const statusCodeGroups = [
-    { label: t('charts.statusGroups.success'), codes: [200, 201, 204] },
-    { label: t('charts.statusGroups.redirect'), codes: [301, 302, 304] },
-    { label: t('charts.statusGroups.clientError'), codes: [400, 401, 403, 404, 429] },
-    { label: t('charts.statusGroups.serverError'), codes: [500, 502, 503, 504] },
-  ];
+  // One-click chips for the codes operators reach for most. Anything else -
+  // 499, 444, Cloudflare's 52x - is reachable by typing it, which the old
+  // fixed list made impossible.
+  const quickStatusCodes = [200, 301, 302, 304, 400, 401, 403, 404, 429, 499, 500, 502, 503, 504];
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 p-4 mb-4 transition-colors">
@@ -267,40 +266,22 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
           </div>
         )}
 
-        {/* Status Codes (Multiple Select) */}
+        {/* Status Codes — classes, common codes, or anything typed */}
         {logType === 'access' && (
           <div className="md:col-span-2">
             <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 flex items-center gap-1">
               {t('filters.statusCodes')}
               <HelpTip content={t('filters.statusCodesHelp')} />
             </label>
-            <div className="flex flex-wrap gap-2">
-              {statusCodeGroups.map(group => (
-                <div key={group.label} className="flex items-center gap-1">
-                  <span className="text-xs text-slate-500 dark:text-slate-400">{group.label}:</span>
-                  {group.codes.map(code => (
-                    <button
-                      key={code}
-                      type="button"
-                      onClick={() => {
-                        const current = localFilter.status_codes || [];
-                        if (current.includes(code)) {
-                          updateFilter('status_codes', current.filter(c => c !== code));
-                        } else {
-                          updateFilter('status_codes', [...current, code]);
-                        }
-                      }}
-                      className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${(localFilter.status_codes || []).includes(code)
-                        ? 'bg-primary-500 text-white'
-                        : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
-                        }`}
-                    >
-                      {code}
-                    </button>
-                  ))}
-                </div>
-              ))}
-            </div>
+            <StatusCodeFilter
+              codes={localFilter.status_codes || []}
+              classes={localFilter.status_classes || []}
+              quickCodes={quickStatusCodes}
+              onChange={(codes, classes) => {
+                updateFilter('status_codes', codes.length ? codes : undefined);
+                updateFilter('status_classes', classes.length ? classes : undefined);
+              }}
+            />
           </div>
         )}
 
@@ -486,11 +467,13 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
           {(localFilter.exclude_ips?.length || localFilter.exclude_user_agents?.length ||
-            localFilter.exclude_uris?.length || localFilter.exclude_hosts?.length || localFilter.exclude_countries?.length) && (
+            localFilter.exclude_uris?.length || localFilter.exclude_hosts?.length || localFilter.exclude_countries?.length ||
+            localFilter.exclude_status_codes?.length || localFilter.exclude_status_classes?.length) && (
               <span className="px-1.5 py-0.5 bg-red-500 text-white rounded-full text-xs">
                 {(localFilter.exclude_ips?.length ? 1 : 0) + (localFilter.exclude_user_agents?.length ? 1 : 0) +
                   (localFilter.exclude_uris?.length ? 1 : 0) + (localFilter.exclude_hosts?.length ? 1 : 0) +
-                  (localFilter.exclude_countries?.length ? 1 : 0)}
+                  (localFilter.exclude_countries?.length ? 1 : 0) +
+                  ((localFilter.exclude_status_codes?.length || localFilter.exclude_status_classes?.length) ? 1 : 0)}
               </span>
             )}
         </button>
@@ -575,6 +558,26 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
                 helpText={t('filters.countryCodes')}
               />
             </div>
+
+            {/* Exclude Status Codes */}
+            {logType === 'access' && (
+              <div className="md:col-span-2 lg:col-span-3">
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 flex items-center gap-1">
+                  {t('filters.excludeStatusCodes')}
+                  <HelpTip content={t('filters.excludeStatusCodesHelp')} />
+                </label>
+                <StatusCodeFilter
+                  variant="exclude"
+                  codes={localFilter.exclude_status_codes || []}
+                  classes={localFilter.exclude_status_classes || []}
+                  quickCodes={quickStatusCodes}
+                  onChange={(codes, classes) => {
+                    updateFilter('exclude_status_codes', codes.length ? codes : undefined);
+                    updateFilter('exclude_status_classes', classes.length ? classes : undefined);
+                  }}
+                />
+              </div>
+            )}
           </div>
         )}
       </div>

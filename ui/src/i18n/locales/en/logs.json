@@ -107,7 +107,14 @@
       "hostExample": "Type host and press Enter",
       "countryCodeExample": "Type country code (e.g. US)"
     },
-    "tagInputHelp": "Press Enter, Space or comma to add"
+    "tagInputHelp": "Press Enter, Space or comma to add",
+    "statusClass": "Class",
+    "statusCommon": "Common",
+    "statusCodePlaceholder": "Type any code or class, e.g. 499, 444, 4xx",
+    "statusCodeInvalid": "\"{{value}}\" is not a status code or class (100-599, or 1xx-5xx)",
+    "excludeStatusCodes": "Exclude Status Codes",
+    "excludeStatusCodesHelp": "Hide these responses. Note that WAF-blocked requests are 403, so excluding 403 hides them too. Error-log rows have no status code and are always kept.",
+    "remove": "Remove"
   },
   "presets": {
     "label": "Presets",

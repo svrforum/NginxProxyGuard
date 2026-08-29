@@ -37,7 +37,11 @@ func limitArray(arr []string, max int) []string {
 
 // parseLogFilter extracts a LogFilter from query parameters.
 // This is shared between List and GetStats to avoid duplication.
-func parseLogFilter(q url.Values) *model.LogFilter {
+//
+// It returns an error (wrapping model.ErrInvalidInput) for filter values the
+// caller can fix, so a typo answers 400 with the offending value instead of
+// silently returning an unfiltered page that looks filtered.
+func parseLogFilter(q url.Values) (*model.LogFilter, error) {
 	filter := &model.LogFilter{}
 
 	if logType := q.Get("log_type"); logType != "" && model.IsValidLogType(logType) {
@@ -107,13 +111,11 @@ func parseLogFilter(q url.Values) *model.LogFilter {
 	if geoCountryCode := q.Get("geo_country_code"); geoCountryCode != "" {
 		filter.GeoCountryCode = &geoCountryCode
 	}
-	if statusCodes := q["status_codes"]; len(statusCodes) > 0 {
-		for _, sc := range statusCodes {
-			if code, err := strconv.Atoi(sc); err == nil {
-				filter.StatusCodes = append(filter.StatusCodes, code)
-			}
-		}
+	includeCodes, err := model.ParseStatusFilter(q["status_codes"], q["status_classes"])
+	if err != nil {
+		return nil, err
 	}
+	filter.StatusCodes = includeCodes
 	if minSize := q.Get("min_size"); minSize != "" {
 		if size, err := strconv.ParseInt(minSize, 10, 64); err == nil {
 			filter.MinSize = &size
@@ -184,8 +186,13 @@ func parseLogFilter(q url.Values) *model.LogFilter {
 	if excludeCountries := q["exclude_countries"]; len(excludeCountries) > 0 {
 		filter.ExcludeCountries = limitArray(excludeCountries, maxFilterArraySize)
 	}
+	excludeCodes, err := model.ParseStatusFilter(q["exclude_status_codes"], q["exclude_status_classes"])
+	if err != nil {
+		return nil, err
+	}
+	filter.ExcludeStatusCodes = excludeCodes
 
-	return filter
+	return filter, nil
 }
 
 // sanitizeIPFilters keeps only entries that are a valid IP address or CIDR
@@ -230,7 +237,11 @@ func (h *LogHandler) List(w http.ResponseWriter, r *http.Request) {
 		perPage = 200
 	}
 
-	filter := parseLogFilter(r.URL.Query())
+	filter, err := parseLogFilter(r.URL.Query())
+	if err != nil {
+		httpJSONError(w, strings.TrimPrefix(err.Error(), model.ErrInvalidInput.Error()+": "), http.StatusBadRequest)
+		return
+	}
 
 	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
 		filter.Cursor = &cursor
@@ -299,7 +310,11 @@ func (h *LogHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *LogHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	filter := parseLogFilter(r.URL.Query())
+	filter, err := parseLogFilter(r.URL.Query())
+	if err != nil {
+		httpJSONError(w, strings.TrimPrefix(err.Error(), model.ErrInvalidInput.Error()+": "), http.StatusBadRequest)
+		return
+	}
 
 	stats, err := h.logRepo.GetStatsWithFilter(ctx, filter)
 	if err != nil {
