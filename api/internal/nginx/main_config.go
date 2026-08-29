@@ -56,13 +56,10 @@ http {
     # Real IP Configuration
     # Extract real client IP from X-Forwarded-For when behind proxies/Docker
     # ==========================================================================
-    set_real_ip_from 10.0.0.0/8;
-    set_real_ip_from 172.16.0.0/12;
-    set_real_ip_from 192.168.0.0/16;
-    set_real_ip_from 127.0.0.0/8;
-    set_real_ip_from ::1;
-    set_real_ip_from fc00::/7;
-    real_ip_header X-Forwarded-For;
+{{range .TrustedProxyBuiltins}}    set_real_ip_from {{.}};
+{{end}}{{if .TrustedProxyExtra}}    # Operator-configured proxies in front of NPG (Settings -> Trusted Proxies)
+{{range .TrustedProxyExtra}}    set_real_ip_from {{.}};
+{{end}}{{end}}    real_ip_header {{.RealIPHeader}};
     real_ip_recursive on;
 
     # ==========================================================================
@@ -441,6 +438,17 @@ type MainConfigData struct {
 	LimitReqRate     int
 	LimitReqBurst    int
 
+	// TrustedProxyBuiltins are the private/loopback ranges NPG has always
+	// trusted. Always emitted, always first — a containerised deployment
+	// depends on them and they are not operator-removable.
+	TrustedProxyBuiltins []string
+	// TrustedProxyExtra are the operator's additions (preset + custom list),
+	// already validated and de-duplicated against the built-ins.
+	TrustedProxyExtra []string
+	// RealIPHeader is the header nginx reads the client address from. Never
+	// empty: an empty value renders `real_ip_header ;`, which fails nginx -t.
+	RealIPHeader string
+
 	// GlobalTrustedIPs are IP/CIDR entries from system_settings.global_trusted_ips
 	// that should bypass http-level limit_conn / limit_req. Empty when none are
 	// configured; the template only emits the geo+map blocks when this is set.
@@ -471,8 +479,52 @@ var validErrorLogLevels = map[string]bool{
 // individual entries) and are wired into the http-level limit_conn / limit_req
 // zones so whitelisted IPs bypass DDoS limits the same way they bypass per-host
 // rate limits and bot/WAF checks. Pass nil when no whitelist applies.
-func buildMainConfigData(s *model.GlobalSettings, trustedIPs []string, trustedBypassWAF bool) MainConfigData {
+// TrustedProxyConfig carries the operator's real-IP settings into the render.
+// The zero value is meaningful and safe: it reproduces the behaviour NPG had
+// before the setting existed (private/loopback ranges only, X-Forwarded-For).
+type TrustedProxyConfig struct {
+	// CIDRs are the operator's additions, already parsed and validated.
+	CIDRs []string
+	// Header is the real-IP header name. "" resolves to the default rather
+	// than rendering an empty directive.
+	Header string
+}
+
+// resolveTrustedProxies returns the built-in ranges, the operator additions
+// with built-in duplicates removed, and a header that is never empty.
+//
+// The de-duplication matters because repeating a range in set_real_ip_from is
+// legal but confusing to read, and a fresh install must render exactly what it
+// rendered before this setting existed.
+func resolveTrustedProxies(cfg TrustedProxyConfig) (builtins, extra []string, header string) {
+	builtins = model.AlwaysTrustedProxyRanges()
+	seen := make(map[string]struct{}, len(builtins))
+	for _, b := range builtins {
+		seen[b] = struct{}{}
+	}
+	for _, entry := range cfg.CIDRs {
+		if _, dup := seen[entry]; dup {
+			continue
+		}
+		seen[entry] = struct{}{}
+		extra = append(extra, entry)
+	}
+	header, err := model.NormalizeRealIPHeader(cfg.Header)
+	if err != nil {
+		// Unreachable through the API (the handler validates first), but a row
+		// hand-edited in the database must not be able to break nginx.conf.
+		log.Printf("[MainConfig] ignoring unsupported real_ip_header %q; using %s", cfg.Header, model.RealIPHeaderDefault)
+		header = model.RealIPHeaderDefault
+	}
+	return builtins, extra, header
+}
+
+func buildMainConfigData(s *model.GlobalSettings, trustedIPs []string, trustedBypassWAF bool, proxies TrustedProxyConfig) MainConfigData {
+	builtins, extraProxies, realIPHeader := resolveTrustedProxies(proxies)
 	d := MainConfigData{
+		TrustedProxyBuiltins:     builtins,
+		TrustedProxyExtra:        extraProxies,
+		RealIPHeader:             realIPHeader,
 		WorkerConnections:        s.WorkerConnections,
 		MultiAccept:              s.MultiAccept,
 		UseEpoll:                 s.UseEpoll,
@@ -579,7 +631,7 @@ func buildMainConfigData(s *model.GlobalSettings, trustedIPs []string, trustedBy
 //
 // Call from startup and from SettingsService.UpdateGlobalSettings, and also
 // from SystemSettingsHandler when global_trusted_ips changes.
-func (m *Manager) GenerateMainNginxConfig(ctx context.Context, s *model.GlobalSettings, trustedIPs []string, trustedBypassWAF bool) error {
+func (m *Manager) GenerateMainNginxConfig(ctx context.Context, s *model.GlobalSettings, trustedIPs []string, trustedBypassWAF bool, proxies TrustedProxyConfig) error {
 	if s == nil {
 		return fmt.Errorf("global settings are nil")
 	}
@@ -590,7 +642,7 @@ func (m *Manager) GenerateMainNginxConfig(ctx context.Context, s *model.GlobalSe
 	}
 
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, buildMainConfigData(s, trustedIPs, trustedBypassWAF)); err != nil {
+	if err := tmpl.Execute(&buf, buildMainConfigData(s, trustedIPs, trustedBypassWAF, proxies)); err != nil {
 		return fmt.Errorf("execute main nginx template: %w", err)
 	}
 

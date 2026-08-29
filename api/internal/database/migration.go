@@ -1369,6 +1369,12 @@ EXCEPTION WHEN duplicate_table OR duplicate_object THEN NULL; END $$;`,
 ALTER TABLE public.cloudflare_tunnel ADD COLUMN IF NOT EXISTS catchall_enabled boolean DEFAULT false NOT NULL;
 ALTER TABLE public.cloudflare_tunnel ADD COLUMN IF NOT EXISTS catchall_applied_service text DEFAULT ''::text NOT NULL;`,
 		},
+		{
+			desc: "v2.51.0: operator-configurable trusted proxies / real-IP header (#278)",
+			sql: `ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS trusted_proxy_cidrs text DEFAULT ''::text NOT NULL;
+ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS trusted_proxy_preset text DEFAULT 'none'::text NOT NULL;
+ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS real_ip_header text DEFAULT 'X-Forwarded-For'::text NOT NULL;`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

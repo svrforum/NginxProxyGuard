@@ -1771,5 +1771,26 @@
     "digestEventCount": "{{count}} summary-only",
     "lastDelivery": "last delivered {{when}}",
     "previewUsesSaved": "Previews send using the saved settings. Save first to see the changes you just made."
+  },
+  "trustedProxies": {
+    "title": "Trusted Proxies",
+    "intro": "When a CDN such as Cloudflare, or another reverse proxy, sits in front of NPG, the address recorded for a request is the proxy's, not the visitor's. Naming the proxies you trust here recovers the real client address.",
+    "safetyWarning": "This list changes what every security feature judges. Country restriction, access lists, banned IPs, fail2ban, rate limiting and the WAF all read the address decided here. List only proxies you operate or trust: trusting too broadly lets visitors forge their own address and walk through all of them at once.",
+    "preset": "Preset",
+    "presetHelp": "Adds a well-known CDN's published ranges in one step. Can be combined with your own entries below.",
+    "presetNone": "None",
+    "presetCloudflare": "Behind Cloudflare proxy (orange cloud)",
+    "cloudflareRanges": "Includes {{count}} Cloudflare ranges (as of {{date}}). Anything added since can be pasted below.",
+    "tunnelNote": "Not needed for Cloudflare Tunnel (cloudflared) — a tunnel already delivers the real client address correctly.",
+    "header": "Real IP header",
+    "headerHelp": "The header the visitor's address is read from, on requests that arrived through a trusted proxy.",
+    "headerDefaultSuffix": "default",
+    "headerSwitchWarning": "Careful: with a non-default header, requests that do not carry it keep the proxy's address. If anything else also sits in front of NPG (a router, HAProxy, a NAS, another nginx), that traffic will be recorded with a private address and can be blocked wholesale by country rules. Change this only when Cloudflare is the only thing in front.",
+    "custom": "Custom entries",
+    "customHelp": "One IP or CIDR per line. Anything after # is a comment.",
+    "customPlaceholder": "203.0.113.0/24\n198.51.100.7   # office proxy",
+    "builtins": "Always trusted",
+    "builtinsHelp": "Private and loopback networks. Docker's own traffic and LAN proxies depend on these, so they cannot be removed.",
+    "savedApplying": "Saved. Applying to the nginx configuration."
   }
 }

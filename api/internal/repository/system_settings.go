@@ -80,6 +80,9 @@ func (r *SystemSettingsRepository) getFromDB(ctx context.Context) (*model.System
 		       COALESCE(waf_auto_ban_duration, 3600) as waf_auto_ban_duration,
 		       COALESCE(global_trusted_ips, '') as global_trusted_ips,
 		       COALESCE(global_trusted_ips_bypass_waf, false) as global_trusted_ips_bypass_waf,
+		       COALESCE(trusted_proxy_cidrs, '') as trusted_proxy_cidrs,
+		       COALESCE(trusted_proxy_preset, 'none') as trusted_proxy_preset,
+		       COALESCE(NULLIF(real_ip_header, ''), 'X-Forwarded-For') as real_ip_header,
 		       COALESCE(global_block_exploits_exceptions, '^/wp-json/
 ^/api/v1/challenge/
 ^/wp-admin/admin-ajax.php
@@ -156,6 +159,9 @@ func (r *SystemSettingsRepository) getFromDB(ctx context.Context) (*model.System
 		&settings.WAFAutoBanDuration,
 		&settings.GlobalTrustedIPs,
 		&settings.GlobalTrustedIPsBypassWAF,
+		&settings.TrustedProxyCIDRs,
+		&settings.TrustedProxyPreset,
+		&settings.RealIPHeader,
 		&settings.GlobalBlockExploitsExceptions,
 		&settings.DirectIPAccessAction,
 		&settings.UIFontFamily,
@@ -250,6 +256,13 @@ func (r *SystemSettingsRepository) createDefault(ctx context.Context) (*model.Sy
 		BackupRetentionCount:     10,
 		DDNSCheckIntervalMinutes: 5,
 		ACMEDNSCredentials:       json.RawMessage("{}"),
+		// The INSERT above lists only a subset of columns and the row is NOT
+		// read back, so every DB-DEFAULT column would otherwise return here as
+		// its Go zero value. For real_ip_header that means "", which renders
+		// `real_ip_header ;`, fails nginx -t and takes the whole generated
+		// nginx.conf down on first boot. Mirror the DB defaults explicitly.
+		TrustedProxyPreset: model.TrustedProxyPresetNone,
+		RealIPHeader:       model.RealIPHeaderDefault,
 	}
 
 	err := r.db.QueryRowContext(ctx, query,
@@ -547,6 +560,24 @@ func (r *SystemSettingsRepository) Update(ctx context.Context, req *model.Update
 	if req.GlobalTrustedIPsBypassWAF != nil {
 		setClauses = append(setClauses, fmt.Sprintf("global_trusted_ips_bypass_waf = $%d", argIndex))
 		args = append(args, *req.GlobalTrustedIPsBypassWAF)
+		argIndex++
+	}
+
+	// Trusted proxies (#278). Values are validated in the handler; the empty
+	// string is a legitimate value here (it clears the operator list).
+	if req.TrustedProxyCIDRs != nil {
+		setClauses = append(setClauses, fmt.Sprintf("trusted_proxy_cidrs = $%d", argIndex))
+		args = append(args, *req.TrustedProxyCIDRs)
+		argIndex++
+	}
+	if req.TrustedProxyPreset != nil {
+		setClauses = append(setClauses, fmt.Sprintf("trusted_proxy_preset = $%d", argIndex))
+		args = append(args, *req.TrustedProxyPreset)
+		argIndex++
+	}
+	if req.RealIPHeader != nil {
+		setClauses = append(setClauses, fmt.Sprintf("real_ip_header = $%d", argIndex))
+		args = append(args, *req.RealIPHeader)
 		argIndex++
 	}
 

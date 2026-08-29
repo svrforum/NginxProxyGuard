@@ -1784,5 +1784,26 @@
     "digestEventCount": "요약에만 {{count}}건",
     "lastDelivery": "마지막 전송 {{when}}",
     "previewUsesSaved": "미리보기는 저장된 설정으로 보냅니다. 지금 화면에서 바꾼 내용을 확인하려면 먼저 저장하세요."
+  },
+  "trustedProxies": {
+    "title": "신뢰 프록시",
+    "intro": "NPG 앞에 Cloudflare 같은 CDN이나 다른 리버스 프록시가 있으면, 접속자의 실제 IP가 아니라 그 프록시의 IP가 기록됩니다. 여기서 어떤 프록시를 믿을지 지정하면 실제 방문자 IP를 되찾습니다.",
+    "safetyWarning": "이 목록은 보안 기능 전체의 판단 기준을 바꿉니다. 국가 차단, 접근 목록, IP 차단, fail2ban, 요청 수 제한, WAF가 모두 여기서 정해진 IP를 봅니다. 직접 운영하거나 신뢰할 수 있는 프록시만 넣으세요. 신뢰 범위를 넓게 잡으면 방문자가 자기 IP를 마음대로 위장할 수 있게 되어 위 기능이 한꺼번에 무력화됩니다.",
+    "preset": "프리셋",
+    "presetHelp": "잘 알려진 CDN의 대역을 한 번에 넣습니다. 아래 직접 입력과 함께 사용할 수 있습니다.",
+    "presetNone": "사용 안 함",
+    "presetCloudflare": "Cloudflare 프록시 (오렌지 클라우드)",
+    "cloudflareRanges": "Cloudflare 대역 {{count}}개 포함 ({{date}} 기준). 이후 추가된 대역이 있으면 아래에 직접 넣으시면 됩니다.",
+    "tunnelNote": "Cloudflare Tunnel(cloudflared)만 쓰신다면 이 설정은 필요 없습니다. 터널은 이미 실제 IP가 올바르게 전달됩니다.",
+    "header": "실제 IP 헤더",
+    "headerHelp": "신뢰하는 프록시가 보낸 요청에서 방문자 IP를 읽어올 헤더입니다.",
+    "headerDefaultSuffix": "기본값",
+    "headerSwitchWarning": "주의: 기본값이 아닌 헤더를 고르면 그 헤더가 없는 요청은 실제 IP를 알아낼 수 없습니다. NPG 앞에 다른 프록시(공유기, HAProxy, 시놀로지, 또 다른 nginx 등)도 있다면 그쪽 트래픽이 사설 IP로 기록되어 국가 차단에 전부 걸릴 수 있습니다. Cloudflare만 앞에 있는 경우에만 바꾸세요.",
+    "custom": "직접 입력",
+    "customHelp": "한 줄에 하나씩 IP나 CIDR을 넣습니다. # 뒤는 주석입니다.",
+    "customPlaceholder": "203.0.113.0/24\n198.51.100.7   # 사무실 프록시",
+    "builtins": "항상 신뢰하는 대역",
+    "builtinsHelp": "사설망과 루프백입니다. 도커 내부 통신과 LAN 프록시가 여기에 의존하므로 제거할 수 없습니다.",
+    "savedApplying": "저장했습니다. nginx 설정에 반영 중입니다."
   }
 }

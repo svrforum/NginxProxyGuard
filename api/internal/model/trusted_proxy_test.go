@@ -1,0 +1,108 @@
+package model
+
+import (
+	"errors"
+	"fmt"
+	"strings"
+	"testing"
+)
+
+func TestNormalizeRealIPHeader(t *testing.T) {
+	// Empty must resolve, not error: a row written before the column existed
+	// holds "", and erroring there would block every settings save.
+	if got, err := NormalizeRealIPHeader(""); err != nil || got != RealIPHeaderDefault {
+		t.Fatalf(`NormalizeRealIPHeader(""): got %q, %v; want %q, nil`, got, err, RealIPHeaderDefault)
+	}
+	if got, err := NormalizeRealIPHeader("  cf-connecting-ip  "); err != nil || got != "CF-Connecting-IP" {
+		t.Fatalf("case/space normalization: got %q, %v", got, err)
+	}
+	// The value lands inside an nginx directive, so anything outside the
+	// allowlist is a config-injection vector.
+	for _, bad := range []string{"X-Evil", "X-Forwarded-For; return 200", "Host\nreal_ip_header X-Real-IP"} {
+		if _, err := NormalizeRealIPHeader(bad); err == nil {
+			t.Errorf("header %q should be rejected", bad)
+		} else if !errors.Is(err, ErrInvalidInput) {
+			t.Errorf("header %q: error does not wrap ErrInvalidInput", bad)
+		}
+	}
+}
+
+func TestNormalizeTrustedProxyPreset(t *testing.T) {
+	if got, err := NormalizeTrustedProxyPreset(""); err != nil || got != TrustedProxyPresetNone {
+		t.Fatalf(`empty preset: got %q, %v; want %q, nil`, got, err, TrustedProxyPresetNone)
+	}
+	if got, err := NormalizeTrustedProxyPreset("CloudFlare"); err != nil || got != TrustedProxyPresetCloudflare {
+		t.Fatalf("case normalization: got %q, %v", got, err)
+	}
+	if _, err := NormalizeTrustedProxyPreset("fastly"); err == nil {
+		t.Error("unknown preset should be rejected")
+	}
+}
+
+func TestValidateTrustedProxyCIDRs(t *testing.T) {
+	if err := ValidateTrustedProxyCIDRs(""); err != nil {
+		t.Fatalf("empty list must be valid (it clears the setting): %v", err)
+	}
+	valid := "203.0.113.0/24\n# a comment\n198.51.100.7\n2001:db8::/32"
+	if err := ValidateTrustedProxyCIDRs(valid); err != nil {
+		t.Fatalf("valid list rejected: %v", err)
+	}
+
+	// The whole Cloudflare preset must pass its own validator, or turning the
+	// preset on would produce a list the operator cannot then edit and save.
+	if err := ValidateTrustedProxyCIDRs(strings.Join(CloudflareRanges, "\n")); err != nil {
+		t.Fatalf("shipped Cloudflare ranges fail validation: %v", err)
+	}
+
+	for _, bad := range []string{"not-an-ip", "203.0.113.0/33", "203.0.113.0/", "10.0.0.1/8/8"} {
+		if err := ValidateTrustedProxyCIDRs(bad); err == nil {
+			t.Errorf("entry %q should be rejected", bad)
+		}
+	}
+
+	// Trusting everything is the one shape that makes the header forgeable by
+	// anyone who can reach the box.
+	for _, bad := range []string{"0.0.0.0/0", "::/0"} {
+		if err := ValidateTrustedProxyCIDRs(bad); err == nil {
+			t.Errorf("%q should be rejected", bad)
+		}
+	}
+
+	// The regression this exists for: a prefix-length floor would accept this
+	// — 256 entries, every one a /8, none of them 0.0.0.0/0 — while trusting
+	// the entire IPv4 internet. Counting addresses is what catches it.
+	var everything []string
+	for i := 0; i < 256; i++ {
+		everything = append(everything, fmt.Sprintf("%d.0.0.0/8", i))
+	}
+	if err := ValidateTrustedProxyCIDRs(strings.Join(everything, "\n")); err == nil {
+		t.Error("256 x /8 covers the whole IPv4 internet and must be rejected")
+	}
+
+	// A single oversized block is the same problem in one line. 240.0.0.0/4 is
+	// reserved and assigned to nobody, so the test carries no real allocation.
+	if err := ValidateTrustedProxyCIDRs("240.0.0.0/4"); err == nil {
+		t.Error("a /4 (268M addresses) should exceed the address budget")
+	}
+
+	// A realistic operator allocation must still fit.
+	if err := ValidateTrustedProxyCIDRs("203.0.113.0/24\n198.51.100.0/22"); err != nil {
+		t.Errorf("ordinary allocation rejected: %v", err)
+	}
+}
+
+func TestParseTrustedProxyCIDRs(t *testing.T) {
+	valid, invalid := ParseTrustedProxyCIDRs("203.0.113.0/24, 203.0.113.0/24\nbogus\n\n# note\n198.51.100.7 # inline")
+	if len(invalid) != 1 || invalid[0] != "bogus" {
+		t.Fatalf("invalid entries: got %v, want [bogus]", invalid)
+	}
+	if len(valid) != 2 {
+		t.Fatalf("valid entries: got %v, want 2 (deduped)", valid)
+	}
+	// Host bits are normalized to the network address so the stored value
+	// equals what nginx enforces and de-duplication can see equal entries.
+	valid, _ = ParseTrustedProxyCIDRs("10.1.2.3/8")
+	if len(valid) != 1 || valid[0] != "10.0.0.0/8" {
+		t.Fatalf("normalization: got %v, want [10.0.0.0/8]", valid)
+	}
+}

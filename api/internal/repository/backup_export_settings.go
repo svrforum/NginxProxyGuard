@@ -94,6 +94,9 @@ func (r *BackupRepository) exportSystemSettings(ctx context.Context) (*model.Sys
 		       COALESCE(ddns_check_interval_minutes, 5) as ddns_check_interval_minutes,
 		       COALESCE(global_trusted_ips, '') as global_trusted_ips,
 		       COALESCE(global_trusted_ips_bypass_waf, false) as global_trusted_ips_bypass_waf,
+		       COALESCE(trusted_proxy_cidrs, '') as trusted_proxy_cidrs,
+		       COALESCE(trusted_proxy_preset, 'none') as trusted_proxy_preset,
+		       COALESCE(NULLIF(real_ip_header, ''), 'X-Forwarded-For') as real_ip_header,
 		       COALESCE(global_block_exploits_exceptions, '^/wp-json/
 ^/api/v1/challenge/
 ^/wp-admin/admin-ajax.php
@@ -114,6 +117,7 @@ func (r *BackupRepository) exportSystemSettings(ctx context.Context) (*model.Sys
 	var botListBadBots, botListAIBots, botListSearchEngines, botListSuspiciousClients sql.NullString
 	var globalTrustedIPs, globalBlockExploitsExceptions, uiFontFamily, uiErrorPageLanguage string
 	var globalTrustedIPsBypassWAF bool
+	var trustedProxyCIDRs, trustedProxyPreset, realIPHeader string
 	var systemLogsLevels []byte
 	var systemLogsExcludePatterns, systemLogsStdoutExcluded pq.StringArray
 
@@ -137,7 +141,9 @@ func (r *BackupRepository) exportSystemSettings(ctx context.Context) (*model.Sys
 		&ss.WAFAutoBanEnabled, &ss.WAFAutoBanThreshold, &ss.WAFAutoBanWindow, &ss.WAFAutoBanDuration,
 		&directIPAccessAction, &ss.SystemLogsEnabled,
 		&ss.DDNSCheckIntervalMinutes,
-		&globalTrustedIPs, &globalTrustedIPsBypassWAF, &globalBlockExploitsExceptions,
+		&globalTrustedIPs, &globalTrustedIPsBypassWAF,
+		&trustedProxyCIDRs, &trustedProxyPreset, &realIPHeader,
+		&globalBlockExploitsExceptions,
 		&uiFontFamily, &uiErrorPageLanguage,
 		&systemLogsLevels, &systemLogsExcludePatterns, &systemLogsStdoutExcluded,
 	)
@@ -162,6 +168,9 @@ func (r *BackupRepository) exportSystemSettings(ctx context.Context) (*model.Sys
 	ss.BotListSuspiciousClients = botListSuspiciousClients.String
 	ss.GlobalTrustedIPs = &globalTrustedIPs
 	ss.GlobalTrustedIPsBypassWAF = &globalTrustedIPsBypassWAF
+	ss.TrustedProxyCIDRs = &trustedProxyCIDRs
+	ss.TrustedProxyPreset = &trustedProxyPreset
+	ss.RealIPHeader = &realIPHeader
 	ss.GlobalBlockExploitsExceptions = &globalBlockExploitsExceptions
 	ss.UIFontFamily = &uiFontFamily
 	ss.UIErrorPageLanguage = &uiErrorPageLanguage

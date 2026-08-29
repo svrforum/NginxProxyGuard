@@ -95,7 +95,8 @@
       "users": "Users",
       "roles": "Roles",
       "sso": "SSO",
-      "notifications": "Notifications"
+      "notifications": "Notifications",
+      "trustedProxies": "Trusted Proxies"
     }
   },
   "loading": "Loading...",

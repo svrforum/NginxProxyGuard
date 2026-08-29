@@ -91,6 +91,9 @@ func (r *BackupRepository) importSystemSettings(ctx context.Context, tx *sql.Tx,
 			system_logs_exclude_patterns = COALESCE($54, system_logs_exclude_patterns),
 			system_logs_stdout_excluded = COALESCE($55, system_logs_stdout_excluded),
 			global_trusted_ips_bypass_waf = COALESCE($56, global_trusted_ips_bypass_waf),
+			trusted_proxy_cidrs = COALESCE($57, trusted_proxy_cidrs),
+			trusted_proxy_preset = COALESCE($58, trusted_proxy_preset),
+			real_ip_header = COALESCE($59, real_ip_header),
 			updated_at = NOW()
 	`
 
@@ -117,6 +120,11 @@ func (r *BackupRepository) importSystemSettings(ctx context.Context, tx *sql.Tx,
 		systemLogsStdoutExcluded = pq.Array(ss.SystemLogsStdoutExcluded)
 	}
 
+	// An out-of-allowlist value in a hand-edited backup must not reach
+	// nginx.conf. Coerce rather than fail the whole restore.
+	trustedProxyPreset := coerceBackupString(ss.TrustedProxyPreset, model.NormalizeTrustedProxyPreset)
+	realIPHeader := coerceBackupString(ss.RealIPHeader, model.NormalizeRealIPHeader)
+
 	_, err := tx.ExecContext(ctx, query,
 		ss.GeoIPEnabled, ss.GeoIPAutoUpdate, ss.GeoIPUpdateInterval,
 		ss.MaxmindAccountID, ss.MaxmindLicenseKey,
@@ -141,6 +149,7 @@ func (r *BackupRepository) importSystemSettings(ctx context.Context, tx *sql.Tx,
 		ss.UIFontFamily, ss.UIErrorPageLanguage,
 		systemLogsLevels, systemLogsExcludePatterns, systemLogsStdoutExcluded,
 		ss.GlobalTrustedIPsBypassWAF,
+		ss.TrustedProxyCIDRs, trustedProxyPreset, realIPHeader,
 	)
 	return err
 }
@@ -396,4 +405,17 @@ func (r *BackupRepository) importCloudflareTunnel(ctx context.Context, tx *sql.T
 	_, err := tx.ExecContext(ctx, query, e.Enabled, e.Token, mode,
 		e.APIToken, e.CatchallEnabled, e.CatchallAppliedService)
 	return err
+}
+
+// coerceBackupString runs a restored value through its normalizer, dropping it
+// to nil (keep the live value) when the backup holds something unsupported.
+func coerceBackupString(v *string, normalize func(string) (string, error)) interface{} {
+	if v == nil {
+		return nil
+	}
+	normalized, err := normalize(*v)
+	if err != nil {
+		return nil
+	}
+	return normalized
 }

@@ -945,6 +945,13 @@ type SystemSettingsExport struct {
 	GlobalTrustedIPsBypassWAF     *bool   `json:"global_trusted_ips_bypass_waf,omitempty"`
 	GlobalBlockExploitsExceptions *string `json:"global_block_exploits_exceptions,omitempty"`
 
+	// Trusted proxies (#278). Pointers for the same reason as the fields
+	// above: an older backup leaves them nil and the import must keep the
+	// live values rather than resetting who nginx trusts.
+	TrustedProxyCIDRs  *string `json:"trusted_proxy_cidrs,omitempty"`
+	TrustedProxyPreset *string `json:"trusted_proxy_preset,omitempty"`
+	RealIPHeader       *string `json:"real_ip_header,omitempty"`
+
 	// UI Settings
 	UIFontFamily        *string `json:"ui_font_family,omitempty"`
 	UIErrorPageLanguage *string `json:"ui_error_page_language,omitempty"`

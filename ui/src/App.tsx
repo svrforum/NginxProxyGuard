@@ -432,6 +432,7 @@ function AppContent({ user, onLogout }: AppContentProps) {
           <Route path="/settings" element={<Navigate to="/settings/global" replace />} />
           <Route path="/settings/global" element={<SettingsPage subTab="global" />} />
           <Route path="/settings/captcha" element={<SettingsPage subTab="captcha" />} />
+          <Route path="/settings/trusted-proxies" element={<SettingsPage subTab="trusted-proxies" />} />
           <Route path="/settings/geoip" element={<SettingsPage subTab="geoip" />} />
           <Route path="/settings/ssl" element={<SettingsPage subTab="ssl" />} />
           <Route path="/settings/maintenance" element={<SettingsPage subTab="maintenance" />} />

@@ -9,6 +9,7 @@ import MaintenanceSettings from '../components/MaintenanceSettings'
 import BackupManager from '../components/BackupManager'
 import BotFilterSettings from '../components/BotFilterSettings'
 import WAFAutoBanSettings from '../components/WAFAutoBanSettings'
+import TrustedProxySettings from '../components/settings/TrustedProxySettings'
 import SystemLogSettings from '../components/SystemLogSettings'
 import FilterSubscriptionList from '../components/FilterSubscriptionList'
 import CloudflareTunnelSettings from '../components/settings/CloudflareTunnelSettings'
@@ -27,6 +28,7 @@ type SubTab =
   | 'backups'
   | 'botfilter'
   | 'waf-auto-ban'
+  | 'trusted-proxies'
   | 'system-logs'
   | 'filter-subscriptions'
   | 'cloudflare-tunnel'
@@ -64,6 +66,7 @@ export default function SettingsPage({ subTab }: { subTab: SubTab }) {
           { key: 'botfilter' as SubTab, label: t('subTabs.settings.botfilter') },
           { key: 'waf-auto-ban' as SubTab, label: t('subTabs.settings.wafAutoBan') },
           { key: 'filter-subscriptions' as SubTab, label: t('subTabs.settings.filterSubscriptions') },
+          { key: 'trusted-proxies' as SubTab, label: t('subTabs.settings.trustedProxies') },
         ]
         : [],
     },
@@ -144,6 +147,7 @@ export default function SettingsPage({ subTab }: { subTab: SubTab }) {
       {subTab === 'geoip' && <GeoIPSettings />}
       {subTab === 'botfilter' && <BotFilterSettings />}
       {subTab === 'waf-auto-ban' && <WAFAutoBanSettings />}
+      {subTab === 'trusted-proxies' && <TrustedProxySettings />}
       {subTab === 'ssl' && <SSLACMESettings />}
       {subTab === 'maintenance' && <MaintenanceSettings />}
       {subTab === 'backups' && <BackupManager />}

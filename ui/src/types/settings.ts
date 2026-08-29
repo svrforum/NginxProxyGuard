@@ -409,6 +409,13 @@ export interface SystemSettings {
   // Global Trusted IPs
   global_trusted_ips: string;
   global_trusted_ips_bypass_waf: boolean;
+  // Trusted proxies (#278) — who NPG believes when a header names the client.
+  trusted_proxy_cidrs: string;
+  trusted_proxy_preset: string;
+  real_ip_header: string;
+  trusted_proxy_builtins?: string[];
+  trusted_proxy_preset_ranges?: string[];
+  cloudflare_ranges_updated?: string;
 
   // Global Block Exploits Exceptions
   global_block_exploits_exceptions: string;
@@ -496,6 +503,9 @@ export interface UpdateSystemSettingsRequest {
   // Global Trusted IPs
   global_trusted_ips?: string;
   global_trusted_ips_bypass_waf?: boolean;
+  trusted_proxy_cidrs?: string;
+  trusted_proxy_preset?: string;
+  real_ip_header?: string;
 
   // Global Block Exploits Exceptions
   global_block_exploits_exceptions?: string;

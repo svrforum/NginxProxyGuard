@@ -95,7 +95,8 @@
       "users": "사용자",
       "roles": "역할",
       "sso": "SSO",
-      "notifications": "알림"
+      "notifications": "알림",
+      "trustedProxies": "신뢰 프록시"
     }
   },
   "loading": "로딩 중...",

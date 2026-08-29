@@ -88,6 +88,17 @@ type SystemSettings struct {
 	// the WAF, so a compromised trusted host cannot proxy attacks to the backend.
 	GlobalTrustedIPsBypassWAF bool `json:"global_trusted_ips_bypass_waf" db:"global_trusted_ips_bypass_waf"`
 
+	// Trusted proxies decide whose forwarded-client-address header nginx
+	// believes (#278). Without them a CDN or reverse proxy in front of NPG
+	// leaves $remote_addr pointing at the proxy, so GeoIP, access lists,
+	// banned IPs, fail2ban and rate limiting all judge the proxy instead of
+	// the visitor. Defaults reproduce the previous hardcoded behaviour: an
+	// empty list plus X-Forwarded-For, additive to the private/loopback
+	// ranges that are always trusted.
+	TrustedProxyCIDRs  string `json:"trusted_proxy_cidrs" db:"trusted_proxy_cidrs"`   // Newline-separated IP/CIDR of proxies in front of NPG
+	TrustedProxyPreset string `json:"trusted_proxy_preset" db:"trusted_proxy_preset"` // none | cloudflare
+	RealIPHeader       string `json:"real_ip_header" db:"real_ip_header"`             // Header nginx reads the client address from
+
 	// Global Block Exploits Exceptions
 	GlobalBlockExploitsExceptions string `json:"global_block_exploits_exceptions" db:"global_block_exploits_exceptions"` // Line-separated regex patterns for URI paths that bypass RFI/exploit blocking globally
 
@@ -187,6 +198,14 @@ type SystemSettingsResponse struct {
 	GlobalTrustedIPs          string `json:"global_trusted_ips"`
 	GlobalTrustedIPsBypassWAF bool   `json:"global_trusted_ips_bypass_waf"`
 
+	// Trusted proxies (#278)
+	TrustedProxyCIDRs        string   `json:"trusted_proxy_cidrs"`
+	TrustedProxyPreset       string   `json:"trusted_proxy_preset"`
+	RealIPHeader             string   `json:"real_ip_header"`
+	TrustedProxyBuiltins     []string `json:"trusted_proxy_builtins"`      // Always-trusted private/loopback ranges, read-only
+	TrustedProxyPresetRanges []string `json:"trusted_proxy_preset_ranges"` // Ranges the selected preset contributes
+	CloudflareRangesUpdated  string   `json:"cloudflare_ranges_updated"`   // Date the shipped Cloudflare list was taken
+
 	// Global Block Exploits Exceptions
 	GlobalBlockExploitsExceptions string `json:"global_block_exploits_exceptions"`
 
@@ -208,6 +227,18 @@ type SystemSettingsResponse struct {
 
 // ToResponse converts SystemSettings to a safe API response
 func (s *SystemSettings) ToResponse() *SystemSettingsResponse {
+	// Report what nginx will actually use, not the raw column. A row written
+	// before these columns existed holds "", and showing that as the header
+	// name would tell the operator the WAF reads a header called nothing.
+	resolvedHeader, err := NormalizeRealIPHeader(s.RealIPHeader)
+	if err != nil {
+		resolvedHeader = RealIPHeaderDefault
+	}
+	resolvedPreset, err := NormalizeTrustedProxyPreset(s.TrustedProxyPreset)
+	if err != nil {
+		resolvedPreset = TrustedProxyPresetNone
+	}
+
 	resp := &SystemSettingsResponse{
 		ID:                                     s.ID,
 		GeoIPEnabled:                           s.GeoIPEnabled,
@@ -260,6 +291,12 @@ func (s *SystemSettings) ToResponse() *SystemSettingsResponse {
 		WAFAutoBanDuration:                     s.WAFAutoBanDuration,
 		GlobalTrustedIPs:                       s.GlobalTrustedIPs,
 		GlobalTrustedIPsBypassWAF:              s.GlobalTrustedIPsBypassWAF,
+		TrustedProxyCIDRs:                      s.TrustedProxyCIDRs,
+		TrustedProxyPreset:                     resolvedPreset,
+		RealIPHeader:                           resolvedHeader,
+		TrustedProxyBuiltins:                   AlwaysTrustedProxyRanges(),
+		TrustedProxyPresetRanges:               TrustedProxyRangesForPreset(resolvedPreset),
+		CloudflareRangesUpdated:                CloudflareRangesUpdated,
 		GlobalBlockExploitsExceptions:          s.GlobalBlockExploitsExceptions,
 
 		DirectIPAccessAction:      s.DirectIPAccessAction,
@@ -375,6 +412,11 @@ type UpdateSystemSettingsRequest struct {
 	// Global Trusted IPs
 	GlobalTrustedIPs          *string `json:"global_trusted_ips,omitempty"`
 	GlobalTrustedIPsBypassWAF *bool   `json:"global_trusted_ips_bypass_waf,omitempty"`
+
+	// Trusted proxies (#278)
+	TrustedProxyCIDRs  *string `json:"trusted_proxy_cidrs,omitempty"`
+	TrustedProxyPreset *string `json:"trusted_proxy_preset,omitempty"`
+	RealIPHeader       *string `json:"real_ip_header,omitempty"`
 
 	// Global Block Exploits Exceptions
 	GlobalBlockExploitsExceptions *string `json:"global_block_exploits_exceptions,omitempty"`

@@ -117,6 +117,44 @@ func (s *SettingsService) loadGlobalTrustedIPsBypassWAF(ctx context.Context) boo
 	return sys.GlobalTrustedIPsBypassWAF
 }
 
+// loadTrustedProxies reads the operator's trusted-proxy settings. On any error
+// it returns the zero value, which renders exactly what NPG rendered before the
+// setting existed — a DB hiccup must not silently widen who is trusted, and
+// must not narrow it into an nginx.conf that fails to parse.
+func (s *SettingsService) loadTrustedProxies(ctx context.Context) nginx.TrustedProxyConfig {
+	if s.systemSettingsRepo == nil {
+		return nginx.TrustedProxyConfig{}
+	}
+	sys, err := s.systemSettingsRepo.Get(ctx)
+	if err != nil || sys == nil {
+		if err != nil {
+			log.Printf("[SettingsService] failed to load system settings for trusted proxies: %v", err)
+		}
+		return nginx.TrustedProxyConfig{}
+	}
+	return ResolveTrustedProxyConfig(sys)
+}
+
+// ResolveTrustedProxyConfig merges the preset's ranges with the operator's own
+// list, dropping entries nginx could not use. Invalid entries are skipped
+// rather than aborting the render: one bad token inside set_real_ip_from is an
+// [emerg] that blocks the reload for every host on the instance, and rows
+// written before validation existed can hold anything.
+func ResolveTrustedProxyConfig(sys *model.SystemSettings) nginx.TrustedProxyConfig {
+	preset, err := model.NormalizeTrustedProxyPreset(sys.TrustedProxyPreset)
+	if err != nil {
+		log.Printf("[SettingsService] ignoring unknown trusted proxy preset %q", sys.TrustedProxyPreset)
+		preset = model.TrustedProxyPresetNone
+	}
+	cidrs := model.TrustedProxyRangesForPreset(preset)
+	custom, invalid := model.ParseTrustedProxyCIDRs(sys.TrustedProxyCIDRs)
+	if len(invalid) > 0 {
+		log.Printf("[SettingsService] skipping %d unusable trusted proxy entr(y/ies), first: %q", len(invalid), invalid[0])
+	}
+	cidrs = append(cidrs, custom...)
+	return nginx.TrustedProxyConfig{CIDRs: cidrs, Header: sys.RealIPHeader}
+}
+
 // ---- Global Settings ----
 
 func (s *SettingsService) GetGlobalSettings(ctx context.Context) (*model.GlobalSettings, error) {
@@ -141,7 +179,7 @@ func (s *SettingsService) RegenerateMainNginxConfig(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return s.nginxManager.GenerateMainNginxConfig(ctx, settings, s.loadGlobalTrustedIPs(ctx), s.loadGlobalTrustedIPsBypassWAF(ctx))
+	return s.nginxManager.GenerateMainNginxConfig(ctx, settings, s.loadGlobalTrustedIPs(ctx), s.loadGlobalTrustedIPsBypassWAF(ctx), s.loadTrustedProxies(ctx))
 }
 
 func (s *SettingsService) UpdateGlobalSettings(ctx context.Context, req *model.UpdateGlobalSettingsRequest) (*model.GlobalSettings, error) {
@@ -160,7 +198,7 @@ func (s *SettingsService) UpdateGlobalSettings(ctx context.Context, req *model.U
 	// learns their input was rejected (otherwise they see "200 OK" and wonder
 	// why nothing changed). The DB retains the saved value; the operator can
 	// reopen the form and fix it.
-	if err := s.nginxManager.GenerateMainNginxConfig(ctx, settings, s.loadGlobalTrustedIPs(ctx), s.loadGlobalTrustedIPsBypassWAF(ctx)); err != nil {
+	if err := s.nginxManager.GenerateMainNginxConfig(ctx, settings, s.loadGlobalTrustedIPs(ctx), s.loadGlobalTrustedIPsBypassWAF(ctx), s.loadTrustedProxies(ctx)); err != nil {
 		log.Printf("[SettingsService] nginx.conf regeneration rejected: %v", err)
 		return settings, fmt.Errorf("settings saved but nginx rejected the new config: %w", err)
 	}
@@ -214,7 +252,7 @@ func (s *SettingsService) ResetGlobalSettings(ctx context.Context) (*model.Globa
 	}
 
 	// Regenerate main nginx.conf so the reset defaults actually hit nginx.
-	if err := s.nginxManager.GenerateMainNginxConfig(ctx, settings, s.loadGlobalTrustedIPs(ctx), s.loadGlobalTrustedIPsBypassWAF(ctx)); err != nil {
+	if err := s.nginxManager.GenerateMainNginxConfig(ctx, settings, s.loadGlobalTrustedIPs(ctx), s.loadGlobalTrustedIPsBypassWAF(ctx), s.loadTrustedProxies(ctx)); err != nil {
 		log.Printf("[SettingsService] Warning: failed to regenerate nginx.conf after reset: %v", err)
 	}
 

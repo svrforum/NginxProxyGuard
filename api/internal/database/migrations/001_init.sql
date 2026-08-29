@@ -2471,7 +2471,10 @@ geckodriver'::text,
 ^/webapi/'::text,
     global_trusted_ips text DEFAULT '',
     global_trusted_ips_bypass_waf boolean DEFAULT false NOT NULL,
-    ddns_check_interval_minutes integer DEFAULT 5 NOT NULL
+    ddns_check_interval_minutes integer DEFAULT 5 NOT NULL,
+    trusted_proxy_cidrs text DEFAULT ''::text NOT NULL,
+    trusted_proxy_preset text DEFAULT 'none'::text NOT NULL,
+    real_ip_header text DEFAULT 'X-Forwarded-For'::text NOT NULL
 );
 COMMENT ON COLUMN public.system_settings.access_log_retention_days IS 'Retention period for access logs in days (default: 3 years)';
 COMMENT ON COLUMN public.system_settings.waf_log_retention_days IS 'Retention period for WAF/ModSecurity logs in days (default: 3 months)';
@@ -4112,6 +4115,13 @@ ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS global_trusted_ips t
 -- v2.26.0: opt-in flag to ALSO exempt global trusted IPs from ModSecurity/WAF
 -- (#166). Default false. Canonical execution lives in migration.go upgrades.
 ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS global_trusted_ips_bypass_waf boolean DEFAULT false NOT NULL;
+
+-- v2.51.0: operator-configurable trusted proxies so real client IPs survive a
+-- CDN/reverse proxy in front of NPG (#278). Defaults reproduce the previous
+-- hardcoded behaviour exactly. Canonical execution lives in migration.go upgrades.
+ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS trusted_proxy_cidrs text DEFAULT ''::text NOT NULL;
+ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS trusted_proxy_preset text DEFAULT 'none'::text NOT NULL;
+ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS real_ip_header text DEFAULT 'X-Forwarded-For'::text NOT NULL;
 
 -- v2.8.4: Default language for public error pages (403, etc.) - Issue #105
 ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS ui_error_page_language character varying(10) DEFAULT 'auto'::character varying;

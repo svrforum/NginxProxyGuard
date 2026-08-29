@@ -22,7 +22,7 @@ func renderOnly(t *testing.T, s *model.GlobalSettings) string {
 	if err := os.MkdirAll(m.configPath, 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := m.GenerateMainNginxConfig(context.Background(), s, nil, false); err != nil {
+	if err := m.GenerateMainNginxConfig(context.Background(), s, nil, false, TrustedProxyConfig{}); err != nil {
 		t.Fatalf("GenerateMainNginxConfig: %v", err)
 	}
 	b, err := os.ReadFile(filepath.Join(dir, "nginx.conf"))
@@ -225,7 +225,7 @@ func TestMainConfig_RollsBackOnNginxTestFailure(t *testing.T) {
 
 	m := &Manager{configPath: confDir, cli: &fakeFailingCLI{}}
 
-	err := m.GenerateMainNginxConfig(context.Background(), baselineSettings(), nil, false)
+	err := m.GenerateMainNginxConfig(context.Background(), baselineSettings(), nil, false, TrustedProxyConfig{})
 	if err == nil {
 		t.Fatal("expected GenerateMainNginxConfig to return an error when nginx -t fails")
 	}
@@ -286,7 +286,7 @@ func TestMainConfig_GlobalTrustedIPsBypassRateLimit(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 	trusted := []string{"192.168.0.0/16", "10.0.0.5"}
-	if err := m.GenerateMainNginxConfig(context.Background(), s, trusted, false); err != nil {
+	if err := m.GenerateMainNginxConfig(context.Background(), s, trusted, false, TrustedProxyConfig{}); err != nil {
 		t.Fatalf("GenerateMainNginxConfig: %v", err)
 	}
 	b, err := os.ReadFile(filepath.Join(dir, "nginx.conf"))
@@ -328,7 +328,7 @@ func TestMainConfig_GlobalTrustedIPsBypassWAF(t *testing.T) {
 		if err := os.MkdirAll(m.configPath, 0755); err != nil {
 			t.Fatalf("mkdir: %v", err)
 		}
-		if err := m.GenerateMainNginxConfig(context.Background(), baselineSettings(), trusted, bypass); err != nil {
+		if err := m.GenerateMainNginxConfig(context.Background(), baselineSettings(), trusted, bypass, TrustedProxyConfig{}); err != nil {
 			t.Fatalf("GenerateMainNginxConfig: %v", err)
 		}
 		b, err := os.ReadFile(filepath.Join(dir, "nginx.conf"))

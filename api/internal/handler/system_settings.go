@@ -125,6 +125,12 @@ func (h *SystemSettingsHandler) GetPublicUISettings(c echo.Context) error {
 }
 
 // UpdateSystemSettings updates system settings
+// trimInvalidInputPrefix strips the sentinel wrapper so the client sees the
+// actionable sentence, not "invalid input: ...".
+func trimInvalidInputPrefix(err error) string {
+	return strings.TrimPrefix(err.Error(), model.ErrInvalidInput.Error()+": ")
+}
+
 func (h *SystemSettingsHandler) UpdateSystemSettings(c echo.Context) error {
 	var req model.UpdateSystemSettingsRequest
 	if err := c.Bind(&req); err != nil {
@@ -140,6 +146,29 @@ func (h *SystemSettingsHandler) UpdateSystemSettings(c echo.Context) error {
 		log.Printf("[SystemSettings] Ignoring raw_log_enabled=false; raw log storage is mandatory since v2.17.1.")
 		t := true
 		req.RawLogEnabled = &t
+	}
+
+	// Trusted proxies decide whose forwarded-address header nginx believes, so
+	// a bad value is a security problem, not a cosmetic one — reject it here
+	// rather than letting the render silently drop it (#278).
+	if req.TrustedProxyCIDRs != nil {
+		if err := model.ValidateTrustedProxyCIDRs(*req.TrustedProxyCIDRs); err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": trimInvalidInputPrefix(err)})
+		}
+	}
+	if req.TrustedProxyPreset != nil {
+		normalized, err := model.NormalizeTrustedProxyPreset(*req.TrustedProxyPreset)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": trimInvalidInputPrefix(err)})
+		}
+		req.TrustedProxyPreset = &normalized
+	}
+	if req.RealIPHeader != nil {
+		normalized, err := model.NormalizeRealIPHeader(*req.RealIPHeader)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": trimInvalidInputPrefix(err)})
+		}
+		req.RealIPHeader = &normalized
 	}
 
 	settings, err := h.repo.Update(c.Request().Context(), &req)
@@ -165,9 +194,13 @@ func (h *SystemSettingsHandler) UpdateSystemSettings(c echo.Context) error {
 	// Also regenerate when only the WAF-bypass flag (#166) toggles — the
 	// http-level ctl:ruleEngine=Off rule lives in nginx.conf, so a flag change
 	// with unchanged trusted-IP list must still re-render the main config.
-	if req.GlobalTrustedIPs != nil || req.GlobalTrustedIPsBypassWAF != nil {
+	if req.GlobalTrustedIPs != nil || req.GlobalTrustedIPsBypassWAF != nil ||
+		req.TrustedProxyCIDRs != nil || req.TrustedProxyPreset != nil || req.RealIPHeader != nil {
 		trustedIPs := service.ParseGlobalTrustedIPs(settings.GlobalTrustedIPs)
 		bypassWAF := settings.GlobalTrustedIPsBypassWAF
+		// Trusted proxies live in the same http-level block, so the same
+		// ordered worker applies them (#278).
+		trustedProxies := service.ResolveTrustedProxyConfig(settings)
 		// One ORDERED background worker: nginx.conf first, then per-host
 		// configs, then a single reload via SyncAllConfigs. The previous two
 		// unsynchronized goroutines could interleave their writes/reloads, and
@@ -182,7 +215,7 @@ func (h *SystemSettingsHandler) UpdateSystemSettings(c echo.Context) error {
 					log.Printf("[SystemSettings] ERROR: trusted IPs change NOT fully applied — failed to load global settings for nginx.conf regen: %v (run Sync All to retry)", err)
 					return
 				}
-				if err := h.nginxManager.GenerateMainNginxConfig(bgCtx, gs, trustedIPs, bypassWAF); err != nil {
+				if err := h.nginxManager.GenerateMainNginxConfig(bgCtx, gs, trustedIPs, bypassWAF, trustedProxies); err != nil {
 					log.Printf("[SystemSettings] ERROR: trusted IPs change NOT fully applied — nginx.conf regeneration failed: %v (run Sync All to retry)", err)
 					return
 				}

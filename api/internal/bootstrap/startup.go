@@ -66,11 +66,15 @@ func runStartup(ctx context.Context, c *Container) error {
 		// zones honor the same whitelist the per-host configs already use.
 		var trustedIPs []string
 		var trustedBypassWAF bool
+		// Zero value reproduces the pre-#278 behaviour, so a settings read
+		// failure here still renders a config nginx accepts.
+		var trustedProxies nginx.TrustedProxyConfig
 		if sys, err := c.Repositories.SystemSettings.Get(ctx); err == nil && sys != nil {
 			trustedIPs = service.ParseGlobalTrustedIPs(sys.GlobalTrustedIPs)
 			trustedBypassWAF = sys.GlobalTrustedIPsBypassWAF
+			trustedProxies = service.ResolveTrustedProxyConfig(sys)
 		}
-		if err := c.Nginx.GenerateMainNginxConfig(ctx, settings, trustedIPs, trustedBypassWAF); err != nil {
+		if err := c.Nginx.GenerateMainNginxConfig(ctx, settings, trustedIPs, trustedBypassWAF, trustedProxies); err != nil {
 			log.Printf("[Startup] Warning: failed to regenerate nginx.conf: %v", err)
 		} else {
 			log.Println("[Startup] nginx.conf regenerated successfully")
