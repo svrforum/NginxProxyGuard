@@ -1,7 +1,7 @@
 {
   "name": "nginx-proxy-guard-ui",
   "private": true,
-  "version": "2.50.0",
+  "version": "2.51.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
