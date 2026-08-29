@@ -96,6 +96,28 @@ server {
     }
 
 {{if eq .Action "block_444"}}
+    # Cleartext HTTP spoken to an 'ssl' listener is finalized as nginx's
+    # internal 497 before the content phase, so a bare 'return 444' in
+    # 'location /' never sees it and the client gets '400 Bad Request / The
+    # plain HTTP request was sent to HTTPS port' while the setting promises
+    # 444. Measured on one install this was 52% of a week's unattributed 400s
+    # (#280). error_page reaches it because r->srv_conf is initialised from the
+    # listen socket's default_server before the request is parsed.
+    #
+    # Deliberately limited to 497. nginx also answers 400 for a request line it
+    # could not parse at all (missing/duplicate Host, garbage method, non-HTTP
+    # bytes) and 494 for oversized headers — but those are decided before the
+    # Host header is read, so rescuing them would silently drop malformed
+    # requests aimed at a hostname the operator HAS configured, trading a
+    # diagnosable 400 for a silent reset. Those stay 400 and stay in the log.
+    error_page 497 =444 /_npg_close;
+    location = /_npg_close {
+        internal;
+        return 444;
+    }
+{{end}}
+
+{{if eq .Action "block_444"}}
     # Block direct IP access - close connection without response
     location / {
         return 444;
@@ -132,6 +154,28 @@ server {
     # Access Action so those non-existent subdomains are handled consistently
     # (e.g. silently closed with 444) instead of leaking the welcome page. (#212)
 {{if eq .Action "block_444"}}
+    # Cleartext HTTP spoken to an 'ssl' listener is finalized as nginx's
+    # internal 497 before the content phase, so a bare 'return 444' in
+    # 'location /' never sees it and the client gets '400 Bad Request / The
+    # plain HTTP request was sent to HTTPS port' while the setting promises
+    # 444. Measured on one install this was 52% of a week's unattributed 400s
+    # (#280). error_page reaches it because r->srv_conf is initialised from the
+    # listen socket's default_server before the request is parsed.
+    #
+    # Deliberately limited to 497. nginx also answers 400 for a request line it
+    # could not parse at all (missing/duplicate Host, garbage method, non-HTTP
+    # bytes) and 494 for oversized headers — but those are decided before the
+    # Host header is read, so rescuing them would silently drop malformed
+    # requests aimed at a hostname the operator HAS configured, trading a
+    # diagnosable 400 for a silent reset. Those stay 400 and stay in the log.
+    error_page 497 =444 /_npg_close;
+    location = /_npg_close {
+        internal;
+        return 444;
+    }
+{{end}}
+
+{{if eq .Action "block_444"}}
     location / {
         return 444;
     }
@@ -162,6 +206,15 @@ server {
 
     ssl_certificate     /etc/nginx/certs/default-selfsigned.crt;
     ssl_certificate_key /etc/nginx/certs/default-selfsigned.key;
+
+    # This block answers 444 unconditionally, so it takes the same 497 rescue
+    # unconditionally — cleartext sent to the HTTPS port with a loopback or
+    # IP-literal Host lands here and would otherwise answer 400 (#280).
+    error_page 497 =444 /_npg_close;
+    location = /_npg_close {
+        internal;
+        return 444;
+    }
 
     return 444;
 }

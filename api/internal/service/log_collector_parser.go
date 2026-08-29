@@ -15,9 +15,37 @@ import (
 
 // Access log format (with host and timing):
 // 172.19.0.1 - - [02/Dec/2025:00:47:05 +0000] "app.local" "GET / HTTP/2.0" 200 595 "-" "Mozilla/5.0..." "-" rt=0.001 ... block="bot_filter" bot="ai_bot"
+//
+// The request is captured as ONE quoted field and split afterwards. Requiring
+// three whitespace-separated tokens inside the quotes looked equivalent and was
+// not: `"` is a non-space character, so on a request line nginx could not parse
+// — a scanner's raw TLS bytes, an SMB or RDP probe, a bare "GARBAGE /path" —
+// the three-token pattern happily spanned the quote boundary and captured the
+// HOST as the method. That produced request_method = `_"` (161 rows a week on
+// one install) and, worse, mis-attributed the host, which is what fail2ban
+// counts against a proxy host.
 var accessLogRegex = regexp.MustCompile(
-	`^(\S+)\s+-\s+(\S+)\s+\[([^\]]+)\]\s+"([^"]*)"\s+"(\S+)\s+(\S+)\s+(\S+)"\s+(\d+)\s+(\d+)\s+"([^"]*)"\s+"([^"]*)"\s+"([^"]*)"`,
+	`^(\S+)\s+-\s+(\S+)\s+\[([^\]]+)\]\s+"([^"]*)"\s+"([^"]*)"\s+(\d+)\s+(\d+)\s+"([^"]*)"\s+"([^"]*)"\s+"([^"]*)"`,
 )
+
+// splitRequestLine breaks nginx's $request into method / URI / protocol without
+// assuming it is well formed. nginx logs whatever arrived, escaped; a malformed
+// or non-HTTP request line still deserves an honest row rather than a mis-parse.
+func splitRequestLine(raw string) (method, uri, protocol string) {
+	fields := strings.Fields(raw)
+	switch len(fields) {
+	case 0:
+		return "", "", ""
+	case 1:
+		return fields[0], "", ""
+	case 2:
+		return fields[0], fields[1], ""
+	default:
+		// A URI cannot contain an unescaped space, so anything between the
+		// first and last field belongs to it.
+		return fields[0], strings.Join(fields[1:len(fields)-1], " "), fields[len(fields)-1]
+	}
+}
 
 // Regex patterns for parsing additional log fields
 var (
@@ -43,23 +71,24 @@ var accessLogRegexOld = regexp.MustCompile(
 func (c *LogCollector) parseAccessLog(line string) (*model.CreateLogRequest, error) {
 	// Try new format with host first
 	matches := accessLogRegex.FindStringSubmatch(line)
-	if matches != nil && len(matches) >= 13 {
-		// New format: client - user [time] "host" "method uri protocol" status bytes "referer" "ua" "xff"
+	if matches != nil && len(matches) >= 11 {
+		// New format: client - user [time] "host" "request" status bytes "referer" "ua" "xff"
 		timestamp, err := time.Parse("02/Jan/2006:15:04:05 -0700", matches[3])
 		if err != nil {
 			timestamp = time.Now()
 		}
 
-		statusCode, _ := strconv.Atoi(matches[8])
-		bodyBytes, _ := strconv.ParseInt(matches[9], 10, 64)
+		statusCode, _ := strconv.Atoi(matches[6])
+		bodyBytes, _ := strconv.ParseInt(matches[7], 10, 64)
 
 		host := matches[4]
-		referer := matches[10]
+		reqMethod, reqURI, reqProtocol := splitRequestLine(matches[5])
+		referer := matches[8]
 		if referer == "-" {
 			referer = ""
 		}
 
-		xForwardedFor := matches[12]
+		xForwardedFor := matches[10]
 		if xForwardedFor == "-" {
 			xForwardedFor = ""
 		}
@@ -134,13 +163,13 @@ func (c *LogCollector) parseAccessLog(line string) (*model.CreateLogRequest, err
 			Timestamp:            timestamp,
 			Host:                 host,
 			ClientIP:             matches[1],
-			RequestMethod:        matches[5],
-			RequestURI:           matches[6],
-			RequestProtocol:      matches[7],
+			RequestMethod:        reqMethod,
+			RequestURI:           reqURI,
+			RequestProtocol:      reqProtocol,
 			StatusCode:           statusCode,
 			BodyBytesSent:        bodyBytes,
 			HTTPReferer:          referer,
-			HTTPUserAgent:        matches[11],
+			HTTPUserAgent:        matches[9],
 			HTTPXForwardedFor:    xForwardedFor,
 			BlockReason:          blockReason,
 			BotCategory:          botCategory,

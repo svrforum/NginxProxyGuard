@@ -917,16 +917,16 @@
           },
           "block403": {
             "label": "403 Forbidden 반환",
-            "description": "403 Forbidden 응답을 반환합니다. JSON 형태로 접근 거부 메시지를 표시합니다."
+            "description": "403 Forbidden과 함께 Nginx Proxy Guard 접근 거부 페이지를 반환합니다."
           },
           "block444": {
             "label": "연결 종료 (444)",
-            "description": "응답 없이 연결을 즉시 종료합니다. 스캐너에게 가장 효과적입니다."
+            "description": "응답 없이 연결을 즉시 종료합니다. 스캐너에게 가장 효과적입니다. 형식이 깨진 요청이나 HTTPS 포트로 들어온 평문 HTTP도 동일하게 종료합니다. 다만 실제로 등록하신 호스트네임을 달고 온 요청은 평소대로 오류 응답을 받습니다."
           }
         },
         "note": {
           "title": "참고",
-          "description": "Health check (/health)와 ACME 챌린지 (/.well-known/acme-challenge/)는 이 설정과 관계없이 항상 허용됩니다."
+          "description": "이 설정과 관계없이 헬스체크(/health), ACME 챌린지(/.well-known/acme-challenge/), 공개 API(/api/v1/public/)는 항상 응답합니다. nginx 상태(/nginx_status)와 내부 점검용 카나리(/__npg_canary)는 루프백·사설망에서 온 요청에만 응답합니다. HTTPS는 SNI가 어느 호스트와도 맞지 않으면 TLS 핸드셰이크 단계에서 거부되므로 HTTP 상태 코드 자체가 남지 않습니다."
         }
       },
       "ipv6": {

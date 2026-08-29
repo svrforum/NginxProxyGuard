@@ -913,16 +913,16 @@
           },
           "block403": {
             "label": "Return 403 Forbidden",
-            "description": "Returns 403 Forbidden response with JSON access denied message."
+            "description": "Returns 403 Forbidden with the Nginx Proxy Guard access-denied page."
           },
           "block444": {
             "label": "Close Connection (444)",
-            "description": "Immediately closes connection without response. Most effective against scanners."
+            "description": "Closes the connection with no response — the most effective answer to scanners. Malformed requests and plain HTTP sent to the HTTPS port are closed the same way; a request carrying a hostname you have actually configured is still answered with a normal error."
           }
         },
         "note": {
           "title": "Note",
-          "description": "Health check (/health) and ACME challenge (/.well-known/acme-challenge/) are always allowed regardless of this setting."
+          "description": "Regardless of this setting, the catch-all server still answers the health check (/health), the ACME challenge path (/.well-known/acme-challenge/) and the public API (/api/v1/public/). The nginx status endpoint (/nginx_status) and the internal pipeline canary (/__npg_canary) answer only for loopback and private-network clients. Over HTTPS, a connection whose SNI matches no host is refused during the TLS handshake, so it produces no HTTP status at all."
         }
       },
       "ipv6": {

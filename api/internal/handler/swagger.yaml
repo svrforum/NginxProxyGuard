@@ -11782,25 +11782,36 @@ components:
           enum: [low, medium, high, critical]
     CreateExploitRule:
       type: object
-      required: [name, pattern]
+      description: >-
+        Request body for POST /exploit-rules. Every field below is validated;
+        an unknown enum value answers 400 naming the field and the accepted set.
+      required: [category, name, pattern, pattern_type]
       properties:
-        name:
-          type: string
-        description:
-          type: string
         category:
           type: string
+          enum: [sql_injection, xss, rfi, path_traversal, scanner, http_method, custom]
+        name:
+          type: string
+          maxLength: 100
         pattern:
           type: string
-        action:
+          description: >-
+            Regex applied by nginx. Compiled and rejected with 400 if invalid.
+        pattern_type:
           type: string
-          enum: [block, log, challenge]
-        enabled:
-          type: boolean
-          default: true
+          enum: [query_string, request_uri, user_agent, request_method]
+          description: >-
+            Which part of the request the pattern is matched against. The nginx
+            template dispatches on this value, so it is required and closed —
+            an unrecognised type would render the rule nowhere while the rule
+            list still showed it as enabled.
+        description:
+          type: string
         severity:
           type: string
-          enum: [low, medium, high, critical]
+          enum: [info, warning, critical]
+          default: warning
+          description: Labelling only; does not change enforcement.
     URIBlockConfig:
       type: object
       description: A proxy host's URI blocking rules.
