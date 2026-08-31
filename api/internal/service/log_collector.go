@@ -182,9 +182,10 @@ type LogCollector struct {
 	actualTailPath  atomic.Value // string, the resolved file-tail source (post-fallback)
 
 	// Domain to host ID cache for Fail2ban
-	domainCacheMu    sync.RWMutex
-	domainCache      map[string]string // domain -> hostID
-	domainCacheTime  time.Time
+	domainCacheMu   sync.RWMutex
+	domainCache     map[string]string // exact domain -> hostID
+	domainWildcards []wildcardHost    // "*.example.com" entries, longest suffix first
+	domainCacheTime time.Time
 
 	// Global trusted IPs cache (bypass all security)
 	settingsRepo     *repository.SystemSettingsRepository
@@ -338,45 +339,121 @@ func ipMatchesCIDR(ip, cidr string) bool {
 }
 
 // getHostIDByDomain returns the host ID for a given domain (with caching)
+// wildcardHost is a "*.example.com" domain and the host that owns it.
+type wildcardHost struct {
+	// suffix is the part after the star, including the leading dot
+	// (".example.com"), so matching is a plain HasSuffix.
+	suffix string
+	hostID string
+}
+
+// matchWildcardHost applies nginx's wildcard semantics: "*.example.com" matches
+// any name ending in ".example.com" at any depth, but NOT "example.com" itself.
+// Longest suffix wins so a more specific wildcard beats a broader one.
+func matchWildcardHost(domain string, wildcards []wildcardHost) string {
+	best := ""
+	bestLen := 0
+	for _, w := range wildcards {
+		if len(w.suffix) > bestLen && strings.HasSuffix(domain, w.suffix) {
+			best = w.hostID
+			bestLen = len(w.suffix)
+		}
+	}
+	return best
+}
+
+// getHostIDByDomain resolves an access-log $host to the proxy host that served
+// it. Attribution decides whether fail2ban and WAF auto-ban ever see a failure
+// (see the ProxyHostID gate in processLogLine), so a miss here silently
+// disables both for that traffic.
+//
+// Wildcard domains are matched explicitly: model.ValidateDomainName accepts a
+// leading "*.", nginx serves it, but an exact map lookup never matched — so on
+// a wildcard host every request was unattributed and fail2ban was dead. The
+// cache is refreshed on a ticker (refreshDomainCache) rather than on a miss, so
+// a newly created host is not invisible for up to a minute.
 func (c *LogCollector) getHostIDByDomain(ctx context.Context, domain string) string {
 	if domain == "" || c.proxyHostRepo == nil {
 		return ""
 	}
 
-	// Check cache first (fast path)
 	c.domainCacheMu.RLock()
-	if hostID, ok := c.domainCache[domain]; ok {
-		c.domainCacheMu.RUnlock()
-		return hostID
-	}
-	needsRefresh := time.Since(c.domainCacheTime) > 60*time.Second
+	hostID, ok := c.domainCache[domain]
+	wildcards := c.domainWildcards
+	stale := time.Since(c.domainCacheTime) > 60*time.Second
 	c.domainCacheMu.RUnlock()
 
-	if !needsRefresh {
+	if ok {
+		return hostID
+	}
+	if id := matchWildcardHost(domain, wildcards); id != "" {
+		return id
+	}
+	if !stale {
 		return ""
 	}
 
-	// DB query OUTSIDE lock
+	// Ticker is the normal refresh path; this covers a collector that started
+	// before the first tick, and a cache older than the window.
+	c.refreshDomainCache(ctx)
+
+	c.domainCacheMu.RLock()
+	hostID = c.domainCache[domain]
+	wildcards = c.domainWildcards
+	c.domainCacheMu.RUnlock()
+	if hostID != "" {
+		return hostID
+	}
+	return matchWildcardHost(domain, wildcards)
+}
+
+// refreshDomainCache rebuilds the domain -> host map from the database.
+func (c *LogCollector) refreshDomainCache(ctx context.Context) {
+	if c.proxyHostRepo == nil {
+		return
+	}
 	hosts, _, err := c.proxyHostRepo.List(ctx, 1, 1000, "", "", "")
 	if err != nil {
-		return ""
+		return
 	}
 
-	// Build new cache
-	newCache := make(map[string]string)
+	newCache := make(map[string]string, len(hosts))
+	var newWildcards []wildcardHost
 	for _, host := range hosts {
 		for _, d := range host.DomainNames {
+			if strings.HasPrefix(d, "*.") {
+				newWildcards = append(newWildcards, wildcardHost{suffix: d[1:], hostID: host.ID})
+				continue
+			}
 			newCache[d] = host.ID
 		}
 	}
 
-	// Swap cache under write lock (fast)
 	c.domainCacheMu.Lock()
 	c.domainCache = newCache
+	c.domainWildcards = newWildcards
 	c.domainCacheTime = time.Now()
 	c.domainCacheMu.Unlock()
+}
 
-	return newCache[domain]
+// domainCacheLoop keeps the domain -> host map fresh so a newly created or
+// renamed host is attributed immediately rather than after the next cache miss.
+func (c *LogCollector) domainCacheLoop(ctx context.Context) {
+	// Prime once so the very first log lines after boot resolve.
+	c.refreshDomainCache(ctx)
+
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-c.stopCh:
+			return
+		case <-ticker.C:
+			c.refreshDomainCache(ctx)
+		}
+	}
 }
 
 func (c *LogCollector) Start(ctx context.Context) {
@@ -394,6 +471,11 @@ func (c *LogCollector) Start(ctx context.Context) {
 
 	// Start periodic flush
 	go c.flushLoop(ctx)
+
+	// Keep the domain -> host map warm. Refreshing on a miss meant a host
+	// created just after a rebuild stayed unattributed for up to 60s, and
+	// during that window fail2ban counted nothing for it.
+	go c.domainCacheLoop(ctx)
 
 	// Start log streaming:
 	//   - access logs: tail nginx file directly (immune to docker logs RPC stalls)

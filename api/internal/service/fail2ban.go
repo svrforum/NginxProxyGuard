@@ -30,9 +30,15 @@ type Fail2banService struct {
 	mu       sync.RWMutex
 	ipEvents map[string]map[string][]time.Time // hostID -> IP -> list of fail timestamps
 
+	// systemSettingsRepo supplies the operator's declared trusted proxies so a
+	// proxy address is never auto-banned (banning one bans every client behind
+	// it). Optional: nil means no guard beyond loopback.
+	systemSettingsRepo *repository.SystemSettingsRepository
+
 	// Cache of fail2ban configs per host
 	configMu          sync.RWMutex
 	configCache       map[string]*model.Fail2banConfig // hostID -> config
+	trustedProxyCIDRs []string                        // refreshed alongside configCache
 	lastConfigRefresh time.Time
 	// notify is optional: nil means notifications are not configured.
 	notify *NotificationService
@@ -46,16 +52,18 @@ func NewFail2banService(
 	proxyHostService *ProxyHostService,
 	redisCache *cache.RedisClient,
 	historyRepo *repository.IPBanHistoryRepository,
+	systemSettingsRepo *repository.SystemSettingsRepository,
 ) *Fail2banService {
 	return &Fail2banService{
-		db:               db,
-		rateLimitRepo:    rateLimitRepo,
-		proxyHostRepo:    proxyHostRepo,
-		proxyHostService: proxyHostService,
-		redisCache:       redisCache,
-		historyRepo:      historyRepo,
-		ipEvents:         make(map[string]map[string][]time.Time),
-		configCache:      make(map[string]*model.Fail2banConfig),
+		db:                 db,
+		rateLimitRepo:      rateLimitRepo,
+		proxyHostRepo:      proxyHostRepo,
+		proxyHostService:   proxyHostService,
+		redisCache:         redisCache,
+		historyRepo:        historyRepo,
+		systemSettingsRepo: systemSettingsRepo,
+		ipEvents:           make(map[string]map[string][]time.Time),
+		configCache:        make(map[string]*model.Fail2banConfig),
 	}
 }
 
@@ -116,7 +124,30 @@ func (s *Fail2banService) refreshConfigs(ctx context.Context) {
 		}
 	}
 
+	s.trustedProxyCIDRs = s.loadTrustedProxyCIDRs(ctx)
 	s.lastConfigRefresh = time.Now()
+}
+
+// loadTrustedProxyCIDRs reads the operator's declared proxy ranges. On any
+// error it returns nil, which only weakens the guard to loopback — it must
+// never make the caller skip a ban it would otherwise apply.
+func (s *Fail2banService) loadTrustedProxyCIDRs(ctx context.Context) []string {
+	if s.systemSettingsRepo == nil {
+		return nil
+	}
+	sys, err := s.systemSettingsRepo.Get(ctx)
+	if err != nil || sys == nil {
+		return nil
+	}
+	return ResolveTrustedProxyConfig(sys).CIDRs
+}
+
+// unbannable reports why an address must not be auto-banned, or "".
+func (s *Fail2banService) unbannable(ip string) string {
+	s.configMu.RLock()
+	cidrs := s.trustedProxyCIDRs
+	s.configMu.RUnlock()
+	return model.UnbannableReason(ip, cidrs)
 }
 
 // getConfig returns the fail2ban config for a host (from cache)
@@ -172,6 +203,16 @@ func (s *Fail2banService) RecordFailedRequest(ctx context.Context, hostID string
 
 		reason := fmt.Sprintf("Fail2ban: %d failed requests (%d status) in %d seconds on %s",
 			eventCount, statusCode, config.FindTime, hostDomain)
+
+		// Some addresses must never be auto-banned however they behave.
+		// Checked here rather than before counting so the operator gets one
+		// line explaining why the ban they expected did not happen, instead of
+		// silence — and the counter is cleared so it says it once per window.
+		if why := s.unbannable(clientIP); why != "" {
+			log.Printf("[Fail2ban] NOT banning IP %s on %s — %s: %s", clientIP, hostDomain, why, reason)
+			s.clearIPEvents(ctx, clientIP, hostID)
+			return
+		}
 
 		// The dropdown promises: block = ban, notify = alert only, log = log only.
 		// "notify" used to fall through to a real ban — honor the promise here.

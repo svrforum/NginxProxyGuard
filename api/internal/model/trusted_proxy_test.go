@@ -139,3 +139,49 @@ func TestParseTrustedProxyCIDRs(t *testing.T) {
 		t.Fatalf("normalization: got %v, want [10.0.0.0/8]", valid)
 	}
 }
+
+// Two addresses must never be auto-banned, and the boundary between them and
+// "ban this LAN device on purpose" is the whole point of the rule.
+func TestUnbannableReason(t *testing.T) {
+	declared := []string{"104.16.0.0/13", "203.0.113.7"}
+
+	// Loopback: a self-ban renders 127.0.0.1 into every host's geo block, and
+	// that check runs in the server rewrite phase — before the per-host ACME
+	// location — so it breaks certificate renewal everywhere at once. The
+	// loopback SSL server answers 444 unconditionally, so a local self-probe
+	// can reach a fail-code threshold on its own.
+	for _, ip := range []string{"127.0.0.1", "127.0.0.53", "::1"} {
+		if UnbannableReason(ip, declared) == "" {
+			t.Errorf("loopback %q must never be auto-banned", ip)
+		}
+	}
+
+	// A declared proxy carries many clients.
+	for _, ip := range []string{"104.16.0.1", "104.23.255.255", "203.0.113.7"} {
+		if UnbannableReason(ip, declared) == "" {
+			t.Errorf("declared proxy address %q must never be auto-banned", ip)
+		}
+	}
+
+	// Everything else stays bannable — including private addresses. The
+	// always-trusted RFC1918 ranges are a default, not a claim that a LAN
+	// address is a proxy, so an operator must still be able to ban a LAN device.
+	for _, ip := range []string{"192.0.2.10", "198.51.100.4", "192.168.77.50", "10.1.2.3", "203.0.113.8"} {
+		if why := UnbannableReason(ip, declared); why != "" {
+			t.Errorf("%q should be bannable, refused with: %s", ip, why)
+		}
+	}
+
+	// No declared proxies: only loopback is protected.
+	if UnbannableReason("104.16.0.1", nil) != "" {
+		t.Error("with no trusted proxies configured a CDN address is not distinguishable and must stay bannable — the guard for that case is the enable-time precondition, not an address test")
+	}
+	if UnbannableReason("127.0.0.1", nil) == "" {
+		t.Error("loopback must be protected even with no trusted proxies configured")
+	}
+
+	// Garbage in, no crash, no accidental protection.
+	if UnbannableReason("not-an-ip", declared) != "" {
+		t.Error("an unparseable address must not be treated as protected")
+	}
+}

@@ -282,3 +282,52 @@ func ipv6PrefixAtLeast(entry string, minPrefix int) bool {
 	ones, _ := ipNet.Mask.Size()
 	return ones >= minPrefix
 }
+
+// UnbannableReason explains why an address must never be auto-banned, or "" when
+// banning it is fine. Returned as a string so the caller can log the reason.
+//
+// Two classes, and only two — a broader rule would stop an operator banning a
+// LAN device on purpose:
+//
+//   - Loopback. Banning yourself renders 127.0.0.1 into every host's geo block,
+//     and that check runs in the server rewrite phase, BEFORE the per-host
+//     /.well-known/acme-challenge/ location — so a self-ban breaks certificate
+//     renewal for every host at once. The loopback SSL server answers 444
+//     unconditionally, so any local self-probe can reach a fail-code threshold.
+//
+//   - An address the operator declared as a proxy in Trusted Proxies. Those
+//     carry many clients; banning one bans everyone behind it. Note this does
+//     NOT cover the always-trusted private ranges: those are a default, not a
+//     statement that a LAN address is a proxy.
+//
+// Deliberately NOT a guard against the CDN case. With no trusted proxy
+// configured, a CDN's edge address is not in this set at all — the protection
+// there has to be a precondition on enabling the feature, not an address test.
+func UnbannableReason(ip string, trustedProxyCIDRs []string) string {
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return ""
+	}
+	if parsed.IsLoopback() {
+		return "loopback address (banning it would break ACME renewal on every host)"
+	}
+	for _, entry := range trustedProxyCIDRs {
+		if ipInEntry(parsed, entry) {
+			return fmt.Sprintf("inside trusted proxy range %s (banning a proxy bans every client behind it)", entry)
+		}
+	}
+	return ""
+}
+
+// ipInEntry reports whether ip is covered by a bare address or CIDR entry.
+func ipInEntry(ip net.IP, entry string) bool {
+	if strings.Contains(entry, "/") {
+		_, ipNet, err := net.ParseCIDR(entry)
+		if err != nil {
+			return false
+		}
+		return ipNet.Contains(ip)
+	}
+	other := net.ParseIP(entry)
+	return other != nil && other.Equal(ip)
+}

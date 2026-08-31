@@ -30,6 +30,9 @@ type WAFAutoBanService struct {
 
 	// Settings cache
 	settingsMu      sync.RWMutex
+	// trustedProxyCIDRs are the operator's declared proxy ranges, refreshed
+	// with the rest of the settings.
+	trustedProxyCIDRs []string
 	enabled         bool
 	threshold       int
 	windowSeconds   int
@@ -103,6 +106,9 @@ func (s *WAFAutoBanService) refreshSettings(ctx context.Context) {
 	s.threshold = settings.WAFAutoBanThreshold
 	s.windowSeconds = settings.WAFAutoBanWindow
 	s.durationSeconds = settings.WAFAutoBanDuration
+	// Declared proxies must never be auto-banned; banning one bans every
+	// client behind it. Loaded here so the check costs nothing per event.
+	s.trustedProxyCIDRs = ResolveTrustedProxyConfig(settings).CIDRs
 	s.lastSettingsCheck = time.Now()
 
 	if s.threshold < 1 {
@@ -120,6 +126,7 @@ func (s *WAFAutoBanService) RecordWAFEvent(ctx context.Context, clientIP string,
 	threshold := s.threshold
 	windowSeconds := s.windowSeconds
 	durationSeconds := s.durationSeconds
+	trustedProxyCIDRs := s.trustedProxyCIDRs
 	s.settingsMu.RUnlock()
 
 	if !enabled {
@@ -156,6 +163,16 @@ func (s *WAFAutoBanService) RecordWAFEvent(ctx context.Context, clientIP string,
 		// Ban the IP
 		reason := fmt.Sprintf("Auto-banned: %d WAF events in %d seconds (last: rule %d - %s)",
 			eventCount, windowSeconds, ruleID, truncateStringWithEllipsis(ruleMessage, 100))
+
+		// Some addresses must never be auto-banned: loopback (a self-ban breaks
+		// ACME renewal on every host, because the ban check runs in the server
+		// rewrite phase before the per-host challenge location) and an address
+		// the operator declared as a proxy (banning one bans every client
+		// behind it). Logged so the ban that did not happen is explicable.
+		if why := model.UnbannableReason(clientIP, trustedProxyCIDRs); why != "" {
+			log.Printf("[WAF Auto-Ban] NOT banning IP %s — %s: %s", clientIP, why, reason)
+			return
+		}
 
 		if err := s.banIP(ctx, clientIP, host, reason, eventCount, durationSeconds); err != nil {
 			log.Printf("[WAF Auto-Ban] Failed to ban IP %s: %v", clientIP, err)

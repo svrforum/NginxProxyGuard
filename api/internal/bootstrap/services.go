@@ -195,6 +195,7 @@ func InitServices(
 		svcs.ProxyHost,
 		redisCache,
 		repos.IPBanHistory,
+		repos.SystemSettings,
 	)
 
 	svcs.StatsCollector = service.NewStatsCollector(

@@ -28,7 +28,11 @@ const KeyPrefix = "nginx_proxy_guard:"
 const (
 	PrefixBannedIP     = KeyPrefix + "banned_ip:"       // Set of banned IPs
 	PrefixRateLimit    = KeyPrefix + "rate_limit:"      // Rate limiting counters
-	PrefixFail2ban     = KeyPrefix + "fail2ban:"        // Fail2ban event counters
+	PrefixFail2ban     = KeyPrefix + "fail2ban:"        // Fail2ban event counters (legacy INCR keys, expire on their own)
+	// PrefixFail2banWindow holds the sorted-set sliding window. Separate from
+	// the legacy prefix so an in-flight INCR key from an older version cannot
+	// collide with ZADD (WRONGTYPE) — the old keys simply expire.
+	PrefixFail2banWindow = KeyPrefix + "f2bw:"          // Fail2ban sliding-window sets
 	PrefixWAFCounter   = KeyPrefix + "waf_counter:"     // WAF auto-ban counters
 	PrefixConfig       = KeyPrefix + "config:"          // Configuration cache
 	PrefixSession      = KeyPrefix + "session:"         // Session data
@@ -386,24 +390,43 @@ func (r *RedisClient) CheckRateLimit(ctx context.Context, key string, limit int6
 	}, nil
 }
 
-// IncrementCounter increments a counter with TTL
-func (r *RedisClient) IncrementCounter(ctx context.Context, key string, ttl time.Duration) (int64, error) {
+// IncrementCounter records one failure and returns how many fall inside the
+// window — a true sliding window, matching both the in-memory fallback in
+// Fail2banService and RecordWAFEvent right below.
+//
+// It used to be INCR + EXPIRE on every call, which is not a window at all: each
+// increment pushed the TTL forward, so an address trickling one failure every
+// find_time-1 seconds accumulated forever and was eventually banned, while a
+// Redis-less install (true sliding window) never banned it. The two paths
+// disagreed on the same configuration.
+//
+// The key shape changed with the type, so the prefix carries a version marker:
+// an old string key from a previous version would make ZADD fail with WRONGTYPE
+// for as long as it lived.
+func (r *RedisClient) IncrementCounter(ctx context.Context, key string, window time.Duration) (int64, error) {
 	if !r.IsReady() {
 		return 0, ErrNotReady
 	}
 
-	fullKey := PrefixFail2ban + key
+	fullKey := PrefixFail2banWindow + key
+	now := time.Now()
+	windowStart := now.Add(-window).UnixMilli()
 
 	pipe := r.client.Pipeline()
-	incrCmd := pipe.Incr(ctx, fullKey)
-	pipe.Expire(ctx, fullKey, ttl)
+	pipe.ZRemRangeByScore(ctx, fullKey, "0", strconv.FormatInt(windowStart, 10))
+	pipe.ZAdd(ctx, fullKey, redis.Z{
+		Score:  float64(now.UnixMilli()),
+		Member: fmt.Sprintf("%d", now.UnixNano()),
+	})
+	countCmd := pipe.ZCard(ctx, fullKey)
+	// Reap idle keys. ZRemRangeByScore already enforces the window, so this is
+	// only about not leaking a key per address forever.
+	pipe.Expire(ctx, fullKey, window+time.Minute)
 
-	_, err := pipe.Exec(ctx)
-	if err != nil {
+	if _, err := pipe.Exec(ctx); err != nil {
 		return 0, err
 	}
-
-	return incrCmd.Val(), nil
+	return countCmd.Val(), nil
 }
 
 // GetCounter gets current counter value
@@ -412,7 +435,7 @@ func (r *RedisClient) GetCounter(ctx context.Context, key string) (int64, error)
 		return 0, ErrNotReady
 	}
 
-	val, err := r.client.Get(ctx, PrefixFail2ban+key).Int64()
+	val, err := r.client.ZCard(ctx, PrefixFail2banWindow+key).Result()
 	if errors.Is(err, redis.Nil) {
 		return 0, nil
 	}
@@ -424,7 +447,7 @@ func (r *RedisClient) ResetCounter(ctx context.Context, key string) error {
 	if !r.IsReady() {
 		return ErrNotReady
 	}
-	return r.client.Del(ctx, PrefixFail2ban+key).Err()
+	return r.client.Del(ctx, PrefixFail2banWindow+key).Err()
 }
 
 // ========================================
