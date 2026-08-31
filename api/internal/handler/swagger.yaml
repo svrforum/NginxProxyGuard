@@ -2569,6 +2569,11 @@ paths:
     put:
       tags: [Exploit Rules]
       summary: Update exploit rule
+      description: >-
+        Partial update: send only the fields you want to change. `category` is
+        deliberately absent — the handler decodes a dedicated update model that
+        has no such field, so sending it is silently ignored rather than
+        applied. Change a rule's category by deleting and recreating it.
       security:
         - BearerAuth: []
       parameters:
@@ -2582,7 +2587,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateExploitRule'
+              $ref: '#/components/schemas/UpdateExploitRule'
       responses:
         '200':
           description: Exploit rule updated
@@ -11812,6 +11817,31 @@ components:
           enum: [info, warning, critical]
           default: warning
           description: Labelling only; does not change enforcement.
+    UpdateExploitRule:
+      type: object
+      description: >-
+        Request body for PUT /exploit-rules/{id}. Every field is optional and
+        only the ones present are applied, so no field is listed as required.
+        Values are validated the same way as on create — an unknown enum or an
+        uncompilable pattern answers 400.
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        pattern:
+          type: string
+          description: Regex applied by nginx. Rejected with 400 if it does not compile.
+        pattern_type:
+          type: string
+          enum: [query_string, request_uri, user_agent, request_method]
+        description:
+          type: string
+        severity:
+          type: string
+          enum: [info, warning, critical]
+        enabled:
+          type: boolean
+
     URIBlockConfig:
       type: object
       description: A proxy host's URI blocking rules.
