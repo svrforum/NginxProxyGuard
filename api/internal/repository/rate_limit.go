@@ -3,7 +3,9 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/lib/pq"
@@ -162,6 +164,79 @@ func (r *RateLimitRepository) GetFail2banByProxyHostID(ctx context.Context, prox
 	}
 
 	return &f, nil
+}
+
+// GetGlobalFail2ban returns the singleton jail, creating it with the shipped
+// defaults if the row does not exist yet. Pointer fields on the update request
+// mean an absent field keeps the stored value; the row is only ever one.
+func (r *RateLimitRepository) GetGlobalFail2ban(ctx context.Context) (*model.GlobalFail2banConfig, error) {
+	const sel = `SELECT id, enabled, max_retries, find_time, ban_time, fail_codes, action, created_at, updated_at
+	             FROM global_fail2ban LIMIT 1`
+	var g model.GlobalFail2banConfig
+	err := r.db.QueryRowContext(ctx, sel).Scan(
+		&g.ID, &g.Enabled, &g.MaxRetries, &g.FindTime, &g.BanTime, &g.FailCodes, &g.Action, &g.CreatedAt, &g.UpdatedAt,
+	)
+	if err == sql.ErrNoRows {
+		// Insert the row and read it back so every DB default reaches the
+		// caller rather than a Go zero value.
+		if _, err := r.db.ExecContext(ctx, `INSERT INTO global_fail2ban DEFAULT VALUES ON CONFLICT DO NOTHING`); err != nil {
+			return nil, err
+		}
+		err = r.db.QueryRowContext(ctx, sel).Scan(
+			&g.ID, &g.Enabled, &g.MaxRetries, &g.FindTime, &g.BanTime, &g.FailCodes, &g.Action, &g.CreatedAt, &g.UpdatedAt,
+		)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &g, nil
+}
+
+// UpdateGlobalFail2ban applies a partial update to the singleton.
+func (r *RateLimitRepository) UpdateGlobalFail2ban(ctx context.Context, req *model.UpdateGlobalFail2banRequest) (*model.GlobalFail2banConfig, error) {
+	// Ensure the row exists before updating it.
+	if _, err := r.GetGlobalFail2ban(ctx); err != nil {
+		return nil, err
+	}
+
+	setClauses := []string{"updated_at = NOW()"}
+	args := []interface{}{}
+	idx := 1
+	add := func(col string, v interface{}) {
+		setClauses = append(setClauses, fmt.Sprintf("%s = $%d", col, idx))
+		args = append(args, v)
+		idx++
+	}
+	if req.Enabled != nil {
+		add("enabled", *req.Enabled)
+	}
+	if req.MaxRetries != nil {
+		add("max_retries", *req.MaxRetries)
+	}
+	if req.FindTime != nil {
+		add("find_time", *req.FindTime)
+	}
+	if req.BanTime != nil {
+		add("ban_time", *req.BanTime)
+	}
+	if req.FailCodes != nil {
+		add("fail_codes", *req.FailCodes)
+	}
+	if req.Action != nil {
+		add("action", *req.Action)
+	}
+
+	query := fmt.Sprintf(`UPDATE global_fail2ban SET %s
+	    RETURNING id, enabled, max_retries, find_time, ban_time, fail_codes, action, created_at, updated_at`,
+		strings.Join(setClauses, ", "))
+
+	var g model.GlobalFail2banConfig
+	if err := r.db.QueryRowContext(ctx, query, args...).Scan(
+		&g.ID, &g.Enabled, &g.MaxRetries, &g.FindTime, &g.BanTime, &g.FailCodes, &g.Action, &g.CreatedAt, &g.UpdatedAt,
+	); err != nil {
+		return nil, err
+	}
+	return &g, nil
 }
 
 func (r *RateLimitRepository) UpsertFail2ban(ctx context.Context, proxyHostID string, req *model.CreateFail2banRequest) (*model.Fail2banConfig, error) {

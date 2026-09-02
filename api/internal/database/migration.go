@@ -1386,6 +1386,21 @@ UPDATE public.system_settings
    SET system_logs_stdout_excluded = ARRAY['npg-proxy'::text]
  WHERE system_logs_stdout_excluded = ARRAY['npm-guard-proxy'::text];`,
 		},
+		{
+			desc: "v2.53.0: global fail2ban jail for unmatched-host traffic (#275)",
+			sql:  `CREATE TABLE IF NOT EXISTS public.global_fail2ban (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    enabled boolean DEFAULT false NOT NULL,
+    max_retries integer DEFAULT 5 NOT NULL,
+    find_time integer DEFAULT 600 NOT NULL,
+    ban_time integer DEFAULT 3600 NOT NULL,
+    fail_codes character varying(100) DEFAULT '400,444'::character varying NOT NULL,
+    action character varying(20) DEFAULT 'log'::character varying NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_global_fail2ban_singleton ON public.global_fail2ban USING btree ((true));`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

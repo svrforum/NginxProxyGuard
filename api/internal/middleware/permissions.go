@@ -334,6 +334,8 @@ var routePermissions = map[string]string{
 	"PUT /api/v1/settings/global-geo": "waf:write",
 	"GET /api/v1/settings/global-rate-limit": "waf:read",
 	"PUT /api/v1/settings/global-rate-limit": "waf:write",
+	"GET /api/v1/settings/global-fail2ban":   "waf:read",
+	"PUT /api/v1/settings/global-fail2ban":   "waf:write",
 	"GET /api/v1/settings/global-security-headers": "waf:read",
 	"PUT /api/v1/settings/global-security-headers": "waf:write",
 	"GET /api/v1/settings/global-waf": "waf:read",

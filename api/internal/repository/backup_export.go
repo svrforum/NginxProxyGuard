@@ -141,6 +141,13 @@ func (r *BackupRepository) ExportAllData(ctx context.Context) (*model.ExportData
 	}
 	export.GlobalRateLimit = globalRateLimit
 
+	// Export Global Fail2ban jail (#275)
+	globalFail2ban, err := r.exportGlobalFail2ban(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to export global fail2ban: %w", err)
+	}
+	export.GlobalFail2ban = globalFail2ban
+
 	// Export Global WAF default (#198 slice 6)
 	globalWAF, err := r.exportGlobalWAF(ctx)
 	if err != nil {

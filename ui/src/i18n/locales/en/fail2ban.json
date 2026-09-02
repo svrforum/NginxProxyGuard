@@ -24,7 +24,7 @@
     "banTimeCustom": "Custom (seconds)",
     "banTimeSecondsPlaceholder": "seconds, 0 = permanent",
     "failCodes": "Fail Codes",
-    "failCodesHelp": "HTTP status codes that count as failures. Only responses this host itself answers are counted - 444 from the direct-IP catch-all server belongs to no host and never counts.",
+    "failCodesHelp": "HTTP status codes that count as failures. Only responses this host itself answers are counted — 444 from the direct-IP catch-all belongs to no host, so use Global Fail2ban for that traffic.",
     "action": "Action",
     "actionOptions": {
       "block": "Block IP",
@@ -39,5 +39,19 @@
   },
   "editModal": {
     "title": "Fail2ban Settings - {{host}}"
+  },
+  "global": {
+    "title": "Global Fail2ban",
+    "subtitle": "Automatic banning for requests that matched no host",
+    "intro": "Counts requests that arrived by IP address, or with a hostname you have not configured. Those belong to no proxy host, so a per-host jail structurally cannot see them — which is why putting 444 in a host's fail codes never did anything.",
+    "blastRadius": "⚠️ Bans created here apply to **every host at once**. A false positive affects all your sites, not one. That is why it ships disabled, and why starting with \"Log Only\" — which records without banning — is the safer order. Watch the log for a few days, confirm only the traffic you want is being caught, then switch it on.",
+    "excluded": "Not counted: domains you configured as redirect hosts (those are your hosts, and their visitors are not scanners), requests too malformed for the hostname to be read, NPG's own self-checks, and loopback or trusted-proxy addresses.",
+    "enable": "Enable global fail2ban",
+    "enableHelp": "Settings → Trusted Proxies must be configured first. Without it every request appears to come from your CDN or upstream proxy, and banning that address blocks every visitor behind it on every host.",
+    "maxRetriesHelp": "Failures before a ban. Because the ban applies everywhere, a more forgiving threshold than your per-host jails is the safer default.",
+    "actionHelp": "Start with \"Log Only\" for a few days, then switch to \"Block IP\". \"Notify Only\" alerts without banning.",
+    "failCodesHelp": "HTTP status codes that count as a failure. Only unmatched-host requests are considered, which is where 444 (direct-IP blocking) actually occurs.",
+    "failCodesNote": "The default 400,444 was chosen by analysing real logs. Adding 403 or 404 catches nothing extra — those come only from hosts you configured.",
+    "saved": "Saved."
   }
 }

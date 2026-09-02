@@ -228,6 +228,7 @@ type ExportData struct {
 	GlobalSecurityHeaders *GlobalSecurityHeadersExport `json:"global_security_headers,omitempty"`
 	GlobalCloudProviders  *GlobalCloudProvidersExport  `json:"global_cloud_providers,omitempty"`
 	GlobalRateLimit       *GlobalRateLimitExport       `json:"global_rate_limit,omitempty"`
+	GlobalFail2ban        *GlobalFail2banExport        `json:"global_fail2ban,omitempty"`
 	GlobalWAF             *GlobalWAFExport             `json:"global_waf,omitempty"`
 	CloudflareTunnel      *CloudflareTunnelExport      `json:"cloudflare_tunnel,omitempty"`
 
@@ -525,6 +526,21 @@ type GlobalCloudProvidersExport struct {
 	BlockedProviders []string `json:"blocked_providers"`
 	ChallengeMode    bool     `json:"challenge_mode"`
 	AllowSearchBots  bool     `json:"allow_search_bots"`
+}
+
+// GlobalFail2banExport represents the singleton global jail (#275).
+//
+// Restoring a backup taken BEFORE this feature existed leaves the field nil,
+// and the importer then leaves the live row alone — so a restore does not
+// disarm a jail the operator armed. Worth knowing for a feature that bans
+// people; it is called out in the release notes.
+type GlobalFail2banExport struct {
+	Enabled    bool   `json:"enabled"`
+	MaxRetries int    `json:"max_retries"`
+	FindTime   int    `json:"find_time"`
+	BanTime    int    `json:"ban_time"`
+	FailCodes  string `json:"fail_codes"`
+	Action     string `json:"action"`
 }
 
 // GlobalRateLimitExport represents the singleton global rate-limit default (#198 slice 5).

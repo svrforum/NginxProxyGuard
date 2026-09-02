@@ -160,6 +160,14 @@ type Log struct {
 	IsBanned bool `json:"is_banned"`
 }
 
+// CanaryURIPrefix is the PipelineCanary self-test path. Those rows exist so the
+// ingestion pipeline can prove itself end to end, and every consumer that
+// counts real traffic must exclude them — the repository read path already does
+// (canaryURIExclusion). Exported so a new consumer cannot quietly hand-wire yet
+// another copy of the literal, which is how #191 happened.
+const CanaryURIPrefix = "/__npg_canary"
+
+
 type CreateLogRequest struct {
 	LogType   LogType   `json:"log_type" validate:"required,oneof=access error modsec"`
 	Timestamp time.Time `json:"timestamp"`

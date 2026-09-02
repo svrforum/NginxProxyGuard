@@ -234,6 +234,63 @@ func (r *BackupRepository) importGlobalRateLimit(ctx context.Context, tx *sql.Tx
 	return err
 }
 
+// importGlobalFail2ban restores the singleton global jail (#275).
+// Delete-then-insert so the singleton stays unique. Values are coerced rather
+// than trusted: this row decides whether addresses get banned on every host, so
+// a hand-edited backup must not be able to arm it with nonsense.
+func (r *BackupRepository) importGlobalFail2ban(ctx context.Context, tx *sql.Tx, g *model.GlobalFail2banExport) error {
+	_, _ = tx.ExecContext(ctx, "DELETE FROM global_fail2ban")
+
+	failCodes := g.FailCodes
+	if err := model.ValidateFail2banRequest(&model.CreateFail2banRequest{FailCodes: failCodes}); err != nil || failCodes == "" {
+		failCodes = "400,444"
+	}
+	action := g.Action
+	if err := model.ValidateFail2banRequest(&model.CreateFail2banRequest{Action: action}); err != nil || action == "" {
+		action = "log"
+	}
+	maxRetries := g.MaxRetries
+	if maxRetries < 1 {
+		maxRetries = 5
+	}
+	findTime := g.FindTime
+	if findTime < 1 {
+		findTime = 600
+	}
+	banTime := g.BanTime
+	if banTime < 0 {
+		banTime = 3600
+	}
+
+	// The API refuses to ENABLE this jail while Trusted Proxies are
+	// unconfigured, because without them the address it would ban is the CDN
+	// edge. A restore must not be a way around that check: system_settings is
+	// imported earlier in this same transaction, so the post-restore state is
+	// already visible here. A backup that carries an armed jail but no trusted
+	// proxies is imported disarmed rather than rejected — losing a setting is
+	// recoverable, banning every visitor is not.
+	enabled := g.Enabled
+	if enabled {
+		var trustedCount int
+		err := tx.QueryRowContext(ctx, `
+			SELECT COUNT(*) FROM system_settings
+			WHERE COALESCE(NULLIF(trusted_proxy_cidrs, ''), NULL) IS NOT NULL
+			   OR COALESCE(trusted_proxy_preset, 'none') <> 'none'
+		`).Scan(&trustedCount)
+		if err != nil || trustedCount == 0 {
+			enabled = false
+			log.Printf("[Backup] global fail2ban restored DISABLED: the backup had it enabled but this instance has no trusted proxies configured, and the jail bans on every host")
+		}
+	}
+
+	query := `
+		INSERT INTO global_fail2ban (enabled, max_retries, find_time, ban_time, fail_codes, action)
+		VALUES ($1, $2, $3, $4, $5, $6)
+	`
+	_, err := tx.ExecContext(ctx, query, enabled, maxRetries, findTime, banTime, failCodes, action)
+	return err
+}
+
 // importGlobalWAF restores the singleton global WAF default (#198 slice 6).
 // Delete-then-insert so the singleton stays unique. Clamps paranoia/threshold to
 // the column CHECK ranges so a malformed or zero-value backup cannot fail import.

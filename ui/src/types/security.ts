@@ -336,3 +336,29 @@ export interface AddURIBlockRuleRequest {
   description?: string;
   enabled?: boolean;
 }
+
+/**
+ * Global fail2ban jail (#275): the singleton that acts on requests which
+ * matched no configured host. Its bans carry no proxy host and therefore apply
+ * everywhere, which is why enabling it requires Trusted Proxies to be set.
+ */
+export interface GlobalFail2ban {
+  id: string
+  enabled: boolean
+  max_retries: number
+  find_time: number
+  ban_time: number
+  fail_codes: string
+  action: string
+  created_at: string
+  updated_at: string
+}
+
+export interface UpdateGlobalFail2banRequest {
+  enabled?: boolean
+  max_retries?: number
+  find_time?: number
+  ban_time?: number
+  fail_codes?: string
+  action?: string
+}

@@ -161,6 +161,13 @@ func (m *BotMatcher) MatchBot(userAgent string) (string, bool) {
 type LogCollector struct {
 	logRepo         *repository.LogRepository
 	proxyHostRepo   *repository.ProxyHostRepository
+	// redirectHostRepo lets the collector tell "matched a configured host that
+	// simply is not a proxy host" from "matched nothing". Redirect hosts are
+	// unattributed today, so without this a global jail would count their real
+	// visitors' 404s and ban them everywhere. Optional; nil disables the
+	// distinction (and with it the global jail's safety, so it is wired in
+	// bootstrap alongside the proxy host repo).
+	redirectHostRepo *repository.RedirectHostRepository
 	geoIP           *GeoIPService
 	wafAutoBan      *WAFAutoBanService
 	fail2ban        *Fail2banService
@@ -185,7 +192,11 @@ type LogCollector struct {
 	domainCacheMu   sync.RWMutex
 	domainCache     map[string]string // exact domain -> hostID
 	domainWildcards []wildcardHost    // "*.example.com" entries, longest suffix first
-	domainCacheTime time.Time
+	// Redirect-host domains, refreshed together with the proxy host map. The
+	// hostID field is unused for these — only membership matters.
+	redirectDomains   map[string]struct{}
+	redirectWildcards []wildcardHost
+	domainCacheTime   time.Time
 
 	// Global trusted IPs cache (bypass all security)
 	settingsRepo     *repository.SystemSettingsRepository
@@ -219,7 +230,8 @@ func NewLogCollector(logRepo *repository.LogRepository, nginxContainer string, a
 		buffer:         make([]model.CreateLogRequest, 0, 500),
 		stopCh:         make(chan struct{}),
 		restartTail:    make(chan struct{}, 1),
-		domainCache:    make(map[string]string),
+		domainCache:     make(map[string]string),
+		redirectDomains: make(map[string]struct{}),
 		debugLog:       os.Getenv("LOG_COLLECTOR_DEBUG") == "1",
 	}
 }
@@ -232,6 +244,32 @@ func NewLogCollector(logRepo *repository.LogRepository, nginxContainer string, a
 // lifetime. IsReady() is a cheap RLock'd flag read.
 func (c *LogCollector) redisBufferReady() bool {
 	return c.redisCache != nil && c.redisCache.IsReady()
+}
+
+// SetRedirectHostRepo supplies redirect-host domains so they are recognised as
+// configured hosts even though they carry no proxy_host_id.
+func (c *LogCollector) SetRedirectHostRepo(repo *repository.RedirectHostRepository) {
+	c.redirectHostRepo = repo
+}
+
+// IsConfiguredHost reports whether a hostname belongs to ANY configured host —
+// proxy or redirect, exact or wildcard. The global jail acts only on requests
+// where this is false.
+func (c *LogCollector) IsConfiguredHost(ctx context.Context, domain string) bool {
+	if domain == "" {
+		return false
+	}
+	if c.getHostIDByDomain(ctx, domain) != "" {
+		return true
+	}
+	c.domainCacheMu.RLock()
+	_, ok := c.redirectDomains[domain]
+	wildcards := c.redirectWildcards
+	c.domainCacheMu.RUnlock()
+	if ok {
+		return true
+	}
+	return matchWildcardHost(domain, wildcards) != ""
 }
 
 // SetProxyHostRepo sets the proxy host repository for domain lookups
@@ -429,11 +467,46 @@ func (c *LogCollector) refreshDomainCache(ctx context.Context) {
 		}
 	}
 
+	newRedirects, newRedirectWildcards := c.loadRedirectDomains(ctx)
+
 	c.domainCacheMu.Lock()
 	c.domainCache = newCache
 	c.domainWildcards = newWildcards
+	if newRedirects != nil {
+		c.redirectDomains = newRedirects
+		c.redirectWildcards = newRedirectWildcards
+	}
 	c.domainCacheTime = time.Now()
 	c.domainCacheMu.Unlock()
+}
+
+// loadRedirectDomains snapshots redirect-host domains. Returns nil on error so
+// the caller keeps the previous snapshot: an empty set would make every
+// redirect host look unconfigured, which is the direction that causes bans.
+//
+// Disabled redirect hosts are included on purpose. A disabled host has no
+// server block, so its traffic falls to the catch-all — but it is still a
+// hostname the operator configured, and its visitors are not scanners.
+func (c *LogCollector) loadRedirectDomains(ctx context.Context) (map[string]struct{}, []wildcardHost) {
+	if c.redirectHostRepo == nil {
+		return nil, nil
+	}
+	hosts, _, err := c.redirectHostRepo.List(ctx, 1, 1000)
+	if err != nil {
+		return nil, nil
+	}
+	domains := make(map[string]struct{}, len(hosts))
+	var wildcards []wildcardHost
+	for _, h := range hosts {
+		for _, d := range h.DomainNames {
+			if strings.HasPrefix(d, "*.") {
+				wildcards = append(wildcards, wildcardHost{suffix: d[1:], hostID: h.ID})
+				continue
+			}
+			domains[d] = struct{}{}
+		}
+	}
+	return domains, wildcards
 }
 
 // domainCacheLoop keeps the domain -> host map fresh so a newly created or
@@ -888,10 +961,19 @@ func (c *LogCollector) handleAccessLine(ctx context.Context, line string) {
 		}
 	}
 
-	// Notify Fail2ban service for error responses (4xx, 5xx).
-	// Skip for globally trusted IPs.
-	if c.fail2ban != nil && logReq.ClientIP != "" && logReq.StatusCode >= 400 && logReq.ProxyHostID != "" && !c.isTrustedIP(ctx, logReq.ClientIP) {
-		c.fail2ban.RecordFailedRequest(ctx, logReq.ProxyHostID, logReq.ClientIP, logReq.StatusCode, logReq.RequestURI)
+	// Notify Fail2ban for error responses (4xx, 5xx). Skip globally trusted IPs.
+	//
+	// The two branches are disjoint by construction, so one request can never
+	// be counted twice: either a proxy host owns it, or nothing does and the
+	// global jail (#275) takes it. The global jail is what finally sees
+	// catch-all traffic — the 444s an operator adds to a host's fail codes
+	// expecting them to fire, which by definition matched no host.
+	if c.fail2ban != nil && logReq.ClientIP != "" && logReq.StatusCode >= 400 && !c.isTrustedIP(ctx, logReq.ClientIP) {
+		if logReq.ProxyHostID != "" {
+			c.fail2ban.RecordFailedRequest(ctx, logReq.ProxyHostID, logReq.ClientIP, logReq.StatusCode, logReq.RequestURI)
+		} else {
+			c.fail2ban.RecordUnattributedFailure(ctx, logReq.ClientIP, logReq.Host, logReq.RequestURI, logReq.StatusCode)
+		}
 	}
 
 	c.addLog(*logReq)

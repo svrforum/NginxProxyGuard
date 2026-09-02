@@ -232,6 +232,9 @@ func wireServiceCallbacks(svcs *Services, repos *Repositories) {
 	svcs.Security.SetGlobalWAFRepo(repos.GlobalWAF)
 	// Security: per-banned-IP statistics for the ban detail view (#242).
 	svcs.Security.SetBannedIPStatsRepo(repos.BannedIPStats)
+	// The global jail refuses to be enabled while trusted proxies are
+	// unconfigured; that check needs the settings row (#275).
+	svcs.Security.SetSystemSettingsRepo(repos.SystemSettings)
 	// ProxyHost: resolve docker container-name targets to their current IP (#150).
 	svcs.ProxyHost.SetContainerResolver(svcs.DockerStats)
 	// AuthProvider: same resolver for container-backed verify endpoints (#181).
@@ -332,6 +335,11 @@ func wireServiceCallbacks(svcs *Services, repos *Repositories) {
 		svcs.LogCollector.SetWAFAutoBanService(svcs.WAFAutoBan)
 		svcs.LogCollector.SetFail2banService(svcs.Fail2ban)
 		svcs.LogCollector.SetProxyHostRepo(repos.ProxyHost)
+		// The global jail must be able to tell "matched no host" from "matched
+		// a redirect host"; without this it would count redirect hosts' real
+		// visitors and ban them on every host (#275).
+		svcs.LogCollector.SetRedirectHostRepo(repos.RedirectHost)
+		svcs.Fail2ban.SetConfiguredHostResolver(svcs.LogCollector.IsConfiguredHost)
 		svcs.LogCollector.SetSystemSettingsRepo(repos.SystemSettings)
 	}
 }

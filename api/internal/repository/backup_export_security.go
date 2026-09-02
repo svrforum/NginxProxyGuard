@@ -349,6 +349,26 @@ func (r *BackupRepository) exportGlobalRateLimit(ctx context.Context) (*model.Gl
 	return &g, nil
 }
 
+// exportGlobalFail2ban exports the singleton global jail (#275). Returns nil
+// when no row exists, which is the pre-feature state.
+func (r *BackupRepository) exportGlobalFail2ban(ctx context.Context) (*model.GlobalFail2banExport, error) {
+	query := `
+		SELECT enabled, max_retries, find_time, ban_time, fail_codes, action
+		FROM global_fail2ban LIMIT 1
+	`
+	var g model.GlobalFail2banExport
+	err := r.db.QueryRowContext(ctx, query).Scan(
+		&g.Enabled, &g.MaxRetries, &g.FindTime, &g.BanTime, &g.FailCodes, &g.Action,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &g, nil
+}
+
 // exportGlobalWAF exports the singleton global WAF default (#198 slice 6).
 // Returns nil when no row exists.
 func (r *BackupRepository) exportGlobalWAF(ctx context.Context) (*model.GlobalWAFExport, error) {

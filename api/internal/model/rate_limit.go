@@ -140,12 +140,12 @@ var Fail2banActions = []string{"block", "log", "notify"}
 func ValidateFail2banRequest(req *CreateFail2banRequest) error {
 	if req.FailCodes != "" {
 		if len(req.FailCodes) > 100 {
-			return fmt.Errorf("fail_codes is too long (max 100 characters)")
+			return fmt.Errorf("%w: fail_codes is too long (max 100 characters)", ErrInvalidInput)
 		}
 		for _, part := range strings.Split(req.FailCodes, ",") {
 			code, err := strconv.Atoi(strings.TrimSpace(part))
 			if err != nil || code < 100 || code > 599 {
-				return fmt.Errorf("invalid fail code %q: expected comma-separated HTTP status codes (e.g. 401,403,429)", strings.TrimSpace(part))
+				return fmt.Errorf("%w: invalid fail code %q: expected comma-separated HTTP status codes (e.g. 401,403,429)", ErrInvalidInput, strings.TrimSpace(part))
 			}
 		}
 	}
@@ -158,7 +158,7 @@ func ValidateFail2banRequest(req *CreateFail2banRequest) error {
 			}
 		}
 		if !valid {
-			return fmt.Errorf("invalid action %q: must be one of block, log, notify", req.Action)
+			return fmt.Errorf("%w: invalid action %q: must be one of block, log, notify", ErrInvalidInput, req.Action)
 		}
 	}
 	return nil
@@ -205,6 +205,65 @@ type CreateFail2banRequest struct {
 	Action     string `json:"action,omitempty"`
 }
 
+// GlobalFail2banConfig is the singleton jail for requests that matched NO
+// configured host — the catch-all traffic a per-host jail structurally cannot
+// see, because fail2ban counts a failure only after attributing it to a proxy
+// host. That is why adding 444 to a host's fail codes never fires (#271): 444
+// is emitted only by the catch-all default server, which by definition matched
+// no host.
+//
+// Bans it creates carry proxy_host_id NULL and therefore apply to EVERY host,
+// so the blast radius of a false positive is the whole instance. It ships
+// disabled, with action "log", and the API refuses to enable it while trusted
+// proxies are unconfigured — behind a CDN the address seen here is the edge,
+// and banning one edge address takes every site down for everyone behind it.
+type GlobalFail2banConfig struct {
+	ID         string    `json:"id"`
+	Enabled    bool      `json:"enabled"`
+	MaxRetries int       `json:"max_retries"`
+	FindTime   int       `json:"find_time"`   // seconds
+	BanTime    int       `json:"ban_time"`    // seconds, 0 = permanent
+	FailCodes  string    `json:"fail_codes"`  // comma separated
+	Action     string    `json:"action"`      // block, log, notify
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+// UpdateGlobalFail2banRequest is a partial update of the singleton.
+type UpdateGlobalFail2banRequest struct {
+	Enabled    *bool   `json:"enabled,omitempty"`
+	MaxRetries *int    `json:"max_retries,omitempty"`
+	FindTime   *int    `json:"find_time,omitempty"`
+	BanTime    *int    `json:"ban_time,omitempty"`
+	FailCodes  *string `json:"fail_codes,omitempty"`
+	Action     *string `json:"action,omitempty"`
+}
+
+// ValidateGlobalFail2banRequest applies the same rules as the per-host jail,
+// plus bounds that only matter when one mistake bans every host at once.
+func ValidateGlobalFail2banRequest(req *UpdateGlobalFail2banRequest) error {
+	if req.FailCodes != nil {
+		if err := ValidateFail2banRequest(&CreateFail2banRequest{FailCodes: *req.FailCodes}); err != nil {
+			return err
+		}
+	}
+	if req.Action != nil {
+		if err := ValidateFail2banRequest(&CreateFail2banRequest{Action: *req.Action}); err != nil {
+			return err
+		}
+	}
+	if req.MaxRetries != nil && *req.MaxRetries < 1 {
+		return fmt.Errorf("%w: max_retries must be at least 1", ErrInvalidInput)
+	}
+	if req.FindTime != nil && *req.FindTime < 1 {
+		return fmt.Errorf("%w: find_time must be a positive number of seconds", ErrInvalidInput)
+	}
+	if req.BanTime != nil && *req.BanTime < 0 {
+		return fmt.Errorf("%w: ban_time must be 0 (permanent) or a positive number of seconds", ErrInvalidInput)
+	}
+	return nil
+}
+
 // BannedIP represents an auto-blocked IP address
 type BannedIP struct {
 	ID           string     `json:"id"`
@@ -237,6 +296,10 @@ const (
 // IPBanHistory sources
 const (
 	BanSourceFail2ban    = "fail2ban"
+	// BanSourceFail2banGlobal marks a ban from the global jail (#275). Distinct
+	// from BanSourceFail2ban so the history makes it obvious the ban applies to
+	// every host, not the one the operator was looking at.
+	BanSourceFail2banGlobal = "fail2ban_global"
 	BanSourceWAFAutoBan  = "waf_auto_ban"
 	BanSourceManual      = "manual"
 	BanSourceAPI         = "api"

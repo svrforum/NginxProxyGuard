@@ -62,6 +62,7 @@
       "globalSecurityHeaders": "Global Security Headers",
       "globalCloud": "Global Cloud Blocking",
       "globalRateLimit": "Global Rate Limit",
+      "globalFail2ban": "Global Fail2ban",
       "globalWAF": "Global WAF"
     },
     "logs": {

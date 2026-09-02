@@ -229,6 +229,13 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 		}
 	}
 
+	// Import Global Fail2ban jail (#275)
+	if data.GlobalFail2ban != nil {
+		if err := r.importGlobalFail2ban(ctx, tx, data.GlobalFail2ban); err != nil {
+			return nil, fmt.Errorf("failed to import global fail2ban: %w", err)
+		}
+	}
+
 	// Import Global Rate Limit default (#198 slice 5)
 	if data.GlobalRateLimit != nil {
 		if err := r.importGlobalRateLimit(ctx, tx, data.GlobalRateLimit); err != nil {

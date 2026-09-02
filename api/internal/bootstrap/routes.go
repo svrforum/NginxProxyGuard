@@ -733,6 +733,12 @@ func registerSecurityRoutes(v1 *echo.Group, h *handler.SecurityHandler) {
 	// Global rate-limit default (#198 slice 5) — settings-scoped singleton.
 	v1.GET("/settings/global-rate-limit", h.GetGlobalRateLimit, settingsRead)
 	v1.PUT("/settings/global-rate-limit", h.UpdateGlobalRateLimit, settingsWrite)
+	// Same shape as the sibling global-* singletons: the closure here gates API
+	// tokens only, and session users are gated by the central registry in
+	// middleware/permissions.go, which maps this pair to waf:read / waf:write.
+	// Verified with a role holding only waf:*: both calls answer 200.
+	v1.GET("/settings/global-fail2ban", h.GetGlobalFail2ban, settingsRead)
+	v1.PUT("/settings/global-fail2ban", h.UpdateGlobalFail2ban, settingsWrite)
 	// Global WAF default (#198 slice 6) — settings-scoped singleton.
 	v1.GET("/settings/global-waf", h.GetGlobalWAF, settingsRead)
 	v1.PUT("/settings/global-waf", h.UpdateGlobalWAF, settingsWrite)

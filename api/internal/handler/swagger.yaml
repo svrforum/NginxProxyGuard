@@ -3529,6 +3529,64 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '500':
           description: Update succeeded but regenerating the host configs failed
+  /settings/global-fail2ban:
+    get:
+      tags: [Settings]
+      summary: Get the global fail2ban jail
+      description: |
+        Returns the singleton `global_fail2ban` row, creating it with the
+        shipped defaults if it does not exist yet (never 404).
+
+        This jail acts on requests that matched **no configured host** — the
+        catch-all traffic a per-host jail structurally cannot see, because
+        fail2ban counts a failure only after attributing it to a proxy host.
+        That is why adding `444` to a host's fail codes never fires: `444` is
+        emitted only by the catch-all default server.
+
+        Not counted: domains configured as redirect hosts, requests whose Host
+        header could not be read, the internal pipeline canary, and loopback or
+        trusted-proxy addresses.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlobalFail2ban'
+    put:
+      tags: [Settings]
+      summary: Update the global fail2ban jail
+      description: |
+        Partial update: only the fields present are applied.
+
+        **Enabling is refused with 400 while Trusted Proxies are
+        unconfigured.** Behind a CDN with no trusted proxy set, every request
+        carries the CDN edge address, and a ban here applies to every host — so
+        one false positive would block every visitor behind that edge on every
+        site. An address-based guard cannot substitute: with the preset off the
+        CDN ranges are not in the trusted set at all.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateGlobalFail2ban'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlobalFail2ban'
+        '400':
+          description: >-
+            Invalid value, or an attempt to enable the jail while Trusted
+            Proxies are unconfigured.
+
   /settings/global-rate-limit:
     get:
       tags: [Settings]
@@ -11817,6 +11875,69 @@ components:
           enum: [info, warning, critical]
           default: warning
           description: Labelling only; does not change enforcement.
+    GlobalFail2ban:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        enabled:
+          type: boolean
+          default: false
+          description: Ships disabled — its bans apply to every host.
+        max_retries:
+          type: integer
+          default: 5
+        find_time:
+          type: integer
+          default: 600
+          description: Sliding window in seconds.
+        ban_time:
+          type: integer
+          default: 3600
+          description: Seconds; 0 means permanent.
+        fail_codes:
+          type: string
+          default: "400,444"
+          description: >-
+            Comma-separated HTTP status codes. The default was chosen from log
+            analysis; 403 and 404 add nothing, because those come only from
+            configured hosts.
+        action:
+          type: string
+          enum: [block, log, notify]
+          default: log
+          description: >-
+            Ships as `log` so an operator can watch what would be banned before
+            anything is.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    UpdateGlobalFail2ban:
+      type: object
+      description: Partial update; every field is optional.
+      properties:
+        enabled:
+          type: boolean
+        max_retries:
+          type: integer
+          minimum: 1
+        find_time:
+          type: integer
+          minimum: 1
+        ban_time:
+          type: integer
+          minimum: 0
+        fail_codes:
+          type: string
+        action:
+          type: string
+          enum: [block, log, notify]
+
     UpdateExploitRule:
       type: object
       description: >-

@@ -62,6 +62,7 @@
       "globalSecurityHeaders": "전역 보안 헤더",
       "globalCloud": "전역 클라우드 차단",
       "globalRateLimit": "전역 레이트 리밋",
+      "globalFail2ban": "전역 Fail2ban",
       "globalWAF": "전역 WAF"
     },
     "logs": {

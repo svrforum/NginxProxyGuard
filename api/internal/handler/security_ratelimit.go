@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -115,7 +116,7 @@ func (h *SecurityHandler) UpsertFail2ban(c echo.Context) error {
 	// A typo'd fail code ("4o1", "401;403") used to save fine and then silently
 	// never match — reject it here so the operator learns at save time.
 	if err := model.ValidateFail2banRequest(&req); err != nil {
-		return badRequestError(c, err.Error())
+		return badRequestError(c, strings.TrimPrefix(err.Error(), model.ErrInvalidInput.Error()+": "))
 	}
 
 	config, err := h.securityService.UpsertFail2ban(c.Request().Context(), proxyHostID, &req)
@@ -336,6 +337,38 @@ func (h *SecurityHandler) GetBannedIPStats(c echo.Context) error {
 }
 
 // GetGlobalRateLimit returns the singleton global rate-limit default (#198 slice 5).
+// GetGlobalFail2ban returns the singleton jail for traffic that matched no
+// configured host (#275).
+func (h *SecurityHandler) GetGlobalFail2ban(c echo.Context) error {
+	g, err := h.securityService.GetGlobalFail2ban(c.Request().Context())
+	if err != nil {
+		return databaseError(c, "get global fail2ban", err)
+	}
+	return c.JSON(http.StatusOK, g)
+}
+
+// UpdateGlobalFail2ban applies a partial update. Enabling it is refused while
+// trusted proxies are unconfigured — see the service for why that precondition
+// is load-bearing rather than advisory.
+func (h *SecurityHandler) UpdateGlobalFail2ban(c echo.Context) error {
+	var req model.UpdateGlobalFail2banRequest
+	if err := c.Bind(&req); err != nil {
+		return badRequestError(c, "Invalid request body")
+	}
+
+	g, err := h.securityService.UpdateGlobalFail2ban(c.Request().Context(), &req)
+	if err != nil {
+		if errors.Is(err, model.ErrInvalidInput) {
+			return badRequestError(c, strings.TrimPrefix(err.Error(), model.ErrInvalidInput.Error()+": "))
+		}
+		return databaseError(c, "update global fail2ban", err)
+	}
+
+	auditCtx := service.ContextWithAudit(c.Request().Context(), c)
+	h.audit.LogFail2banUpdate(auditCtx, "(global)", g.Enabled, nil)
+	return c.JSON(http.StatusOK, g)
+}
+
 func (h *SecurityHandler) GetGlobalRateLimit(c echo.Context) error {
 	g, err := h.securityService.GetGlobalRateLimit(c.Request().Context())
 	if err != nil {

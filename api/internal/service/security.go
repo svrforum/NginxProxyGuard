@@ -37,6 +37,49 @@ type SecurityService struct {
 	globalWAFRepo        *repository.GlobalWAFRepository             // global WAF default (#198 slice 6)
 
 	bannedIPStatsRepo *repository.BannedIPStatsRepository // per-IP summary behind a banned address (#242)
+
+	// systemSettingsRepo backs the global jail's enable-time precondition:
+	// behind a CDN with no trusted proxy configured, the address the jail sees
+	// is the edge, and one global ban takes every site down for everyone
+	// behind that edge (#275).
+	systemSettingsRepo *repository.SystemSettingsRepository
+}
+
+// SetSystemSettingsRepo wires the settings the global jail's precondition needs.
+func (s *SecurityService) SetSystemSettingsRepo(repo *repository.SystemSettingsRepository) {
+	s.systemSettingsRepo = repo
+}
+
+// GetGlobalFail2ban returns the singleton jail for unmatched-host traffic (#275).
+func (s *SecurityService) GetGlobalFail2ban(ctx context.Context) (*model.GlobalFail2banConfig, error) {
+	return s.rateLimitRepo.GetGlobalFail2ban(ctx)
+}
+
+// UpdateGlobalFail2ban applies a partial update, refusing to ENABLE the jail
+// while trusted proxies are unconfigured.
+//
+// That precondition is the only real protection for a CDN deployment. With no
+// trusted proxy set, nginx cannot resolve the visitor's address, so every
+// request carries the CDN edge address — and a global ban on an edge address
+// blocks every visitor routed through it, on every host. An address-based
+// guard cannot help: with the preset off, the CDN's ranges are not in the
+// trusted set at all, so there is nothing to compare against.
+func (s *SecurityService) UpdateGlobalFail2ban(ctx context.Context, req *model.UpdateGlobalFail2banRequest) (*model.GlobalFail2banConfig, error) {
+	if err := model.ValidateGlobalFail2banRequest(req); err != nil {
+		return nil, err
+	}
+
+	if req.Enabled != nil && *req.Enabled && s.systemSettingsRepo != nil {
+		sys, err := s.systemSettingsRepo.Get(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if sys != nil && len(ResolveTrustedProxyConfig(sys).CIDRs) == 0 {
+			return nil, fmt.Errorf("%w: configure Settings → Trusted Proxies first. Without it every request appears to come from your CDN or reverse proxy, and one global ban would block every visitor behind it on every host", model.ErrInvalidInput)
+		}
+	}
+
+	return s.rateLimitRepo.UpdateGlobalFail2ban(ctx, req)
 }
 
 // SetBannedIPStatsRepo wires the per-banned-IP statistics repository (#242).

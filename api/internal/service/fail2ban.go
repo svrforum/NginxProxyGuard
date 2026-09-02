@@ -30,6 +30,12 @@ type Fail2banService struct {
 	mu       sync.RWMutex
 	ipEvents map[string]map[string][]time.Time // hostID -> IP -> list of fail timestamps
 
+	// isConfiguredHost reports whether a hostname belongs to any configured
+	// host, proxy or redirect. Supplied by the log collector, which owns the
+	// domain snapshot. nil disables the global jail's safety check, so the
+	// global jail refuses to run without it.
+	isConfiguredHost func(context.Context, string) bool
+
 	// systemSettingsRepo supplies the operator's declared trusted proxies so a
 	// proxy address is never auto-banned (banning one bans every client behind
 	// it). Optional: nil means no guard beyond loopback.
@@ -39,6 +45,8 @@ type Fail2banService struct {
 	configMu          sync.RWMutex
 	configCache       map[string]*model.Fail2banConfig // hostID -> config
 	trustedProxyCIDRs []string                        // refreshed alongside configCache
+	globalConfig      *model.GlobalFail2banConfig     // singleton jail for unmatched-host traffic (#275)
+	lastInertWarning  time.Time                       // rate-limits the "armed but inert" warning
 	lastConfigRefresh time.Time
 	// notify is optional: nil means notifications are not configured.
 	notify *NotificationService
@@ -125,6 +133,9 @@ func (s *Fail2banService) refreshConfigs(ctx context.Context) {
 	}
 
 	s.trustedProxyCIDRs = s.loadTrustedProxyCIDRs(ctx)
+	if g, err := s.rateLimitRepo.GetGlobalFail2ban(ctx); err == nil {
+		s.globalConfig = g
+	}
 	s.lastConfigRefresh = time.Now()
 }
 
@@ -148,6 +159,12 @@ func (s *Fail2banService) unbannable(ip string) string {
 	cidrs := s.trustedProxyCIDRs
 	s.configMu.RUnlock()
 	return model.UnbannableReason(ip, cidrs)
+}
+
+// SetConfiguredHostResolver wires the domain snapshot the global jail needs to
+// tell "matched no host" from "matched a redirect host".
+func (s *Fail2banService) SetConfiguredHostResolver(fn func(context.Context, string) bool) {
+	s.isConfiguredHost = fn
 }
 
 // getConfig returns the fail2ban config for a host (from cache)
@@ -310,19 +327,206 @@ func (s *Fail2banService) isFailCode(statusCode int, failCodes string) bool {
 
 // isIPBanned checks if an IP is already banned for a specific host
 func (s *Fail2banService) isIPBanned(ctx context.Context, ip string, hostID string) bool {
+	// The global jail passes an empty hostID. Binding "" to a uuid column is a
+	// hard Postgres error ("invalid input syntax for type uuid"), which the
+	// error branch below would swallow as "not banned" — so the global path
+	// gets its own predicate rather than a parameter the column cannot hold.
 	query := `
 		SELECT COUNT(*) FROM banned_ips
 		WHERE ip_address = $1
-		AND (proxy_host_id = $2 OR proxy_host_id IS NULL)
+		AND proxy_host_id IS NULL
 		AND (expires_at IS NULL OR expires_at > NOW())
 	`
+	args := []interface{}{ip}
+	if hostID != "" {
+		query = `
+			SELECT COUNT(*) FROM banned_ips
+			WHERE ip_address = $1
+			AND (proxy_host_id = $2 OR proxy_host_id IS NULL)
+			AND (expires_at IS NULL OR expires_at > NOW())
+		`
+		args = append(args, hostID)
+	}
 	var count int
-	err := s.db.QueryRowContext(ctx, query, ip, hostID).Scan(&count)
+	err := s.db.QueryRowContext(ctx, query, args...).Scan(&count)
 	if err != nil {
 		log.Printf("[Fail2ban] Error checking banned IP: %v", err)
 		return false
 	}
 	return count > 0
+}
+
+// globalJailKey namespaces the global jail's counters so they cannot collide
+// with a per-host counter for the same address.
+const globalJailKey = "__global__"
+
+// RecordUnattributedFailure is the global jail (#275): it counts failures on
+// requests that matched NO configured host — the catch-all traffic a per-host
+// jail structurally cannot see, which is why adding 444 to a host's fail codes
+// never fires.
+//
+// The caller has already established that no proxy host owns the request. This
+// method establishes the rest, and every condition below exists because a ban
+// here applies to EVERY host:
+//
+//   - a redirect host is a configured host. Its 404s and its cleartext-to-TLS
+//     400s are real visitors, and counting them would ban them everywhere.
+//   - a request nginx rejected before reading Host has no usable hostname, so
+//     it cannot be told apart from a malformed request aimed at a real site.
+//   - the pipeline canary is NPG probing itself.
+//   - loopback and declared proxies are never bannable (see unbannable).
+func (s *Fail2banService) RecordUnattributedFailure(ctx context.Context, clientIP, host, uri string, statusCode int) {
+	s.configMu.RLock()
+	config := s.globalConfig
+	s.configMu.RUnlock()
+
+	if config == nil || !config.Enabled {
+		return
+	}
+
+	// The enable-time precondition is not enough on its own: Trusted Proxies
+	// live behind a different endpoint, so an operator can clear them long
+	// after arming the jail and nothing would re-check. Without them the
+	// address seen here is the CDN edge, and one ban takes every host down for
+	// everyone behind it — so the jail goes inert rather than staying armed
+	// against an address it cannot interpret.
+	s.configMu.RLock()
+	haveTrustedProxies := len(s.trustedProxyCIDRs) > 0
+	s.configMu.RUnlock()
+	if !haveTrustedProxies {
+		s.warnGlobalJailInert()
+		return
+	}
+
+	if !s.isFailCode(statusCode, config.FailCodes) {
+		return
+	}
+	// nginx logs the default server_name when it could not read a Host header,
+	// and the parser leaves it empty when the request line was unparseable.
+	// Both mean "we do not know who this was for".
+	if host == "" || host == "_" || host == "-" {
+		return
+	}
+	if strings.HasPrefix(uri, model.CanaryURIPrefix) {
+		return
+	}
+	if s.isConfiguredHost != nil && s.isConfiguredHost(ctx, host) {
+		return
+	}
+
+	findTime := time.Duration(config.FindTime) * time.Second
+	var eventCount int
+	if s.redisCache != nil && s.redisCache.IsReady() {
+		key := fmt.Sprintf("%s:%s", globalJailKey, clientIP)
+		count, err := s.redisCache.IncrementCounter(ctx, key, findTime)
+		if err == nil {
+			eventCount = int(count)
+		} else {
+			eventCount = s.recordFailedRequestInMemory(globalJailKey, clientIP, findTime)
+		}
+	} else {
+		eventCount = s.recordFailedRequestInMemory(globalJailKey, clientIP, findTime)
+	}
+
+	if eventCount < config.MaxRetries {
+		return
+	}
+	if s.isIPBannedCached(ctx, clientIP, "") {
+		return
+	}
+
+	reason := fmt.Sprintf("Global fail2ban: %d failed requests (%d status) in %d seconds with no matching host",
+		eventCount, statusCode, config.FindTime)
+
+	if why := s.unbannable(clientIP); why != "" {
+		log.Printf("[Fail2ban/global] NOT banning IP %s — %s: %s", clientIP, why, reason)
+		s.clearIPEvents(ctx, clientIP, globalJailKey)
+		return
+	}
+
+	switch config.Action {
+	case "log":
+		log.Printf("[Fail2ban/global] Would ban IP %s (action=log, not banned): %s", clientIP, reason)
+		s.clearIPEvents(ctx, clientIP, globalJailKey)
+	case "notify":
+		log.Printf("[Fail2ban/global] Threshold reached for IP %s (action=notify, not banned): %s", clientIP, reason)
+		if s.notify != nil {
+			_ = s.notify.EmitBatched(ctx, "ip.detected", map[string]string{
+				"ip": clientIP, "host": "-", "reason": "fail2ban_global",
+			})
+		}
+		s.clearIPEvents(ctx, clientIP, globalJailKey)
+	default: // block
+		if err := s.banGlobally(ctx, clientIP, reason, eventCount, config.BanTime); err != nil {
+			log.Printf("[Fail2ban/global] Failed to ban IP %s: %v", clientIP, err)
+			return
+		}
+		log.Printf("[Fail2ban/global] Banned IP %s on every host: %s", clientIP, reason)
+		if s.notify != nil {
+			_ = s.notify.EmitBatched(ctx, "ip.banned", map[string]string{
+				"ip": clientIP, "host": "-", "reason": "fail2ban_global",
+			})
+		}
+		s.clearIPEvents(ctx, clientIP, globalJailKey)
+	}
+}
+
+// warnGlobalJailInert says once every 10 minutes that the jail is armed but
+// cannot act. Silence here would leave an operator believing it is protecting
+// them; a line per request would drown the log.
+func (s *Fail2banService) warnGlobalJailInert() {
+	s.configMu.Lock()
+	defer s.configMu.Unlock()
+	if time.Since(s.lastInertWarning) < 10*time.Minute {
+		return
+	}
+	s.lastInertWarning = time.Now()
+	log.Printf("[Fail2ban/global] enabled but INERT: Settings → Trusted Proxies is empty, so the client address cannot be trusted. Configure it, or disable the global jail.")
+}
+
+// banGlobally writes a ban with proxy_host_id NULL, which renders into every
+// host's geo block.
+//
+// It goes through the repository rather than issuing SQL directly: the
+// repository invalidates the cached ban list, and WAFAutoBanService's
+// direct-SQL path does not — so a config regeneration triggered by a ban can
+// read a 60s-stale list and render without it.
+func (s *Fail2banService) banGlobally(ctx context.Context, ip, reason string, failCount, banTime int) error {
+	// proxyHostID nil is what makes the ban global.
+	banned, err := s.rateLimitRepo.BanIP(ctx, nil, ip, reason, banTime)
+	if err != nil {
+		return err
+	}
+
+	if s.historyRepo != nil {
+		isPermanent := banTime == 0
+		event := &model.IPBanHistory{
+			EventType:   model.BanEventTypeBan,
+			IPAddress:   ip,
+			ProxyHostID: nil,
+			DomainName:  "",
+			Reason:      reason,
+			Source:      model.BanSourceFail2banGlobal,
+			BanDuration: &banTime,
+			ExpiresAt:   banned.ExpiresAt,
+			IsPermanent: isPermanent,
+			IsAuto:      true,
+			FailCount:   &failCount,
+		}
+		if err := s.historyRepo.RecordBanEvent(ctx, event); err != nil {
+			log.Printf("[Fail2ban/global] Warning: failed to record ban history: %v", err)
+		}
+	}
+	if s.proxyHostService != nil {
+		go func() {
+			bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+			if err := s.proxyHostService.SyncAllConfigs(bgCtx); err != nil {
+				log.Printf("[Fail2ban/global] ban recorded but config sync failed: %v (run Sync All to apply)", err)
+			}
+		}()
+	}
+	return nil
 }
 
 // clearIPEvents resets the failure counter for an IP after the configured
