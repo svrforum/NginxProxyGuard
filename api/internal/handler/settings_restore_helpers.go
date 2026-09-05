@@ -369,10 +369,14 @@ func (h *SettingsHandler) getMergedWAFExclusions(ctx context.Context, hostID str
 		return hostExclusions // Return host-only if global fails
 	}
 
-	// Create a map of host exclusions to avoid duplicates
+	// Create a map of host exclusions to avoid duplicates. Only a host-wide
+	// exclusion supersedes the global one — see the same rule in
+	// mergeExclusions. (#286)
 	hostExclusionMap := make(map[int]bool)
 	for _, ex := range hostExclusions {
-		hostExclusionMap[ex.RuleID] = true
+		if ex.ScopeType == "" || ex.ScopeType == model.WAFScopeHost {
+			hostExclusionMap[ex.RuleID] = true
+		}
 	}
 
 	// Merge: start with host exclusions
@@ -390,6 +394,7 @@ func (h *SettingsHandler) getMergedWAFExclusions(ctx context.Context, hostID str
 				RuleDescription: gex.RuleDescription,
 				Reason:          gex.Reason + " (global)",
 				DisabledBy:      gex.DisabledBy,
+				ScopeType:       model.WAFScopeHost,
 				CreatedAt:       gex.CreatedAt,
 			})
 		}

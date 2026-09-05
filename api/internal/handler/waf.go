@@ -3,7 +3,9 @@ package handler
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net"
@@ -87,19 +89,32 @@ func (h *WAFHandler) GetRules(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Create maps of host-specific excluded rule IDs
+	// Create maps of host-specific excluded rule IDs. Only a host-wide
+	// exclusion switches the rule off; a uri or param scope narrows it and the
+	// rule keeps protecting everything else, so reporting those as "disabled"
+	// misstated how much of the host was still covered. (#286)
 	excludedRules := make(map[int]bool)
 	exclusionMap := make(map[int]*model.WAFRuleExclusion)
+	exclusionsMap := make(map[int][]model.WAFRuleExclusion)
 	for i := range exclusions {
 		ex := &exclusions[i]
-		excludedRules[ex.RuleID] = true
-		exclusionMap[ex.RuleID] = ex
+		exclusionsMap[ex.RuleID] = append(exclusionsMap[ex.RuleID], *ex)
+		// An empty scope_type is a legacy host-wide row: rows written before
+		// #231, and rows the clone path produced until this change. The three
+		// merge sites and the config template all read "" as host, so reading it
+		// as a narrow exemption here would report a rule as enabled while nginx
+		// removes it for the whole host. (#286)
+		if ex.ScopeType == "" || ex.ScopeType == model.WAFScopeHost {
+			excludedRules[ex.RuleID] = true
+			exclusionMap[ex.RuleID] = ex
+		}
 	}
 
 	// Parse CRS rules with both global and host-specific exclusion info
 	categories, err := h.parseAllRules(RuleParseOptions{
 		HostExcludedRules:   excludedRules,
 		HostExclusionMap:    exclusionMap,
+		HostExclusionsMap:   exclusionsMap,
 		GlobalExcludedRules: globalExcludedRules,
 		GlobalExclusionMap:  globalExclusionMap,
 	})
@@ -268,14 +283,16 @@ func (h *WAFHandler) DisableRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if already excluded
-	existing, err := h.wafRepo.GetExclusionByRuleID(ctx, proxyHostID, ruleID)
+	// Check whether this exact scope is already excluded. Two scopes on one
+	// rule are legitimate — /api/a and /api/b are separate exemptions — so the
+	// duplicate test has to match the storage key, not just the rule. (#286)
+	existing, err := h.wafRepo.GetExclusionByScope(ctx, proxyHostID, ruleID, req.ScopeType, req.ScopeValue)
 	if err != nil {
 		httpDatabaseError(w, "check WAF exclusion", err)
 		return
 	}
 	if existing != nil {
-		httpJSONError(w, "Rule already disabled", http.StatusConflict)
+		httpJSONError(w, "Rule already disabled for this scope", http.StatusConflict)
 		return
 	}
 
@@ -357,18 +374,9 @@ func (h *WAFHandler) DisableRuleByHost(w http.ResponseWriter, r *http.Request) {
 
 	proxyHostID := host.ID
 
-	// Check if already excluded
-	existing, err := h.wafRepo.GetExclusionByRuleID(ctx, proxyHostID, req.RuleID)
-	if err != nil {
-		httpDatabaseError(w, "check WAF exclusion", err)
-		return
-	}
-	if existing != nil {
-		httpJSONError(w, "Rule already disabled for this host", http.StatusConflict)
-		return
-	}
-
-	// Create the exclusion request
+	// Create the exclusion request. Validation runs before the duplicate check
+	// because it normalises the scope — an omitted scope_type becomes "host",
+	// and comparing the raw "" against stored rows would never match. (#286)
 	exclusionReq := &model.CreateWAFRuleExclusionRequest{
 		RuleID:          req.RuleID,
 		RuleCategory:    req.RuleCategory,
@@ -379,6 +387,17 @@ func (h *WAFHandler) DisableRuleByHost(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := exclusionReq.ValidateScope(); err != nil {
 		httpJSONError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Check whether this exact scope is already excluded (#286).
+	existing, err := h.wafRepo.GetExclusionByScope(ctx, proxyHostID, req.RuleID, exclusionReq.ScopeType, exclusionReq.ScopeValue)
+	if err != nil {
+		httpDatabaseError(w, "check WAF exclusion", err)
+		return
+	}
+	if existing != nil {
+		httpJSONError(w, "Rule already disabled for this host and scope", http.StatusConflict)
 		return
 	}
 
@@ -435,11 +454,46 @@ func (h *WAFHandler) EnableRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get exclusion info before deleting (for history)
-	exclusion, _ := h.wafRepo.GetExclusionByRuleID(ctx, proxyHostID, ruleID)
+	// A rule may carry several scoped exclusions. Naming a scope removes just
+	// that one; omitting it re-enables the rule outright, which is what the
+	// rule toggle has always meant and what older clients still send. (#286)
+	scopeType := r.URL.Query().Get("scope_type")
+	scopeValue := r.URL.Query().Get("scope_value")
+	// A scope_value on its own is a caller mistake, not an instruction to remove
+	// everything — falling through to the rule-wide delete would silently throw
+	// away exemptions the caller never named. (#286)
+	if scopeType == "" && scopeValue != "" {
+		httpJSONError(w, "scope_value requires scope_type", http.StatusBadRequest)
+		return
+	}
+	scoped := scopeType != ""
 
-	// Delete the exclusion
-	err = h.wafRepo.DeleteExclusion(ctx, proxyHostID, ruleID)
+	var exclusion *model.WAFRuleExclusion
+	if scoped {
+		// Here the scope is a lookup key, not a new value, so only the type is
+		// checked. Running the create-time value rules would make any row an
+		// older release stored — a bare "/" uri scope, say — impossible to
+		// remove through this endpoint. (#286)
+		switch scopeType {
+		case model.WAFScopeHost, model.WAFScopeURI, model.WAFScopeParam:
+		default:
+			httpJSONError(w, "invalid scope_type: must be host, uri or param", http.StatusBadRequest)
+			return
+		}
+		if scopeType == model.WAFScopeHost {
+			scopeValue = ""
+		}
+		exclusion, _ = h.wafRepo.GetExclusionByScope(ctx, proxyHostID, ruleID, scopeType, scopeValue)
+		err = h.wafRepo.DeleteExclusionByScope(ctx, proxyHostID, ruleID, scopeType, scopeValue)
+	} else {
+		// Get exclusion info before deleting (for history)
+		exclusion, _ = h.wafRepo.GetExclusionByRuleID(ctx, proxyHostID, ruleID)
+		err = h.wafRepo.DeleteExclusion(ctx, proxyHostID, ruleID)
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		httpJSONError(w, "Rule exclusion not found", http.StatusNotFound)
+		return
+	}
 	if err != nil {
 		httpDatabaseError(w, "delete WAF exclusion", err)
 		return

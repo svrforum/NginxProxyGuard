@@ -129,6 +129,27 @@ func TestBackupSyncCriticalTables(t *testing.T) {
 				"status",
 			},
 		},
+		{
+			// Added after #286: scope_type/scope_value reached the export but a
+			// column dropped on either side turns a path-scoped exemption into a
+			// host-wide one on restore, which switches the CRS rule off
+			// everywhere. Nothing mechanical guarded that before.
+			name:       "waf_rule_exclusions",
+			exportFile: "backup_export_security.go",
+			exportFunc: "exportWAFExclusions",
+			importFile: "backup_import_security.go",
+			importFunc: "importWAFExclusion",
+			columns: []string{
+				"disabled_by",
+				"proxy_host_id",
+				"reason",
+				"rule_category",
+				"rule_description",
+				"rule_id",
+				"scope_type",
+				"scope_value",
+			},
+		},
 	}
 
 	for _, tc := range cases {

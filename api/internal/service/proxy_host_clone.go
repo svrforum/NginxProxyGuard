@@ -386,11 +386,16 @@ func (s *ProxyHostService) cloneRelatedConfigs(ctx context.Context, sourceID, ta
 			log.Printf("[Clone] Failed to get WAF exclusions: %v", err)
 		} else {
 			for _, ex := range exclusions {
+				// Carry the scope. Dropping it silently widened an exemption
+				// that covered one path into one covering the whole host, so a
+				// cloned host lost the CRS rule everywhere. (#286)
 				exReq := &model.CreateWAFRuleExclusionRequest{
 					RuleID:          ex.RuleID,
 					RuleCategory:    ex.RuleCategory,
 					RuleDescription: ex.RuleDescription,
 					Reason:          ex.Reason + " (cloned)",
+					ScopeType:       ex.ScopeType,
+					ScopeValue:      ex.ScopeValue,
 				}
 				if _, err := s.wafRepo.CreateExclusion(ctx, targetID, exReq); err != nil {
 					log.Printf("[Clone] Failed to clone WAF exclusion for rule %d: %v", ex.RuleID, err)

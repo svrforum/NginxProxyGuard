@@ -162,7 +162,7 @@ function WAFHostCard({
         <div className="text-sm">
           {host.exclusion_count > 0 ? (
             <span className="text-orange-600 dark:text-orange-400 font-medium">
-              {t('hostList.rulesDisabled', { count: host.exclusion_count })}
+              {t('hostList.exclusionCount', { count: host.exclusion_count })}
             </span>
           ) : (
             <span className="text-gray-500 dark:text-slate-500">{t('hostList.allRulesEnabled')}</span>

@@ -117,6 +117,49 @@ func TestMergeWAFExclusions_Characterization(t *testing.T) {
 			},
 		},
 		{
+			// A narrow host exemption must NOT suppress the global exclusion:
+			// the host still wants the rule off everywhere, minus the one path
+			// it named. Keying the dedupe on rule_id alone dropped the global
+			// entry and left the rule enforcing. (#286)
+			name: "narrow_host_scope_keeps_global",
+			host: []model.WAFRuleExclusion{
+				{RuleID: 942100, ScopeType: model.WAFScopeURI, ScopeValue: "/api/a"},
+			},
+			global:  []model.GlobalWAFRuleExclusion{{RuleID: 942100}},
+			wantIDs: []int{942100, 942100},
+			checkFor: func(t *testing.T, got []model.WAFRuleExclusion) {
+				var sawGlobal, sawScoped bool
+				for _, ex := range got {
+					if ex.ProxyHostID == "global" && ex.ScopeType == model.WAFScopeHost {
+						sawGlobal = true
+					}
+					if ex.ScopeType == model.WAFScopeURI && ex.ScopeValue == "/api/a" {
+						sawScoped = true
+					}
+				}
+				if !sawGlobal {
+					t.Error("global exclusion was dropped by a uri-scoped host exclusion")
+				}
+				if !sawScoped {
+					t.Error("the host's uri-scoped exclusion is missing from the merge")
+				}
+			},
+		},
+		{
+			// A host-WIDE exclusion still supersedes the global one.
+			name: "host_scope_supersedes_global",
+			host: []model.WAFRuleExclusion{
+				{RuleID: 942100, ScopeType: model.WAFScopeHost},
+			},
+			global:  []model.GlobalWAFRuleExclusion{{RuleID: 942100}},
+			wantIDs: []int{942100},
+			checkFor: func(t *testing.T, got []model.WAFRuleExclusion) {
+				if len(got) != 1 || got[0].ProxyHostID == "global" {
+					t.Errorf("host-wide exclusion should have absorbed the global one, got %+v", got)
+				}
+			},
+		},
+		{
 			name:    "both_empty",
 			host:    nil,
 			global:  nil,

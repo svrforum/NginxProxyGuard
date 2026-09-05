@@ -345,7 +345,8 @@
       "inactive": "비활성",
       "blocking": "차단 모드",
       "detection": "탐지 모드"
-    }
+    },
+    "exclusionCount": "규칙 예외 {{count}}개"
   },
   "policyManager": {
     "title": "WAF 정책 관리 - {{name}}",
@@ -383,7 +384,12 @@
       "disabled": "비활성화",
       "enabled": "활성화",
       "reason": "사유"
-    }
+    },
+    "partialExclusions": "부분 제외 {{count}}개",
+    "scopedExclusions": "부분 제외",
+    "scopedExclusionsHint": "아래 범위에서만 규칙이 적용되지 않습니다. 그 밖의 요청에는 규칙이 계속 적용됩니다.",
+    "removeScope": "제외 해제",
+    "confirmDropScopes": "이 규칙에는 부분 제외가 {{count}}개 있습니다. 규칙을 다시 켜면 부분 제외도 모두 삭제됩니다. 계속할까요?"
   },
   "disableModal": {
     "title": "규칙 비활성화",

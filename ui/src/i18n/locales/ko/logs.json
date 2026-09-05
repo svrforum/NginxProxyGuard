@@ -366,7 +366,8 @@
     "ruleDisableFailed": "정책 비활성화 실패: {{error}}",
     "cannotDisable": "정책을 비활성화할 수 없습니다: 호스트 정보가 없습니다.",
     "cleanupSuccess": "{{count}}개의 오래된 로그를 삭제했습니다.",
-    "disabledReasonDefault": "로그 뷰어에서 비활성화됨"
+    "disabledReasonDefault": "로그 뷰어에서 비활성화됨",
+    "ruleDisabledScoped": "{{host}}의 {{scope}} 범위에서만 정책 {{ruleId}}가 제외되었습니다. 다른 요청에는 계속 적용됩니다."
   },
   "botFilter": {
     "title": "Bot Filter Logs",

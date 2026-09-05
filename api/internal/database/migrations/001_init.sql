@@ -3016,7 +3016,7 @@ ALTER TABLE ONLY public.waf_rule_change_events
 ALTER TABLE ONLY public.waf_rule_exclusions
     ADD CONSTRAINT waf_rule_exclusions_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.waf_rule_exclusions
-    ADD CONSTRAINT waf_rule_exclusions_proxy_host_id_rule_id_key UNIQUE (proxy_host_id, rule_id);
+    ADD CONSTRAINT waf_rule_exclusions_scope_key UNIQUE (proxy_host_id, rule_id, scope_type, scope_value);
 ALTER TABLE ONLY public.waf_rule_snapshot_details
     ADD CONSTRAINT waf_rule_snapshot_details_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.waf_rule_snapshots

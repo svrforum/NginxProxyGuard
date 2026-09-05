@@ -71,16 +71,30 @@ func (r *BackupRepository) importWAFExclusion(ctx context.Context, tx *sql.Tx, w
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		ON CONFLICT (proxy_host_id, rule_id, scope_type, scope_value) DO NOTHING
 	`
-	// A backup written before scoped exclusions existed carries no scope, and
-	// the column is NOT NULL. Those exclusions were host-wide, so that is what
-	// they are restored as — without this the restore fails outright, since the
-	// conflict target now includes both columns.
-	scopeType, scopeValue := we.ScopeType, we.ScopeValue
-	if scopeType == "" {
-		scopeType, scopeValue = model.WAFScopeHost, ""
+	// Validate rather than trust the file. scope_value is rendered verbatim into
+	// a ModSecurity directive and the column carries no CHECK, so restore was the
+	// one write path that could put an arbitrary string there. ValidateScope also
+	// maps an absent scope to host — a backup written before scoped exclusions
+	// existed carries none, and host is what those exclusions were. (#286)
+	scope := model.WAFRuleExclusion{ScopeType: we.ScopeType, ScopeValue: we.ScopeValue}
+	if err := scope.ValidateScope(); err != nil {
+		// Two things must not happen here. Failing the restore is one:
+		// ImportAllData runs after clearExistingData in a single transaction, so
+		// returning an error rolls back proxy hosts, certificates — everything,
+		// over one exclusion row. Widening the row to a host-wide exclusion is
+		// the other: that would switch a CRS rule off for the entire host on the
+		// strength of a value we could not parse. So the row is dropped and
+		// logged — the rule keeps protecting, and the operator can re-create the
+		// exemption from a message that names it.
+		//
+		// Note this branch is for corrupt input only: a backup predating scoped
+		// exclusions carries no scope and normalises to host, and a legacy uri
+		// scope of "/" normalises too. (#286)
+		log.Printf("[Backup] Skipped WAF exclusion for rule %d: unusable scope (%v). The rule stays enabled on that host; re-create the exemption if it is still needed.", we.RuleID, err)
+		return nil
 	}
 	_, err := tx.ExecContext(ctx, query, we.ProxyHostID, we.RuleID, we.RuleCategory, we.RuleDescription, we.Reason, we.DisabledBy,
-		scopeType, scopeValue)
+		scope.ScopeType, scope.ScopeValue)
 	return err
 }
 

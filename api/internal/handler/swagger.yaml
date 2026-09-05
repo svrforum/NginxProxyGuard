@@ -1020,6 +1020,17 @@ paths:
     post:
       tags: [WAF]
       summary: Disable WAF rule for host
+      description: >
+        Adds a rule exclusion. The scope decides how much is switched off: `host`
+        disables the rule for the whole host, while `uri` and `param` exempt only
+        one path prefix or one request argument and leave the rule active
+        everywhere else.
+
+
+        A rule may carry several exclusions at once — `/api/a` and `/api/b` are
+        separate exemptions. The conflict test is the full key
+        (host + rule + scope_type + scope_value), so only an identical scope is
+        rejected as a duplicate.
       security:
         - BearerAuth: []
       parameters:
@@ -1029,14 +1040,31 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWAFRuleExclusion'
       responses:
-        '200':
-          description: Rule disabled
+        '201':
+          description: Rule exclusion created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WAFRuleExclusion'
+        '400':
+          description: Invalid scope_type or scope_value
+        '409':
+          description: An exclusion with this exact scope already exists
 
     delete:
       tags: [WAF]
       summary: Enable WAF rule for host
-      description: Remove rule exclusion
+      description: >
+        Removes rule exclusions. Naming a scope removes only that exemption and
+        leaves the rule's other scopes in place; omitting the scope re-enables the
+        rule outright, dropping every exclusion it carries.
       security:
         - BearerAuth: []
       parameters:
@@ -1046,9 +1074,26 @@ paths:
           required: true
           schema:
             type: string
+        - name: scope_type
+          in: query
+          required: false
+          description: Remove only the exclusion with this scope. Omit to remove all of the rule's exclusions.
+          schema:
+            type: string
+            enum: [host, uri, param]
+        - name: scope_value
+          in: query
+          required: false
+          description: The path prefix (uri) or argument name (param). Empty for the host scope.
+          schema:
+            type: string
       responses:
-        '200':
-          description: Rule enabled
+        '204':
+          description: Rule exclusion(s) removed
+        '400':
+          description: Invalid scope_type or scope_value
+        '404':
+          description: No matching rule exclusion
 
   # ============================================================================
   # Settings & Dashboard
@@ -9200,7 +9245,8 @@ paths:
                 $ref: '#/components/schemas/WAFRuleExclusion'
         '400':
           description: >-
-            Unparseable body, empty `host`, or `rule_id` absent/zero.
+            Unparseable body, empty `host`, a `rule_id` outside 100000-999999,
+            or an invalid `scope_type`/`scope_value`.
           content:
             application/json:
               schema:
@@ -9214,7 +9260,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '409':
-          description: The rule is already disabled for this host.
+          description: >-
+            An exclusion with this exact scope already exists for the host. A
+            different scope on the same rule is not a conflict — several
+            exemptions per rule are expected.
           content:
             application/json:
               schema:
@@ -16696,9 +16745,10 @@ components:
         enabled:
           type: boolean
           description: >-
-            False when the rule is excluded in the scope being queried. On
-            /waf/rules this means host OR global exclusion; on /waf/global/rules
-            only global exclusions are considered.
+            False only when the rule is switched off entirely — a host-wide
+            exclusion, or a global one. A `uri`/`param` exclusion narrows the rule
+            without disabling it, so the rule stays enabled and its exemptions
+            appear in `exclusions`.
         globally_disabled:
           type: boolean
           description: True when a global exclusion exists for this rule ID.
@@ -16706,8 +16756,16 @@ components:
           allOf:
             - $ref: '#/components/schemas/WAFRuleExclusion'
           description: >-
-            The host-specific exclusion row. Present only when a proxy host was
-            supplied and that host excludes this rule.
+            The host-wide exclusion row, present only when the rule is switched
+            off for the entire host. Narrow exemptions are not reported here —
+            read `exclusions` for the full picture.
+        exclusions:
+          type: array
+          description: >-
+            Every host exclusion on this rule, narrow ones included. A rule can be
+            exempted on several paths at once.
+          items:
+            $ref: '#/components/schemas/WAFRuleExclusion'
         global_exclusion:
           allOf:
             - $ref: '#/components/schemas/GlobalWAFRuleExclusion'
@@ -16758,9 +16816,47 @@ components:
           type: string
         disabled_by:
           type: string
+        scope_type:
+          type: string
+          enum: [host, uri, param]
+          description: >-
+            How narrowly the rule is switched off. `host` disables it for the
+            whole host; `uri` skips it under a path prefix; `param` drops one
+            argument from the rule's targets. Defaults to `host` when omitted on
+            create.
+        scope_value:
+          type: string
+          description: >-
+            The path prefix (uri) or argument name (param). Empty for the host
+            scope. Restricted to printable ASCII without spaces or shell/config
+            metacharacters, since the value is rendered into a ModSecurity
+            directive.
         created_at:
           type: string
           format: date-time
+    CreateWAFRuleExclusion:
+      type: object
+      description: >-
+        Body for disabling a rule on a host. Every field is optional — posting an
+        empty body disables the rule for the whole host, which is what clients
+        written before scoped exclusions existed already do.
+      properties:
+        rule_id:
+          type: integer
+          description: Ignored on the per-host route; the rule comes from the path.
+        rule_category:
+          type: string
+        rule_description:
+          type: string
+        reason:
+          type: string
+        scope_type:
+          type: string
+          enum: [host, uri, param]
+          default: host
+        scope_value:
+          type: string
+          description: Required when scope_type is uri or param. A uri value must start with /.
     GlobalWAFRuleExclusion:
       type: object
       description: A CRS rule switched off for every WAF-enabled host.
@@ -16804,6 +16900,23 @@ components:
           type: string
         reason:
           type: string
+        scope_type:
+          type: string
+          enum: [host, uri, param]
+          default: host
+          description: >-
+            How narrowly to switch the rule off. `host` covers the whole host;
+            `uri` skips the rule under a path prefix; `param` drops one argument
+            from its targets. Omitted means host, which is what clients written
+            before scoped exclusions existed already get.
+        scope_value:
+          type: string
+          description: >-
+            Required when scope_type is uri or param — a path prefix starting
+            with `/`, or an argument name. A uri value of exactly `/` matches
+            every request and is stored as the host scope. Restricted to
+            printable ASCII without spaces or shell/config metacharacters,
+            since the value is rendered into a ModSecurity directive.
     CreateGlobalWAFRuleExclusion:
       type: object
       description: >-

@@ -295,10 +295,15 @@ func (h *WAFHandler) regenerateAllHostConfigs(ctx context.Context) error {
 // mergeExclusions merges global and host-specific exclusions.
 // Global exclusions are converted to WAFRuleExclusion format.
 func (h *WAFHandler) mergeExclusions(globalExclusions []model.GlobalWAFRuleExclusion, hostExclusions []model.WAFRuleExclusion) []model.WAFRuleExclusion {
-	// Create a map of host exclusions to avoid duplicates
+	// Create a map of host exclusions to avoid duplicates. Only a host-wide
+	// exclusion supersedes the global one: a host that merely exempts a rule on
+	// one path still wants the global "off everywhere" directive, and keying on
+	// the rule alone dropped it. (#286)
 	hostExclusionMap := make(map[int]bool)
 	for _, ex := range hostExclusions {
-		hostExclusionMap[ex.RuleID] = true
+		if ex.ScopeType == "" || ex.ScopeType == model.WAFScopeHost {
+			hostExclusionMap[ex.RuleID] = true
+		}
 	}
 
 	// Start with host exclusions
@@ -316,6 +321,7 @@ func (h *WAFHandler) mergeExclusions(globalExclusions []model.GlobalWAFRuleExclu
 				RuleDescription: gex.RuleDescription,
 				Reason:          gex.Reason + " (global)",
 				DisabledBy:      gex.DisabledBy,
+				ScopeType:       model.WAFScopeHost,
 				CreatedAt:       gex.CreatedAt,
 			})
 		}

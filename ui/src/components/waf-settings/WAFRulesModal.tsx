@@ -11,6 +11,8 @@ import type {
   WAFHostConfig,
   WAFRuleCategory,
   WAFRule,
+  WAFRuleExclusion,
+  WAFExclusionScope,
   WAFPolicyHistory,
 } from '../../types/waf';
 import { HelpTip } from '../common/HelpTip';
@@ -54,8 +56,11 @@ export function WAFRulesModal({
     },
   });
 
+  // Without a scope this drops every exemption on the rule, which is what the
+  // toggle means. Passing one removes just that path or argument. (#286)
   const enableMutation = useMutation({
-    mutationFn: (ruleId: number) => enableWAFRule(host.proxy_host_id, ruleId),
+    mutationFn: ({ ruleId, scope }: { ruleId: number; scope?: { scope_type: WAFExclusionScope; scope_value?: string } }) =>
+      enableWAFRule(host.proxy_host_id, ruleId, scope),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['waf-rules', host.proxy_host_id] });
       queryClient.invalidateQueries({ queryKey: ['waf-hosts'] });
@@ -70,9 +75,21 @@ export function WAFRulesModal({
     if (rule.enabled) {
       setDisableModalRule({ rule, categoryName });
       setDisableReason('');
-    } else {
-      enableMutation.mutate(rule.id);
+      return;
     }
+    // The unscoped delete drops every exemption on the rule. Say so before
+    // throwing away path exemptions the operator set up one at a time. (#286)
+    const scoped = (rule.exclusions || []).filter((ex) => ex.scope_type && ex.scope_type !== 'host');
+    if (scoped.length > 0 && !confirm(t('policyManager.confirmDropScopes', { count: scoped.length }))) return;
+    enableMutation.mutate({ ruleId: rule.id });
+  };
+
+  // Removing one narrow exemption must leave the rule's other scopes alone. (#286)
+  const handleRemoveScope = (rule: WAFRule, exclusion: WAFRuleExclusion) => {
+    enableMutation.mutate({
+      ruleId: rule.id,
+      scope: { scope_type: exclusion.scope_type, scope_value: exclusion.scope_value },
+    });
   };
 
   const handleConfirmDisable = () => {
@@ -95,7 +112,9 @@ export function WAFRulesModal({
       .map((cat) => {
         let rules = cat.rules || [];
         if (query) { rules = rules.filter((r) => r.id.toString().includes(query) || r.description?.toLowerCase().includes(query)); }
-        if (showDisabledOnly) { rules = rules.filter((r) => !r.enabled); }
+        // A rule with only a narrow exemption stays enabled, so filtering on
+        // !enabled alone hid exactly the rows this filter exists to surface. (#286)
+        if (showDisabledOnly) { rules = rules.filter((r) => !r.enabled || (r.exclusions?.length ?? 0) > 0); }
         totalRules += rules.length;
         disabledRules += rules.filter((r) => !r.enabled).length;
         return { ...cat, rules };
@@ -103,6 +122,15 @@ export function WAFRulesModal({
       .filter((cat) => { if (activeCategory === 'all') return cat.rules && cat.rules.length > 0; return cat.id === activeCategory; });
     return { categories, totalRules, disabledRules };
   }, [rulesQuery.data, searchQuery, showDisabledOnly, activeCategory]);
+
+  // The header pairs this with the unfiltered rule total, so it must be counted
+  // over every rule — filteredData is narrowed by the search box. (#286)
+  const totalDisabledRules = useMemo(
+    () => (rulesQuery.data?.categories ?? []).reduce(
+      (n, cat) => n + (cat.rules ?? []).filter((r) => !r.enabled).length, 0
+    ),
+    [rulesQuery.data]
+  );
 
   const handleBulkDisable = (categoryId: string) => {
     const category = rulesQuery.data?.categories.find((c) => c.id === categoryId);
@@ -117,7 +145,7 @@ export function WAFRulesModal({
   const handleBulkEnable = (categoryId: string) => {
     const category = rulesQuery.data?.categories.find((c) => c.id === categoryId);
     if (!category?.rules) return;
-    category.rules.filter((r) => !r.enabled).forEach((rule) => { enableMutation.mutate(rule.id); });
+    category.rules.filter((r) => !r.enabled).forEach((rule) => { enableMutation.mutate({ ruleId: rule.id }); });
   };
 
   const isPending = disableMutation.isPending || enableMutation.isPending;
@@ -130,7 +158,7 @@ export function WAFRulesModal({
         <div className="flex-shrink-0 px-6 py-4 border-b dark:border-slate-700 bg-gray-50 dark:bg-slate-900 flex items-center justify-between">
           <div>
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">{t('policyManager.title', { name: host.proxy_host_name })}</h2>
-            <p className="text-sm text-gray-500 dark:text-slate-400 mt-0.5">{t('policyManager.subtitle', { total: rulesQuery.data?.total_rules || 0, disabled: host.exclusion_count })}</p>
+            <p className="text-sm text-gray-500 dark:text-slate-400 mt-0.5">{t('policyManager.subtitle', { total: rulesQuery.data?.total_rules || 0, disabled: totalDisabledRules })}</p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-lg transition-colors text-slate-500 dark:text-slate-400">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -200,7 +228,7 @@ export function WAFRulesModal({
                 ) : (
                   <div className="divide-y">
                     {filteredData.categories.map((category) => (
-                      <CategoryRulesSection key={category.id} category={category} onToggleRule={(rule) => handleToggleRule(rule, category.name)} onBulkDisable={() => handleBulkDisable(category.id)} onBulkEnable={() => handleBulkEnable(category.id)} isPending={isPending} showCategoryHeader={activeCategory === 'all'} />
+                      <CategoryRulesSection key={category.id} category={category} onToggleRule={(rule) => handleToggleRule(rule, category.name)} onRemoveScope={handleRemoveScope} onBulkDisable={() => handleBulkDisable(category.id)} onBulkEnable={() => handleBulkEnable(category.id)} isPending={isPending} showCategoryHeader={activeCategory === 'all'} />
                     ))}
                   </div>
                 )}
@@ -247,8 +275,8 @@ export function WAFRulesModal({
   );
 }
 
-function CategoryRulesSection({ category, onToggleRule, onBulkDisable, onBulkEnable, isPending, showCategoryHeader }: {
-  category: WAFRuleCategory; onToggleRule: (rule: WAFRule) => void; onBulkDisable: () => void; onBulkEnable: () => void; isPending: boolean; showCategoryHeader: boolean;
+function CategoryRulesSection({ category, onToggleRule, onRemoveScope, onBulkDisable, onBulkEnable, isPending, showCategoryHeader }: {
+  category: WAFRuleCategory; onToggleRule: (rule: WAFRule) => void; onRemoveScope: (rule: WAFRule, exclusion: WAFRuleExclusion) => void; onBulkDisable: () => void; onBulkEnable: () => void; isPending: boolean; showCategoryHeader: boolean;
 }) {
   const { t } = useTranslation('waf');
   const [isExpanded, setIsExpanded] = useState(true);
@@ -278,18 +306,23 @@ function CategoryRulesSection({ category, onToggleRule, onBulkDisable, onBulkEna
       )}
       {(!showCategoryHeader || isExpanded) && (
         <div className="divide-y divide-gray-100 dark:divide-slate-700/50">
-          {category.rules?.map((rule) => (<RuleRow key={rule.id} rule={rule} onToggle={() => onToggleRule(rule)} isPending={isPending} />))}
+          {category.rules?.map((rule) => (<RuleRow key={rule.id} rule={rule} onToggle={() => onToggleRule(rule)} onRemoveScope={(ex) => onRemoveScope(rule, ex)} isPending={isPending} />))}
         </div>
       )}
     </div>
   );
 }
 
-function RuleRow({ rule, onToggle, isPending }: { rule: WAFRule; onToggle: () => void; isPending: boolean; }) {
+function RuleRow({ rule, onToggle, onRemoveScope, isPending }: { rule: WAFRule; onToggle: () => void; onRemoveScope: (exclusion: WAFRuleExclusion) => void; isPending: boolean; }) {
   const { t, i18n } = useTranslation('waf');
   const [showDetails, setShowDetails] = useState(false);
   const formatDate = (dateStr: string) => new Date(dateStr).toLocaleString(i18n.language, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-  const hasDetails = rule.exclusion || rule.global_exclusion;
+  // A uri/param exemption narrows the rule instead of switching it off, so it
+  // gets its own list rather than being folded into the disabled state. (#286)
+  // An empty scope_type is a legacy host-wide row, not a narrow exemption —
+  // the API and the config template both read it that way. (#286)
+  const scopedExclusions = (rule.exclusions || []).filter((ex) => ex.scope_type && ex.scope_type !== 'host');
+  const hasDetails = rule.exclusion || rule.global_exclusion || scopedExclusions.length > 0;
 
   return (
     <div className={`${rule.globally_disabled ? 'bg-purple-50 dark:bg-purple-900/10' : !rule.enabled ? 'bg-orange-50 dark:bg-orange-900/10' : 'bg-white dark:bg-slate-800'}`}>
@@ -301,6 +334,11 @@ function RuleRow({ rule, onToggle, isPending }: { rule: WAFRule; onToggle: () =>
             <span className="px-1.5 py-0.5 text-xs rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 flex items-center gap-1">
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
               {t('global.badge')}
+            </span>
+          )}
+          {scopedExclusions.length > 0 && !rule.globally_disabled && (
+            <span className="px-1.5 py-0.5 text-xs rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 whitespace-nowrap">
+              {t('policyManager.partialExclusions', { count: scopedExclusions.length })}
             </span>
           )}
           {rule.severity && !rule.globally_disabled && (
@@ -331,6 +369,36 @@ function RuleRow({ rule, onToggle, isPending }: { rule: WAFRule; onToggle: () =>
               {rule.exclusion.disabled_by && (<div><span className="text-orange-600 dark:text-orange-400 text-xs">{t('policyManager.disabledBy')}</span><p className="font-medium">{rule.exclusion.disabled_by}</p></div>)}
               {rule.exclusion.rule_category && (<div><span className="text-orange-600 dark:text-orange-400 text-xs">{t('policyManager.category')}</span><p className="font-medium">{rule.exclusion.rule_category}</p></div>)}
             </div>
+          </div>
+        </div>
+      )}
+
+      {showDetails && scopedExclusions.length > 0 && !rule.globally_disabled && (
+        <div className="px-4 pb-3 ml-8 mr-4">
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900/40 rounded-lg p-3 text-sm">
+            <div className="flex items-center gap-2 mb-2">
+              <svg className="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+              <span className="font-semibold text-blue-800 dark:text-blue-300">{t('policyManager.scopedExclusions')}</span>
+            </div>
+            <p className="text-xs text-blue-700 dark:text-blue-400 mb-2">{t('policyManager.scopedExclusionsHint')}</p>
+            <ul className="space-y-1.5">
+              {scopedExclusions.map((ex) => (
+                <li key={ex.id} className="flex items-center justify-between gap-3 bg-white/70 dark:bg-slate-800/50 rounded px-2 py-1.5">
+                  <div className="min-w-0">
+                    <span className="px-1.5 py-0.5 text-xs rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-mono uppercase">{ex.scope_type}</span>
+                    <span className="ml-2 font-mono text-xs text-blue-900 dark:text-blue-200 break-all">{ex.scope_value}</span>
+                    {ex.reason && <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5 truncate" title={ex.reason}>{ex.reason}</p>}
+                  </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onRemoveScope(ex); }}
+                    disabled={isPending}
+                    className="flex-shrink-0 px-2 py-1 text-xs rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/60 transition-colors disabled:opacity-50"
+                  >
+                    {t('policyManager.removeScope')}
+                  </button>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       )}

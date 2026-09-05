@@ -20,14 +20,22 @@ func (r *WAFRepository) CreateExclusion(ctx context.Context, proxyHostID string,
 	var exclusion model.WAFRuleExclusion
 	var ruleCategory, ruleDescription, reason, disabledBy sql.NullString
 
+	// Normalise here as well as in the handlers. The column is NOT NULL with no
+	// CHECK, so an empty scope_type from a caller that skipped validation would
+	// be stored verbatim and match nothing on lookup. (#286)
+	scope := model.WAFRuleExclusion{ScopeType: req.ScopeType, ScopeValue: req.ScopeValue}
+	if err := scope.ValidateScope(); err != nil {
+		return nil, fmt.Errorf("failed to create WAF rule exclusion: %w", err)
+	}
+
 	err := r.db.QueryRowContext(ctx, query,
 		proxyHostID,
 		req.RuleID,
 		req.RuleCategory,
 		req.RuleDescription,
 		req.Reason,
-		req.ScopeType,
-		req.ScopeValue,
+		scope.ScopeType,
+		scope.ScopeValue,
 	).Scan(
 		&exclusion.ID,
 		&exclusion.ProxyHostID,
@@ -64,7 +72,19 @@ func (r *WAFRepository) CreateExclusion(ctx context.Context, proxyHostID string,
 // DeleteExclusion removes a WAF rule exclusion (re-enables the rule)
 func (r *WAFRepository) DeleteExclusion(ctx context.Context, proxyHostID string, ruleID int) error {
 	query := `DELETE FROM waf_rule_exclusions WHERE proxy_host_id = $1 AND rule_id = $2`
-	result, err := r.db.ExecContext(ctx, query, proxyHostID, ruleID)
+	return r.execDeleteExclusion(ctx, query, proxyHostID, ruleID)
+}
+
+// DeleteExclusionByScope removes one scoped exclusion and leaves the rule's other
+// scopes in place. Without it, re-enabling rule 942370 under /api/a also dropped
+// the separate exemption for /api/b. (#286)
+func (r *WAFRepository) DeleteExclusionByScope(ctx context.Context, proxyHostID string, ruleID int, scopeType, scopeValue string) error {
+	query := `DELETE FROM waf_rule_exclusions WHERE proxy_host_id = $1 AND rule_id = $2 AND scope_type = $3 AND scope_value = $4`
+	return r.execDeleteExclusion(ctx, query, proxyHostID, ruleID, scopeType, scopeValue)
+}
+
+func (r *WAFRepository) execDeleteExclusion(ctx context.Context, query string, args ...interface{}) error {
+	result, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("failed to delete WAF rule exclusion: %w", err)
 	}
@@ -87,7 +107,7 @@ func (r *WAFRepository) GetExclusionsByProxyHost(ctx context.Context, proxyHostI
 		SELECT id, proxy_host_id, rule_id, rule_category, rule_description, reason, disabled_by, scope_type, scope_value, created_at
 		FROM waf_rule_exclusions
 		WHERE proxy_host_id = $1
-		ORDER BY rule_id ASC
+		ORDER BY rule_id ASC, scope_type ASC, scope_value ASC
 	`
 
 	rows, err := r.db.QueryContext(ctx, query, proxyHostID)
@@ -140,18 +160,45 @@ func (r *WAFRepository) GetExclusionsByProxyHost(ctx context.Context, proxyHostI
 	return exclusions, nil
 }
 
-// GetExclusionByRuleID checks if a specific rule is excluded for a proxy host
+// GetExclusionByRuleID returns one exclusion for a rule, for callers that only
+// need the rule's descriptive fields (policy history). A rule can carry several
+// scoped exclusions, so the oldest is returned for a stable answer — use
+// GetExclusionByScope when the specific scope matters.
 func (r *WAFRepository) GetExclusionByRuleID(ctx context.Context, proxyHostID string, ruleID int) (*model.WAFRuleExclusion, error) {
 	query := `
 		SELECT id, proxy_host_id, rule_id, rule_category, rule_description, reason, disabled_by, scope_type, scope_value, created_at
 		FROM waf_rule_exclusions
 		WHERE proxy_host_id = $1 AND rule_id = $2
+		ORDER BY created_at
+		LIMIT 1
 	`
 
+	return r.scanOneExclusion(r.db.QueryRowContext(ctx, query, proxyHostID, ruleID))
+}
+
+// GetExclusionByScope looks an exclusion up by the full unique key. The scope is
+// part of that key, so "rule 942370 under /api/a" and "rule 942370 under /api/b"
+// are different exclusions and both may exist. Keying on the rule alone made the
+// second one look like a duplicate. (#286)
+func (r *WAFRepository) GetExclusionByScope(ctx context.Context, proxyHostID string, ruleID int, scopeType, scopeValue string) (*model.WAFRuleExclusion, error) {
+	query := `
+		SELECT id, proxy_host_id, rule_id, rule_category, rule_description, reason, disabled_by, scope_type, scope_value, created_at
+		FROM waf_rule_exclusions
+		WHERE proxy_host_id = $1 AND rule_id = $2 AND scope_type = $3 AND scope_value = $4
+	`
+
+	return r.scanOneExclusion(r.db.QueryRowContext(ctx, query, proxyHostID, ruleID, scopeType, scopeValue))
+}
+
+// scanOneExclusion reads the ten-column exclusion projection shared by the
+// single-row lookups. It exists because the column list and the Scan list drifted
+// apart once — the SELECT gained scope_type/scope_value and the Scan did not,
+// which made every lookup fail the moment a row existed. (#286)
+func (r *WAFRepository) scanOneExclusion(row *sql.Row) (*model.WAFRuleExclusion, error) {
 	var exclusion model.WAFRuleExclusion
 	var ruleCategory, ruleDescription, reason, disabledBy sql.NullString
 
-	err := r.db.QueryRowContext(ctx, query, proxyHostID, ruleID).Scan(
+	err := row.Scan(
 		&exclusion.ID,
 		&exclusion.ProxyHostID,
 		&exclusion.RuleID,
@@ -159,6 +206,8 @@ func (r *WAFRepository) GetExclusionByRuleID(ctx context.Context, proxyHostID st
 		&ruleDescription,
 		&reason,
 		&disabledBy,
+		&exclusion.ScopeType,
+		&exclusion.ScopeValue,
 		&exclusion.CreatedAt,
 	)
 

@@ -3,6 +3,7 @@ import type {
   WAFHostConfig,
   WAFHostConfigListResponse,
   WAFRuleExclusion,
+  WAFExclusionScope,
   CreateWAFRuleExclusionRequest,
   WAFPolicyHistoryResponse,
 } from '../types/waf';
@@ -64,9 +65,18 @@ export async function disableWAFRule(
   return res.json();
 }
 
-// Enable a rule for a proxy host (remove exclusion)
-export async function enableWAFRule(hostId: string, ruleId: number): Promise<void> {
-  const res = await fetch(`${API_BASE}/waf/hosts/${hostId}/rules/${ruleId}/disable`, {
+// Enable a rule for a proxy host (remove exclusion).
+// Naming a scope removes just that exemption; omitting it re-enables the rule
+// outright, dropping every scope it carries. (#286)
+export async function enableWAFRule(
+  hostId: string,
+  ruleId: number,
+  scope?: { scope_type: WAFExclusionScope; scope_value?: string }
+): Promise<void> {
+  const query = scope
+    ? `?${new URLSearchParams({ scope_type: scope.scope_type, scope_value: scope.scope_value || '' })}`
+    : '';
+  const res = await fetch(`${API_BASE}/waf/hosts/${hostId}/rules/${ruleId}/disable${query}`, {
     method: 'DELETE',
     headers: getAuthHeaders(),
   });

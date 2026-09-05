@@ -165,7 +165,13 @@ export function LogDetailModal({ log, onClose, onRuleDisabled }: LogDetailModalP
       queryClient.invalidateQueries({ queryKey: ['waf-hosts'] });
       alert(isGlobalDisable
         ? t('messages.ruleDisabledGlobal', { ruleId: log.rule_id, defaultValue: '규칙 {{ruleId}}가 전역 비활성화되었습니다.' })
-        : t('messages.ruleDisabled', { ruleId: log.rule_id, host: log.host }));
+        // A uri scope of "/" is normalised to host by the API, so report what
+        // actually happened rather than what was clicked. (#286)
+        : ruleScope === 'host' || scopeValue.trim() === '/'
+          ? t('messages.ruleDisabled', { ruleId: log.rule_id, host: log.host })
+          // Saying "disabled for this host" after the operator deliberately
+          // picked one path contradicts what the scope hint just promised.
+          : t('messages.ruleDisabledScoped', { ruleId: log.rule_id, host: log.host, scope: scopeValue.trim() }));
       onRuleDisabled?.();
       setShowDisableForm(false);
       setDisableReason('');

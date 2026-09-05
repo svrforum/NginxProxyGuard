@@ -4,10 +4,15 @@ export interface WAFRule {
   description?: string;
   severity?: string;
   tags?: string[];
+  /** False only when the rule is off for the whole host. A uri/param scope
+   *  narrows the rule without disabling it, so it stays true. (#286) */
   enabled: boolean;
   globally_disabled?: boolean;
+  /** The host-wide exclusion, present only when the rule is fully disabled. */
   exclusion?: WAFRuleExclusion;
   global_exclusion?: GlobalWAFRuleExclusion;
+  /** Every host exclusion on this rule, narrow ones included. (#286) */
+  exclusions?: WAFRuleExclusion[];
 }
 
 export interface WAFRuleCategory {
@@ -32,8 +37,15 @@ export interface WAFRuleExclusion {
   rule_description?: string;
   reason?: string;
   disabled_by?: string;
+  /** How narrowly the rule is switched off: the whole host, one path prefix,
+   *  or one request argument. (#231) */
+  scope_type: WAFExclusionScope;
+  /** The path prefix (uri) or argument name (param); empty for host. */
+  scope_value?: string;
   created_at: string;
 }
+
+export type WAFExclusionScope = 'host' | 'uri' | 'param';
 
 export interface WAFHostConfig {
   proxy_host_id: string;
@@ -54,6 +66,8 @@ export interface CreateWAFRuleExclusionRequest {
   rule_category?: string;
   rule_description?: string;
   reason?: string;
+  scope_type?: WAFExclusionScope;
+  scope_value?: string;
 }
 
 export interface WAFPolicyHistory {

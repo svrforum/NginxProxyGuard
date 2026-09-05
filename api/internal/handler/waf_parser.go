@@ -44,10 +44,15 @@ var ruleCategories = map[string]struct {
 // RuleParseOptions configures which exclusion data to use when parsing rules.
 // Nil maps are safe — Go returns zero values on nil map reads.
 type RuleParseOptions struct {
-	HostExcludedRules   map[int]bool
-	HostExclusionMap    map[int]*model.WAFRuleExclusion
-	GlobalExcludedRules map[int]bool
-	GlobalExclusionMap  map[int]*model.GlobalWAFRuleExclusion
+	// HostExcludedRules marks rules switched off for the whole host. A rule
+	// exempted only on a path stays enabled and must not appear here. (#286)
+	HostExcludedRules map[int]bool
+	// HostExclusionMap holds the host-wide exclusion per rule, for the detail panel.
+	HostExclusionMap map[int]*model.WAFRuleExclusion
+	// HostExclusionsMap holds every exclusion on a rule, narrow ones included.
+	HostExclusionsMap    map[int][]model.WAFRuleExclusion
+	GlobalExcludedRules  map[int]bool
+	GlobalExclusionMap   map[int]*model.GlobalWAFRuleExclusion
 }
 
 // parseAllRules parses OWASP CRS rule files with the given exclusion options
@@ -202,6 +207,9 @@ func parseRulesFromFile(filePath string, ruleIDRegex, msgRegex *regexp.Regexp, o
 		// Add host-specific exclusion details
 		if ex, ok := opts.HostExclusionMap[ruleID]; ok {
 			rule.Exclusion = ex
+		}
+		if list, ok := opts.HostExclusionsMap[ruleID]; ok {
+			rule.Exclusions = list
 		}
 
 		// Add global exclusion details

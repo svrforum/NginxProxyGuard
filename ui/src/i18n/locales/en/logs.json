@@ -364,7 +364,8 @@
     "ruleDisableFailed": "Failed to disable rule: {{error}}",
     "cannotDisable": "Cannot disable rule: Host information is missing.",
     "cleanupSuccess": "Successfully deleted {{count}} old logs.",
-    "disabledReasonDefault": "Disabled from log viewer"
+    "disabledReasonDefault": "Disabled from log viewer",
+    "ruleDisabledScoped": "Rule {{ruleId}} is now skipped for {{scope}} on {{host}}. It still applies to every other request."
   },
   "botFilter": {
     "title": "Bot Filter Logs",

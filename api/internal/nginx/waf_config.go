@@ -65,8 +65,11 @@ SecRule REQUEST_URI "@beginsWith {{$e.ScopeValue}}" "id:{{scopedRuleID $i}},phas
 {{- else if eq $e.ScopeType "param"}}
 # Scoped to the {{$e.ScopeValue}} argument — the rule still inspects everything else.
 SecRuleUpdateTargetById {{$e.RuleID}} "!ARGS:{{$e.ScopeValue}}"
-{{- else}}
+{{- else if or (eq $e.ScopeType "") (eq $e.ScopeType "host")}}
 SecRuleRemoveById {{$e.RuleID}}
+{{- else}}
+# Unrecognised scope {{$e.ScopeType}} — left in place rather than removed, so an
+# unexpected value keeps the rule protecting the host instead of switching it off.
 {{- end}}
 {{end}}
 {{end}}

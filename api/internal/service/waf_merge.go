@@ -3,8 +3,11 @@ package service
 import "nginx-proxy-guard/internal/model"
 
 // mergeWAFExclusions merges host-specific WAF rule exclusions with global
-// exclusions. Host-specific exclusions take precedence — any global exclusion
-// whose RuleID already appears in host exclusions is dropped.
+// exclusions. A host-WIDE exclusion takes precedence — the global entry for that
+// rule is dropped as redundant. A narrow (uri/param) host exclusion does not:
+// the host still wants the global "off everywhere" directive, and suppressing it
+// on the strength of a one-path exemption left the rule enforcing where the
+// operator had globally switched it off. (#286)
 //
 // Output shape per entry:
 //   - host-specific entries: copied verbatim
@@ -22,7 +25,9 @@ import "nginx-proxy-guard/internal/model"
 func mergeWAFExclusions(hostExclusions []model.WAFRuleExclusion, globalExclusions []model.GlobalWAFRuleExclusion) []model.WAFRuleExclusion {
 	hostExclusionMap := make(map[int]bool, len(hostExclusions))
 	for _, ex := range hostExclusions {
-		hostExclusionMap[ex.RuleID] = true
+		if ex.ScopeType == "" || ex.ScopeType == model.WAFScopeHost {
+			hostExclusionMap[ex.RuleID] = true
+		}
 	}
 
 	merged := make([]model.WAFRuleExclusion, len(hostExclusions))
@@ -38,6 +43,7 @@ func mergeWAFExclusions(hostExclusions []model.WAFRuleExclusion, globalExclusion
 				RuleDescription: gex.RuleDescription,
 				Reason:          gex.Reason + " (global)",
 				DisabledBy:      gex.DisabledBy,
+				ScopeType:       model.WAFScopeHost,
 				CreatedAt:       gex.CreatedAt,
 			})
 		}

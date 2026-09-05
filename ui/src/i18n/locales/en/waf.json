@@ -345,7 +345,8 @@
       "inactive": "Inactive",
       "blocking": "Blocking Mode",
       "detection": "Detection Mode"
-    }
+    },
+    "exclusionCount": "{{count}} rule exclusion(s)"
   },
   "policyManager": {
     "title": "WAF Policy Management - {{name}}",
@@ -383,7 +384,12 @@
       "disabled": "Disabled",
       "enabled": "Enabled",
       "reason": "Reason"
-    }
+    },
+    "partialExclusions": "{{count}} partial exclusion(s)",
+    "scopedExclusions": "Partial exclusions",
+    "scopedExclusionsHint": "The rule is skipped only within these scopes. It keeps applying to every other request.",
+    "removeScope": "Remove",
+    "confirmDropScopes": "This rule has {{count}} partial exclusion(s). Re-enabling it removes them too. Continue?"
   },
   "disableModal": {
     "title": "Disable Rule",

@@ -78,6 +78,16 @@ func (e *WAFRuleExclusion) ValidateScope() error {
 		if !strings.HasPrefix(v, "/") {
 			return fmt.Errorf("invalid scope_value: a uri scope must start with /")
 		}
+		// "/" prefixes every request, so a uri scope of "/" is a host-wide
+		// disable wearing a scope — it would render as the widest possible
+		// exemption while still reporting the rule as enabled. Normalise it to
+		// what it actually is. Rejecting it instead would break the values
+		// v2.37.0-v2.53.0 already stored, and the log viewer prefills exactly
+		// this for a request blocked on the site root. (#286)
+		if v == "/" {
+			e.ScopeType, e.ScopeValue = WAFScopeHost, ""
+			return nil
+		}
 	} else if !paramNamePattern.MatchString(v) {
 		return fmt.Errorf("invalid scope_value: a param scope must be an argument name")
 	}
@@ -98,10 +108,14 @@ type WAFRule struct {
 	Description      string                  `json:"description,omitempty"`
 	Severity         string                  `json:"severity,omitempty"`
 	Tags             []string                `json:"tags,omitempty"`
-	Enabled          bool                    `json:"enabled"`                     // Whether this rule is enabled for the current host
+	Enabled          bool                    `json:"enabled"`                     // Whether this rule still applies to the host (a uri/param scope leaves it enabled)
 	GloballyDisabled bool                    `json:"globally_disabled"`           // Whether this rule is disabled globally
-	Exclusion        *WAFRuleExclusion       `json:"exclusion,omitempty"`         // Host-specific exclusion details if rule is disabled
+	Exclusion        *WAFRuleExclusion       `json:"exclusion,omitempty"`         // The host-wide exclusion, if the rule is switched off for the whole host
 	GlobalExclusion  *GlobalWAFRuleExclusion `json:"global_exclusion,omitempty"`  // Global exclusion details if rule is globally disabled
+	// Exclusions carries every host exclusion on this rule, including the
+	// narrow ones. A rule can be exempted on several paths at once, and
+	// reporting only one of them hid the rest from the operator. (#286)
+	Exclusions []WAFRuleExclusion `json:"exclusions,omitempty"`
 }
 
 // WAFRuleCategory represents a group of related WAF rules
@@ -137,8 +151,16 @@ type CreateWAFRuleExclusionRequest struct {
 }
 
 // ValidateScope normalises and checks the scope on a create request, using the
-// same rules as a stored exclusion.
+// same rules as a stored exclusion, and bounds the rule id.
+//
+// The `validate:"min=100000,max=999999"` tag on RuleID is decorative — this repo
+// has no struct validator — and RuleID is interpolated into the same generated
+// directive the scope is. An out-of-range id renders a rule ModSecurity cannot
+// load, which fails `nginx -t` and blocks every later reload. (#286)
 func (r *CreateWAFRuleExclusionRequest) ValidateScope() error {
+	if r.RuleID < minCRSRuleID || r.RuleID > maxCRSRuleID {
+		return fmt.Errorf("invalid rule_id: must be between %d and %d", minCRSRuleID, maxCRSRuleID)
+	}
 	e := WAFRuleExclusion{ScopeType: r.ScopeType, ScopeValue: r.ScopeValue}
 	if err := e.ValidateScope(); err != nil {
 		return err
@@ -146,6 +168,13 @@ func (r *CreateWAFRuleExclusionRequest) ValidateScope() error {
 	r.ScopeType, r.ScopeValue = e.ScopeType, e.ScopeValue
 	return nil
 }
+
+// CRS rule ids are six digits. The generated per-host exclusions live at
+// 1,000,000+ (see scopedRuleID), clear of this range.
+const (
+	minCRSRuleID = 100000
+	maxCRSRuleID = 999999
+)
 
 // WAFRulesResponse is the response for listing WAF rules
 type WAFRulesResponse struct {
