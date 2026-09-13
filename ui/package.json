@@ -22,7 +22,7 @@
     "react-dom": "^19.2.8",
     "react-i18next": "^17.0.13",
     "react-router-dom": "^7.18.3",
-    "react-simple-maps": "^3.0.0",
+    "react-simple-maps": "^5.0.3",
     "recharts": "^3.10.1",
     "topojson-client": "^3.1.0"
   },
