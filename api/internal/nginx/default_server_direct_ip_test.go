@@ -94,3 +94,40 @@ func TestDefaultServerKeepsOperationalPaths(t *testing.T) {
 		}
 	}
 }
+
+// HTTP/3 needs reuseport, and nginx allows it on exactly one listen per
+// address:port. It must therefore appear in the default server — once per
+// family — and never in a per-host template, where a second host would make
+// nginx -t fail with "duplicate listen options" and block every reload (#309).
+func TestDefaultServerOwnsTheQUICReuseport(t *testing.T) {
+	for _, action := range []string{"allow", "block_403", "block_444"} {
+		cfg := renderDefaultServer(t, action)
+		if got := strings.Count(cfg, "listen 443 quic reuseport default_server;"); got != 1 {
+			t.Errorf("action=%s: want exactly one IPv4 quic reuseport listener, found %d", action, got)
+		}
+	}
+
+	dir := t.TempDir()
+	m := &Manager{configPath: dir, httpPort: "80", httpsPort: "443", apiURL: "http://127.0.0.1:9080", enableIPv6: true}
+	if err := m.GenerateDefaultServerConfig(context.Background(), "block_444"); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	out, _ := os.ReadFile(filepath.Join(dir, "zzz_default.conf"))
+	if got := strings.Count(string(out), "listen [::]:443 quic reuseport default_server;"); got != 1 {
+		t.Errorf("IPv6 enabled: want exactly one [::] quic reuseport listener, found %d", got)
+	}
+}
+
+// The other half of the invariant: host templates must not carry reuseport.
+func TestHostTemplatesNeverCarryReuseport(t *testing.T) {
+	files := []string{"templates/proxy_host/ssl.conf.tmpl", "redirect_config.go"}
+	for _, f := range files {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatalf("read %s: %v", f, err)
+		}
+		if strings.Contains(string(b), "reuseport") {
+			t.Errorf("%s mentions reuseport; a second listener with it fails nginx -t (#309)", f)
+		}
+	}
+}

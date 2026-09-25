@@ -142,6 +142,24 @@ server {
 server {
     listen {{.HTTPSPort}} ssl default_server;
 {{if .EnableIPv6}}    listen [::]:{{.HTTPSPort}} ssl default_server;
+{{end}}
+    # HTTP/3. 'reuseport' is a property of the UDP socket, not of a server
+    # block: nginx accepts it on exactly ONE listen per address:port and
+    # rejects a second with "duplicate listen options", which fails nginx -t
+    # and blocks every reload. So it lives here, in the one block that always
+    # exists, and the per-host 'listen ... quic;' lines share the socket.
+    #
+    # Without it every worker reads from a single shared UDP socket, and the
+    # packets of one QUIC connection land on workers that do not own it. Short
+    # requests mostly get lucky; long-lived connections do not. Measured on
+    # this image, 4 workers, 40 concurrent connections x 25 requests: 425 of
+    # 1000 requests timed out without reuseport (55s), 0 with it (6s) — the
+    # "HTTP/3 stalls, then the browser falls back to HTTP/2" of #309.
+    #
+    # ssl_reject_handshake below applies to QUIC as well, so an unknown SNI is
+    # still refused over UDP.
+    listen {{.HTTPSPort}} quic reuseport default_server;
+{{if .EnableIPv6}}    listen [::]:{{.HTTPSPort}} quic reuseport default_server;
 {{end}}    server_name _;
 
     # Reject SSL handshake immediately - no certificate warning, just connection reset
