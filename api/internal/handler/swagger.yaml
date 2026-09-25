@@ -9219,6 +9219,83 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /waf/events/{logId}/rules:
+    get:
+      tags: [WAF]
+      summary: List every CRS rule that contributed to one WAF event
+      description: |
+        CRS blocks by anomaly score, so one blocked request usually matched
+        several rules, while the log row records only the first. This reads the
+        stored audit record back and returns every contributing rule, minus the
+        score bookkeeping rules (949110, 980xxx), with the exclusions each rule
+        already has on the event's host.
+
+        `at` must be the event's `created_at` from the log list; it bounds the
+        lookup to one chunk of the log hypertable.
+
+        Requires the `waf:read` scope when called with an API token.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: logId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: at
+          in: query
+          required: true
+          description: The event's created_at (RFC 3339).
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Contributing rules
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  proxy_host_id:
+                    type: string
+                  rules:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        rule_id:
+                          type: integer
+                        message:
+                          type: string
+                        severity:
+                          type: string
+                        data:
+                          type: string
+                        category:
+                          type: string
+                        excluded:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              scope_type:
+                                type: string
+                              scope_value:
+                                type: string
+        '400':
+          description: Malformed logId or missing/invalid at
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No WAF event with that id near that time
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /waf/hosts/{id}/history:
     get:
       tags: [WAF]

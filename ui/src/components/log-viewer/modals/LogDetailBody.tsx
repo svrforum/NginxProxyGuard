@@ -1,4 +1,5 @@
 import { useTranslation, Trans } from 'react-i18next';
+import { ContributingRules } from './ContributingRules';
 import type { Log } from '../../../types/log';
 import type { URIMatchType } from '../../../types/security';
 import { formatBytes } from '../utils';
@@ -202,6 +203,9 @@ interface DisableRuleFormProps {
   setRuleScope: (v: 'host' | 'uri' | 'param') => void;
   scopeValue: string;
   setScopeValue: (v: string) => void;
+  /** Rules picked from the event's full list; empty means "the row's rule". */
+  selectedRules: number[];
+  setSelectedRules: (ids: number[]) => void;
   onSubmit: () => void;
   onCancel: () => void;
   isPending: boolean;
@@ -209,7 +213,8 @@ interface DisableRuleFormProps {
 
 export function DisableRuleForm({
   log, disableReason, setDisableReason, isGlobalDisable, setIsGlobalDisable,
-  ruleScope, setRuleScope, scopeValue, setScopeValue, onSubmit, onCancel, isPending,
+  ruleScope, setRuleScope, scopeValue, setScopeValue, selectedRules, setSelectedRules,
+  onSubmit, onCancel, isPending,
 }: DisableRuleFormProps) {
   const { t } = useTranslation('logs');
   return (
@@ -299,6 +304,16 @@ export function DisableRuleForm({
         </div>
       )}
 
+      {!isGlobalDisable && (
+        <ContributingRules
+          log={log}
+          scopeType={ruleScope}
+          scopeValue={scopeValue}
+          selected={selectedRules}
+          setSelected={setSelectedRules}
+        />
+      )}
+
       <div>
         <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase mb-1 block">
           {t('disableRule.reason')}
@@ -323,7 +338,9 @@ export function DisableRuleForm({
             ? t('disableRule.processing')
             : (isGlobalDisable
               ? t('disableRule.submitGlobal', { ruleId: log.rule_id, defaultValue: '전역 비활성화' })
-              : t('disableRule.submit', { ruleId: log.rule_id }))}
+              : selectedRules.length > 1
+                ? t('disableRule.submitMany', { count: selectedRules.length })
+                : t('disableRule.submit', { ruleId: selectedRules[0] ?? log.rule_id }))}
         </button>
         <button
           onClick={onCancel}
@@ -340,7 +357,12 @@ export function DisableRuleForm({
               <Trans
                 ns="logs"
                 i18nKey="disableRule.description"
-                values={{ ruleId: log.rule_id, host: log.host }}
+                values={{
+                  // Name what will actually be switched off: with several
+                  // contributing rules picked, the row's single rule id was wrong.
+                  ruleId: selectedRules.length > 1 ? selectedRules.join(', ') : (selectedRules[0] ?? log.rule_id),
+                  host: log.host,
+                }}
                 components={{ 1: <strong /> }}
               />
             </span>

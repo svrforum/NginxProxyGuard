@@ -612,6 +612,8 @@ func registerWAFRoutes(v1 *echo.Group, h *handler.WAFHandler) {
 	g.GET("/hosts", echo.WrapHandler(http.HandlerFunc(h.GetHostConfigs)), wafRead)
 	g.GET("/hosts/:id/config", echo.WrapHandler(http.HandlerFunc(h.GetHostConfig)), wafRead)
 	g.GET("/hosts/:id/history", echo.WrapHandler(http.HandlerFunc(h.GetPolicyHistory)), wafRead)
+	// Every rule behind one WAF event, not just the one the log row kept (#306).
+	g.GET("/events/:logId/rules", h.GetEventRules, wafRead)
 	g.POST("/hosts/:id/rules/:ruleId/disable", echo.WrapHandler(http.HandlerFunc(h.DisableRule)), wafWrite)
 	g.POST("/rules/disable-by-host", echo.WrapHandler(http.HandlerFunc(h.DisableRuleByHost)), wafWrite)
 	g.DELETE("/hosts/:id/rules/:ruleId/disable", echo.WrapHandler(http.HandlerFunc(h.EnableRule)), wafWrite)

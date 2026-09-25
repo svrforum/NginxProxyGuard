@@ -387,6 +387,7 @@ var routePermissions = map[string]string{
 	"GET /api/v1/waf/hosts": "waf:read",
 	"GET /api/v1/waf/hosts/:id/config": "waf:read",
 	"GET /api/v1/waf/hosts/:id/history": "waf:read",
+	"GET /api/v1/waf/events/:logId/rules": "waf:read",
 	"DELETE /api/v1/waf/hosts/:id/rules/:ruleId/disable": "waf:write",
 	"POST /api/v1/waf/hosts/:id/rules/:ruleId/disable": "waf:write",
 	"GET /api/v1/waf/rules": "waf:read",

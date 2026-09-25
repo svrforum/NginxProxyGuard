@@ -285,6 +285,14 @@
       "host": "이 호스트의 모든 요청에서 규칙이 꺼집니다. 가장 넓은 선택이라, 이 규칙이 막던 공격이 다른 경로에서도 통과합니다.",
       "uri": "입력한 경로로 시작하는 요청에서만 꺼집니다. 나머지 경로는 계속 보호됩니다.",
       "param": "규칙은 유지하되 그 인자만 검사에서 뺍니다. 가장 좁은 선택입니다."
+    },
+    "submitMany": "규칙 {{count}}개 비활성화",
+    "contributing": {
+      "loading": "이 요청을 차단한 규칙을 불러오는 중…",
+      "title": "이 요청을 차단한 규칙 ({{count}}개)",
+      "hint": "WAF는 여러 규칙의 점수를 합쳐 차단합니다. 하나만 끄면 다음 요청이 다른 규칙으로 다시 막힐 수 있어요.",
+      "alreadyExcluded": "이미 예외됨",
+      "allCovered": "이 범위에서는 이미 모두 예외돼 있습니다. 계속 차단된다면 예외 전에 들어온 요청이거나 경로가 다른 요청일 수 있습니다."
     }
   },
   "banIP": {
@@ -367,7 +375,9 @@
     "cannotDisable": "정책을 비활성화할 수 없습니다: 호스트 정보가 없습니다.",
     "cleanupSuccess": "{{count}}개의 오래된 로그를 삭제했습니다.",
     "disabledReasonDefault": "로그 뷰어에서 비활성화됨",
-    "ruleDisabledScoped": "{{host}}의 {{scope}} 범위에서만 정책 {{ruleId}}가 제외되었습니다. 다른 요청에는 계속 적용됩니다."
+    "ruleDisabledScoped": "{{host}}의 {{scope}} 범위에서만 정책 {{ruleId}}가 제외되었습니다. 다른 요청에는 계속 적용됩니다.",
+    "rulesDisabledMany": "{{host}}에서 규칙 {{done}}개를 비활성화했습니다. ({{already}}개는 이미 되어 있었음)",
+    "rulesAlreadyDisabled": "선택한 규칙은 이 범위에서 이미 모두 예외돼 있습니다. 계속 차단된다면 예외 이전의 요청이거나 다른 경로의 요청일 수 있습니다."
   },
   "botFilter": {
     "title": "Bot Filter Logs",

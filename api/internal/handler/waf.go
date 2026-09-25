@@ -26,6 +26,8 @@ type WAFHandler struct {
 	globalWAFRepo *repository.GlobalWAFRepository
 	nginxManager  *nginx.Manager
 	crsPath       string
+	// logRepo reads back a WAF event's full audit record (GetEventRules).
+	logRepo *repository.LogRepository
 }
 
 // resolvedHost applies the global WAF default to a stored row before its
@@ -43,7 +45,7 @@ func (h *WAFHandler) resolvedHost(ctx context.Context, host *model.ProxyHost) *m
 	return model.ResolveWAF(g, host)
 }
 
-func NewWAFHandler(wafRepo *repository.WAFRepository, proxyHostRepo *repository.ProxyHostRepository, geoRepo *repository.GeoRepository, globalWAFRepo *repository.GlobalWAFRepository, nginxManager *nginx.Manager) *WAFHandler {
+func NewWAFHandler(wafRepo *repository.WAFRepository, proxyHostRepo *repository.ProxyHostRepository, geoRepo *repository.GeoRepository, globalWAFRepo *repository.GlobalWAFRepository, nginxManager *nginx.Manager, logRepo *repository.LogRepository) *WAFHandler {
 	crsPath := os.Getenv("CRS_PATH")
 	if crsPath == "" {
 		crsPath = "/etc/nginx/owasp-crs"
@@ -55,6 +57,7 @@ func NewWAFHandler(wafRepo *repository.WAFRepository, proxyHostRepo *repository.
 		geoRepo:       geoRepo,
 		nginxManager:  nginxManager,
 		crsPath:       crsPath,
+		logRepo:       logRepo,
 	}
 }
 

@@ -283,6 +283,14 @@
       "host": "The rule is off for every request to this host. The widest choice — whatever it was catching now gets through on other paths too.",
       "uri": "Off only for requests whose path starts with this. Every other path stays protected.",
       "param": "The rule stays on but stops inspecting that one argument. The narrowest choice."
+    },
+    "submitMany": "Disable {{count}} rules",
+    "contributing": {
+      "loading": "Loading the rules that blocked this request…",
+      "title": "Rules that blocked this request ({{count}})",
+      "hint": "The WAF blocks on the combined score of several rules. Disabling only one can leave the next request blocked under another.",
+      "alreadyExcluded": "already disabled",
+      "allCovered": "All of them are already disabled for this scope. If requests are still blocked, they arrived before the exclusion or on a different path."
     }
   },
   "banIP": {
@@ -365,7 +373,9 @@
     "cannotDisable": "Cannot disable rule: Host information is missing.",
     "cleanupSuccess": "Successfully deleted {{count}} old logs.",
     "disabledReasonDefault": "Disabled from log viewer",
-    "ruleDisabledScoped": "Rule {{ruleId}} is now skipped for {{scope}} on {{host}}. It still applies to every other request."
+    "ruleDisabledScoped": "Rule {{ruleId}} is now skipped for {{scope}} on {{host}}. It still applies to every other request.",
+    "rulesDisabledMany": "Disabled {{done}} rules on {{host}} ({{already}} were already disabled).",
+    "rulesAlreadyDisabled": "Every selected rule is already disabled for this scope. If requests are still blocked, they arrived before the exclusion or on a different path."
   },
   "botFilter": {
     "title": "Bot Filter Logs",

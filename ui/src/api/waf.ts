@@ -100,6 +100,14 @@ export interface DisableRuleByHostRequest {
   scope_value?: string;
 }
 
+/** Thrown for a 409 from disable-by-host: this rule already has this exclusion. */
+export class RuleAlreadyDisabledError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RuleAlreadyDisabledError';
+  }
+}
+
 export async function disableWAFRuleByHost(request: DisableRuleByHostRequest): Promise<WAFRuleExclusion> {
   const res = await fetch(`${API_BASE}/waf/rules/disable-by-host`, {
     method: 'POST',
@@ -108,8 +116,43 @@ export async function disableWAFRuleByHost(request: DisableRuleByHostRequest): P
   });
   if (!res.ok) {
     const errorText = await res.text();
+    // A 409 means the goal is already met. Distinguishing it lets a caller
+    // that disables several rules at once skip the ones already done instead
+    // of failing the whole batch on the first (#306).
+    if (res.status === 409) {
+      throw new RuleAlreadyDisabledError(errorText || 'Rule already disabled');
+    }
     throw new Error(errorText || 'Failed to disable WAF rule');
   }
+  return res.json();
+}
+
+export interface WAFEventRuleScope {
+  scope_type: 'host' | 'uri' | 'param';
+  scope_value?: string;
+}
+
+export interface WAFEventRule {
+  rule_id: number;
+  message: string;
+  severity?: string;
+  data?: string;
+  category?: string;
+  /** Exclusions this rule already has on the event's host. */
+  excluded: WAFEventRuleScope[];
+}
+
+/**
+ * Every CRS rule that contributed to one WAF event. The log row keeps only the
+ * first; CRS blocks on the SUM of several, so disabling the one shown usually
+ * leaves the request blocked under another number (#306). `createdAt` is the
+ * row's created_at — the server needs it to find the row cheaply.
+ */
+export async function fetchWAFEventRules(logId: string, createdAt: string): Promise<{ proxy_host_id?: string; rules: WAFEventRule[] }> {
+  const res = await fetch(`${API_BASE}/waf/events/${encodeURIComponent(logId)}/rules?at=${encodeURIComponent(createdAt)}`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) throw new Error('Failed to load the rules behind this event');
   return res.json();
 }
 

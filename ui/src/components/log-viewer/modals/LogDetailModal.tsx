@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEscapeKey } from '../../../hooks/useEscapeKey';
-import { disableWAFRuleByHost, disableGlobalWAFRule } from '../../../api/waf';
+import { disableWAFRuleByHost, disableGlobalWAFRule, RuleAlreadyDisabledError } from '../../../api/waf';
 import { banIP, addURIBlockRule } from '../../../api/security';
 import { api } from '../../../api/client';
 import type { Log } from '../../../types/log';
@@ -39,6 +39,8 @@ export function LogDetailModal({ log, onClose, onRuleDisabled }: LogDetailModalP
   // existing behaviour is what an operator gets without touching it.
   const [ruleScope, setRuleScope] = useState<'host' | 'uri' | 'param'>('host');
   const [scopeValue, setScopeValue] = useState('');
+  // Rules picked from the event's full contributing list (#306).
+  const [selectedRules, setSelectedRules] = useState<number[]>([]);
   const [showDisableForm, setShowDisableForm] = useState(false);
   const [isGlobalDisable, setIsGlobalDisable] = useState(!log.host);
   const [showBanForm, setShowBanForm] = useState(false);
@@ -143,40 +145,76 @@ export function LogDetailModal({ log, onClose, onRuleDisabled }: LogDetailModalP
           rule_description: log.rule_message,
           reason: disableReason || t('messages.disabledReasonDefault'),
         });
+        return { global: true, done: 1, already: 0, ids: [log.rule_id], scope: 'host' as const, value: '' };
       } else {
-        // Per-host disable
+        // Per-host disable — every rule the operator picked from the event's
+        // contributing list, falling back to the row's own rule when that
+        // list could not be read. CRS blocks on the sum of several rules, so
+        // disabling only the one the row names usually left the request
+        // blocked under the next number (#306).
         if (!log.host) {
           throw new Error('Missing host');
         }
-        await disableWAFRuleByHost({
-          host: log.host,
-          rule_id: log.rule_id,
-          rule_category: log.attack_type,
-          rule_description: log.rule_message,
-          reason: disableReason || t('messages.disabledReasonDefault'),
-          scope_type: ruleScope,
-          scope_value: ruleScope === 'host' ? '' : scopeValue.trim(),
-        });
+        const ids = selectedRules.length ? selectedRules : [log.rule_id];
+        let done = 0;
+        let already = 0;
+        for (const id of ids) {
+          try {
+            await disableWAFRuleByHost({
+              host: log.host,
+              rule_id: id,
+              rule_category: id === log.rule_id ? log.attack_type : undefined,
+              rule_description: id === log.rule_id ? log.rule_message : undefined,
+              reason: disableReason || t('messages.disabledReasonDefault'),
+              scope_type: ruleScope,
+              scope_value: ruleScope === 'host' ? '' : scopeValue.trim(),
+            });
+            done++;
+          } catch (err) {
+            // Already disabled for this scope: the goal is met, keep going.
+            if (err instanceof RuleAlreadyDisabledError) {
+              already++;
+              continue;
+            }
+            throw err;
+          }
+        }
+        return { global: false, done, already, ids, scope: ruleScope, value: scopeValue.trim() };
       }
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['waf-event-rules', log.id] });
       queryClient.invalidateQueries({ queryKey: ['global-waf-rules'] });
       queryClient.invalidateQueries({ queryKey: ['waf-rules'] });
       queryClient.invalidateQueries({ queryKey: ['waf-hosts'] });
-      alert(isGlobalDisable
+      // Nothing new was written: every rule was already disabled for this
+      // scope. Saying "disabled" here would repeat the #306 confusion.
+      if (result.done === 0) {
+        alert(t('messages.rulesAlreadyDisabled'));
+        onRuleDisabled?.();
+        setShowDisableForm(false);
+        return;
+      }
+      // Decide the wording from what was SUBMITTED, not from live form state:
+      // the scope toggles stay clickable while the requests are in flight, and
+      // flipping one mid-submit used to report a per-host exclusion as global.
+      alert(result.global
         ? t('messages.ruleDisabledGlobal', { ruleId: log.rule_id, defaultValue: '규칙 {{ruleId}}가 전역 비활성화되었습니다.' })
+        : result.ids.length > 1
+          ? t('messages.rulesDisabledMany', { done: result.done, already: result.already, host: log.host })
         // A uri scope of "/" is normalised to host by the API, so report what
         // actually happened rather than what was clicked. (#286)
-        : ruleScope === 'host' || scopeValue.trim() === '/'
-          ? t('messages.ruleDisabled', { ruleId: log.rule_id, host: log.host })
+        : result.scope === 'host' || result.value === '/'
+          ? t('messages.ruleDisabled', { ruleId: result.ids[0], host: log.host })
           // Saying "disabled for this host" after the operator deliberately
           // picked one path contradicts what the scope hint just promised.
-          : t('messages.ruleDisabledScoped', { ruleId: log.rule_id, host: log.host, scope: scopeValue.trim() }));
+          : t('messages.ruleDisabledScoped', { ruleId: result.ids[0], host: log.host, scope: result.value }));
       onRuleDisabled?.();
       setShowDisableForm(false);
       setDisableReason('');
       setRuleScope('host');
       setScopeValue('');
+      setSelectedRules([]);
       setIsGlobalDisable(!log.host);
     },
     onError: (error) => {
@@ -280,6 +318,8 @@ export function LogDetailModal({ log, onClose, onRuleDisabled }: LogDetailModalP
                       setRuleScope={setRuleScope}
                       scopeValue={scopeValue}
                       setScopeValue={setScopeValue}
+                      selectedRules={selectedRules}
+                      setSelectedRules={setSelectedRules}
                       onSubmit={handleDisableRule}
                       onCancel={() => setShowDisableForm(false)}
                       isPending={disableMutation.isPending}
