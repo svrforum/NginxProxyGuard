@@ -13,6 +13,7 @@ import (
 func GetTemplateFuncMap(apiHost string) template.FuncMap {
 	return template.FuncMap{
 		"join":      strings.Join,
+		"hostPort":  formatHostPort,
 		"hasPrefix": strings.HasPrefix,
 		"now": func() string {
 			return "auto-generated"

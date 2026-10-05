@@ -45,7 +45,7 @@
         proxy_ssl_verify off;{{end}}{{else}}proxy_pass {{.Host.ForwardScheme}}://npg_direct_{{sanitizeID .Host.ID}};
         # Direct-forward upstream is an upstream group name, so `proxy_redirect
         # default` can't derive the backend URL — rewrite backend Location/Refresh explicitly.
-        proxy_redirect {{.Host.ForwardScheme}}://{{.Host.ForwardHost}}:{{.Host.ForwardPort}}/ /;{{end}}
+        proxy_redirect {{.Host.ForwardScheme}}://{{hostPort .Host.ForwardHost .Host.ForwardPort}}/ /;{{end}}
         include /etc/nginx/includes/proxy_params.conf;
     }
 {{end}}{{end}}
@@ -119,7 +119,7 @@
         proxy_ssl_verify off;{{end}}{{else}}proxy_pass {{.Host.ForwardScheme}}://npg_direct_{{sanitizeID .Host.ID}};
         # Direct-forward upstream is an upstream group name, so `proxy_redirect
         # default` can't derive the backend URL — rewrite backend Location/Refresh explicitly.
-        proxy_redirect {{.Host.ForwardScheme}}://{{.Host.ForwardHost}}:{{.Host.ForwardPort}}/ /;{{end}}
+        proxy_redirect {{.Host.ForwardScheme}}://{{hostPort .Host.ForwardHost .Host.ForwardPort}}/ /;{{end}}
         include /etc/nginx/includes/proxy_params.conf;
         {{if .GlobalSettings}}
         # Proxy settings (Host-level overrides Global)
