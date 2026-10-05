@@ -9,7 +9,7 @@ upstream {{.Upstream.Name}} {
     random;
 {{end}}
 {{range .Upstream.Servers}}
-    server {{.Address}}:{{.Port}}{{if ne .Weight 1}} weight={{.Weight}}{{end}}{{if ne .MaxFails 0}} max_fails={{.MaxFails}}{{end}}{{if ne .FailTimeout 0}} fail_timeout={{.FailTimeout}}s{{end}}{{if .IsBackup}} backup{{end}}{{if .IsDown}} down{{end}};
+    server {{hostPort .Address .Port}}{{if ne .Weight 1}} weight={{.Weight}}{{end}}{{if ne .MaxFails 0}} max_fails={{.MaxFails}}{{end}}{{if ne .FailTimeout 0}} fail_timeout={{.FailTimeout}}s{{end}}{{if .IsBackup}} backup{{end}}{{if .IsDown}} down{{end}};
 {{end}}
 {{if .Upstream.Keepalive}}
     keepalive {{.Upstream.Keepalive}};
@@ -21,7 +21,7 @@ upstream {{.Upstream.Name}} {
 # empty Connection header. WebSocket hosts override Connection per-location
 # with $connection_upgrade and simply don't benefit from the pool.
 upstream npg_direct_{{sanitizeID .Host.ID}} {
-    server {{.Host.ForwardHost}}:{{.Host.ForwardPort}};
+    server {{hostPort .Host.ForwardHost .Host.ForwardPort}};
     keepalive 32;
     keepalive_requests 1000;
     keepalive_timeout 60s;
