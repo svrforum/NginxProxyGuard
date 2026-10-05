@@ -14,7 +14,7 @@ func TestProxyHostForwardAddressFormatting(t *testing.T) {
 	}{
 		{"fd00::1", "[fd00::1]:8080"},
 		{"::1", "[::1]:8080"},
-		{"192.168.1.10", "192.168.1.10:8080"},
+		{"192.0.2.10", "192.0.2.10:8080"},
 		{"backend.example.com", "backend.example.com:8080"},
 	} {
 		for _, fixture := range []struct {
