@@ -484,6 +484,8 @@ func (r *DashboardRepository) getTopCountries(ctx context.Context, since time.Ti
 // GetGeoIPStats returns detailed GeoIP statistics from logs_partitioned table
 func (r *DashboardRepository) GetGeoIPStats(ctx context.Context, since time.Time) ([]model.GeoIPStat, int64, error) {
 	// Single query with window function to get both total and per-country counts
+	// No LIMIT: the dashboard map colours every country and sums them into region
+	// totals, and GeoIP reports at most ~250 country codes.
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT
 			geo_country_code,
@@ -498,7 +500,6 @@ func (r *DashboardRepository) GetGeoIPStats(ctx context.Context, since time.Time
 		AND `+canaryURIExclusion+`
 			GROUP BY geo_country_code
 		ORDER BY request_count DESC
-		LIMIT 50
 	`, since)
 	if err != nil {
 		return nil, 0, err
