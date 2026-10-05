@@ -9184,10 +9184,17 @@ paths:
         the record is pushed to its provider and `last_ip`, `last_status`, `last_synced_at` and
         `last_error` are updated.
 
-        Unlike `POST /ddns-records/sync`, a failure here is reported: public-IP detection
-        failure, an unknown/unsupported provider, or a provider API error all return 500 (and
-        are also recorded on the record). Disabled records are synced too — `enabled` is not
-        checked on this path.
+        Unlike `POST /ddns-records/sync`, a failure here is reported (and also recorded on the
+        record). A provider whose API answered and **refused** the update returns 400 with its
+        reason in `error`: credentials it rejected (DuckDNS `KO`, HTTP 401/403 from the Cloudflare
+        or Dynu API), or a zone, domain or record the account does not have (any other 4xx from
+        those APIs except 408/429, a Dynu account with no matching domain, a Cloudflare zone that
+        cannot be found). A blank Dynu API key returns 400 too, without asking Dynu. Everything
+        else returns 500: the provider could not be reached or failed on its side (408/429/5xx);
+        Cloudflare or DuckDNS sent an answer that is not its API's, whatever the status (a
+        Cloudflare edge or WAF page or JSON without an `errors` list, any DuckDNS answer other
+        than `OK`/`KO`); public-IP detection failed; or the provider is unknown/unsupported.
+        Disabled records are synced too — `enabled` is not checked on this path.
       security:
         - BearerAuth: []
       parameters:
@@ -9207,6 +9214,17 @@ paths:
               example:
                 success: true
                 message: record synced
+        '400':
+          description: |
+            The provider's API refused the update: credentials it rejected (DuckDNS `KO`, HTTP
+            401/403 from the Cloudflare or Dynu API) or a zone, domain or record the account does
+            not have (other 4xx except 408/429). `error` carries the provider's reason — fix the
+            DNS provider or the record. Also returned for a blank Dynu API key, and when `id` is
+            not a valid UUID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: DDNS record not found
           content:
@@ -9214,7 +9232,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '500':
-          description: Public IP detection failed, provider unsupported/not found, or the provider update failed
+          description: Public IP detection failed, provider unsupported/not found, the provider could not be reached or failed on its side (HTTP 408/429/5xx), or Cloudflare or DuckDNS sent an answer that is not its API's (a Cloudflare edge or WAF page, a DuckDNS answer other than OK/KO)
           content:
             application/json:
               schema:

@@ -77,7 +77,9 @@ func (u *dynuUpdater) Update(ctx context.Context, rec model.DDNSRecord, rawCreds
 		return fmt.Errorf("dynu: bad credentials: %w", err)
 	}
 	if strings.TrimSpace(c.APIKey) == "" {
-		return fmt.Errorf("dynu: missing api_key")
+		// A key of only spaces gets past the save-time check; either way the
+		// stored provider is the operator's to fix: 400, not 500 (#312).
+		return fmt.Errorf("%w: dynu: missing api_key", model.ErrInvalidCredentials)
 	}
 
 	// 1. List the account's domains and match one to this hostname.
@@ -86,7 +88,9 @@ func (u *dynuUpdater) Update(ctx context.Context, rec model.DDNSRecord, rawCreds
 		return err
 	}
 	if code != http.StatusOK {
-		return fmt.Errorf("dynu: list domains failed (%d): %s", code, strings.TrimSpace(string(raw)))
+		// Dynu answers a wrong API key with 401 here; ddnsStatusError tags it
+		// so the sync handler can answer 400 instead of 500 (#312).
+		return ddnsStatusError(code, "dynu: list domains failed (%d): %s", code, strings.TrimSpace(string(raw)))
 	}
 	var list struct {
 		Domains []dynuDomain `json:"domains"`
@@ -96,7 +100,7 @@ func (u *dynuUpdater) Update(ctx context.Context, rec model.DDNSRecord, rawCreds
 	}
 	dom, ok := matchDynuDomain(list.Domains, rec.Hostname)
 	if !ok {
-		return fmt.Errorf("dynu: no domain in this Dynu account matches %q", rec.Hostname)
+		return fmt.Errorf("%w: dynu: no domain in this Dynu account matches %q", model.ErrInvalidInput, rec.Hostname)
 	}
 
 	// 2. Update the domain's IPv4 address (Dynu's DDNS-managed A record).
@@ -106,7 +110,7 @@ func (u *dynuUpdater) Update(ctx context.Context, rec model.DDNSRecord, rawCreds
 		return err
 	}
 	if code != http.StatusOK {
-		return fmt.Errorf("dynu: update failed (%d): %s", code, strings.TrimSpace(string(raw)))
+		return ddnsStatusError(code, "dynu: update failed (%d): %s", code, strings.TrimSpace(string(raw)))
 	}
 	return nil
 }

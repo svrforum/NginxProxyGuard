@@ -1516,6 +1516,20 @@ UPDATE public.system_settings
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_global_fail2ban_singleton ON public.global_fail2ban USING btree ((true));`,
 		},
+		{
+			// #312. The DuckDNS updater stored net/http's error for a failed
+			// request, and that text quotes the update URL, token= included,
+			// in ddns_records.last_error, which anyone who can read DDNS
+			// records sees. New errors no longer carry it, and a record that
+			// syncs again overwrites its own, but a disabled record is never
+			// synced again. The token is cut out in place and the rest of the
+			// message kept; the WHERE only matches text not yet redacted, so
+			// later boots change nothing.
+			desc: "#312: redact DuckDNS tokens left in ddns_records.last_error",
+			sql: `UPDATE public.ddns_records
+   SET last_error = regexp_replace(last_error, '(token=)[^&"<[:space:]]+', '\1[redacted]', 'g')
+ WHERE last_error ~ 'token=[^[&"<[:space:]]'`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

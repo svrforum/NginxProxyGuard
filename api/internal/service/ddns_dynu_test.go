@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -79,6 +81,79 @@ func TestDynuUpdate_NoMatchingDomain(t *testing.T) {
 	err := u.Update(context.Background(), model.DDNSRecord{Hostname: "home.example.org"}, creds, "203.0.113.7")
 	if err == nil || !strings.Contains(err.Error(), "no domain") {
 		t.Fatalf("expected no-domain error, got %v", err)
+	}
+	// A hostname the account does not have is the operator's to fix: 400. (#312)
+	if !errors.Is(err, model.ErrInvalidInput) {
+		t.Errorf("no-domain error should carry ErrInvalidInput, got %v", err)
+	}
+}
+
+// Dynu answers a wrong API key with 401 {"statusCode":401,"type":
+// "Authentication Exception","message":"Failed."}. A refusal is the operator's
+// to fix (400); a rate limit or a Dynu fault is not (500). Both requests —
+// listing the domains and posting the IP — are classified the same way. (#312)
+func TestDynuUpdate_ClassifiesRejections(t *testing.T) {
+	cases := []struct {
+		name       string
+		listStatus int
+		postStatus int
+		want       string
+	}{
+		{"list 401", http.StatusUnauthorized, 0, "credentials"},
+		{"list 403", http.StatusForbidden, 0, "credentials"},
+		{"list 400", http.StatusBadRequest, 0, "input"},
+		{"list 429", http.StatusTooManyRequests, 0, ""},
+		{"list 500", http.StatusInternalServerError, 0, ""},
+		{"update 401", http.StatusOK, http.StatusUnauthorized, "credentials"},
+		{"update 400", http.StatusOK, http.StatusBadRequest, "input"},
+		{"update 503", http.StatusOK, http.StatusServiceUnavailable, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				status := tc.postStatus
+				if r.Method == http.MethodGet {
+					status = tc.listStatus
+				}
+				w.WriteHeader(status)
+				if status == http.StatusOK {
+					_ = json.NewEncoder(w).Encode(map[string]interface{}{
+						"domains": []map[string]interface{}{{"id": 42, "name": "home.example.org"}},
+					})
+					return
+				}
+				fmt.Fprintf(w, `{"statusCode":%d,"message":"Failed."}`, status)
+			}))
+			defer srv.Close()
+
+			u := &dynuUpdater{client: srv.Client(), apiBase: srv.URL}
+			creds, _ := json.Marshal(model.DynuCredentials{APIKey: "k123"})
+			err := u.Update(context.Background(), model.DDNSRecord{Hostname: "home.example.org"}, creds, "203.0.113.7")
+			if err == nil {
+				t.Fatal("expected an error")
+			}
+			if got := ddnsErrKind(err); got != tc.want {
+				t.Errorf("kind = %q, want %q (%v)", got, tc.want, err)
+			}
+		})
+	}
+}
+
+// A key of only spaces gets past the save-time check, which only rejects an
+// empty one. Either way the stored provider is the operator's to fix: 400, not
+// 500, and Dynu is never asked. (#312)
+func TestDynuUpdate_BlankAPIKeyIsInvalidCredentials(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("Dynu was asked %s %s with a blank key", r.Method, r.URL.Path)
+	}))
+	defer srv.Close()
+	u := &dynuUpdater{client: srv.Client(), apiBase: srv.URL}
+	for _, key := range []string{"", "   "} {
+		creds, _ := json.Marshal(model.DynuCredentials{APIKey: key})
+		err := u.Update(context.Background(), model.DDNSRecord{Hostname: "home.example.org"}, creds, "203.0.113.7")
+		if !errors.Is(err, model.ErrInvalidCredentials) {
+			t.Errorf("key %q: want ErrInvalidCredentials, got %v", key, err)
+		}
 	}
 }
 

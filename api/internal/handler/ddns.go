@@ -129,6 +129,15 @@ func (h *DDNSHandler) SyncOne(c echo.Context) error {
 		if err == model.ErrNotFound {
 			return notFoundError(c, "DDNS record")
 		}
+		// The provider answered and refused: credentials it rejected, or a
+		// zone or domain the account does not have. The operator fixes that in
+		// the DNS provider or the record, so 400 with the provider's reason
+		// (#312). Only the updaters' sentinels qualify — failing to reach the
+		// provider, a provider outage, IP detection and database errors carry
+		// none and stay 500, which is where ca46235 moved them from 400.
+		if isDNSProviderInputError(err) {
+			return badRequestError(c, err.Error())
+		}
 		return internalError(c, "sync DDNS record", err)
 	}
 

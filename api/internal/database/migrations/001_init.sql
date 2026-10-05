@@ -4518,3 +4518,13 @@ CREATE INDEX IF NOT EXISTS idx_proxy_hosts_tags ON public.proxy_hosts USING gin 
 -- Column drift between this file and migrateToTimescaleDB()'s two hand-typed lists is
 -- now caught by database/migration_hypertable_columns_test.go, which compares all three
 -- lists by name, by type and by position.
+
+-- #312: DuckDNS tokens left in ddns_records.last_error — DOCUMENTATION ONLY.
+-- The DuckDNS updater stored net/http's error for a failed request, which quotes the
+-- update URL, token= included. New errors no longer carry it and a record that syncs
+-- again overwrites its own, but a disabled record is never synced again, so existing
+-- installs get a one-time scrub. A fresh install has no such rows. Executable copy
+-- lives in database/migration.go `upgrades`.
+--   UPDATE public.ddns_records
+--      SET last_error = regexp_replace(last_error, '(token=)[^&"<[:space:]]+', '\1[redacted]', 'g')
+--    WHERE last_error ~ 'token=[^[&"<[:space:]]';

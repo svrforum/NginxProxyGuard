@@ -77,11 +77,16 @@ func (u *cloudflareUpdater) do(ctx context.Context, method, url string, c model.
 		return nil, fmt.Errorf("cloudflare: bad response (%d): %s", resp.StatusCode, string(raw))
 	}
 	if !cr.Success {
-		msg := "unknown error"
-		if len(cr.Errors) > 0 {
-			msg = cr.Errors[0].Message
+		// Only the API's own error answer is classified (#312): a wrong token
+		// or key comes back 401/403, a zone or record the account does not have
+		// as another 4xx, each with an errors list. A body that is not the
+		// API's JSON (an edge error page) is left plain above, and JSON without
+		// an errors list ({}, null, a gateway's {"message":...}) is left plain
+		// here, whatever the status.
+		if len(cr.Errors) == 0 {
+			return nil, fmt.Errorf("cloudflare API error: unknown error")
 		}
-		return nil, fmt.Errorf("cloudflare API error: %s", msg)
+		return nil, ddnsStatusError(resp.StatusCode, "cloudflare API error: %s", cr.Errors[0].Message)
 	}
 	return &cr, nil
 }
@@ -93,7 +98,7 @@ func (u *cloudflareUpdater) resolveZoneID(ctx context.Context, c model.Cloudflar
 	// Fallback: guess the zone as the last two labels (covers the common case).
 	labels := strings.Split(hostname, ".")
 	if len(labels) < 2 {
-		return "", fmt.Errorf("cloudflare: cannot derive zone for %q; set Zone ID in DNS provider", hostname)
+		return "", fmt.Errorf("%w: cloudflare: cannot derive zone for %q; set Zone ID in DNS provider", model.ErrInvalidInput, hostname)
 	}
 	guess := strings.Join(labels[len(labels)-2:], ".")
 	cr, err := u.do(ctx, http.MethodGet, fmt.Sprintf("%s/zones?name=%s", u.apiBase, url.QueryEscape(guess)), c, nil)
@@ -104,7 +109,7 @@ func (u *cloudflareUpdater) resolveZoneID(ctx context.Context, c model.Cloudflar
 		ID string `json:"id"`
 	}
 	if err := json.Unmarshal(cr.Result, &zones); err != nil || len(zones) == 0 {
-		return "", fmt.Errorf("cloudflare: zone %q not found; set Zone ID in DNS provider", guess)
+		return "", fmt.Errorf("%w: cloudflare: zone %q not found; set Zone ID in DNS provider", model.ErrInvalidInput, guess)
 	}
 	return zones[0].ID, nil
 }
