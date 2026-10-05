@@ -10896,7 +10896,7 @@ components:
           description: Defaults to "http" for http hosts; for stream hosts it is overwritten with stream_protocol.
         forward_host:
           type: string
-          description: Required unless forward_container_name is set. Must be a valid hostname or IP.
+          description: Required unless forward_container_name is set. Must be a valid hostname or IP. An IPv6 literal may be bracketed ("[2001:db8::1]"); it is stored without the brackets.
         forward_container_name:
           type: string
           description: When set, forward_host is resolved from this container and the hostname/IP validation is skipped.
@@ -11074,6 +11074,7 @@ components:
           enum: [http, https, tcp, udp]
         forward_host:
           type: string
+          description: An IPv6 literal may be bracketed ("[2001:db8::1]"); it is stored without the brackets.
         forward_container_name:
           type: string
           nullable: true
@@ -15394,6 +15395,7 @@ components:
           enum: [http, https, tcp, udp]
         forward_host:
           type: string
+          description: An IPv6 literal may be bracketed ("[2001:db8::1]"); it is stored without the brackets.
         forward_port:
           type: integer
         forward_container_name:

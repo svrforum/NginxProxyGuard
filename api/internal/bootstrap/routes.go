@@ -1007,7 +1007,7 @@ func registerTestRoutes(v1 *echo.Group, c *Container) {
 			})
 		}
 
-		upstreamURL := fmt.Sprintf("%s://%s:%d", host.ForwardScheme, host.ForwardHost, host.ForwardPort)
+		upstreamURL := upstreamProbeURL(host)
 		client := &http.Client{
 			Timeout: 5 * time.Second,
 			Transport: &http.Transport{
@@ -1029,8 +1029,9 @@ func registerTestRoutes(v1 *echo.Group, c *Container) {
 		}
 		resp, err := client.Do(req)
 		if err != nil {
-			// If forward_host is a private IP (docker internal), retry via nginx container
-			if ip := net.ParseIP(host.ForwardHost); ip != nil && ip.IsPrivate() {
+			// If forward_host is a private IP (docker internal) or an IPv6
+			// address, retry via nginx container
+			if probeUpstreamFromNginx(host.ForwardHost) {
 				testCtx, cancel := context.WithTimeout(ec.Request().Context(), 5*time.Second)
 				defer cancel()
 				cmd := exec.CommandContext(testCtx, "docker", "exec", c.Config.NginxContainer,
@@ -1067,4 +1068,21 @@ func registerTestRoutes(v1 *echo.Group, c *Container) {
 	test.GET("/system/self-check", c.Handlers.Settings.SelfCheck)
 	test.GET("/backup-restore", c.Handlers.Settings.TestBackupRestore)
 	test.GET("/dashboard/queries", c.Handlers.Settings.TestDashboardQueries)
+}
+
+// upstreamProbeURL is the URL the proxy host list's health check probes. An
+// IPv6 forward host is bracketed exactly once, whether it is stored bare or,
+// by an older version or a restored backup, already in brackets. (#314)
+func upstreamProbeURL(host *model.ProxyHost) string {
+	return fmt.Sprintf("%s://%s", host.ForwardScheme, net.JoinHostPort(model.NormalizeForwardHost(host.ForwardHost), strconv.Itoa(host.ForwardPort)))
+}
+
+// probeUpstreamFromNginx reports whether a failed health check is retried from
+// the nginx container, which runs in host network mode and so reaches what the
+// API container may not: a private address can sit on a docker network only
+// the host routes to, and no IPv6 address is reachable from the API's default
+// network, which has IPv6 disabled. (#314)
+func probeUpstreamFromNginx(forwardHost string) bool {
+	ip := net.ParseIP(model.NormalizeForwardHost(forwardHost))
+	return ip != nil && (ip.IsPrivate() || ip.To4() == nil)
 }

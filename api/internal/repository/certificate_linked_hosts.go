@@ -47,7 +47,11 @@ const linkedHostsQuery = `
 			'proxy'::text AS kind,
 			COALESCE(domain_names, '{}'::text[]) AS domains,
 			enabled,
-			forward_scheme || '://' || forward_host || ':' || forward_port::text AS target,
+			-- An IPv6 literal needs brackets before the port (#314); one stored
+			-- in brackets by an older version already has them.
+			forward_scheme || '://'
+				|| CASE WHEN strpos(forward_host, ':') > 0 AND left(forward_host, 1) <> '[' THEN '[' || forward_host || ']' ELSE forward_host END
+				|| ':' || forward_port::text AS target,
 			COALESCE(ddns_enabled, false) AND COALESCE(ddns_proxied, false) AS cloudflare_proxied
 		FROM proxy_hosts
 		WHERE certificate_id = ANY($1::uuid[])

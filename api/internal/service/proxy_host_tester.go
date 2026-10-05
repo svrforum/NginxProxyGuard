@@ -205,14 +205,17 @@ func (t *ProxyHostTester) TestUpstream(ctx context.Context, host *model.ProxyHos
 		return t.testStreamUpstream(ctx, host), nil
 	}
 
+	// Unwrap first: a forward host stored in brackets by an older version or a
+	// restored backup must not come out as "[[...]]". (#314)
+	hostPort := net.JoinHostPort(model.NormalizeForwardHost(host.ForwardHost), strconv.Itoa(host.ForwardPort))
 	result := &model.ProxyHostTestResult{
-		Domain:   fmt.Sprintf("%s:%d", host.ForwardHost, host.ForwardPort),
+		Domain:   hostPort,
 		TestedAt: time.Now(),
 		Headers:  make(map[string]string),
 	}
 
 	// Build upstream URL
-	upstreamURL := fmt.Sprintf("%s://%s:%d/", host.ForwardScheme, host.ForwardHost, host.ForwardPort)
+	upstreamURL := fmt.Sprintf("%s://%s/", host.ForwardScheme, hostPort)
 
 	transport := &http.Transport{
 		DialContext: (&net.Dialer{

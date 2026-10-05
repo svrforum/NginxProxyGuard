@@ -5,6 +5,7 @@ import { fetchProxyHosts } from '../api/proxy-hosts';
 import type { ProxyHost } from '../types/proxy-host';
 import { useTranslation } from 'react-i18next';
 import { HelpTip } from './common/HelpTip';
+import { formatHostPort } from './common/hostPort';
 
 const categoryColors: Record<string, string> = {
   'SQL Injection': 'bg-red-100 text-red-800',
@@ -261,7 +262,7 @@ export function WAFTester() {
                       : t('tester.status.disabled')}
                   </span>
                   <span className="text-slate-500 dark:text-slate-400">
-                    → {host.forward_scheme}://{host.forward_host}:{host.forward_port}
+                    → {host.forward_scheme}://{formatHostPort(host.forward_host, host.forward_port)}
                   </span>
                 </div>
               );

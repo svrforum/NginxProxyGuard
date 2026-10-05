@@ -5,6 +5,7 @@ import type { FormErrors } from '../types'
 import { useTranslation } from 'react-i18next'
 import { fetchProxyHostGroups } from '../../../api/proxy-hosts'
 import { HelpTip } from '../../common/HelpTip'
+import { formatHostPort } from '../../common/hostPort'
 import { DockerContainerSelector } from '../DockerContainerSelector'
 import { TagInput } from '../TagInput'
 
@@ -286,7 +287,7 @@ export function BasicTabContent({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
               </svg>
               <code className="px-2 py-1 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded font-medium">
-                {streamProtocol}://{formData.forward_host || 'host'}:{portInput || '??'}
+                {streamProtocol}://{formatHostPort(formData.forward_host || 'host', portInput || '??')}
               </code>
             </div>
           </div>
@@ -469,7 +470,7 @@ export function BasicTabContent({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
               </svg>
               <code className="px-2 py-1 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded font-medium">
-                {formData.forward_scheme}://{formData.forward_host || 'host'}:{portInput || '??'}
+                {formData.forward_scheme}://{formatHostPort(formData.forward_host || 'host', portInput || '??')}
               </code>
             </div>
           </div>

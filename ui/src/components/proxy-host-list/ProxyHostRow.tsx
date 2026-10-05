@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { ProxyHost } from '../../types/proxy-host';
 import type { TabType } from '../proxy-host/types';
 import { IconButton, PencilIcon, TrashIcon } from '../common/listui';
+import { formatHostPort } from '../common/hostPort';
 import { usePermissions } from '../../hooks/usePermissions';
 
 // ProxyHostRow.tsx - houses the per-row toggle confirmation dialog and the
@@ -53,7 +54,7 @@ function streamSource(host: ProxyHost) {
 
 function streamTarget(host: ProxyHost) {
   const protocol = host.stream_protocol || 'tcp';
-  return `${protocol}://${host.forward_host}:${host.forward_port}`;
+  return `${protocol}://${formatHostPort(host.forward_host, host.forward_port)}`;
 }
 
 function renderHealthDot(status: HealthDot, t: (key: string) => string) {
@@ -198,7 +199,7 @@ function ProxyHostRowImpl({
         <div className="flex items-center gap-2">
           {renderHealthDot(healthStatus, t)}
           <code className="text-sm text-slate-600 dark:text-slate-400">
-            {isStream ? streamTarget(host) : `${host.forward_scheme}://${host.forward_host}:${host.forward_port}`}
+            {isStream ? streamTarget(host) : `${host.forward_scheme}://${formatHostPort(host.forward_host, host.forward_port)}`}
           </code>
           <button
             onClick={() => onCheckHealth(host.id)}

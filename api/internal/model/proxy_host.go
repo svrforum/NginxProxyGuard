@@ -100,6 +100,25 @@ func ValidateHostnameOrIP(host string) bool {
 	return ValidateDomainName(host)
 }
 
+// NormalizeForwardHost turns a bracketed IPv6 literal into the bare address,
+// so "[2001:db8::1]" is stored as "2001:db8::1". The brackets are URL syntax,
+// not part of the address: they are only needed where a port follows, and the
+// config generator adds them there. Only an IPv6 literal is unwrapped —
+// anything else, "[192.0.2.1]" and "[backend]" included, comes back unchanged
+// so the format validators still reject it. Call it before
+// ValidateHostnameOrIP, and before joining a stored forward host with a port:
+// older versions and backups can still hold the bracketed form. (#314)
+func NormalizeForwardHost(host string) string {
+	if len(host) < 2 || host[0] != '[' || host[len(host)-1] != ']' {
+		return host
+	}
+	inner := host[1 : len(host)-1]
+	if strings.Contains(inner, ":") && net.ParseIP(inner) != nil {
+		return inner
+	}
+	return host
+}
+
 // ValidatePort checks whether a TCP/UDP port is in the usable numeric range.
 func ValidatePort(port int) bool {
 	return port >= 1 && port <= 65535

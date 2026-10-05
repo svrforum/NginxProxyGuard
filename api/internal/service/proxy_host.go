@@ -221,6 +221,9 @@ func normalizeCreateProxyHostRequest(req *model.CreateProxyHostRequest) error {
 		return err
 	}
 	req.Tags = tags
+	// "[2001:db8::1]" is stored as "2001:db8::1" (#314). Clone reaches Create
+	// without going through the handler, so the create path normalizes here too.
+	req.ForwardHost = model.NormalizeForwardHost(req.ForwardHost)
 
 	req.ProxyType = model.NormalizeProxyType(req.ProxyType)
 	if req.ProxyType == model.ProxyTypeStream {
@@ -399,6 +402,9 @@ func (s *ProxyHostService) validateAuthProviderConflict(ctx context.Context, hos
 }
 
 func normalizeUpdateProxyHostRequest(existing *model.ProxyHost, req *model.UpdateProxyHostRequest) (*model.ProxyHost, error) {
+	// Before the merge, so the stored value and the validated candidate are
+	// both the bare literal (#314).
+	req.ForwardHost = model.NormalizeForwardHost(req.ForwardHost)
 	candidate := applyUpdateCandidate(existing, req)
 	candidate.ProxyType = model.NormalizeProxyType(candidate.ProxyType)
 	if req.ProxyType != "" {

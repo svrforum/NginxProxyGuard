@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"fmt"
+	"net"
+	"strconv"
 	"strings"
 
 	"nginx-proxy-guard/internal/model"
@@ -41,7 +43,7 @@ func buildProviderURL(scheme *string, ip string, port *int) string {
 	if scheme != nil && *scheme != "" {
 		sch = *scheme
 	}
-	return fmt.Sprintf("%s://%s:%d", sch, ip, *port)
+	return fmt.Sprintf("%s://%s", sch, net.JoinHostPort(ip, strconv.Itoa(*port)))
 }
 
 // resolveContainerURL resolves a container target to its current verify URL. Returns

@@ -12,7 +12,7 @@ func TestProxyHostForwardAddressFormatting(t *testing.T) {
 		host string
 		want string
 	}{
-		{"fd00::1", "[fd00::1]:8080"},
+		{"2001:db8::1", "[2001:db8::1]:8080"},
 		{"::1", "[::1]:8080"},
 		{"192.0.2.10", "192.0.2.10:8080"},
 		{"backend.example.com", "backend.example.com:8080"},
@@ -48,14 +48,14 @@ func TestProxyHostForwardAddressFormatting(t *testing.T) {
 
 func TestProxyHostIPv6LoadBalancedUpstream(t *testing.T) {
 	data := fixtureUpstreamLB()
-	data.Upstream.Servers[0].Address = "fd00::1"
+	data.Upstream.Servers[0].Address = "2001:db8::1"
 	data.Upstream.Servers[0].Weight = 2
 	var out bytes.Buffer
 	if err := renderProxyHostConfig(context.Background(), &out, data); err != nil {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"server [fd00::1]:8080 weight=2;",
+		"server [2001:db8::1]:8080 weight=2;",
 		"server 10.0.0.2:8080;",
 	} {
 		if !strings.Contains(out.String(), want) {

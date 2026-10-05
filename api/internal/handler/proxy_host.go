@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -57,6 +58,9 @@ func (h *ProxyHostHandler) Create(c echo.Context) error {
 			})
 		}
 	}
+	// "[2001:db8::1]" is URL syntax for the address 2001:db8::1; validate and
+	// store the bare literal (#314).
+	req.ForwardHost = model.NormalizeForwardHost(req.ForwardHost)
 	// Container-name targets resolve forward_host server-side (#150); the
 	// container name lives in its own field and forward_host may be empty or a
 	// placeholder pre-resolution, so skip the hostname/IP validation for them.
@@ -101,7 +105,7 @@ func (h *ProxyHostHandler) Create(c echo.Context) error {
 	}
 
 	// Log audit
-	destination := fmt.Sprintf("%s://%s:%d", req.ForwardScheme, req.ForwardHost, req.ForwardPort)
+	destination := fmt.Sprintf("%s://%s", req.ForwardScheme, net.JoinHostPort(req.ForwardHost, strconv.Itoa(req.ForwardPort)))
 	auditCtx := service.ContextWithAudit(c.Request().Context(), c)
 	h.audit.LogProxyHostCreate(auditCtx, req.DomainNames, destination)
 
