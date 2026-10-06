@@ -2,8 +2,8 @@
     # Redirect HTTP to HTTPS
     {{if .Host.SSLForceHTTPS}}
     # Server-level redirect — survives any user-defined location block.
-    # Bypass: ACME HTTP-01 (cert renewal) + NPG challenge page (geo restriction).
-    if ($request_uri !~ "^/\.well-known/acme-challenge/|^/api/v1/challenge/") {
+    # Bypass (normalized path): ACME HTTP-01 (cert renewal) + NPG challenge page (geo restriction).
+    if ($npg_request_path !~ "^/\.well-known/acme-challenge/|^/api/v1/challenge/") {
         return 301 https://$host$request_uri;
     }
     {{else}}
@@ -16,10 +16,10 @@
     if ($cookie_ng_challenge != "") {
         set $need_challenge 0;
     }
-    if ($request_uri ~ "^/api/v1/challenge/") {
+    if ($npg_request_path ~ "^/api/v1/challenge/") {
         set $need_challenge 0;
     }
-    if ($request_uri ~ "^/.well-known/acme-challenge/") {
+    if ($npg_request_path ~ "^/\.well-known/acme-challenge/") {
         set $need_challenge 0;
     }
 {{if .GeoRestriction.AllowSearchBots}}
@@ -125,10 +125,10 @@
     if ($cookie_ng_challenge != "") {
         set $need_challenge 0;
     }
-    if ($request_uri ~ "^/api/v1/challenge/") {
+    if ($npg_request_path ~ "^/api/v1/challenge/") {
         set $need_challenge 0;
     }
-    if ($request_uri ~ "^/.well-known/acme-challenge/") {
+    if ($npg_request_path ~ "^/\.well-known/acme-challenge/") {
         set $need_challenge 0;
     }
 {{if .GeoRestriction.AllowSearchBots}}

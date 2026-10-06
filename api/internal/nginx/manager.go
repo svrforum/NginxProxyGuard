@@ -539,7 +539,9 @@ func (m *Manager) GenerateConfigFull(ctx context.Context, data ProxyHostConfigDa
 
 	// Ensure shared include files exist BEFORE writing a host config that
 	// references them (fresh installs, volume wipes, resolver changes). Both
-	// are read+compare no-ops when already current.
+	// are read+compare no-ops when already current. ensureHostCommonInclude
+	// also writes conf.d/npg_request_path.conf, which defines the
+	// $npg_request_path this host config's exemption tests read.
 	if err := m.ensureHostCommonInclude(); err != nil {
 		return fmt.Errorf("failed to ensure host common include: %w", err)
 	}

@@ -2,6 +2,7 @@ package nginx
 
 import (
 	"fmt"
+	"log"
 	"regexp"
 	"strings"
 	"text/template"
@@ -215,7 +216,261 @@ func GetTemplateFuncMap(apiHost string) template.FuncMap {
 		"hasDirective": func(directives map[string]bool, name string) bool {
 			return directives[name]
 		},
+		"exemptionPattern": exemptionPattern,
 	}
+}
+
+// exemptionPattern renders an operator-written exemption regex (exploit-rule
+// URI exclusions and Block Exploits exceptions) for a test on
+// $npg_request_target: the normalized request path, then the query string as
+// sent. Before, the same patterns tested $request_uri, where the path is still
+// percent-encoded; the exploit log shows it that way and the exclusion form
+// suggests it. So each literal %HH is widened to (?:%HH|\xHH): the escape
+// still matches the query string as sent, and the byte matches the decoded
+// path. "^/files/my%20docs/" keeps matching /files/my%20docs/a, and so does a
+// path copied from the log in Korean. To PCRE, "\%HH" and a %HH inside
+// \Q...\E are that same literal, so they are widened as well; copied as
+// written, they no longer matched the path they matched before.
+//
+// Block Exploits exceptions are not validated and may use any PCRE syntax, so
+// whatever is not such a literal is copied as written: any other escape, a
+// (?#...) comment, a backtracking verb such as (*MARK:name), a callout string
+// and the inside of a character class. The result compiles wherever the input
+// did.
+//
+// The pattern sits between the double quotes of that test, and nginx's
+// tokenizer unescapes a quoted string before PCRE compiles it: "\\" becomes one
+// backslash, \" and \' a quote, \t, \r and \n a control byte, and any other
+// backslash pair stays as written. The stored text has always been written
+// there as it is, so the widening works on what PCRE compiles: the text is
+// unescaped first and escaped for the string again afterwards, and a pattern
+// with no %HH to widen reaches PCRE exactly as before. Widened as stored,
+// "^/a\\%2F" (PCRE: ^/a\%2F) rendered as "^/a\\(?:%2F|\x2F)", which reached
+// PCRE as an escaped "(" and an unmatched ")", and nginx -t failed for the
+// whole config.
+//
+// Widening grows each %HH from 3 bytes to 12, and nginx refuses a config token
+// longer than 4094 bytes ("too long parameter"). Block Exploits exceptions have
+// no length limit, so a pattern whose widened form would exceed
+// maxExemptionPattern gets each %HH as \xHH instead, 4 bytes: it matches the
+// decoded path, as the pattern matched the encoded one on $request_uri, but no
+// escape in the query string. A pattern too long even for that is rendered as
+// written, which matches the query string but not the path, and is logged.
+//
+// The template refuses every exemption on its own when $npg_request_path is
+// "" (an unsafe path), so a pattern that matches "" needs nothing here.
+func exemptionPattern(p string) string {
+	pcre := unquoteNginxString(p)
+	if widened := quoteNginxString(rewritePercentEscapes(pcre, widenEscape)); len(widened) <= maxExemptionPattern {
+		return widened
+	}
+	if decoded := quoteNginxString(rewritePercentEscapes(pcre, byteEscape)); len(decoded) <= maxExemptionPattern {
+		return decoded
+	}
+	log.Printf("[WARN] Exploit exemption pattern %.60q... (%d bytes) is too long to match a percent-encoded path; it is used as written", p, len(p))
+	return quoteNginxString(pcre)
+}
+
+// maxExemptionPattern bounds a rendered exemption pattern: nginx reads a config
+// token into a 4096-byte buffer and refuses one longer than 4094 bytes.
+const maxExemptionPattern = 4000
+
+// widenEscape and byteEscape are the two ways exemptionPattern writes a %HH.
+func widenEscape(hh string) string { return `(?:%` + hh + `|\x` + hh + `)` }
+func byteEscape(hh string) string  { return `\x` + hh }
+
+// rewritePercentEscapes copies the PCRE pattern p with each literal %HH in it
+// passed through rewrite: written bare, as \%HH, or inside a \Q...\E quote,
+// which is split around it. Other escapes, (?#...) comments, backtracking
+// verbs, callout strings and character classes are copied as written (see
+// exemptionPattern).
+func rewritePercentEscapes(p string, rewrite func(hh string) string) string {
+	var b strings.Builder
+	for i := 0; i < len(p); i++ {
+		switch c := p[i]; {
+		case strings.HasPrefix(p[i:], `\Q`):
+			// Literal up to \E, or to the end of the pattern without one.
+			quoted, next := p[i+2:], len(p)
+			if n := strings.Index(quoted, `\E`); n >= 0 {
+				quoted, next = quoted[:n], i+2+n+2
+			}
+			if !hasPercentEscape(quoted) {
+				b.WriteString(p[i:next])
+			} else {
+				run := 0
+				for j := 0; j < len(quoted); j++ {
+					if isPercentEscape(quoted, j) {
+						if j > run {
+							b.WriteString(`\Q` + quoted[run:j] + `\E`)
+						}
+						b.WriteString(rewrite(quoted[j+1 : j+3]))
+						j += 2
+						run = j + 1
+					}
+				}
+				if run < len(quoted) {
+					b.WriteString(`\Q` + quoted[run:] + `\E`)
+				}
+			}
+			i = next - 1
+		case strings.HasPrefix(p[i:], "(?#"), strings.HasPrefix(p[i:], "(*"):
+			// A comment, or a verb such as (*MARK:name): text up to the first ")".
+			n := strings.IndexByte(p[i:], ')')
+			if n < 0 {
+				n = len(p) - i - 1
+			}
+			b.WriteString(p[i : i+n+1])
+			i += n
+		case strings.HasPrefix(p[i:], "(?C") && i+3 < len(p) && strings.IndexByte("`'\"^%#${", p[i+3]) >= 0:
+			// A callout string runs to its closing delimiter ("}" for "{"),
+			// and a doubled delimiter stands for itself.
+			d := p[i+3]
+			if d == '{' {
+				d = '}'
+			}
+			j := i + 4
+			for j < len(p) && (p[j] != d || j+1 < len(p) && p[j+1] == d) {
+				if p[j] == d {
+					j++
+				}
+				j++
+			}
+			b.WriteString(p[i:min(j+1, len(p))])
+			i = j
+		case c == '\\' && isPercentEscape(p, i+1):
+			// \% is a literal "%" to PCRE, so \%HH is the same %HH.
+			b.WriteString(rewrite(p[i+2 : i+4]))
+			i += 3
+		case c == '\\':
+			// \cX takes the next character as its argument, whatever it is.
+			n := 2
+			if strings.HasPrefix(p[i:], `\c`) {
+				n = 3
+			}
+			n = min(n, len(p)-i)
+			b.WriteString(p[i : i+n])
+			i += n - 1
+		case c == '[':
+			n := charClassLen(p[i:])
+			b.WriteString(p[i : i+n])
+			i += n - 1
+		case isPercentEscape(p, i):
+			b.WriteString(rewrite(p[i+1 : i+3]))
+			i += 2
+		default:
+			b.WriteByte(c)
+		}
+	}
+	return b.String()
+}
+
+// isPercentEscape reports whether s holds a %HH at i.
+func isPercentEscape(s string, i int) bool {
+	return i+2 < len(s) && s[i] == '%' && isHexDigit(s[i+1]) && isHexDigit(s[i+2])
+}
+
+// hasPercentEscape reports whether s holds a %HH anywhere.
+func hasPercentEscape(s string) bool {
+	for i := range len(s) {
+		if isPercentEscape(s, i) {
+			return true
+		}
+	}
+	return false
+}
+
+// charClassLen returns the length of the PCRE character class at the start of
+// p (p[0] == '['), or len(p) when it is not closed. A "]" right after "[" or
+// "[^" is a member, a backslash escapes the next character, and a POSIX class
+// such as [:alpha:] is skipped whole.
+func charClassLen(p string) int {
+	i := 1
+	if i < len(p) && p[i] == '^' {
+		i++
+	}
+	if i < len(p) && p[i] == ']' {
+		i++
+	}
+	for i < len(p) {
+		switch {
+		case p[i] == '\\':
+			i += 2
+		case strings.HasPrefix(p[i:], "[:"):
+			if n := strings.Index(p[i+2:], ":]"); n >= 0 {
+				i += n + 4
+			} else {
+				i++
+			}
+		case p[i] == ']':
+			return i + 1
+		default:
+			i++
+		}
+	}
+	return len(p)
+}
+
+func isHexDigit(c byte) bool {
+	return c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F'
+}
+
+// unquoteNginxString returns what nginx's config tokenizer makes of s written
+// between double quotes: \", \' and \\ stand for the character after the
+// backslash, \t, \r and \n for the control byte, and any other backslash pair
+// stays as written.
+func unquoteNginxString(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c == '\\' && i+1 < len(s) {
+			switch s[i+1] {
+			case '"', '\'', '\\':
+				c = s[i+1]
+				i++
+			case 't':
+				c = '\t'
+				i++
+			case 'r':
+				c = '\r'
+				i++
+			case 'n':
+				c = '\n'
+				i++
+			}
+		}
+		b.WriteByte(c)
+	}
+	return b.String()
+}
+
+// quoteNginxString escapes s for a double-quoted nginx string, so that the
+// tokenizer gives s back byte for byte. A backslash is doubled only where the
+// tokenizer would read it as part of an escape (before a quote, a backslash,
+// t, r, n or a control byte it escapes, and at the end, where it would escape
+// the closing quote), so "^/a\.php" renders as it is written.
+func quoteNginxString(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		switch c := s[i]; c {
+		case '"':
+			b.WriteString(`\"`)
+		case '\t':
+			b.WriteString(`\t`)
+		case '\r':
+			b.WriteString(`\r`)
+		case '\n':
+			b.WriteString(`\n`)
+		case '\\':
+			if i+1 == len(s) || strings.IndexByte("\"'\\trn\t\r\n", s[i+1]) >= 0 {
+				b.WriteString(`\\`)
+			} else {
+				b.WriteByte(c)
+			}
+		default:
+			b.WriteByte(c)
+		}
+	}
+	return b.String()
 }
 
 // GetRedirectTemplateFuncMap returns template functions for redirect host config

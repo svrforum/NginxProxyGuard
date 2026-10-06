@@ -353,8 +353,10 @@ func TestForceHTTPSCustomLocationRedirects(t *testing.T) {
 	// The first `server {` … first `}` (top-level) covers the HTTP server.
 	httpServer := extractFirstServerBlock(t, out)
 
-	// Server-level if with ACME + NPG challenge bypass must be present.
-	if !strings.Contains(httpServer, `if ($request_uri !~ "^/\.well-known/acme-challenge/|^/api/v1/challenge/")`) {
+	// Server-level if with ACME + NPG challenge bypass must be present, tested
+	// on the normalized path: on $request_uri, /.well-known/acme-challenge/../x
+	// skipped the redirect and was served over plain HTTP.
+	if !strings.Contains(httpServer, `if ($npg_request_path !~ "^/\.well-known/acme-challenge/|^/api/v1/challenge/")`) {
 		t.Errorf("HTTP server is missing the server-level bypass `if`; got:\n%s", httpServer)
 	}
 
@@ -414,8 +416,8 @@ func TestForceHTTPSACMEBypass(t *testing.T) {
 
 			// Sanity: the if must use negative match (`!~`) so non-matching
 			// URIs trigger the redirect and matching ones fall through.
-			if !strings.Contains(httpServer, `if ($request_uri !~`) {
-				t.Errorf("HTTP server is missing `if ($request_uri !~ ...)` bypass; got:\n%s", httpServer)
+			if !strings.Contains(httpServer, `if ($npg_request_path !~`) {
+				t.Errorf("HTTP server is missing `if ($npg_request_path !~ ...)` bypass; got:\n%s", httpServer)
 			}
 		})
 	}

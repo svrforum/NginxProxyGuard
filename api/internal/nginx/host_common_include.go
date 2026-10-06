@@ -30,12 +30,14 @@ func (m *Manager) hostCommonIncludeContent() []byte {
 resolver %s valid=30s;
 
 # Skip security checks for ACME HTTP-01 Challenge
+# Decided on the normalized path ($npg_request_path, conf.d/npg_request_path.conf),
+# not the raw $request_uri: /.well-known/acme-challenge/../../admin is /admin.
 set $skip_security_for_acme 0;
-if ($request_uri ~ "^/.well-known/acme-challenge/") {
+if ($npg_request_path ~ "^/\.well-known/acme-challenge/") {
     set $skip_security_for_acme 1;
 }
 # Also skip for challenge page to prevent redirect loops
-if ($request_uri ~ "^/api/v1/challenge/") {
+if ($npg_request_path ~ "^/api/v1/challenge/") {
     set $skip_security_for_acme 1;
 }
 
@@ -70,7 +72,15 @@ location @blocked {
 // the include always exists first — including on fresh installs and after
 // volume wipes. Content only changes with the manager's resolver, so this is a
 // read+compare no-op on the hot path.
+//
+// The stanza reads $npg_request_path, and every existing host config includes
+// it, so the map defining that variable is ensured first: rewriting this file
+// on an upgrade must never leave a reference without its definition, not even
+// between two writes.
 func (m *Manager) ensureHostCommonInclude() error {
+	if err := m.ensureRequestPathMap(); err != nil {
+		return err
+	}
 	path := filepath.Join(m.configPath, "includes", "host_common.conf")
 	desired := m.hostCommonIncludeContent()
 	if current, err := os.ReadFile(path); err == nil && bytes.Equal(current, desired) {

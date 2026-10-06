@@ -232,8 +232,9 @@
     # URI-scoped exclusions — rule bypasses the check on matching paths
     set $exploit_skip_{{$rule.IDSanitized}} "0";
 {{- range $uri := $rule.URIExclusions}}
-    if ($request_uri ~* "{{escapeNginxPattern $uri}}") { set $exploit_skip_{{$rule.IDSanitized}} "1"; }
+    if ($npg_request_target ~* "{{exemptionPattern $uri}}") { set $exploit_skip_{{$rule.IDSanitized}} "1"; }
 {{- end}}
+    if ($npg_request_path = "") { set $exploit_skip_{{$rule.IDSanitized}} "0"; }
     set $exploit_match_{{$rule.IDSanitized}} "0";
     if ($query_string ~* "{{escapeNginxPattern $rule.Pattern}}") { set $exploit_match_{{$rule.IDSanitized}} "1"; }
     set $exploit_combined_{{$rule.IDSanitized}} "$exploit_skip_{{$rule.IDSanitized}}$exploit_match_{{$rule.IDSanitized}}";
@@ -250,11 +251,19 @@
 {{end}}
 {{if hasMergedExceptions .GlobalBlockExploitsExceptions .Host.BlockExploitsExceptions}}
     # URI exceptions - skip query string blocking for these paths
+    set $exploit_qs_exempt 0;
 {{range splitExceptions (mergeExceptions .GlobalBlockExploitsExceptions .Host.BlockExploitsExceptions)}}
-    if ($request_uri ~* "{{.}}") {
-        set $exploit_qs_block 0;
+    if ($npg_request_target ~* "{{exemptionPattern .}}") {
+        set $exploit_qs_exempt 1;
     }
 {{end}}
+    # No exception for a path a backend may resolve differently ($npg_request_path is "")
+    if ($npg_request_path = "") {
+        set $exploit_qs_exempt 0;
+    }
+    if ($exploit_qs_exempt = 1) {
+        set $exploit_qs_block 0;
+    }
 {{end}}
     # Skip exploit blocking for ACME challenge and CAPTCHA challenge paths
     if ($skip_security_for_acme = 1) {
@@ -277,8 +286,9 @@
     # URI-scoped exclusions — rule bypasses the check on matching paths
     set $rfi_skip_{{$rule.IDSanitized}} "0";
 {{- range $uri := $rule.URIExclusions}}
-    if ($request_uri ~* "{{escapeNginxPattern $uri}}") { set $rfi_skip_{{$rule.IDSanitized}} "1"; }
+    if ($npg_request_target ~* "{{exemptionPattern $uri}}") { set $rfi_skip_{{$rule.IDSanitized}} "1"; }
 {{- end}}
+    if ($npg_request_path = "") { set $rfi_skip_{{$rule.IDSanitized}} "0"; }
     set $rfi_match_{{$rule.IDSanitized}} "0";
     if ($request_uri ~* "{{escapeNginxPattern $rule.Pattern}}") { set $rfi_match_{{$rule.IDSanitized}} "1"; }
     set $rfi_combined_{{$rule.IDSanitized}} "$rfi_skip_{{$rule.IDSanitized}}$rfi_match_{{$rule.IDSanitized}}";
@@ -295,11 +305,19 @@
 {{end}}
 {{if hasMergedExceptions .GlobalBlockExploitsExceptions .Host.BlockExploitsExceptions}}
     # Dynamic exceptions from database (global + host-specific)
+    set $rfi_exempt 0;
 {{range splitExceptions (mergeExceptions .GlobalBlockExploitsExceptions .Host.BlockExploitsExceptions)}}
-    if ($request_uri ~* "{{.}}") {
-        set $rfi_block 0;
+    if ($npg_request_target ~* "{{exemptionPattern .}}") {
+        set $rfi_exempt 1;
     }
 {{end}}
+    # No exception for a path a backend may resolve differently ($npg_request_path is "")
+    if ($npg_request_path = "") {
+        set $rfi_exempt 0;
+    }
+    if ($rfi_exempt = 1) {
+        set $rfi_block 0;
+    }
 {{end}}
     # Skip exploit blocking for ACME challenge and CAPTCHA challenge paths
     if ($skip_security_for_acme = 1) {
@@ -373,11 +391,19 @@
         set $rfi_block 1;
     }
 {{if hasMergedExceptions .GlobalBlockExploitsExceptions .Host.BlockExploitsExceptions}}
+    set $rfi_exempt 0;
 {{range splitExceptions (mergeExceptions .GlobalBlockExploitsExceptions .Host.BlockExploitsExceptions)}}
-    if ($request_uri ~* "{{.}}") {
-        set $rfi_block 0;
+    if ($npg_request_target ~* "{{exemptionPattern .}}") {
+        set $rfi_exempt 1;
     }
 {{end}}
+    # No exception for a path a backend may resolve differently ($npg_request_path is "")
+    if ($npg_request_path = "") {
+        set $rfi_exempt 0;
+    }
+    if ($rfi_exempt = 1) {
+        set $rfi_block 0;
+    }
 {{end}}
     # Skip exploit blocking for ACME challenge and CAPTCHA challenge paths
     if ($skip_security_for_acme = 1) {
