@@ -249,7 +249,12 @@ func (h *WAFHandler) regenerateAllHostConfigs(ctx context.Context) error {
 
 	var wafHosts []hostWAFData
 	for i := range hosts {
-		if !hosts[i].WAFEnabled {
+		// Resolved, not the raw row, for the gate as for the file: a host that
+		// inherits the global WAF stores waf_enabled=false, so the stored flag
+		// left its modsec file without the changed global exclusion, and the
+		// stored columns would pin it to its own stale waf_mode (#272).
+		resolved := h.resolvedHost(ctx, &hosts[i])
+		if !resolved.WAFEnabled || resolved.IsStream() {
 			continue
 		}
 
@@ -272,10 +277,7 @@ func (h *WAFHandler) regenerateAllHostConfigs(ctx context.Context) error {
 		}
 
 		wafHosts = append(wafHosts, hostWAFData{
-			// Resolved, not the raw row: this loop rewrites EVERY host's modsec
-			// file, so using stored columns would pin every inheriting host to
-			// its own stale waf_mode (#272).
-			Host:       h.resolvedHost(ctx, &hosts[i]),
+			Host:       resolved,
 			Exclusions: mergedExclusions,
 			AllowedIPs: allowedIPs,
 		})

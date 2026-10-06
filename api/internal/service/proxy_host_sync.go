@@ -29,7 +29,11 @@ func (s *ProxyHostService) buildHostRender(ctx context.Context, host *model.Prox
 		return nginx.HostConfigRender{}, err
 	}
 	render := nginx.HostConfigRender{Data: configData}
-	if host.WAFEnabled && !host.IsStream() {
+	// Gate on the RESOLVED host, as SyncAll does (#202): a host inheriting the
+	// global WAF stores waf_enabled=false, and RegenerateConfigsAtomic writes
+	// its modsec file from configData.Host either way — with no exclusions if
+	// they were skipped here.
+	if configData.Host.WAFEnabled && !configData.Host.IsStream() {
 		mergedExclusions, err := s.getMergedWAFExclusions(ctx, host.ID)
 		if err != nil {
 			return render, fmt.Errorf("failed to get WAF exclusions for host %s: %w", host.ID, err)
@@ -507,9 +511,10 @@ func (s *ProxyHostService) RegenerateConfigForHost(ctx context.Context, hostID s
 		return fmt.Errorf("failed to load config data for host %s: %w", hostID, err)
 	}
 
-	// Get WAF exclusions if WAF is enabled
+	// Get WAF exclusions if WAF is enabled — on the RESOLVED host, which
+	// GenerateConfigAndReload writes the modsec file from (see buildHostRender).
 	var wafExclusions []model.WAFRuleExclusion
-	if host.WAFEnabled && !host.IsStream() {
+	if configData.Host.WAFEnabled && !configData.Host.IsStream() {
 		wafExclusions, err = s.getMergedWAFExclusions(ctx, hostID)
 		if err != nil {
 			return fmt.Errorf("failed to get WAF exclusions for host %s: %w", hostID, err)

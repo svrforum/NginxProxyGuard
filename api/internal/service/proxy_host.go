@@ -785,9 +785,11 @@ func (s *ProxyHostService) Create(ctx context.Context, req *model.CreateProxyHos
 			return nil, err
 		}
 
-		// Get WAF exclusions if WAF is enabled
+		// Get WAF exclusions if WAF is enabled — on the RESOLVED host, which
+		// GenerateConfigAndReload writes the modsec file from: a host inheriting
+		// the global WAF stores waf_enabled=false.
 		var wafExclusions []model.WAFRuleExclusion
-		if host.WAFEnabled && !host.IsStream() {
+		if configData.Host.WAFEnabled && !configData.Host.IsStream() {
 			wafExclusions, err = s.getMergedWAFExclusions(ctx, host.ID)
 			if err != nil {
 				// Rollback: Delete DB record since config generation won't proceed
@@ -970,9 +972,9 @@ func (s *ProxyHostService) Update(ctx context.Context, id string, req *model.Upd
 			return nil, err
 		}
 
-		// Get WAF exclusions if WAF is enabled
+		// Get WAF exclusions if WAF is enabled — on the RESOLVED host (see Create).
 		var wafExclusions []model.WAFRuleExclusion
-		if host.WAFEnabled && !host.IsStream() {
+		if configData.Host.WAFEnabled && !configData.Host.IsStream() {
 			wafExclusions, err = s.getMergedWAFExclusions(ctx, id)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get WAF exclusions: %w", err)
