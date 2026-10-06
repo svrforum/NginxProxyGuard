@@ -550,15 +550,15 @@
         set $priority_allow 1;
     }
 {{end}}
-{{if .BotFilter.CustomAllowedAgents}}
+{{with toRegexPattern .BotFilter.CustomAllowedAgents}}
     # Custom allowed agents bypass all bot filtering
-    if ($http_user_agent ~* ({{toRegexPattern .BotFilter.CustomAllowedAgents}})) {
+    if ($http_user_agent ~* ({{.}})) {
         set $priority_allow 1;
     }
 {{end}}
-{{if .BotFilter.BlockBadBots}}{{if .BadBotsList}}
+{{if .BotFilter.BlockBadBots}}{{with toRegexPattern .BadBotsList}}
     set $block_bad_bot 0;
-    if ($http_user_agent ~* ({{toRegexPattern .BadBotsList}})) {
+    if ($http_user_agent ~* ({{.}})) {
         set $block_bad_bot 1;
     }
     # Block only if not in priority allow list
@@ -569,9 +569,9 @@
         return 403;
     }
 {{end}}{{end}}
-{{if .BotFilter.BlockAIBots}}{{if .AIBotsList}}
+{{if .BotFilter.BlockAIBots}}{{with toRegexPattern .AIBotsList}}
     set $block_ai_bot 0;
-    if ($http_user_agent ~* ({{toRegexPattern .AIBotsList}})) {
+    if ($http_user_agent ~* ({{.}})) {
         set $block_ai_bot 1;
     }
     # Block only if not in priority allow list
@@ -582,9 +582,9 @@
         return 403;
     }
 {{end}}{{end}}
-{{if .BotFilter.BlockSuspiciousClients}}{{if .SuspiciousClientsList}}
+{{if .BotFilter.BlockSuspiciousClients}}{{with toRegexPattern .SuspiciousClientsList}}
     set $block_suspicious 0;
-    if ($http_user_agent ~* ({{toRegexPattern .SuspiciousClientsList}})) {
+    if ($http_user_agent ~* ({{.}})) {
         set $block_suspicious 1;
     }
     # Block only if not in priority allow list
@@ -595,9 +595,9 @@
         return 403;
     }
 {{end}}{{end}}
-{{if .BotFilter.CustomBlockedAgents}}
+{{with toRegexPattern .BotFilter.CustomBlockedAgents}}
     set $block_custom 0;
-    if ($http_user_agent ~* ({{toRegexPattern .BotFilter.CustomBlockedAgents}})) {
+    if ($http_user_agent ~* ({{.}})) {
         set $block_custom 1;
     }
     # Block only if not in priority allow list

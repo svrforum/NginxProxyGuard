@@ -18,9 +18,9 @@ server {
     # Shared host stanza: resolver, ACME/challenge skip vars, custom error pages
     include /etc/nginx/conf.d/includes/host_common.conf;
 
-{{if .SearchEnginesList}}
+{{with toRegexPattern .SearchEnginesList}}
     # Search bot detection (set once, used by GeoIP, CloudProvider, BotFilter)
-    if ($http_user_agent ~* ({{toRegexPattern .SearchEnginesList}})) {
+    if ($http_user_agent ~* ({{.}})) {
         set $is_search_bot 1;
     }
 {{end}}

@@ -48,41 +48,7 @@ func GetTemplateFuncMap(apiHost string) template.FuncMap {
 			// Replace hyphens with underscores for nginx zone names
 			return strings.ReplaceAll(id, "-", "_")
 		},
-		"toRegexPattern": func(s string) string {
-			// Convert newline-separated patterns to pipe-separated regex pattern
-			lines := strings.Split(s, "\n")
-			var patterns []string
-			for _, line := range lines {
-				line = strings.TrimSpace(line)
-				if line == "" || strings.HasPrefix(line, "#") {
-					continue
-				}
-				if len(line) > 500 {
-					line = line[:500]
-				}
-				// Escape special regex characters
-				line = strings.ReplaceAll(line, "\\", "\\\\")
-				line = strings.ReplaceAll(line, ".", "\\.")
-				line = strings.ReplaceAll(line, "+", "\\+")
-				line = strings.ReplaceAll(line, "?", "\\?")
-				line = strings.ReplaceAll(line, "(", "\\(")
-				line = strings.ReplaceAll(line, ")", "\\)")
-				line = strings.ReplaceAll(line, "[", "\\[")
-				line = strings.ReplaceAll(line, "]", "\\]")
-				line = strings.ReplaceAll(line, "{", "\\{")
-				line = strings.ReplaceAll(line, "}", "\\}")
-				line = strings.ReplaceAll(line, "^", "\\^")
-				line = strings.ReplaceAll(line, "$", "\\$")
-				line = strings.ReplaceAll(line, "|", "\\|")
-				line = strings.ReplaceAll(line, "*", ".*")
-				line = strings.ReplaceAll(line, " ", "\\s")
-				patterns = append(patterns, line)
-			}
-			if len(patterns) > 100 {
-				patterns = patterns[:100]
-			}
-			return strings.Join(patterns, "|")
-		},
+		"toRegexPattern": toRegexPattern,
 		"apiHost": func() string {
 			return apiHost
 		},
@@ -218,6 +184,64 @@ func GetTemplateFuncMap(apiHost string) template.FuncMap {
 		},
 		"exemptionPattern": exemptionPattern,
 	}
+}
+
+// toRegexPattern turns a newline-separated user-agent list into the
+// alternation a bot-filter `if ($http_user_agent ~* (...))` tests: each line is
+// a case-insensitive substring, "*" is a wildcard, a space or tab matches any
+// whitespace, and every other character means itself. Blank lines and lines
+// starting with "#" are skipped, a line is cut at 500 bytes, and at most 100
+// lines are used.
+//
+// The result goes into the config unquoted, so nginx's tokenizer reads it
+// before PCRE does, and a character that tokenizer acts on cannot be passed
+// through as it is:
+//   - ";" ends the directive, and a space or tab ends the token. Real user
+//     agents are full of both ("Mozilla/5.0 (compatible; Googlebot/2.1)"), and
+//     one such line failed `nginx -t` for the whole config: directive "if" has
+//     no opening "{". ";" is escaped and whitespace becomes \s.
+//   - "\\" is read back as one backslash, so a backslash doubled for PCRE
+//     reached it as an escape of whatever followed: "foo\bar" became a word
+//     boundary and a trailing "\" did not compile. A backslash is written as
+//     \x5c, which the tokenizer leaves alone. Other control bytes become \xHH.
+//
+// Every other character renders exactly as it always has, so a list that was
+// already valid renders byte for byte the same. A list with no pattern lines
+// gives "", and the templates then render nothing: "()" matches every request,
+// which turned a comment-only block list into a 403 for every visitor and a
+// comment-only allow list into a bypass for every client.
+func toRegexPattern(s string) string {
+	var patterns []string
+	for _, line := range strings.Split(s, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if len(line) > 500 {
+			line = line[:500]
+		}
+		var b strings.Builder
+		for i := 0; i < len(line); i++ {
+			switch c := line[i]; {
+			case c == '*':
+				b.WriteString(".*")
+			case c == ' ' || c == '\t':
+				b.WriteString(`\s`)
+			case c == '\\' || c < 0x20 || c == 0x7f:
+				fmt.Fprintf(&b, `\x%02x`, c)
+			case strings.IndexByte(`.+?()[]{}^$|;`, c) >= 0:
+				b.WriteByte('\\')
+				b.WriteByte(c)
+			default:
+				b.WriteByte(c)
+			}
+		}
+		patterns = append(patterns, b.String())
+		if len(patterns) == 100 {
+			break
+		}
+	}
+	return strings.Join(patterns, "|")
 }
 
 // exemptionPattern renders an operator-written exemption regex (exploit-rule
