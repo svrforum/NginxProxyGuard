@@ -550,11 +550,26 @@
         set $priority_allow 1;
     }
 {{end}}
-{{with toRegexPattern .BotFilter.CustomAllowedAgents}}
+{{with siteAllowedAgents .BotFilter.CustomAllowedAgents}}
     # Custom allowed agents bypass all bot filtering
     if ($http_user_agent ~* ({{.}})) {
         set $priority_allow 1;
     }
+{{end}}
+{{- with scopedAllowedAgents .BotFilter.CustomAllowedAgents}}
+    # Custom allowed agents limited to paths: each check tests the path, a
+    # newline, then the User-Agent. The path is $npg_request_path, which an
+    # error_page redirect or an auth_request subrequest does not change
+    # (unlike $uri).
+    set $bot_scoped_subject "$npg_request_path\n$http_user_agent";
+{{- range .}}
+    # only under: {{join .Paths " "}}
+{{- range .Patterns}}
+    if ($bot_scoped_subject ~ ({{.}})) {
+        set $priority_allow 1;
+    }
+{{- end}}
+{{- end}}
 {{end}}
 {{if .BotFilter.BlockBadBots}}{{with toRegexPattern .BadBotsList}}
     set $block_bad_bot 0;

@@ -48,7 +48,9 @@ func GetTemplateFuncMap(apiHost string) template.FuncMap {
 			// Replace hyphens with underscores for nginx zone names
 			return strings.ReplaceAll(id, "-", "_")
 		},
-		"toRegexPattern": toRegexPattern,
+		"toRegexPattern":      toRegexPattern,
+		"siteAllowedAgents":   siteAllowedAgents,
+		"scopedAllowedAgents": scopedAllowedAgents,
 		"apiHost": func() string {
 			return apiHost
 		},

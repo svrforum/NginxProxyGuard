@@ -239,8 +239,30 @@
         "customBlocked": "Custom Block List",
         "customBlockedPlaceholder": "Enter User-Agents to block, one per line",
         "customAllowed": "Custom Allow List",
-        "customAllowedDescription": "User-Agents in this list will bypass all bot filter blocks",
-        "customAllowedPlaceholder": "Enter User-Agents to allow, one per line",
+        "customAllowedDescription": "User-Agents in this list bypass the bot filter's blocks, on the whole site or only under the paths you give",
+        "customAllowedPlaceholder": "GoodBot\nokhttp @ /api\npython-requests @ /webhook /hooks",
+        "customAllowedScopeHint": "To allow an agent only under some paths, add \" @ \" and the paths: okhttp @ /api covers /api and everything below it, not /api-admin. Paths are case-sensitive and written without %, ? or //. The bot filter only reads the User-Agent header, which any client can set, so it is not access control. A host that overrides the bot filter uses only its own list.",
+        "allowedPreview": {
+          "wholeSite": "whole site",
+          "only": "only under {{paths}}",
+          "invalid": "line {{line}} not applied: {{reason}}"
+        },
+        "allowedIssues": {
+          "gluedAt": "write \" @ \" with a space on each side of @",
+          "noAgent": "no User-Agent before @",
+          "noPath": "no path after @",
+          "tooManyPaths": "at most {{max}} paths per line",
+          "tooManyScoped": "at most {{max}} lines can be limited to paths",
+          "pathNoSlash": "path \"{{path}}\" must start with /",
+          "pathPercent": "path \"{{path}}\" contains %; percent-encoded paths are not supported",
+          "pathDoubleSlash": "path \"{{path}}\" contains //",
+          "pathQuery": "path \"{{path}}\" contains ? or #; only the path is matched, not a query string",
+          "pathDotSegment": "path \"{{path}}\" contains a . or .. segment",
+          "pathChar": "path \"{{path}}\" contains {{char}}, which is not allowed",
+          "pathNotAscii": "path \"{{path}}\" may contain only printable ASCII",
+          "pathTooLong": "path \"{{path}}\" is longer than {{max}} characters"
+        },
+        "allowedAgentsInvalidSave": "Bot filter allowed User-Agents, line {{line}}: {{reason}}",
         "settingsLink": "Bot lists can be customized in <1>Settings &rarr; Bot Filter</1>",
         "inheritHint": "This host uses the global bot filter default.",
         "disableHint": "This host gets no bot filter (the global default is ignored too)."

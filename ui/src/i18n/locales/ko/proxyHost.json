@@ -241,8 +241,30 @@
         "customBlocked": "사용자 정의 차단 목록",
         "customBlockedPlaceholder": "차단할 User-Agent를 한 줄에 하나씩 입력",
         "customAllowed": "사용자 정의 예외 목록",
-        "customAllowedDescription": "이 목록의 User-Agent는 모든 봇 필터 차단을 우회합니다",
-        "customAllowedPlaceholder": "허용할 User-Agent를 한 줄에 하나씩 입력",
+        "customAllowedDescription": "이 목록의 User-Agent는 봇 필터 차단을 우회합니다. 사이트 전체나 지정한 경로 아래에서만 적용할 수 있습니다",
+        "customAllowedPlaceholder": "GoodBot\nokhttp @ /api\npython-requests @ /webhook /hooks",
+        "customAllowedScopeHint": "특정 경로에서만 허용하려면 \" @ \" 뒤에 경로를 적으세요. okhttp @ /api 는 /api와 그 아래 경로에만 적용되고 /api-admin에는 적용되지 않습니다. 경로는 대소문자를 구분하며 %, ?, //는 쓸 수 없습니다. 봇 필터는 누구나 바꿀 수 있는 User-Agent 헤더만 보므로 접근 제어 수단이 아닙니다. 봇 필터를 재정의한 호스트는 자기 목록만 사용합니다.",
+        "allowedPreview": {
+          "wholeSite": "사이트 전체",
+          "only": "{{paths}} 경로에서만",
+          "invalid": "{{line}}번째 줄 적용 안 됨: {{reason}}"
+        },
+        "allowedIssues": {
+          "gluedAt": "@ 앞뒤에 공백을 넣어 \" @ \" 형태로 적으세요",
+          "noAgent": "@ 앞에 User-Agent가 없습니다",
+          "noPath": "@ 뒤에 경로가 없습니다",
+          "tooManyPaths": "한 줄에 경로는 최대 {{max}}개입니다",
+          "tooManyScoped": "경로를 지정한 줄은 최대 {{max}}개입니다",
+          "pathNoSlash": "경로 \"{{path}}\": /로 시작해야 합니다",
+          "pathPercent": "경로 \"{{path}}\": %는 쓸 수 없습니다(퍼센트 인코딩 경로는 지원하지 않음)",
+          "pathDoubleSlash": "경로 \"{{path}}\": //는 쓸 수 없습니다",
+          "pathQuery": "경로 \"{{path}}\": ?나 #는 쓸 수 없습니다(쿼리 문자열은 비교하지 않음)",
+          "pathDotSegment": "경로 \"{{path}}\": . 또는 .. 구간은 쓸 수 없습니다",
+          "pathChar": "경로 \"{{path}}\": 허용되지 않는 문자 {{char}}",
+          "pathNotAscii": "경로 \"{{path}}\": 출력 가능한 ASCII 문자만 쓸 수 있습니다",
+          "pathTooLong": "경로 \"{{path}}\": {{max}}자를 넘습니다"
+        },
+        "allowedAgentsInvalidSave": "봇 필터 예외 User-Agent {{line}}번째 줄: {{reason}}",
         "settingsLink": "봇 목록은 <1>설정 &rarr; Bot Filter</1>에서 관리할 수 있습니다",
         "inheritHint": "이 호스트는 전역 봇 필터 기본값을 사용합니다.",
         "disableHint": "이 호스트에는 봇 필터가 적용되지 않습니다(전역 기본값도 무시)."

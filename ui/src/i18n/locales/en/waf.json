@@ -637,6 +637,8 @@
     "infoDesc": "This default applies to all proxy hosts that leave the bot filter set to \"Inherit\". A host set to \"Override\" uses its own configuration, and one set to \"Disable\" gets no bot filter at all. Saving regenerates all inheriting hosts automatically.",
     "saveSuccess": "Global bot filter default saved and applied to inheriting hosts",
     "saveFailed": "Failed to save global bot filter default",
+    "saveFailedWithReason": "Failed to save global bot filter default: {{reason}}",
+    "allowedAgentsInvalid": "Fix the allowed User-Agents list before saving. Line {{line}}: {{reason}}",
     "unsavedChanges": "You have unsaved changes"
   },
   "globalSecurityHeaders": {

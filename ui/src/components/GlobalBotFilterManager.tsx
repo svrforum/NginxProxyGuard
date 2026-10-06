@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getGlobalBotFilter, updateGlobalBotFilter, type GlobalBotFilter } from '../api/global-bot-filter'
 import { BotFilterFields } from './proxy-host/tabs/security/BotFilterFields'
+import { allowedAgentsSaveIssue } from './proxy-host/tabs/security/allowedAgents'
 
 type BotFilterDraft = Omit<GlobalBotFilter, 'id' | 'created_at' | 'updated_at'>
 
@@ -32,6 +33,7 @@ function hydrate(g: GlobalBotFilter): BotFilterDraft {
 
 export function GlobalBotFilterManager() {
   const { t } = useTranslation('waf')
+  const { t: tHost } = useTranslation('proxyHost')
   const queryClient = useQueryClient()
 
   const [data, setData] = useState<BotFilterDraft>(EMPTY)
@@ -64,11 +66,20 @@ export function GlobalBotFilterManager() {
       setSaveMessage({ type: 'success', message: t('globalBotFilter.saveSuccess') })
       setTimeout(() => setSaveMessage(null), 5000)
     },
-    onError: () => {
-      setSaveMessage({ type: 'error', message: t('globalBotFilter.saveFailed') })
+    onError: (err) => {
+      // Say why: a 400 names the allowed-agent line the server refused.
+      const message = err instanceof Error && err.message
+        ? t('globalBotFilter.saveFailedWithReason', { reason: err.message })
+        : t('globalBotFilter.saveFailed')
+      setSaveMessage({ type: 'error', message })
       setTimeout(() => setSaveMessage(null), 5000)
     },
   })
+
+  // The server refuses a changed allowed-agents list with an unusable line
+  // (#313), so Save waits until it is fixed.
+  const badAllowed = allowedAgentsSaveIssue(data.custom_allowed_agents || '', global?.custom_allowed_agents || '', tHost)
+  const badAllowedMessage = badAllowed ? t('globalBotFilter.allowedAgentsInvalid', badAllowed) : null
 
   const handleDiscard = () => {
     setData(global ? hydrate(global) : EMPTY)
@@ -113,7 +124,12 @@ export function GlobalBotFilterManager() {
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
-            <span className="font-medium">{t('globalBotFilter.unsavedChanges')}</span>
+            <div>
+              <span className="font-medium">{t('globalBotFilter.unsavedChanges')}</span>
+              {badAllowedMessage && (
+                <p className="text-sm text-red-700 dark:text-red-400 mt-1">{badAllowedMessage}</p>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -124,7 +140,7 @@ export function GlobalBotFilterManager() {
             </button>
             <button
               onClick={() => mutation.mutate()}
-              disabled={mutation.isPending}
+              disabled={mutation.isPending || !!badAllowedMessage}
               className="px-4 py-1.5 text-sm bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded font-medium transition-colors flex items-center gap-2"
             >
               {mutation.isPending && (

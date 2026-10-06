@@ -30,6 +30,19 @@ func (h *SecurityHandler) UpsertBotFilter(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return badRequestError(c, "Invalid request body")
 	}
+	// A custom_allowed_agents line can limit its exemption to paths (#313),
+	// and a line that tries to and cannot be used is refused here, so the
+	// operator learns why instead of finding the exemption silently missing.
+	// Only a value the caller CHANGED is checked (the #263 rule, see
+	// model.ValidateAllowedAgentsChange). The renderer drops such lines either
+	// way.
+	stored := ""
+	if cur, err := h.securityService.GetBotFilter(c.Request().Context(), proxyHostID); err == nil && cur != nil {
+		stored = cur.CustomAllowedAgents
+	}
+	if err := model.ValidateAllowedAgentsChange(req.CustomAllowedAgents, stored); err != nil {
+		return badRequestError(c, err.Error())
+	}
 
 	filter, err := h.securityService.UpsertBotFilter(c.Request().Context(), proxyHostID, &req, skipReload)
 	if err != nil {
@@ -78,6 +91,16 @@ func (h *SecurityHandler) UpdateGlobalBotFilter(c echo.Context) error {
 	var req model.UpdateGlobalBotFilterRequest
 	if err := c.Bind(&req); err != nil {
 		return badRequestError(c, "Invalid request body")
+	}
+	// Same rule as the per-host endpoint: only a changed list is validated.
+	if req.CustomAllowedAgents != nil {
+		stored := ""
+		if cur, err := h.securityService.GetGlobalBotFilter(c.Request().Context()); err == nil && cur != nil {
+			stored = cur.CustomAllowedAgents
+		}
+		if err := model.ValidateAllowedAgentsChange(*req.CustomAllowedAgents, stored); err != nil {
+			return badRequestError(c, err.Error())
+		}
 	}
 
 	g, err := h.securityService.UpdateGlobalBotFilter(c.Request().Context(), &req)

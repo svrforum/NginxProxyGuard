@@ -11327,7 +11327,27 @@ components:
           description: Additional user agent patterns to block. Free-form text, not an array.
         custom_allowed_agents:
           type: string
-          description: Additional user agent patterns to allow. Free-form text, not an array.
+          description: |
+            User agents exempt from the bot filter, one per line; blank lines and
+            `#` comments are ignored. Each line is a case-insensitive substring,
+            with `*` as a wildcard. Free-form text, not an array.
+
+            A line can limit its exemption to path prefixes:
+            `<agent> @ <path> [<path> ...]`, for example `okhttp @ /api` or
+            `python-requests @ /webhook /hooks`. A path covers itself and
+            everything below it (`/api` covers `/api/v1`, not `/api-admin`) and is
+            matched case-sensitively against the decoded, normalized request path.
+            A path starts with `/`, is at most 255 characters of printable ASCII,
+            and contains no `%`, `//`, `?`, `#`, `.`/`..` segment or any of
+            `` " ' \ ` ; { } $ | & < > ``; `/` alone means the whole host. Any `@`
+            standing alone between spaces or tabs starts the path list; one
+            written against the path or the agent (`okhttp @/api`,
+            `okhttp@ /api`) is rejected. At most 20 such lines, 10 paths each.
+
+            A changed value with a line that names paths it cannot use is
+            rejected with 400. An unchanged value is accepted as stored, and an
+            unusable line is left out of the nginx config, so the agent is simply
+            not exempted.
         challenge_suspicious:
           type: boolean
           description: Show a CAPTCHA challenge to suspicious clients instead of blocking them.
@@ -12454,7 +12474,10 @@ components:
           description: Additional user agent patterns to block
         custom_allowed_agents:
           type: string
-          description: Additional user agent patterns to exempt
+          description: |
+            User agents exempt from the bot filter on every inheriting host; same
+            syntax, including path-limited lines, as BotFilter.custom_allowed_agents.
+            A host that overrides the bot filter uses only its own list.
         challenge_suspicious:
           type: boolean
           description: |
@@ -12489,6 +12512,7 @@ components:
           type: string
         custom_allowed_agents:
           type: string
+          description: See BotFilter.custom_allowed_agents. Validated only when it differs from the stored value.
         challenge_suspicious:
           type: boolean
           description: Persisted but currently inert — no nginx template reads it
@@ -15723,6 +15747,7 @@ components:
           type: string
         custom_allowed_agents:
           type: string
+          description: See BotFilter.custom_allowed_agents. Validated only when it differs from the stored value.
         challenge_suspicious:
           type: boolean
         disable_global:

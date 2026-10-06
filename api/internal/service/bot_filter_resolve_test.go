@@ -61,3 +61,17 @@ func TestResolveBotFilter_NoHostRow_GlobalOff_Nil(t *testing.T) {
 		t.Fatalf("no host row + global off should return nil, got %+v", got)
 	}
 }
+
+// A path-limited allowed agent in the global default (#313) reaches every
+// inheriting host as written; a host that overrides keeps only its own list,
+// with nothing from the global list merged in.
+func TestResolveBotFilter_AllowedAgents_InheritedVerbatim_NotMerged(t *testing.T) {
+	global := &model.GlobalBotFilter{Enabled: true, BlockSuspiciousClients: true, CustomAllowedAgents: "okhttp @ /api"}
+	if got := resolveBotFilter(global, nil); got == nil || got.CustomAllowedAgents != "okhttp @ /api" {
+		t.Fatalf("inherit should carry the global list verbatim, got %+v", got)
+	}
+	host := &model.BotFilter{Enabled: true, CustomAllowedAgents: "GoodBot"}
+	if got := resolveBotFilter(global, host); got.CustomAllowedAgents != "GoodBot" {
+		t.Fatalf("override should use only the host list, got %q", got.CustomAllowedAgents)
+	}
+}

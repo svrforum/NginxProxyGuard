@@ -9,6 +9,7 @@ import {
 import { ApiError } from '../../../api/client'
 import type { CreateProxyHostRequest, ProxyHost } from '../../../types/proxy-host'
 import { isFormValid, normalizeDomains, validateProxyHostForm } from './proxyHostValidation'
+import { allowedAgentsSaveIssue } from '../tabs/security/allowedAgents'
 import type { ProxyHostCertificate } from './useProxyHostCertificate'
 import type { ProxyHostExtras } from './useProxyHostExtras'
 import type { ProxyHostFormStateResult } from './useProxyHostFormState'
@@ -243,6 +244,17 @@ export function useProxyHostSubmit({
     state.setErrors(newErrors)
     if (!isFormValid(newErrors)) {
       setSaveProgress(INITIAL_PROGRESS)
+      return
+    }
+
+    // The bot filter is saved after the host and a failure there is only
+    // logged, so a 400 for an unusable allowed-agent line would report success
+    // while dropping the whole bot-filter write, mode change included. Check it
+    // here, in any mode, by the server's rule (#313).
+    const badAllowed = isStreamMode ? null : allowedAgentsSaveIssue(
+      state.botFilterData.custom_allowed_agents || '', state.existingBotFilter?.custom_allowed_agents || '', t)
+    if (badAllowed) {
+      setSaveProgress((prev) => ({ ...prev, error: t('form.security.botFilter.allowedAgentsInvalidSave', badAllowed) }))
       return
     }
 

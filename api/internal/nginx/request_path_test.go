@@ -117,6 +117,64 @@ func TestUnsafeRequestPathPattern(t *testing.T) {
 	}
 }
 
+// TestRawDotSegmentPattern pins the test on the raw target. nginx resolves a
+// "." or ".." segment before it sets $uri and keeps no trace of what the
+// segment removed: "/api/x/..;/../admin" is "/api/x/admin" to nginx, so the
+// $uri test above cannot see the "..;" that Tomcat resolves to reach /admin.
+func TestRawDotSegmentPattern(t *testing.T) {
+	re := regexp.MustCompile(`(?i)` + rawDotSegmentPattern)
+	unsafe := []string{
+		"/api/x/..;/../admin", // Tomcat: /admin; nginx: /api/x/admin
+		"/api/;/../admin",     // Tomcat: /admin; nginx: /api/admin
+		"/api/.;/../admin",
+		"/api/;jsessionid=1/../admin",
+		"/api/x/..;foo/../admin",
+		"/api/x/%2e%2e;/../admin",
+		"/api/x/%2E%2E;/%2E%2E/admin", // encoded dots are resolved too
+		"/api/x/..%20/../admin",       // the ".. " nginx keeps is removed by the ".."
+		"/api/x/%252e%252e/../admin",
+		"/api/x/..;%2f..%2fadmin", // nginx treats a decoded %2f as a separator
+		"/api/x%2F..%2F..%2Fadmin",
+		"/api/../admin",        // plain
+		"/api/./x",             // single dot
+		"/api/x/..",            // at the end of the path
+		"/api/x/.%2e/admin",    // mixed spelling
+		"/api/x/..?a=1",        // ended by the query string
+		"/api/x/..;/..#/admin", // nginx ends its path at "#" and resolves the ".."
+		"/api#/../admin",       // after a "#": nginx stops there, proxy_pass does not
+		"/..",
+		"/.",
+	}
+	for _, p := range unsafe {
+		if !re.MatchString(p) {
+			t.Errorf("%q holds a dot segment nginx resolves, but the raw-target pattern does not match it", p)
+		}
+	}
+	safe := []string{
+		"/",
+		"/api/x",
+		"/api?next=/../x", // a dot segment in the query string is not in the path
+		"/api/v1/items?x=./y",
+		"/.well-known/acme-challenge/tok", // ".well-known" is a name
+		"/api/a..b",
+		"/api/..b",
+		"/api/%2e%2ex", // "..x" is a name
+		"/api/.hidden",
+		"/files/my%20docs/x",
+		"/job/p/job/feature%252Ffoo",
+		// Not resolved by nginx, so not this pattern's job: the $uri test
+		// refuses them (TestUnsafeRequestPathPattern).
+		"/api/...",
+		"/api/x/..;",
+		"/api/x/..%5cadmin",
+	}
+	for _, p := range safe {
+		if re.MatchString(p) {
+			t.Errorf("%q has no dot segment nginx resolves, but the raw-target pattern matches it", p)
+		}
+	}
+}
+
 // TestUnsafeRequestPathPatternIsLinear guards against catastrophic backtracking
 // on PCRE (nginx and libmodsecurity): an unbounded quantifier here let a crafted
 // path blow SecPcreMatchLimit and fail the WAF guard open. RE2 cannot backtrack,
@@ -140,19 +198,29 @@ func TestRequestPathMapContent(t *testing.T) {
 	if n := len(requestPathDefinition.FindAllString(content, -1)); n != 1 {
 		t.Fatalf("npg_request_path.conf must define $npg_request_path exactly once, found %d:\n%s", n, content)
 	}
-	// Keyed on $uri, nginx's decoded and normalized path. Not volatile: the
-	// value is computed once and survives error_page/auth_request re-runs.
-	if !strings.Contains(content, "map $uri $npg_request_path {") {
-		t.Errorf("map must read $uri:\n%s", content)
+	// $uri, nginx's decoded and normalized path, unless the raw target held a
+	// dot segment nginx resolved (keyed on $request_uri) or $uri still holds
+	// one a backend may resolve (keyed on $uri). Not volatile: the value is
+	// computed once and survives error_page/auth_request re-runs.
+	if !strings.Contains(content, "map $request_uri $npg_request_path {\n    default $npg_uri_path;\n") {
+		t.Errorf("map must test the raw target and fall back to $npg_uri_path:\n%s", content)
+	}
+	if !strings.Contains(content, `"~*`+rawDotSegmentPattern+`" "";`) {
+		t.Errorf("a raw target with a dot segment must map to the empty string:\n%s", content)
+	}
+	if !strings.Contains(content, "map $uri $npg_uri_path {\n    default $uri;\n") {
+		t.Errorf("$npg_uri_path must read $uri and default to it:\n%s", content)
 	}
 	if strings.Contains(content, "volatile") {
 		t.Errorf("map must stay cacheable; volatile re-evaluates it after internal redirects:\n%s", content)
 	}
-	if !strings.Contains(content, "    default $uri;\n") {
-		t.Errorf("map default must be $uri:\n%s", content)
-	}
 	if !strings.Contains(content, `"~*(?:`+unsafeRequestPathPattern+`)" "";`) {
 		t.Errorf("unsafe paths must map to the empty string:\n%s", content)
+	}
+	// $npg_uri_path is the second half of $npg_request_path, not a variable an
+	// exemption may read: it misses the raw-target test.
+	if n := strings.Count(content, "$npg_uri_path"); n != 2 {
+		t.Errorf("$npg_uri_path must be defined once and read once (by $npg_request_path), found %d mentions:\n%s", n, content)
 	}
 	// $npg_request_target is $npg_request_path with the query string from the
 	// raw target appended, defined once in the same file. Exploit-rule URI
@@ -258,6 +326,7 @@ func TestRequestPathDefinedOnceAcrossGeneratedFiles(t *testing.T) {
 
 	var defined []string
 	var readers []string
+	var uriPathFiles []string
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return err
@@ -273,6 +342,9 @@ func TestRequestPathDefinedOnceAcrossGeneratedFiles(t *testing.T) {
 		if bytes.Contains(b, []byte("$npg_request_path")) {
 			readers = append(readers, rel)
 		}
+		if bytes.Contains(b, []byte("$npg_uri_path")) {
+			uriPathFiles = append(uriPathFiles, rel)
+		}
 		return nil
 	})
 	if err != nil {
@@ -281,6 +353,10 @@ func TestRequestPathDefinedOnceAcrossGeneratedFiles(t *testing.T) {
 	want := filepath.Join("conf.d", requestPathMapFile)
 	if len(defined) != 1 || defined[0] != want {
 		t.Fatalf("$npg_request_path must be defined once, in %s; definitions found in: %q", want, defined)
+	}
+	// $npg_uri_path misses the raw-target test, so no exemption may read it.
+	if len(uriPathFiles) != 1 || uriPathFiles[0] != want {
+		t.Errorf("$npg_uri_path must appear only in %s, found in: %q", want, uriPathFiles)
 	}
 	// Sanity: the definition has readers, so this test is not vacuous.
 	if len(readers) < 3 {

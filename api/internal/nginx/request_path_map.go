@@ -62,7 +62,8 @@ const (
 //
 // The nginx map below and the ModSecurity guard in waf_config.go both use it,
 // so the two engines refuse the same paths. nginx applies it to $uri, where a
-// plainly spelled "/../" is already resolved away; ModSecurity applies it to a
+// plainly spelled "/../" is already resolved away (the map refuses that one on
+// the raw target, rawDotSegmentPattern); ModSecurity applies it to a
 // non-normalized REQUEST_FILENAME, where it is not, and refuses it there.
 // Neither engine compiles it in UTF mode, so \xc0 and the like match single
 // bytes. Every quantifier is bounded, so the match is linear in the path
@@ -70,9 +71,31 @@ const (
 const unsafeRequestPathPattern = `[\x00-\x1f\x7f]|(?:\A|` + pathSepPattern + `)` + pathDotPattern +
 	`(?:` + pathDotPattern + `|` + pathSpacePattern + `){0,16}(?:` + pathSepPattern + `|` + pathParamPattern + `|\z)`
 
+// rawDotSegmentPattern matches a raw request target ($request_uri) whose path
+// holds a "." or ".." segment that nginx resolves itself: the dots written
+// literally or as %2e, with "/" or "%2f" before them and "/", "%2f", "?", "#"
+// or the end after them. It scans the path up to the query string, past a
+// "#": nginx ends its path there, but proxy_pass forwards the rest.
+//
+// nginx resolves such a segment before it sets $uri and keeps no trace of what
+// the segment removed, so unsafeRequestPathPattern cannot see it in $uri. In
+// "/api/x/..;/../admin" the ".." removes the "..;" and $uri is "/api/x/admin",
+// but proxy_pass forwards the raw target, and Tomcat, which strips the ";",
+// resolves it to /admin. Browsers and curl resolve dot segments before they
+// send a request, so a target that still holds one was sent that way on
+// purpose, and it gets no exemption whatever nginx made of it. The quantifiers
+// are bounded or a single class, so the match is linear.
+const rawDotSegmentPattern = `\A[^?]*(?:/|%2f)(?:\.|%2e){1,2}(?:[/?#]|%2f|\z)`
+
 // requestPathMapContent defines $npg_request_path, the request path every
 // path-scoped exemption is decided on, and $npg_request_target, that path
 // followed by the query string as sent.
+//
+// $npg_request_path is $uri, or "" when the raw target held a dot segment
+// (rawDotSegmentPattern) or $uri still holds one a backend may resolve
+// (unsafeRequestPathPattern). The first test reads $request_uri, the second
+// $uri, so it takes two maps: $npg_uri_path is $uri after the second test,
+// and nothing but $npg_request_path reads it.
 //
 // $request_uri is the raw request target. "/api/../admin" and
 // "/api/%2e%2e/admin" both begin with "/api/", but nginx routes them to the
@@ -103,9 +126,17 @@ var requestPathMapContent = []byte(`# Normalized request path for path-scoped se
 # A path in which a backend may still find a dot segment nginx did not resolve
 # ("..;", a backslash, "%2e%2e" or "..%2f" left over from a second encoding,
 # control bytes) maps to "", and no exemption is granted for it.
-map $uri $npg_request_path {
+map $uri $npg_uri_path {
     default $uri;
     "~*(?:` + unsafeRequestPathPattern + `)" "";
+}
+
+# So does a request target sent with a dot segment that nginx resolved itself:
+# nginx keeps no trace of what it removed, and in /api/x/..;/../admin the "..;"
+# that Tomcat resolves is already gone from $uri ("/api/x/admin").
+map $request_uri $npg_request_path {
+    default $npg_uri_path;
+    "~*` + rawDotSegmentPattern + `" "";
 }
 
 map $request_uri $npg_request_target {

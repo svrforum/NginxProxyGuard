@@ -342,6 +342,7 @@ export function useProxyHostFormState(host: ProxyHost | null | undefined) {
     geoipStatus,
     countryCodes,
     existingGeoRestriction,
+    existingBotFilter,
 
     // Flags
     isEditing,
