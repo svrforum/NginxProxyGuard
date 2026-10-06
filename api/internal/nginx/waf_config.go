@@ -61,8 +61,18 @@ SecRule REMOTE_ADDR "@ipMatch {{joinComma .AllowedIPs}}" "id:900900,phase:1,pass
 # Reason: {{$e.Reason}}
 {{- if eq $e.ScopeType "uri"}}
 # Scoped to {{$e.ScopeValue}} — matched at a path boundary, so a sibling path that
-# only shares the prefix ({{$e.ScopeValue}}-admin) keeps the rule.
-SecRule REQUEST_URI "@rx {{uriScopePattern $e.ScopeValue}}" "id:{{scopedRuleID $i}},phase:1,pass,nolog,ctl:ruleRemoveById={{$e.RuleID}}"
+# only shares the prefix ({{$e.ScopeValue}}-admin) keeps the rule. Matched on the
+# normalized path (dot segments resolved); the chained test keeps the rule for a
+# path a backend may resolve differently (..;, \, %2e, a dot segment, control bytes).
+{{- with uriScopeQueryPattern $e.ScopeValue}}
+# With a query: that exact path, and only while the decoded query string begins
+# with the part after "?", followed by "/", "?" or its end.
+{{- end}}
+SecRule REQUEST_FILENAME "@rx {{uriScopePattern $e.ScopeValue}}" "id:{{scopedRuleID $i}},phase:1,pass,nolog,t:none,t:normalizePath,chain"
+{{- with uriScopeQueryPattern $e.ScopeValue}}
+    SecRule QUERY_STRING "@rx {{.}}" "t:none,t:urlDecode,chain"
+{{- end}}
+    SecRule REQUEST_FILENAME "!@rx {{unsafePathGuard}}" "t:none,ctl:ruleRemoveById={{$e.RuleID}}"
 {{- else if eq $e.ScopeType "param"}}
 # Scoped to the {{$e.ScopeValue}} argument — the rule still inspects everything else.
 SecRuleUpdateTargetById {{$e.RuleID}} "!ARGS:{{$e.ScopeValue}}"

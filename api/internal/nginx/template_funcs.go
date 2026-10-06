@@ -3,7 +3,7 @@ package nginx
 import (
 	"fmt"
 	"log"
-	"regexp"
+	"net/url"
 	"strings"
 	"text/template"
 
@@ -541,29 +541,112 @@ func GetSimpleTemplateFuncMap() template.FuncMap {
 		"scopedRuleID": func(i int) int {
 			return 1000000 + i
 		},
-		// uriScopePattern turns a uri scope into an anchored pattern that stops at
-		// a path boundary.
-		//
-		// "@beginsWith /api" was a raw byte prefix, so an exemption scoped to /api
-		// also switched the rule off for /api-admin, /apikeys and /apiv2 — paths
-		// the operator never named, with no signal anywhere in the UI. (#286)
-		//
-		// Three details are load-bearing:
-		//   - REQUEST_URI carries the query string, so "?" is a boundary as well
-		//     as "/". Without it, scoping /api would stop exempting GET /api?q=1.
-		//   - A trailing slash is trimmed. An operator who typed "/api/" means the
-		//     same subtree, and "^/api/([/?]|$)" would match nothing they use.
-		//   - The value is regex-quoted. ValidateScope permits . + * ( ) [ ] ^ ,
-		//     and an unbalanced "(" compiles to a rule that never fires while
-		//     `nginx -t` still reports success — libmodsecurity swallows the PCRE
-		//     compile error, so the exemption would die silently.
-		"uriScopePattern": func(v string) string {
-			trimmed := strings.TrimRight(v, "/")
-			if trimmed == "" {
-				// An all-slashes value stays literal rather than widening to ^/.
-				trimmed = v
-			}
-			return "^" + regexp.QuoteMeta(trimmed) + "([/?]|$)"
+		"uriScopePattern":      uriScopePattern,
+		"uriScopeQueryPattern": uriScopeQueryPattern,
+		// unsafePathGuard is the regex a uri-scoped exclusion's chained rule
+		// refuses: the nginx map's unsafe paths. In REQUEST_FILENAME that also
+		// takes in a plain dot segment, which nginx resolves in $uri but
+		// libmodsecurity leaves in place.
+		"unsafePathGuard": func() string {
+			return `(?i)(?:` + unsafeRequestPathPattern + `)`
 		},
 	}
+}
+
+// uriScopePattern turns a stored uri scope into the anchored pattern its
+// exclusion rule matches against REQUEST_FILENAME after t:normalizePath.
+//
+// "@beginsWith /api" was a raw byte prefix, so an exemption scoped to /api also
+// switched the rule off for /api-admin, /apikeys and /apiv2 — paths the
+// operator never named, with no signal anywhere in the UI. (#286) Matched on
+// REQUEST_URI it also covered /api/../admin, which nginx and the backend both
+// serve as /admin.
+//
+// Details that are load-bearing, each checked against libmodsecurity 3.0.15:
+//   - REQUEST_FILENAME arrives percent-decoded once, exactly as nginx decodes
+//     $uri, so the stored value is decoded once too. The log viewer prefills
+//     the raw logged path, and a raw "/files/my%20docs" never matched the
+//     decoded request for that path. A value that is not valid percent-encoding
+//     is used as typed.
+//   - No t:urlDecodeUni: it would be a second decode, and it turns "+" into a
+//     space, so a scope like /c++ would stop matching /c++/x.
+//   - \A and \z, not ^ and $: libmodsecurity compiles @rx multiline, so
+//     "^/api" also matched "/admin%0a/api".
+//   - A trailing slash is trimmed. An operator who typed "/api/" means the same
+//     subtree, and "\A/api/(?:/|\z)" would match nothing they use. The query
+//     string is not part of REQUEST_FILENAME, so "/" is the only boundary.
+//   - Runs of "/" are collapsed after decoding, as t:normalizePath collapses
+//     them in the request. ValidateScope accepts "/api//v1", which would
+//     otherwise match no request and silently stop exempting anything.
+//   - A value with a "?" (ValidateScope accepts one; an older UI prefilled the
+//     logged path with its query) names one resource and a query. On
+//     REQUEST_URI it matched that exact path followed by that query, and it
+//     still does: the path before the "?" must match exactly (no subtree, no
+//     trimmed slash), and uriScopeQueryPattern adds a chained test on the
+//     query. Cut at the "?" alone, it exempted the whole path under every
+//     query; matched as written, it matched nothing.
+//   - Every byte outside [A-Za-z0-9/_~-] is escaped: regex metacharacters with a
+//     backslash, the rest as \xHH. ValidateScope permits . + * ( ) [ ] ^, and an
+//     unbalanced "(" compiles to a rule that never fires while `nginx -t` still
+//     reports success, because libmodsecurity swallows the PCRE compile error.
+//     Decoding can also produce a quote, a backslash, "%{" or a newline, each of
+//     which would otherwise end the directive or start a macro.
+func uriScopePattern(v string) string {
+	path, _, hasQuery := strings.Cut(v, "?")
+	if decoded, err := url.PathUnescape(path); err == nil {
+		path = decoded
+	}
+	for strings.Contains(path, "//") {
+		path = strings.ReplaceAll(path, "//", "/")
+	}
+	if hasQuery {
+		return `\A` + scopeRegexLiteral(path) + `\z`
+	}
+	trimmed := strings.TrimRight(path, "/")
+	if trimmed == "" {
+		// An all-slashes value stays literal rather than widening to every path.
+		trimmed = path
+	}
+	return `\A` + scopeRegexLiteral(trimmed) + `(?:/|\z)`
+}
+
+// uriScopeQueryPattern returns the pattern a uri scope's query part must match
+// in QUERY_STRING after t:urlDecode, or "" when the stored value has no "?".
+//
+// QUERY_STRING is the raw query, so it is decoded (t:urlDecode: %HH, and "+"
+// as a space) and so is the stored part, the same way. On REQUEST_URI, which
+// libmodsecurity decodes, a scope of "/?rest_route=/wp/v2/posts" also covered
+// the editor's ?rest_route=%2Fwp%2Fv2%2Fposts%2F1. The boundary is the one the
+// scope had there: the query begins with the stored part, followed by "/", "?"
+// or nothing. Whoever knows the scope can still append "/&q=..." to it; that
+// was so before, and ctl:ruleRemoveById cannot be narrower than the request.
+func uriScopeQueryPattern(v string) string {
+	_, query, ok := strings.Cut(v, "?")
+	if !ok {
+		return ""
+	}
+	if decoded, err := url.QueryUnescape(query); err == nil {
+		query = decoded
+	}
+	return `\A` + scopeRegexLiteral(query) + `(?:[/?]|\z)`
+}
+
+// scopeRegexLiteral writes s as a regex matching exactly s, with every byte
+// outside [A-Za-z0-9/_~-] escaped (see uriScopePattern).
+func scopeRegexLiteral(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9',
+			c == '/', c == '_', c == '~', c == '-':
+			b.WriteByte(c)
+		case strings.IndexByte(`.+*?()|[]{}^$`, c) >= 0:
+			b.WriteByte('\\')
+			b.WriteByte(c)
+		default:
+			fmt.Fprintf(&b, `\x%02x`, c)
+		}
+	}
+	return b.String()
 }

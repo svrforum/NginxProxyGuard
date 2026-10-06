@@ -137,8 +137,11 @@ test.describe('Scoped WAF rule exclusions (#286)', () => {
     );
     // Anchored and terminated at a path boundary. A raw prefix test also
     // exempted /api/a-admin and /api/apikeys — paths nobody named. (#286)
-    expect(conf).toContain('@rx ^/api/a([/?]|$)');
-    expect(conf).toContain('@rx ^/api/b([/?]|$)');
+    // Matched on the normalized path, not REQUEST_URI, which also covered
+    // /api/a/../admin; a chained rule keeps the rule for ..;, \ and %2e.
+    expect(conf).toContain('SecRule REQUEST_FILENAME "@rx \\A/api/a(?:/|\\z)"');
+    expect(conf).toContain('SecRule REQUEST_FILENAME "@rx \\A/api/b(?:/|\\z)"');
+    expect(conf).not.toContain('REQUEST_URI');
     // Each scoped exclusion is its own SecRule and needs its own id.
     const ids = [...conf.matchAll(/id:(\d{7})/g)].map((m) => m[1]);
     expect(new Set(ids).size, 'generated rule ids must be unique').toBe(ids.length);
@@ -219,18 +222,31 @@ test.describe('Scoped WAF rule exclusions (#286)', () => {
     const boundaryHostId = (await created.json()).id;
 
     try {
+      // The scopes exempt the anomaly-blocking rule itself, so a probe passes
+      // inside a scope whichever detection rules it trips, and is blocked
+      // outside. Exempting one detection rule (942100) made the result depend
+      // on that rule alone catching the probe, which this CRS build no longer
+      // does for a tautology at PL1 — with or without any exclusion.
       const res = await request.post(
-        `${API}/api/v1/waf/hosts/${boundaryHostId}/rules/942100/disable`,
+        `${API}/api/v1/waf/hosts/${boundaryHostId}/rules/949110/disable`,
         { headers: auth(), data: { scope_type: 'uri', scope_value: '/api/a' } }
       );
       expect(res.status()).toBe(201);
+      // A second scope shows whether a path that only looks like /api/b is let
+      // through too. On REQUEST_URI, /api/b/../../x was.
+      const blocking = await request.post(
+        `${API}/api/v1/waf/hosts/${boundaryHostId}/rules/949110/disable`,
+        { headers: auth(), data: { scope_type: 'uri', scope_value: '/api/b' } }
+      );
+      expect(blocking.status()).toBe(201);
 
       // ModSecurity does not re-parse its rules on `nginx -s reload`, so the
       // exclusion only goes live after the proxy restarts.
       execSync('docker restart npg-test-proxy', { stdio: 'ignore' });
       await new Promise((r) => setTimeout(r, 8000));
 
-      const payload = "?id=1%27%20or%20%271%27%3D%271";
+      // Blocked at PL1 (942190 and others) on every path no scope covers.
+      const payload = "?id=1%27%20UNION%20SELECT%20a,b%20FROM%20users--";
       const probe = (path: string) => rawGet(host, `${path}${payload}`);
 
       expect(await probe('/api/a/x'), '/api/a/x is inside the scope').not.toBe(403);
@@ -238,6 +254,14 @@ test.describe('Scoped WAF rule exclusions (#286)', () => {
       expect(await probe('/api/a-x'), '/api/a-x only shares the prefix').toBe(403);
       expect(await probe('/api/abc'), '/api/abc only shares the prefix').toBe(403);
       expect(await probe('/other'), 'unrelated path').toBe(403);
+
+      // nginx and the backend serve each of these as /x (or, for ..; and the
+      // backslash, a Tomcat or Windows backend does), so the scope is decided
+      // on the normalized path and the rule keeps blocking.
+      expect(await probe('/api/b/x'), '/api/b/x is inside the 949110 scope').not.toBe(403);
+      for (const path of ['/api/b/../../x', '/api/b/%2e%2e/%2e%2e/x', '/api/b/..;/x', '/api/b/..%5cx']) {
+        expect(await probe(path), `${path} only looks like it is under /api/b`).toBe(403);
+      }
     } finally {
       await request.delete(`${API}/api/v1/proxy-hosts/${boundaryHostId}`, { headers: auth() });
     }
