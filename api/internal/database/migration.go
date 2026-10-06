@@ -1530,6 +1530,64 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_global_fail2ban_singleton ON public.global
    SET last_error = regexp_replace(last_error, '(token=)[^&"<[:space:]]+', '\1[redacted]', 'g')
  WHERE last_error ~ 'token=[^[&"<[:space:]]'`,
 		},
+		{
+			// Credentials carried in request URLs reached stored error text:
+			// lego quoted the DuckDNS update URL, token= included, in a failed
+			// DNS-01 issuance or renewal (certificates.error_message, the
+			// certificate history and its logs, the cert.renewal_failed
+			// notification), and net/http's `Post "<URL>": ...` for a failed
+			// delivery put the Telegram bot token or the whole Discord or
+			// webhook URL — itself the credential — into the notification
+			// channel and delivery-log errors. New text no longer carries
+			// them, but a stored row is replayed until something overwrites
+			// it. shapes is redact.ShapesPattern (a test holds them equal);
+			// request_url keeps the scheme and host of the URL a failed
+			// delivery names and cuts the path, query or fragment after it,
+			// reading past the \" a Go %q leaves for a quote; a URL with only
+			// a host is left as stored, since a host name that is itself the
+			// credential cannot be told from any other there. jsonb is
+			// rewritten through its text form; no replaced character is a
+			// quote or a backslash, so it stays valid JSON. Casting every
+			// jsonb row to text costs seconds on a long certificate history,
+			// and upgrades run before the API serves on every boot, so this
+			// runs once: the 'credential_scrub_v1' row in schema_migrations
+			// commits with it. A certificate it rewrites gets the upgrade
+			// time as updated_at, from that table's trigger.
+			desc: "redact URL-borne credentials left in certificate and notification errors",
+			sql: `DO $$
+DECLARE
+    shapes CONSTANT text := '(token=)[A-Za-z0-9._~%+-]+|(/bot)[0-9]+:[A-Za-z0-9_-]+|(/api/(?:v[0-9]+/)?webhooks/)[0-9]+/[A-Za-z0-9_-]+|(/services/)T[A-Z0-9]+/B[A-Z0-9]+/[A-Za-z0-9]+';
+    kept CONSTANT text := '\1\2\3\4[redacted]';
+    request_url CONSTANT text := '((?:Get|Post) "https?://[^/?#"]+)(?!/\[redacted\]")[/?#](?:[^"\\]|\\.)+"';
+BEGIN
+    IF EXISTS (SELECT 1 FROM schema_migrations WHERE version = 'credential_scrub_v1') THEN
+        RETURN;
+    END IF;
+    UPDATE public.certificates SET error_message = regexp_replace(error_message, shapes, kept, 'g')
+     WHERE error_message ~ shapes;
+    UPDATE public.certificate_history SET message = regexp_replace(message, shapes, kept, 'g')
+     WHERE message ~ shapes;
+    UPDATE public.certificate_history SET logs = regexp_replace(logs::text, shapes, kept, 'g')::jsonb
+     WHERE logs::text ~ shapes;
+    IF to_regclass('public.notification_state') IS NOT NULL THEN
+        UPDATE public.notification_state SET last_detail = regexp_replace(last_detail, shapes, kept, 'g')
+         WHERE last_detail ~ shapes;
+    END IF;
+    IF to_regclass('public.notification_channels') IS NOT NULL THEN
+        UPDATE public.notification_channels
+           SET last_error = regexp_replace(regexp_replace(last_error, shapes, kept, 'g'), request_url, '\1/[redacted]"', 'g')
+         WHERE last_error ~ shapes OR last_error ~ request_url;
+    END IF;
+    IF to_regclass('public.notification_outbox') IS NOT NULL THEN
+        UPDATE public.notification_outbox
+           SET last_error = regexp_replace(regexp_replace(last_error, shapes, kept, 'g'), request_url, '\1/[redacted]"', 'g')
+         WHERE last_error ~ shapes OR last_error ~ request_url;
+        UPDATE public.notification_outbox SET payload = regexp_replace(payload::text, shapes, kept, 'g')::jsonb
+         WHERE payload::text ~ shapes;
+    END IF;
+    INSERT INTO schema_migrations (version) VALUES ('credential_scrub_v1') ON CONFLICT DO NOTHING;
+END $$`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

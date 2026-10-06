@@ -1,6 +1,9 @@
 package repository
 
-import "nginx-proxy-guard/internal/database"
+import (
+	"nginx-proxy-guard/internal/database"
+	"nginx-proxy-guard/internal/redact"
+)
 
 // Scrubbing driver text on the way *into* a column, not just on the way out of
 // a handler.
@@ -24,11 +27,19 @@ import "nginx-proxy-guard/internal/database"
 //
 // Both are no-ops for the overwhelmingly common case: an nginx -t failure, an ACME
 // rejection or a provider's HTTP error contains no "pq: " and is stored verbatim.
+//
+// The same write also cuts out the credentials redact.Shapes recognises in a URL —
+// a token= parameter, a Telegram bot path, a Discord or Slack webhook path. The
+// code that builds these messages redacts the credentials it holds at the source;
+// this is the backstop for a wording or a path nobody listed, so a credential that
+// slips through is still not replayed to every reader of the column. Notification
+// columns are not written through here: the dispatcher redacts a delivery error by
+// value before it is stored (service.redactDeliveryError).
 
 // persistedErrorText prepares an error string for a column that will be read
 // back and displayed.
 func persistedErrorText(message string) string {
-	return database.ScrubDriverText(message)
+	return redact.Shapes(database.ScrubDriverText(message))
 }
 
 // persistedErrorPtr is the nullable form. nil stays nil — "no error" must not
@@ -38,6 +49,6 @@ func persistedErrorPtr(message *string) *string {
 	if message == nil {
 		return nil
 	}
-	scrubbed := database.ScrubDriverText(*message)
+	scrubbed := persistedErrorText(*message)
 	return &scrubbed
 }

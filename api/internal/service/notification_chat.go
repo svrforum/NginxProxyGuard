@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"nginx-proxy-guard/internal/model"
+	"nginx-proxy-guard/internal/redact"
 )
 
 // Discord and Telegram adapters (#221).
@@ -252,7 +253,15 @@ func DetectTelegramChats(ctx context.Context, botToken string) ([]TelegramChat, 
 	return detectTelegramChatsAt(ctx, telegramAPIBase, botToken)
 }
 
-func detectTelegramChatsAt(ctx context.Context, base, botToken string) ([]TelegramChat, error) {
+func detectTelegramChatsAt(ctx context.Context, base, botToken string) (_ []TelegramChat, err error) {
+	// The token is in the request path, so net/http's error for a request that
+	// failed quotes it, and the handler answers with this error — even when the
+	// token is the stored one the API otherwise never reads back.
+	defer func() {
+		secrets := &redact.Secrets{}
+		secrets.Add(botToken)
+		err = secrets.RequestError(err)
+	}()
 	if strings.TrimSpace(botToken) == "" {
 		return nil, fmt.Errorf("invalid bot_token: required")
 	}

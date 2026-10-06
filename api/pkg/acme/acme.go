@@ -305,7 +305,7 @@ func (s *Service) ObtainCertificate(email string, domains []string, provider *mo
 	}
 
 	// Set up DNS provider
-	dnsProvider, err := s.createDNSProvider(provider)
+	dnsProvider, err := s.newDNS01Provider(provider)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create DNS provider: %w", err)
 	}
@@ -363,7 +363,7 @@ func (s *Service) RenewCertificate(certPEM, keyPEM string, provider *model.DNSPr
 	}
 
 	// Set up DNS provider
-	dnsProvider, err := s.createDNSProvider(provider)
+	dnsProvider, err := s.newDNS01Provider(provider)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create DNS provider: %w", err)
 	}

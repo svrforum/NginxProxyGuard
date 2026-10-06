@@ -70,6 +70,7 @@ func (d *NotificationDispatcher) DispatchOnce(ctx context.Context) (int, error) 
 		}
 
 		outcome, wait, sendErr := adapter.Send(ctx, e.Channel, e.Payload)
+		sendErr = redactDeliveryError(e.Channel, sendErr)
 		reason := ""
 		if sendErr != nil {
 			reason = sendErr.Error()
@@ -195,6 +196,7 @@ func (d *NotificationDispatcher) SendTest(ctx context.Context, ch *model.Notific
 	}
 
 	outcome, _, sendErr := adapter.Send(ctx, ch, msg)
+	sendErr = redactDeliveryError(ch, sendErr)
 	reason := ""
 	if sendErr != nil {
 		reason = sendErr.Error()

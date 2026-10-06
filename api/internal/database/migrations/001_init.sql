@@ -4528,3 +4528,51 @@ CREATE INDEX IF NOT EXISTS idx_proxy_hosts_tags ON public.proxy_hosts USING gin 
 --   UPDATE public.ddns_records
 --      SET last_error = regexp_replace(last_error, '(token=)[^&"<[:space:]]+', '\1[redacted]', 'g')
 --    WHERE last_error ~ 'token=[^[&"<[:space:]]';
+
+-- URL-borne credentials left in certificate and notification errors — DOCUMENTATION ONLY.
+-- lego quoted the DuckDNS update URL, token= included, in a failed DNS-01 issuance or
+-- renewal (certificates.error_message, certificate_history.message and .logs, the
+-- cert.renewal_failed notification), and net/http's `Post "<URL>": ...` for a failed
+-- delivery put the Telegram bot token or the whole Discord or webhook URL — itself the
+-- credential — into notification_channels.last_error and notification_outbox.last_error.
+-- New text no longer carries them, but a stored row is replayed until something
+-- overwrites it, so existing installs get a one-time scrub, recorded in schema_migrations
+-- as 'credential_scrub_v1' in the same transaction (reading every jsonb row as text on
+-- each boot cost seconds on a long certificate history). A fresh install has no such rows
+-- and only records the marker. shapes is redact.ShapesPattern; request_url keeps the
+-- scheme and host of the URL a failed delivery names and cuts the path, query or fragment
+-- after it. A scrubbed certificate gets the upgrade time as updated_at (its trigger).
+-- Executable copy lives in database/migration.go `upgrades`.
+--   DO $$
+--   DECLARE
+--       shapes CONSTANT text := '(token=)[A-Za-z0-9._~%+-]+|(/bot)[0-9]+:[A-Za-z0-9_-]+|(/api/(?:v[0-9]+/)?webhooks/)[0-9]+/[A-Za-z0-9_-]+|(/services/)T[A-Z0-9]+/B[A-Z0-9]+/[A-Za-z0-9]+';
+--       kept CONSTANT text := '\1\2\3\4[redacted]';
+--       request_url CONSTANT text := '((?:Get|Post) "https?://[^/?#"]+)(?!/\[redacted\]")[/?#](?:[^"\\]|\\.)+"';
+--   BEGIN
+--       IF EXISTS (SELECT 1 FROM schema_migrations WHERE version = 'credential_scrub_v1') THEN
+--           RETURN;
+--       END IF;
+--       UPDATE public.certificates SET error_message = regexp_replace(error_message, shapes, kept, 'g')
+--        WHERE error_message ~ shapes;
+--       UPDATE public.certificate_history SET message = regexp_replace(message, shapes, kept, 'g')
+--        WHERE message ~ shapes;
+--       UPDATE public.certificate_history SET logs = regexp_replace(logs::text, shapes, kept, 'g')::jsonb
+--        WHERE logs::text ~ shapes;
+--       IF to_regclass('public.notification_state') IS NOT NULL THEN
+--           UPDATE public.notification_state SET last_detail = regexp_replace(last_detail, shapes, kept, 'g')
+--            WHERE last_detail ~ shapes;
+--       END IF;
+--       IF to_regclass('public.notification_channels') IS NOT NULL THEN
+--           UPDATE public.notification_channels
+--              SET last_error = regexp_replace(regexp_replace(last_error, shapes, kept, 'g'), request_url, '\1/[redacted]"', 'g')
+--            WHERE last_error ~ shapes OR last_error ~ request_url;
+--       END IF;
+--       IF to_regclass('public.notification_outbox') IS NOT NULL THEN
+--           UPDATE public.notification_outbox
+--              SET last_error = regexp_replace(regexp_replace(last_error, shapes, kept, 'g'), request_url, '\1/[redacted]"', 'g')
+--            WHERE last_error ~ shapes OR last_error ~ request_url;
+--           UPDATE public.notification_outbox SET payload = regexp_replace(payload::text, shapes, kept, 'g')::jsonb
+--            WHERE payload::text ~ shapes;
+--       END IF;
+--       INSERT INTO schema_migrations (version) VALUES ('credential_scrub_v1') ON CONFLICT DO NOTHING;
+--   END $$;
