@@ -656,3 +656,30 @@ func splitServerBlocks(t *testing.T, full string) []string {
 		rest = rest[end:]
 	}
 }
+
+// A ForwardAuth bypass location switches authentication off for a prefix and
+// forwards the request target as sent. nginx routes it on the normalized path,
+// but "/public/..;/admin" is /admin to Tomcat, and "/public/%252e%252e/admin"
+// is /admin to a backend that decodes twice — so the location refuses any path
+// $npg_request_path marks as unsafe instead of serving it unauthenticated.
+func TestForwardAuthBypassRefusesUnsafePaths(t *testing.T) {
+	host := baseHost("00000000-0000-0000-0000-0000000000f7", "192.0.2.30", true)
+	host.AuthBypassPaths = []string{"/public/", "/healthz"}
+	out := renderForTest(t, ProxyHostConfigData{
+		Host:         host,
+		AuthProvider: &model.AuthProvider{Type: "authelia", ProviderURL: "http://192.0.2.40:9091", TimeoutMs: 2000, Enabled: true},
+	})
+	for _, p := range host.AuthBypassPaths {
+		head := "    location " + p + " {\n        auth_request off;\n"
+		i := strings.Index(out, head)
+		if i < 0 {
+			t.Fatalf("bypass location %s not rendered:\n%s", p, out)
+		}
+		block := out[i : i+strings.Index(out[i:], "\n    }\n")]
+		guard := strings.Index(block, "        if ($npg_request_path = \"\") {\n            set $block_reason_var \"access_denied\";\n            return 403;\n        }\n")
+		proxy := strings.Index(block, "proxy_pass ")
+		if guard < 0 || proxy < 0 || guard > proxy {
+			t.Errorf("bypass location %s must refuse an unsafe path before proxying it:\n%s", p, block)
+		}
+	}
+}

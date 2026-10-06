@@ -151,6 +151,14 @@
     # ForwardAuth bypass: {{.}}
     location {{.}} {
         auth_request off;
+        # No authentication here, and the request target is forwarded as sent: a
+        # path in which a backend may find a dot segment nginx did not resolve
+        # ("..;", "..\", "%2e%2e" left over from a second encoding - see
+        # conf.d/npg_request_path.conf, $npg_request_path is "") is refused.
+        if ($npg_request_path = "") {
+            set $block_reason_var "access_denied";
+            return 403;
+        }
         {{if and $.Upstream $.Upstream.Servers}}proxy_pass {{upstreamScheme $.Upstream}}://{{$.Upstream.Name}};{{if eq (upstreamScheme $.Upstream) "https"}}
         proxy_ssl_server_name on;
         proxy_ssl_name $host;
