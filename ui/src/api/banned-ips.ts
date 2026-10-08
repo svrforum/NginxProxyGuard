@@ -19,6 +19,12 @@ interface BannedIPListResponse {
   page: number
   per_page: number
   total_pages: number
+  /** Counted over every ban the list matches, like `total` — `data` is only
+   *  one page of them. (#319) */
+  permanent_count: number
+  auto_count: number
+  /** Matching bans per proxy_host_id; global bans are not in it. */
+  host_counts: Record<string, number>
 }
 
 interface ProxyHostListResponse {

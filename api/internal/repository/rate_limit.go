@@ -295,47 +295,89 @@ func (r *RateLimitRepository) DeleteFail2ban(ctx context.Context, proxyHostID st
 
 // BannedIP operations
 
+// bannedIPCounts describes every ban a list matches, not only the page it
+// returns. The banned-IP screen's statistics cards and host filter show these;
+// they used to be counted from the page, so a 50-row page made the permanent
+// card read 50 however many permanent bans there were (#319).
+type bannedIPCounts struct {
+	total, permanent, auto int
+	byHost                 map[string]int
+}
+
+// countBannedIPs counts the bans matching where — the list query's own WHERE,
+// with its own arguments — in one statement, so the total and its breakdowns
+// are read together and always add up. Grouping by host gives the per-host
+// figures in the same pass; global bans fall in the NULL group and only count
+// towards the totals.
+func (r *RateLimitRepository) countBannedIPs(ctx context.Context, where string, args ...interface{}) (*bannedIPCounts, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT proxy_host_id, COUNT(*),
+		       COUNT(*) FILTER (WHERE is_permanent),
+		       COUNT(*) FILTER (WHERE is_auto_banned)
+		FROM banned_ips
+		WHERE `+where+`
+		GROUP BY proxy_host_id
+	`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	c := &bannedIPCounts{byHost: map[string]int{}}
+	for rows.Next() {
+		var hostID sql.NullString
+		var n, permanent, auto int
+		if err := rows.Scan(&hostID, &n, &permanent, &auto); err != nil {
+			return nil, err
+		}
+		c.total += n
+		c.permanent += permanent
+		c.auto += auto
+		if hostID.Valid {
+			c.byHost[hostID.String] = n
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
 func (r *RateLimitRepository) ListBannedIPs(ctx context.Context, proxyHostID *string, page, perPage int) (*model.BannedIPListResponse, error) {
-	var countQuery, listQuery string
-	var args []interface{}
+	var where, listQuery string
+	var whereArgs, args []interface{}
 
 	// Only show active bans (permanent or not yet expired)
 	activeCondition := "(is_permanent = TRUE OR expires_at > NOW())"
 
 	if proxyHostID != nil {
-		countQuery = "SELECT COUNT(*) FROM banned_ips WHERE proxy_host_id = $1 AND " + activeCondition
+		where = "proxy_host_id = $1 AND " + activeCondition
 		listQuery = `
 			SELECT id, proxy_host_id, ip_address, reason, fail_count, banned_at, expires_at, is_permanent, COALESCE(is_auto_banned, false), created_at
 			FROM banned_ips
-			WHERE proxy_host_id = $1 AND ` + activeCondition + `
+			WHERE ` + where + `
 			ORDER BY banned_at DESC
 			LIMIT $2 OFFSET $3
 		`
+		whereArgs = []interface{}{*proxyHostID}
 		args = []interface{}{*proxyHostID, perPage, (page - 1) * perPage}
 	} else {
-		countQuery = "SELECT COUNT(*) FROM banned_ips WHERE " + activeCondition
+		where = activeCondition
 		listQuery = `
 			SELECT id, proxy_host_id, ip_address, reason, fail_count, banned_at, expires_at, is_permanent, COALESCE(is_auto_banned, false), created_at
 			FROM banned_ips
-			WHERE ` + activeCondition + `
+			WHERE ` + where + `
 			ORDER BY banned_at DESC
 			LIMIT $1 OFFSET $2
 		`
 		args = []interface{}{perPage, (page - 1) * perPage}
 	}
 
-	var total int
-	if proxyHostID != nil {
-		err := r.db.QueryRowContext(ctx, countQuery, *proxyHostID).Scan(&total)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		err := r.db.QueryRowContext(ctx, countQuery).Scan(&total)
-		if err != nil {
-			return nil, err
-		}
+	counts, err := r.countBannedIPs(ctx, where, whereArgs...)
+	if err != nil {
+		return nil, err
 	}
+	total := counts.total
 
 	rows, err := r.db.QueryContext(ctx, listQuery, args...)
 	if err != nil {
@@ -374,6 +416,10 @@ func (r *RateLimitRepository) ListBannedIPs(ctx context.Context, proxyHostID *st
 		Page:       page,
 		PerPage:    perPage,
 		TotalPages: totalPages,
+
+		PermanentCount: counts.permanent,
+		AutoCount:      counts.auto,
+		HostCounts:     counts.byHost,
 	}, nil
 }
 
@@ -381,20 +427,20 @@ func (r *RateLimitRepository) ListBannedIPs(ctx context.Context, proxyHostID *st
 func (r *RateLimitRepository) ListGlobalBannedIPs(ctx context.Context, page, perPage int) (*model.BannedIPListResponse, error) {
 	activeCondition := "(is_permanent = TRUE OR expires_at > NOW())"
 
-	countQuery := "SELECT COUNT(*) FROM banned_ips WHERE proxy_host_id IS NULL AND " + activeCondition
+	where := "proxy_host_id IS NULL AND " + activeCondition
 	listQuery := `
 		SELECT id, proxy_host_id, ip_address, reason, fail_count, banned_at, expires_at, is_permanent, COALESCE(is_auto_banned, false), created_at
 		FROM banned_ips
-		WHERE proxy_host_id IS NULL AND ` + activeCondition + `
+		WHERE ` + where + `
 		ORDER BY banned_at DESC
 		LIMIT $1 OFFSET $2
 	`
 
-	var total int
-	err := r.db.QueryRowContext(ctx, countQuery).Scan(&total)
+	counts, err := r.countBannedIPs(ctx, where)
 	if err != nil {
 		return nil, err
 	}
+	total := counts.total
 
 	rows, err := r.db.QueryContext(ctx, listQuery, perPage, (page-1)*perPage)
 	if err != nil {
@@ -433,6 +479,10 @@ func (r *RateLimitRepository) ListGlobalBannedIPs(ctx context.Context, page, per
 		Page:       page,
 		PerPage:    perPage,
 		TotalPages: totalPages,
+
+		PermanentCount: counts.permanent,
+		AutoCount:      counts.auto,
+		HostCounts:     counts.byHost,
 	}, nil
 }
 
@@ -440,20 +490,20 @@ func (r *RateLimitRepository) ListGlobalBannedIPs(ctx context.Context, page, per
 func (r *RateLimitRepository) ListHostBannedIPs(ctx context.Context, page, perPage int) (*model.BannedIPListResponse, error) {
 	activeCondition := "(is_permanent = TRUE OR expires_at > NOW())"
 
-	countQuery := "SELECT COUNT(*) FROM banned_ips WHERE proxy_host_id IS NOT NULL AND " + activeCondition
+	where := "proxy_host_id IS NOT NULL AND " + activeCondition
 	listQuery := `
 		SELECT id, proxy_host_id, ip_address, reason, fail_count, banned_at, expires_at, is_permanent, COALESCE(is_auto_banned, false), created_at
 		FROM banned_ips
-		WHERE proxy_host_id IS NOT NULL AND ` + activeCondition + `
+		WHERE ` + where + `
 		ORDER BY banned_at DESC
 		LIMIT $1 OFFSET $2
 	`
 
-	var total int
-	err := r.db.QueryRowContext(ctx, countQuery).Scan(&total)
+	counts, err := r.countBannedIPs(ctx, where)
 	if err != nil {
 		return nil, err
 	}
+	total := counts.total
 
 	rows, err := r.db.QueryContext(ctx, listQuery, perPage, (page-1)*perPage)
 	if err != nil {
@@ -492,6 +542,10 @@ func (r *RateLimitRepository) ListHostBannedIPs(ctx context.Context, page, perPa
 		Page:       page,
 		PerPage:    perPage,
 		TotalPages: totalPages,
+
+		PermanentCount: counts.permanent,
+		AutoCount:      counts.auto,
+		HostCounts:     counts.byHost,
 	}, nil
 }
 

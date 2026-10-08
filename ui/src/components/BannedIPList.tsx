@@ -303,20 +303,14 @@ export function BannedIPList() {
   const total = data?.total || 0
   const totalPages = data?.total_pages || 1
 
-  // Statistics
-  const stats = useMemo(() => {
-    const bans = data?.data || []
-    return {
-      total: bans.length,
-      permanent: bans.filter(b => b.is_permanent).length,
-      auto: bans.filter(b => b.is_auto_banned).length,
-      byHost: bans.reduce((acc, b) => {
-        const key = b.proxy_host_id || 'global'
-        acc[key] = (acc[key] || 0) + 1
-        return acc
-      }, {} as Record<string, number>),
-    }
-  }, [data?.data])
+  // Statistics — counted by the server over every ban the tab matches. The
+  // page holds at most 50 of them, so counting it made the cards read the
+  // page size once there were more (#319).
+  const stats = {
+    permanent: data?.permanent_count ?? 0,
+    auto: data?.auto_count ?? 0,
+    byHost: data?.host_counts ?? {},
+  }
 
   return (
     <div className="space-y-6">

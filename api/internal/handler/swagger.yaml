@@ -14802,6 +14802,17 @@ components:
           type: integer
         total_pages:
           type: integer
+        permanent_count:
+          type: integer
+          description: Permanent bans among all `total` matches, not just this page.
+        auto_count:
+          type: integer
+          description: Bans with `is_auto_banned` set among all `total` matches, not just this page. Per-host fail2ban and the WAF auto-ban set it; the global fail2ban jail does not, so its bans are counted in `total` but not here.
+        host_counts:
+          type: object
+          description: Matching bans per host, keyed by proxy_host_id. Global bans are counted in `total` but not here.
+          additionalProperties:
+            type: integer
     BanIPRequest:
       type: object
       required: [ip_address]

@@ -285,6 +285,13 @@ type BannedIPListResponse struct {
 	Page       int        `json:"page"`
 	PerPage    int        `json:"per_page"`
 	TotalPages int        `json:"total_pages"`
+
+	// Counted over every ban the list matches, like Total, not over Data. The
+	// screen used to count the page it was showing, so with more bans than one
+	// page holds the permanent card read the page size (#319).
+	PermanentCount int            `json:"permanent_count"`
+	AutoCount      int            `json:"auto_count"`
+	HostCounts     map[string]int `json:"host_counts"` // by proxy_host_id; global bans are not in it
 }
 
 // IPBanHistory event types
