@@ -46,6 +46,7 @@ type Services struct {
 	DDNS               *service.DDNSService
 	CloudflareTunnel   *service.CloudflareTunnelService
 	DiskGuard          *service.DiskGuard // nil when NPG_DISK_GUARD_DISABLED
+	RawLogReclaim      *service.RawLogReclaimService
 
 	// Ends whatever DiskGuard started; cancelled by its scheduler's Stop.
 	diskGuardCtx    context.Context
@@ -222,6 +223,9 @@ func InitServices(
 	// which it is wired into.
 	initDiskGuard(cfg, db, repos, svcs)
 
+	// Opt-in removal of the raw_log copies kept in old compressed logs.
+	svcs.RawLogReclaim = service.NewRawLogReclaimService(repos.RawLogReclaim, rawLogReclaimOptions())
+
 	return svcs
 }
 
@@ -353,6 +357,14 @@ func wireServiceCallbacks(svcs *Services, repos *Repositories) {
 		svcs.Fail2ban.SetConfiguredHostResolver(svcs.LogCollector.IsConfiguredHost)
 		svcs.LogCollector.SetSystemSettingsRepo(repos.SystemSettings)
 	}
+
+	// Raw log reclaim: DiskGuard measures the database's disk before each day
+	// and says when it is critical. The nil check keeps a disabled guard from
+	// becoming a non-nil interface holding a nil pointer; without a probe the
+	// reclaim refuses to start (free space unknown).
+	if svcs.DiskGuard != nil {
+		svcs.RawLogReclaim.SetDiskProbe(svcs.DiskGuard)
+	}
 }
 
 // StopBackgroundServices gracefully stops services with explicit Stop semantics.
@@ -382,5 +394,10 @@ func (s *Services) StopBackgroundServices() {
 	}
 	if s.GeoIP != nil {
 		s.GeoIP.Close()
+	}
+	if s.RawLogReclaim != nil {
+		// Cancels a running reclaim without recording a stop: it resumes
+		// after the next start.
+		s.RawLogReclaim.Shutdown()
 	}
 }

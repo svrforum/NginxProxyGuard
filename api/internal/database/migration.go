@@ -1628,6 +1628,46 @@ BEGIN
     INSERT INTO schema_migrations (version) VALUES ('logs_compress_after_1d_v1') ON CONFLICT DO NOTHING;
 END $$`,
 		},
+		{
+			// State of the opt-in raw_log reclaim in Settings > Maintenance:
+			// the job (a singleton) and the days it works on, so a stop or an
+			// API restart resumes where it was. Operational state only — no
+			// foreign keys, not backed up. A fresh install gets the same two
+			// statements from the executable end of 001_init.sql
+			// (migration_raw_log_reclaim_test.go holds the copies equal).
+			desc: "raw log reclaim job state (raw_log_reclaim_job, raw_log_reclaim_chunks)",
+			sql: `CREATE TABLE IF NOT EXISTS public.raw_log_reclaim_job (
+    id boolean DEFAULT true NOT NULL,
+    status character varying(20) DEFAULT 'idle'::character varying NOT NULL,
+    max_chunks integer,
+    requested_at timestamp with time zone,
+    requested_by text,
+    started_at timestamp with time zone,
+    finished_at timestamp with time zone,
+    last_error text,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT raw_log_reclaim_job_pkey PRIMARY KEY (id),
+    CONSTRAINT chk_raw_log_reclaim_job_singleton CHECK (id),
+    CONSTRAINT chk_raw_log_reclaim_job_status CHECK (status IN ('idle', 'running', 'paused', 'done', 'failed'))
+);
+CREATE TABLE IF NOT EXISTS public.raw_log_reclaim_chunks (
+    chunk_name text NOT NULL,
+    range_start timestamp with time zone NOT NULL,
+    range_end timestamp with time zone NOT NULL,
+    state character varying(20) DEFAULT 'pending'::character varying NOT NULL,
+    bytes_before bigint,
+    bytes_after bigint,
+    raw_bytes bigint,
+    batches_nulled integer,
+    update_xid bigint,
+    attempts integer DEFAULT 0 NOT NULL,
+    last_error text,
+    worked_at timestamp with time zone,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT raw_log_reclaim_chunks_pkey PRIMARY KEY (chunk_name),
+    CONSTRAINT chk_raw_log_reclaim_chunks_state CHECK (state IN ('pending', 'nulled', 'done', 'skipped', 'gone', 'failed'))
+);`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

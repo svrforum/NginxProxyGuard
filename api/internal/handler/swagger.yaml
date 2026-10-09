@@ -7434,6 +7434,118 @@ paths:
           description: Raw log files are not enabled
         '500':
           description: logrotate failed (response carries its output in "details")
+  /system-settings/log-storage/raw-reclaim:
+    get:
+      tags: [Logs]
+      summary: Status of the raw log reclaim
+      description: |
+        The opt-in job that removes the raw_log copies of access and error lines kept
+        inside old compressed log history (compressed days at least two days old), one
+        day at a time. WAF (ModSecurity) events keep theirs, and every other column is
+        unchanged. Without `estimate=1` this reads only the job's own state and is cheap
+        enough to poll; the card polls every 5 seconds while it runs.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: estimate
+          in: query
+          required: false
+          description: >-
+            `1` also measures what is left to reclaim and the free space on the database
+            disk. The measurement is cached for 10 minutes, and renewed sooner once a day
+            finishes.
+          schema:
+            type: string
+            enum: ['1', 'true']
+      responses:
+        '200':
+          description: Job status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogRawReclaimStatus'
+  /system-settings/log-storage/raw-reclaim/start:
+    post:
+      tags: [Logs]
+      summary: Start (or resume) the raw log reclaim
+      description: |
+        Irreversible for the database copy: the verbatim access/error line is removed
+        from compressed days, including what has no column of its own (Basic-auth user
+        name, upstream connect/header timings, nginx's ASN value, the error-line prefix).
+        It remains only in the raw log files, for their retention.
+
+        Plans the work, checks the free space on the database disk against the first day
+        (twice its size without raw_log, plus 1 GiB) and starts a background runner; a
+        paused or failed job continues where it stopped. Each day takes a short UPDATE,
+        a wait for older transactions to end, and a VACUUM FULL during which queries on
+        that day wait (about a minute for a large day). The job waits while the database
+        disk is critical and pauses 30 seconds between days (`NPG_RAW_RECLAIM_PAUSE`).
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                max_chunks:
+                  type: integer
+                  minimum: 1
+                  description: Work on at most this many days in this request; absent means all.
+      responses:
+        '202':
+          description: Started, or finished at once when no day had raw_log left to remove
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogRawReclaimStatus'
+        '400':
+          description: max_chunks is below 1
+        '409':
+          description: Already running (code `already_running`)
+        '412':
+          description: |
+            Cannot start now. `code` is `unsupported` (with `reason`: timescaledb_missing,
+            catalog_changed, not_hypertable, compression_disabled or
+            segmentby_without_log_type), `free_space_unknown` (the database disk cannot be
+            measured, e.g. NPG_DISK_GUARD_DISABLED) or `insufficient_space` (with
+            `free_bytes` and `required_free_bytes`).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  code:
+                    type: string
+                    enum: [unsupported, free_space_unknown, insufficient_space]
+                  reason:
+                    type: string
+                  free_bytes:
+                    type: integer
+                    format: int64
+                  required_free_bytes:
+                    type: integer
+                    format: int64
+  /system-settings/log-storage/raw-reclaim/stop:
+    post:
+      tags: [Logs]
+      summary: Pause the raw log reclaim
+      description: |
+        Records `paused` and cancels the statement in flight; its transaction rolls back,
+        so the day keeps the state it had. Start continues later. A no-op (still 200)
+        when nothing runs.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Job status after stopping
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogRawReclaimStatus'
   /system-settings/logs:
     get:
       tags: [Logs]
@@ -17992,3 +18104,102 @@ components:
           type: integer
         total_pages:
           type: integer
+    LogRawReclaimStatus:
+      type: object
+      description: >-
+        The raw log reclaim job: removing the raw_log copies of access and error lines
+        kept in old compressed log history.
+      properties:
+        status:
+          type: string
+          enum: [idle, running, paused, done, failed]
+        supported:
+          type: boolean
+          description: false when this database cannot run the job; see unsupported_reason.
+        unsupported_reason:
+          type: string
+          enum: [timescaledb_missing, catalog_changed, not_hypertable, compression_disabled, segmentby_without_log_type]
+        requested_at:
+          type: string
+          format: date-time
+        requested_by:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+          format: date-time
+        max_chunks:
+          type: integer
+        resume_at:
+          type: string
+          format: date-time
+          description: Set while a run interrupted by an API restart waits to resume.
+        chunks_total:
+          type: integer
+          description: >-
+            Days the job has recorded (every day it found raw_log to remove in), except
+            unfinished ones that retention has dropped since.
+        chunks_done:
+          type: integer
+        chunks_pending:
+          type: integer
+        chunks_skipped:
+          type: integer
+          description: Days left alone because they no longer qualify (e.g. partially compressed).
+        chunks_failed:
+          type: integer
+          description: Days that failed three times and are left alone.
+        bytes_before:
+          type: integer
+          format: int64
+          description: Compressed size of the finished days before.
+        bytes_after:
+          type: integer
+          format: int64
+        reclaimed_bytes:
+          type: integer
+          format: int64
+        remaining_raw_bytes:
+          type: integer
+          format: int64
+          description: raw_log still held by planned days that are not finished.
+        estimated_reclaimable_bytes:
+          type: integer
+          format: int64
+          description: Access/error raw_log in compressed days old enough (from estimate=1).
+        modsec_raw_bytes:
+          type: integer
+          format: int64
+          description: WAF (ModSecurity) raw_log in those days, which is kept.
+        estimate_chunks:
+          type: integer
+        estimated_at:
+          type: string
+          format: date-time
+        current_chunk:
+          type: object
+          properties:
+            range_start:
+              type: string
+              format: date-time
+            range_end:
+              type: string
+              format: date-time
+            step:
+              type: string
+              enum: [waiting_disk, waiting_lock, nulling, waiting, vacuum, pausing]
+            since:
+              type: string
+              format: date-time
+        free_bytes:
+          type: integer
+          format: int64
+          description: Free space on the database disk at the last measurement; absent when unknown.
+        required_free_bytes:
+          type: integer
+          format: int64
+          description: What the next day needs, twice its size without raw_log plus 1 GiB.
+        last_error:
+          type: string

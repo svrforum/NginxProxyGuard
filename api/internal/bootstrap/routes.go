@@ -380,6 +380,7 @@ func registerTokenProtectedRoutes(v1 *echo.Group, c *Container) {
 	registerSettingsRoutes(v1, c.Handlers.Settings)
 	registerSystemLogRoutes(v1, c.Handlers.SystemLog)
 	registerSystemSettingsRoutes(v1, c.Handlers.SystemSettings)
+	registerRawLogReclaimRoutes(v1, c.Handlers.RawLogReclaim)
 	registerAuditLogRoutes(v1, c.Handlers.AuditLog)
 	registerChallengeConfigRoutes(v1, c.Handlers.Challenge)
 	registerCloudProviderRoutes(v1, c.Handlers.CloudProvider)
@@ -881,6 +882,18 @@ func registerSystemSettingsRoutes(v1 *echo.Group, h *handler.SystemSettingsHandl
 
 	g.GET("/logs", h.GetSystemLogConfig, settingsRead)
 	g.PUT("/logs", h.UpdateSystemLogConfig, settingsWrite)
+}
+
+// registerRawLogReclaimRoutes: the opt-in removal of the raw_log copies kept in
+// old compressed logs, a Maintenance setting.
+func registerRawLogReclaimRoutes(v1 *echo.Group, h *handler.RawLogReclaimHandler) {
+	settingsRead := authMiddleware.RequireAPIPermission(model.PermissionSettingsRead)
+	settingsWrite := authMiddleware.RequireAPIPermission(model.PermissionSettingsWrite)
+
+	g := v1.Group("/system-settings/log-storage/raw-reclaim")
+	g.GET("", h.GetStatus, settingsRead)
+	g.POST("/start", h.Start, settingsWrite)
+	g.POST("/stop", h.Stop, settingsWrite)
 }
 
 func registerAuditLogRoutes(v1 *echo.Group, h *handler.AuditLogHandler) {

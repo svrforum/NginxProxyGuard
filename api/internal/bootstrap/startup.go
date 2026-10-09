@@ -208,4 +208,8 @@ func startBackgroundServices(ctx context.Context, c *Container) {
 	// CloudProvider + GeoIP scheduler start themselves via their own Start() methods.
 	c.Services.CloudProvider.Start()
 	c.Services.GeoIPScheduler.Start()
+
+	// A raw log reclaim the previous process left running resumes about five
+	// minutes after start-up.
+	go c.Services.RawLogReclaim.ResumeIfRunning(ctx)
 }

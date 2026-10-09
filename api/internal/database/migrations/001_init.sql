@@ -4646,3 +4646,42 @@ CREATE INDEX IF NOT EXISTS idx_proxy_hosts_tags ON public.proxy_hosts USING gin 
 --       END IF;
 --       INSERT INTO schema_migrations (version) VALUES ('logs_compress_after_1d_v1') ON CONFLICT DO NOTHING;
 --   END $$;
+
+-- Raw log reclaim: state of the opt-in job in Settings > Maintenance that removes the
+-- raw_log copies of access and error lines kept inside old compressed log history (the
+-- analysis columns and WAF event records stay). One row per job (a singleton) and one row
+-- per day it works on, so a stop or an API restart resumes where it was. Operational
+-- state only: no foreign keys, and deliberately not part of backup export/import.
+-- EXECUTABLE: a fresh install runs this whole file once, which creates them here; the
+-- identical copy in database/migration.go `upgrades` creates them on existing installs.
+CREATE TABLE IF NOT EXISTS public.raw_log_reclaim_job (
+    id boolean DEFAULT true NOT NULL,
+    status character varying(20) DEFAULT 'idle'::character varying NOT NULL,
+    max_chunks integer,
+    requested_at timestamp with time zone,
+    requested_by text,
+    started_at timestamp with time zone,
+    finished_at timestamp with time zone,
+    last_error text,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT raw_log_reclaim_job_pkey PRIMARY KEY (id),
+    CONSTRAINT chk_raw_log_reclaim_job_singleton CHECK (id),
+    CONSTRAINT chk_raw_log_reclaim_job_status CHECK (status IN ('idle', 'running', 'paused', 'done', 'failed'))
+);
+CREATE TABLE IF NOT EXISTS public.raw_log_reclaim_chunks (
+    chunk_name text NOT NULL,
+    range_start timestamp with time zone NOT NULL,
+    range_end timestamp with time zone NOT NULL,
+    state character varying(20) DEFAULT 'pending'::character varying NOT NULL,
+    bytes_before bigint,
+    bytes_after bigint,
+    raw_bytes bigint,
+    batches_nulled integer,
+    update_xid bigint,
+    attempts integer DEFAULT 0 NOT NULL,
+    last_error text,
+    worked_at timestamp with time zone,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT raw_log_reclaim_chunks_pkey PRIMARY KEY (chunk_name),
+    CONSTRAINT chk_raw_log_reclaim_chunks_state CHECK (state IN ('pending', 'nulled', 'done', 'skipped', 'gone', 'failed'))
+);

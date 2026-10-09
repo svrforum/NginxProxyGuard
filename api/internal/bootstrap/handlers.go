@@ -39,6 +39,7 @@ type Handlers struct {
 	HealthDetailed     *handler.HealthDetailedHandler
 	DDNS               *handler.DDNSHandler
 	CloudflareTunnel   *handler.CloudflareTunnelHandler
+	RawLogReclaim      *handler.RawLogReclaimHandler
 }
 
 // InitHandlers constructs every HTTP handler with the previously built
@@ -100,6 +101,7 @@ func InitHandlers(
 	h.HealthDetailed.SetDiskGuard(svcs.DiskGuard)
 	h.DDNS = handler.NewDDNSHandler(svcs.DDNS, svcs.ProxyHost)
 	h.CloudflareTunnel = handler.NewCloudflareTunnelHandler(svcs.CloudflareTunnel, svcs.Audit)
+	h.RawLogReclaim = handler.NewRawLogReclaimHandler(svcs.RawLogReclaim, svcs.Audit)
 
 	return h
 }
