@@ -156,9 +156,14 @@ setup_geoip_config() {
 # Raw log files are ADDITIONAL storage, not a replacement
 # Raw logs are stored in /etc/nginx/logs (within the consolidated volume) for API access
 setup_log_files() {
-    local raw_log_enabled=false
+    # Raw logging is the log collector's source and has been mandatory since
+    # v2.17.1; the API writes .raw_log_config every time it applies the
+    # settings. A missing file means "not written yet" (a fresh volume, or the
+    # first start after an upgrade, when nginx comes up before the new API),
+    # not "off": treating it as off dropped access logs until the API applied
+    # the settings again.
+    local raw_log_enabled=true
 
-    # Check if raw log configuration file exists
     if [ -f "$RAW_LOG_CONFIG" ]; then
         raw_log_enabled=$(grep "^ENABLED=" "$RAW_LOG_CONFIG" | cut -d'=' -f2)
     fi

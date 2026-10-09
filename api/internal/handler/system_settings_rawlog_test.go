@@ -88,6 +88,9 @@ func TestNginxEntrypointReadsTheRawLogMarker(t *testing.T) {
 	}
 	for _, want := range []string{
 		`RAW_LOG_CONFIG="` + rawLogConfigFile + `"`,
+		// A missing marker (fresh volume, or nginx starting before the
+		// upgraded API has written it) must mean "on", not "off".
+		`local raw_log_enabled=true`,
 		`raw_log_enabled=$(grep "^ENABLED=" "$RAW_LOG_CONFIG" | cut -d'=' -f2)`,
 		`if [ "$raw_log_enabled" = "true" ]; then`,
 		`rm -f /etc/nginx/conf.d/00-raw-logging.conf`,
