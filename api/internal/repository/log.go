@@ -357,13 +357,27 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 	}
 	offset := (page - 1) * perPage
 
+	// The time sort (sort_by=timestamp) is served by the created_at ordering.
+	// created_at is the insert time, seconds after the request's timestamp, so
+	// only rows from the same moment can change places; ordering by timestamp
+	// itself sorted the whole window (7 s on a 3M-row day) and needed an index
+	// of its own on every chunk, which is no longer built. Mapped on a copy:
+	// the caller's filter is left as it came.
+	sortBy := ""
+	if filter != nil && filter.SortBy != nil {
+		sortBy = *filter.SortBy
+	}
+	if sortBy == "timestamp" {
+		sortBy = "created_at"
+	}
+
 	// Cursor mode is only safe for the default sort. Custom SortBy still
 	// uses OFFSET because the cursor encodes (created_at, id) — switching
 	// the sort key mid-stream would silently return the wrong rows.
 	useCursor := false
 	var cursor logCursor
 	if filter != nil && filter.Cursor != nil && *filter.Cursor != "" &&
-		(filter.SortBy == nil || *filter.SortBy == "" || *filter.SortBy == "created_at") &&
+		(sortBy == "" || sortBy == "created_at") &&
 		(filter.SortOrder == nil || strings.EqualFold(*filter.SortOrder, "desc")) {
 		// Keyset predicate below is DESC-only ((created_at,id) < cursor); an ASC
 		// sort must fall back to OFFSET or it would page the wrong direction.
@@ -689,7 +703,7 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 	// timestamp for ingested logs, so the visible order is unchanged.
 	orderBy := "created_at DESC, id DESC"
 	customSort := false
-	if filter != nil && filter.SortBy != nil && *filter.SortBy != "" {
+	if sortBy != "" {
 		allowedSortFields := map[string]bool{
 			"created_at":      true,
 			"timestamp":       true,
@@ -699,12 +713,12 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 			"client_ip":       true,
 			"host":            true,
 		}
-		if allowedSortFields[*filter.SortBy] {
+		if allowedSortFields[sortBy] {
 			sortOrder := "DESC"
 			if filter.SortOrder != nil && (*filter.SortOrder == "asc" || *filter.SortOrder == "ASC") {
 				sortOrder = "ASC"
 			}
-			if *filter.SortBy == "created_at" {
+			if sortBy == "created_at" {
 				orderBy = fmt.Sprintf("created_at %s, id %s", sortOrder, sortOrder)
 				// The cursor predicate is `(created_at, id) < (...)`, which only
 				// walks DESC. Ascending order kept minting a cursor the server
@@ -714,9 +728,9 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 					customSort = true
 				}
 			} else {
-				// Any other explicit sort (incl. timestamp) can't keyset on
-				// (created_at, id), so it falls back to OFFSET pagination.
-				orderBy = fmt.Sprintf("%s %s", *filter.SortBy, sortOrder)
+				// Any other explicit sort can't keyset on (created_at, id), so
+				// it falls back to OFFSET pagination.
+				orderBy = fmt.Sprintf("%s %s", sortBy, sortOrder)
 				customSort = true
 			}
 		}

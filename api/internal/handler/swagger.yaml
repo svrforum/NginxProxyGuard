@@ -2913,8 +2913,9 @@ paths:
           in: query
           description: |
             Opaque keyset token from a previous response's `next_cursor`. Honoured only
-            for the default sort; any explicit `sort_by` other than created_at falls
-            back to offset pagination and the cursor is ignored.
+            for the default sort, created_at descending (`sort_by=timestamp` descending
+            uses it too); any other explicit sort falls back to offset pagination and
+            the cursor is ignored.
           schema:
             type: string
         - name: log_type
@@ -3191,8 +3192,11 @@ paths:
         - name: sort_by
           in: query
           description: |
-            Unrecognised values fall back to created_at DESC. Only created_at supports
-            cursor pagination; the others switch the query to offset pagination.
+            Unrecognised values fall back to created_at DESC. `timestamp` is served by
+            the created_at order: created_at is when the row was stored, seconds after
+            the request's timestamp, so only requests from the same moment can change
+            places. Only created_at and timestamp support cursor pagination (descending);
+            the others switch the query to offset pagination.
           schema:
             type: string
             enum: [created_at, timestamp, body_bytes_sent, request_time, status_code, client_ip, host]

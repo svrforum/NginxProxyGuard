@@ -4175,8 +4175,10 @@ CREATE INDEX IF NOT EXISTS idx_logs_part_uri_trgm ON logs_partitioned USING gin 
 CREATE INDEX IF NOT EXISTS idx_logs_part_ua_trgm ON logs_partitioned USING gin (http_user_agent gin_trgm_ops);
 
 -- v2.8.0: DB Performance composite indexes for logs_partitioned
-CREATE INDEX IF NOT EXISTS idx_logs_part_host_ts ON logs_partitioned (host, timestamp DESC);
-CREATE INDEX IF NOT EXISTS idx_logs_part_status_ts ON logs_partitioned (status_code, timestamp DESC) WHERE status_code IS NOT NULL;
+-- idx_logs_part_host_ts and idx_logs_part_status_ts are retired; see the logs_partitioned
+-- index retirement note below and retiredLogsPartitionedIndexes in database/migration.go.
+-- CREATE INDEX IF NOT EXISTS idx_logs_part_host_ts ON logs_partitioned (host, timestamp DESC);
+-- CREATE INDEX IF NOT EXISTS idx_logs_part_status_ts ON logs_partitioned (status_code, timestamp DESC) WHERE status_code IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_logs_part_proxy_host_ts ON logs_partitioned (proxy_host_id, timestamp DESC) WHERE proxy_host_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_logs_part_geo_ts ON logs_partitioned (geo_country_code, timestamp DESC) WHERE geo_country_code IS NOT NULL AND geo_country_code != '';
 CREATE INDEX IF NOT EXISTS idx_logs_part_type_created ON logs_partitioned (log_type, created_at DESC);
@@ -4428,6 +4430,30 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_proxy_hosts_stream_listener_unique
 -- reclaims names squatted by logs_partitioned_backup (DROP INDEX — the backup
 -- is verification-only) and builds the canonical index set on the live table
 -- using timescaledb.transaction_per_chunk to keep ingest unblocked.
+
+-- logs_partitioned index retirement — DOCUMENTATION ONLY. The executable copy is
+-- retireLogsPartitionedIndexes in database/migration.go, called first by
+-- ensureLogsPartitionedIndexes on every boot. Seven btrees are no longer built:
+--   idx_logs_part_log_type, idx_logs_part_timestamp, idx_logs_part_type_timestamp,
+--   idx_logs_part_host_ts, idx_logs_part_status_ts, idx_logs_part_status_code,
+--   idx_logs_part_block_reason_ts
+-- Measured on an attack-day mix (3M rows), no filter, sort, dashboard or autocomplete
+-- query got slower without them once the log list serves the time sort from created_at,
+-- and the sparse indexes TimescaleDB derives for compressed chunks stayed the same.
+-- Together they cost about 377 MB per uncompressed day on the busiest install and seven
+-- index writes per insert. idx_logs_part_status_created stays (it serves the status
+-- sort), and so do the three pg_trgm indexes (without them URI/User-Agent filters and
+-- autocomplete searches take seconds instead of milliseconds).
+-- Each DROP runs in its own transaction under lock_timeout '3s'; a drop that cannot get
+-- its locks rolls back and is retried on the next boot. The upgrades entries that
+-- created four of them on every boot are gone. The native-partition CREATE section
+-- above still declares all seven: on a fresh install that table becomes
+-- logs_partitioned_backup and is dropped while empty.
+-- Never retire idx_logs_ht_* or logs_hypertable_created_at_idx: each has an identical
+-- canonical twin, and a chunk created after both existed carries ONE physical index for
+-- the pair, owned by whichever was created first. Dropping the owner leaves that chunk
+-- without the index its twin still promises. The retirement skips any index with an
+-- identical index that stays.
 
 -- v2.32.0: cloudflare_tunnel singleton (Phase 1 token mode)
 CREATE TABLE IF NOT EXISTS public.cloudflare_tunnel (

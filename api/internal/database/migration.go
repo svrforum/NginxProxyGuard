@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 //go:embed migrations/*.sql
@@ -402,10 +404,10 @@ END $$`,
 		// -----------------------------------------------------------------------
 		// Performance indexes for logs_partitioned (v2.4.0+)
 		// -----------------------------------------------------------------------
-		{
-			desc: "v2.4.0: idx_logs_part_block_reason_ts",
-			sql:  `CREATE INDEX IF NOT EXISTS idx_logs_part_block_reason_ts ON logs_partitioned (block_reason, timestamp DESC) WHERE block_reason != 'none'`,
-		},
+		// idx_logs_part_block_reason_ts and idx_logs_part_status_code used to be
+		// created here. They are retired (retiredLogsPartitionedIndexes), and
+		// these entries run on every boot, so they would rebuild what
+		// ensureLogsPartitionedIndexes drops. Do not add them back.
 		{
 			desc: "v2.4.0: idx_logs_part_client_ip",
 			sql:  `CREATE INDEX IF NOT EXISTS idx_logs_part_client_ip ON logs_partitioned (client_ip)`,
@@ -413,10 +415,6 @@ END $$`,
 		{
 			desc: "v2.4.0: idx_logs_part_created_at",
 			sql:  `CREATE INDEX IF NOT EXISTS idx_logs_part_created_at ON logs_partitioned (created_at DESC)`,
-		},
-		{
-			desc: "v2.4.0: idx_logs_part_status_code",
-			sql:  `CREATE INDEX IF NOT EXISTS idx_logs_part_status_code ON logs_partitioned (status_code) WHERE status_code IS NOT NULL`,
 		},
 
 		// -----------------------------------------------------------------------
@@ -550,14 +548,8 @@ END $$`,
 		// -----------------------------------------------------------------------
 		// DB Performance: composite indexes for logs_partitioned (v2.8.0+)
 		// -----------------------------------------------------------------------
-		{
-			desc: "v2.8.0: idx_logs_part_host_ts",
-			sql:  `CREATE INDEX IF NOT EXISTS idx_logs_part_host_ts ON logs_partitioned (host, timestamp DESC)`,
-		},
-		{
-			desc: "v2.8.0: idx_logs_part_status_ts",
-			sql:  `CREATE INDEX IF NOT EXISTS idx_logs_part_status_ts ON logs_partitioned (status_code, timestamp DESC) WHERE status_code IS NOT NULL`,
-		},
+		// idx_logs_part_host_ts and idx_logs_part_status_ts used to be created
+		// here; retired like the two v2.4.0 entries above. Do not add them back.
 		{
 			desc: "v2.8.0: idx_logs_part_proxy_host_ts",
 			sql:  `CREATE INDEX IF NOT EXISTS idx_logs_part_proxy_host_ts ON logs_partitioned (proxy_host_id, timestamp DESC) WHERE proxy_host_id IS NOT NULL`,
@@ -2757,22 +2749,18 @@ func (db *DB) runHypertableNumericFixMigration() error {
 // reclaims squatted names from the backup table and builds the indexes on the
 // live table; it runs after the hypertable swap and on every boot thereafter
 // (cheap catalog lookups when everything is in place).
+//
+// Seven indexes 001_init.sql and older upgrades declare are no longer part of
+// the set; see retiredLogsPartitionedIndexes.
 var logsPartitionedIndexes = []struct {
 	Name  string
 	Def   string // USING clause + column list
 	Where string // optional partial-index predicate (must come after WITH)
 }{
 	{"idx_logs_part_host", "USING btree (host)", ""},
-	{"idx_logs_part_log_type", "USING btree (log_type)", ""},
-	{"idx_logs_part_timestamp", `USING btree ("timestamp" DESC)`, ""},
-	{"idx_logs_part_type_timestamp", `USING btree (log_type, "timestamp" DESC)`, ""},
 	{"idx_logs_partitioned_exploit_rule", "USING btree (exploit_rule)", "exploit_rule IS NOT NULL AND exploit_rule::text <> '-'"},
-	{"idx_logs_part_block_reason_ts", `USING btree (block_reason, "timestamp" DESC)`, "block_reason != 'none'"},
 	{"idx_logs_part_client_ip", "USING btree (client_ip)", ""},
 	{"idx_logs_part_created_at", "USING btree (created_at DESC)", ""},
-	{"idx_logs_part_status_code", "USING btree (status_code)", "status_code IS NOT NULL"},
-	{"idx_logs_part_host_ts", `USING btree (host, "timestamp" DESC)`, ""},
-	{"idx_logs_part_status_ts", `USING btree (status_code, "timestamp" DESC)`, "status_code IS NOT NULL"},
 	{"idx_logs_part_proxy_host_ts", `USING btree (proxy_host_id, "timestamp" DESC)`, "proxy_host_id IS NOT NULL"},
 	{"idx_logs_part_geo_ts", `USING btree (geo_country_code, "timestamp" DESC)`, "geo_country_code IS NOT NULL AND geo_country_code::text <> ''"},
 	{"idx_logs_part_type_created", "USING btree (log_type, created_at DESC)", ""},
@@ -2784,12 +2772,120 @@ var logsPartitionedIndexes = []struct {
 	{"idx_logs_part_ua_trgm", "USING gin (http_user_agent gin_trgm_ops)", ""},
 }
 
+// retiredLogsPartitionedIndexes are logs_partitioned indexes NPG no longer
+// builds, dropped where an earlier version built them. Measured on an
+// attack-day mix (3M rows), no filter, sort, dashboard or autocomplete query
+// got slower without them once the time sort reads created_at (see List), and
+// the sparse indexes TimescaleDB derives for compressed chunks came out the
+// same. Each one cost space on every uncompressed day (about 377 MB a day
+// together on the busiest install) and a write on every insert.
+//
+// Never list idx_logs_ht_* or logs_hypertable_created_at_idx here. Each has an
+// identical canonical twin (idx_logs_part_host, idx_logs_part_created_at,
+// idx_logs_part_type_created, idx_logs_partitioned_exploit_rule), and a chunk
+// created after both existed carries ONE physical index for the pair, owned by
+// whichever was created first: dropping the owner leaves that chunk without the
+// index its twin still promises. retireLogsPartitionedIndexes refuses any drop
+// that has such a twin.
+var retiredLogsPartitionedIndexes = []struct {
+	Name   string
+	Reason string
+}{
+	{"idx_logs_part_log_type", "idx_logs_part_type_created leads with log_type"},
+	{"idx_logs_part_timestamp", "the time sort reads created_at"},
+	{"idx_logs_part_type_timestamp", "idx_logs_part_type_created serves log_type in time order"},
+	{"idx_logs_part_host_ts", "idx_logs_part_host serves the host filter"},
+	{"idx_logs_part_status_ts", "idx_logs_part_status_created serves the status filter"},
+	{"idx_logs_part_status_code", "partial, so it cannot serve the status sort; idx_logs_part_status_created serves both"},
+	{"idx_logs_part_block_reason_ts", "idx_logs_part_block_reason and idx_logs_part_block_reason_created serve the block filters"},
+}
+
+// indexDefWithoutName is an index's definition with its name cut out, so two
+// indexes built alike on the same table compare equal.
+const indexDefWithoutName = `regexp_replace(pg_get_indexdef(i.indexrelid), '^CREATE (UNIQUE )?INDEX \S+ ON ', '')`
+
+// retireLogsPartitionedIndexes drops the retired indexes where they exist. Each
+// DROP runs in its own transaction under a short lock_timeout: DROP INDEX locks
+// the hypertable and every chunk exclusively, so a drop that cannot get its
+// locks at once rolls back whole and is tried again on the next boot instead of
+// holding log inserts behind it.
+func (db *DB) retireLogsPartitionedIndexes() {
+	retired := make([]string, len(retiredLogsPartitionedIndexes))
+	for i, idx := range retiredLogsPartitionedIndexes {
+		retired[i] = idx.Name
+	}
+	for _, idx := range retiredLogsPartitionedIndexes {
+		var onTable, def string
+		err := db.QueryRow(`
+			SELECT c.relname, `+indexDefWithoutName+`
+			FROM pg_index i
+			JOIN pg_class ic ON ic.oid = i.indexrelid
+			JOIN pg_namespace n ON n.oid = ic.relnamespace
+			JOIN pg_class c ON c.oid = i.indrelid
+			WHERE n.nspname = 'public' AND ic.relname = $1`, idx.Name).Scan(&onTable, &def)
+		if err == sql.ErrNoRows {
+			continue // never built here, or already retired
+		}
+		if err != nil {
+			log.Printf("[Migration] Warning: could not check retired index %s: %v", idx.Name, err)
+			continue
+		}
+		if onTable != "logs_partitioned" && onTable != "logs_partitioned_backup" {
+			log.Printf("[Migration] Warning: retired index name %s is on unexpected table %q; leaving it alone", idx.Name, onTable)
+			continue
+		}
+
+		// An identical index that stays may share this one's physical chunk
+		// indexes; see retiredLogsPartitionedIndexes. Identical retired
+		// indexes do not count: neither of them stays.
+		var twins int
+		if err := db.QueryRow(`
+			SELECT count(*)
+			FROM pg_index i
+			JOIN pg_class ic ON ic.oid = i.indexrelid
+			WHERE i.indrelid = to_regclass('public.logs_partitioned')
+			  AND ic.relname <> ALL($1)
+			  AND `+indexDefWithoutName+` = $2`, pq.Array(retired), def).Scan(&twins); err != nil {
+			log.Printf("[Migration] Warning: could not check %s for an identical index: %v", idx.Name, err)
+			continue
+		}
+		if twins > 0 {
+			log.Printf("[Migration] Not retiring %s: an identical index stays on logs_partitioned and may own the only physical index on newer chunks", idx.Name)
+			continue
+		}
+
+		err = func() error {
+			tx, err := db.Begin()
+			if err != nil {
+				return err
+			}
+			defer tx.Rollback()
+			if _, err := tx.Exec(`SET LOCAL lock_timeout = '3s'`); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(`DROP INDEX IF EXISTS public.` + pq.QuoteIdentifier(idx.Name)); err != nil {
+				return err
+			}
+			return tx.Commit()
+		}()
+		if err != nil {
+			log.Printf("[Migration] Retiring index %s deferred to the next boot: %v", idx.Name, err)
+			continue
+		}
+		log.Printf("[Migration] Retired index %s on %s (%s)", idx.Name, onTable, idx.Reason)
+	}
+}
+
 // ensureLogsPartitionedIndexes verifies every canonical index exists ON the
 // live logs_partitioned table, reclaiming names squatted by
 // logs_partitioned_backup (the backup exists only for operator verification
 // and does not need indexes). Heavy builds use TimescaleDB's
 // transaction_per_chunk so ingest stays mostly unblocked on large installs.
+// It first drops the retired indexes (retireLogsPartitionedIndexes); every
+// caller goes through here.
 func (db *DB) ensureLogsPartitionedIndexes() {
+	db.retireLogsPartitionedIndexes()
+
 	var isHypertable bool
 	_ = db.QueryRow(`SELECT EXISTS (
 		SELECT 1 FROM timescaledb_information.hypertables

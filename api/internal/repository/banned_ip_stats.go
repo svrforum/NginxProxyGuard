@@ -28,12 +28,20 @@ func NewBannedIPStatsRepository(db *sql.DB) *BannedIPStatsRepository {
 // planner inlines the scan into each branch and the address is scanned four
 // times, which on a large hypertable is the difference between one slow query
 // and four.
+//
+// The window is on timestamp, but the hypertable is partitioned on created_at,
+// so the created_at bound is what lets TimescaleDB leave out the chunks before
+// the window instead of planning and opening every chunk (about 250 of 283 on
+// the largest install at 30 days). created_at is the insert time, never before
+// the request's timestamp, so with a day of margin it drops no row the window
+// keeps.
 const bannedIPTrafficQuery = `
 WITH scoped AS MATERIALIZED (
     SELECT host, request_uri, block_reason, geo_country, geo_country_code, timestamp
     FROM logs_partitioned
     WHERE client_ip = $1::inet
       AND timestamp > now() - make_interval(days => $2)
+      AND created_at > now() - make_interval(days => $2 + 1)
       AND ` + canaryURIExclusion + `
 ),
 totals AS (
