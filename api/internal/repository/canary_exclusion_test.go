@@ -17,7 +17,7 @@ func TestCanaryExclusionWiredIntoStatsQueries(t *testing.T) {
 	if !strings.Contains(canaryURIExclusion, "/__npg_canary") {
 		t.Fatalf("canaryURIExclusion must filter /__npg_canary; got %q", canaryURIExclusion)
 	}
-	for _, f := range []string{"log.go", "log_stats.go", "dashboard.go", "log_queries.go"} {
+	for _, f := range []string{"log.go", "log_stats.go", "dashboard.go", "log_queries.go", "dashboard_rollup.go"} {
 		src, err := os.ReadFile(f)
 		if err != nil {
 			t.Fatalf("read %s: %v", f, err)

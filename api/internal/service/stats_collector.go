@@ -52,7 +52,34 @@ type StatsCollector struct {
 	statusWarnedOnce   bool
 	nginxStatusBackoffBase time.Duration
 	nginxStatusMaxBackoff  time.Duration
+
+	// The dashboard's hourly totals, rebuilt from the logs by recomputeRollup.
+	// Only the collector goroutine touches these.
+	rollup            hourlyRollupRecomputer
+	rollupLastAttempt time.Time
+	rollupSwept       bool
 }
+
+// hourlyRollupRecomputer rebuilds the dashboard's hourly totals for the hours
+// in [from, to) from the logs. DashboardRepository implements it.
+type hourlyRollupRecomputer interface {
+	RecomputeHourlyRollup(ctx context.Context, from, to time.Time) (int64, error)
+}
+
+const (
+	// rollupInterval is how often the current hour is rebuilt.
+	rollupInterval = time.Minute
+	// rollupLateWindow is how long into an hour the previous hour is rebuilt
+	// too: a row's created_at is when the transaction that stored it began,
+	// so a batch that began before the hour turned can commit after it.
+	rollupLateWindow = 10 * time.Minute
+	// rollupBootSweep is how far back the first rebuild after boot reaches:
+	// it repairs what went unrecorded while the API was down, and what the
+	// old incremental rollup got wrong, across the dashboard's whole 24 hours.
+	rollupBootSweep = 25 * time.Hour
+	// rollupTimeout bounds one rebuild; the boot sweep reads a day of logs.
+	rollupTimeout = 2 * time.Minute
+)
 
 type NginxStatus struct {
 	ActiveConnections int
@@ -110,6 +137,12 @@ func NewStatsCollector(db *sql.DB, nginxStatusURL, accessLogPath string) *StatsC
 	}
 }
 
+// SetRollupRepo wires the dashboard's hourly totals. Without it the collector
+// records system health only.
+func (sc *StatsCollector) SetRollupRepo(r hourlyRollupRecomputer) {
+	sc.rollup = r
+}
+
 func (sc *StatsCollector) Start(ctx context.Context) {
 	log.Println("Starting stats collector...")
 
@@ -165,16 +198,61 @@ func (sc *StatsCollector) collectStats() {
 			nginxStatus.ActiveConnections, nginxStatus.Reading, nginxStatus.Writing, nginxStatus.Waiting)
 	}
 
-	// 2. Aggregate stats from system_logs (docker_nginx source)
-	stats := sc.aggregateStatsFromDB()
+	// 2. Rebuild the dashboard's hourly request totals from the logs (at most
+	//    once a minute; see recomputeRollup)
+	sc.recomputeRollup()
 
 	// 3. Record to database (nginx stats only, host resources are fetched live)
-	if err := sc.recordStats(nginxStatus, stats); err != nil {
+	if err := sc.recordStats(nginxStatus); err != nil {
 		log.Printf("[StatsCollector] Failed to record stats: %v", err)
 	}
 
-	log.Printf("[StatsCollector] Stats collected: requests=%d, nginx_connections=%d",
-		stats.TotalRequests, nginxStatus.ActiveConnections)
+	log.Printf("[StatsCollector] Stats collected: nginx_connections=%d", nginxStatus.ActiveConnections)
+}
+
+// rollupWindow returns the hours [from, to) to rebuild at now: the current
+// hour; the previous one too early in an hour; the last 25 hours until the
+// first rebuild after boot has succeeded. Hours are UTC hours, as the
+// rollup's date_trunc('hour', created_at, 'UTC') buckets them.
+func rollupWindow(now time.Time, swept bool) (from, to time.Time) {
+	hour := now.Truncate(time.Hour)
+	from = hour
+	switch {
+	case !swept:
+		from = hour.Add(-rollupBootSweep)
+	case now.Sub(hour) < rollupLateWindow:
+		from = hour.Add(-time.Hour)
+	}
+	return from, hour.Add(time.Hour)
+}
+
+// recomputeRollup rebuilds the dashboard's hourly totals from the logs, at
+// most once per rollupInterval. Every rebuild overwrites the hours it covers
+// with what the logs hold, so a missed or failed run is made good by the next
+// one rather than lost.
+func (sc *StatsCollector) recomputeRollup() {
+	if sc.rollup == nil {
+		return
+	}
+	now := time.Now()
+	if !sc.rollupLastAttempt.IsZero() && now.Sub(sc.rollupLastAttempt) < rollupInterval {
+		return
+	}
+	sc.rollupLastAttempt = now
+
+	from, to := rollupWindow(now, sc.rollupSwept)
+	ctx, cancel := context.WithTimeout(context.Background(), rollupTimeout)
+	defer cancel()
+	rows, err := sc.rollup.RecomputeHourlyRollup(ctx, from, to)
+	if err != nil {
+		log.Printf("[StatsCollector] Failed to rebuild dashboard hourly stats from %s: %v", from.UTC().Format(time.RFC3339), err)
+		return
+	}
+	if !sc.rollupSwept {
+		sc.rollupSwept = true
+		log.Printf("[StatsCollector] Rebuilt dashboard hourly stats from the logs for the last %d hours (%d hourly rows) in %v",
+			int(to.Sub(from)/time.Hour), rows, time.Since(now).Round(time.Millisecond))
+	}
 }
 
 // getNginxStatusWithBackoff wraps getNginxStatus with first-failure warn +
@@ -486,56 +564,6 @@ func (stats *AggregatedStats) accumulateRow(statusCode int, bodyBytes int64, req
 	}
 }
 
-const aggregateStatsQuery = `
-	SELECT status_code, body_bytes_sent, request_time, host, request_uri, COALESCE(block_reason, 'none')
-	FROM logs_partitioned
-	WHERE log_type = 'access'
-	  AND created_at > NOW() - INTERVAL '35 seconds'
-	  AND host IS NOT NULL
-	  AND host NOT IN ('localhost', 'nginx', '127.0.0.1', '', '_', '0.0.0.0')
-	  AND host NOT LIKE 'localhost:%'
-	  AND request_uri NOT IN ('/health', '/nginx_status')
-	  AND request_uri NOT LIKE '/__npg_canary%'
-	  AND request_uri NOT LIKE '/.well-known/%'
-	LIMIT 10000
-`
-
-// aggregateStatsFromDB queries logs table for nginx request stats
-func (sc *StatsCollector) aggregateStatsFromDB() AggregatedStats {
-	stats := AggregatedStats{
-		HostStats: make(map[string]int64),
-		PathStats: make(map[string]int64),
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	// Query access logs from the last collection interval (30 seconds + buffer)
-	// Only include requests to actual proxy hosts (exclude internal like localhost, nginx)
-	// LIMIT 10000 to prevent unbounded memory growth during traffic spikes
-	rows, err := sc.db.QueryContext(ctx, aggregateStatsQuery)
-	if err != nil {
-		log.Printf("[StatsCollector] Failed to query logs: %v", err)
-		return stats
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var statusCode int
-		var bodyBytes int64
-		var requestTime float64
-		var host, uri, blockReason string
-
-		if err := rows.Scan(&statusCode, &bodyBytes, &requestTime, &host, &uri, &blockReason); err != nil {
-			continue
-		}
-
-		stats.accumulateRow(statusCode, bodyBytes, requestTime, host, uri, blockReason)
-	}
-
-	return stats
-}
-
 func (sc *StatsCollector) aggregateStats(entries []AccessLogEntry) AggregatedStats {
 	stats := AggregatedStats{
 		HostStats: make(map[string]int64),
@@ -549,11 +577,8 @@ func (sc *StatsCollector) aggregateStats(entries []AccessLogEntry) AggregatedSta
 	return stats
 }
 
-func (sc *StatsCollector) recordStats(nginxStatus NginxStatus, stats AggregatedStats) error {
-	now := time.Now()
-	hourBucket := now.Truncate(time.Hour)
-
-	// Record system health first (always) - including host resources
+func (sc *StatsCollector) recordStats(nginxStatus NginxStatus) error {
+	// Record system health (always) - including host resources
 	nginxStatusStr := "unknown"
 	if nginxStatus.ActiveConnections >= 0 {
 		nginxStatusStr = "ok"
@@ -592,52 +617,7 @@ func (sc *StatsCollector) recordStats(nginxStatus NginxStatus, stats AggregatedS
 	// Note: system_health cleanup is handled by PartitionScheduler.cleanupDashboardStats()
 	// which runs daily via DashboardRepository.CleanupOldStats()
 
-	// Skip traffic stats if no new data
-	if stats.TotalRequests == 0 {
-		return nil
-	}
-
-	// Calculate averages. Divide by TimedRequests (excludes WebSocket 101) so a
-	// long-lived socket's connection time cannot skew avg_response_time. (#148)
-	avgResponseTime := 0.0
-	if stats.TimedRequests > 0 {
-		avgResponseTime = stats.TotalTime / float64(stats.TimedRequests) * 1000 // Convert to ms
-	}
-
-	// Upsert hourly stats for global (proxy_host_id IS NULL) bucket.
-	// Uses partial unique index idx_dashboard_stats_hourly_null_host_bucket
-	// which covers (hour_bucket) WHERE proxy_host_id IS NULL. (GitHub Issue #96)
-	_, err = sc.db.Exec(`
-		INSERT INTO dashboard_stats_hourly (
-			proxy_host_id, hour_bucket, total_requests,
-			status_2xx, status_3xx, status_4xx, status_5xx,
-			avg_response_time, bytes_sent,
-			waf_blocked, rate_limited, bot_blocked
-		) VALUES (NULL, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-		ON CONFLICT (hour_bucket) WHERE proxy_host_id IS NULL DO UPDATE SET
-			total_requests = dashboard_stats_hourly.total_requests + EXCLUDED.total_requests,
-			status_2xx = dashboard_stats_hourly.status_2xx + EXCLUDED.status_2xx,
-			status_3xx = dashboard_stats_hourly.status_3xx + EXCLUDED.status_3xx,
-			status_4xx = dashboard_stats_hourly.status_4xx + EXCLUDED.status_4xx,
-			status_5xx = dashboard_stats_hourly.status_5xx + EXCLUDED.status_5xx,
-			avg_response_time = CASE
-				WHEN dashboard_stats_hourly.total_requests > 0
-				THEN (dashboard_stats_hourly.avg_response_time * dashboard_stats_hourly.total_requests + EXCLUDED.avg_response_time * EXCLUDED.total_requests)
-					/ (dashboard_stats_hourly.total_requests + EXCLUDED.total_requests)
-				ELSE EXCLUDED.avg_response_time
-			END,
-			bytes_sent = dashboard_stats_hourly.bytes_sent + EXCLUDED.bytes_sent,
-			waf_blocked = dashboard_stats_hourly.waf_blocked + EXCLUDED.waf_blocked,
-			rate_limited = dashboard_stats_hourly.rate_limited + EXCLUDED.rate_limited,
-			bot_blocked = dashboard_stats_hourly.bot_blocked + EXCLUDED.bot_blocked
-	`, hourBucket, stats.TotalRequests,
-		stats.Status2xx, stats.Status3xx, stats.Status4xx, stats.Status5xx,
-		avgResponseTime, stats.TotalBytes,
-		stats.WAFBlocked, stats.RateLimited, stats.BotBlocked)
-	if err != nil {
-		return fmt.Errorf("failed to record hourly stats: %w", err)
-	}
-
+	// The hourly request totals are rebuilt from the logs by recomputeRollup.
 	return nil
 }
 

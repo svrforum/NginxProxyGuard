@@ -203,6 +203,8 @@ func InitServices(
 		resolveNginxStatusURL(),
 		resolveAccessLogPath(),
 	)
+	// The dashboard's hourly totals are rebuilt from the logs.
+	svcs.StatsCollector.SetRollupRepo(repos.Dashboard)
 
 	svcs.DDNS = service.NewDDNSService(repos.DDNS, repos.DNSProvider, service.NewPublicIPDetector())
 
