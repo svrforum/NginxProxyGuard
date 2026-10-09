@@ -30,7 +30,12 @@ type HealthDetailedHandler struct {
 	canary      *service.PipelineCanary
 	stats       *service.StatsCollector
 	db          *database.DB
+	disk        *service.DiskGuard
 }
+
+// SetDiskGuard wires DiskGuard after construction (D1). nil leaves the disk
+// object out of the response.
+func (h *HealthDetailedHandler) SetDiskGuard(g *service.DiskGuard) { h.disk = g }
 
 func NewHealthDetailedHandler(
 	repo *repository.HealthDetailedRepository,
@@ -63,6 +68,9 @@ type detailedHealthResponse struct {
 	LogCollector  *detailedLogCollectorInfo   `json:"log_collector"`
 	Nginx         *detailedNginxInfo          `json:"nginx"`
 	NginxTuning   *detailedNginxTuningInfo    `json:"nginx_tuning,omitempty"`
+	// Disk is DiskGuard's view without paths or container names: this route
+	// is in PublicRoutes, so any session or any-scope API token reads it.
+	Disk *model.StorageHealth `json:"disk,omitempty"`
 }
 
 // detailedNginxTuningInfo exposes the subset of global_settings that an
@@ -140,6 +148,9 @@ func (h *HealthDetailedHandler) GetDetailed(c echo.Context) error {
 		LogCollector:  h.logInfo(),
 		Nginx:         h.nginxInfo(ctx),
 		NginxTuning:   h.tuningInfo(ctx),
+	}
+	if h.disk != nil {
+		resp.Disk = h.disk.Status(ctx).Health()
 	}
 	return c.JSON(http.StatusOK, resp)
 }

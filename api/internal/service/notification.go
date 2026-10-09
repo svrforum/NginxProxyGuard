@@ -52,6 +52,9 @@ type notifyStore interface {
 var allowedFields = map[string]bool{
 	"event": true, "time": true, "host": true, "ip": true, "country": true,
 	"reason": true, "count": true, "detail": true, "instance": true, "subject": true,
+	// Disk alerts (D2): sizes and role codes only, nothing that came from a
+	// request.
+	"free": true, "growth_per_day": true, "days_to_full": true, "roles": true,
 }
 
 const (
@@ -126,13 +129,36 @@ func (s *NotificationService) EmitTransition(ctx context.Context, eventKey, subj
 
 	key := eventKey
 	severity := "error"
+	// A failure the catalogue calls a warning — a disk at 85% — is not a red
+	// "Problem". Every key that used this path before is "error" in the
+	// catalogue, so their messages are unchanged.
+	if model.SeverityOf(eventKey) == "warning" {
+		severity = "warning"
+	}
 	if !failing {
 		key = recoveryKeyFor(eventKey)
+		if key == "" {
+			// Recorded, not announced: another key tells this story (critical
+			// disk usage recovers through disk.space_recovered, below 80%).
+			return nil
+		}
 		severity = "resolved"
 	}
 
 	payload := s.buildPayload(key, severity, label, detail, fields)
 	return s.fanOut(ctx, key, payload)
+}
+
+// ResolveQuietly marks a subject healthy without telling anyone. DiskGuard uses
+// it for a filesystem that is no longer measured (the database moved to
+// another disk): its last state would otherwise sit in the digest's "still
+// failing" section forever, and announcing a recovery that did not happen
+// would be worse.
+func (s *NotificationService) ResolveQuietly(ctx context.Context, eventKey, subject string) error {
+	if s == nil || s.store == nil || !s.store.TablesExist(ctx) {
+		return nil
+	}
+	return s.store.SetState(ctx, eventKey, subject, "", stateOK, "")
 }
 
 // EmitBatched records a high-frequency event. Nothing is sent until FlushBatches
@@ -276,13 +302,20 @@ func (s *NotificationService) fanOut(ctx context.Context, eventKey string, paylo
 
 // recoveryKeyFor maps a failure key to the key its recovery is announced under.
 // Events with no distinct recovery key announce recovery under their own key,
-// which a channel subscribed to the failure already receives.
+// which a channel subscribed to the failure already receives. An empty key
+// means the recovery is recorded but not announced.
 func recoveryKeyFor(failureKey string) string {
 	switch failureKey {
 	case "cert.renewal_failed":
 		return "cert.renewed"
 	case "ddns.sync_failed":
 		return "ddns.recovered"
+	case "disk.space_low":
+		return "disk.space_recovered"
+	case "disk.space_critical":
+		// Silent: 91% -> 84% is still "low". The single recovery message comes
+		// from disk.space_low once usage drops below the recover line.
+		return ""
 	default:
 		return failureKey
 	}

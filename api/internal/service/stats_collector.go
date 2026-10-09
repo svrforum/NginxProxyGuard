@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/shirou/gopsutil/v3/cpu"
-	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/host"
 	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/shirou/gopsutil/v3/net"
@@ -58,6 +57,9 @@ type StatsCollector struct {
 	rollup            hourlyRollupRecomputer
 	rollupLastAttempt time.Time
 	rollupSwept       bool
+
+	// DiskGuard (D1), wired by SetDiskSource; nil when it is disabled.
+	diskSource diskPrimarySource
 }
 
 // hourlyRollupRecomputer rebuilds the dashboard's hourly totals for the hours
@@ -351,13 +353,14 @@ func (sc *StatsCollector) getHostResources() HostResources {
 		resources.MemoryUsed = memStats.Used
 	}
 
-	// Get disk usage for root partition
-	diskStats, err := disk.Usage("/")
-	if err == nil {
-		resources.DiskUsage = diskStats.UsedPercent
-		resources.DiskTotal = diskStats.Total
-		resources.DiskUsed = diskStats.Used
-		resources.DiskPath = "/"
+	// The disk that matters: the database's when DiskGuard can see it.
+	// system_health's disk_* columns therefore follow that disk, which is what
+	// the history chart, the digest and DiskGuard's growth estimate read.
+	if pct, total, used, path, ok := primaryDiskUsage(sc.diskSource); ok {
+		resources.DiskUsage = pct
+		resources.DiskTotal = total
+		resources.DiskUsed = used
+		resources.DiskPath = path
 	}
 
 	// Get network I/O stats (all interfaces combined)

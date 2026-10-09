@@ -144,10 +144,21 @@ func TestEventCatalogue(t *testing.T) {
 			t.Errorf("key %q should be namespaced", e.Key)
 		}
 	}
-	for _, want := range []string{"cert.renewal_failed", "ddns.sync_failed", "ip.banned", "backup.failed"} {
+	for _, want := range []string{"cert.renewal_failed", "ddns.sync_failed", "ip.banned", "backup.failed",
+		"disk.space_low", "disk.space_critical", "disk.space_recovered"} {
 		if !seen[want] {
 			t.Errorf("catalogue is missing %q", want)
 		}
+	}
+	// Disk alerts are edge-triggered per filesystem: one message per state
+	// change, never a coalesced count.
+	for _, key := range []string{"disk.space_low", "disk.space_critical", "disk.space_recovered"} {
+		if IsBatchedEvent(key) {
+			t.Errorf("%s must be edge-triggered, not batched", key)
+		}
+	}
+	if SeverityOf("disk.space_low") != "warning" || SeverityOf("backup.failed") != "error" || SeverityOf("made.up") != "" {
+		t.Error("SeverityOf must return the catalogue severity, or empty for an unknown key")
 	}
 	if !IsBatchedEvent("ip.banned") {
 		t.Error("ip.banned must be batched — the peak measured hour is 1,566 blocks")

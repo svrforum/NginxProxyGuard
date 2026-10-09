@@ -24,6 +24,7 @@ type Schedulers struct {
 	DDNS               *scheduler.DDNSScheduler
 	NotifyDispatch     *scheduler.NotificationDispatchScheduler
 	NotifyDigest       *scheduler.NotificationDigestScheduler
+	DiskGuard          *scheduler.DiskGuardScheduler // nil when disabled
 }
 
 // ddnsIntervalFn returns a function the DDNS scheduler consults each cycle so a
@@ -109,6 +110,10 @@ func NewSchedulers(cfg *config.Config, db *database.DB, nginxManager *nginx.Mana
 	s.Backup.SetNotificationService(svcs.Notification)
 	// Expired challenge (CAPTCHA) tokens are pruned with the sessions.
 	s.SessionCleanup.SetChallengeService(svcs.Challenge)
+	// Disk guard (D1-D4).
+	if svcs.DiskGuard != nil {
+		s.DiskGuard = scheduler.NewDiskGuardScheduler(svcs.diskGuardCtx, svcs.diskGuardCancel, svcs.DiskGuard, diskGuardInterval())
+	}
 
 	return s
 }
@@ -125,6 +130,9 @@ func (s *Schedulers) Start() {
 	s.NotifyDigest.Start()
 	s.ContainerReconcile.Start()
 	s.DDNS.Start()
+	if s.DiskGuard != nil {
+		s.DiskGuard.Start()
+	}
 }
 
 // Stop signals every scheduler to stop.
@@ -140,6 +148,9 @@ func (s *Schedulers) Stop() {
 	s.NotifyDigest.Stop()
 	s.ContainerReconcile.Stop()
 	s.DDNS.Stop()
+	if s.DiskGuard != nil {
+		s.DiskGuard.Stop()
+	}
 	// LogRotateScheduler and BackupScheduler also expose Stop, but the
 	// original main.go did not call them on shutdown. Keep the original
 	// semantics for minimal behavior change.

@@ -45,6 +45,11 @@ type Services struct {
 	StatsCollector     *service.StatsCollector
 	DDNS               *service.DDNSService
 	CloudflareTunnel   *service.CloudflareTunnelService
+	DiskGuard          *service.DiskGuard // nil when NPG_DISK_GUARD_DISABLED
+
+	// Ends whatever DiskGuard started; cancelled by its scheduler's Stop.
+	diskGuardCtx    context.Context
+	diskGuardCancel context.CancelFunc
 }
 
 // InitServices creates the full service graph in the same order as the
@@ -212,6 +217,10 @@ func InitServices(
 
 	svcs.NotifyDigest = service.NewNotificationDigestService(repos.Dashboard, svcs.Certificate, repos.Notification)
 	svcs.NotifyDispatcher.SetDigestService(svcs.NotifyDigest)
+
+	// Disk guard (D1-D4): after Notification, StatsCollector and Settings,
+	// which it is wired into.
+	initDiskGuard(cfg, db, repos, svcs)
 
 	return svcs
 }

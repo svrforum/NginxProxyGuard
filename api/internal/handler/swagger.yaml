@@ -6014,9 +6014,10 @@ paths:
       summary: Detailed health snapshot
       description: |
         Authenticated read-only diagnostics: hypertable/compression telemetry, cache
-        readiness, log-collector flush freshness and pipeline canary state. All
-        sub-queries share a 5 second budget, so a stuck DB or Redis degrades fields
-        rather than hanging the request.
+        readiness, log-collector flush freshness, pipeline canary state and disk
+        levels (DiskGuard; levels, percentages and bytes only). All sub-queries
+        share a 5 second budget, so a stuck DB or Redis degrades fields rather than
+        hanging the request.
       security:
         - BearerAuth: []
       responses:
@@ -11708,6 +11709,8 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/UserAgentStat'
+        storage:
+          $ref: '#/components/schemas/StorageStatus'
     Backup:
       type: object
       properties:
@@ -13547,7 +13550,11 @@ components:
             - nginx.reload_failed
             - auth.login_failed
             - ip.banned
+            - ip.detected
             - sso.login_refused
+            - disk.space_low
+            - disk.space_critical
+            - disk.space_recovered
         severity:
           type: string
           enum: [error, warning, info]
@@ -13984,6 +13991,185 @@ components:
             ssl_early_data_inferred:
               type: boolean
               description: Inferred from the nginx.conf template, not stored in settings
+        disk:
+          $ref: '#/components/schemas/StorageHealth'
+    StorageStatus:
+      type: object
+      description: |
+        DiskGuard's live view of the filesystems NPG writes to, as GET /dashboard
+        returns it (never cached). Absent until the first measurement, about a
+        minute after boot, and when the guard is disabled (NPG_DISK_GUARD_DISABLED).
+        GET /health/detailed returns the reduced StorageHealth instead.
+      properties:
+        level:
+          type: string
+          enum: [ok, low, critical]
+          description: The worst filesystem's level
+        thresholds:
+          $ref: '#/components/schemas/StorageThresholds'
+        filesystems:
+          type: array
+          description: One entry per physical filesystem, fullest first.
+          items:
+            $ref: '#/components/schemas/FilesystemUsage'
+        stalled:
+          type: array
+          description: |
+            Roles whose filesystem did not answer statfs within 3 seconds (a hung
+            network mount). They have no numbers until the mount answers.
+          items:
+            $ref: '#/components/schemas/StalledFilesystem'
+        database:
+          type: object
+          properties:
+            measured:
+              type: boolean
+            container:
+              type: string
+              example: npg-db
+            data_dir:
+              type: string
+              example: /var/lib/postgresql/data
+            reason:
+              type: string
+              enum: [db_container_not_found, db_external, db_exec_failed, docker_unavailable]
+              description: |
+                Why the database disk is not measured. With measured=true,
+                db_exec_failed means the container could not be asked but a volume
+                verified to share its disk answered.
+        measured_at:
+          type: string
+          format: date-time
+    StorageThresholds:
+      type: object
+      description: Used-space percentages from NPG_DISK_WARN_PERCENT, NPG_DISK_CRITICAL_PERCENT and NPG_DISK_RECOVER_PERCENT
+      properties:
+        warn_percent:
+          type: number
+          example: 85
+        critical_percent:
+          type: number
+          example: 90
+        recover_percent:
+          type: number
+          example: 80
+    FilesystemUsage:
+      type: object
+      properties:
+        key:
+          type: string
+          description: Most important role on the filesystem; the alert subject
+        roles:
+          type: array
+          items:
+            type: string
+            enum: [db, nginx_logs, archive, backups, docker]
+        path:
+          type: string
+          example: 'npg-db:/var/lib/postgresql/data'
+        source:
+          type: string
+          enum: [statfs, docker_exec, docker_exec_df]
+        total_bytes:
+          type: integer
+          format: int64
+        used_bytes:
+          type: integer
+          format: int64
+        avail_bytes:
+          type: integer
+          format: int64
+          description: Free to non-root writers (df Available)
+        used_percent:
+          type: number
+          description: used/(used+avail)*100, as df prints it
+        level:
+          type: string
+          enum: [ok, low, critical]
+        growth_per_day_bytes:
+          type: integer
+          format: int64
+          description: Net change over the last 24h; absent until there is a day of history
+        days_to_full:
+          type: number
+          description: At the current growth; absent when the disk is not growing
+        measured_at:
+          type: string
+          format: date-time
+    StalledFilesystem:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [nginx_logs, archive, backups, docker]
+        path:
+          type: string
+        since:
+          type: string
+          format: date-time
+    StorageHealth:
+      type: object
+      description: |
+        StorageStatus without paths, container names or the data directory: GET
+        /health/detailed is readable by any session and by API tokens of any scope.
+      properties:
+        level:
+          type: string
+          enum: [ok, low, critical]
+        thresholds:
+          $ref: '#/components/schemas/StorageThresholds'
+        filesystems:
+          type: array
+          items:
+            $ref: '#/components/schemas/FilesystemHealth'
+        stalled_roles:
+          type: array
+          items:
+            type: string
+        database:
+          type: object
+          properties:
+            measured:
+              type: boolean
+            reason:
+              type: string
+              enum: [db_container_not_found, db_external, db_exec_failed, docker_unavailable]
+        measured_at:
+          type: string
+          format: date-time
+    FilesystemHealth:
+      type: object
+      description: FilesystemUsage without path and source
+      properties:
+        key:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+            enum: [db, nginx_logs, archive, backups, docker]
+        level:
+          type: string
+          enum: [ok, low, critical]
+        used_percent:
+          type: number
+        total_bytes:
+          type: integer
+          format: int64
+        used_bytes:
+          type: integer
+          format: int64
+        avail_bytes:
+          type: integer
+          format: int64
+        growth_per_day_bytes:
+          type: integer
+          format: int64
+        days_to_full:
+          type: number
+        measured_at:
+          type: string
+          format: date-time
     HypertableStats:
       type: object
       properties:
@@ -14049,7 +14235,9 @@ components:
         disk_usage:
           type: number
           format: double
-          description: Percent
+          description: |
+            Percent of the primary disk: the database's filesystem when DiskGuard
+            measures it, else the API container's "/" (Docker's storage)
         disk_total:
           type: integer
           format: int64
@@ -14058,6 +14246,7 @@ components:
           format: int64
         disk_path:
           type: string
+          description: The disk the disk_* fields describe, e.g. "npg-db:/var/lib/postgresql/data" or "/"
         uptime_seconds:
           type: integer
           format: int64

@@ -34,7 +34,8 @@ func severityColour(severity string) int {
 
 // fieldOrder keeps a message's lines stable between sends. Map iteration order
 // would otherwise reshuffle them and make two identical alerts look different.
-var fieldOrder = []string{"host", "ip", "country", "count", "reason", "detail", "subject", "time"}
+var fieldOrder = []string{"host", "ip", "country", "count", "reason", "detail",
+	"free", "growth_per_day", "days_to_full", "roles", "subject", "time"}
 
 // dropRedundantSubject removes a subject that only repeats the host.
 //
@@ -60,6 +61,39 @@ func displayValue(key, value string) string {
 		return t.Format("2006-01-02 15:04")
 	}
 	return value
+}
+
+// codedFields carry comma-separated codes instead of prose, so a webhook
+// receiver can key off them; a person reading Discord, Telegram or plain text
+// gets them translated by displayValueIn.
+var codedFields = map[string]bool{"roles": true}
+
+// displayValueIn renders a field in the channel's language. Most values are
+// language-neutral (a size, an address, a host) and pass through displayValue.
+func displayValueIn(lang, key, value string) string {
+	if !codedFields[key] {
+		return displayValue(key, value)
+	}
+	parts := strings.Split(value, ",")
+	for i, p := range parts {
+		p = strings.TrimSpace(p)
+		if v := lookupValueLabel(lang, key, p); v != "" {
+			parts[i] = v
+		} else {
+			parts[i] = p
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+func lookupValueLabel(lang, key, code string) string {
+	if v, ok := notificationStrings[normaliseLang(lang)]["value."+key+"."+code]; ok && v != "" {
+		return v
+	}
+	if v, ok := notificationStrings[LangEnglish]["value."+key+"."+code]; ok && v != "" {
+		return v
+	}
+	return ""
 }
 
 func orderedFields(fields map[string]string) []string {
@@ -168,7 +202,7 @@ func discordEmbed(lang string, msg model.RenderedMessage) map[string]any {
 		}
 		fields = append(fields, map[string]any{
 			"name":   fieldLabel(lang, k),
-			"value":  truncateRunes(msg.Fields[k], 1024),
+			"value":  truncateRunes(displayValueIn(lang, k, msg.Fields[k]), 1024),
 			"inline": true,
 		})
 		if len(fields) == 25 { // Discord's per-embed field cap
@@ -214,7 +248,7 @@ func telegramMarkdown(lang string, msg model.RenderedMessage) string {
 		if k == "detail" {
 			continue
 		}
-		fmt.Fprintf(&b, "\n%s: `%s`", escapeMarkdownV2(fieldLabel(lang, k)), escapeMarkdownV2(displayValue(k, msg.Fields[k])))
+		fmt.Fprintf(&b, "\n%s: `%s`", escapeMarkdownV2(fieldLabel(lang, k)), escapeMarkdownV2(displayValueIn(lang, k, msg.Fields[k])))
 	}
 	return b.String()
 }
@@ -230,7 +264,7 @@ func plainText(lang string, msg model.RenderedMessage) string {
 		if k == "detail" {
 			continue
 		}
-		fmt.Fprintf(&b, "\n%s: %s", fieldLabel(lang, k), displayValue(k, msg.Fields[k]))
+		fmt.Fprintf(&b, "\n%s: %s", fieldLabel(lang, k), displayValueIn(lang, k, msg.Fields[k]))
 	}
 	return b.String()
 }
@@ -323,6 +357,28 @@ func SampleMessage(lang, eventKey string) model.RenderedMessage {
 		fields["subject"] = "google"
 		fields["count"] = "2"
 		fields["reason"] = "not_on_allowlist"
+	case "disk.space_low":
+		severity = "warning"
+		fields["subject"] = "npg-db:/var/lib/postgresql/data"
+		fields["detail"] = "86.2% · 154.3 GB / 188.0 GB"
+		fields["free"] = "24.7 GB"
+		fields["growth_per_day"] = "+2.1 GB"
+		fields["days_to_full"] = "11"
+		fields["roles"] = "db,nginx_logs,backups,docker"
+	case "disk.space_critical":
+		severity = "error"
+		fields["subject"] = "npg-db:/var/lib/postgresql/data"
+		fields["detail"] = "91.4% · 163.6 GB / 188.0 GB"
+		fields["free"] = "15.4 GB"
+		fields["growth_per_day"] = "+2.1 GB"
+		fields["days_to_full"] = "7"
+		fields["roles"] = "db,nginx_logs,backups,docker"
+	case "disk.space_recovered":
+		severity = "resolved"
+		fields["subject"] = "npg-db:/var/lib/postgresql/data"
+		fields["detail"] = "71.9% · 128.7 GB / 188.0 GB"
+		fields["free"] = "50.3 GB"
+		fields["roles"] = "db,nginx_logs,backups,docker"
 	default:
 		fields["detail"] = tr(lang, "sample.test")
 	}

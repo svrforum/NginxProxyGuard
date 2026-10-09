@@ -197,6 +197,9 @@ type DashboardSummary struct {
 	TopPaths      []PathStat      `json:"top_paths"`
 	TopIPs        []IPStat        `json:"top_ips"`
 	TopUserAgents []UserAgentStat `json:"top_user_agents"`
+
+	// Storage is attached live per request (never cached with the summary).
+	Storage *StorageStatus `json:"storage,omitempty"`
 }
 
 // ChartDataPoint represents a single data point for charts

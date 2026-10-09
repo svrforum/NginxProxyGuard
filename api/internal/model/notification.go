@@ -66,6 +66,26 @@ var EventCatalogue = []EventDescriptor{
 	// banned. A separate key from ip.banned, which promises a real ban.
 	{Key: "ip.detected", Severity: "warning", Batched: true},
 	{Key: "sso.login_refused", Severity: "warning", Batched: true},
+	// Storage (D2). Edge-triggered per filesystem, with hysteresis: low at 85%,
+	// critical at 90%, and only one recovery message, below 80%. The gaps are
+	// what keep a disk hovering at a threshold from alerting every minute.
+	// Critical has no recovery of its own: dropping from 91% to 84% is still
+	// "low", and the operator hears "back to normal" once, below 80%.
+	{Key: "disk.space_low", Severity: "warning"},
+	{Key: "disk.space_critical", Severity: "error"},
+	{Key: "disk.space_recovered", Severity: "info"},
+}
+
+// SeverityOf returns the catalogue severity of an event, or "" for an unknown
+// key. EmitTransition uses it so a failure the catalogue calls a warning (a
+// disk at 85%) is not announced with the red "Problem" glyph.
+func SeverityOf(key string) string {
+	for _, e := range EventCatalogue {
+		if e.Key == key {
+			return e.Severity
+		}
+	}
+	return ""
 }
 
 func IsKnownEvent(key string) bool {

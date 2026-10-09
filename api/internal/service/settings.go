@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/shirou/gopsutil/v3/cpu"
-	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/host"
 	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/shirou/gopsutil/v3/net"
@@ -48,6 +47,9 @@ type SettingsService struct {
 	dashSummary       *model.DashboardSummary
 	dashSummaryExpiry time.Time
 	dashSummarySF     singleflight.Group
+
+	// DiskGuard (D1/D4), wired by SetDiskSource; nil when it is disabled.
+	diskSource diskStatusSource
 
 	// Last non-blocking CPU sample served to the dashboard (see sampledCPUPercent).
 	cpuSampleMu  sync.Mutex
@@ -353,6 +355,8 @@ func (s *SettingsService) GetDashboard(ctx context.Context) (*model.DashboardSum
 	// addLiveMetrics mutates SystemHealth fields (the slices stay read-only).
 	out := *summary
 	s.addLiveMetrics(&out)
+	// Live, per request, on the copy only: never stored in either cache.
+	out.Storage = s.storageStatus(ctx)
 
 	return &out, nil
 }
@@ -421,12 +425,12 @@ func (s *SettingsService) addLiveMetrics(summary *model.DashboardSummary) {
 		summary.SystemHealth.MemoryUsed = memStats.Used
 	}
 
-	// Disk stats
-	if diskStats, err := disk.Usage("/"); err == nil {
-		summary.SystemHealth.DiskUsage = diskStats.UsedPercent
-		summary.SystemHealth.DiskTotal = diskStats.Total
-		summary.SystemHealth.DiskUsed = diskStats.Used
-		summary.SystemHealth.DiskPath = "/"
+	// Disk stats: the database's disk when DiskGuard measures it, else "/".
+	if pct, total, used, path, ok := primaryDiskUsage(s.diskSource); ok {
+		summary.SystemHealth.DiskUsage = pct
+		summary.SystemHealth.DiskTotal = total
+		summary.SystemHealth.DiskUsed = used
+		summary.SystemHealth.DiskPath = path
 	}
 
 	// Host info
@@ -552,11 +556,11 @@ func (s *SettingsService) GetSystemHealth(ctx context.Context) (*model.SystemHea
 		health.MemoryTotal = memStats.Total
 		health.MemoryUsed = memStats.Used
 	}
-	if diskStats, err := disk.Usage("/"); err == nil {
-		health.DiskUsage = diskStats.UsedPercent
-		health.DiskTotal = diskStats.Total
-		health.DiskUsed = diskStats.Used
-		health.DiskPath = "/"
+	if pct, total, used, path, ok := primaryDiskUsage(s.diskSource); ok {
+		health.DiskUsage = pct
+		health.DiskTotal = total
+		health.DiskUsed = used
+		health.DiskPath = path
 	}
 	if hostInfo, err := host.Info(); err == nil {
 		health.UptimeSeconds = hostInfo.Uptime

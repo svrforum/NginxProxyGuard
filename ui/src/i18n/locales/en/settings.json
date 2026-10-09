@@ -1737,6 +1737,18 @@
       "sso.login_refused": {
         "label": "SSO sign-in refused",
         "desc": "An identity outside your allowlist tried to sign in — a misconfiguration, or somebody trying."
+      },
+      "disk.space_low": {
+        "label": "Disk space running low",
+        "desc": "A disk NPG writes to (database, logs, backups) passed its warning line, 85% full by default. Sent once, with the free space, the daily growth and roughly when it fills."
+      },
+      "disk.space_critical": {
+        "label": "Disk space critical",
+        "desc": "Passed the critical line, 90% full by default. Act now: once the database's disk is full, logging, sign-in and alerts all stop."
+      },
+      "disk.space_recovered": {
+        "label": "Disk space back to normal",
+        "desc": "Sent only when a disk that was running low drops back below its recovery line, 80% by default."
       }
     },
     "modes": {
