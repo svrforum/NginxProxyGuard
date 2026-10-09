@@ -367,8 +367,18 @@ export async function testACME(): Promise<{ acme_enabled: boolean; acme_email: s
 
 // Log Files Management API
 
-export async function getLogFiles(): Promise<LogFilesResponse> {
-  const res = await fetch(`${API_BASE}/system-settings/log-files`, {
+export interface LogFilesQuery {
+  /** Page size (1-1000). Without it the server returns every file. */
+  limit?: number;
+  offset?: number;
+}
+
+export async function getLogFiles(query: LogFilesQuery = {}): Promise<LogFilesResponse> {
+  const params = new URLSearchParams();
+  if (query.limit !== undefined) params.set('limit', String(query.limit));
+  if (query.offset !== undefined) params.set('offset', String(query.offset));
+  const qs = params.toString();
+  const res = await fetch(`${API_BASE}/system-settings/log-files${qs ? `?${qs}` : ''}`, {
     headers: getAuthHeaders(),
   });
   if (!res.ok) throw new Error('Failed to fetch log files');

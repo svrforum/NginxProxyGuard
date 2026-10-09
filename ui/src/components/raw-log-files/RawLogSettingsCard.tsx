@@ -4,9 +4,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getSystemSettings, updateSystemSettings } from '../../api/settings';
 import type { SystemSettings, UpdateSystemSettingsRequest } from '../../types/settings';
 import { usePermissions } from '../../hooks/usePermissions';
+import type { RawLogUsage } from '../../types/rawLogFiles';
+import RawLogUsageEstimate from './RawLogUsageEstimate';
 import { RAW_LOG_LIMITS, inRawLogRange, type RawLogLimitedField, type RawLogMessage } from './shared';
 
 interface RawLogSettingsCardProps {
+  /** Disk use measured by the server (GET /log-files), for the estimate. */
+  usage: RawLogUsage | undefined;
   onMessage: (message: RawLogMessage) => void;
 }
 
@@ -19,7 +23,7 @@ const inputClass =
  * gone from the form — retention is by age now, and the count is a
  * server-side safety cap the operator never sets.
  */
-export default function RawLogSettingsCard({ onMessage }: RawLogSettingsCardProps) {
+export default function RawLogSettingsCard({ usage, onMessage }: RawLogSettingsCardProps) {
   const { t } = useTranslation('logs');
   const queryClient = useQueryClient();
   const { can } = usePermissions();
@@ -143,6 +147,8 @@ export default function RawLogSettingsCard({ onMessage }: RawLogSettingsCardProp
               <p className="text-xs text-slate-500 dark:text-slate-400">{t('rawFiles.settings.compressDesc')}</p>
             </div>
           </label>
+
+          <RawLogUsageEstimate usage={usage} retentionDays={getValue('raw_log_retention_days') ?? usage?.retention_days ?? 7} />
         </div>
       </div>
     </div>

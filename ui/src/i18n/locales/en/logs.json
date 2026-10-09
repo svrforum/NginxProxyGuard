@@ -619,7 +619,7 @@
       "rangeHint": "Enter a whole number between {{min}} and {{max}}.",
       "compress": "Compress Rotated Files",
       "compressDesc": "Compress with gzip to save disk space. The newest rotated file is compressed at the next rotation.",
-      "estimatedSize": "Est. Max Usage",
+      "estimatedSize": "Estimated disk use",
       "compressed": "compressed"
     },
     "list": {
@@ -628,7 +628,18 @@
       "emptyDesc": "Files will appear here when Raw Log Saving is enabled.",
       "preview": "Preview",
       "download": "Download",
-      "delete": "Delete"
+      "delete": "Delete",
+      "page": "{{from}}–{{to}} of {{total}}",
+      "prev": "Previous",
+      "next": "Next"
+    },
+    "estimate": {
+      "formula": "≈{{daily}}/day ({{basis}}) × {{retention}} days + current files {{current}}",
+      "basis": "average of the last {{days}} days",
+      "none": "No rotated file has finished yet, so the daily volume is unknown. After the first day the estimate uses the real file sizes.",
+      "current": "Now: {{count}} files, {{size}}",
+      "disk": "log disk ({{fs}}): {{free}} free of {{total}}",
+      "exceedsFree": "The estimate is larger than the free space on the log disk ({{free}}). Shorten the retention."
     },
     "actions": {
       "manualRotate": "Manual Rotate",

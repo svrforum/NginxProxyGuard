@@ -535,19 +535,35 @@ export interface GeoIPStatus {
 }
 
 // Log File Management Types
+// (imported here rather than at the top of the file to keep this section self-contained)
+import type { RawLogUsage } from './rawLogFiles';
+
+export type LogFileLocation = 'local' | 'archive';
+
 export interface LogFileInfo {
   name: string;
   size: number;
   modified_at: string;
+  /** Rotation time from the file name; absent for the live files. */
+  rotated_at?: string;
   is_compressed: boolean;
   log_type: 'access' | 'error' | 'unknown';
+  /** access_raw.log / error_raw.log, which nginx is writing: cannot be deleted. */
+  is_active: boolean;
+  location: LogFileLocation;
 }
 
 export interface LogFilesResponse {
+  /** One page of files (every file when no limit was asked for). */
   files: LogFileInfo[];
+  /** Totals of the whole location, not only this page. */
   total_size: number;
   total_count: number;
   raw_log_enabled: boolean;
+  location: LogFileLocation;
+  limit?: number;
+  offset: number;
+  usage?: RawLogUsage;
 }
 
 export interface LogFileViewResponse {

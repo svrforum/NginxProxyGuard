@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { getLogFiles } from '../api/settings';
 import RawLogSettingsCard from './raw-log-files/RawLogSettingsCard';
 import RawLogFileList from './raw-log-files/RawLogFileList';
-import type { RawLogMessage } from './raw-log-files/shared';
+import { RAW_LOG_PAGE_SIZE, type RawLogMessage } from './raw-log-files/shared';
 
 /** Logs -> Raw log files: rotation settings and the files on disk. */
 export default function RawLogFiles() {
@@ -21,10 +21,18 @@ export default function RawLogFiles() {
     if (timer.current) clearTimeout(timer.current);
   }, []);
 
+  const [page, setPage] = useState(0);
   const { data: logFilesData, refetch } = useQuery({
-    queryKey: ['logFiles'],
-    queryFn: getLogFiles,
+    queryKey: ['logFiles', 'local', page],
+    queryFn: () => getLogFiles({ limit: RAW_LOG_PAGE_SIZE, offset: page * RAW_LOG_PAGE_SIZE }),
+    placeholderData: keepPreviousData,
   });
+
+  // A deletion or a retention change can leave the page past the end.
+  const total = logFilesData?.total_count ?? 0;
+  useEffect(() => {
+    if (page > 0 && page * RAW_LOG_PAGE_SIZE >= total && logFilesData) setPage(Math.max(0, Math.ceil(total / RAW_LOG_PAGE_SIZE) - 1));
+  }, [page, total, logFilesData]);
 
   return (
     <div className="space-y-6">
@@ -47,8 +55,14 @@ export default function RawLogFiles() {
         </div>
       )}
 
-      <RawLogSettingsCard onMessage={showMessage} />
-      <RawLogFileList data={logFilesData} onRefresh={() => refetch()} onMessage={showMessage} />
+      <RawLogSettingsCard usage={logFilesData?.usage} onMessage={showMessage} />
+      <RawLogFileList
+        data={logFilesData}
+        page={page}
+        onPageChange={setPage}
+        onRefresh={() => refetch()}
+        onMessage={showMessage}
+      />
     </div>
   );
 }

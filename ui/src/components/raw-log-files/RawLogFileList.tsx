@@ -5,18 +5,19 @@ import { viewLogFile, downloadLogFile, deleteLogFile, triggerLogRotation } from 
 import type { LogFileInfo, LogFilesResponse } from '../../types/settings';
 import { ModalShell } from '../common/ModalShell';
 import { usePermissions } from '../../hooks/usePermissions';
-import { formatFileSize, type RawLogMessage } from './shared';
+import { RAW_LOG_PAGE_SIZE, formatFileSize, type RawLogMessage } from './shared';
 
 interface RawLogFileListProps {
   data: LogFilesResponse | undefined;
+  /** Zero-based page of RAW_LOG_PAGE_SIZE files. */
+  page: number;
+  onPageChange: (page: number) => void;
   onRefresh: () => void;
   onMessage: (message: RawLogMessage) => void;
 }
 
-const isActiveName = (name: string) => name === 'access_raw.log' || name === 'error_raw.log';
-
 /** Status line, "Rotate now", and the list of raw log files with preview, download and delete. */
-export default function RawLogFileList({ data, onRefresh, onMessage }: RawLogFileListProps) {
+export default function RawLogFileList({ data, page, onPageChange, onRefresh, onMessage }: RawLogFileListProps) {
   const { t, i18n } = useTranslation('logs');
   const queryClient = useQueryClient();
   const { can } = usePermissions();
@@ -83,6 +84,8 @@ export default function RawLogFileList({ data, onRefresh, onMessage }: RawLogFil
   };
 
   const files = data?.files ?? [];
+  const total = data?.total_count ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / RAW_LOG_PAGE_SIZE));
 
   return (
     <>
@@ -187,7 +190,7 @@ export default function RawLogFileList({ data, onRefresh, onMessage }: RawLogFil
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
                   </button>
-                  {canWrite && !isActiveName(file.name) && (
+                  {canWrite && !file.is_active && (
                     <button
                       onClick={() => setConfirmDelete(file.name)}
                       className="p-2 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
@@ -203,6 +206,33 @@ export default function RawLogFileList({ data, onRefresh, onMessage }: RawLogFil
               </div>
             ))}
           </div>
+          {pageCount > 1 && (
+            <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-slate-200 dark:border-slate-700 text-sm">
+              <span className="text-slate-500 dark:text-slate-400">
+                {t('rawFiles.list.page', {
+                  from: page * RAW_LOG_PAGE_SIZE + 1,
+                  to: Math.min((page + 1) * RAW_LOG_PAGE_SIZE, total),
+                  total,
+                })}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => onPageChange(page - 1)}
+                  disabled={page === 0}
+                  className="px-3 py-1.5 font-medium bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50 transition-colors"
+                >
+                  {t('rawFiles.list.prev')}
+                </button>
+                <button
+                  onClick={() => onPageChange(page + 1)}
+                  disabled={page + 1 >= pageCount}
+                  className="px-3 py-1.5 font-medium bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50 transition-colors"
+                >
+                  {t('rawFiles.list.next')}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <div className="text-center py-12 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">

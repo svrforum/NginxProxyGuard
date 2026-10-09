@@ -7321,11 +7321,28 @@ paths:
       tags: [Logs]
       summary: List raw nginx log files on disk
       description: |
-        Symlinks (stdout/stderr) are skipped. `raw_log_enabled` reflects whether nginx
-        is writing files at all; when the log directory is unreadable the endpoint still
-        returns 200 with an empty list.
+        Only raw log files are listed (access_raw.log, error_raw.log and their rotated
+        copies); symlinks and other files are skipped. The live files come first, then
+        the newest rotation first. `raw_log_enabled` reflects whether nginx is writing
+        files at all; when the log directory is unreadable the endpoint still returns 200
+        with an empty list. `usage` carries the disk use measured from the files, which
+        the raw log page projects with the retention being edited.
       security:
         - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          description: Page size. Without it every file is returned.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
       responses:
         '200':
           description: Log files, newest first
@@ -7333,6 +7350,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LogFilesResponse'
+        '400':
+          description: limit or offset out of range
   /system-settings/log-files/{filename}/download:
     get:
       tags: [Logs]
@@ -7343,7 +7362,9 @@ paths:
         - name: filename
           in: path
           required: true
-          description: Bare filename. Values containing `/` or `..` are rejected.
+          description: >-
+            A raw log file name (access_raw.log, error_raw.log or a rotated copy such as
+            access_raw.log-20261009-000000.gz). Any other name is rejected with 400.
           schema:
             type: string
       responses:
@@ -7370,7 +7391,9 @@ paths:
         - name: filename
           in: path
           required: true
-          description: Bare filename. Values containing `/` or `..` are rejected.
+          description: >-
+            A raw log file name (access_raw.log, error_raw.log or a rotated copy such as
+            access_raw.log-20261009-000000.gz). Any other name is rejected with 400.
           schema:
             type: string
         - name: lines
@@ -7404,21 +7427,24 @@ paths:
       tags: [Logs]
       summary: Delete a rotated log file
       description: |
-        The active `access.log` and `error.log` cannot be deleted, nor can symlinks.
+        The live `access_raw.log` and `error_raw.log` cannot be deleted (nginx keeps
+        writing to an unlinked file), nor can symlinks or files that are not raw logs.
       security:
         - BearerAuth: []
       parameters:
         - name: filename
           in: path
           required: true
-          description: Bare filename. Values containing `/` or `..` are rejected.
+          description: >-
+            A raw log file name (access_raw.log, error_raw.log or a rotated copy such as
+            access_raw.log-20261009-000000.gz). Any other name is rejected with 400.
           schema:
             type: string
       responses:
         '204':
           description: File deleted
         '400':
-          description: Invalid filename, active log file, or symlink
+          description: Invalid filename, a live log file, or a symlink
         '404':
           description: File not found
   /system-settings/log-files/rotate:
@@ -15805,27 +15831,117 @@ components:
         modified_at:
           type: string
           format: date-time
+        rotated_at:
+          type: string
+          format: date-time
+          description: Rotation time from the file name; absent for the live files
         is_compressed:
           type: boolean
           description: True for .gz/.bz2 files
         log_type:
           type: string
-          description: Derived from the filename prefix — access, error, or unknown
+          description: Derived from the filename prefix — access or error
+        is_active:
+          type: boolean
+          description: access_raw.log or error_raw.log, which nginx is writing; cannot be deleted
+        location:
+          type: string
+          enum: [local, archive]
     LogFilesResponse:
       type: object
       properties:
         files:
           type: array
+          description: One page of files (every file when no limit was given)
           items:
             $ref: '#/components/schemas/LogFileInfo'
         total_size:
           type: integer
           format: int64
+          description: Size of every file in the location, not only this page
         total_count:
           type: integer
+          description: Number of files in the location, not only this page
         raw_log_enabled:
           type: boolean
           description: Whether nginx is configured to write raw log files at all
+        location:
+          type: string
+          enum: [local, archive]
+        limit:
+          type: integer
+          description: The page size asked for; absent when every file was returned
+        offset:
+          type: integer
+        usage:
+          $ref: '#/components/schemas/RawLogUsage'
+    RawLogUsage:
+      type: object
+      description: |
+        Disk use of the raw logs, measured from the files. avg_daily_bytes averages the
+        finished rotated files (compressed ones when compression is on) of the last 7
+        local days before today, or of the days since the oldest rotated file when there
+        is less history. A projection is avg_daily_bytes x retention + live_bytes +
+        pending_bytes; with archiving on, rotated files leave the log disk once settled.
+      properties:
+        basis:
+          type: string
+          enum: [last_7_days, history, none]
+          description: none when no rotated file has finished yet
+        basis_days:
+          type: integer
+        avg_daily_bytes:
+          type: integer
+          format: int64
+        live_bytes:
+          type: integer
+          format: int64
+          description: access_raw.log and error_raw.log now
+        pending_bytes:
+          type: integer
+          format: int64
+          description: Rotated files not finished yet (with compression, the newest one)
+        local_bytes:
+          type: integer
+          format: int64
+        local_files:
+          type: integer
+        archive_bytes:
+          type: integer
+          format: int64
+        archive_files:
+          type: integer
+        retention_days:
+          type: integer
+        compressed:
+          type: boolean
+        archive_enabled:
+          type: boolean
+        archive_retention_days:
+          type: integer
+        projected_local_bytes:
+          type: integer
+          format: int64
+          description: Projection with the saved settings
+        projected_archive_bytes:
+          type: integer
+          format: int64
+        local_fs_type:
+          type: string
+          description: Filesystem holding the log directory (ext4, xfs, ...), when known
+        local_total_bytes:
+          type: integer
+          format: int64
+        local_free_bytes:
+          type: integer
+          format: int64
+          description: Space available to nginx on the log filesystem
+        archive_total_bytes:
+          type: integer
+          format: int64
+        archive_free_bytes:
+          type: integer
+          format: int64
     CloneProxyHost:
       type: object
       description: |

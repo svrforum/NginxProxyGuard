@@ -26,4 +26,7 @@ export function formatFileSize(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
+/** Files per page in the raw log list (long retentions create tens of thousands). */
+export const RAW_LOG_PAGE_SIZE = 100;
+
 export type RawLogMessage = { type: 'success' | 'error' | 'info'; text: string };
