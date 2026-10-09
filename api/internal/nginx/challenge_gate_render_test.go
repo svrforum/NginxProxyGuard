@@ -1,6 +1,11 @@
 package nginx
 
 import (
+	"bytes"
+	"context"
+	"log"
+	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -309,5 +314,129 @@ func TestChallengePageIsNotAccessLogged(t *testing.T) {
 				t.Fatal("no server block serves the challenge endpoints")
 			}
 		})
+	}
+}
+
+// serverLevel returns the directives named name that sit directly in the
+// server block (not in a location or other nested block), trimmed.
+func serverLevel(serverBlock, name string) []string {
+	var out []string
+	depth := 0
+	for _, l := range strings.Split(serverBlock, "\n") {
+		t := strings.TrimSpace(l)
+		if depth == 1 && strings.HasPrefix(t, name+" ") {
+			out = append(out, t)
+		}
+		depth += strings.Count(t, "{") - strings.Count(t, "}")
+	}
+	return out
+}
+
+// A legacy Advanced Config can still hold an auth_request of its own for the
+// whole server: refused when saving since v2.25.0, but kept by hosts saved
+// before and by restored backups. A block takes one auth_request, so next to
+// the challenge's server-level gate nginx -t failed and the boot sync dropped
+// the host. Such a host keeps the gate in location / only; an auth_request
+// inside a location, or in a comment, leaves the server-level gate in place.
+func TestChallengeGateYieldsToAdvancedConfigAuthRequest(t *testing.T) {
+	ext := "location = /ext {\n    internal;\n    proxy_pass http://192.0.2.20:9000/auth;\n}\n"
+	app := "location /app/ {\n    proxy_pass http://192.0.2.20:8080;\n}\n"
+	for _, tc := range []struct {
+		name, adv  string
+		own        string // the Advanced Config's server-level auth_request, "" if none
+		customRoot bool
+	}{
+		{"server level", "auth_request /ext;\n" + app + ext, "auth_request /ext;", false},
+		{"server level off", "auth_request off;\n" + app, "auth_request off;", false},
+		{"custom location /", "auth_request /ext;\nlocation / {\n    proxy_pass http://192.0.2.20:8080;\n}\n" + ext, "auth_request /ext;", true},
+		{"inside a location", "location /app/ {\n    auth_request /ext;\n    proxy_pass http://192.0.2.20:8080;\n}\n" + ext, "", false},
+		{"commented out", "# auth_request /ext;\n" + app, "", false},
+	} {
+		for _, mode := range gateTLSModes {
+			name := tc.name + " " + mode.name
+			out := renderForTest(t, ProxyHostConfigData{
+				Host:           gateTestHost("00000000-0000-0000-0000-0000000000ea", mode.ssl, mode.force, tc.adv),
+				GeoRestriction: geoChallenge(false),
+			})
+			for i, b := range splitServerBlocks(t, out) {
+				if mode.force && i == 0 {
+					continue // redirects everything but ACME and the challenge endpoints
+				}
+				auth := serverLevel(b, "auth_request")
+				if tc.own == "" {
+					if len(auth) != 1 || auth[0] != "auth_request /_challenge/validate;" {
+						t.Errorf("%s server %d: server-level auth_request %q, want only the gate", name, i, auth)
+					}
+					continue
+				}
+				if len(auth) != 1 || auth[0] != tc.own {
+					t.Errorf("%s server %d: server-level auth_request %q, want only the host's own %q", name, i, auth, tc.own)
+				}
+				if ep := serverLevel(b, "error_page"); slices.Contains(ep, "error_page 401 = @challenge_redirect;") {
+					t.Errorf("%s server %d: the gate's error_page 401 is still set for the whole server", name, i)
+				}
+				// @challenge_redirect reads $challenge_gate_status: still declared.
+				if set := serverLevel(b, "auth_request_set"); !slices.Equal(set, []string{"auth_request_set $challenge_gate_status $upstream_status;"}) {
+					t.Errorf("%s server %d: server-level auth_request_set %q", name, i, set)
+				}
+				if tc.customRoot {
+					continue // no location / of NPG's own to keep the gate in
+				}
+				root := blockAt(b, "location / {")
+				for _, want := range []string{
+					"auth_request /_challenge/validate;",
+					"error_page 401 = @challenge_redirect;",
+					"error_page 500 502 503 504 = @api_fallback;",
+				} {
+					if !strings.Contains(root, want) {
+						t.Errorf("%s server %d: location / lacks %q", name, i, want)
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestAdvancedConfigHasTopLevel(t *testing.T) {
+	for _, tc := range []struct {
+		cfg  string
+		want bool
+	}{
+		{"auth_request /ext;", true},
+		{"  auth_request off;\n", true},
+		{"proxy_set_header X-A b; auth_request /ext;", true},
+		{"location /a/ {\n    auth_request /ext;\n}\n", false},
+		{"location /a/ { proxy_pass http://192.0.2.1; }\nauth_request /ext;", true},
+		{"if ($x) {\n    auth_request /ext;\n}", false},
+		{"auth_request_set $a $upstream_status;", false},
+		{"# auth_request /ext;\nclient_max_body_size 1m;", false},
+		{"add_header X-Note \"auth_request /x;\";", false},
+		{"add_header X-Note 'a { b'; auth_request /ext;", true},
+		{"", false},
+	} {
+		if got := advancedConfigHasTopLevel(tc.cfg, "auth_request"); got != tc.want {
+			t.Errorf("%q: got %v, want %v", tc.cfg, got, tc.want)
+		}
+	}
+}
+
+// The warning names each host once per process, not at every regeneration.
+func TestAdvancedConfigAuthRequestWarnsOnce(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	m, _ := newRequestPathTestManager(t)
+	h := gateTestHost("00000000-0000-0000-0000-0000000000eb", false, false, "auth_request /ext;\nlocation = /ext {\n    internal;\n    proxy_pass http://192.0.2.20:9000/auth;\n}\n")
+	advancedAuthRequestWarned.Delete(h.ID) // -count > 1
+	for i := 0; i < 3; i++ {
+		if err := m.GenerateConfigFull(context.Background(), ProxyHostConfigData{Host: h, GeoRestriction: geoChallenge(false)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := strings.Count(buf.String(), h.ID); n != 1 {
+		t.Fatalf("host named %d times, want once:\n%s", n, buf.String())
+	}
+	if !strings.Contains(buf.String(), "auth provider (ForwardAuth)") {
+		t.Errorf("the warning does not say what to do instead:\n%s", buf.String())
 	}
 }

@@ -85,6 +85,7 @@ type ProxyHostConfigData struct {
 	AdvancedConfigDirectives      map[string]bool       // Set of directive names present in AdvancedConfig (e.g. "proxy_connect_timeout")
 	AdvancedConfigServerLevel     string                // Server-level directives extracted from AdvancedConfig (ssl_stapling, etc.)
 	AdvancedConfigLocationLevel   string                // Location-level directives extracted from AdvancedConfig
+	AdvancedConfigAuthRequest     bool                  // True if AdvancedConfig is rendered into the server block and sets auth_request at its top level (legacy, see GenerateConfigFull)
 	GlobalTrustedIPs              []string              // Global trusted IPs that bypass all security (from system settings)
 	HTTPPort                      string                // HTTP listen port (default: 80)
 	HTTPSPort                     string                // HTTPS listen port (default: 443)

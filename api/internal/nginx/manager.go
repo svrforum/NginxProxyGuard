@@ -467,6 +467,71 @@ func HasCustomLocationRootInConfig(advancedConfig string) bool {
 	return customLocationRootRe.MatchString(advancedConfig)
 }
 
+// advancedConfigHasTopLevel reports whether advancedConfig uses the directive
+// name at its top level, outside every block. Comments and quoted strings are
+// skipped. Advanced Config is pasted into a server block, so a top-level
+// directive there is a server-level directive.
+func advancedConfigHasTopLevel(advancedConfig, name string) bool {
+	const wordEnd = " \t\r\n;{}#\"'"
+	depth := 0
+	atStart := true // the next word is a directive name
+	for i := 0; i < len(advancedConfig); i++ {
+		switch c := advancedConfig[i]; c {
+		case '#':
+			for i < len(advancedConfig) && advancedConfig[i] != '\n' {
+				i++
+			}
+		case '"', '\'':
+			for i++; i < len(advancedConfig) && advancedConfig[i] != c; i++ {
+				if advancedConfig[i] == '\\' {
+					i++
+				}
+			}
+			atStart = false
+		case '{':
+			depth++
+			atStart = true
+		case '}':
+			depth--
+			atStart = true
+		case ';':
+			atStart = true
+		case ' ', '\t', '\r', '\n':
+		default:
+			j := i
+			for j < len(advancedConfig) && !strings.ContainsRune(wordEnd, rune(advancedConfig[j])) {
+				j++
+			}
+			if atStart && depth == 0 && advancedConfig[i:j] == name {
+				return true
+			}
+			atStart = false
+			i = j - 1
+		}
+	}
+	return false
+}
+
+// advancedAuthRequestWarned holds the IDs of the hosts already named in the
+// warning below, so each is named once per process, not at every
+// regeneration.
+var advancedAuthRequestWarned sync.Map
+
+func warnAdvancedAuthRequestOnce(host *model.ProxyHost, customRoot bool) {
+	if _, seen := advancedAuthRequestWarned.LoadOrStore(host.ID, struct{}{}); seen {
+		return
+	}
+	effect := "covers only location /, not the locations in its Advanced Config"
+	if customRoot {
+		effect = "is not applied, because its Advanced Config replaces location / as well"
+	}
+	log.Printf("[WARN] Host %s (%s): its Advanced Config sets its own auth_request for the whole server, "+
+		"so the geo challenge %s. Advanced Config no longer accepts auth_request: move this login to an "+
+		"auth provider (ForwardAuth) and remove auth_request from the Advanced Config. A host uses either "+
+		"an auth provider or the geo challenge.",
+		host.ID, strings.Join(host.DomainNames, ", "), effect)
+}
+
 // GenerateConfigFull generates nginx config with all Phase 6 features support
 func (m *Manager) GenerateConfigFull(ctx context.Context, data ProxyHostConfigData) error {
 	start := time.Now()
@@ -573,6 +638,18 @@ func (m *Manager) GenerateConfigFull(ctx context.Context, data ProxyHostConfigDa
 		serverPart, locationPart := splitAdvancedConfigByContext(data.Host.AdvancedConfig)
 		data.AdvancedConfigServerLevel = serverPart
 		data.AdvancedConfigLocationLevel = locationPart
+
+		// Advanced Config has refused auth_request since v2.25.0, but a host
+		// saved before then, or restored from a backup, can still carry one
+		// at its top level. Rendered into the server block next to the geo
+		// challenge's server-level gate, it would fail nginx -t ("auth_request
+		// directive is duplicate"), and the boot sync would drop the host.
+		// Such a host keeps the gate in location / only.
+		data.AdvancedConfigAuthRequest = (data.AdvancedConfigHasLocation || data.HasCustomLocationRoot) &&
+			advancedConfigHasTopLevel(data.Host.AdvancedConfig, "auth_request")
+		if data.AdvancedConfigAuthRequest && data.GeoRestriction != nil && data.GeoRestriction.ChallengeMode {
+			warnAdvancedAuthRequestOnce(data.Host, data.HasCustomLocationRoot)
+		}
 	}
 
 	tmpl, err := template.New("proxy_host").Funcs(funcMap).Parse(proxyHostTemplate)

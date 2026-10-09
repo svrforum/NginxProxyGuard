@@ -7,7 +7,13 @@
         return 301 https://$host$request_uri;
     }
     {{else}}
-{{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}
+{{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}{{if .AdvancedConfigAuthRequest}}
+    # Challenge gate in location / only: this host's Advanced Config has
+    # its own auth_request for the whole server, and a block takes only one
+    # (the API log names the host). The API's answer to the gate in
+    # location /, for @challenge_redirect:
+    auth_request_set $challenge_gate_status $upstream_status;
+{{else}}
     # Challenge gate for every location of this server: the generated
     # location / and any location from Advanced Config alike. NPG's own
     # pass-through locations (ACME, /api/v1/challenge/, @api_fallback and
@@ -17,7 +23,7 @@
     # so @challenge_redirect can tell the gate's 401 from any other.
     auth_request_set $challenge_gate_status $upstream_status;
     error_page 401 = @challenge_redirect;
-{{end}}{{end}}
+{{end}}{{end}}{{end}}
 {{if not .HasCustomLocationRoot}}
     location / {
 {{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}
@@ -118,7 +124,13 @@
 {{end}}{{end}}
     {{end}}
 {{else}}
-{{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}
+{{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}{{if .AdvancedConfigAuthRequest}}
+    # Challenge gate in location / only: this host's Advanced Config has
+    # its own auth_request for the whole server, and a block takes only one
+    # (the API log names the host). The API's answer to the gate in
+    # location /, for @challenge_redirect:
+    auth_request_set $challenge_gate_status $upstream_status;
+{{else}}
     # Challenge gate for every location of this server: the generated
     # location / and any location from Advanced Config alike. NPG's own
     # pass-through locations (ACME, /api/v1/challenge/, @api_fallback and
@@ -128,7 +140,7 @@
     # so @challenge_redirect can tell the gate's 401 from any other.
     auth_request_set $challenge_gate_status $upstream_status;
     error_page 401 = @challenge_redirect;
-{{end}}{{end}}
+{{end}}{{end}}{{end}}
 {{if not .HasCustomLocationRoot}}
     location / {
 {{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}

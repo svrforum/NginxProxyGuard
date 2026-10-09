@@ -66,6 +66,8 @@ func renderProxyHostConfig(_ context.Context, w *bytes.Buffer, data ProxyHostCon
 		serverPart, locationPart := splitAdvancedConfigByContext(data.Host.AdvancedConfig)
 		data.AdvancedConfigServerLevel = serverPart
 		data.AdvancedConfigLocationLevel = locationPart
+		data.AdvancedConfigAuthRequest = (data.AdvancedConfigHasLocation || data.HasCustomLocationRoot) &&
+			advancedConfigHasTopLevel(data.Host.AdvancedConfig, "auth_request")
 	}
 
 	tmpl, err := template.New("proxy_host").Funcs(funcMap).Parse(proxyHostTemplate)
