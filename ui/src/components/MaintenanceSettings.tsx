@@ -7,6 +7,7 @@ import {
 } from '../api/settings';
 import type { SystemSettings, UpdateSystemSettingsRequest } from '../types/settings';
 import { HelpTip } from './common/HelpTip';
+import LogRawReclaimCard from './settings/LogRawReclaimCard';
 
 export default function MaintenanceSettings() {
   const { t } = useTranslation('settings');
@@ -321,6 +322,9 @@ export default function MaintenanceSettings() {
           </p>
         </div>
       </div>
+
+      {/* Raw log copies kept in old compressed logs */}
+      <LogRawReclaimCard />
     </div>
   );
 }

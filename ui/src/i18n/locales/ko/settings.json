@@ -466,6 +466,84 @@
           "description": "Access + Error 로그 파일 기준 약 {{size}} MB",
           "compressed": " (압축 시)"
         }
+      },
+      "rawReclaim": {
+        "title": "압축된 과거 로그의 원문 사본 정리",
+        "description": "2일보다 오래된 압축 로그에 남아 있는 접근·오류 로그의 원문 사본(raw_log)을 지워 디스크를 회수합니다. 분석에 쓰이는 컬럼과 WAF 이벤트 기록은 그대로 둡니다. 하루치씩 처리하며, 처리 중인 날짜의 로그 조회는 최대 1분가량 기다릴 수 있습니다.",
+        "irreversible": "되돌릴 수 없는 작업입니다. 시작할 때 확인 창에서 지워지는 내용을 확인하세요.",
+        "estimate": "회수 가능 (추정)",
+        "estimateDays": "{{count}}일 분량",
+        "estimating": "계산 중…",
+        "estimateNone": "지울 원문 사본이 없습니다",
+        "modsecKept": "유지되는 WAF 이벤트 원문",
+        "modsecKeptHint": "WAF(ModSecurity) 이벤트는 규칙 상세 화면에 필요해 그대로 둡니다",
+        "freeSpace": "DB 디스크 여유 공간",
+        "required": "다음 날짜에 필요: {{size}}",
+        "freeUnknownShort": "측정 불가",
+        "progress": "진행",
+        "progressDays": "{{done}} / {{total}}일 완료",
+        "reclaimed": "{{size}} 회수됨",
+        "remaining": "남은 원문 사본 {{size}}",
+        "skipped": "건너뜀 {{count}}일",
+        "failedDays": "실패 {{count}}일",
+        "current": "처리 중: {{day}}",
+        "since": "{{time}}부터",
+        "preparing": "준비 중…",
+        "steps": {
+          "waiting_disk": "DB 디스크가 위험 수준이라 비상 압축이 먼저 끝나기를 기다리는 중",
+          "waiting_lock": "다른 압축 작업이 끝나기를 기다리는 중",
+          "nulling": "원문 사본 삭제 중",
+          "waiting": "삭제 전에 시작된 트랜잭션이 끝나기를 기다리는 중",
+          "vacuum": "공간 회수 중(VACUUM FULL) — 이 날짜의 조회는 잠시 기다립니다",
+          "pausing": "다음 날짜 전에 잠시 쉬는 중"
+        },
+        "status": {
+          "idle": "대기",
+          "running": "진행 중",
+          "paused": "일시 중지됨",
+          "done": "완료",
+          "failed": "중단됨"
+        },
+        "resumeAt": "API가 다시 시작되어 {{time}}에 이어서 진행합니다",
+        "lastError": "마지막 오류",
+        "freeUnknown": "DB 디스크의 여유 공간을 측정할 수 없어 시작할 수 없습니다. 디스크 감시(NPG_DISK_GUARD_DISABLED)가 꺼져 있거나 DB 컨테이너를 찾지 못한 경우입니다.",
+        "needSpace": "여유 공간이 부족합니다: 다음 날짜에 {{required}}가 필요한데 {{free}}만 남아 있습니다.",
+        "unsupported": "이 데이터베이스에서는 사용할 수 없습니다.",
+        "unsupportedReasons": {
+          "timescaledb_missing": "TimescaleDB가 설치되어 있지 않습니다.",
+          "catalog_changed": "TimescaleDB 내부 구조가 예상과 달라 안전하게 처리할 수 없습니다.",
+          "not_hypertable": "로그 테이블이 하이퍼테이블이 아닙니다.",
+          "compression_disabled": "로그 압축이 켜져 있지 않습니다.",
+          "segmentby_without_log_type": "로그가 로그 유형별로 나뉘어 압축되어 있지 않습니다."
+        },
+        "start": "정리 시작",
+        "resume": "이어서 진행",
+        "stop": "일시 중지",
+        "starting": "시작 중…",
+        "stopping": "중지 중…",
+        "readOnly": "시작하거나 중지하려면 설정 쓰기 권한이 필요합니다.",
+        "confirm": {
+          "title": "원문 사본을 영구 삭제할까요?",
+          "intro": "압축된 과거 로그에서 접근·오류 로그 줄의 원문 사본(raw_log)을 데이터베이스에서 지웁니다. 되돌릴 수 없습니다.",
+          "removedTitle": "컬럼에는 없고 원문에만 있던 다음 정보가 데이터베이스 사본에서 사라집니다:",
+          "removedUser": "Basic 인증 사용자 이름 ($remote_user)",
+          "removedTimings": "업스트림 연결·헤더 응답 시간",
+          "removedAsn": "nginx가 기록한 ASN 값",
+          "removedPrefix": "오류 로그 줄의 앞부분 (시각·레벨·프로세스 정보)",
+          "kept": "그대로 남는 것: 분석에 쓰이는 모든 컬럼(시각, 호스트, IP, URI, 상태 코드, 국가 등)과 WAF 이벤트 기록.",
+          "files": "원문 줄은 Raw 로그 파일에만, 그 파일의 보관 기간 동안 남습니다.",
+          "wait": "하루치씩 처리하며, 처리 중인 날짜의 로그 조회는 최대 1분가량 기다릴 수 있습니다.",
+          "maxChunks": "이번에 처리할 최대 일수",
+          "maxChunksHint": "비워 두면 해당하는 날짜를 모두 처리합니다. 처음에는 1일로 시험해 볼 수 있습니다.",
+          "confirm": "영구 삭제하고 시작"
+        },
+        "errors": {
+          "already_running": "이미 진행 중입니다.",
+          "unsupported": "이 데이터베이스에서는 사용할 수 없습니다.",
+          "free_space_unknown": "DB 디스크의 여유 공간을 측정할 수 없어 시작하지 않았습니다.",
+          "insufficient_space": "여유 공간이 부족해 시작하지 않았습니다. 아래의 필요 공간을 확인하세요.",
+          "generic": "요청을 처리하지 못했습니다: {{message}}"
+        }
       }
     },
     "logfiles": {

@@ -462,6 +462,84 @@
           "description": "Approx. {{size}} MB based on Access + Error logs",
           "compressed": " (Compressed)"
         }
+      },
+      "rawReclaim": {
+        "title": "Raw log copies in old compressed logs",
+        "description": "Frees disk space by removing the raw copies (raw_log) of access and error lines kept in compressed log history older than two days. The columns used for analysis and the WAF event records stay. Days are processed one at a time; queries for the day being processed may wait up to about a minute.",
+        "irreversible": "This cannot be undone. The confirmation lists what is removed.",
+        "estimate": "Reclaimable (estimate)",
+        "estimateDays": "across {{count}} day(s)",
+        "estimating": "Measuring…",
+        "estimateNone": "No raw copies left to remove",
+        "modsecKept": "WAF event records kept",
+        "modsecKeptHint": "WAF (ModSecurity) events keep their raw records; the rule detail view needs them",
+        "freeSpace": "Free on the database disk",
+        "required": "Next day needs {{size}}",
+        "freeUnknownShort": "Unknown",
+        "progress": "Progress",
+        "progressDays": "{{done}} of {{total}} days done",
+        "reclaimed": "{{size}} reclaimed",
+        "remaining": "{{size}} of raw copies left",
+        "skipped": "{{count}} skipped",
+        "failedDays": "{{count}} failed",
+        "current": "Working on {{day}}",
+        "since": "since {{time}}",
+        "preparing": "Preparing…",
+        "steps": {
+          "waiting_disk": "Waiting: the database disk is critical, so emergency compression goes first",
+          "waiting_lock": "Waiting for another compression job to finish",
+          "nulling": "Removing the raw copies",
+          "waiting": "Waiting for transactions older than the removal to end",
+          "vacuum": "Returning the space (VACUUM FULL); queries for this day wait meanwhile",
+          "pausing": "Pausing before the next day"
+        },
+        "status": {
+          "idle": "Idle",
+          "running": "Running",
+          "paused": "Paused",
+          "done": "Done",
+          "failed": "Stopped"
+        },
+        "resumeAt": "The API restarted; continuing at {{time}}",
+        "lastError": "Last error",
+        "freeUnknown": "Cannot start: the free space on the database disk cannot be measured (the disk guard is off via NPG_DISK_GUARD_DISABLED, or the database container was not found).",
+        "needSpace": "Not enough free space: the next day needs {{required}}, and {{free}} is free.",
+        "unsupported": "Not available on this database.",
+        "unsupportedReasons": {
+          "timescaledb_missing": "TimescaleDB is not installed.",
+          "catalog_changed": "TimescaleDB's internal catalog is not as expected, so this cannot run safely.",
+          "not_hypertable": "The log table is not a hypertable.",
+          "compression_disabled": "Log compression is not enabled.",
+          "segmentby_without_log_type": "Logs are not compressed by log type."
+        },
+        "start": "Start",
+        "resume": "Continue",
+        "stop": "Pause",
+        "starting": "Starting…",
+        "stopping": "Pausing…",
+        "readOnly": "Starting or pausing needs the settings write permission.",
+        "confirm": {
+          "title": "Permanently delete the raw copies?",
+          "intro": "This removes the raw copy (raw_log) of every access and error line from compressed log history in the database. It cannot be undone.",
+          "removedTitle": "What only the raw line held, with no column of its own, is lost from the database copy:",
+          "removedUser": "Basic-auth user name ($remote_user)",
+          "removedTimings": "Upstream connect and header timings",
+          "removedAsn": "The ASN value nginx logged",
+          "removedPrefix": "The error-line prefix (time, level, process)",
+          "kept": "Kept: every column used for analysis (time, host, IP, URI, status, country, …) and the WAF event records.",
+          "files": "The verbatim lines remain only in the raw log files, for those files' retention.",
+          "wait": "Days are processed one at a time; queries for the day being processed may wait up to about a minute.",
+          "maxChunks": "Days to process this time",
+          "maxChunksHint": "Leave empty to process every eligible day. You can try one day first.",
+          "confirm": "Delete permanently and start"
+        },
+        "errors": {
+          "already_running": "It is already running.",
+          "unsupported": "Not available on this database.",
+          "free_space_unknown": "Not started: the free space on the database disk cannot be measured.",
+          "insufficient_space": "Not started: not enough free space. See the space needed below.",
+          "generic": "The request failed: {{message}}"
+        }
       }
     },
     "logfiles": {
