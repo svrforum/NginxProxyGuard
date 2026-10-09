@@ -2,13 +2,17 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { viewLogFile, downloadLogFile, deleteLogFile, triggerLogRotation } from '../../api/settings';
-import type { LogFileInfo, LogFilesResponse } from '../../types/settings';
+import type { LogFileInfo, LogFileLocation, LogFilesResponse } from '../../types/settings';
 import { ModalShell } from '../common/ModalShell';
 import { usePermissions } from '../../hooks/usePermissions';
 import { RAW_LOG_PAGE_SIZE, formatFileSize, type RawLogMessage } from './shared';
 
 interface RawLogFileListProps {
   data: LogFilesResponse | undefined;
+  /** Error of the list request (the archive tab answers 409/503 when it cannot be read). */
+  error: Error | null;
+  location: LogFileLocation;
+  onLocationChange: (location: LogFileLocation) => void;
   /** Zero-based page of RAW_LOG_PAGE_SIZE files. */
   page: number;
   onPageChange: (page: number) => void;
@@ -17,7 +21,7 @@ interface RawLogFileListProps {
 }
 
 /** Status line, "Rotate now", and the list of raw log files with preview, download and delete. */
-export default function RawLogFileList({ data, page, onPageChange, onRefresh, onMessage }: RawLogFileListProps) {
+export default function RawLogFileList({ data, error, location, onLocationChange, page, onPageChange, onRefresh, onMessage }: RawLogFileListProps) {
   const { t, i18n } = useTranslation('logs');
   const queryClient = useQueryClient();
   const { can } = usePermissions();
@@ -27,8 +31,9 @@ export default function RawLogFileList({ data, page, onPageChange, onRefresh, on
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const viewFileMutation = useMutation({
-    mutationFn: ({ filename, lines }: { filename: string; lines: number }) => viewLogFile(filename, lines),
+    mutationFn: ({ filename, lines }: { filename: string; lines: number }) => viewLogFile(filename, lines, location),
     onSuccess: (result) => setViewContent(result.content),
+    onError: (err: Error) => setViewContent(err.message),
   });
 
   const rotateMutation = useMutation({
@@ -54,7 +59,7 @@ export default function RawLogFileList({ data, page, onPageChange, onRefresh, on
   });
 
   const deleteMutation = useMutation({
-    mutationFn: deleteLogFile,
+    mutationFn: (filename: string) => deleteLogFile(filename, location),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['logFiles'] });
       setConfirmDelete(null);
@@ -72,7 +77,7 @@ export default function RawLogFileList({ data, page, onPageChange, onRefresh, on
 
   const handleDownloadFile = async (filename: string) => {
     try {
-      await downloadLogFile(filename);
+      await downloadLogFile(filename, location);
     } catch {
       onMessage({ type: 'error', text: t('rawFiles.downloadFailed') });
     }
@@ -83,8 +88,14 @@ export default function RawLogFileList({ data, page, onPageChange, onRefresh, on
     setViewContent('');
   };
 
-  const files = data?.files ?? [];
+  const files = error ? [] : data?.files ?? [];
   const total = data?.total_count ?? 0;
+  // The archive tab exists once a directory is mounted at all.
+  const archive = data?.archive;
+  const showArchiveTab = location === 'archive' || archive?.mounted === true;
+  // Deleting from the archive is a write: only in a directory this install initialised.
+  const canDelete = (file: LogFileInfo) =>
+    canWrite && !file.is_active && (file.location !== 'archive' || archive?.marker === 'ours');
   const pageCount = Math.max(1, Math.ceil(total / RAW_LOG_PAGE_SIZE));
 
   return (
@@ -128,6 +139,30 @@ export default function RawLogFileList({ data, page, onPageChange, onRefresh, on
           </div>
         </div>
       </div>
+
+      {showArchiveTab && (
+        <div role="tablist" className="flex gap-2">
+          {(['local', 'archive'] as const).map((loc) => (
+            <button
+              key={loc}
+              role="tab"
+              aria-selected={location === loc}
+              onClick={() => onLocationChange(loc)}
+              className={`px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors ${location === loc
+                ? 'bg-blue-600 text-white border-blue-600'
+                : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600'}`}
+            >
+              {t(`rawFiles.list.tabs.${loc}`)}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {error && (
+        <div role="alert" className="px-4 py-3 rounded-lg text-sm bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800 break-all">
+          {error.message}
+        </div>
+      )}
 
       {/* File list */}
       {files.length > 0 ? (
@@ -190,7 +225,7 @@ export default function RawLogFileList({ data, page, onPageChange, onRefresh, on
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
                   </button>
-                  {canWrite && !file.is_active && (
+                  {canDelete(file) && (
                     <button
                       onClick={() => setConfirmDelete(file.name)}
                       className="p-2 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"

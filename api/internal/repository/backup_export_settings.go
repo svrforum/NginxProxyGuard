@@ -84,6 +84,8 @@ func (r *BackupRepository) exportSystemSettings(ctx context.Context) (*model.Sys
 		       system_log_retention_days, audit_log_retention_days,
 		       raw_log_enabled, raw_log_retention_days, raw_log_max_size_mb,
 		       raw_log_rotate_count, raw_log_compress_rotated,
+		       COALESCE(raw_log_archive_enabled, false) as raw_log_archive_enabled,
+		       COALESCE(raw_log_archive_retention_days, 365) as raw_log_archive_retention_days,
 		       bot_filter_default_enabled, bot_filter_default_block_bad_bots,
 		       bot_filter_default_block_ai_bots, bot_filter_default_allow_search_engines,
 		       bot_filter_default_block_suspicious_clients, bot_filter_default_challenge_suspicious,
@@ -120,6 +122,8 @@ func (r *BackupRepository) exportSystemSettings(ctx context.Context) (*model.Sys
 	var trustedProxyCIDRs, trustedProxyPreset, realIPHeader string
 	var systemLogsLevels []byte
 	var systemLogsExcludePatterns, systemLogsStdoutExcluded pq.StringArray
+	var rawLogArchiveEnabled bool
+	var rawLogArchiveRetentionDays int
 
 	err := r.db.QueryRowContext(ctx, query).Scan(
 		&ss.GeoIPEnabled, &ss.GeoIPAutoUpdate, &geoipUpdateInterval,
@@ -133,6 +137,7 @@ func (r *BackupRepository) exportSystemSettings(ctx context.Context) (*model.Sys
 		&ss.SystemLogRetentionDays, &ss.AuditLogRetentionDays,
 		&ss.RawLogEnabled, &ss.RawLogRetentionDays, &ss.RawLogMaxSizeMB,
 		&ss.RawLogRotateCount, &ss.RawLogCompressRotated,
+		&rawLogArchiveEnabled, &rawLogArchiveRetentionDays,
 		&ss.BotFilterDefaultEnabled, &ss.BotFilterDefaultBlockBadBots,
 		&ss.BotFilterDefaultBlockAIBots, &ss.BotFilterDefaultAllowSearchEngines,
 		&ss.BotFilterDefaultBlockSuspiciousClients, &ss.BotFilterDefaultChallengeSuspicious,
@@ -177,6 +182,8 @@ func (r *BackupRepository) exportSystemSettings(ctx context.Context) (*model.Sys
 	ss.SystemLogsLevels = json.RawMessage(systemLogsLevels)
 	ss.SystemLogsExcludePatterns = []string(systemLogsExcludePatterns)
 	ss.SystemLogsStdoutExcluded = []string(systemLogsStdoutExcluded)
+	ss.RawLogArchiveEnabled = &rawLogArchiveEnabled
+	ss.RawLogArchiveRetentionDays = &rawLogArchiveRetentionDays
 
 	return &ss, nil
 }

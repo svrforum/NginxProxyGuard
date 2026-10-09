@@ -1701,6 +1701,17 @@ BEGIN
     INSERT INTO schema_migrations (version) VALUES ('raw_log_retention_by_days_v1') ON CONFLICT DO NOTHING;
 END $$`,
 		},
+		// Raw log archive directory (service.RawLogArchiver): settled
+		// rotated raw logs move to another disk or a NAS share once an
+		// operator has initialised it. Off by default.
+		{
+			desc: "system_settings.raw_log_archive_enabled",
+			sql:  `ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS raw_log_archive_enabled boolean DEFAULT false NOT NULL`,
+		},
+		{
+			desc: "system_settings.raw_log_archive_retention_days",
+			sql:  `ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS raw_log_archive_retention_days integer DEFAULT 365 NOT NULL`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

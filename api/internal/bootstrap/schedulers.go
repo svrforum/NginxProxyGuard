@@ -94,7 +94,7 @@ func NewSchedulers(cfg *config.Config, db *database.DB, nginxManager *nginx.Mana
 			repos.SystemLog,
 			repos.Dashboard,
 		),
-		LogRotate:      scheduler.NewLogRotateScheduler(nginxManager, nil),
+		LogRotate:      scheduler.NewLogRotateScheduler(nginxManager, svcs.RawLogArchiver.Wake),
 		Backup:         scheduler.NewBackupScheduler(repos.Backup, repos.SystemSettings, cfg.BackupPath),
 		FilterRefresh:  scheduler.NewFilterRefreshScheduler(svcs.FilterSubscription),
 		SessionCleanup: scheduler.NewSessionCleanupScheduler(svcs.Auth, svcs.SSO),

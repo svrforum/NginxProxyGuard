@@ -90,6 +90,7 @@ func InitHandlers(
 		svcs.CloudProvider,
 		svcs.ProxyHost,
 	)
+	h.SystemSettings.SetRawLogArchiver(svcs.RawLogArchiver)
 	h.APIToken = handler.NewAPITokenHandler(repos.APIToken, repos.AuditLog)
 	h.AuditLog = handler.NewAuditLogHandler(repos.AuditLog, repos.APIToken)
 	h.Challenge = handler.NewChallengeHandler(svcs.Challenge, svcs.Audit)

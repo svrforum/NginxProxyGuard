@@ -12,7 +12,7 @@ func intp(v int) *int { return &v }
 // Stored legacy values never block a save: long-running installs carry
 // 1825 days / 9999 files, and API clients echo the whole object back.
 func TestValidateRawLogSettingsOnlyChecksChangedValues(t *testing.T) {
-	cur := &SystemSettings{RawLogRetentionDays: 1825, RawLogRotateCount: 9999, RawLogMaxSizeMB: 5}
+	cur := &SystemSettings{RawLogRetentionDays: 1825, RawLogRotateCount: 9999, RawLogMaxSizeMB: 5, RawLogArchiveRetentionDays: 365}
 
 	ok := []struct {
 		name string
@@ -28,6 +28,8 @@ func TestValidateRawLogSettingsOnlyChecksChangedValues(t *testing.T) {
 		{"upper bounds", UpdateSystemSettingsRequest{
 			RawLogRetentionDays: intp(3650), RawLogMaxSizeMB: intp(10240), RawLogRotateCount: intp(100000),
 		}},
+		{"archive retention bounds", UpdateSystemSettingsRequest{RawLogArchiveRetentionDays: intp(1)}},
+		{"archive retention max", UpdateSystemSettingsRequest{RawLogArchiveRetentionDays: intp(3650)}},
 	}
 	for _, tc := range ok {
 		req := tc.req
@@ -47,6 +49,8 @@ func TestValidateRawLogSettingsOnlyChecksChangedValues(t *testing.T) {
 		{"size 10241", UpdateSystemSettingsRequest{RawLogMaxSizeMB: intp(10241)}, "raw_log_max_size_mb"},
 		{"rotate 0", UpdateSystemSettingsRequest{RawLogRotateCount: intp(0)}, "raw_log_rotate_count"},
 		{"rotate 100001", UpdateSystemSettingsRequest{RawLogRotateCount: intp(100001)}, "raw_log_rotate_count"},
+		{"archive retention 0", UpdateSystemSettingsRequest{RawLogArchiveRetentionDays: intp(0)}, "raw_log_archive_retention_days"},
+		{"archive retention 3651", UpdateSystemSettingsRequest{RawLogArchiveRetentionDays: intp(3651)}, "raw_log_archive_retention_days"},
 		{"a bad value next to an echoed legacy one", UpdateSystemSettingsRequest{
 			RawLogRotateCount: intp(9999), RawLogRetentionDays: intp(-3),
 		}, "raw_log_retention_days"},
@@ -128,17 +132,63 @@ func TestRawLogRetentionHandover(t *testing.T) {
 }
 
 func TestCoerceRawLogImportRepairsZeroValues(t *testing.T) {
-	ss := &SystemSettingsExport{}
-	CoerceRawLogImport(ss)
+	now := time.Date(2026, 10, 10, 12, 0, 0, 0, time.UTC)
+	installed := now.AddDate(-2, 0, 0)
+	archived := false
+
+	ss := &SystemSettingsExport{RawLogArchiveEnabled: &archived}
+	CoerceRawLogImport(ss, installed, now)
 	if !ss.RawLogEnabled || ss.RawLogRetentionDays != 7 || ss.RawLogMaxSizeMB != 100 || ss.RawLogRotateCount != 5 {
 		t.Fatalf("zero values were not replaced by the defaults: %+v", ss)
 	}
 
-	kept := &SystemSettingsExport{RawLogEnabled: true, RawLogRetentionDays: 1825, RawLogMaxSizeMB: 5, RawLogRotateCount: 9999}
-	CoerceRawLogImport(kept)
-	if kept.RawLogRetentionDays != 1825 || kept.RawLogMaxSizeMB != 5 || kept.RawLogRotateCount != 9999 {
+	zero := 0
+	ss = &SystemSettingsExport{RawLogArchiveEnabled: &archived, RawLogArchiveRetentionDays: &zero}
+	CoerceRawLogImport(ss, installed, now)
+	if *ss.RawLogArchiveRetentionDays != 365 {
+		t.Fatalf("archive retention 0 must import as 365, got %d", *ss.RawLogArchiveRetentionDays)
+	}
+
+	kept := &SystemSettingsExport{RawLogEnabled: true, RawLogRetentionDays: 1825, RawLogMaxSizeMB: 5, RawLogRotateCount: 9999, RawLogArchiveEnabled: &archived}
+	CoerceRawLogImport(kept, installed, now)
+	if kept.RawLogRetentionDays != 1825 || kept.RawLogMaxSizeMB != 5 || kept.RawLogRotateCount != 9999 || kept.RawLogArchiveRetentionDays != nil {
 		t.Fatalf("valid stored values must be imported as they are: %+v", kept)
 	}
 
-	CoerceRawLogImport(nil) // must not panic
+	CoerceRawLogImport(nil, installed, now) // must not panic
+}
+
+// A backup from before the archive columns (archive fields absent) gets the
+// same retention handover as an upgrading install, bounded by the age of the
+// install it is restored into. A newer backup is restored as it is.
+func TestCoerceRawLogImportHandsOverOldBackups(t *testing.T) {
+	now := time.Date(2026, 10, 10, 12, 0, 0, 0, time.UTC)
+	daysAgo := func(d int) time.Time { return now.AddDate(0, 0, -d) }
+
+	cases := []struct {
+		name              string
+		retention, rotate int
+		installedAt       time.Time
+		want              int
+	}{
+		{"production-shaped backup onto a 300-day-old install", 1825, 9999, daysAgo(300), 1825},
+		{"7 days / 30 files onto an install older than 30 days", 7, 30, daysAgo(400), 30},
+		{"7 days / 30 files onto a 10-day-old install", 7, 30, daysAgo(10), 11},
+		{"7 days / 30 files onto a fresh install", 7, 30, now, 7},
+		{"zero retention, 30 files, old install", 0, 30, daysAgo(400), 30},
+	}
+	for _, tc := range cases {
+		old := &SystemSettingsExport{RawLogRetentionDays: tc.retention, RawLogRotateCount: tc.rotate, RawLogMaxSizeMB: 100}
+		CoerceRawLogImport(old, tc.installedAt, now)
+		if old.RawLogRetentionDays != tc.want {
+			t.Errorf("%s: retention %d, want %d", tc.name, old.RawLogRetentionDays, tc.want)
+		}
+	}
+
+	archived := true
+	newer := &SystemSettingsExport{RawLogRetentionDays: 7, RawLogRotateCount: 30, RawLogMaxSizeMB: 100, RawLogArchiveEnabled: &archived}
+	CoerceRawLogImport(newer, daysAgo(400), now)
+	if newer.RawLogRetentionDays != 7 {
+		t.Fatalf("a backup with archive fields was made after the handover; its retention must be kept, got %d", newer.RawLogRetentionDays)
+	}
 }

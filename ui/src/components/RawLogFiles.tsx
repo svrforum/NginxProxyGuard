@@ -4,6 +4,8 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { getLogFiles } from '../api/settings';
 import RawLogSettingsCard from './raw-log-files/RawLogSettingsCard';
 import RawLogFileList from './raw-log-files/RawLogFileList';
+import RawLogArchiveCard from './raw-log-files/RawLogArchiveCard';
+import type { LogFileLocation } from '../types/settings';
 import { RAW_LOG_PAGE_SIZE, type RawLogMessage } from './raw-log-files/shared';
 
 /** Logs -> Raw log files: rotation settings and the files on disk. */
@@ -21,12 +23,18 @@ export default function RawLogFiles() {
     if (timer.current) clearTimeout(timer.current);
   }, []);
 
+  const [location, setLocation] = useState<LogFileLocation>('local');
   const [page, setPage] = useState(0);
-  const { data: logFilesData, refetch } = useQuery({
-    queryKey: ['logFiles', 'local', page],
-    queryFn: () => getLogFiles({ limit: RAW_LOG_PAGE_SIZE, offset: page * RAW_LOG_PAGE_SIZE }),
+  const { data: logFilesData, error, refetch } = useQuery({
+    queryKey: ['logFiles', location, page],
+    queryFn: () => getLogFiles({ location, limit: RAW_LOG_PAGE_SIZE, offset: page * RAW_LOG_PAGE_SIZE }),
     placeholderData: keepPreviousData,
+    retry: location === 'local' ? 1 : false,
   });
+  const changeLocation = (next: LogFileLocation) => {
+    setLocation(next);
+    setPage(0);
+  };
 
   // A deletion or a retention change can leave the page past the end.
   const total = logFilesData?.total_count ?? 0;
@@ -56,8 +64,14 @@ export default function RawLogFiles() {
       )}
 
       <RawLogSettingsCard usage={logFilesData?.usage} onMessage={showMessage} />
+      {logFilesData?.archive && (
+        <RawLogArchiveCard archive={logFilesData.archive} usage={logFilesData.usage} onMessage={showMessage} />
+      )}
       <RawLogFileList
         data={logFilesData}
+        error={error}
+        location={location}
+        onLocationChange={changeLocation}
         page={page}
         onPageChange={setPage}
         onRefresh={() => refetch()}

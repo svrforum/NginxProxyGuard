@@ -922,6 +922,12 @@ type SystemSettingsExport struct {
 	RawLogRotateCount     int  `json:"raw_log_rotate_count"`
 	RawLogCompressRotated bool `json:"raw_log_compress_rotated"`
 
+	// Raw log archive. Pointers: a backup made before these columns existed
+	// leaves them nil, the import keeps the live values, and nil also marks
+	// a backup from before retention-by-days (model.CoerceRawLogImport).
+	RawLogArchiveEnabled       *bool `json:"raw_log_archive_enabled,omitempty"`
+	RawLogArchiveRetentionDays *int  `json:"raw_log_archive_retention_days,omitempty"`
+
 	// Bot Filter Defaults
 	BotFilterDefaultEnabled                bool   `json:"bot_filter_default_enabled"`
 	BotFilterDefaultBlockBadBots           bool   `json:"bot_filter_default_block_bad_bots"`

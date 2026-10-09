@@ -200,6 +200,9 @@ func startBackgroundServices(ctx context.Context, c *Container) {
 	go c.Services.WAFAutoBan.Start(ctx)
 	go c.Services.Fail2ban.Start(ctx)
 	go c.Services.StatsCollector.Start(ctx)
+	if c.Services.RawLogArchiver != nil {
+		go c.Services.RawLogArchiver.Start(ctx)
+	}
 
 	if os.Getenv("ENABLE_DOCKER_LOGS") != "false" {
 		go c.Services.DockerLogCollector.Start(ctx)

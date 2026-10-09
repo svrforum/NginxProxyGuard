@@ -381,8 +381,12 @@ export interface SystemSettings {
   raw_log_enabled: boolean;
   raw_log_retention_days: number;
   raw_log_max_size_mb: number;
+  /** Deprecated: ignored by the server (retention is by age); kept for older clients. */
   raw_log_rotate_count: number;
   raw_log_compress_rotated: boolean;
+  /** Move settled rotated raw logs to the archive directory. */
+  raw_log_archive_enabled: boolean;
+  raw_log_archive_retention_days: number;
 
   // Bot Filter Default Settings
   bot_filter_default_enabled: boolean;
@@ -477,8 +481,11 @@ export interface UpdateSystemSettingsRequest {
   raw_log_enabled?: boolean;
   raw_log_retention_days?: number;
   raw_log_max_size_mb?: number;
+  /** Deprecated: ignored by the server (retention is by age); kept for older clients. */
   raw_log_rotate_count?: number;
   raw_log_compress_rotated?: boolean;
+  raw_log_archive_enabled?: boolean;
+  raw_log_archive_retention_days?: number;
 
   // Bot Filter Default Settings
   bot_filter_default_enabled?: boolean;
@@ -536,7 +543,7 @@ export interface GeoIPStatus {
 
 // Log File Management Types
 // (imported here rather than at the top of the file to keep this section self-contained)
-import type { RawLogUsage } from './rawLogFiles';
+import type { RawLogArchiveStatus, RawLogUsage } from './rawLogFiles';
 
 export type LogFileLocation = 'local' | 'archive';
 
@@ -564,6 +571,8 @@ export interface LogFilesResponse {
   limit?: number;
   offset: number;
   usage?: RawLogUsage;
+  /** The archive directory's status; absent when the API has no archiver. */
+  archive?: RawLogArchiveStatus;
 }
 
 export interface LogFileViewResponse {

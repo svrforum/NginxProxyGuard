@@ -12,6 +12,9 @@ export const RAW_LOG_LIMITS = {
 
 export type RawLogLimitedField = keyof typeof RAW_LOG_LIMITS;
 
+/** Archive retention range (raw_log_archive_retention_days). */
+export const RAW_LOG_ARCHIVE_RETENTION = { min: 1, max: 3650 } as const;
+
 /** True when an edited value is a whole number inside the server's range. */
 export function inRawLogRange(field: RawLogLimitedField, value: unknown): boolean {
   const { min, max } = RAW_LOG_LIMITS[field];

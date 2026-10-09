@@ -146,6 +146,9 @@ services:
       # Consolidated API data volume (config + backups)
       - api_data:/app/data:rw
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Optional: keep rotated raw logs on another disk or NAS mounted on the
+      # host (fstab with nofail), then Logs -> Raw log files -> Archive.
+      # - /mnt/nas/npg-raw-logs:/archive
     depends_on:
       db:
         condition: service_healthy

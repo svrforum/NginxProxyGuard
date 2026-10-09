@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -23,6 +24,14 @@ type Config struct {
 	BackupPath      string
 	DBMaxOpenConns  int
 	DBMaxIdleConns  int
+
+	// Raw log archive (service.RawLogArchiver). The directory is fixed by the
+	// operator's mount, never by the database: it is where the archive share
+	// is bound inside the API container, and NPG never creates it — a missing
+	// directory is how "not mounted" is detected.
+	RawLogArchiveDir string
+	// How long a rotated file must be left alone before it moves (0 in e2e).
+	RawLogArchiveSettle time.Duration
 }
 
 func Load() *Config {
@@ -44,6 +53,9 @@ func Load() *Config {
 		BackupPath:      getEnv("BACKUP_PATH", "/data/backups"),
 		DBMaxOpenConns:  getEnvInt("NPG_DB_MAX_OPEN", 80),
 		DBMaxIdleConns:  getEnvInt("NPG_DB_MAX_IDLE", 20),
+
+		RawLogArchiveDir:    getEnv("NPG_RAW_LOG_ARCHIVE_DIR", "/archive"),
+		RawLogArchiveSettle: getEnvDuration("NPG_RAW_LOG_ARCHIVE_SETTLE", 10*time.Minute),
 	}
 
 	// database/sql silently clamps MaxIdleConns to MaxOpenConns when the
@@ -62,6 +74,21 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+// getEnvDuration parses a Go duration ("10m", "0s"); a malformed or negative
+// value is reported and the default used.
+func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	d, err := time.ParseDuration(value)
+	if err != nil || d < 0 {
+		log.Printf("[config] ignoring %s=%q: not a duration like 10m; using %s", key, value, defaultValue)
+		return defaultValue
+	}
+	return d
 }
 
 func getEnvInt(key string, defaultValue int) int {

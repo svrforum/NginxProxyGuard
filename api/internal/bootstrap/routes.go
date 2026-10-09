@@ -878,6 +878,9 @@ func registerSystemSettingsRoutes(v1 *echo.Group, h *handler.SystemSettingsHandl
 	g.GET("/log-files/:filename/download", h.DownloadLogFile, settingsRead)
 	g.GET("/log-files/:filename/view", h.ViewLogFile, settingsRead)
 	g.DELETE("/log-files/:filename", h.DeleteLogFile, settingsWrite)
+	g.POST("/log-files/archive/check", h.CheckRawLogArchive, settingsWrite)
+	g.POST("/log-files/archive/init", h.InitRawLogArchive, settingsWrite)
+	g.POST("/log-files/archive/run", h.RunRawLogArchive, settingsWrite)
 	g.POST("/log-files/rotate", h.TriggerLogRotation, settingsWrite)
 
 	g.GET("/logs", h.GetSystemLogConfig, settingsRead)

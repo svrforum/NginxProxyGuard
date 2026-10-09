@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/lib/pq"
 	"nginx-proxy-guard/internal/model"
@@ -94,6 +95,8 @@ func (r *BackupRepository) importSystemSettings(ctx context.Context, tx *sql.Tx,
 			trusted_proxy_cidrs = COALESCE($57, trusted_proxy_cidrs),
 			trusted_proxy_preset = COALESCE($58, trusted_proxy_preset),
 			real_ip_header = COALESCE($59, real_ip_header),
+			raw_log_archive_enabled = COALESCE($60, raw_log_archive_enabled),
+			raw_log_archive_retention_days = COALESCE($61, raw_log_archive_retention_days),
 			updated_at = NOW()
 	`
 
@@ -105,7 +108,13 @@ func (r *BackupRepository) importSystemSettings(ctx context.Context, tx *sql.Tx,
 
 	// 원본 로그 설정: 구 버전/손상 백업의 0 값은 기본값으로 보정한다
 	// (보존 0일은 logrotate에서 "삭제 안 함", 회전 개수 0은 구버전에서 전부 삭제).
-	model.CoerceRawLogImport(ss)
+	// 보관 디렉터리 필드가 없는 백업(일 단위 보존 이전)은 업그레이드와 같은
+	// 보존 인계 규칙을 받는다 — 복원 대상 설치의 created_at 기준.
+	var installedAt time.Time
+	if err := tx.QueryRowContext(ctx, `SELECT created_at FROM system_settings LIMIT 1`).Scan(&installedAt); err != nil && err != sql.ErrNoRows {
+		return fmt.Errorf("read install date: %w", err)
+	}
+	model.CoerceRawLogImport(ss, installedAt, time.Now())
 
 	// 하위 버전 백업 호환: $49-$56 컬럼은 구 버전 백업엔 없어 nil이 된다.
 	// nil이면 COALESCE가 기존 DB 값(신규 설치 기본값)을 유지한다 — 빈 값으로
@@ -164,6 +173,7 @@ func (r *BackupRepository) importSystemSettings(ctx context.Context, tx *sql.Tx,
 		systemLogsLevels, systemLogsExcludePatterns, systemLogsStdoutExcluded,
 		ss.GlobalTrustedIPsBypassWAF,
 		trustedProxyCIDRs, trustedProxyPreset, realIPHeader,
+		ss.RawLogArchiveEnabled, ss.RawLogArchiveRetentionDays,
 	)
 	return err
 }

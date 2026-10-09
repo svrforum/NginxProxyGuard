@@ -47,6 +47,7 @@ type Services struct {
 	CloudflareTunnel   *service.CloudflareTunnelService
 	DiskGuard          *service.DiskGuard // nil when NPG_DISK_GUARD_DISABLED
 	RawLogReclaim      *service.RawLogReclaimService
+	RawLogArchiver     *service.RawLogArchiver
 
 	// Ends whatever DiskGuard started; cancelled by its scheduler's Stop.
 	diskGuardCtx    context.Context
@@ -218,6 +219,11 @@ func InitServices(
 
 	svcs.NotifyDigest = service.NewNotificationDigestService(repos.Dashboard, svcs.Certificate, repos.Notification)
 	svcs.NotifyDispatcher.SetDigestService(svcs.NotifyDigest)
+
+	// Raw log archive: settled rotated raw logs move to cfg.RawLogArchiveDir
+	// once an operator has initialised it. Woken by the log rotation
+	// scheduler every hour.
+	svcs.RawLogArchiver = service.NewRawLogArchiver(cfg.RawLogArchiveDir, "/etc/nginx/logs", cfg.RawLogArchiveSettle, repos.SystemSettings.Get)
 
 	// Disk guard (D1-D4): after Notification, StatsCollector and Settings,
 	// which it is wired into.
@@ -399,5 +405,8 @@ func (s *Services) StopBackgroundServices() {
 		// Cancels a running reclaim without recording a stop: it resumes
 		// after the next start.
 		s.RawLogReclaim.Shutdown()
+	}
+	if s.RawLogArchiver != nil {
+		s.RawLogArchiver.Stop()
 	}
 }

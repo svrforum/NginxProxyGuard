@@ -58,6 +58,10 @@ type SystemSettings struct {
 	RawLogRotateCount     int  `json:"raw_log_rotate_count" db:"raw_log_rotate_count"`         // Default: 5 files
 	RawLogCompressRotated bool `json:"raw_log_compress_rotated" db:"raw_log_compress_rotated"` // Default: true
 
+	// Raw log archive (another disk or a NAS share bound at NPG_RAW_LOG_ARCHIVE_DIR)
+	RawLogArchiveEnabled       bool `json:"raw_log_archive_enabled" db:"raw_log_archive_enabled"`               // Move settled rotated files to the archive (default: false)
+	RawLogArchiveRetentionDays int  `json:"raw_log_archive_retention_days" db:"raw_log_archive_retention_days"` // Delete archived files after this many days (default: 365)
+
 	// Bot Filter Default Settings (applied to new proxy hosts)
 	BotFilterDefaultEnabled                bool   `json:"bot_filter_default_enabled" db:"bot_filter_default_enabled"`
 	BotFilterDefaultBlockBadBots           bool   `json:"bot_filter_default_block_bad_bots" db:"bot_filter_default_block_bad_bots"`
@@ -173,6 +177,10 @@ type SystemSettingsResponse struct {
 	RawLogRotateCount     int  `json:"raw_log_rotate_count"`
 	RawLogCompressRotated bool `json:"raw_log_compress_rotated"`
 
+	// Raw log archive
+	RawLogArchiveEnabled       bool `json:"raw_log_archive_enabled"`
+	RawLogArchiveRetentionDays int  `json:"raw_log_archive_retention_days"`
+
 	// Bot Filter Default Settings
 	BotFilterDefaultEnabled                bool   `json:"bot_filter_default_enabled"`
 	BotFilterDefaultBlockBadBots           bool   `json:"bot_filter_default_block_bad_bots"`
@@ -274,6 +282,8 @@ func (s *SystemSettings) ToResponse() *SystemSettingsResponse {
 		RawLogMaxSizeMB:                        s.RawLogMaxSizeMB,
 		RawLogRotateCount:                      s.RawLogRotateCount,
 		RawLogCompressRotated:                  s.RawLogCompressRotated,
+		RawLogArchiveEnabled:                   s.RawLogArchiveEnabled,
+		RawLogArchiveRetentionDays:             s.RawLogArchiveRetentionDays,
 		BotFilterDefaultEnabled:                s.BotFilterDefaultEnabled,
 		BotFilterDefaultBlockBadBots:           s.BotFilterDefaultBlockBadBots,
 		BotFilterDefaultBlockAIBots:            s.BotFilterDefaultBlockAIBots,
@@ -387,6 +397,10 @@ type UpdateSystemSettingsRequest struct {
 	RawLogMaxSizeMB       *int  `json:"raw_log_max_size_mb,omitempty"`
 	RawLogRotateCount     *int  `json:"raw_log_rotate_count,omitempty"`
 	RawLogCompressRotated *bool `json:"raw_log_compress_rotated,omitempty"`
+
+	// Raw log archive
+	RawLogArchiveEnabled       *bool `json:"raw_log_archive_enabled,omitempty"`
+	RawLogArchiveRetentionDays *int  `json:"raw_log_archive_retention_days,omitempty"`
 
 	// Bot Filter Default Settings
 	BotFilterDefaultEnabled                *bool   `json:"bot_filter_default_enabled,omitempty"`

@@ -19,3 +19,14 @@ func TestRawLogRotateRunsCountByModeAndResult(t *testing.T) {
 		t.Fatalf("npg_raw_log_rotate_runs_total{mode=if_due,result=not_due} = %v, want %v", got, before+1)
 	}
 }
+
+func TestRawLogArchiveStatusGaugeMarksOneStatus(t *testing.T) {
+	SetRawLogArchiveStatus("stalled")
+	SetRawLogArchiveStatus("ready")
+	if got := testutil.ToFloat64(RawLogArchiveStatus.WithLabelValues("ready")); got != 1 {
+		t.Fatalf("ready = %v, want 1", got)
+	}
+	if got := testutil.ToFloat64(RawLogArchiveStatus.WithLabelValues("stalled")); got != 0 {
+		t.Fatalf("stalled = %v after the status changed, want 0", got)
+	}
+}

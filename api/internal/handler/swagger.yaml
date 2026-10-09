@@ -1390,8 +1390,10 @@ paths:
         '400':
           description: >-
             A value this request changes is out of range (for example
-            raw_log_retention_days outside 1-3650), or a trusted-proxy entry is
-            invalid. The body carries the reason in "error".
+            raw_log_retention_days outside 1-3650), a trusted-proxy entry is
+            invalid, or raw_log_archive_enabled is switched on while the archive
+            directory is not ready (the body then also carries "archive"). The
+            body carries the reason in "error".
           content:
             application/json:
               schema:
@@ -7330,6 +7332,13 @@ paths:
       security:
         - BearerAuth: []
       parameters:
+        - name: location
+          in: query
+          description: local (default) or archive (the archive directory, see the archive endpoints)
+          schema:
+            type: string
+            enum: [local, archive]
+            default: local
         - name: limit
           in: query
           description: Page size. Without it every file is returned.
@@ -7351,7 +7360,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/LogFilesResponse'
         '400':
-          description: limit or offset out of range
+          description: limit or offset out of range, or an unknown location
+        '409':
+          description: location=archive while the archive is not mounted or not available; carries "archive" (RawLogArchiveStatus)
+        '503':
+          description: location=archive while the archive share does not answer; carries "archive" (RawLogArchiveStatus)
   /system-settings/log-files/{filename}/download:
     get:
       tags: [Logs]
@@ -7367,6 +7380,13 @@ paths:
             access_raw.log-20261009-000000.gz). Any other name is rejected with 400.
           schema:
             type: string
+        - name: location
+          in: query
+          description: local (default) or archive (the archive directory, see the archive endpoints)
+          schema:
+            type: string
+            enum: [local, archive]
+            default: local
       responses:
         '200':
           description: File contents as an attachment
@@ -7379,6 +7399,10 @@ paths:
           description: Invalid filename, or the target is a symlink
         '404':
           description: File not found
+        '409':
+          description: location=archive while the archive is not available
+        '503':
+          description: location=archive while the archive share does not answer
   /system-settings/log-files/{filename}/view:
     get:
       tags: [Logs]
@@ -7396,6 +7420,13 @@ paths:
             access_raw.log-20261009-000000.gz). Any other name is rejected with 400.
           schema:
             type: string
+        - name: location
+          in: query
+          description: local (default) or archive (the archive directory, see the archive endpoints)
+          schema:
+            type: string
+            enum: [local, archive]
+            default: local
         - name: lines
           in: query
           description: Values outside 1-1000 are ignored and 100 is used.
@@ -7422,6 +7453,12 @@ paths:
           description: Invalid filename
         '404':
           description: File not found
+        '409':
+          description: location=archive while the archive is not available
+        '503':
+          description: location=archive while the archive share does not answer
+        '504':
+          description: Reading the file took longer than 60 seconds
   /system-settings/log-files/{filename}:
     delete:
       tags: [Logs]
@@ -7440,6 +7477,13 @@ paths:
             access_raw.log-20261009-000000.gz). Any other name is rejected with 400.
           schema:
             type: string
+        - name: location
+          in: query
+          description: local (default) or archive (the archive directory, see the archive endpoints)
+          schema:
+            type: string
+            enum: [local, archive]
+            default: local
       responses:
         '204':
           description: File deleted
@@ -7447,6 +7491,71 @@ paths:
           description: Invalid filename, a live log file, or a symlink
         '404':
           description: File not found
+        '409':
+          description: location=archive while the archive is not ready (not mounted, or not initialised by this install)
+        '503':
+          description: location=archive while the archive share does not answer
+  /system-settings/log-files/archive/check:
+    post:
+      tags: [Logs]
+      summary: Check the raw log archive directory
+      description: |
+        Probes the archive directory (NPG_RAW_LOG_ARCHIVE_DIR, default /archive, bound
+        on the api service) as if archiving were on: mounted, filesystem type and size,
+        marker file, and a write test (one temporary file, removed again). Writes no
+        marker. status is ready only for a directory this install initialised.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: The probe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RawLogArchiveStatus'
+        '409':
+          description: No archive is available in this build
+  /system-settings/log-files/archive/init:
+    post:
+      tags: [Logs]
+      summary: Use the archive directory for this install
+      description: |
+        Write test, then the marker file (.npg-raw-log-archive) naming this install,
+        replacing one another install wrote. NPG never creates the directory and writes
+        nothing to the archive before this. Switch archiving on afterwards with
+        raw_log_archive_enabled in PUT /system-settings.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Initialised; the probe as Check reports it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RawLogArchiveStatus'
+        '400':
+          description: Not mounted or not writable; carries "archive" (RawLogArchiveStatus)
+        '503':
+          description: The share does not answer; carries "archive"
+  /system-settings/log-files/archive/run:
+    post:
+      tags: [Logs]
+      summary: Move settled rotated raw logs to the archive now
+      description: |
+        Wakes the archive mover and answers at once. The mover also runs every hour
+        after the scheduled rotation. Only settled rotated files move: compressed when
+        compression is on, untouched for NPG_RAW_LOG_ARCHIVE_SETTLE (default 10m).
+      security:
+        - BearerAuth: []
+      responses:
+        '202':
+          description: A pass was requested; the current status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RawLogArchiveStatus'
+        '409':
+          description: No archive is available in this build
   /system-settings/log-files/rotate:
     post:
       tags: [Logs]
@@ -11837,6 +11946,19 @@ components:
           description: >-
             gzip rotated raw logs. The newest rotated file is compressed at the
             next rotation (delaycompress).
+        raw_log_archive_enabled:
+          type: boolean
+          default: false
+          description: >-
+            Move settled rotated raw logs to the archive directory. Switching it
+            on is refused with 400 unless the directory is ready (initialised by
+            this install and writable); see /system-settings/log-files/archive/check.
+        raw_log_archive_retention_days:
+          type: integer
+          minimum: 1
+          maximum: 3650
+          default: 365
+          description: Archived files older than this, by the time in their name, are deleted.
     Dashboard:
       type: object
       description: Main dashboard summary returned by GET /dashboard
@@ -15875,6 +15997,8 @@ components:
           type: integer
         usage:
           $ref: '#/components/schemas/RawLogUsage'
+        archive:
+          $ref: '#/components/schemas/RawLogArchiveStatus'
     RawLogUsage:
       type: object
       description: |
@@ -15942,6 +16066,71 @@ components:
         archive_free_bytes:
           type: integer
           format: int64
+    RawLogArchiveStatus:
+      type: object
+      description: |
+        The raw log archive directory. Nothing is written to it before an operator
+        initialises it (marker file); when it is missing, not ours, unwritable, full or
+        hung, rotated files stay local and follow the local retention.
+      properties:
+        enabled:
+          type: boolean
+          description: raw_log_archive_enabled
+        dir:
+          type: string
+          description: The archive directory inside the API container (NPG_RAW_LOG_ARCHIVE_DIR)
+        status:
+          type: string
+          enum: [disabled, not_mounted, not_initialized, foreign, unwritable, insufficient_space, stalled, ready]
+          description: |
+            not_mounted: the directory does not exist in the container. not_initialized: no
+            marker (never initialised, or the share is not mounted and an empty mount point
+            is bound). foreign: initialised by another install (or before a backup was
+            restored here). stalled: the share stopped answering.
+        mounted:
+          type: boolean
+          description: The directory exists in the API container
+        marker:
+          type: string
+          enum: [missing, ours, foreign, unreadable]
+        writable:
+          type: boolean
+          description: Result of the write test (check and init only)
+        fs_type:
+          type: string
+          description: Filesystem type of the directory (nfs, cifs, ext4, ...), when known
+        total_bytes:
+          type: integer
+          format: int64
+        free_bytes:
+          type: integer
+          format: int64
+        detail:
+          type: string
+        retention_days:
+          type: integer
+          description: raw_log_archive_retention_days
+        checked_at:
+          type: string
+          format: date-time
+        last_move_at:
+          type: string
+          format: date-time
+        last_moved:
+          type: integer
+        last_pruned:
+          type: integer
+        last_error:
+          type: string
+        pending_files:
+          type: integer
+          description: Settled local files waiting to move
+        stalled_since:
+          type: string
+          format: date-time
+        running:
+          type: boolean
+          description: A pass is moving files right now
     CloneProxyHost:
       type: object
       description: |

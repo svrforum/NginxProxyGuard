@@ -21,7 +21,10 @@ export default function RawLogUsageEstimate({ usage, retentionDays }: RawLogUsag
   const current = usage.live_bytes + usage.pending_bytes;
   const hasBasis = usage.basis !== 'none';
   const retention = Number.isFinite(retentionDays) && retentionDays > 0 ? retentionDays : usage.retention_days;
-  const projected = usage.avg_daily_bytes * retention + current;
+  // With the archive on, rotated files leave the log disk once settled; the
+  // archive card shows what they take there.
+  const archiveOn = usage.archive_enabled;
+  const projected = (archiveOn ? 0 : usage.avg_daily_bytes * retention) + current;
   // The raw logs already on the disk are part of the projection, so they count
   // as room it can use.
   const room = usage.local_free_bytes !== undefined ? usage.local_free_bytes + usage.local_bytes : undefined;
@@ -37,10 +40,12 @@ export default function RawLogUsageEstimate({ usage, retentionDays }: RawLogUsag
       <div>
         <span className="text-slate-600 dark:text-slate-400">{t('rawFiles.settings.estimatedSize')}: </span>
         <span className="font-semibold text-slate-800 dark:text-slate-200">
-          {hasBasis ? `≈ ${formatFileSize(projected)}` : formatFileSize(current)}
+          {hasBasis || archiveOn ? `≈ ${formatFileSize(projected)}` : formatFileSize(current)}
         </span>
       </div>
-      {hasBasis ? (
+      {archiveOn ? (
+        <p className="text-xs text-slate-500 dark:text-slate-400">{t('rawFiles.estimate.archiveOn', { current: formatFileSize(current) })}</p>
+      ) : hasBasis ? (
         <p className="text-xs text-slate-500 dark:text-slate-400">
           {t('rawFiles.estimate.formula', {
             daily: formatFileSize(usage.avg_daily_bytes),

@@ -151,6 +151,25 @@ func TestBackupSyncCriticalTables(t *testing.T) {
 				"scope_value",
 			},
 		},
+		{
+			// The raw log settings decide what logrotate deletes and where
+			// rotated files go; a column dropped on either side restores the
+			// wrong retention or silently turns the archive off.
+			name:       "system_settings (raw log)",
+			exportFile: "backup_export_settings.go",
+			exportFunc: "exportSystemSettings",
+			importFile: "backup_import_settings.go",
+			importFunc: "importSystemSettings",
+			columns: []string{
+				"raw_log_archive_enabled",
+				"raw_log_archive_retention_days",
+				"raw_log_compress_rotated",
+				"raw_log_enabled",
+				"raw_log_max_size_mb",
+				"raw_log_retention_days",
+				"raw_log_rotate_count",
+			},
+		},
 	}
 
 	for _, tc := range cases {

@@ -630,6 +630,10 @@
       "download": "Download",
       "delete": "Delete",
       "page": "{{from}}–{{to}} of {{total}}",
+      "tabs": {
+        "local": "Log disk",
+        "archive": "Archive"
+      },
       "prev": "Previous",
       "next": "Next"
     },
@@ -639,7 +643,51 @@
       "none": "No rotated file has finished yet, so the daily volume is unknown. After the first day the estimate uses the real file sizes.",
       "current": "Now: {{count}} files, {{size}}",
       "disk": "log disk ({{fs}}): {{free}} free of {{total}}",
-      "exceedsFree": "The estimate is larger than the free space on the log disk ({{free}}). Shorten the retention."
+      "exceedsFree": "The estimate is larger than the free space on the log disk ({{free}}). Shorten the retention.",
+      "archiveOn": "Archive in use: rotated files move once settled, so only the current files ({{current}}) stay on the log disk."
+    },
+    "archive": {
+      "title": "Archive directory (another disk or NAS)",
+      "description": "Moves finished rotated raw logs to another disk or a NAS to free the log disk. Mount the share on the host (fstab with nofail) and bind it to {{dir}} on the api service. NPG never creates this directory and writes nothing to it before you press \"Use this directory\".",
+      "toggle": "Move rotated raw logs to the archive directory",
+      "toggleDesc": "Only rotated files that are compressed and have been left alone for a while move. When the archive cannot be used, files simply stay on the log disk.",
+      "retention": "Archive retention (days)",
+      "localRetentionNote": "Archived files older than this, by the rotation time in their name, are deleted from the archive. Files that could not move follow the log disk retention.",
+      "estimate": "Estimated archive use about {{size}} ({{free}} free)",
+      "estimateExceeds": "Estimated archive use about {{size}} is more than the {{free}} free there.",
+      "fs": "{{fs}}, {{free}} free of {{total}}",
+      "lastMove": "Last move: {{when}} ({{count}} files)",
+      "pending": "{{count}} files waiting to move",
+      "initDone": "The archive directory is set up for this NPG. You can now switch moving on.",
+      "runStarted": "Moving to the archive directory has started.",
+      "initConfirmTitle": "Use this directory as the archive",
+      "initConfirm": "NPG writes a marker file to {{dir}} ({{fs}}, {{total}}, {{free}} free) and keeps raw logs there. Check that the filesystem type and size are the NAS's — a local disk here means the share is not mounted.",
+      "initForeign": "This directory was used by another NPG install (or by this one before a backup was restored). Using it stops that install writing here.",
+      "actions": {
+        "check": "Check",
+        "checking": "Checking...",
+        "init": "Use this directory",
+        "run": "Move now"
+      },
+      "status": {
+        "disabled": "Off",
+        "not_mounted": "Not mounted",
+        "not_initialized": "Not set up",
+        "foreign": "Another install's directory",
+        "unwritable": "Not writable",
+        "insufficient_space": "Out of space",
+        "stalled": "Not answering",
+        "ready": "In use"
+      },
+      "help": {
+        "not_mounted": "The archive directory does not exist in the API container. Mount the share on the host, bind it on the api service and recreate the container.",
+        "not_initialized": "No marker file: either the share is not mounted (an empty mount point) or \"Use this directory\" was never pressed.",
+        "foreign": "Another NPG install set up this directory. Press \"Use this directory\" to use it from this install.",
+        "unwritable": "The API cannot write to this directory. Check the share's permissions (root_squash and the like).",
+        "insufficient_space": "The archive is out of space, so moving stopped. The files stay on the log disk.",
+        "stalled": "The archive directory is not answering (a hung or disconnected NAS). The files stay on the log disk.",
+        "readyToEnable": "This directory is set up for this install. Switch moving on and save to use it."
+      }
     },
     "actions": {
       "manualRotate": "Manual Rotate",

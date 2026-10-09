@@ -72,6 +72,8 @@ func (r *SystemSettingsRepository) getFromDB(ctx context.Context) (*model.System
 		       COALESCE(raw_log_max_size_mb, 100) as raw_log_max_size_mb,
 		       COALESCE(raw_log_rotate_count, 5) as raw_log_rotate_count,
 		       COALESCE(raw_log_compress_rotated, true) as raw_log_compress_rotated,
+		       COALESCE(raw_log_archive_enabled, false) as raw_log_archive_enabled,
+		       COALESCE(raw_log_archive_retention_days, 365) as raw_log_archive_retention_days,
 		       COALESCE(bot_filter_default_enabled, false) as bot_filter_default_enabled,
 		       COALESCE(bot_filter_default_block_bad_bots, true) as bot_filter_default_block_bad_bots,
 		       COALESCE(bot_filter_default_block_ai_bots, false) as bot_filter_default_block_ai_bots,
@@ -151,6 +153,8 @@ func (r *SystemSettingsRepository) getFromDB(ctx context.Context) (*model.System
 		&settings.RawLogMaxSizeMB,
 		&settings.RawLogRotateCount,
 		&settings.RawLogCompressRotated,
+		&settings.RawLogArchiveEnabled,
+		&settings.RawLogArchiveRetentionDays,
 		&settings.BotFilterDefaultEnabled,
 		&settings.BotFilterDefaultBlockBadBots,
 		&settings.BotFilterDefaultBlockAIBots,
@@ -493,6 +497,16 @@ func (r *SystemSettingsRepository) Update(ctx context.Context, req *model.Update
 	if req.RawLogCompressRotated != nil {
 		setClauses = append(setClauses, fmt.Sprintf("raw_log_compress_rotated = $%d", argIndex))
 		args = append(args, *req.RawLogCompressRotated)
+		argIndex++
+	}
+	if req.RawLogArchiveEnabled != nil {
+		setClauses = append(setClauses, fmt.Sprintf("raw_log_archive_enabled = $%d", argIndex))
+		args = append(args, *req.RawLogArchiveEnabled)
+		argIndex++
+	}
+	if req.RawLogArchiveRetentionDays != nil {
+		setClauses = append(setClauses, fmt.Sprintf("raw_log_archive_retention_days = $%d", argIndex))
+		args = append(args, *req.RawLogArchiveRetentionDays)
 		argIndex++
 	}
 

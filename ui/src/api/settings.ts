@@ -14,6 +14,7 @@ import type {
   SystemLogConfig,
   LogFilesResponse,
   LogFileViewResponse,
+  LogFileLocation,
 } from '../types/settings';
 import { getAuthHeaders } from './auth';
 
@@ -368,36 +369,49 @@ export async function testACME(): Promise<{ acme_enabled: boolean; acme_email: s
 // Log Files Management API
 
 export interface LogFilesQuery {
+  /** local (default) or archive. */
+  location?: LogFileLocation;
   /** Page size (1-1000). Without it the server returns every file. */
   limit?: number;
   offset?: number;
 }
 
+/** The server's sentence for a failed log file request, or the fallback. */
+async function logFileError(res: Response, fallback: string): Promise<Error> {
+  const body = await res.json().catch(() => ({}));
+  return new Error(body.error || fallback);
+}
+
 export async function getLogFiles(query: LogFilesQuery = {}): Promise<LogFilesResponse> {
   const params = new URLSearchParams();
+  if (query.location && query.location !== 'local') params.set('location', query.location);
   if (query.limit !== undefined) params.set('limit', String(query.limit));
   if (query.offset !== undefined) params.set('offset', String(query.offset));
   const qs = params.toString();
   const res = await fetch(`${API_BASE}/system-settings/log-files${qs ? `?${qs}` : ''}`, {
     headers: getAuthHeaders(),
   });
-  if (!res.ok) throw new Error('Failed to fetch log files');
+  if (!res.ok) throw await logFileError(res, 'Failed to fetch log files');
   return res.json();
 }
 
-export async function viewLogFile(filename: string, lines = 100): Promise<LogFileViewResponse> {
-  const res = await fetch(`${API_BASE}/system-settings/log-files/${encodeURIComponent(filename)}/view?lines=${lines}`, {
+const locationQuery = (location: LogFileLocation) => (location === 'archive' ? 'location=archive' : '');
+
+export async function viewLogFile(filename: string, lines = 100, location: LogFileLocation = 'local'): Promise<LogFileViewResponse> {
+  const extra = locationQuery(location);
+  const res = await fetch(`${API_BASE}/system-settings/log-files/${encodeURIComponent(filename)}/view?lines=${lines}${extra ? `&${extra}` : ''}`, {
     headers: getAuthHeaders(),
   });
-  if (!res.ok) throw new Error('Failed to view log file');
+  if (!res.ok) throw await logFileError(res, 'Failed to view log file');
   return res.json();
 }
 
-export async function downloadLogFile(filename: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/system-settings/log-files/${encodeURIComponent(filename)}/download`, {
+export async function downloadLogFile(filename: string, location: LogFileLocation = 'local'): Promise<void> {
+  const extra = locationQuery(location);
+  const res = await fetch(`${API_BASE}/system-settings/log-files/${encodeURIComponent(filename)}/download${extra ? `?${extra}` : ''}`, {
     headers: getAuthHeaders(),
   });
-  if (!res.ok) throw new Error('Failed to download log file');
+  if (!res.ok) throw await logFileError(res, 'Failed to download log file');
 
   const blob = await res.blob();
   const url = window.URL.createObjectURL(blob);
@@ -410,8 +424,9 @@ export async function downloadLogFile(filename: string): Promise<void> {
   document.body.removeChild(a);
 }
 
-export async function deleteLogFile(filename: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/system-settings/log-files/${encodeURIComponent(filename)}`, {
+export async function deleteLogFile(filename: string, location: LogFileLocation = 'local'): Promise<void> {
+  const extra = locationQuery(location);
+  const res = await fetch(`${API_BASE}/system-settings/log-files/${encodeURIComponent(filename)}${extra ? `?${extra}` : ''}`, {
     method: 'DELETE',
     headers: getAuthHeaders(),
   });

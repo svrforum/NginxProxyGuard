@@ -30,6 +30,12 @@ const (
 	RawLogRotateCountMin     = 1
 	RawLogRotateCountMax     = 100000
 	RawLogRotateCountDefault = 5
+
+	// Archived files (raw_log_archive_*) older than this — by the time in
+	// their name — are deleted from the archive directory.
+	RawLogArchiveRetentionDaysMin     = 1
+	RawLogArchiveRetentionDaysMax     = 3650
+	RawLogArchiveRetentionDaysDefault = 365
 )
 
 // RawLogRotation is what the raw-log logrotate stanza is rendered from.
@@ -93,6 +99,7 @@ func ValidateRawLogSettings(req *UpdateSystemSettingsRequest, cur *SystemSetting
 		{"raw_log_retention_days", req.RawLogRetentionDays, storedOf(func(s *SystemSettings) int { return s.RawLogRetentionDays }), RawLogRetentionDaysMin, RawLogRetentionDaysMax},
 		{"raw_log_max_size_mb", req.RawLogMaxSizeMB, storedOf(func(s *SystemSettings) int { return s.RawLogMaxSizeMB }), RawLogMaxSizeMBMin, RawLogMaxSizeMBMax},
 		{"raw_log_rotate_count", req.RawLogRotateCount, storedOf(func(s *SystemSettings) int { return s.RawLogRotateCount }), RawLogRotateCountMin, RawLogRotateCountMax},
+		{"raw_log_archive_retention_days", req.RawLogArchiveRetentionDays, storedOf(func(s *SystemSettings) int { return s.RawLogArchiveRetentionDays }), RawLogArchiveRetentionDaysMin, RawLogArchiveRetentionDaysMax},
 	}
 	for _, c := range checks {
 		if err := checkRawLogRange(c.name, c.value, c.stored, c.min, c.max); err != nil {
@@ -114,8 +121,8 @@ func checkRawLogRange(name string, value, stored *int, min, max int) error {
 
 // RawLogRetentionHandover is the one-time rule that moves an install from
 // "keep N rotated files" to "keep files for N days" (marker
-// raw_log_retention_by_days_v1 in database/migration.go, and pre-archive
-// backups on import). Under the old config logrotate cut one file a day, so a
+// raw_log_retention_by_days_v1 in database/migration.go, and backups made
+// before the archive columns existed, on import — see CoerceRawLogImport). Under the old config logrotate cut one file a day, so a
 // file count N kept about N days — more than the retention in days whenever
 // the count was larger. Raising retention to the count would keep every file
 // the old config kept, but a count is no promise about files that cannot
@@ -146,7 +153,13 @@ func RawLogRetentionHandover(retentionDays, rotateCount int, installedAt, now ti
 // server never accepts: zero values from backups written before a field
 // existed, and raw_log_enabled=false (raw log files are mandatory since
 // v2.17.1; the update handler coerces it the same way).
-func CoerceRawLogImport(ss *SystemSettingsExport) {
+//
+// A backup made before the archive columns existed (RawLogArchiveEnabled is
+// nil) was also made before retention-by-days, so it gets the same one-time
+// handover an upgrading install gets — bounded by the age of the install it
+// is restored INTO (installedAt: that install's system_settings.created_at),
+// since no older file can exist there.
+func CoerceRawLogImport(ss *SystemSettingsExport, installedAt, now time.Time) {
 	if ss == nil {
 		return
 	}
@@ -159,5 +172,12 @@ func CoerceRawLogImport(ss *SystemSettingsExport) {
 	}
 	if ss.RawLogRotateCount < RawLogRotateCountMin {
 		ss.RawLogRotateCount = RawLogRotateCountDefault
+	}
+	if ss.RawLogArchiveEnabled == nil {
+		ss.RawLogRetentionDays = RawLogRetentionHandover(ss.RawLogRetentionDays, ss.RawLogRotateCount, installedAt, now)
+	}
+	if ss.RawLogArchiveRetentionDays != nil && *ss.RawLogArchiveRetentionDays < RawLogArchiveRetentionDaysMin {
+		v := RawLogArchiveRetentionDaysDefault
+		ss.RawLogArchiveRetentionDays = &v
 	}
 }

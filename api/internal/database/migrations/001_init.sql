@@ -2387,6 +2387,8 @@ CREATE TABLE IF NOT EXISTS public.system_settings (
     raw_log_max_size_mb integer DEFAULT 100 NOT NULL,
     raw_log_rotate_count integer DEFAULT 5 NOT NULL,
     raw_log_compress_rotated boolean DEFAULT true NOT NULL,
+    raw_log_archive_enabled boolean DEFAULT false NOT NULL,
+    raw_log_archive_retention_days integer DEFAULT 365 NOT NULL,
     bot_filter_default_enabled boolean DEFAULT false,
     bot_filter_default_block_bad_bots boolean DEFAULT true,
     bot_filter_default_block_ai_bots boolean DEFAULT false,
@@ -2504,6 +2506,8 @@ COMMENT ON COLUMN public.system_settings.raw_log_retention_days IS 'Rotated raw 
 COMMENT ON COLUMN public.system_settings.raw_log_max_size_mb IS 'A raw log larger than this is rotated at the next hourly check, besides the daily rotation (MB; 10-10240, default: 100MB)';
 COMMENT ON COLUMN public.system_settings.raw_log_rotate_count IS 'Deprecated: no longer rendered into the logrotate config (retention is by age); kept for older clients and backups (1-100000, default: 5)';
 COMMENT ON COLUMN public.system_settings.raw_log_compress_rotated IS 'Compress rotated log files with gzip (default: true)';
+COMMENT ON COLUMN public.system_settings.raw_log_archive_enabled IS 'Move settled rotated raw logs to the archive directory (NPG_RAW_LOG_ARCHIVE_DIR, default /archive) once it is initialised (default: false)';
+COMMENT ON COLUMN public.system_settings.raw_log_archive_retention_days IS 'Archived raw logs older than this many days, by the time in their name, are deleted from the archive (1-3650, default: 365)';
 COMMENT ON COLUMN public.system_settings.global_block_exploits_exceptions IS 'Global regex patterns for URI paths that bypass RFI/exploit blocking (one per line). Applied to all hosts with block_exploits enabled.';
 CREATE TABLE IF NOT EXISTS public.upstream_servers (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -4711,3 +4715,9 @@ CREATE TABLE IF NOT EXISTS public.raw_log_reclaim_chunks (
 --          AND raw_log_retention_days < 3650;
 --       INSERT INTO schema_migrations (version) VALUES ('raw_log_retention_by_days_v1') ON CONFLICT DO NOTHING;
 --   END $$;
+
+-- Raw log archive directory: settled rotated raw logs move to another disk or a NAS share
+-- bound at NPG_RAW_LOG_ARCHIVE_DIR (default /archive) on the api service, once an
+-- operator has initialised it (marker file .npg-raw-log-archive). Off by default.
+ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS raw_log_archive_enabled boolean DEFAULT false NOT NULL;
+ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS raw_log_archive_retention_days integer DEFAULT 365 NOT NULL;

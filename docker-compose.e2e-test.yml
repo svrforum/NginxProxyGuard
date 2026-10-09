@@ -94,6 +94,8 @@ services:
       API_HOST: "127.0.0.1:19080"
       NPG_CANARY_INTERVAL: "5s"
       NPG_CANARY_BOOT_DELAY: "3s"
+      # Raw log archive specs: a rotated file may move as soon as it exists.
+      NPG_RAW_LOG_ARCHIVE_SETTLE: "0s"
       # Off-default cloudflared metrics port (must match the nginx service env):
       # a dev NPG instance on the same host-network box would otherwise answer
       # the e2e stack's /ready probe on 20241.
@@ -109,6 +111,10 @@ services:
       - e2e_test_nginx_conf:/etc/nginx:rw
       - e2e_test_api_data:/app/data:rw
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    # Raw log archive directory for the archive specs (a stand-in for a NAS
+    # share). Empty on every start, so it begins uninitialised.
+    tmpfs:
+      - /archive:size=64m
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
       interval: 5s

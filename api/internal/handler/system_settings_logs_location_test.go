@@ -14,6 +14,9 @@ import (
 	"testing"
 
 	"github.com/labstack/echo/v4"
+
+	"nginx-proxy-guard/internal/model"
+	"nginx-proxy-guard/internal/service"
 )
 
 // Only raw log names resolve, and never through a symlink.
@@ -139,5 +142,111 @@ func TestReadLogTailHandlesCompressedAndLargePlainFiles(t *testing.T) {
 	cancel()
 	if _, err := readLogTail(ctx, f, filepath.Base(gzPath), 0, 2); !errors.Is(err, context.Canceled) {
 		t.Errorf("cancelled read: %v", err)
+	}
+}
+
+func testArchiver(t *testing.T, mounted bool) (*service.RawLogArchiver, string) {
+	t.Helper()
+	root := filepath.Join(t.TempDir(), "archive")
+	if mounted {
+		if err := os.MkdirAll(root, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	settings := &model.SystemSettings{ID: "test-instance", RawLogArchiveEnabled: true, RawLogArchiveRetentionDays: 365, RawLogCompressRotated: true}
+	a := service.NewRawLogArchiver(root, t.TempDir(), 0, func(context.Context) (*model.SystemSettings, error) {
+		s := *settings
+		return &s, nil
+	})
+	return a, root
+}
+
+// The archive location answers with the archive's status when it cannot be
+// used, and a bad location is refused.
+func TestArchiveLocationAnswersWithTheArchiveStatus(t *testing.T) {
+	h := &SystemSettingsHandler{}
+
+	// No archiver wired.
+	c, rec := newLogFileRequest(http.MethodDelete, "/x?location=archive", "access_raw.log-20261009-000000.gz")
+	if err := h.DeleteLogFile(c); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("no archiver: %d %s", rec.Code, rec.Body)
+	}
+
+	// Not mounted: 409 carrying the status.
+	a, _ := testArchiver(t, false)
+	h.SetRawLogArchiver(a)
+	c, rec = newLogFileRequest(http.MethodDelete, "/x?location=archive", "access_raw.log-20261009-000000.gz")
+	if err := h.DeleteLogFile(c); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), `"status":"not_mounted"`) {
+		t.Fatalf("not mounted: %d %s", rec.Code, rec.Body)
+	}
+
+	// Mounted but not initialised: deleting is a write, so it is refused.
+	a, _ = testArchiver(t, true)
+	h.SetRawLogArchiver(a)
+	c, rec = newLogFileRequest(http.MethodDelete, "/x?location=archive", "access_raw.log-20261009-000000.gz")
+	if err := h.DeleteLogFile(c); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), `"status":"not_initialized"`) {
+		t.Fatalf("not initialised: %d %s", rec.Code, rec.Body)
+	}
+
+	// Names outside the archive's pattern never reach the filesystem.
+	for _, name := range []string{"../x", "access_raw.log", ".npg-raw-log-archive"} {
+		c, rec = newLogFileRequest(http.MethodGet, "/x?location=archive", name)
+		if err := h.DownloadLogFile(c); err != nil {
+			t.Fatal(err)
+		}
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("download %q from the archive: %d", name, rec.Code)
+		}
+	}
+
+	c, rec = newLogFileRequest(http.MethodGet, "/x?location=elsewhere", "access_raw.log")
+	if err := h.ViewLogFile(c); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("unknown location: %d", rec.Code)
+	}
+}
+
+func TestArchiveFileDownloadAndPreview(t *testing.T) {
+	a, root := testArchiver(t, true)
+	if _, err := a.Initialise(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	var gz bytes.Buffer
+	zw := gzip.NewWriter(&gz)
+	zw.Write([]byte("first\nsecond\n"))
+	zw.Close()
+	name := "access_raw.log-20261009-000000.gz"
+	if err := os.WriteFile(filepath.Join(root, name), gz.Bytes(), 0644); err != nil {
+		t.Fatal(err)
+	}
+	h := &SystemSettingsHandler{}
+	h.SetRawLogArchiver(a)
+
+	c, rec := newLogFileRequest(http.MethodGet, "/x?location=archive&lines=1", name)
+	if err := h.ViewLogFile(c); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"content":"second\n"`) {
+		t.Fatalf("preview: %d %s", rec.Code, rec.Body)
+	}
+
+	c, rec = newLogFileRequest(http.MethodGet, "/x?location=archive", name)
+	if err := h.DownloadLogFile(c); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != http.StatusOK || !bytes.Equal(rec.Body.Bytes(), gz.Bytes()) ||
+		!strings.Contains(rec.Header().Get(echo.HeaderContentDisposition), name) {
+		t.Fatalf("download: %d %q %d bytes", rec.Code, rec.Header().Get(echo.HeaderContentDisposition), rec.Body.Len())
 	}
 }

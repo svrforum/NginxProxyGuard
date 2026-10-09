@@ -32,6 +32,7 @@ type SystemSettingsHandler struct {
 	cloudProviderService *service.CloudProviderService
 	proxyHostService     *service.ProxyHostService
 	updateChecker        *service.UpdateChecker
+	archiver             *service.RawLogArchiver // raw log archive mover; set by SetRawLogArchiver
 }
 
 func NewSystemSettingsHandler(
@@ -128,13 +129,31 @@ func (h *SystemSettingsHandler) UpdateSystemSettings(c echo.Context) error {
 	// Raw log files: refuse a value only when this request changes it to
 	// something out of range. Stored legacy values echoed back (1825 days /
 	// 9999 files on long-running installs) must never block another save.
-	if req.RawLogRetentionDays != nil || req.RawLogMaxSizeMB != nil || req.RawLogRotateCount != nil {
+	archiveSwitched := false
+	if req.RawLogRetentionDays != nil || req.RawLogMaxSizeMB != nil || req.RawLogRotateCount != nil ||
+		req.RawLogArchiveRetentionDays != nil || req.RawLogArchiveEnabled != nil {
 		cur, err := h.repo.Get(c.Request().Context())
 		if err != nil {
 			return directInternalError(c, err)
 		}
 		if err := model.ValidateRawLogSettings(&req, cur); err != nil {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": trimInvalidInputPrefix(err)})
+		}
+		// Switching the archive on needs a directory this install has
+		// initialised and can write to; nothing is moved anywhere else.
+		if req.RawLogArchiveEnabled != nil && *req.RawLogArchiveEnabled != cur.RawLogArchiveEnabled {
+			archiveSwitched = true
+			if *req.RawLogArchiveEnabled {
+				if h.archiver == nil {
+					return c.JSON(http.StatusBadRequest, map[string]string{"error": "the raw log archive is not available"})
+				}
+				if st := h.archiver.Check(c.Request().Context()); st.Status != service.ArchiveStatusReady {
+					return c.JSON(http.StatusBadRequest, map[string]interface{}{
+						"error":   "archive directory " + st.Dir + " is not ready (" + st.Status + "): " + st.Detail,
+						"archive": st,
+					})
+				}
+			}
 		}
 	}
 
@@ -173,6 +192,22 @@ func (h *SystemSettingsHandler) UpdateSystemSettings(c echo.Context) error {
 		if err := h.generateRawLogConfig(settings); err != nil {
 			log.Printf("[SystemSettings] Warning: failed to generate raw log config: %v", err)
 		}
+	}
+	// The archive settings only concern the API's mover: no nginx reload,
+	// just a pass with the new values.
+	if req.RawLogArchiveEnabled != nil || req.RawLogArchiveRetentionDays != nil || req.RawLogCompressRotated != nil {
+		h.archiver.Wake()
+	}
+	if archiveSwitched {
+		action := "archive_disable"
+		if settings.RawLogArchiveEnabled {
+			action = "archive_enable"
+		}
+		auditCtx := service.ContextWithAudit(c.Request().Context(), c)
+		h.audit.LogSettingsUpdate(auditCtx, "로그 파일", map[string]interface{}{
+			"action":         action,
+			"retention_days": settings.RawLogArchiveRetentionDays,
+		})
 	}
 
 	// Regenerate all nginx configs when global trusted IPs change.

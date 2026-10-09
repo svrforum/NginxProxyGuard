@@ -33,3 +33,45 @@ export interface RawLogUsage {
   archive_total_bytes?: number;
   archive_free_bytes?: number;
 }
+
+/** Archive directory states (see the API's RawLogArchiveStatus). */
+export type RawLogArchiveState =
+  | 'disabled'
+  | 'not_mounted'
+  | 'not_initialized'
+  | 'foreign'
+  | 'unwritable'
+  | 'insufficient_space'
+  | 'stalled'
+  | 'ready';
+
+/**
+ * The raw log archive directory: another disk or a NAS share bound into the
+ * API container. Nothing is written to it before "Use this directory"; when
+ * it is missing, not ours, unwritable, full or hung, rotated files stay local.
+ */
+export interface RawLogArchiveStatus {
+  enabled: boolean;
+  /** The directory inside the API container (NPG_RAW_LOG_ARCHIVE_DIR). */
+  dir: string;
+  status: RawLogArchiveState;
+  /** The directory exists in the API container (the marker tells whether the share is really there). */
+  mounted: boolean;
+  marker?: 'missing' | 'ours' | 'foreign' | 'unreadable';
+  /** Write test result (check and init only). */
+  writable?: boolean;
+  fs_type?: string;
+  total_bytes?: number;
+  free_bytes?: number;
+  detail?: string;
+  retention_days: number;
+  checked_at?: string;
+  last_move_at?: string;
+  last_moved: number;
+  last_pruned: number;
+  last_error?: string;
+  /** Settled local files waiting to move. */
+  pending_files: number;
+  stalled_since?: string;
+  running: boolean;
+}

@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -22,26 +23,45 @@ type LogFileInfo = service.RawLogFile
 // the location's files (all of them without a limit); TotalSize and
 // TotalCount cover every file there, not just the page.
 type LogFilesResponse struct {
-	Files         []LogFileInfo        `json:"files"`
-	TotalSize     int64                `json:"total_size"`
-	TotalCount    int                  `json:"total_count"`
-	RawLogEnabled bool                 `json:"raw_log_enabled"`
-	Location      string               `json:"location"`
-	Limit         int                  `json:"limit,omitempty"`
-	Offset        int                  `json:"offset"`
-	Usage         *service.RawLogUsage `json:"usage,omitempty"`
+	Files         []LogFileInfo                `json:"files"`
+	TotalSize     int64                        `json:"total_size"`
+	TotalCount    int                          `json:"total_count"`
+	RawLogEnabled bool                         `json:"raw_log_enabled"`
+	Location      string                       `json:"location"`
+	Limit         int                          `json:"limit,omitempty"`
+	Offset        int                          `json:"offset"`
+	Usage         *service.RawLogUsage         `json:"usage,omitempty"`
+	Archive       *service.RawLogArchiveStatus `json:"archive,omitempty"`
 }
 
 // logFilesViewTimeout bounds a preview. Decompressing a large legacy .gz to
 // reach its last lines can take tens of seconds.
 const logFilesViewTimeout = 60 * time.Second
 
-// ListLogFiles returns the raw log files, newest first, with the disk usage
-// estimate the raw log page shows.
+// logFileLocation reads ?location=local|archive (default local).
+func logFileLocation(c echo.Context) (string, error) {
+	switch loc := c.QueryParam("location"); loc {
+	case "", service.RawLogLocationLocal:
+		return service.RawLogLocationLocal, nil
+	case service.RawLogLocationArchive:
+		return loc, nil
+	}
+	return "", errors.New("location must be local or archive")
+}
+
+// ListLogFiles returns the raw log files of one location, newest first, with
+// the disk usage estimate and the archive status the raw log page shows.
 func (h *SystemSettingsHandler) ListLogFiles(c echo.Context) error {
 	page, err := parseLogFilesPage(c)
 	if err != nil {
 		return badRequestError(c, err.Error())
+	}
+	location, err := logFileLocation(c)
+	if err != nil {
+		return badRequestError(c, err.Error())
+	}
+	if location == service.RawLogLocationArchive && h.archiver == nil {
+		return h.errArchiveUnavailable(c)
 	}
 	ctx := c.Request().Context()
 	settings, err := h.repo.Get(ctx)
@@ -52,7 +72,7 @@ func (h *SystemSettingsHandler) ListLogFiles(c echo.Context) error {
 	response := LogFilesResponse{
 		Files:         []LogFileInfo{},
 		RawLogEnabled: settings.RawLogEnabled,
-		Location:      service.RawLogLocationLocal,
+		Location:      location,
 		Limit:         page.limit,
 		Offset:        page.offset,
 	}
@@ -64,59 +84,128 @@ func (h *SystemSettingsHandler) ListLogFiles(c echo.Context) error {
 	}
 	service.SortRawLogFiles(local)
 
+	// The archive: its status always, its files when it answers. For the
+	// local tab an archive that does not answer only drops out of the
+	// estimate; for the archive tab it is the answer.
+	var archived []service.RawLogFile
+	if h.archiver != nil {
+		st := h.archiver.Status(ctx)
+		response.Archive = &st
+		if st.Mounted {
+			archived, err = h.archiver.ListArchive(ctx)
+			if err != nil {
+				if location == service.RawLogLocationArchive {
+					return h.archiveError(c, err)
+				}
+				archived = nil
+			}
+		} else if location == service.RawLogLocationArchive {
+			return c.JSON(http.StatusConflict, map[string]interface{}{"error": st.Detail, "archive": st})
+		}
+		service.SortRawLogFiles(archived)
+	}
+
 	rot, _ := settings.EffectiveRawLogRotation()
-	usage := service.EstimateRawLogUsage(local, nil, time.Now(), rot, false, 0)
+	archiveRetention := settings.RawLogArchiveRetentionDays
+	usage := service.EstimateRawLogUsage(local, archived, time.Now(), rot, settings.RawLogArchiveEnabled, archiveRetention)
 	if fsType, total, avail, err := service.RawLogFilesystem(ctx, nginxLogsPath); err == nil {
 		usage.LocalFSType, usage.LocalTotalBytes, usage.LocalFreeBytes = fsType, total, avail
 	}
+	if response.Archive != nil {
+		usage.ArchiveTotalBytes, usage.ArchiveFreeBytes = response.Archive.TotalBytes, response.Archive.FreeBytes
+	}
 	response.Usage = &usage
 
-	for _, f := range local {
+	files := local
+	if location == service.RawLogLocationArchive {
+		files = archived
+	}
+	for _, f := range files {
 		response.TotalSize += f.Size
 	}
-	response.TotalCount = len(local)
-	response.Files = page.apply(local)
+	response.TotalCount = len(files)
+	response.Files = page.apply(files)
 	return c.JSON(http.StatusOK, response)
 }
 
-// DownloadLogFile downloads a raw log file.
-func (h *SystemSettingsHandler) DownloadLogFile(c echo.Context) error {
-	filename := c.Param("filename")
-	path, info, err := localLogFilePath(nginxLogsPath, filename)
-	if err != nil {
-		return logFileError(c, err)
+// openLogFile opens a raw log file of either location for reading. Archive
+// files open through the archiver, so a hung share cannot hold the request.
+func (h *SystemSettingsHandler) openLogFile(c echo.Context, location, name string) (*os.File, os.FileInfo, error) {
+	if location == service.RawLogLocationArchive {
+		if h.archiver == nil {
+			return nil, nil, service.ErrArchiveNotReady
+		}
+		return h.archiver.OpenArchiveFile(c.Request().Context(), name)
 	}
-
-	auditCtx := service.ContextWithAudit(c.Request().Context(), c)
-	h.audit.LogSettingsUpdate(auditCtx, "로그 파일", map[string]interface{}{
-		"action":   "download",
-		"filename": filename,
-	})
-
-	c.Response().Header().Set("Content-Length", strconv.FormatInt(info.Size(), 10))
-	return c.Attachment(path, filename)
+	path, info, err := localLogFilePath(nginxLogsPath, name)
+	if err != nil {
+		return nil, nil, err
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	return f, info, nil
 }
 
-// DeleteLogFile deletes a rotated raw log file. The live access_raw.log and
+// DownloadLogFile downloads a raw log file (?location=archive for the archive).
+func (h *SystemSettingsHandler) DownloadLogFile(c echo.Context) error {
+	filename := c.Param("filename")
+	location, err := logFileLocation(c)
+	if err != nil {
+		return badRequestError(c, err.Error())
+	}
+	f, info, err := h.openLogFile(c, location, filename)
+	if err != nil {
+		return h.archiveError(c, err)
+	}
+	defer f.Close()
+
+	h.auditLogFile(c, map[string]interface{}{
+		"action":   "download",
+		"filename": filename,
+		"location": location,
+	})
+
+	c.Response().Header().Set(echo.HeaderContentDisposition, fmt.Sprintf("attachment; filename=%q", filename))
+	http.ServeContent(c.Response(), c.Request(), filename, info.ModTime(), f)
+	return nil
+}
+
+// DeleteLogFile deletes a rotated raw log file (?location=archive for the
+// archive, which needs this install's marker). The live access_raw.log and
 // error_raw.log are refused here, not only hidden in the UI: nginx keeps
 // writing to an unlinked file, and those lines would be lost.
 func (h *SystemSettingsHandler) DeleteLogFile(c echo.Context) error {
 	filename := c.Param("filename")
-	if service.IsActiveRawLog(filename) {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "cannot delete active log file"})
-	}
-	path, _, err := localLogFilePath(nginxLogsPath, filename)
+	location, err := logFileLocation(c)
 	if err != nil {
-		return logFileError(c, err)
+		return badRequestError(c, err.Error())
 	}
-	if err := os.Remove(path); err != nil {
-		return logFileError(c, err)
+	if location == service.RawLogLocationArchive {
+		if h.archiver == nil {
+			return h.errArchiveUnavailable(c)
+		}
+		if err := h.archiver.DeleteArchiveFile(c.Request().Context(), filename); err != nil {
+			return h.archiveError(c, err)
+		}
+	} else {
+		if service.IsActiveRawLog(filename) {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "cannot delete active log file"})
+		}
+		path, _, err := localLogFilePath(nginxLogsPath, filename)
+		if err != nil {
+			return logFileError(c, err)
+		}
+		if err := os.Remove(path); err != nil {
+			return logFileError(c, err)
+		}
 	}
 
-	auditCtx := service.ContextWithAudit(c.Request().Context(), c)
-	h.audit.LogSettingsUpdate(auditCtx, "로그 파일", map[string]interface{}{
+	h.auditLogFile(c, map[string]interface{}{
 		"action":   "delete",
 		"filename": filename,
+		"location": location,
 	})
 
 	return c.NoContent(http.StatusNoContent)
@@ -126,6 +215,10 @@ func (h *SystemSettingsHandler) DeleteLogFile(c echo.Context) error {
 // Compressed files are decompressed on the fly.
 func (h *SystemSettingsHandler) ViewLogFile(c echo.Context) error {
 	filename := c.Param("filename")
+	location, err := logFileLocation(c)
+	if err != nil {
+		return badRequestError(c, err.Error())
+	}
 
 	lines := 100
 	if linesParam := c.QueryParam("lines"); linesParam != "" {
@@ -134,13 +227,9 @@ func (h *SystemSettingsHandler) ViewLogFile(c echo.Context) error {
 		}
 	}
 
-	path, info, err := localLogFilePath(nginxLogsPath, filename)
+	f, info, err := h.openLogFile(c, location, filename)
 	if err != nil {
-		return logFileError(c, err)
-	}
-	f, err := os.Open(path)
-	if err != nil {
-		return logFileError(c, err)
+		return h.archiveError(c, err)
 	}
 	defer f.Close()
 
@@ -211,11 +300,10 @@ func (h *SystemSettingsHandler) TriggerLogRotation(c echo.Context) error {
 		})
 	}
 
-	// Audit log
-	auditCtx := service.ContextWithAudit(c.Request().Context(), c)
-	h.audit.LogSettingsUpdate(auditCtx, "로그 파일", map[string]interface{}{
-		"action": "rotate",
-	})
+	// A cut may have finished files for the archive.
+	h.archiver.Wake()
+
+	h.auditLogFile(c, map[string]interface{}{"action": "rotate"})
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status":  "completed",
