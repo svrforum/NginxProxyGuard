@@ -119,12 +119,28 @@ var (
 	}, []string{"buffer"})
 
 	// LogCollectorWatchdogRestartTotal counts docker-logs subprocess restarts
-	// triggered by the watchdog. Reasons: "idle" (no data for streamIdleThreshold)
-	// or "max_age" (cmd lifetime exceeded streamMaxAge).
+	// triggered by the watchdog of the nginx stdout/stderr followers. Reasons:
+	// "max_age" (process lifetime reached followerMaxAge) or "stall" (docker
+	// holds a line the follower never received). "idle" no longer exists: a
+	// quiet stream is normal and is not restarted.
 	LogCollectorWatchdogRestartTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "npg_log_collector_watchdog_restart_total",
 		Help: "Total docker-logs subprocess restarts triggered by the watchdog.",
 	}, []string{"reason"})
+
+	// LogCollectorOversizeLinesTotal counts docker-log lines discarded because
+	// they exceeded the follower's per-line cap. Reading continues after them.
+	LogCollectorOversizeLinesTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "npg_log_collector_oversize_lines_total",
+		Help: "Total docker-log lines discarded for exceeding the per-line size cap.",
+	}, []string{"stream"})
+
+	// LogCollectorReplayDedupTotal counts lines dropped after a reconnect
+	// because they had already been delivered before it.
+	LogCollectorReplayDedupTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "npg_log_collector_replay_dedup_total",
+		Help: "Total replayed docker-log lines dropped as already delivered.",
+	}, []string{"stream"})
 )
 
 // registerOnce guards Register so duplicate calls (tests, init-order quirks)
@@ -152,6 +168,8 @@ func Register() {
 			LogCollectorParseErrorsTotal,
 			LogCollectorBufferSize,
 			LogCollectorWatchdogRestartTotal,
+			LogCollectorOversizeLinesTotal,
+			LogCollectorReplayDedupTotal,
 		)
 	})
 }

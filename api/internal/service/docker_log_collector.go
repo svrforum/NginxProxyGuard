@@ -1,7 +1,6 @@
 package service
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"io"
@@ -320,7 +319,16 @@ func (c *DockerLogCollector) tailContainerLogs(ctx context.Context, container Co
 	// value reaches back to the container's start when it started recently, so a
 	// startup burst emitted before this collector attached is still captured
 	// (#205); otherwise it is "1s" to avoid re-ingesting old history.
-	cmd := exec.CommandContext(ctx, "docker", "logs", "--follow", "--since", since, container.Name)
+	//
+	// Per-attach context: cancelling it kills this docker logs process. It is
+	// cancelled as soon as either stream ends (and on Stop), so the other
+	// stream and Wait can never wait on a child that is still writing into a
+	// pipe nobody reads - the deadlock that also stopped the nginx stdout
+	// reader (see container_log_follower.go).
+	runCtx, kill := context.WithCancel(ctx)
+	defer kill()
+	cmd := exec.CommandContext(runCtx, "docker", "logs", "--follow", "--since", since, container.Name)
+	cmd.WaitDelay = 5 * time.Second
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -339,8 +347,18 @@ func (c *DockerLogCollector) tailContainerLogs(ctx context.Context, container Co
 		return
 	}
 
+	// Stop closes stopCh without cancelling ctx; the readers below only end
+	// at EOF, so the child has to die for them to return.
+	go func() {
+		select {
+		case <-c.stopCh:
+			kill()
+		case <-runCtx.Done():
+		}
+	}()
+
 	// Process stdout and stderr concurrently
-	done := make(chan struct{})
+	done := make(chan struct{}, 2)
 	go func() {
 		// Check if stdout is excluded for this container
 		excludeStdout := false
@@ -366,48 +384,54 @@ func (c *DockerLogCollector) tailContainerLogs(ctx context.Context, container Co
 		done <- struct{}{}
 	}()
 
-	// Wait for both streams to close
+	// Wait for both streams to close. The first one to end (EOF, read error)
+	// kills the child so the second one ends too; Wait then cannot block.
 	<-done
+	kill()
 	<-done
 
-	cmd.Wait()
+	_ = cmd.Wait()
 }
 
-func (c *DockerLogCollector) processLogStream(ctx context.Context, container ContainerConfig, reader io.Reader, isStderr bool) {
-	scanner := bufio.NewScanner(reader)
-	// Increase buffer size for long log lines
-	buf := make([]byte, 0, 64*1024)
-	scanner.Buffer(buf, 1024*1024)
+// dockerLogMaxLine caps one system-log line; longer lines are skipped.
+const dockerLogMaxLine = 1 << 20
 
-	// scanner.Scan() blocks, so run it in a dedicated goroutine feeding a
-	// channel. With Scan() inline in the select's default arm (the previous
-	// shape) the flush ticker could only fire after a line arrived, so a
-	// partial batch from a container that went silent sat unflushed
-	// indefinitely — invisible in the system log viewer for hours.
+func (c *DockerLogCollector) processLogStream(ctx context.Context, container ContainerConfig, reader io.Reader, isStderr bool) {
+	// Reading blocks, so run it in a dedicated goroutine feeding a channel.
+	// With the read inline in the select's default arm (the previous shape)
+	// the flush ticker could only fire after a line arrived, so a partial
+	// batch from a container that went silent sat unflushed indefinitely —
+	// invisible in the system log viewer for hours.
+	//
+	// forEachLine, not bufio.Scanner: an over-long line (a ModSecurity audit
+	// record with a response body, when npg-proxy stdout is collected) is
+	// skipped and reading goes on. Scanner stopped for good at 1 MiB and left
+	// docker logs blocked writing into a pipe nobody read. After ctx/stop the
+	// reader keeps draining (and dropping) until the killed child's EOF.
 	lines := make(chan string)
 	go func() {
 		defer close(lines)
-		for scanner.Scan() {
+		err := forEachLine(reader, dockerLogMaxLine, nil, func(l []byte) {
 			select {
-			case lines <- scanner.Text():
+			case lines <- string(l):
 			case <-ctx.Done():
-				return
 			case <-c.stopCh:
-				return
 			}
-		}
-		if err := scanner.Err(); err != nil {
-			log.Printf("[DockerLogCollector] Scanner error for %s: %v", container.Name, err)
+		}, func([]byte) {
+			log.Printf("[DockerLogCollector] Skipped a log line over %d bytes from %s", dockerLogMaxLine, container.Name)
+		})
+		if err != nil {
+			log.Printf("[DockerLogCollector] Read error for %s: %v", container.Name, err)
 		}
 	}()
 
 	// drainReader waits for the reader goroutine to finish before the main loop
 	// returns. Without it, an exit via ctx.Done()/stopCh leaves the reader still
-	// blocked in scanner.Scan()->pipe Read; tailContainerLogs would then race
+	// blocked in a pipe Read; tailContainerLogs would then race
 	// cmd.Wait()/cleanup against the still-live reader (and leak the goroutine).
-	// The subprocess is killed by ctx cancel on shutdown, so the pending Read
-	// unblocks and the reader closes `lines`; any buffered lines are discarded
-	// because we're shutting down.
+	// The subprocess is killed on shutdown (ctx cancel or Stop), so the pending
+	// Read unblocks and the reader closes `lines`; any buffered lines are
+	// discarded because we're shutting down.
 	drainReader := func() {
 		for range lines {
 		}

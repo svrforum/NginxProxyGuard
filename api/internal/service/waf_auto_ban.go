@@ -128,8 +128,15 @@ func (s *WAFAutoBanService) refreshSettings(ctx context.Context) {
 	}
 }
 
-// RecordWAFEvent records a WAF event for an IP and checks if it should be banned
-func (s *WAFAutoBanService) RecordWAFEvent(ctx context.Context, clientIP string, host string, ruleID int64, ruleMessage string) {
+// RecordWAFEvent records a WAF event for an IP and checks if it should be banned.
+//
+// at is when the event happened (docker's timestamp of the audit line). After
+// a reconnect the log follower replays the lines written while it was away;
+// counting them at replay time would squeeze minutes of events into one window
+// and ban on a rate that never happened. So an event older than the window is
+// not counted, an in-window event counts at its own time, and a zero or future
+// time (clock skew) counts as now.
+func (s *WAFAutoBanService) RecordWAFEvent(ctx context.Context, clientIP string, host string, ruleID int64, ruleMessage string, at time.Time) {
 	s.settingsMu.RLock()
 	enabled := s.enabled
 	threshold := s.threshold
@@ -144,11 +151,17 @@ func (s *WAFAutoBanService) RecordWAFEvent(ctx context.Context, clientIP string,
 
 	now := time.Now()
 	windowStart := now.Add(-time.Duration(windowSeconds) * time.Second)
+	if at.IsZero() || at.After(now) {
+		at = now
+	}
+	if !at.After(windowStart) {
+		return // a replayed event that is already outside the window
+	}
 
 	s.mu.Lock()
 
 	// Add new event
-	s.ipEvents[clientIP] = append(s.ipEvents[clientIP], now)
+	s.ipEvents[clientIP] = append(s.ipEvents[clientIP], at)
 
 	// Filter to only events within the window
 	var recentEvents []time.Time
