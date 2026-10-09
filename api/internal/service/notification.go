@@ -52,9 +52,9 @@ type notifyStore interface {
 var allowedFields = map[string]bool{
 	"event": true, "time": true, "host": true, "ip": true, "country": true,
 	"reason": true, "count": true, "detail": true, "instance": true, "subject": true,
-	// Disk alerts (D2): sizes and role codes only, nothing that came from a
-	// request.
-	"free": true, "growth_per_day": true, "days_to_full": true, "roles": true,
+	// Disk alerts (D2): sizes and codes only, nothing that came from a
+	// request. action says what NPG does about a critical database disk (D3).
+	"free": true, "growth_per_day": true, "days_to_full": true, "roles": true, "action": true,
 }
 
 const (

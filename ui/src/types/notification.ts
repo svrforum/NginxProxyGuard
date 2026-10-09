@@ -81,5 +81,5 @@ export const NOTIFICATION_SECRET_PLACEHOLDER = '********'
  *  credentials and a notification leaves the operator's network. */
 export const TEMPLATE_PLACEHOLDERS = [
   'event', 'time', 'host', 'ip', 'country', 'reason', 'count', 'detail', 'instance', 'subject',
-  'free', 'growth_per_day', 'days_to_full', 'roles',
+  'free', 'growth_per_day', 'days_to_full', 'roles', 'action',
 ] as const

@@ -321,7 +321,7 @@ func dbNotMeasuredLine(reason, name string, cause error) string {
 	case "db_exec_failed":
 		return fmt.Sprintf("%srunning stat in the container %s failed: %v", prefix, name, cause)
 	default:
-		return prefix + "set NPG_DB_CONTAINER to the name of your TimescaleDB container to get database disk alerts"
+		return prefix + "set NPG_DB_CONTAINER to the name of your TimescaleDB container to get database disk alerts and emergency compression"
 	}
 }
 

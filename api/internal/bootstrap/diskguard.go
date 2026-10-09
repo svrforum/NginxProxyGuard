@@ -23,9 +23,10 @@ import (
 //	NPG_DISK_GUARD_DISABLED=1          turn the whole guard off
 //	NPG_DISK_GUARD_INTERVAL=1m         tick (minimum 15s)
 //	NPG_DISK_WARN_PERCENT=85           disk.space_low
-//	NPG_DISK_CRITICAL_PERCENT=90       disk.space_critical
+//	NPG_DISK_CRITICAL_PERCENT=90       disk.space_critical + emergency compression
 //	NPG_DISK_RECOVER_PERCENT=80        disk.space_recovered
 //	NPG_DISK_ALERT_COOLDOWN=6h         hold a new "low" this long after a recovery
+//	NPG_DISK_EMERGENCY_COMPRESS=on     on | off | dryrun
 //	NPG_DB_CONTAINER=                  database container name, when discovery fails
 func diskGuardDisabled() bool {
 	v := strings.ToLower(strings.TrimSpace(os.Getenv("NPG_DISK_GUARD_DISABLED")))
@@ -72,8 +73,20 @@ func diskGuardInterval() time.Duration {
 	return diskEnvDuration("NPG_DISK_GUARD_INTERVAL", time.Minute)
 }
 
-// initDiskGuard builds DiskGuard and wires it into the stats collector and the
-// dashboard. It leaves svcs.DiskGuard nil when the guard is disabled.
+// diskEmergencyMode is NPG_DISK_EMERGENCY_COMPRESS; an unknown value is
+// reported and treated as the default, on.
+func diskEmergencyMode() service.EmergencyMode {
+	v := os.Getenv("NPG_DISK_EMERGENCY_COMPRESS")
+	mode, ok := service.ParseEmergencyMode(v)
+	if !ok {
+		log.Printf("[DiskGuard] ignoring NPG_DISK_EMERGENCY_COMPRESS=%q: use on, off or dryrun", v)
+	}
+	return mode
+}
+
+// initDiskGuard builds DiskGuard and its emergency compressor and wires them
+// into the stats collector and the dashboard. It leaves svcs.DiskGuard nil
+// when the guard is disabled.
 func initDiskGuard(cfg *config.Config, db *database.DB, repos *Repositories, svcs *Services) {
 	if diskGuardDisabled() {
 		log.Println("[DiskGuard] disabled by NPG_DISK_GUARD_DISABLED: no disk alerts and no storage warning on the dashboard")
@@ -99,6 +112,18 @@ func initDiskGuard(cfg *config.Config, db *database.DB, repos *Repositories, svc
 	// DiskGuard must never statfs the archive itself: a hung NAS would freeze
 	// every disk alert with it.
 
+	// Stopping the scheduler cancels this, which also ends an emergency pass
+	// in flight: the chunk being compressed rolls back cleanly (verified).
+	svcs.diskGuardCtx, svcs.diskGuardCancel = context.WithCancel(context.Background())
+	emerg := service.NewEmergencyCompressor(svcs.diskGuardCtx, maint, provider.MeasureDB, diskEmergencyMode())
+	emerg.SetSystemLog(func(level repository.SystemLogLevel, msg string) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = repos.SystemLog.Create(ctx, &repository.SystemLog{
+			Source: repository.SourceScheduler, Level: level, Message: msg, Component: "disk-guard",
+		})
+	})
+
 	th := diskThresholdsFromEnv()
 	svcs.DiskGuard = service.NewDiskGuard(provider, svcs.Notification, repos.Notification, repos.Dashboard,
 		service.DiskGuardOptions{
@@ -106,9 +131,9 @@ func initDiskGuard(cfg *config.Config, db *database.DB, repos *Repositories, svc
 			ConfirmSamples: 2,
 			Cooldown:       diskEnvDuration("NPG_DISK_ALERT_COOLDOWN", 6*time.Hour),
 		})
-	svcs.diskGuardCtx, svcs.diskGuardCancel = context.WithCancel(context.Background())
+	svcs.DiskGuard.SetEmergencyCompressor(emerg)
 	svcs.StatsCollector.SetDiskSource(svcs.DiskGuard)
 	svcs.Settings.SetDiskSource(svcs.DiskGuard)
-	log.Printf("[DiskGuard] watching NPG's disks: warn %g%%, critical %g%%, recovered below %g%%",
-		th.Warn, th.Critical, th.Recover)
+	log.Printf("[DiskGuard] watching NPG's disks: warn %g%%, critical %g%%, recovered below %g%%, emergency compression %s",
+		th.Warn, th.Critical, th.Recover, emerg.Mode())
 }

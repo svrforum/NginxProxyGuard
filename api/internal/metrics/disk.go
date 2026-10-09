@@ -25,6 +25,13 @@ var (
 		Name: "npg_disk_level",
 		Help: "Disk alert level of a filesystem NPG writes to: 0 ok, 1 low, 2 critical.",
 	}, []string{"fs"})
+
+	// DiskEmergencyChunksCompressed counts closed log chunks compressed early
+	// because the database disk was critical (D3).
+	DiskEmergencyChunksCompressed = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "npg_disk_emergency_chunks_compressed_total",
+		Help: "Closed log chunks compressed ahead of the compression policy because the database disk was critical.",
+	})
 )
 
 var registerDiskOnce sync.Once
@@ -33,6 +40,6 @@ var registerDiskOnce sync.Once
 // call more than once.
 func RegisterDiskMetrics() {
 	registerDiskOnce.Do(func() {
-		prometheus.MustRegister(DiskUsedRatio, DiskLevel)
+		prometheus.MustRegister(DiskUsedRatio, DiskLevel, DiskEmergencyChunksCompressed)
 	})
 }

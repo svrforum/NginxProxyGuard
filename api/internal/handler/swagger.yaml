@@ -14037,6 +14037,8 @@ components:
                 Why the database disk is not measured. With measured=true,
                 db_exec_failed means the container could not be asked but a volume
                 verified to share its disk answered.
+        emergency:
+          $ref: '#/components/schemas/EmergencyCompressionStatus'
         measured_at:
           type: string
           format: date-time
@@ -14107,6 +14109,35 @@ components:
         since:
           type: string
           format: date-time
+    EmergencyCompressionStatus:
+      type: object
+      description: |
+        Early compression of closed log chunks while the database disk is at or
+        above the critical line (lossless; nothing is deleted).
+      properties:
+        mode:
+          type: string
+          enum: ['on', 'off', dryrun]
+          description: NPG_DISK_EMERGENCY_COMPRESS
+        state:
+          type: string
+          enum: [idle, running, done, blocked]
+        reason:
+          type: string
+          enum: [nothing_to_compress, dry_run, insufficient_space, policy_running, another_pass_running, chunks_busy, db_disk_unmeasured, compress_failed, error, stopped]
+        chunks_done:
+          type: integer
+        chunks_total:
+          type: integer
+        freed_bytes:
+          type: integer
+          format: int64
+        started_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+          format: date-time
     StorageHealth:
       type: object
       description: |
@@ -14134,6 +14165,8 @@ components:
             reason:
               type: string
               enum: [db_container_not_found, db_external, db_exec_failed, docker_unavailable]
+        emergency:
+          $ref: '#/components/schemas/EmergencyCompressionStatus'
         measured_at:
           type: string
           format: date-time

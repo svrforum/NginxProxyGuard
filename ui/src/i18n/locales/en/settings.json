@@ -1744,7 +1744,7 @@
       },
       "disk.space_critical": {
         "label": "Disk space critical",
-        "desc": "Passed the critical line, 90% full by default. Act now: once the database's disk is full, logging, sign-in and alerts all stop."
+        "desc": "Passed the critical line, 90% full by default. On the database's disk NPG compresses older log chunks right away to win space back without deleting anything, and the message says whether that is enough. Once the database's disk is full, logging, sign-in and alerts all stop."
       },
       "disk.space_recovered": {
         "label": "Disk space back to normal",

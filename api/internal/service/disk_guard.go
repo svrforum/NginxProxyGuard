@@ -14,7 +14,8 @@ import (
 )
 
 // DiskGuard watches the filesystems NPG writes to (D1), tells the operator
-// when one is filling (D2) and feeds the dashboard (D4).
+// when one is filling (D2), compresses closed log chunks early when the
+// database disk passes the critical line (D3), and feeds the dashboard (D4).
 //
 // Why the lines sit at 85% and 90% rather than 99%: an alert travels through
 // notification_outbox, which is a database table. On 2026-10-09 production
@@ -106,6 +107,13 @@ type diskHistory interface {
 	DiskUsedNear(ctx context.Context, path string, total uint64, at time.Time, tol time.Duration) (used uint64, recordedAt time.Time, ok bool, err error)
 }
 
+// emergencyRunner is the emergency compressor (D3) as the guard drives it.
+type emergencyRunner interface {
+	Plan(ctx context.Context, fs FSUsage) EmergencyPlan
+	TriggerAsync(fs FSUsage)
+	Status() model.EmergencyCompressionStatus
+}
+
 // fsState is the per-filesystem memory of the guard. Only the tick goroutine
 // reads or writes its fields.
 type fsState struct {
@@ -145,6 +153,7 @@ type DiskGuard struct {
 	notify  diskNotifier
 	state   diskStateReader
 	history diskHistory
+	emerg   emergencyRunner // nil until SetEmergencyCompressor
 	opts    DiskGuardOptions
 
 	mu         sync.RWMutex
@@ -178,7 +187,17 @@ func NewDiskGuard(usage diskUsageProvider, notify diskNotifier, state diskStateR
 	}
 }
 
-// Tick measures, updates levels and announces changes. Called every minute by
+// SetEmergencyCompressor wires D3. Call before the scheduler starts.
+func (g *DiskGuard) SetEmergencyCompressor(e *EmergencyCompressor) {
+	if e == nil {
+		g.emerg = nil
+		return
+	}
+	g.emerg = e
+}
+
+// Tick measures, updates levels, announces changes and starts an emergency
+// compression when the database disk is critical. Called every minute by
 // DiskGuardScheduler, from one goroutine.
 func (g *DiskGuard) Tick(ctx context.Context) {
 	now := g.opts.Now()
@@ -218,6 +237,14 @@ func (g *DiskGuard) Tick(ctx context.Context) {
 		g.announce(ctx, *fs, st, now)
 		if st.level >= DiskLevelLow {
 			urgent = true
+		}
+		// Compressing the database only frees space on the database's disk.
+		// The sample itself must still support "critical" (with the usual
+		// hysteresis): right after a restart the level is the one restored
+		// from notification_state, which can be stale until it is confirmed.
+		if st.level == DiskLevelCritical && fs.HasRole(DiskRoleDB) && g.emerg != nil &&
+			nextDiskLevel(DiskLevelCritical, fs.UsedPercent, g.opts.Thresholds) == DiskLevelCritical {
+			g.emerg.TriggerAsync(*fs)
 		}
 	}
 	g.usage.SetUrgent(urgent)
@@ -332,6 +359,12 @@ func (g *DiskGuard) announce(ctx context.Context, fs FSUsage, st *fsState, now t
 		}
 	}
 	if wantCrit != st.announcedCritical {
+		// The first message says whether NPG can win space back or the
+		// operator has to act. The pass itself starts right after, off the
+		// tick.
+		if wantCrit && g.emerg != nil && fs.HasRole(DiskRoleDB) {
+			fields["action"] = g.emerg.Plan(ctx, fs).Action
+		}
 		if err := g.notify.EmitTransition(ctx, eventDiskCritical, fs.Key, wantCrit, fields["detail"], fields); err != nil {
 			log.Printf("[DiskGuard] could not record the %s alert for %s: %v", eventDiskCritical, fs.Path, err)
 		} else {
@@ -341,7 +374,7 @@ func (g *DiskGuard) announce(ctx context.Context, fs FSUsage, st *fsState, now t
 }
 
 // fields is the message. Values are language-neutral (sizes, a path, codes);
-// the formatter translates roles per channel.
+// the formatter translates roles and action per channel.
 func (g *DiskGuard) fields(ctx context.Context, fs FSUsage, now time.Time) map[string]string {
 	f := map[string]string{
 		"subject": fs.Path,
@@ -548,6 +581,10 @@ func (g *DiskGuard) Status(ctx context.Context) *model.StorageStatus {
 		out.Stalled = append(out.Stalled, model.StalledFilesystem{Role: string(s.Role), Path: s.Path, Since: s.Since})
 	}
 	out.Level = worst.String()
+	if g.emerg != nil {
+		em := g.emerg.Status()
+		out.Emergency = &em
+	}
 	return out
 }
 

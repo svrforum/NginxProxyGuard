@@ -15,9 +15,28 @@ type StorageStatus struct {
 	Filesystems []FilesystemUsage `json:"filesystems"` // fullest first
 	// Stalled lists roles whose filesystem did not answer in time — a hung
 	// network mount. They have no numbers and no entry in Filesystems.
-	Stalled    []StalledFilesystem `json:"stalled,omitempty"`
-	Database   DatabaseDiskInfo    `json:"database"`
-	MeasuredAt time.Time           `json:"measured_at"`
+	Stalled  []StalledFilesystem `json:"stalled,omitempty"`
+	Database DatabaseDiskInfo    `json:"database"`
+	// Emergency is D3, the early compression of closed log chunks when the
+	// database disk is critical.
+	Emergency  *EmergencyCompressionStatus `json:"emergency,omitempty"`
+	MeasuredAt time.Time                   `json:"measured_at"`
+}
+
+// EmergencyCompressionStatus reports D3: compressing closed log chunks early
+// when the database disk passes the critical line.
+type EmergencyCompressionStatus struct {
+	Mode  string `json:"mode"`  // on | off | dryrun (NPG_DISK_EMERGENCY_COMPRESS)
+	State string `json:"state"` // idle | running | done | blocked
+	// Reason explains done or blocked: nothing_to_compress, dry_run,
+	// insufficient_space, policy_running, another_pass_running, chunks_busy,
+	// db_disk_unmeasured, compress_failed, error.
+	Reason      string     `json:"reason,omitempty"`
+	ChunksDone  int        `json:"chunks_done"`
+	ChunksTotal int        `json:"chunks_total"`
+	FreedBytes  int64      `json:"freed_bytes"`
+	StartedAt   *time.Time `json:"started_at,omitempty"`
+	FinishedAt  *time.Time `json:"finished_at,omitempty"`
 }
 
 type StorageThresholds struct {
@@ -78,9 +97,10 @@ type StorageHealth struct {
 	Thresholds  StorageThresholds  `json:"thresholds"`
 	Filesystems []FilesystemHealth `json:"filesystems"`
 	// StalledRoles are the roles of StorageStatus.Stalled, without their paths.
-	StalledRoles []string           `json:"stalled_roles,omitempty"`
-	Database     DatabaseDiskHealth `json:"database"`
-	MeasuredAt   time.Time          `json:"measured_at"`
+	StalledRoles []string                    `json:"stalled_roles,omitempty"`
+	Database     DatabaseDiskHealth          `json:"database"`
+	Emergency    *EmergencyCompressionStatus `json:"emergency,omitempty"`
+	MeasuredAt   time.Time                   `json:"measured_at"`
 }
 
 // FilesystemHealth is FilesystemUsage without its path and source.
@@ -114,6 +134,7 @@ func (s *StorageStatus) Health() *StorageHealth {
 		Thresholds:  s.Thresholds,
 		Filesystems: make([]FilesystemHealth, 0, len(s.Filesystems)),
 		Database:    DatabaseDiskHealth{Measured: s.Database.Measured, Reason: s.Database.Reason},
+		Emergency:   s.Emergency,
 		MeasuredAt:  s.MeasuredAt,
 	}
 	for _, f := range s.Filesystems {

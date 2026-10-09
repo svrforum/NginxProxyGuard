@@ -35,7 +35,7 @@ func severityColour(severity string) int {
 // fieldOrder keeps a message's lines stable between sends. Map iteration order
 // would otherwise reshuffle them and make two identical alerts look different.
 var fieldOrder = []string{"host", "ip", "country", "count", "reason", "detail",
-	"free", "growth_per_day", "days_to_full", "roles", "subject", "time"}
+	"free", "growth_per_day", "days_to_full", "roles", "action", "subject", "time"}
 
 // dropRedundantSubject removes a subject that only repeats the host.
 //
@@ -66,7 +66,7 @@ func displayValue(key, value string) string {
 // codedFields carry comma-separated codes instead of prose, so a webhook
 // receiver can key off them; a person reading Discord, Telegram or plain text
 // gets them translated by displayValueIn.
-var codedFields = map[string]bool{"roles": true}
+var codedFields = map[string]bool{"roles": true, "action": true}
 
 // displayValueIn renders a field in the channel's language. Most values are
 // language-neutral (a size, an address, a host) and pass through displayValue.
@@ -373,6 +373,7 @@ func SampleMessage(lang, eventKey string) model.RenderedMessage {
 		fields["growth_per_day"] = "+2.1 GB"
 		fields["days_to_full"] = "7"
 		fields["roles"] = "db,nginx_logs,backups,docker"
+		fields["action"] = "emergency_compression"
 	case "disk.space_recovered":
 		severity = "resolved"
 		fields["subject"] = "npg-db:/var/lib/postgresql/data"
