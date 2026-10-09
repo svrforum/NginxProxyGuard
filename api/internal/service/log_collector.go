@@ -1,10 +1,8 @@
 package service
 
 import (
-	"bufio"
 	"context"
 	"fmt"
-	"io"
 	"log"
 	"math"
 	"net"
@@ -13,7 +11,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"nginx-proxy-guard/internal/metrics"
@@ -1064,10 +1061,12 @@ func (c *LogCollector) resolveTailPath() string {
 // tail has a well-understood failure mode (file gone, rotation, truncate) and
 // avoids the dockerd dependency entirely for the high-volume access path.
 //
-// nginx writes access logs to both /dev/stdout (consumed by docker logs) and
-// /etc/nginx/logs/access_raw.log (this function's source). Both files share
-// the same `main` format. Rotation is handled by logrotate daily (file is
-// renamed to access_raw.log-YYYYMMDD.gz and a new access_raw.log is created).
+// nginx writes access logs to /etc/nginx/logs/access_raw.log (this function's
+// source) and optionally to /dev/stdout (the docker-logs copy); both use the
+// same `main` format. logrotate renames the file to
+// access_raw.log-YYYYMMDD-HHMMSS (compressed to .gz on a later rotation) and
+// creates a new one; fileTail (log_collector_tail.go) keeps reading the
+// renamed file until nginx has stopped writing to it.
 func (c *LogCollector) streamFileAccessLogs(ctx context.Context) {
 	if c.accessLogPath == "" {
 		log.Printf("[LogCollector] file-tail disabled: accessLogPath is empty")
@@ -1083,68 +1082,25 @@ func (c *LogCollector) streamFileAccessLogs(ctx context.Context) {
 	c.actualTailPath.Store(tailPath)
 	log.Printf("[LogCollector] starting file-tail of %s", tailPath)
 
-	var (
-		file   *os.File
-		reader *bufio.Reader
-		curIno uint64
-	)
-	defer func() {
-		if file != nil {
-			_ = file.Close()
+	// First open: skip historical content (already ingested before this run).
+	tail := newFileTail(tailPath, time.Now)
+	for {
+		err := tail.open(true)
+		if err == nil {
+			break
 		}
-	}()
-
-	// inodeOf returns the inode of a path, or 0 on error.
-	inodeOf := func(path string) uint64 {
-		st, err := os.Stat(path)
-		if err != nil {
-			return 0
-		}
-		sys, ok := st.Sys().(*syscall.Stat_t)
-		if !ok {
-			return 0
-		}
-		return sys.Ino
-	}
-
-	// openTail opens the file. seekToEnd=true is used on first open to skip
-	// historical lines (already captured before this run). On rotation we
-	// reopen the new file from the beginning to avoid losing any lines.
-	openTail := func(seekToEnd bool) error {
-		if file != nil {
-			_ = file.Close()
-			file = nil
-		}
-		f, err := os.Open(tailPath)
-		if err != nil {
-			return err
-		}
-		if seekToEnd {
-			if _, err := f.Seek(0, io.SeekEnd); err != nil {
-				_ = f.Close()
-				return err
-			}
-		}
-		file = f
-		reader = bufio.NewReaderSize(f, 64*1024)
-		curIno = inodeOf(tailPath)
-		return nil
-	}
-
-	// First open: skip historical content.
-	for file == nil {
-		if err := openTail(true); err != nil {
-			log.Printf("[LogCollector] file-tail open failed: %v (retry in 5s)", err)
-			select {
-			case <-ctx.Done():
-				return
-			case <-c.stopCh:
-				return
-			case <-time.After(5 * time.Second):
-			}
+		log.Printf("[LogCollector] file-tail open failed: %v (retry in 5s)", err)
+		select {
+		case <-ctx.Done():
+			return
+		case <-c.stopCh:
+			return
+		case <-time.After(5 * time.Second):
 		}
 	}
+	defer tail.close()
 
+	emit := func(line string) { c.handleAccessLine(ctx, line) }
 	for {
 		select {
 		case <-ctx.Done():
@@ -1152,51 +1108,22 @@ func (c *LogCollector) streamFileAccessLogs(ctx context.Context) {
 		case <-c.stopCh:
 			return
 		case <-c.restartTail:
-			// Re-resolve the source (env/path may have been corrected) and reopen
-			// from the end. tailPath is captured by the openTail closure.
+			// Re-resolve the source (env/path may have been corrected) and
+			// reopen it from the end. The inode already being read is kept as
+			// is, so a restart never reads a line twice.
 			newPath := c.resolveTailPath()
 			c.actualTailPath.Store(newPath)
-			tailPath = newPath
-			log.Printf("[LogCollector] file-tail restart requested — re-resolved to %s", tailPath)
-			if err := openTail(true); err != nil {
+			log.Printf("[LogCollector] file-tail restart requested — re-resolved to %s", newPath)
+			if err := tail.reopen(newPath, true); err != nil {
 				log.Printf("[LogCollector] file-tail reopen after restart failed: %v", err)
 			}
 			continue
 		default:
 		}
 
-		line, err := reader.ReadString('\n')
-		if err == nil {
-			c.handleAccessLine(ctx, strings.TrimRight(line, "\n"))
-			continue
+		if !tail.poll(emit) {
+			time.Sleep(200 * time.Millisecond) // nothing new: short poll
 		}
-		if err != io.EOF {
-			log.Printf("[LogCollector] file-tail read error: %v (reopening)", err)
-			if err := openTail(false); err != nil {
-				time.Sleep(1 * time.Second)
-			}
-			continue
-		}
-
-		// EOF: either no new data yet, or the file was rotated. Detect rotation
-		// by comparing inode. Bare file-gone is also possible mid-rotation.
-		newIno := inodeOf(tailPath)
-		if newIno == 0 {
-			// File temporarily missing (logrotate window). Brief wait and retry.
-			time.Sleep(200 * time.Millisecond)
-			continue
-		}
-		if newIno != curIno {
-			// Rotation: open the new file from the beginning.
-			log.Printf("[LogCollector] file-tail detected rotation (inode %d -> %d)", curIno, newIno)
-			if err := openTail(false); err != nil {
-				log.Printf("[LogCollector] file-tail reopen after rotation failed: %v", err)
-				time.Sleep(1 * time.Second)
-			}
-			continue
-		}
-		// Same file, no new data. Short poll.
-		time.Sleep(200 * time.Millisecond)
 	}
 }
 

@@ -141,6 +141,22 @@ var (
 		Name: "npg_log_collector_replay_dedup_total",
 		Help: "Total replayed docker-log lines dropped as already delivered.",
 	}, []string{"stream"})
+
+	// LogCollectorTailRotatedLinesTotal counts access lines the file tail read
+	// from a rotated access_raw.log after it had moved on to the new file -
+	// lines nginx flushed into the old inode on reopen, which the tail used to
+	// lose.
+	LogCollectorTailRotatedLinesTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "npg_log_collector_tail_rotated_lines_total",
+		Help: "Total access log lines read from a rotated file after the switch to the new one.",
+	})
+
+	// LogCollectorTailOverlongLinesTotal counts access log lines the file tail
+	// dropped for exceeding its per-line cap.
+	LogCollectorTailOverlongLinesTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "npg_log_collector_tail_overlong_lines_total",
+		Help: "Total access log lines dropped by the file tail for exceeding the per-line size cap.",
+	})
 )
 
 // registerOnce guards Register so duplicate calls (tests, init-order quirks)
@@ -170,6 +186,8 @@ func Register() {
 			LogCollectorWatchdogRestartTotal,
 			LogCollectorOversizeLinesTotal,
 			LogCollectorReplayDedupTotal,
+			LogCollectorTailRotatedLinesTotal,
+			LogCollectorTailOverlongLinesTotal,
 		)
 	})
 }
