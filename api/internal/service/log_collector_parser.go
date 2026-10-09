@@ -69,6 +69,12 @@ var accessLogRegexOld = regexp.MustCompile(
 	`^(\S+)\s+-\s+(\S+)\s+\[([^\]]+)\]\s+"(\S+)\s+(\S+)\s+(\S+)"\s+(\d+)\s+(\d+)\s+"([^"]*)"\s+"([^"]*)"\s+"([^"]*)"`,
 )
 
+// parseAccessLog and parseErrorLog leave RawLog empty. Nothing reads the
+// verbatim line back for these rows - no API returns raw_log for them (the
+// log list does not select the column, so the UI's raw-log panels were
+// already empty) - yet it was about half of every stored row; the line itself
+// stays in access_raw.log and docker logs. Only modsec rows keep a raw_log:
+// the trimmed audit record the WAF event panel reads.
 func (c *LogCollector) parseAccessLog(line string) (*model.CreateLogRequest, error) {
 	// Try new format with host first
 	matches := accessLogRegex.FindStringSubmatch(line)
@@ -180,7 +186,6 @@ func (c *LogCollector) parseAccessLog(line string) (*model.CreateLogRequest, err
 			UpstreamResponseTime: upstreamResponseTime,
 			UpstreamAddr:         upstreamAddr,
 			UpstreamStatus:       upstreamStatus,
-			RawLog:               line,
 		}, nil
 	}
 
@@ -222,7 +227,6 @@ func (c *LogCollector) parseAccessLog(line string) (*model.CreateLogRequest, err
 		HTTPReferer:       referer,
 		HTTPUserAgent:     matches[10],
 		HTTPXForwardedFor: xForwardedFor,
-		RawLog:            line,
 	}, nil
 }
 
@@ -258,7 +262,6 @@ func (c *LogCollector) parseErrorLog(line string) (*model.CreateLogRequest, erro
 		ClientIP:     clientIP,
 		Severity:     severity,
 		ErrorMessage: matches[3],
-		RawLog:       line,
 	}, nil
 }
 
