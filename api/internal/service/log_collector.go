@@ -723,49 +723,7 @@ func (c *LogCollector) flushRedisBuffer(ctx context.Context) ([]model.CreateLogR
 		}
 
 		for _, entry := range entries {
-			logReq := model.CreateLogRequest{
-				LogType:              model.LogType(entry.LogType),
-				Timestamp:            entry.Timestamp,
-				Host:                 entry.Host,
-				ClientIP:             entry.ClientIP,
-				RequestMethod:        entry.Method,
-				RequestURI:           entry.URI,
-				RequestProtocol:      entry.Protocol,
-				StatusCode:           entry.StatusCode,
-				BodyBytesSent:        entry.BodyBytes,
-				HTTPUserAgent:        entry.UserAgent,
-				HTTPReferer:          entry.Referer,
-				BlockReason:          model.ParseBlockReason(entry.BlockReason),
-				BotCategory:          entry.BotCategory,
-				ExploitRule:          entry.ExploitRule,
-				GeoCountry:           entry.GeoCountry,
-				GeoCountryCode:       entry.GeoCountryCode,
-				GeoCity:              entry.GeoCity,
-				GeoASN:               entry.GeoASN,
-				GeoOrg:               entry.GeoOrg,
-				RequestTime:          entry.RequestTime,
-				HTTPXForwardedFor:    entry.XForwardedFor,
-				UpstreamResponseTime: entry.UpstreamResponseTime,
-				UpstreamAddr:         entry.UpstreamAddr,
-				UpstreamStatus:       entry.UpstreamStatus,
-				Severity:             model.LogSeverity(entry.Severity),
-				ErrorMessage:         entry.ErrorMessage,
-				ProxyHostID:          entry.ProxyHostID,
-				RawLog:               entry.RawLog,
-			}
-
-			// Parse extra fields for WAF logs
-			if entry.Extra != nil {
-				if ruleID, ok := entry.Extra["rule_id"]; ok {
-					logReq.RuleID, _ = strconv.ParseInt(ruleID, 10, 64)
-				}
-				logReq.RuleMessage = entry.Extra["rule_message"]
-				logReq.RuleSeverity = entry.Extra["rule_severity"]
-				logReq.AttackType = entry.Extra["attack_type"]
-				logReq.ActionTaken = entry.Extra["action_taken"]
-			}
-
-			allLogs = append(allLogs, logReq)
+			allLogs = append(allLogs, fromCacheLogEntry(entry))
 		}
 
 		if len(entries) < c.batchSize {
@@ -829,48 +787,7 @@ func (c *LogCollector) addLog(logReq model.CreateLogRequest) {
 
 	// Try Redis buffer first (if available)
 	if c.redisBufferReady() {
-		entry := &cache.LogEntry{
-			LogType:              string(logReq.LogType),
-			Timestamp:            logReq.Timestamp,
-			Host:                 logReq.Host,
-			ClientIP:             logReq.ClientIP,
-			Method:               logReq.RequestMethod,
-			URI:                  logReq.RequestURI,
-			Protocol:             logReq.RequestProtocol,
-			StatusCode:           logReq.StatusCode,
-			BodyBytes:            logReq.BodyBytesSent,
-			UserAgent:            logReq.HTTPUserAgent,
-			Referer:              logReq.HTTPReferer,
-			BlockReason:          string(logReq.BlockReason),
-			BotCategory:          logReq.BotCategory,
-			ExploitRule:          logReq.ExploitRule,
-			GeoCountry:           logReq.GeoCountry,
-			GeoCountryCode:       logReq.GeoCountryCode,
-			GeoCity:              logReq.GeoCity,
-			GeoASN:               logReq.GeoASN,
-			GeoOrg:               logReq.GeoOrg,
-			RequestTime:          logReq.RequestTime,
-			XForwardedFor:        logReq.HTTPXForwardedFor,
-			UpstreamResponseTime: logReq.UpstreamResponseTime,
-			UpstreamAddr:         logReq.UpstreamAddr,
-			UpstreamStatus:       logReq.UpstreamStatus,
-			Severity:             string(logReq.Severity),
-			ErrorMessage:         logReq.ErrorMessage,
-			ProxyHostID:          logReq.ProxyHostID,
-			RawLog:               logReq.RawLog,
-		}
-
-		// Add extra fields for WAF logs
-		if logReq.LogType == model.LogTypeModSec {
-			entry.Extra = map[string]string{
-				"rule_id":       fmt.Sprintf("%d", logReq.RuleID),
-				"rule_message":  logReq.RuleMessage,
-				"rule_severity": logReq.RuleSeverity,
-				"attack_type":   logReq.AttackType,
-				"action_taken":  logReq.ActionTaken,
-			}
-		}
-
+		entry := toCacheLogEntry(logReq)
 		if err := c.redisCache.AddLogEntry(context.Background(), entry); err != nil {
 			// Fallback to memory buffer on Redis error
 			log.Printf("[LogCollector] Redis buffer failed, falling back to memory: %v", err)
@@ -881,6 +798,102 @@ func (c *LogCollector) addLog(logReq model.CreateLogRequest) {
 
 	// Fallback to memory buffer
 	c.addLogToMemoryBuffer(logReq)
+}
+
+// toCacheLogEntry and fromCacheLogEntry are the two halves of the Valkey log
+// buffer. Every persisted CreateLogRequest field must survive the round trip
+// (TestCacheLogEntryRoundTrip): rule_data did not, so every modsec row that
+// went through Valkey was stored with rule_data NULL.
+func toCacheLogEntry(logReq model.CreateLogRequest) *cache.LogEntry {
+	entry := &cache.LogEntry{
+		LogType:              string(logReq.LogType),
+		Timestamp:            logReq.Timestamp,
+		Host:                 logReq.Host,
+		ClientIP:             logReq.ClientIP,
+		Method:               logReq.RequestMethod,
+		URI:                  logReq.RequestURI,
+		Protocol:             logReq.RequestProtocol,
+		StatusCode:           logReq.StatusCode,
+		BodyBytes:            logReq.BodyBytesSent,
+		UserAgent:            logReq.HTTPUserAgent,
+		Referer:              logReq.HTTPReferer,
+		BlockReason:          string(logReq.BlockReason),
+		BotCategory:          logReq.BotCategory,
+		ExploitRule:          logReq.ExploitRule,
+		GeoCountry:           logReq.GeoCountry,
+		GeoCountryCode:       logReq.GeoCountryCode,
+		GeoCity:              logReq.GeoCity,
+		GeoASN:               logReq.GeoASN,
+		GeoOrg:               logReq.GeoOrg,
+		RequestTime:          logReq.RequestTime,
+		XForwardedFor:        logReq.HTTPXForwardedFor,
+		UpstreamResponseTime: logReq.UpstreamResponseTime,
+		UpstreamAddr:         logReq.UpstreamAddr,
+		UpstreamStatus:       logReq.UpstreamStatus,
+		Severity:             string(logReq.Severity),
+		ErrorMessage:         logReq.ErrorMessage,
+		ProxyHostID:          logReq.ProxyHostID,
+		RawLog:               logReq.RawLog,
+	}
+
+	// Add extra fields for WAF logs
+	if logReq.LogType == model.LogTypeModSec {
+		entry.Extra = map[string]string{
+			"rule_id":       fmt.Sprintf("%d", logReq.RuleID),
+			"rule_message":  logReq.RuleMessage,
+			"rule_severity": logReq.RuleSeverity,
+			"rule_data":     logReq.RuleData,
+			"attack_type":   logReq.AttackType,
+			"action_taken":  logReq.ActionTaken,
+		}
+	}
+	return entry
+}
+
+func fromCacheLogEntry(entry cache.LogEntry) model.CreateLogRequest {
+	logReq := model.CreateLogRequest{
+		LogType:              model.LogType(entry.LogType),
+		Timestamp:            entry.Timestamp,
+		Host:                 entry.Host,
+		ClientIP:             entry.ClientIP,
+		RequestMethod:        entry.Method,
+		RequestURI:           entry.URI,
+		RequestProtocol:      entry.Protocol,
+		StatusCode:           entry.StatusCode,
+		BodyBytesSent:        entry.BodyBytes,
+		HTTPUserAgent:        entry.UserAgent,
+		HTTPReferer:          entry.Referer,
+		BlockReason:          model.ParseBlockReason(entry.BlockReason),
+		BotCategory:          entry.BotCategory,
+		ExploitRule:          entry.ExploitRule,
+		GeoCountry:           entry.GeoCountry,
+		GeoCountryCode:       entry.GeoCountryCode,
+		GeoCity:              entry.GeoCity,
+		GeoASN:               entry.GeoASN,
+		GeoOrg:               entry.GeoOrg,
+		RequestTime:          entry.RequestTime,
+		HTTPXForwardedFor:    entry.XForwardedFor,
+		UpstreamResponseTime: entry.UpstreamResponseTime,
+		UpstreamAddr:         entry.UpstreamAddr,
+		UpstreamStatus:       entry.UpstreamStatus,
+		Severity:             model.LogSeverity(entry.Severity),
+		ErrorMessage:         entry.ErrorMessage,
+		ProxyHostID:          entry.ProxyHostID,
+		RawLog:               entry.RawLog,
+	}
+
+	// Parse extra fields for WAF logs
+	if entry.Extra != nil {
+		if ruleID, ok := entry.Extra["rule_id"]; ok {
+			logReq.RuleID, _ = strconv.ParseInt(ruleID, 10, 64)
+		}
+		logReq.RuleMessage = entry.Extra["rule_message"]
+		logReq.RuleSeverity = entry.Extra["rule_severity"]
+		logReq.RuleData = entry.Extra["rule_data"]
+		logReq.AttackType = entry.Extra["attack_type"]
+		logReq.ActionTaken = entry.Extra["action_taken"]
+	}
+	return logReq
 }
 
 func (c *LogCollector) addLogToMemoryBuffer(logReq model.CreateLogRequest) {

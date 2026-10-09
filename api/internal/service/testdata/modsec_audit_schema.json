@@ -46,7 +46,6 @@
       "uri": "string"
     },
     "response": {
-      "body": "string",
       "headers": {
         "Connection": "string",
         "Content-Length": "string",

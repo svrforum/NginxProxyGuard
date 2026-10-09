@@ -8,7 +8,9 @@ import (
 )
 
 // ModSecEventRaw is what is needed to explain one WAF event after the fact:
-// the full audit record, plus enough to find the host it belongs to.
+// the stored audit record (the rule messages and request essentials; rows
+// written before the trimmed format hold ModSecurity's full record), plus
+// enough to find the host it belongs to.
 type ModSecEventRaw struct {
 	RawLog      string
 	Host        string

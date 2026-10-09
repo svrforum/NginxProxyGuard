@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -281,48 +282,155 @@ func (v *modsecHTTPVersion) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// ModSecAuditLog represents ModSecurity audit log in JSON format
+// ModSecAuditLog represents ModSecurity audit log in JSON format. It is also
+// the schema of what NPG stores in logs_partitioned.raw_log for a modsec row:
+// rows written before the trimmed format hold ModSecurity's full record, newer
+// rows the trimmed copy made by storedModSecRecord. Every reader
+// (GetEventRules) decodes both with this type.
 type ModSecAuditLog struct {
-	Transaction struct {
-		TimeStamp  string `json:"time_stamp"`
-		ClientIP   string `json:"client_ip"`
-		ClientPort int    `json:"client_port"`
-		HostIP     string `json:"host_ip"`
-		HostPort   int    `json:"host_port"`
-		UniqueID   string `json:"unique_id"`
-		Request    struct {
-			Method      string            `json:"method"`
-			URI         string            `json:"uri"`
-			HTTPVersion modsecHTTPVersion `json:"http_version"`
-			Headers     map[string]string `json:"headers"`
-		} `json:"request"`
-		Response struct {
-			HTTPCode int               `json:"http_code"`
-			Headers  map[string]string `json:"headers"`
-		} `json:"response"`
-		Producer struct {
-			ModSecurity string `json:"modsecurity"`
-			Connector   string `json:"connector"`
-			SeqRules    string `json:"secrules_engine"`
-		} `json:"producer"`
-		Messages []struct {
-			Message string `json:"message"`
-			Details struct {
-				Match      string   `json:"match"`
-				Reference  string   `json:"reference"`
-				RuleID     string   `json:"ruleId"`
-				File       string   `json:"file"`
-				LineNumber string   `json:"lineNumber"`
-				Data       string   `json:"data"`
-				Severity   string   `json:"severity"`
-				Ver        string   `json:"ver"`
-				Rev        string   `json:"rev"`
-				Tags       []string `json:"tags"`
-				Maturity   string   `json:"maturity"`
-				Accuracy   string   `json:"accuracy"`
-			} `json:"details"`
-		} `json:"messages"`
-	} `json:"transaction"`
+	Transaction ModSecTransaction `json:"transaction"`
+}
+
+// ModSecTransaction is the "transaction" object of an audit record.
+type ModSecTransaction struct {
+	TimeStamp  string `json:"time_stamp"`
+	ClientIP   string `json:"client_ip"`
+	ClientPort int    `json:"client_port"`
+	HostIP     string `json:"host_ip"`
+	HostPort   int    `json:"host_port"`
+	UniqueID   string `json:"unique_id"`
+	Request    struct {
+		Method      string            `json:"method"`
+		URI         string            `json:"uri"`
+		HTTPVersion modsecHTTPVersion `json:"http_version"`
+		Headers     map[string]string `json:"headers,omitempty"`
+	} `json:"request"`
+	Response struct {
+		HTTPCode int               `json:"http_code"`
+		Headers  map[string]string `json:"headers,omitempty"`
+	} `json:"response"`
+	Producer struct {
+		ModSecurity string `json:"modsecurity"`
+		Connector   string `json:"connector"`
+		SeqRules    string `json:"secrules_engine"`
+	} `json:"producer"`
+	Messages []ModSecMessage `json:"messages"`
+}
+
+// ModSecMessage is one rule match of an audit record.
+type ModSecMessage struct {
+	Message string `json:"message"`
+	Details struct {
+		Match      string   `json:"match"`
+		Reference  string   `json:"reference"`
+		RuleID     string   `json:"ruleId"`
+		File       string   `json:"file"`
+		LineNumber string   `json:"lineNumber"`
+		Data       string   `json:"data"`
+		Severity   string   `json:"severity"`
+		Ver        string   `json:"ver"`
+		Rev        string   `json:"rev"`
+		Tags       []string `json:"tags"`
+		Maturity   string   `json:"maturity"`
+		Accuracy   string   `json:"accuracy"`
+	} `json:"details"`
+}
+
+// The raw_log stored for a modsec row: what the WAF event panel and an
+// operator need to explain the event, nothing that authenticates anyone, and
+// no bodies. ModSecurity does not cap a rule's data (a 6 KB argument comes
+// back whole in every message), so long fields are cut.
+const (
+	storedModSecVersion   = 1
+	storedModSecFieldCap  = 1024 // runes: messages[].details.data and .match, and the rule_data column
+	storedModSecURICap    = 2048 // runes; the request_uri column keeps the full URI
+	storedModSecHeaderCap = 512  // runes per kept request header value
+)
+
+// storedModSecMarker starts every trimmed record, so a reclaim job can tell
+// rows that are already small from legacy full records with a prefix test.
+const storedModSecMarker = `{"npg":`
+
+// storedModSecRequestHeaders is an allowlist on purpose: credential headers
+// cannot be enumerated (Cookie, Authorization, X-Plex-Token, PRIVATE-TOKEN,
+// X-Emby-Token, X-Api-Key, ...). A header that triggered a rule is still
+// visible in that rule's details.data ("found within REQUEST_HEADERS:...").
+var storedModSecRequestHeaders = map[string]bool{
+	"host": true, ":authority": true, "user-agent": true, "referer": true,
+	"origin": true, "content-type": true, "content-length": true,
+	"accept": true, "accept-language": true, "accept-encoding": true,
+	"x-forwarded-for": true, "x-forwarded-proto": true, "x-forwarded-host": true,
+	"x-real-ip": true, "via": true, "upgrade": true, "connection": true,
+	"transfer-encoding": true, "te": true,
+}
+
+// capRunes shortens s to at most n runes and marks the cut with "…".
+func capRunes(s string, n int) string {
+	if len(s) <= n {
+		return s // n bytes hold at least n runes
+	}
+	runes := 0
+	for i := range s {
+		if runes == n {
+			return s[:i] + "…"
+		}
+		runes++
+	}
+	return s
+}
+
+// storedModSecRecord returns the raw_log value for a modsec row: the audit
+// record without response headers and bodies, with request headers reduced
+// to the allowlist and long match data capped, behind an "npg" format marker.
+// The result decodes as ModSecAuditLog like a full record does.
+func storedModSecRecord(tx ModSecTransaction) string {
+	headers := make(map[string]string, len(tx.Request.Headers))
+	for k, v := range tx.Request.Headers {
+		if storedModSecRequestHeaders[strings.ToLower(k)] {
+			headers[k] = capRunes(v, storedModSecHeaderCap)
+		}
+	}
+	tx.Request.Headers = headers
+	tx.Request.URI = capRunes(tx.Request.URI, storedModSecURICap)
+	tx.Response.Headers = nil
+	msgs := make([]ModSecMessage, len(tx.Messages))
+	for i, m := range tx.Messages {
+		m.Details.Data = capRunes(m.Details.Data, storedModSecFieldCap)
+		m.Details.Match = capRunes(m.Details.Match, storedModSecFieldCap)
+		msgs[i] = m
+	}
+	tx.Messages = msgs
+
+	var b bytes.Buffer
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false) // keep payloads readable, as ModSecurity writes them
+	if err := enc.Encode(struct {
+		NPG         int               `json:"npg"`
+		Transaction ModSecTransaction `json:"transaction"`
+	}{storedModSecVersion, tx}); err != nil {
+		return ""
+	}
+	return strings.TrimSuffix(b.String(), "\n")
+}
+
+// TrimStoredModSecRawLog rewrites a modsec raw_log stored before the trimmed
+// format existed; those rows still hold full request headers (Cookie,
+// Authorization) and response bodies. Idempotent: a value that already
+// carries the marker, or that does not decode as an audit record, is returned
+// unchanged with changed=false.
+func TrimStoredModSecRawLog(raw string) (trimmed string, changed bool) {
+	if raw == "" || strings.HasPrefix(raw, storedModSecMarker) {
+		return raw, false
+	}
+	var a ModSecAuditLog
+	if err := json.Unmarshal([]byte(raw), &a); err != nil {
+		return raw, false
+	}
+	out := storedModSecRecord(a.Transaction)
+	if out == "" {
+		return raw, false
+	}
+	return out, true
 }
 
 func (c *LogCollector) parseModSecLog(line string) (*model.CreateLogRequest, error) {
@@ -481,12 +589,12 @@ func (c *LogCollector) parseModSecLog(line string) (*model.CreateLogRequest, err
 		RuleID:            ruleID,
 		RuleMessage:       ruleMessage,
 		RuleSeverity:      ruleSeverity,
-		RuleData:          ruleData,
+		RuleData:          capRunes(ruleData, storedModSecFieldCap),
 		AttackType:        attackType,
 		ActionTaken:       actionTaken,
 		WAFEngineBlocking: !isDetectionOnly,
 		BlockReason:       blockReason,
-		RawLog:            line,
+		RawLog:            storedModSecRecord(tx),
 	}, nil
 }
 

@@ -24,9 +24,12 @@ import (
 // 942360, and only the third exclusion let the request through. From the
 // outside that reads as "the exclusion did not work" (#306).
 //
-// The full audit record is already stored with the row, so this reads it back
-// and lists every contributing rule, with the exclusions each one already has
-// on the host — which is also what the "already disabled" 409 was about.
+// The row keeps the audit record: its rule messages and the request
+// essentials (service.storedModSecRecord trims the rest; rows written before
+// that hold ModSecurity's full record, which decodes the same way). This reads
+// it back and lists every contributing rule, with the exclusions each one
+// already has on the host — which is also what the "already disabled" 409 was
+// about.
 
 type wafEventRule struct {
 	RuleID   int    `json:"rule_id"`
