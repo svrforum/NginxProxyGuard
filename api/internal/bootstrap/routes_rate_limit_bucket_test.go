@@ -9,6 +9,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	"nginx-proxy-guard/internal/config"
 	"nginx-proxy-guard/internal/middleware"
 )
 
@@ -80,4 +81,48 @@ func TestRateLimiterBucketAssignment(t *testing.T) {
 		t.Errorf("%d entr(y/ies) in middleware.publicAuthPaths match no registered route:\n%s",
 			len(stale), strings.Join(stale, "\n"))
 	}
+}
+
+// nginx's geo-challenge gate calls the token check once for every request a
+// challenged visitor with a token makes, from nginx's own address. Behind the
+// global per-address limit all those visitors shared one bucket, and the gate
+// turned visitors with valid tokens away on its 429. The token check is
+// exempt; every other route stays limited.
+func TestGlobalRateLimitSkipsOnlyTheChallengeTokenCheck(t *testing.T) {
+	const validate = "/api/v1/challenge/validate" // what the nginx gate proxies to
+	t.Setenv("RATE_LIMIT_ENABLED", "")
+	t.Setenv("RATE_LIMIT_RPS", "1")
+	e := echo.New()
+	RegisterMiddleware(e, &config.Config{})
+	ok := func(c echo.Context) error { return c.NoContent(http.StatusOK) }
+	e.GET(validate, ok)
+	e.GET("/api/v1/challenge/page", ok)
+	status := func(path string) int {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.RemoteAddr = "127.0.0.1:40000" // every gate call comes from nginx
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	for i := 1; i <= 20; i++ {
+		if got := status(validate); got != http.StatusOK {
+			t.Fatalf("token check call %d answered %d, want 200: it must not be rate limited", i, got)
+		}
+	}
+	limited := 0
+	for i := 0; i < 20; i++ {
+		if status("/api/v1/challenge/page") == http.StatusTooManyRequests {
+			limited++
+		}
+	}
+	if limited == 0 {
+		t.Fatal("other routes are no longer rate limited")
+	}
+
+	for _, r := range registerAllRoutesForAudit(t).Routes() {
+		if r.Method == http.MethodGet && r.Path == validate {
+			return
+		}
+	}
+	t.Fatalf("GET %s is not a registered route, but the nginx gate calls it and the limiter exempts it", validate)
 }

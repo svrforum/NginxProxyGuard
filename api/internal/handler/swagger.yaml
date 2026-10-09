@@ -10096,7 +10096,11 @@ paths:
       description: |
         The token check behind nginx's challenge gate. Answers with a bare
         status code and NO body: 200 lets the request through, 401 makes nginx
-        send the visitor to the challenge page.
+        send the visitor to the challenge page. nginx refuses the request on
+        any other answer as well; only an API it cannot reach in time lets
+        the host's main location through. nginx calls this once for every
+        request a challenged visitor with a token makes, so the API's
+        per-address rate limit does not apply to it.
 
         nginx decides who is challenged. Its internal `/_challenge/validate`
         location answers 204 itself for a visitor the host does not challenge

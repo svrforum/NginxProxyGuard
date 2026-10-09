@@ -89,8 +89,26 @@ func RegisterMiddleware(e *echo.Echo, cfg *config.Config) {
 				rateLimit = parsed
 			}
 		}
-		e.Use(middleware.RateLimiter(middleware.NewRateLimiterMemoryStore(rate.Limit(rateLimit))))
+		e.Use(middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
+			Skipper: skipGlobalRateLimit,
+			Store:   middleware.NewRateLimiterMemoryStore(rate.Limit(rateLimit)),
+		}))
 	}
+}
+
+// challengeValidatePath is the token check behind nginx's geo-challenge gate.
+const challengeValidatePath = "/api/v1/challenge/validate"
+
+// skipGlobalRateLimit exempts the challenge gate's token check from the
+// per-address limit above. nginx calls it once for every request that a
+// challenged visitor with a token makes, and the call reaches the API from
+// nginx's own address (or with whatever X-Forwarded-For the visitor sent),
+// so this limit cannot tell visitors apart: all visitors of all
+// challenge-mode hosts share one bucket. The gate refuses on any answer but
+// a 2xx, so under load its 429s would turn visitors with valid tokens away.
+// The per-minute API limiter skips /api/v1/challenge/* for the same reason.
+func skipGlobalRateLimit(c echo.Context) bool {
+	return c.Path() == challengeValidatePath
 }
 
 // buildIPExtractor returns the X-Forwarded-For right-walk extractor. With

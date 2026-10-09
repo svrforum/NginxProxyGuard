@@ -440,3 +440,58 @@ func TestAdvancedConfigAuthRequestWarnsOnce(t *testing.T) {
 		t.Errorf("the warning does not say what to do instead:\n%s", buf.String())
 	}
 }
+
+// The gate refuses on any answer from a running API other than a valid token.
+// auth_request turns a status other than 2xx, 401 and 403 into a 500, and
+// location / sends a 500 to @api_fallback, the pass-through for an API that
+// cannot be reached: a request header the API rejects (400) or its rate limit
+// (429) let a challenged visitor through. The gate intercepts the API's errors
+// and refuses; only an unreachable or slow API (502, 503, 504) still reaches
+// location /'s fallback. Every gate: HTTP and HTTPS server blocks, with and
+// without locations from Advanced Config.
+func TestChallengeGateRefusesWhenTheAPIRefuses(t *testing.T) {
+	denyCodes := func(gate string) map[string]bool {
+		codes := map[string]bool{}
+		for _, d := range directives(gate) {
+			if f := strings.Fields(strings.TrimSuffix(d, ";")); len(f) > 3 && f[0] == "error_page" && f[len(f)-1] == "@challenge_gate_deny" {
+				for _, c := range f[1 : len(f)-2] {
+					codes[c] = true
+				}
+			}
+		}
+		return codes
+	}
+	for _, adv := range []string{
+		"",
+		"location / {\n    proxy_pass http://192.0.2.20:8080;\n}\n",
+		"auth_request /ext;\nlocation = /ext {\n    internal;\n    proxy_pass http://192.0.2.20:9000/auth;\n}\n",
+	} {
+		for _, mode := range gateTLSModes {
+			name := mode.name + " " + strings.SplitN(adv, "\n", 2)[0]
+			out := renderForTest(t, ProxyHostConfigData{
+				Host:           gateTestHost("00000000-0000-0000-0000-0000000000ec", mode.ssl, mode.force, adv),
+				GeoRestriction: geoChallenge(false),
+			})
+			for i, b := range splitServerBlocks(t, out) {
+				gate := blockAt(b, "location = /_challenge/validate {")
+				if !slices.Contains(directives(gate), "proxy_intercept_errors on;") {
+					t.Errorf("%s server %d: the gate passes the API's errors on to auth_request:\n%s", name, i, gate)
+				}
+				codes := denyCodes(gate)
+				for _, c := range []string{"400", "401", "404", "405", "408", "413", "429", "431", "500"} {
+					if !codes[c] {
+						t.Errorf("%s server %d: an API %s does not refuse at the gate", name, i, c)
+					}
+				}
+				for _, c := range []string{"502", "503", "504"} {
+					if codes[c] {
+						t.Errorf("%s server %d: an unreachable API (%s) refuses at the gate; location / must keep its fallback", name, i, c)
+					}
+				}
+				if root := blockAt(b, "location / {"); root != "" && adv == "" && !strings.Contains(root, "error_page 500 502 503 504 = @api_fallback;") {
+					t.Errorf("%s server %d: location / lost its fallback for an unreachable API", name, i)
+				}
+			}
+		}
+	}
+}
