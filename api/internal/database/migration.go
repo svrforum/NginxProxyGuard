@@ -2309,30 +2309,51 @@ func (db *DB) setupTableCompression(tableName, segmentBy string) {
 
 	if compressionEnabled {
 		log.Printf("[TimescaleDB] Compression already enabled for %s", tableName)
-		return
+	} else {
+		log.Printf("[TimescaleDB] Setting up compression for %s...", tableName)
+
+		// Enable compression
+		_, err := db.Exec(fmt.Sprintf(`
+			ALTER TABLE %s SET (
+				timescaledb.compress,
+				timescaledb.compress_segmentby = '%s',
+				timescaledb.compress_orderby = 'created_at DESC'
+			)
+		`, tableName, segmentBy))
+		if err != nil {
+			log.Printf("[TimescaleDB] Warning: failed to enable compression for %s: %v", tableName, err)
+			return
+		}
 	}
 
-	log.Printf("[TimescaleDB] Setting up compression for %s...", tableName)
-
-	// Enable compression
-	_, err := db.Exec(fmt.Sprintf(`
-		ALTER TABLE %s SET (
-			timescaledb.compress,
-			timescaledb.compress_segmentby = '%s',
-			timescaledb.compress_orderby = 'created_at DESC'
-		)
-	`, tableName, segmentBy))
-	if err != nil {
-		log.Printf("[TimescaleDB] Warning: failed to enable compression for %s: %v", tableName, err)
-		return
+	// The policy is checked on every boot, not only when compression is first
+	// enabled. It used to be added only in that first pass, so a policy that
+	// was missing afterwards stayed missing and the table was never compressed
+	// again (a dev install: audit_logs, 50 chunks, none compressed). A policy
+	// added here runs straight away and compresses the backlog itself.
+	var jobID int
+	err := db.QueryRow(`
+		SELECT job_id FROM timescaledb_information.jobs
+		WHERE proc_name = 'policy_compression'
+		  AND hypertable_schema = 'public' AND hypertable_name = $1
+		LIMIT 1
+	`, tableName).Scan(&jobID)
+	switch {
+	case err == sql.ErrNoRows:
+		if _, err := db.Exec(fmt.Sprintf(`
+			SELECT add_compression_policy('%s', INTERVAL '7 days', if_not_exists => true)
+		`, tableName)); err != nil {
+			log.Printf("[TimescaleDB] Warning: failed to add compression policy for %s: %v", tableName, err)
+			return
+		}
+		log.Printf("[TimescaleDB] Compression policy added for %s (chunks older than 7 days)", tableName)
+	case err != nil:
+		log.Printf("[TimescaleDB] Warning: could not check the compression policy for %s: %v", tableName, err)
 	}
 
-	// Add compression policy
-	_, err = db.Exec(fmt.Sprintf(`
-		SELECT add_compression_policy('%s', INTERVAL '7 days', if_not_exists => true)
-	`, tableName))
-	if err != nil {
-		log.Printf("[TimescaleDB] Warning: failed to add compression policy for %s: %v", tableName, err)
+	// The one-time sweep of existing chunks and the status line belong to the
+	// first enable only.
+	if compressionEnabled {
 		return
 	}
 
