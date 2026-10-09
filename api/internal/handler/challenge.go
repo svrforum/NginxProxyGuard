@@ -292,8 +292,9 @@ func sanitizeReturnURL(returnURL, requestHost string) string {
 // nginx decides whether a visitor has to pass the challenge. Its
 // /_challenge/validate location answers 204 itself for a visitor the host does
 // not challenge ($geo_blocked is 0: an allowed country, a private, priority or
-// trusted IP, or a search bot the host allows) and 401 for a challenged
-// visitor without a token. It asks this endpoint only about a challenged
+// trusted IP, or a search bot the host allows; with the cloud provider
+// challenge, $cloud_challenge is 0 as well) and 401 for a challenged visitor
+// without a token. It asks this endpoint only about a challenged
 // visitor that carries a token, so the answer depends on the token alone.
 // Nothing the client controls, such as the User-Agent, may grant access here.
 func (h *ChallengeHandler) ValidateToken(c echo.Context) error {

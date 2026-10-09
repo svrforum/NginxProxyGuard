@@ -237,7 +237,24 @@ func TestBlockReasonRegression(t *testing.T) {
 				return d
 			},
 			wantReason: "cloud_provider_challenge",
-			wantStatus: 418,
+			// Like the geo challenge, the cloud check only marks the request;
+			// the challenge gate redirects in the access phase. Status check
+			// skipped.
+			wantStatus:  0,
+			wantNeedles: []string{"set $cloud_challenge 1;", "reason=cloud_provider"},
+		},
+		{
+			// An auth provider holds location /'s one auth_request, so the
+			// cloud challenge cannot use the gate there: it blocks instead.
+			name: "cloud_provider_challenge_with_auth_provider",
+			apply: func(d ProxyHostConfigData) ProxyHostConfigData {
+				d.BlockedCloudIPRanges = []string{"198.51.100.0/24"}
+				d.CloudProviderChallengeMode = true
+				d.AuthProvider = &model.AuthProvider{Type: "authelia", ProviderURL: "http://192.0.2.40:9091", TimeoutMs: 2000, Enabled: true}
+				return d
+			},
+			wantReason: "cloud_provider_block",
+			wantStatus: 403,
 		},
 		{
 			name: "bot_filter_bad_bot",

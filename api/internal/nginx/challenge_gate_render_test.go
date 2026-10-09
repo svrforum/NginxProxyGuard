@@ -54,46 +54,84 @@ var gateTLSModes = []struct {
 	ssl, force bool
 }{{"http", false, false}, {"ssl", true, false}, {"ssl force", true, true}}
 
+// cloudChallenge sets the cloud provider challenge the way the service does:
+// challenge mode together with the blocked providers' ranges.
+func cloudChallenge(d *ProxyHostConfigData) {
+	d.BlockedCloudIPRanges, d.CloudProviderChallengeMode = []string{"198.51.100.0/24"}, true
+}
+
+// The challenges that put a host behind the gate: the geo challenge, the
+// cloud provider challenge, and both on one host.
+var gateChallenges = []struct {
+	name  string
+	cloud bool
+	set   func(*ProxyHostConfigData)
+}{
+	{"geo", false, func(d *ProxyHostConfigData) { d.GeoRestriction = geoChallenge(false) }},
+	{"cloud", true, cloudChallenge},
+	{"geo+cloud", true, func(d *ProxyHostConfigData) { d.GeoRestriction = geoChallenge(false); cloudChallenge(d) }},
+}
+
+// challengeData returns the template data of a host behind the given challenge.
+func challengeData(h *model.ProxyHost, set func(*ProxyHostConfigData)) ProxyHostConfigData {
+	d := ProxyHostConfigData{Host: h}
+	set(&d)
+	return d
+}
+
 // nginx makes the challenge decision and the API only checks tokens. The gate
 // answers 204 for a visitor it does not challenge (no API round-trip) and 401
 // for a challenged visitor without a token. It never reads $is_search_bot
 // (_security already cleared $geo_blocked for the search bots a host allows),
 // and it tells the API "challenged" with a constant, so no header the client
-// sends can say otherwise.
+// sends can say otherwise. With the cloud provider challenge, a visitor is
+// let through only when neither challenge applies: $geo_blocked is 0 for a
+// visitor from a challenged cloud range too.
 func TestChallengeGateDecidesLocally(t *testing.T) {
-	for _, mode := range gateTLSModes {
-		out := renderForTest(t, ProxyHostConfigData{
-			Host:              gateTestHost("00000000-0000-0000-0000-0000000000e1", mode.ssl, mode.force, ""),
-			GeoRestriction:    geoChallenge(true),
-			SearchEnginesList: "Googlebot",
-		})
-		for i, b := range splitServerBlocks(t, out) {
-			gate := blockAt(b, "location = /_challenge/validate {")
-			if gate == "" {
-				t.Fatalf("%s server %d: no challenge gate", mode.name, i)
-			}
-			for _, want := range []string{
-				"if ($geo_blocked = 0) {\n            return 204;",
-				"if ($cookie_ng_challenge = \"\") {\n            return 401;",
-				"proxy_pass http://127.0.0.1:9080/api/v1/challenge/validate;",
-				"proxy_set_header X-Geo-Blocked 1;",
-				// A server-level "error_page 401" must not reach the subrequest:
-				// it would turn the 401 into a 302, auth_request would answer
-				// 500, and location /'s @api_fallback would let the visitor in.
-				"error_page 401 = @challenge_gate_deny;",
-			} {
-				if !strings.Contains(gate, want) {
-					t.Errorf("%s server %d: gate lacks %q:\n%s", mode.name, i, want, gate)
+	for _, ch := range gateChallenges {
+		for _, mode := range gateTLSModes {
+			t.Run(ch.name+" "+mode.name, func(t *testing.T) {
+				d := challengeData(gateTestHost("00000000-0000-0000-0000-0000000000e1", mode.ssl, mode.force, ""), ch.set)
+				if d.GeoRestriction != nil {
+					d.GeoRestriction.AllowSearchBots = true
 				}
-			}
-			for _, bad := range []string{"$is_search_bot", "X-Geo-Blocked $geo_blocked", "$challenge_gate"} {
-				if strings.Contains(gate, bad) {
-					t.Errorf("%s server %d: gate still uses %q", mode.name, i, bad)
+				d.SearchEnginesList = "Googlebot"
+				notChallenged := "if ($geo_blocked = 0) {\n            return 204;"
+				bad := []string{"$is_search_bot", "X-Geo-Blocked $geo_blocked", "$challenge_gate"}
+				if ch.cloud {
+					notChallenged = "set $challenge_needed \"${geo_blocked}${cloud_challenge}\";\n        if ($challenge_needed = \"00\") {\n            return 204;"
+					bad = append(bad, "if ($geo_blocked = 0)")
 				}
-			}
-			if deny := blockAt(b, "location @challenge_gate_deny {"); !strings.Contains(deny, "return 401;") {
-				t.Errorf("%s server %d: @challenge_gate_deny missing or not a plain 401: %q", mode.name, i, deny)
-			}
+				for i, b := range splitServerBlocks(t, renderForTest(t, d)) {
+					gate := blockAt(b, "location = /_challenge/validate {")
+					if gate == "" {
+						t.Errorf("server %d: no challenge gate", i)
+						continue
+					}
+					for _, want := range []string{
+						notChallenged,
+						"if ($cookie_ng_challenge = \"\") {\n            return 401;",
+						"proxy_pass http://127.0.0.1:9080/api/v1/challenge/validate;",
+						"proxy_set_header X-Geo-Blocked 1;",
+						// A server-level "error_page 401" must not reach the subrequest:
+						// it would turn the 401 into a 302, auth_request would answer
+						// 500, and location /'s @api_fallback would let the visitor in.
+						"error_page 401 = @challenge_gate_deny;",
+					} {
+						if !strings.Contains(gate, want) {
+							t.Errorf("server %d: gate lacks %q:\n%s", i, want, gate)
+						}
+					}
+					for _, bad := range bad {
+						if strings.Contains(gate, bad) {
+							t.Errorf("server %d: gate uses %q:\n%s", i, bad, gate)
+						}
+					}
+					if deny := blockAt(b, "location @challenge_gate_deny {"); !strings.Contains(deny, "return 401;") {
+						t.Errorf("server %d: @challenge_gate_deny missing or not a plain 401: %q", i, deny)
+					}
+				}
+			})
 		}
 	}
 }
@@ -103,36 +141,25 @@ func TestChallengeGateDecidesLocally(t *testing.T) {
 // told any client whether a token was valid: every server block that serves
 // the challenge endpoints answers it with 404 itself.
 func TestPublicChallengeValidateAnswers404(t *testing.T) {
-	cases := []struct {
-		name string
-		data ProxyHostConfigData
-	}{
-		{"cloud ssl", ProxyHostConfigData{Host: gateTestHost("00000000-0000-0000-0000-0000000000e5", true, true, ""),
-			BlockedCloudIPRanges: []string{"198.51.100.0/24"}, CloudProviderChallengeMode: true}},
-	}
-	for _, mode := range gateTLSModes {
-		cases = append(cases, struct {
-			name string
-			data ProxyHostConfigData
-		}{"geo " + mode.name, ProxyHostConfigData{Host: gateTestHost("00000000-0000-0000-0000-0000000000e2", mode.ssl, mode.force, ""),
-			GeoRestriction: geoChallenge(false)}})
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			seen := 0
-			for i, b := range splitServerBlocks(t, renderForTest(t, tc.data)) {
-				if blockAt(b, "location /api/v1/challenge/ {") == "" {
-					continue
+	for _, ch := range gateChallenges {
+		for _, mode := range gateTLSModes {
+			t.Run(ch.name+" "+mode.name, func(t *testing.T) {
+				d := challengeData(gateTestHost("00000000-0000-0000-0000-0000000000e2", mode.ssl, mode.force, ""), ch.set)
+				blocks := splitServerBlocks(t, renderForTest(t, d))
+				for i, b := range blocks {
+					// Every server block serves the challenge endpoints, the HTTP
+					// block of an SSL host included: it is where a visitor's
+					// http:// request lands.
+					if blockAt(b, "location /api/v1/challenge/ {") == "" {
+						t.Errorf("server %d of %d does not serve the challenge endpoints", i, len(blocks))
+						continue
+					}
+					if v := blockAt(b, "location = /api/v1/challenge/validate {"); !strings.Contains(v, "return 404;") {
+						t.Errorf("server %d proxies the public validate path to the API: %q", i, v)
+					}
 				}
-				seen++
-				if v := blockAt(b, "location = /api/v1/challenge/validate {"); !strings.Contains(v, "return 404;") {
-					t.Errorf("server %d proxies the public validate path to the API: %q", i, v)
-				}
-			}
-			if seen == 0 {
-				t.Fatal("no server block serves the challenge endpoints")
-			}
-		})
+			})
+		}
 	}
 }
 
@@ -140,50 +167,49 @@ func TestPublicChallengeValidateAnswers404(t *testing.T) {
 // from Advanced Config included, and gets the same token check as
 // location /. NPG's own pass-through locations opt out.
 func TestChallengeGateCoversCustomLocations(t *testing.T) {
-	for _, adv := range []string{
-		"",
-		"location / {\n    proxy_pass http://192.0.2.20:8080;\n}\n",
-		"location /app/ {\n    proxy_pass http://192.0.2.20:8080;\n}\n",
-	} {
-		for _, mode := range gateTLSModes {
-			name := mode.name + " " + strings.SplitN(adv, " {", 2)[0]
-			out := renderForTest(t, ProxyHostConfigData{
-				Host:           gateTestHost("00000000-0000-0000-0000-0000000000e6", mode.ssl, mode.force, adv),
-				GeoRestriction: geoChallenge(false),
-			})
-			if strings.Contains(out, "$need_challenge") {
-				t.Errorf("%s: cookie-presence check still rendered", name)
-			}
-			for i, b := range splitServerBlocks(t, out) {
-				if mode.force && i == 0 {
-					// The HTTP server of a forced-HTTPS host redirects every path
-					// except ACME and the challenge endpoints: it serves no content.
-					if !strings.Contains(b, "return 301 https://$host$request_uri;") {
-						t.Errorf("%s: the HTTP server of a forced-HTTPS host does not redirect", name)
+	for _, ch := range gateChallenges {
+		for _, adv := range []string{
+			"",
+			"location / {\n    proxy_pass http://192.0.2.20:8080;\n}\n",
+			"location /app/ {\n    proxy_pass http://192.0.2.20:8080;\n}\n",
+		} {
+			for _, mode := range gateTLSModes {
+				name := ch.name + " " + mode.name + " " + strings.SplitN(adv, " {", 2)[0]
+				out := renderForTest(t, challengeData(gateTestHost("00000000-0000-0000-0000-0000000000e6", mode.ssl, mode.force, adv), ch.set))
+				if strings.Contains(out, "$need_challenge") {
+					t.Errorf("%s: cookie-presence check still rendered", name)
+				}
+				for i, b := range splitServerBlocks(t, out) {
+					if mode.force && i == 0 {
+						// The HTTP server of a forced-HTTPS host redirects every path
+						// except ACME and the challenge endpoints: it serves no content.
+						if !strings.Contains(b, "return 301 https://$host$request_uri;") {
+							t.Errorf("%s: the HTTP server of a forced-HTTPS host does not redirect", name)
+						}
+						continue
 					}
-					continue
-				}
-				for _, want := range []string{
-					"\n    auth_request /_challenge/validate;\n",
-					"\n    auth_request_set $challenge_gate_status $upstream_status;\n",
-					"\n    error_page 401 = @challenge_redirect;\n",
-				} {
-					if !strings.Contains(b, want) {
-						t.Errorf("%s server %d: server-level gate lacks %q", name, i, strings.TrimSpace(want))
+					for _, want := range []string{
+						"\n    auth_request /_challenge/validate;\n",
+						"\n    auth_request_set $challenge_gate_status $upstream_status;\n",
+						"\n    error_page 401 = @challenge_redirect;\n",
+					} {
+						if !strings.Contains(b, want) {
+							t.Errorf("%s server %d: server-level gate lacks %q", name, i, strings.TrimSpace(want))
+						}
 					}
-				}
-				if !strings.Contains(blockAt(b, "location @challenge_redirect {"), "return 302 /api/v1/challenge/page?") {
-					t.Errorf("%s server %d: @challenge_redirect missing", name, i)
-				}
-				for _, loc := range []string{"location /api/v1/challenge/ {", "location = /api/v1/challenge/page {", "location @api_fallback {", "location /.well-known/acme-challenge/ {"} {
-					if l := blockAt(b, loc); l != "" && !strings.Contains(l, "auth_request off;") {
-						t.Errorf("%s server %d: %s is gated", name, i, loc)
+					if !strings.Contains(blockAt(b, "location @challenge_redirect {"), "return 302 /api/v1/challenge/page?") {
+						t.Errorf("%s server %d: @challenge_redirect missing", name, i)
 					}
-				}
-				if adv == "" {
-					// location / keeps failing open to @api_fallback when the API is down.
-					if root := blockAt(b, "location / {"); !strings.Contains(root, "error_page 500 502 503 504 = @api_fallback;") {
-						t.Errorf("%s server %d: location / lost its API-down fallback", name, i)
+					for _, loc := range []string{"location /api/v1/challenge/ {", "location = /api/v1/challenge/page {", "location @api_fallback {", "location /.well-known/acme-challenge/ {"} {
+						if l := blockAt(b, loc); l != "" && !strings.Contains(l, "auth_request off;") {
+							t.Errorf("%s server %d: %s is gated", name, i, loc)
+						}
+					}
+					if adv == "" {
+						// location / keeps failing open to @api_fallback when the API is down.
+						if root := blockAt(b, "location / {"); !strings.Contains(root, "error_page 500 502 503 504 = @api_fallback;") {
+							t.Errorf("%s server %d: location / lost its API-down fallback", name, i)
+						}
 					}
 				}
 			}
@@ -208,23 +234,63 @@ func TestChallengeGateCoversCustomLocations(t *testing.T) {
 // or with one the API rejected. Any other 401 is passed on as a 401, so a
 // Basic auth prompt still appears; both answers refuse the request.
 func TestChallengeRedirectOnlyForTheGates401(t *testing.T) {
-	out := renderForTest(t, ProxyHostConfigData{
-		Host:           gateTestHost("00000000-0000-0000-0000-0000000000e8", true, false, "location /app/ {\n    proxy_pass http://192.0.2.20:8080;\n}\n"),
-		GeoRestriction: geoChallenge(false),
-	})
-	for i, b := range splitServerBlocks(t, out) {
-		r := blockAt(b, "location @challenge_redirect {")
-		for _, want := range []string{
-			"if ($geo_blocked = 0) {\n            return 401;",
-			"set $challenge_refused 401;\n        if ($cookie_ng_challenge != \"\") {\n            set $challenge_refused $challenge_gate_status;",
-			"if ($challenge_refused != 401) {\n            return 401;",
-		} {
-			if !strings.Contains(r, want) {
-				t.Errorf("server %d: @challenge_redirect lacks %q:\n%s", i, want, r)
+	for _, ch := range gateChallenges {
+		out := renderForTest(t, challengeData(gateTestHost("00000000-0000-0000-0000-0000000000e8", true, false, "location /app/ {\n    proxy_pass http://192.0.2.20:8080;\n}\n"), ch.set))
+		notChallenged := "if ($geo_blocked = 0) {\n            return 401;"
+		if ch.cloud {
+			notChallenged = "set $challenge_needed \"${geo_blocked}${cloud_challenge}\";\n        if ($challenge_needed = \"00\") {\n            return 401;"
+		}
+		for i, b := range splitServerBlocks(t, out) {
+			r := blockAt(b, "location @challenge_redirect {")
+			for _, want := range []string{
+				notChallenged,
+				"set $challenge_refused 401;\n        if ($cookie_ng_challenge != \"\") {\n            set $challenge_refused $challenge_gate_status;",
+				"if ($challenge_refused != 401) {\n            return 401;",
+			} {
+				if !strings.Contains(r, want) {
+					t.Errorf("%s server %d: @challenge_redirect lacks %q:\n%s", ch.name, i, want, r)
+				}
+			}
+			if strings.Index(r, "return 302") < strings.Index(r, "$challenge_refused != 401") {
+				t.Errorf("%s server %d: @challenge_redirect redirects before checking who sent the 401:\n%s", ch.name, i, r)
+			}
+			if ch.cloud && strings.Contains(r, "if ($geo_blocked = 0)") {
+				// A visitor challenged for a cloud range has $geo_blocked 0.
+				t.Errorf("%s server %d: @challenge_redirect passes a cloud-challenged visitor's 401 on as a plain 401:\n%s", ch.name, i, r)
 			}
 		}
-		if strings.Index(r, "return 302") < strings.Index(r, "$challenge_refused != 401") {
-			t.Errorf("server %d: @challenge_redirect redirects before checking who sent the 401:\n%s", i, r)
+	}
+}
+
+// A visitor challenged for a cloud provider range is sent to the challenge
+// page with reason=cloud_provider; one challenged by the geo restriction (on
+// a host with both, too) with reason=geo_restriction. Hosts without the cloud
+// challenge keep the single geo redirect.
+func TestChallengeRedirectNamesTheReason(t *testing.T) {
+	cloudRedirect := "if ($geo_blocked != 1) {\n            return 302 /api/v1/challenge/page?host=00000000-0000-0000-0000-0000000000ed&reason=cloud_provider&return="
+	for _, ch := range gateChallenges {
+		for _, mode := range gateTLSModes {
+			out := renderForTest(t, challengeData(gateTestHost("00000000-0000-0000-0000-0000000000ed", mode.ssl, mode.force, ""), ch.set))
+			for i, b := range splitServerBlocks(t, out) {
+				r := blockAt(b, "location @challenge_redirect {")
+				if mode.force && i == 0 {
+					if r != "" {
+						t.Errorf("%s %s: the redirecting HTTP server has @challenge_redirect", ch.name, mode.name)
+					}
+					continue
+				}
+				geo := strings.Index(r, "reason=geo_restriction&return=")
+				cloud := strings.Index(r, cloudRedirect)
+				if geo < 0 {
+					t.Errorf("%s %s server %d: no geo_restriction redirect:\n%s", ch.name, mode.name, i, r)
+				}
+				if ch.cloud != (cloud >= 0) {
+					t.Errorf("%s %s server %d: cloud_provider redirect rendered %v, want %v:\n%s", ch.name, mode.name, i, cloud >= 0, ch.cloud, r)
+				}
+				if cloud > geo {
+					t.Errorf("%s %s server %d: the cloud_provider redirect comes after the unconditional geo one:\n%s", ch.name, mode.name, i, r)
+				}
+			}
 		}
 	}
 }
@@ -232,22 +298,33 @@ func TestChallengeRedirectOnlyForTheGates401(t *testing.T) {
 // An access list in "satisfy any" mode would accept a request when ANY access
 // check passes, and the gate passes every visitor it does not challenge: next
 // to the gate, the list would stop applying to them. On challenge-mode hosts
-// both must pass; elsewhere (e.g. next to ForwardAuth) "satisfy any" stays.
+// both must pass; elsewhere (e.g. next to ForwardAuth, where the cloud
+// provider challenge blocks instead of using the gate) "satisfy any" stays.
 func TestChallengeGateDoesNotLoosenAccessLists(t *testing.T) {
 	al := &model.AccessList{ID: "00000000-0000-0000-0000-0000000000ac", Name: "lan", SatisfyAny: true,
 		Items: []model.AccessListItem{{ID: "00000000-0000-0000-0000-0000000000ad", Directive: "allow", Address: "192.0.2.0/24", SortOrder: 1}}}
 	for _, mode := range gateTLSModes {
 		h := gateTestHost("00000000-0000-0000-0000-0000000000e9", mode.ssl, mode.force, "location /app/ {\n    proxy_pass http://192.0.2.20:8080;\n}\n")
-		challenge := renderForTest(t, ProxyHostConfigData{Host: h, GeoRestriction: geoChallenge(false), AccessList: al})
-		if strings.Contains(challenge, "satisfy any;") {
-			t.Errorf("%s: challenge-mode host renders \"satisfy any\" next to the gate", mode.name)
-		}
-		if !strings.Contains(challenge, "allow 192.0.2.0/24;") || !strings.Contains(challenge, "deny all;") {
-			t.Errorf("%s: access list not rendered", mode.name)
+		for _, ch := range gateChallenges {
+			d := challengeData(h, ch.set)
+			d.AccessList = al
+			challenge := renderForTest(t, d)
+			if strings.Contains(challenge, "satisfy any;") {
+				t.Errorf("%s %s: challenge-mode host renders \"satisfy any\" next to the gate", ch.name, mode.name)
+			}
+			if !strings.Contains(challenge, "allow 192.0.2.0/24;") || !strings.Contains(challenge, "deny all;") {
+				t.Errorf("%s %s: access list not rendered", ch.name, mode.name)
+			}
 		}
 		plain := renderForTest(t, ProxyHostConfigData{Host: h, AccessList: al})
 		if !strings.Contains(plain, "    satisfy any;") {
 			t.Errorf("%s: \"satisfy any\" lost on a host without the challenge", mode.name)
+		}
+		fa := challengeData(gateTestHost("00000000-0000-0000-0000-0000000000e9", mode.ssl, mode.force, ""), cloudChallenge)
+		fa.AccessList = al
+		fa.AuthProvider = &model.AuthProvider{Type: "authelia", ProviderURL: "http://192.0.2.40:9091", TimeoutMs: 2000, Enabled: true}
+		if out := renderForTest(t, fa); !strings.Contains(out, "    satisfy any;") {
+			t.Errorf("%s: \"satisfy any\" lost next to ForwardAuth on a host whose cloud challenge blocks", mode.name)
 		}
 	}
 }
@@ -271,19 +348,16 @@ func directives(block string) []string {
 // otherwise proxies exactly like the prefix location; verify, verify-redirect
 // and favicon stay logged.
 func TestChallengePageIsNotAccessLogged(t *testing.T) {
-	cases := []struct {
+	type pageCase struct {
 		name string
 		data ProxyHostConfigData
-	}{
-		{"cloud ssl", ProxyHostConfigData{Host: gateTestHost("00000000-0000-0000-0000-0000000000e5", true, true, ""),
-			BlockedCloudIPRanges: []string{"198.51.100.0/24"}, CloudProviderChallengeMode: true}},
 	}
-	for _, mode := range gateTLSModes {
-		cases = append(cases, struct {
-			name string
-			data ProxyHostConfigData
-		}{"geo " + mode.name, ProxyHostConfigData{Host: gateTestHost("00000000-0000-0000-0000-0000000000e2", mode.ssl, mode.force, ""),
-			GeoRestriction: geoChallenge(false)}})
+	var cases []pageCase
+	for _, ch := range gateChallenges {
+		for _, mode := range gateTLSModes {
+			cases = append(cases, pageCase{ch.name + " " + mode.name,
+				challengeData(gateTestHost("00000000-0000-0000-0000-0000000000e2", mode.ssl, mode.force, ""), ch.set)})
+		}
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -461,37 +535,161 @@ func TestChallengeGateRefusesWhenTheAPIRefuses(t *testing.T) {
 		}
 		return codes
 	}
-	for _, adv := range []string{
-		"",
-		"location / {\n    proxy_pass http://192.0.2.20:8080;\n}\n",
-		"auth_request /ext;\nlocation = /ext {\n    internal;\n    proxy_pass http://192.0.2.20:9000/auth;\n}\n",
-	} {
-		for _, mode := range gateTLSModes {
-			name := mode.name + " " + strings.SplitN(adv, "\n", 2)[0]
-			out := renderForTest(t, ProxyHostConfigData{
-				Host:           gateTestHost("00000000-0000-0000-0000-0000000000ec", mode.ssl, mode.force, adv),
-				GeoRestriction: geoChallenge(false),
-			})
-			for i, b := range splitServerBlocks(t, out) {
-				gate := blockAt(b, "location = /_challenge/validate {")
-				if !slices.Contains(directives(gate), "proxy_intercept_errors on;") {
-					t.Errorf("%s server %d: the gate passes the API's errors on to auth_request:\n%s", name, i, gate)
-				}
-				codes := denyCodes(gate)
-				for _, c := range []string{"400", "401", "404", "405", "408", "413", "429", "431", "500"} {
-					if !codes[c] {
-						t.Errorf("%s server %d: an API %s does not refuse at the gate", name, i, c)
+	for _, ch := range gateChallenges {
+		for _, adv := range []string{
+			"",
+			"location / {\n    proxy_pass http://192.0.2.20:8080;\n}\n",
+			"auth_request /ext;\nlocation = /ext {\n    internal;\n    proxy_pass http://192.0.2.20:9000/auth;\n}\n",
+		} {
+			if ch.name == "cloud" && strings.HasPrefix(adv, "auth_request") {
+				continue // no gate: next to the host's own auth_request the cloud challenge blocks
+			}
+			for _, mode := range gateTLSModes {
+				name := ch.name + " " + mode.name + " " + strings.SplitN(adv, "\n", 2)[0]
+				out := renderForTest(t, challengeData(gateTestHost("00000000-0000-0000-0000-0000000000ec", mode.ssl, mode.force, adv), ch.set))
+				for i, b := range splitServerBlocks(t, out) {
+					gate := blockAt(b, "location = /_challenge/validate {")
+					if gate == "" {
+						t.Errorf("%s server %d: no challenge gate", name, i)
+						continue
 					}
-				}
-				for _, c := range []string{"502", "503", "504"} {
-					if codes[c] {
-						t.Errorf("%s server %d: an unreachable API (%s) refuses at the gate; location / must keep its fallback", name, i, c)
+					if !slices.Contains(directives(gate), "proxy_intercept_errors on;") {
+						t.Errorf("%s server %d: the gate passes the API's errors on to auth_request:\n%s", name, i, gate)
 					}
-				}
-				if root := blockAt(b, "location / {"); root != "" && adv == "" && !strings.Contains(root, "error_page 500 502 503 504 = @api_fallback;") {
-					t.Errorf("%s server %d: location / lost its fallback for an unreachable API", name, i)
+					codes := denyCodes(gate)
+					for _, c := range []string{"400", "401", "404", "405", "408", "413", "429", "431", "500"} {
+						if !codes[c] {
+							t.Errorf("%s server %d: an API %s does not refuse at the gate", name, i, c)
+						}
+					}
+					for _, c := range []string{"502", "503", "504"} {
+						if codes[c] {
+							t.Errorf("%s server %d: an unreachable API (%s) refuses at the gate; location / must keep its fallback", name, i, c)
+						}
+					}
+					if root := blockAt(b, "location / {"); root != "" && adv == "" && !strings.Contains(root, "error_page 500 502 503 504 = @api_fallback;") {
+						t.Errorf("%s server %d: location / lost its fallback for an unreachable API", name, i)
+					}
 				}
 			}
+		}
+	}
+}
+
+// The cloud provider challenge goes through the same gate as the geo
+// challenge. It used to return a rewrite-phase 418 that sent every visitor
+// from a challenged range to the challenge page: a solved challenge was never
+// honoured, ModSecurity's phase 2 never saw those requests, and on a host
+// without SSL the challenge page was passed to the protected upstream.
+// _security now only marks the request, every server block serves the
+// challenge endpoints, and the gate checks the token in the access phase,
+// after ModSecurity.
+func TestCloudChallengeUsesTheGate(t *testing.T) {
+	mark := "    set $cloud_challenge 0;\n    if ($cloud_block_check_00000000_0000_0000_0000_0000000000ee = \"10\") {\n" +
+		"        set $cloud_challenge 1;\n        set $block_reason_var \"cloud_provider_challenge\";\n    }\n"
+	for _, mode := range gateTLSModes {
+		for _, cache := range []bool{false, true} {
+			name := mode.name
+			if cache {
+				name += " cache"
+			}
+			h := gateTestHost("00000000-0000-0000-0000-0000000000ee", mode.ssl, mode.force, "")
+			h.CacheEnabled = cache
+			h.WAFEnabled, h.WAFMode = true, "blocking"
+			out := renderForTest(t, challengeData(h, cloudChallenge))
+			for _, bad := range []string{"return 418", "error_page 418", "@cloud_challenge"} {
+				if strings.Contains(out, bad) {
+					t.Errorf("%s: still renders %q", name, bad)
+				}
+			}
+			for i, b := range splitServerBlocks(t, out) {
+				if !strings.Contains(b, mark) {
+					t.Errorf("%s server %d: the cloud check does not just mark the request:\n%s", name, i,
+						blockAt(b, "if ($cloud_block_check_00000000_0000_0000_0000_0000000000ee"))
+				}
+				// The challenge page is NPG's own, in every server block.
+				if page := blockAt(b, "location = /api/v1/challenge/page {"); !strings.Contains(page, "proxy_pass http://127.0.0.1:9080/api/v1/challenge/page;") {
+					t.Errorf("%s server %d: the challenge page is not proxied to the API: %q", name, i, page)
+				}
+				if mode.force && i == 0 {
+					continue // redirects everything but ACME and the challenge endpoints
+				}
+				if !slices.Contains(serverLevel(b, "auth_request"), "auth_request /_challenge/validate;") {
+					t.Errorf("%s server %d: no server-level challenge gate", name, i)
+				}
+				if root := blockAt(b, "location / {"); !strings.Contains(root, "auth_request /_challenge/validate;") {
+					t.Errorf("%s server %d: location / is not behind the gate", name, i)
+				}
+				if !strings.Contains(blockAt(b, "location @challenge_redirect {"), "reason=cloud_provider") {
+					t.Errorf("%s server %d: @challenge_redirect does not send reason=cloud_provider", name, i)
+				}
+			}
+		}
+	}
+}
+
+// A location takes one auth_request. Where the host has one of its own - an
+// auth provider (ForwardAuth) in location /, or one left at the top level of
+// a legacy Advanced Config (refused when saving since v2.25.0), for the whole
+// server or rendered into location / itself - the gate cannot go next to it
+// without replacing that login or failing nginx -t. There the cloud provider
+// challenge blocks (403) instead, as it did for visitors who could never get
+// past it before. An auth_request inside a custom location, or a commented
+// one, leaves the gate in place.
+func TestCloudChallengeBlocksNextToItsOwnAuthRequest(t *testing.T) {
+	ext := "location = /ext {\n    internal;\n    proxy_pass http://192.0.2.20:9000/auth;\n}\n"
+	app := "location /app/ {\n    proxy_pass http://192.0.2.20:8080;\n}\n"
+	for _, tc := range []struct {
+		name     string
+		adv      string
+		provider bool
+		block    bool
+	}{
+		{"auth provider", "", true, true},
+		{"advanced config, whole server", "auth_request /ext;\n" + app + ext, false, true},
+		{"advanced config, custom location /", "auth_request /ext;\nlocation / {\n    proxy_pass http://192.0.2.20:8080;\n}\n" + ext, false, true},
+		{"advanced config, rendered into location /", "auth_request /ext;\nclient_max_body_size 10m;", false, true},
+		{"advanced config, inside a location", "location /app/ {\n    auth_request /ext;\n    proxy_pass http://192.0.2.20:8080;\n}\n" + ext, false, false},
+		{"advanced config, commented out", "# auth_request /ext;\n" + app, false, false},
+	} {
+		for _, mode := range gateTLSModes {
+			name := tc.name + " " + mode.name
+			d := challengeData(gateTestHost("00000000-0000-0000-0000-0000000000ef", mode.ssl, mode.force, tc.adv), cloudChallenge)
+			if tc.provider {
+				d.AuthProvider = &model.AuthProvider{Type: "authelia", ProviderURL: "http://192.0.2.40:9091", TimeoutMs: 2000, Enabled: true}
+			}
+			out := renderForTest(t, d)
+			blocks := strings.Contains(out, "set $block_reason_var \"cloud_provider_block\";\n        return 403;")
+			gated := strings.Contains(out, "location = /_challenge/validate {")
+			if blocks != tc.block || gated == tc.block {
+				t.Errorf("%s: blocks %v and renders the gate %v; want blocking %v", name, blocks, gated, tc.block)
+			}
+			if tc.block && strings.Contains(out, "$cloud_challenge") {
+				t.Errorf("%s: blocks but still marks $cloud_challenge", name)
+			}
+			for i, b := range splitServerBlocks(t, out) {
+				if n := len(serverLevel(b, "auth_request")); n > 1 {
+					t.Errorf("%s server %d: %d server-level auth_request", name, i, n)
+				}
+				if n := strings.Count(blockAt(b, "location / {"), "\n        auth_request "); n > 1 {
+					t.Errorf("%s server %d: %d auth_request in location /", name, i, n)
+				}
+			}
+		}
+	}
+
+	// Geo and cloud challenge next to a legacy server-wide auth_request: the
+	// geo challenge keeps its gate in location / (as before), the cloud
+	// challenge blocks.
+	d := challengeData(gateTestHost("00000000-0000-0000-0000-0000000000ef", true, false, "auth_request /ext;\n"+app+ext), cloudChallenge)
+	d.GeoRestriction = geoChallenge(false)
+	out := renderForTest(t, d)
+	if !strings.Contains(out, "set $block_reason_var \"cloud_provider_block\";\n        return 403;") || strings.Contains(out, "$cloud_challenge") {
+		t.Error("geo+cloud next to a legacy auth_request: the cloud challenge does not block")
+	}
+	for i, b := range splitServerBlocks(t, out) {
+		if !strings.Contains(blockAt(b, "location / {"), "auth_request /_challenge/validate;") {
+			t.Errorf("geo+cloud next to a legacy auth_request, server %d: location / lost the geo gate", i)
 		}
 	}
 }

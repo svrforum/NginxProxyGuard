@@ -208,7 +208,7 @@
     # Access List: {{.AccessList.Name}}
     # Note: Access list denials will have block_reason set to access_denied
     set $block_reason_var "access_denied";
-{{if .AccessList.SatisfyAny}}{{if and .GeoRestriction .GeoRestriction.ChallengeMode}}    # No "satisfy any" here: next to the challenge gate it would let every visitor the gate passes skip this list.{{else}}    satisfy any;{{end}}{{end}}
+{{if .AccessList.SatisfyAny}}{{if .ChallengeGate}}    # No "satisfy any" here: next to the challenge gate it would let every visitor the gate passes skip this list.{{else}}    satisfy any;{{end}}{{end}}
 {{- if $.GlobalTrustedIPs}}
     # Global trusted IPs - allow before deny (access phase, first-match wins)
 {{range $.GlobalTrustedIPs}}    allow {{.}};
@@ -504,14 +504,20 @@
     }
 {{- end}}
     set $cloud_block_check_{{sanitizeID .Host.ID}} "${blocked_cloud_{{sanitizeID .Host.ID}}}${is_priority_allow_cloud}";
-{{if .CloudProviderChallengeMode}}
-    # Challenge mode - redirect to challenge page instead of blocking (skip for priority IPs, search bots, and ACME/challenge paths)
+{{if .CloudChallenge}}
+    # Challenge mode (skip for priority IPs, search bots, and ACME/challenge paths):
+    # mark the request. The challenge gate (/_challenge/validate) decides in the
+    # access phase, after ModSecurity, and lets a visitor with a valid token in.
+    set $cloud_challenge 0;
     if ($cloud_block_check_{{sanitizeID .Host.ID}} = "10") {
+        set $cloud_challenge 1;
         set $block_reason_var "cloud_provider_challenge";
-        return 418; # Use 418 as internal marker for cloud challenge redirect
     }
-    error_page 418 = @cloud_challenge;
 {{else}}
+{{- if .CloudProviderChallengeMode}}
+    # Challenge mode needs the challenge gate's auth_request, and this host
+    # has one of its own (auth provider or Advanced Config): block instead.
+{{- end}}
     # Block mode (skip for priority IPs, search bots, and ACME/challenge paths)
     if ($cloud_block_check_{{sanitizeID .Host.ID}} = "10") {
         set $block_reason_var "cloud_provider_block";

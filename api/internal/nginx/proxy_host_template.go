@@ -91,3 +91,23 @@ type ProxyHostConfigData struct {
 	HTTPSPort                     string                // HTTPS listen port (default: 443)
 	EnableIPv6                    bool                  // Enable IPv6 listen directives
 }
+
+// CloudChallenge reports whether cloud provider blocking challenges visitors
+// instead of blocking them: _security marks the request ($cloud_challenge)
+// and the challenge gate decides, as for the geo challenge. A host with an
+// auth_request of its own blocks instead (403): an auth provider
+// (ForwardAuth) holds location /'s one auth_request, and one left at the top
+// level of a legacy Advanced Config covers the whole server or location /
+// itself - the gate would replace that login, or not load at all.
+func (d ProxyHostConfigData) CloudChallenge() bool {
+	return len(d.BlockedCloudIPRanges) > 0 && d.CloudProviderChallengeMode && d.AuthProvider == nil &&
+		d.Host != nil && !advancedConfigHasTopLevel(d.Host.AdvancedConfig, "auth_request")
+}
+
+// ChallengeGate reports whether the host renders the challenge gate: the
+// internal /_challenge/validate location, the challenge endpoints,
+// @challenge_redirect and the auth_request in front of the content. Geo
+// restriction in challenge mode or the cloud provider challenge.
+func (d ProxyHostConfigData) ChallengeGate() bool {
+	return (d.GeoRestriction != nil && d.GeoRestriction.ChallengeMode) || d.CloudChallenge()
+}

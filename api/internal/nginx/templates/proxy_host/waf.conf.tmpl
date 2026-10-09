@@ -7,7 +7,7 @@
         return 301 https://$host$request_uri;
     }
     {{else}}
-{{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}{{if .AdvancedConfigAuthRequest}}
+{{if .ChallengeGate}}{{if .AdvancedConfigAuthRequest}}
     # Challenge gate in location / only: this host's Advanced Config has
     # its own auth_request for the whole server, and a block takes only one
     # (the API log names the host). The API's answer to the gate in
@@ -23,10 +23,10 @@
     # so @challenge_redirect can tell the gate's 401 from any other.
     auth_request_set $challenge_gate_status $upstream_status;
     error_page 401 = @challenge_redirect;
-{{end}}{{end}}{{end}}
+{{end}}{{end}}
 {{if not .HasCustomLocationRoot}}
     location / {
-{{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}
+{{if .ChallengeGate}}
         # Challenge decision happens inside the /_challenge/validate gate, which
         # runs as an auth_request subrequest (ACCESS phase) - so ModSecurity
         # phase 2 inspects the request BEFORE any challenge redirect. A
@@ -37,7 +37,7 @@
         auth_request /_challenge/validate;
         error_page 401 = @challenge_redirect;
         error_page 500 502 503 504 = @api_fallback;
-{{end}}{{end}}
+{{end}}
 {{if .AuthProvider}}{{template "_auth_gate" .}}{{end}}
         {{if and .Upstream .Upstream.Servers}}proxy_pass {{upstreamScheme .Upstream}}://{{.Upstream.Name}};{{if eq (upstreamScheme .Upstream) "https"}}
         proxy_ssl_server_name on;
@@ -103,15 +103,22 @@
 {{end}}{{end}}
     }
 
-{{end}}{{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}
+{{end}}{{if .ChallengeGate}}
     location @challenge_redirect {
         # Only the gate's own 401 means "solve the challenge": a challenged
         # visitor without a token, or one whose token the API rejected. Any
         # other 401 (Basic auth in a custom location, say, which nginx checks
         # before the gate) stays a 401. Both answers refuse the request.
+{{- if .CloudChallenge}}
+        set $challenge_needed "${geo_blocked}${cloud_challenge}";
+        if ($challenge_needed = "00") {
+            return 401;
+        }
+{{- else}}
         if ($geo_blocked = 0) {
             return 401;
         }
+{{- end}}
         set $challenge_refused 401;
         if ($cookie_ng_challenge != "") {
             set $challenge_refused $challenge_gate_status;
@@ -119,12 +126,18 @@
         if ($challenge_refused != 401) {
             return 401;
         }
+{{- if .CloudChallenge}}
+        # Challenged for the cloud provider range only.
+        if ($geo_blocked != 1) {
+            return 302 /api/v1/challenge/page?host={{.Host.ID}}&reason=cloud_provider&return={{if .Host.SSLEnabled}}https{{else}}$scheme{{end}}://$host$request_uri;
+        }
+{{- end}}
         return 302 /api/v1/challenge/page?host={{.Host.ID}}&reason=geo_restriction&return={{if .Host.SSLEnabled}}https{{else}}$scheme{{end}}://$host$request_uri;
     }
-{{end}}{{end}}
+{{end}}
     {{end}}
 {{else}}
-{{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}{{if .AdvancedConfigAuthRequest}}
+{{if .ChallengeGate}}{{if .AdvancedConfigAuthRequest}}
     # Challenge gate in location / only: this host's Advanced Config has
     # its own auth_request for the whole server, and a block takes only one
     # (the API log names the host). The API's answer to the gate in
@@ -140,10 +153,10 @@
     # so @challenge_redirect can tell the gate's 401 from any other.
     auth_request_set $challenge_gate_status $upstream_status;
     error_page 401 = @challenge_redirect;
-{{end}}{{end}}{{end}}
+{{end}}{{end}}
 {{if not .HasCustomLocationRoot}}
     location / {
-{{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}
+{{if .ChallengeGate}}
         # Challenge decision happens inside the /_challenge/validate gate, which
         # runs as an auth_request subrequest (ACCESS phase) - so ModSecurity
         # phase 2 inspects the request BEFORE any challenge redirect. A
@@ -154,7 +167,7 @@
         auth_request /_challenge/validate;
         error_page 401 = @challenge_redirect;
         error_page 500 502 503 504 = @api_fallback;
-{{end}}{{end}}
+{{end}}
 {{if .AuthProvider}}{{template "_auth_gate" .}}{{end}}
         {{if and .Upstream .Upstream.Servers}}proxy_pass {{upstreamScheme .Upstream}}://{{.Upstream.Name}};{{if eq (upstreamScheme .Upstream) "https"}}
         proxy_ssl_server_name on;
@@ -220,15 +233,22 @@
 {{end}}{{end}}
     }
 
-{{end}}{{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}
+{{end}}{{if .ChallengeGate}}
     location @challenge_redirect {
         # Only the gate's own 401 means "solve the challenge": a challenged
         # visitor without a token, or one whose token the API rejected. Any
         # other 401 (Basic auth in a custom location, say, which nginx checks
         # before the gate) stays a 401. Both answers refuse the request.
+{{- if .CloudChallenge}}
+        set $challenge_needed "${geo_blocked}${cloud_challenge}";
+        if ($challenge_needed = "00") {
+            return 401;
+        }
+{{- else}}
         if ($geo_blocked = 0) {
             return 401;
         }
+{{- end}}
         set $challenge_refused 401;
         if ($cookie_ng_challenge != "") {
             set $challenge_refused $challenge_gate_status;
@@ -236,9 +256,15 @@
         if ($challenge_refused != 401) {
             return 401;
         }
+{{- if .CloudChallenge}}
+        # Challenged for the cloud provider range only.
+        if ($geo_blocked != 1) {
+            return 302 /api/v1/challenge/page?host={{.Host.ID}}&reason=cloud_provider&return={{if .Host.SSLEnabled}}https{{else}}$scheme{{end}}://$host$request_uri;
+        }
+{{- end}}
         return 302 /api/v1/challenge/page?host={{.Host.ID}}&reason=geo_restriction&return={{if .Host.SSLEnabled}}https{{else}}$scheme{{end}}://$host$request_uri;
     }
-{{end}}{{end}}
+{{end}}
 {{end}}
 
 {{if .RateLimit}}{{if .RateLimit.Enabled}}
@@ -249,12 +275,7 @@
     }
 {{end}}{{end}}
 
-{{if .BlockedCloudIPRanges}}{{if .CloudProviderChallengeMode}}
-    # Cloud provider challenge redirect handler
-    location @cloud_challenge {
-        return 302 /api/v1/challenge/page?host={{.Host.ID}}&reason=cloud_provider&return={{if .Host.SSLEnabled}}https{{else}}$scheme{{end}}://$host$request_uri;
-    }
-{{end}}{{end}}
+
 
 {{if .Host.AdvancedConfig}}{{if or .AdvancedConfigHasLocation .HasCustomLocationRoot}}
     # Advanced configuration (server block)

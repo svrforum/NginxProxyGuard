@@ -29,16 +29,16 @@ server {
     location /.well-known/acme-challenge/ {
         # Allow all access for certificate validation
         allow all;
-{{- if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}
+{{- if .ChallengeGate}}
         auth_request off;
-{{- end}}{{end}}
+{{- end}}
         root /etc/nginx/acme-challenge;
         try_files $uri =404;
     }
 
 {{template "_security" .}}
 
-{{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}
+{{if .ChallengeGate}}
     # Challenge validation endpoint (internal)
     location = /_challenge/validate {
         internal;
@@ -64,9 +64,19 @@ server {
         # no API round-trip. Challenged without a token: 401 here, which the
         # caller's error_page 401 turns into the challenge redirect. Only a
         # challenged visitor carrying a token reaches the API.
+{{- if .CloudChallenge}}
+        # The cloud provider challenge: $cloud_challenge is 1 for a visitor
+        # from a challenged cloud provider range (_security). Not challenged
+        # means neither applies ("00" only).
+        set $challenge_needed "${geo_blocked}${cloud_challenge}";
+        if ($challenge_needed = "00") {
+            return 204;
+        }
+{{- else}}
         if ($geo_blocked = 0) {
             return 204;
         }
+{{- end}}
         if ($cookie_ng_challenge = "") {
             return 401;
         }
@@ -141,7 +151,7 @@ server {
         proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
-{{end}}{{end}}
+{{end}}
 
 {{if .AuthProvider}}{{if not .Host.SSLForceHTTPS}}
 {{template "_auth_verify_location" .}}
