@@ -24,6 +24,12 @@ package service
 //     timestamp (--timestamps); a reconnect resumes with --since <timestamp of
 //     the last delivered line> and drops the lines already delivered at
 //     exactly that timestamp (--since is inclusive at nanosecond precision).
+//  5. A stuck follow is noticed on a busy container too. The stall probe
+//     runs only after the follower has been silent for probeAfter, so a line
+//     on its stream after the cursor that docker has held for more than
+//     lagGrace was missed, and so was a younger one that has still not
+//     arrived by the next tick. docker counts --tail across both streams, so
+//     on a busy container the entries the probe sees may all be seconds old.
 
 import (
 	"bufio"
@@ -67,19 +73,35 @@ const (
 	// followerProbeEvery spaces the probes on a stream that stays quiet.
 	followerProbeEvery = 2 * time.Minute
 
-	// followerLagGrace: a line docker has held this long without the follower
-	// receiving it means the follow RPC is stuck (the 2026-05-19/20 incidents:
-	// `docker logs --follow` alive, silent, for hours).
-	followerLagGrace = 15 * time.Second
+	// followerLagGrace is how long a line may be on its way from docker to
+	// the follower. The probe runs only after the follower has been silent
+	// for probeAfter, so a line on its stream after the cursor that docker
+	// has held longer than this was missed: the follow RPC is stuck (the
+	// 2026-05-19/20 incidents: `docker logs --follow` alive, silent, for
+	// hours). A line still younger than this is checked again on the next
+	// tick: if nothing has arrived by then, the follow is stuck as well.
+	followerLagGrace = 2 * time.Second
 
 	// followerReplayTail bounds what the daemon reads on a reconnect. Without
 	// --tail, `docker logs --since` decodes every retained json-file from the
 	// start (3.4 s measured for 294 MB); with --tail 100000 it takes about
 	// 0.5 s and still covers about 30 minutes of the busiest stdout measured.
+	// docker counts it across stdout and stderr together.
 	followerReplayTail = 100000
 
-	// followerProbeTail: the probe only needs the newest lines.
-	followerProbeTail = 200
+	// followerProbeTail is how many of the newest entries the probe reads.
+	// docker applies --tail across stdout and stderr together, before --since
+	// and before the stream is picked, so on a busy container the newest
+	// entries span only seconds: production stdout carries about 37 access
+	// lines/s when the access copy is on. 5000 entries cover minutes of that
+	// and are cheap to read; a burst too fast even for that is caught by the
+	// next-tick check (see followerLagGrace).
+	followerProbeTail = 5000
+
+	// followerProbeOutput caps what one probe keeps of its stream. docker
+	// prints the oldest entries first, and those are the ones the probe looks
+	// for.
+	followerProbeOutput = 4 << 20
 
 	// followerProbeTimeout bounds one probe.
 	followerProbeTimeout = 10 * time.Second
@@ -347,6 +369,11 @@ func (f *containerLogFollower) watch(ctx context.Context, stop <-chan struct{}, 
 	done := ctx.Done()
 	var killedAt, lastProbe time.Time
 	reapWarned := false
+	// A line docker held at the last probe that had not reached the follower
+	// yet, and lastDataAt at that probe: if nothing arrives within lagGrace,
+	// the follow is stuck, however many newer entries docker holds by then.
+	var pendingSince time.Time
+	var pendingDataAt int64
 	stopWith := func(r string) {
 		select {
 		case reasonCh <- r:
@@ -383,25 +410,46 @@ func (f *containerLogFollower) watch(ctx context.Context, stop <-chan struct{}, 
 				}
 				continue
 			}
+			if !pendingSince.IsZero() {
+				switch {
+				case f.lastDataAt.Load() != pendingDataAt:
+					pendingSince = time.Time{} // the stream moved
+				case time.Since(pendingSince) >= f.lagGrace:
+					stopWith("stall")
+					continue
+				}
+			}
 			idle := time.Since(time.Unix(0, f.lastDataAt.Load()))
 			if idle < probeAfter || time.Since(lastProbe) < f.probeEvery {
 				continue
 			}
 			lastProbe = time.Now()
-			if f.lagging(ctx) {
+			dataAt := f.lastDataAt.Load()
+			switch stalled, waiting := f.probe(ctx, dataAt); {
+			case stalled:
 				stopWith("stall")
+			case waiting && (pendingSince.IsZero() || pendingDataAt != dataAt):
+				// Keep the first sighting while nothing arrives: a later
+				// probe that sees the line again does not restart the wait.
+				pendingSince, pendingDataAt = lastProbe, dataAt
 			}
 		}
 	}
 }
 
-// lagging asks docker, in a separate non-follow request, whether it holds a
-// line on our stream that is newer than the cursor and older than lagGrace.
-// Any error means "unknown", which is treated as not stalled: max-age still
-// bounds the damage.
-func (f *containerLogFollower) lagging(parent context.Context) bool {
+// probe asks docker, in a separate non-follow request, for the newest entries
+// after the cursor, and looks at the ones on our stream. The follower has
+// been silent for at least probeAfter when this runs, so any such line that
+// docker has held for more than lagGrace was missed: stalled. A line younger
+// than that is reported as waiting, and watch checks on the next tick whether
+// anything has arrived since. dataAt is lastDataAt when the probe started;
+// if data arrives while it runs, the stream is moving and nothing is
+// reported. Any error means "unknown", which is treated as not stalled:
+// max-age still bounds the damage.
+func (f *containerLogFollower) probe(parent context.Context, dataAt int64) (stalled, waiting bool) {
 	ctx, cancel := context.WithTimeout(parent, followerProbeTimeout)
 	defer cancel()
+	started := time.Now()
 	cursor := time.Unix(0, f.cursorNanos.Load())
 	cmd := f.command(ctx, "docker", "logs", "--timestamps",
 		"--since", formatDockerSince(cursor),
@@ -409,22 +457,30 @@ func (f *containerLogFollower) lagging(parent context.Context) bool {
 		f.container)
 	cmd.WaitDelay = 2 * time.Second
 	var out bytes.Buffer
-	w := &limitedWriter{w: &out, n: 4 << 20}
+	w := &limitedWriter{w: &out, n: followerProbeOutput}
 	if f.stream == "stderr" {
 		cmd.Stderr = w
 	} else {
 		cmd.Stdout = w
 	}
 	if err := cmd.Run(); err != nil && out.Len() == 0 {
-		return false
+		return false, false
 	}
-	deadline := time.Now().Add(-f.lagGrace)
+	if f.lastDataAt.Load() != dataAt {
+		return false, false
+	}
+	deadline := started.Add(-f.lagGrace)
 	for _, line := range bytes.Split(out.Bytes(), []byte{'\n'}) {
-		if ts, _, ok := splitDockerTimestamp(line); ok && ts.After(cursor) && ts.Before(deadline) {
-			return true
+		ts, _, ok := splitDockerTimestamp(line)
+		if !ok || !ts.After(cursor) {
+			continue
 		}
+		if ts.Before(deadline) {
+			return true, false
+		}
+		waiting = true
 	}
-	return false
+	return false, waiting
 }
 
 // readAll reads lines until EOF or a read error. Over-long lines are

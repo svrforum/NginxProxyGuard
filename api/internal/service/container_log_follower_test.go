@@ -9,6 +9,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -257,6 +259,90 @@ func TestFollower_StallProbeRestartsStuckFollow(t *testing.T) {
 		t.Fatal("stall restart not counted")
 	}
 	waitAllReaped(t, readInvocations(inv))
+}
+
+// A stuck follow on a busy container. docker applies --tail to stdout and
+// stderr together, so with the access copy on stdout the newest entries span
+// only seconds: a probe that waited for a missed line to grow old within them
+// never saw one, and only max-age (1 h) ended the stall. The probe runs once
+// the follower has been silent for probeAfter, so a line on its own stream
+// after the cursor that docker has held for more than lagGrace was missed.
+// Both followers, with the two streams interleaved; probeTail and lagGrace
+// are the production values. "burst" shrinks the probe's window below
+// lagGrace, as a burst faster than probeTail/lagGrace entries a second would:
+// the next tick still notices that the line it saw never arrived.
+func TestFollower_StallProbeSeesStuckFollowOnBusyContainer(t *testing.T) {
+	for _, tc := range []struct {
+		name, label, stream, own, other string
+		probeTail                       int
+	}{
+		{"modsec on stdout", "modsec", "stdout", "o", "e", followerProbeTail},
+		{"error log on stderr", "error", "stderr", "e", "o", followerProbeTail},
+		{"burst", "modsec", "stdout", "o", "e", 20},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			store, stall := filepath.Join(dir, "store"), filepath.Join(dir, "stall")
+			if err := os.WriteFile(store, nil, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			inv := installFakeDocker(t, "store", map[string]string{"NPG_FAKE_STORE": store, "NPG_FAKE_STALL": stall})
+			sink := &lineSink{}
+			f := newContainerLogFollower(tc.label, "npg-proxy", tc.stream, func(l string, _ time.Time) { sink.add(l) })
+			f.tick = 20 * time.Millisecond
+			f.reapTimeout = 2 * time.Second
+			f.minBackoff = 20 * time.Millisecond
+			f.maxBackoff = 200 * time.Millisecond
+			f.probeAfter = 300 * time.Millisecond // 90 s in production
+			f.probeEvery = 300 * time.Millisecond // 2 min in production
+			f.probeTail = tc.probeTail
+			stallBefore := testutil.ToFloat64(metrics.LogCollectorWatchdogRestartTotal.WithLabelValues("stall"))
+
+			stop := startFollower(t, f)
+			waitFor(t, 10*time.Second, "first attach", func() bool { return followsReady(inv) > 0 })
+			appendFakeRecord(t, store, time.Now(), tc.own, "own-0")
+			waitFor(t, 10*time.Second, "own-0", func() bool { return sink.len() == 1 })
+
+			if err := os.WriteFile(stall, nil, 0o644); err != nil { // the follow RPC now hangs
+				t.Fatal(err)
+			}
+			waitFor(t, 10*time.Second, "the follow RPC stalled", func() bool { return followsStalled(inv) > 0 })
+
+			// About 150 entries a second, one in five on the follower's own
+			// stream, until the stall has been noticed and own-1 recovered.
+			own := 1
+			deadline := time.Now().Add(20 * time.Second)
+			for i := 0; !slices.Contains(sink.snapshot(), "own-1"); i++ {
+				if time.Now().After(deadline) {
+					t.Fatalf("stuck follow not noticed in 20 s of busy logging (%d docker logs --follow runs)", len(followInvocations(inv)))
+				}
+				if i%5 == 0 {
+					appendFakeRecord(t, store, time.Now(), tc.own, "own-"+strconv.Itoa(own))
+					own++
+				} else {
+					appendFakeRecord(t, store, time.Now(), tc.other, "other-"+strconv.Itoa(i))
+				}
+				time.Sleep(6 * time.Millisecond)
+			}
+			_ = os.Remove(stall)
+			waitFor(t, 10*time.Second, "every own line delivered", func() bool { return sink.len() >= own })
+			stop()
+
+			got := sink.snapshot()
+			for i, l := range got {
+				if l != "own-"+strconv.Itoa(i) {
+					t.Fatalf("line %d is %q; want each own line once, in order, and nothing from the other stream", i, l)
+				}
+			}
+			if len(got) != own {
+				t.Fatalf("delivered %d lines, want %d", len(got), own)
+			}
+			if testutil.ToFloat64(metrics.LogCollectorWatchdogRestartTotal.WithLabelValues("stall")) == stallBefore {
+				t.Fatal("stall restart not counted")
+			}
+			waitAllReaped(t, readInvocations(inv))
+		})
+	}
 }
 
 // A daemon that needs longer for the replay than the stall probe waits must
