@@ -33,6 +33,7 @@ type SystemSettingsHandler struct {
 	proxyHostService     *service.ProxyHostService
 	updateChecker        *service.UpdateChecker
 	archiver             *service.RawLogArchiver // raw log archive mover; set by SetRawLogArchiver
+	rawLogOverride       *rawLogPaths            // nil: defaultRawLogPaths (tests point it elsewhere)
 }
 
 func NewSystemSettingsHandler(
@@ -185,12 +186,12 @@ func (h *SystemSettingsHandler) UpdateSystemSettings(c echo.Context) error {
 		return directInternalError(c, err)
 	}
 
-	// Generate raw log configuration if raw log settings changed
+	// Apply the raw log settings if they changed
 	if req.RawLogEnabled != nil || req.RawLogRetentionDays != nil ||
 		req.RawLogMaxSizeMB != nil || req.RawLogRotateCount != nil ||
 		req.RawLogCompressRotated != nil {
-		if err := h.generateRawLogConfig(settings); err != nil {
-			log.Printf("[SystemSettings] Warning: failed to generate raw log config: %v", err)
+		if err := h.applyRawLogSettings(settings); err != nil {
+			log.Printf("[SystemSettings] Warning: failed to apply raw log settings: %v", err)
 		}
 	}
 	// The archive settings only concern the API's mover: no nginx reload,
