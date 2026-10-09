@@ -128,7 +128,10 @@ http {
     '}';
 
 {{if .AccessLogEnabled}}    access_log /var/log/nginx/access.log main buffer=64k flush=5s;
-{{else}}    access_log off;
+{{else}}    # Copy of the access log to docker logs is off (Global Settings -> Advanced).
+    # Logging is deliberately not switched off here: an http-level "off" also
+    # silences access_raw.log (conf.d/00-raw-logging.conf), which the log
+    # collector reads.
 {{end}}
     # WebSocket and keepalive support
     map $http_upgrade $connection_upgrade {
@@ -426,7 +429,7 @@ type MainConfigData struct {
 	Resolver        string
 	ResolverTimeout string
 
-	AccessLogEnabled    bool
+	AccessLogEnabled    bool // copy of the access log to docker logs only; access_raw.log is always written
 	AccessLogStripQuery bool // #195: log $request_method $uri $proto (no query) instead of $request
 
 	LimitConnEnabled  bool

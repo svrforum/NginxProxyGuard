@@ -905,8 +905,8 @@
         "description": "로깅 상세도입니다. debug가 가장 상세하고, crit가 가장 간결합니다."
       },
       "access_log_enabled": {
-        "label": "접속 로그 활성화",
-        "description": "모든 요청을 로그에 기록합니다. 트래픽이 많으면 디스크 사용량이 증가할 수 있습니다."
+        "label": "접속 로그를 docker logs에도 출력",
+        "description": "켜면 모든 요청 줄을 npg-proxy 컨테이너 출력(docker logs)에도 씁니다. 로그 화면·대시보드·차단 기능이 쓰는 기록(access_raw.log → DB)은 이 설정과 상관없이 항상 남습니다. 트래픽이 많으면 Docker 로그가 빨리 회전해 다른 메시지가 금방 밀려납니다."
       },
       "access_log_strip_query": {
         "label": "접속 로그에서 쿼리스트링 제외",
@@ -1375,7 +1375,7 @@
       "proxy_read_timeout": "백엔드 서버로부터 응답을 기다리는 시간입니다. 처리 시간이 긴 API가 있다면 늘리세요.",
       "resolver": "도메인 이름을 IP로 변환할 때 사용할 DNS 서버입니다.",
       "error_log_level": "로그에 기록할 에러의 상세 수준입니다. 디버깅 목적이 아니면 'warn'이나 'error'를 권장합니다.",
-      "access_log_enabled": "모든 접속 기록을 남깁니다. 디스크 공간 관리가 필요할 수 있습니다.",
+      "access_log_enabled": "docker logs 사본만 켜고 끕니다. 꺼도 NPG의 접속 로그 수집은 멈추지 않습니다.",
       "custom_http_config": "Nginx http 블록에 추가할 사용자 정의 설정을 입력합니다.",
       "proxy_buffer_size": "업스트림 서버에서 응답의 첫 부분(헤더)을 읽을 때 사용하는 버퍼 크기입니다.",
       "proxy_buffers": "응답을 버퍼링하는 데 사용할 버퍼의 수와 크기입니다. 형식: '개수 크기'",

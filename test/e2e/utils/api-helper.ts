@@ -1641,6 +1641,8 @@ export interface GlobalSettingsData {
 
   // nginx.conf generation (issue #121)
   brotli_enabled?: boolean;
+  // Docker-logs copy of the access log only (A5); access_raw.log is always written.
+  access_log_enabled?: boolean;
   custom_http_config?: string;
   custom_stream_config?: string;
   direct_ip_access_action?: string;

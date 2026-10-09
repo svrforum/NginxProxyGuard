@@ -901,8 +901,8 @@
         "description": "Logging verbosity. 'debug' is most detailed, 'crit' is most concise."
       },
       "access_log_enabled": {
-        "label": "Enable Access Log",
-        "description": "Log all requests. High traffic may increase disk usage."
+        "label": "Also print access log to docker logs",
+        "description": "Writes every request line to the npg-proxy container output (docker logs) too. The record the log viewer, dashboard and security features use (access_raw.log → database) is kept regardless of this switch. On busy servers this copy makes Docker's own log rotate quickly, pushing other messages out."
       },
       "access_log_strip_query": {
         "label": "Strip query string from access log",
@@ -1371,7 +1371,7 @@
       "proxy_read_timeout": "Time to wait for response from backend. Increase if you have slow API endpoints.",
       "resolver": "DNS server used to resolve domain names to IPs.",
       "error_log_level": "Detail level of error logs. 'warn' or 'error' recommended unless debugging.",
-      "access_log_enabled": "Logs all access records. May require disk space management.",
+      "access_log_enabled": "Turns only the docker logs copy on or off. NPG keeps collecting access logs either way.",
       "custom_http_config": "Enter custom configuration to add to Nginx http block.",
       "proxy_buffer_size": "Buffer size for reading the first part (header) of upstream server response.",
       "proxy_buffers": "Number and size of buffers for buffering responses. Format: 'count size'",

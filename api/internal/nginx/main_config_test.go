@@ -361,3 +361,64 @@ func TestMainConfig_GlobalTrustedIPsBypassWAF(t *testing.T) {
 		t.Errorf("did not expect a WAF bypass rule when flag ON but no trusted IPs; got:\n%s", onEmpty)
 	}
 }
+
+// httpLevelAccessLogDirectives returns the access_log directives written
+// directly inside http { }, ignoring comments and anything nested deeper
+// (server, location, stream blocks).
+func httpLevelAccessLogDirectives(t *testing.T, conf string) []string {
+	t.Helper()
+	var out []string
+	depth := 0
+	inHTTP := false
+	for _, raw := range strings.Split(conf, "\n") {
+		line := strings.TrimSpace(raw)
+		if i := strings.Index(line, "#"); i >= 0 {
+			line = strings.TrimSpace(line[:i])
+		}
+		if line == "" {
+			continue
+		}
+		if depth == 0 && strings.HasPrefix(line, "http ") && strings.HasSuffix(line, "{") {
+			inHTTP = true
+		}
+		if inHTTP && depth == 1 && strings.HasPrefix(line, "access_log ") {
+			out = append(out, line)
+		}
+		depth += strings.Count(line, "{") - strings.Count(line, "}")
+		if depth == 0 {
+			inHTTP = false
+		}
+	}
+	return out
+}
+
+// A5: "Enable Access Log" off used to render an http-level `access_log off;`.
+// nginx treats `off` as cancelling every access_log on that level, and
+// conf.d/00-raw-logging.conf (the access_raw.log the log collector tails) is
+// included at that same level — so the switch silently stopped all DB access
+// logging while `nginx -t` still passed. Off must now drop only the
+// docker-logs copy and leave the raw file and the include untouched.
+func TestMainConfig_AccessLogOffKeepsRawFileLogging(t *testing.T) {
+	s := baselineSettings()
+	s.AccessLogEnabled = false
+	out := renderOnly(t, s)
+
+	if got := httpLevelAccessLogDirectives(t, out); len(got) != 0 {
+		t.Errorf("access log copy off must render no http-level access_log directive; got %q", got)
+	}
+	if strings.Contains(out, "/var/log/nginx/access.log") {
+		t.Errorf("access log copy off must not write to /var/log/nginx/access.log (docker logs); got:\n%s", out)
+	}
+	if !strings.Contains(out, "include /etc/nginx/conf.d/*.conf;") {
+		t.Errorf("conf.d include (00-raw-logging.conf) must stay; got:\n%s", out)
+	}
+}
+
+func TestMainConfig_AccessLogOnRendersStdoutCopy(t *testing.T) {
+	out := renderOnly(t, baselineSettings())
+	want := "access_log /var/log/nginx/access.log main buffer=64k flush=5s;"
+	got := httpLevelAccessLogDirectives(t, out)
+	if len(got) != 1 || got[0] != want {
+		t.Errorf("access log copy on must render exactly %q at http level; got %q", want, got)
+	}
+}

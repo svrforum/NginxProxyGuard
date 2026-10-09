@@ -11685,6 +11685,14 @@ components:
           type: array
           items:
             type: string
+        access_log_enabled:
+          type: boolean
+          default: true
+          description: >-
+            Also print every access log line to the npg-proxy container output
+            (docker logs). Only that copy is switched: access_raw.log and the
+            database access logs the log viewer, dashboard and security
+            features use are written either way.
     SystemSettings:
       type: object
       properties:
