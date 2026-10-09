@@ -1387,6 +1387,18 @@ paths:
       responses:
         '200':
           description: Settings updated
+        '400':
+          description: >-
+            A value this request changes is out of range (for example
+            raw_log_retention_days outside 1-3650), or a trusted-proxy entry is
+            invalid. The body carries the reason in "error".
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
   /system-settings/geoip/status:
     get:
       tags: [GeoIP]
@@ -11749,6 +11761,43 @@ components:
           type: string
         acme_staging:
           type: boolean
+        raw_log_enabled:
+          type: boolean
+          description: >-
+            Raw nginx log files (access_raw.log / error_raw.log). Mandatory since
+            v2.17.1: false is accepted and stored as true.
+        raw_log_retention_days:
+          type: integer
+          minimum: 1
+          maximum: 3650
+          default: 7
+          description: >-
+            Rotated raw log files older than this are deleted at the next
+            rotation (logrotate maxage). A changed value outside the range is
+            rejected with 400; a stored value sent back unchanged is accepted.
+        raw_log_max_size_mb:
+          type: integer
+          minimum: 10
+          maximum: 10240
+          default: 100
+          description: >-
+            The live raw log is rotated at the next hourly check once it is
+            larger than this, besides the daily rotation at 00:00.
+        raw_log_rotate_count:
+          type: integer
+          minimum: 1
+          maximum: 100000
+          default: 5
+          deprecated: true
+          description: >-
+            Ignored: retention is by age (raw_log_retention_days). Still
+            accepted, stored and backed up for older clients.
+        raw_log_compress_rotated:
+          type: boolean
+          default: true
+          description: >-
+            gzip rotated raw logs. The newest rotated file is compressed at the
+            next rotation (delaycompress).
     Dashboard:
       type: object
       description: Main dashboard summary returned by GET /dashboard

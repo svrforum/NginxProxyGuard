@@ -103,6 +103,10 @@ func (r *BackupRepository) importSystemSettings(ctx context.Context, tx *sql.Tx,
 		ss.DDNSCheckIntervalMinutes = 5
 	}
 
+	// 원본 로그 설정: 구 버전/손상 백업의 0 값은 기본값으로 보정한다
+	// (보존 0일은 logrotate에서 "삭제 안 함", 회전 개수 0은 구버전에서 전부 삭제).
+	model.CoerceRawLogImport(ss)
+
 	// 하위 버전 백업 호환: $49-$56 컬럼은 구 버전 백업엔 없어 nil이 된다.
 	// nil이면 COALESCE가 기존 DB 값(신규 설치 기본값)을 유지한다 — 빈 값으로
 	// 덮어쓰면 trusted IP 우회가 풀리고 기본 익스플로잇 예외가 사라지는 등

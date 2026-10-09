@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/lib/pq"
@@ -17,6 +18,14 @@ import (
 type SystemSettingsRepository struct {
 	db    *sql.DB
 	cache *cache.RedisClient
+
+	// cacheWritten is set once this process has stored the row in the cache.
+	// Until then Get reads the database: Valkey outlives an API restart, and
+	// the upgrades that ran at boot may have changed the row behind the cached
+	// copy (the raw log retention handover, new columns). Rendering the
+	// logrotate stanza from that copy would delete raw logs the upgrade meant
+	// to keep.
+	cacheWritten atomic.Bool
 }
 
 func NewSystemSettingsRepository(db *sql.DB) *SystemSettingsRepository {
@@ -31,7 +40,7 @@ func (r *SystemSettingsRepository) SetCache(c *cache.RedisClient) {
 // Get retrieves the system settings (there should only be one row)
 func (r *SystemSettingsRepository) Get(ctx context.Context) (*model.SystemSettings, error) {
 	// Try cache first
-	if r.cache != nil {
+	if r.cache != nil && r.cacheWritten.Load() {
 		var cached model.SystemSettings
 		if err := r.cache.GetSystemSettings(ctx, &cached); err == nil {
 			return &cached, nil
@@ -221,6 +230,8 @@ func (r *SystemSettingsRepository) getFromDB(ctx context.Context) (*model.System
 	if r.cache != nil {
 		if err := r.cache.SetSystemSettings(ctx, &settings); err != nil {
 			log.Printf("[Cache] Failed to cache system settings: %v", err)
+		} else {
+			r.cacheWritten.Store(true)
 		}
 	}
 

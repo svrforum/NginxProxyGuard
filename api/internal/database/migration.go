@@ -1668,6 +1668,39 @@ CREATE TABLE IF NOT EXISTS public.raw_log_reclaim_chunks (
     CONSTRAINT chk_raw_log_reclaim_chunks_state CHECK (state IN ('pending', 'nulled', 'done', 'skipped', 'gone', 'failed'))
 );`,
 		},
+		{
+			// Raw log retention by days takes over from the rotated-file
+			// count. The logrotate stanza no longer renders `rotate
+			// <raw_log_rotate_count>` as the retention; it renders `maxage
+			// <raw_log_retention_days>` (the count became a safety cap,
+			// because hourly size cuts would make any small count delete
+			// inside the retention). Under the old stanza one file was cut a
+			// day, so N files kept about N days — more than the retention in
+			// days whenever the count was larger, and those files would be
+			// deleted at the first rotation. Retention is raised to the count
+			// where it was larger, bounded by the install's age (no file is
+			// older than the install) and by 3650, and never lowered: a
+			// 1825-day / 9999-file install that is 300 days old keeps 1825; a
+			// 7-day / 30-file one older than 30 days gets 30. It runs once
+			// (marker 'raw_log_retention_by_days_v1', committed with it), so an
+			// operator's later change is kept. model.RawLogRetentionHandover
+			// is the same rule for backups made before this change.
+			desc: "raw logs: retention in days takes over from the rotated-file count",
+			sql: `DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM schema_migrations WHERE version = 'raw_log_retention_by_days_v1') THEN
+        RETURN;
+    END IF;
+    UPDATE public.system_settings
+       SET raw_log_retention_days = GREATEST(raw_log_retention_days,
+               LEAST(raw_log_rotate_count,
+                     floor(extract(epoch FROM (now() - created_at)) / 86400)::int + 1,
+                     3650))
+     WHERE raw_log_rotate_count > raw_log_retention_days
+       AND raw_log_retention_days < 3650;
+    INSERT INTO schema_migrations (version) VALUES ('raw_log_retention_by_days_v1') ON CONFLICT DO NOTHING;
+END $$`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

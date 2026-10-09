@@ -2500,9 +2500,9 @@ COMMENT ON COLUMN public.system_settings.error_log_retention_days IS 'Retention 
 COMMENT ON COLUMN public.system_settings.system_log_retention_days IS 'Retention period for system logs in days (default: 1 month)';
 COMMENT ON COLUMN public.system_settings.audit_log_retention_days IS 'Retention period for admin audit logs in days (default: 3 years)';
 COMMENT ON COLUMN public.system_settings.raw_log_enabled IS 'Enable raw nginx log file storage (in addition to database logging)';
-COMMENT ON COLUMN public.system_settings.raw_log_retention_days IS 'How many days to keep rotated raw log files (default: 7 days)';
-COMMENT ON COLUMN public.system_settings.raw_log_max_size_mb IS 'Maximum size of each log file before rotation in MB (default: 100MB)';
-COMMENT ON COLUMN public.system_settings.raw_log_rotate_count IS 'Number of rotated log files to keep (default: 5)';
+COMMENT ON COLUMN public.system_settings.raw_log_retention_days IS 'Rotated raw log files older than this many days are deleted at the next rotation (logrotate maxage; 1-3650, default: 7 days)';
+COMMENT ON COLUMN public.system_settings.raw_log_max_size_mb IS 'A raw log larger than this is rotated at the next hourly check, besides the daily rotation (MB; 10-10240, default: 100MB)';
+COMMENT ON COLUMN public.system_settings.raw_log_rotate_count IS 'Deprecated: no longer rendered into the logrotate config (retention is by age); kept for older clients and backups (1-100000, default: 5)';
 COMMENT ON COLUMN public.system_settings.raw_log_compress_rotated IS 'Compress rotated log files with gzip (default: true)';
 COMMENT ON COLUMN public.system_settings.global_block_exploits_exceptions IS 'Global regex patterns for URI paths that bypass RFI/exploit blocking (one per line). Applied to all hosts with block_exploits enabled.';
 CREATE TABLE IF NOT EXISTS public.upstream_servers (
@@ -4685,3 +4685,29 @@ CREATE TABLE IF NOT EXISTS public.raw_log_reclaim_chunks (
     CONSTRAINT raw_log_reclaim_chunks_pkey PRIMARY KEY (chunk_name),
     CONSTRAINT chk_raw_log_reclaim_chunks_state CHECK (state IN ('pending', 'nulled', 'done', 'skipped', 'gone', 'failed'))
 );
+
+-- Raw log retention by days takes over from the rotated-file count — DOCUMENTATION ONLY.
+-- The raw-log logrotate stanza now deletes rotated files by age (maxage
+-- raw_log_retention_days); raw_log_rotate_count is no longer rendered. Under the old
+-- stanza one file was cut a day, so N files kept about N days, more than the retention
+-- whenever the count was larger. Existing installs get retention raised to the count
+-- where it was larger, bounded by the install's age in days plus one (no file is older
+-- than the install) and by 3650, never lowered; it runs once, recorded in
+-- schema_migrations as 'raw_log_retention_by_days_v1'. A fresh install has nothing to
+-- carry over and only records the marker. Executable copy lives in
+-- database/migration.go `upgrades`; model.RawLogRetentionHandover applies the same rule
+-- to backups made before the archive columns existed.
+--   DO $$
+--   BEGIN
+--       IF EXISTS (SELECT 1 FROM schema_migrations WHERE version = 'raw_log_retention_by_days_v1') THEN
+--           RETURN;
+--       END IF;
+--       UPDATE public.system_settings
+--          SET raw_log_retention_days = GREATEST(raw_log_retention_days,
+--                  LEAST(raw_log_rotate_count,
+--                        floor(extract(epoch FROM (now() - created_at)) / 86400)::int + 1,
+--                        3650))
+--        WHERE raw_log_rotate_count > raw_log_retention_days
+--          AND raw_log_retention_days < 3650;
+--       INSERT INTO schema_migrations (version) VALUES ('raw_log_retention_by_days_v1') ON CONFLICT DO NOTHING;
+--   END $$;

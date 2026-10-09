@@ -14,7 +14,11 @@ GEOIP_DIR="/etc/nginx/geoip"
 LOG_DIR="/etc/nginx/logs"
 LEGACY_LOG_DIR="/var/log/nginx"
 RAW_LOG_CONFIG="/etc/nginx/conf.d/.raw_log_config"
-LOGROTATE_CONFIG="/etc/logrotate.d/nginx-proxy-guard"
+# The API installs the same path on every rotation it runs (nginx/logrotate.go).
+# Images before the path was unified wrote nginx-proxy-guard instead; that stale
+# copy (old `size`/`rotate` rules) is removed below.
+LOGROTATE_CONFIG="/etc/logrotate.d/nginx-guard"
+STALE_LOGROTATE_CONFIG="/etc/logrotate.d/nginx-proxy-guard"
 
 # =============================================================================
 # Volume Initialization
@@ -161,6 +165,8 @@ setup_log_files() {
 
     echo "[Entrypoint] Raw log enabled: $raw_log_enabled"
 
+    rm -f "$STALE_LOGROTATE_CONFIG" 2>/dev/null || true
+
     # Create log directory within consolidated volume
     mkdir -p "$LOG_DIR"
     chown nginx:nginx "$LOG_DIR"
@@ -208,15 +214,21 @@ RAWLOG
             sed -i "s|/var/log/nginx|$LOG_DIR|g" "$LOGROTATE_CONFIG"
             echo "[Entrypoint] Logrotate configuration installed from volume"
         else
-            # Create default logrotate config for raw logs only
+            # Default until the API writes its own (same rules as
+            # api/internal/nginx/logrotate_config.go with the defaults: 100 MB,
+            # 7 days). maxage is the retention; rotate is only a safety cap.
             cat > "$LOGROTATE_CONFIG" << LOGROTATE
 $LOG_DIR/access_raw.log $LOG_DIR/error_raw.log {
-    size 100M
-    rotate 5
+    daily
+    maxsize 100M
+    maxage 7
+    rotate 336
     missingok
     notifempty
     create 0644 nginx nginx
     sharedscripts
+    dateext
+    dateformat -%Y%m%d-%H%M%S
     compress
     delaycompress
     postrotate

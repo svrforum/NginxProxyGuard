@@ -125,6 +125,19 @@ func (h *SystemSettingsHandler) UpdateSystemSettings(c echo.Context) error {
 		req.RawLogEnabled = &t
 	}
 
+	// Raw log files: refuse a value only when this request changes it to
+	// something out of range. Stored legacy values echoed back (1825 days /
+	// 9999 files on long-running installs) must never block another save.
+	if req.RawLogRetentionDays != nil || req.RawLogMaxSizeMB != nil || req.RawLogRotateCount != nil {
+		cur, err := h.repo.Get(c.Request().Context())
+		if err != nil {
+			return directInternalError(c, err)
+		}
+		if err := model.ValidateRawLogSettings(&req, cur); err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": trimInvalidInputPrefix(err)})
+		}
+	}
+
 	// Trusted proxies decide whose forwarded-address header nginx believes, so
 	// a bad value is a security problem, not a cosmetic one — reject it here
 	// rather than letting the render silently drop it (#278).
