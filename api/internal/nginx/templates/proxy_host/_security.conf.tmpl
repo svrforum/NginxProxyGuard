@@ -208,7 +208,7 @@
     # Access List: {{.AccessList.Name}}
     # Note: Access list denials will have block_reason set to access_denied
     set $block_reason_var "access_denied";
-{{if .AccessList.SatisfyAny}}    satisfy any;{{end}}
+{{if .AccessList.SatisfyAny}}{{if and .GeoRestriction .GeoRestriction.ChallengeMode}}    # No "satisfy any" here: next to the challenge gate it would let every visitor the gate passes skip this list.{{else}}    satisfy any;{{end}}{{end}}
 {{- if $.GlobalTrustedIPs}}
     # Global trusted IPs - allow before deny (access phase, first-match wins)
 {{range $.GlobalTrustedIPs}}    allow {{.}};

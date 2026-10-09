@@ -130,3 +130,26 @@ func TestPublicChallengeValidateAnswers404(t *testing.T) {
 		})
 	}
 }
+
+// An access list in "satisfy any" mode would accept a request when ANY access
+// check passes, and the gate passes every visitor it does not challenge: next
+// to the gate, the list would stop applying to them. On challenge-mode hosts
+// both must pass; elsewhere (e.g. next to ForwardAuth) "satisfy any" stays.
+func TestChallengeGateDoesNotLoosenAccessLists(t *testing.T) {
+	al := &model.AccessList{ID: "00000000-0000-0000-0000-0000000000ac", Name: "lan", SatisfyAny: true,
+		Items: []model.AccessListItem{{ID: "00000000-0000-0000-0000-0000000000ad", Directive: "allow", Address: "192.0.2.0/24", SortOrder: 1}}}
+	for _, mode := range gateTLSModes {
+		h := gateTestHost("00000000-0000-0000-0000-0000000000e9", mode.ssl, mode.force, "location /app/ {\n    proxy_pass http://192.0.2.20:8080;\n}\n")
+		challenge := renderForTest(t, ProxyHostConfigData{Host: h, GeoRestriction: geoChallenge(false), AccessList: al})
+		if strings.Contains(challenge, "satisfy any;") {
+			t.Errorf("%s: challenge-mode host renders \"satisfy any\" next to the gate", mode.name)
+		}
+		if !strings.Contains(challenge, "allow 192.0.2.0/24;") || !strings.Contains(challenge, "deny all;") {
+			t.Errorf("%s: access list not rendered", mode.name)
+		}
+		plain := renderForTest(t, ProxyHostConfigData{Host: h, AccessList: al})
+		if !strings.Contains(plain, "    satisfy any;") {
+			t.Errorf("%s: \"satisfy any\" lost on a host without the challenge", mode.name)
+		}
+	}
+}
