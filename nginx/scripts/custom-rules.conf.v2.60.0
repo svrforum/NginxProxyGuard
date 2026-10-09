@@ -1,0 +1,53 @@
+# nginx-proxy-guard Custom ModSecurity Rules
+# Add your custom rules here
+
+# Allow health check endpoints
+SecRule REQUEST_URI "@beginsWith /health" \
+    "id:1000,\
+    phase:1,\
+    pass,\
+    nolog,\
+    ctl:ruleEngine=Off"
+
+# Note: localhost ruleEngine override removed
+# WAF mode is now controlled per-host via nginx-proxy-guard settings
+
+# Allow Socket.IO requests - disable WAF completely for socket.io paths
+# Socket.IO uses text/plain content-type which is blocked by rule 920420
+SecRule REQUEST_URI "@beginsWith /socket.io" \
+    "id:1002,\
+    phase:1,\
+    pass,\
+    nolog,\
+    ctl:ruleEngine=Off"
+
+# Allow common WebSocket upgrade requests
+SecRule REQUEST_HEADERS:Upgrade "@streq websocket" \
+    "id:1003,\
+    phase:1,\
+    pass,\
+    nolog,\
+    ctl:ruleEngine=Off"
+
+# =============================================================================
+# Rule Exclusions for common false positives
+# =============================================================================
+
+# Note: Rule 932260 exclusion for Supabase cookies is handled in main.conf
+# using SecRuleUpdateTargetById for more precise targeting (excludes only
+# specific cookie patterns instead of disabling the entire rule)
+
+# =============================================================================
+# HTTP/3 (QUIC) Compatibility Rules
+# =============================================================================
+
+# HTTP/3 uses :authority pseudo-header instead of Host header
+# ModSecurity does not recognize this yet, causing false positives for rule 920280
+# Only skip this rule for HTTP/3 requests (HTTP version 3.x)
+# HTTP/1.1 and HTTP/2 requests without Host header will still be detected
+SecRule REQUEST_PROTOCOL "@rx ^HTTP/3" \
+    "id:1010,\
+    phase:1,\
+    pass,\
+    nolog,\
+    ctl:ruleRemoveById=920280"

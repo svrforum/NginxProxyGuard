@@ -18,6 +18,12 @@ package nginx
 // exactly. If unsafeRequestPathPattern changes and the file is not regenerated,
 // or an exemption is reintroduced on the raw path, this fails. It runs against
 // the OLD file too (REQUEST_URI, no normalizePath, no chain) and fails it.
+//
+// The file also carried a third engine exemption, id 1003, keyed on the
+// client's "Upgrade: websocket" header: any request that sent the header was
+// exempt. A genuine WebSocket handshake needs no exemption, so 1003 is now a
+// no-op, and this test fails any rule that switches the whole engine off on
+// something other than the guarded normalized path.
 
 import (
 	"errors"
@@ -109,28 +115,36 @@ func TestCustomRulesPathExemptionsUseNormalizedGuard(t *testing.T) {
 		i++
 
 		starter := group[0]
-		fields := strings.Fields(starter)
-		if len(fields) < 2 || fields[0] != "SecRule" {
-			continue
-		}
-		variable := fields[1]
-
-		relaxes := false
-		for _, d := range group {
-			if directiveRelaxesEngine(d) {
-				relaxes = true
-			}
-		}
-		// Only path-keyed engine exemptions must carry the guard. Rule 1003
-		// (REQUEST_HEADERS:Upgrade) and 1010 (REQUEST_PROTOCOL) relax the engine
-		// on a header / protocol, not on the path, so there is no path to guard.
-		if variable != "REQUEST_FILENAME" || !relaxes {
-			continue
+		variable := "" // none for a SecAction, which applies to every request
+		if fields := strings.Fields(starter); len(fields) >= 2 && fields[0] == "SecRule" {
+			variable = fields[1]
 		}
 
 		id := "?"
 		if m := customRuleIDPattern.FindStringSubmatch(starter); m != nil {
 			id = m[1]
+		}
+
+		relaxes, engineOff := false, false
+		for _, d := range group {
+			if directiveRelaxesEngine(d) {
+				relaxes = true
+			}
+			if strings.Contains(d, "ctl:ruleEngine=Off") {
+				engineOff = true
+			}
+		}
+		// Switching the whole engine off is reserved for the guarded path
+		// exemptions below. Keyed on a request header, as 1003 was on Upgrade,
+		// it exempts every request that sends the header: the client picks it
+		// and it plays no part in routing.
+		if engineOff && variable != "REQUEST_FILENAME" {
+			t.Errorf("rule id %s switches the WAF engine off on %q; only a guarded REQUEST_FILENAME path exemption may: %s", id, variable, starter)
+		}
+		// Only path-keyed exemptions must carry the guard. Rule 1010 removes one
+		// rule on the protocol (REQUEST_PROTOCOL), so there is no path to guard.
+		if variable != "REQUEST_FILENAME" || !relaxes {
+			continue
 		}
 		foundIDs[id] = true
 

@@ -293,6 +293,17 @@ update_modsec_configs() {
 }
 update_modsec_configs
 
+# NPG's own rules in modsec/custom-rules.conf (health check, Socket.IO,
+# WebSocket). Unlike the two files above, this one is also the operator's, so it
+# is never overwritten: only NPG's rules in it that were never edited are
+# upgraded, everything else is kept byte for byte (see the script).
+upgrade_custom_rules() {
+    sh /scripts/upgrade-custom-rules.sh "$NGINX_DIR/modsec/custom-rules.conf" \
+        "$NGINX_DEFAULT/modsec/custom-rules.conf" /scripts/custom-rules.conf.v2.60.0 \
+        || echo "[Entrypoint] WARN: could not upgrade NPG's rules in modsec/custom-rules.conf; compare it with $NGINX_DEFAULT/modsec/custom-rules.conf"
+}
+upgrade_custom_rules
+
 # Always update app-managed nginx includes from defaults.
 # These files (block_exploits.conf, proxy_params.conf) are shipped by NPG,
 # their rule IDs (FILE-001, VCS-001, ENV-001, ...) are referenced from the
