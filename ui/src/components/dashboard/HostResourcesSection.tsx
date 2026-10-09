@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { getSystemHealthHistory } from '../../api/settings';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import type { StorageStatus } from '../../types/storage';
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -39,6 +40,25 @@ function getUsageTextColor(percent: number): string {
   return 'text-green-600 dark:text-green-400';
 }
 
+// The disk bar follows the server's alert lines (85/90 by default), so its
+// colour turns when an alert would, not at the CPU/memory 70/90 lines.
+function diskColor(percent: number, storage?: StorageStatus): string {
+  const warn = storage?.thresholds.warn_percent ?? 85;
+  const crit = storage?.thresholds.critical_percent ?? 90;
+  if (percent >= crit) return 'bg-red-500';
+  if (percent >= warn) return 'bg-amber-500';
+  if (percent >= 70) return 'bg-yellow-500';
+  return 'bg-green-500';
+}
+
+function diskTextColor(percent: number, storage?: StorageStatus): string {
+  const warn = storage?.thresholds.warn_percent ?? 85;
+  const crit = storage?.thresholds.critical_percent ?? 90;
+  if (percent >= crit) return 'text-red-600 dark:text-red-400';
+  if (percent >= warn) return 'text-amber-600 dark:text-amber-400';
+  return getUsageTextColor(Math.min(percent, 89));
+}
+
 function formatUptime(seconds: number): string {
   if (!seconds || seconds === 0) return '-';
   const days = Math.floor(seconds / 86400);
@@ -49,7 +69,8 @@ function formatUptime(seconds: number): string {
   return `${mins}m`;
 }
 
-export default function HostResourcesSection({ systemHealth }: {
+export default function HostResourcesSection({ systemHealth, storage }: {
+  storage?: StorageStatus;
   systemHealth: {
     cpu_usage: number;
     memory_usage: number;
@@ -70,6 +91,11 @@ export default function HostResourcesSection({ systemHealth }: {
 }) {
   const { t } = useTranslation('dashboard');
   const [showCharts, setShowCharts] = useState(false);
+  // The tile shows the primary disk (the database's, else Docker's); the
+  // other filesystems are listed under it.
+  const primaryDisk = storage?.filesystems.find((f) => f.roles.includes('db'))
+    ?? storage?.filesystems.find((f) => f.roles.includes('docker'));
+  const otherDisks = (storage?.filesystems ?? []).filter((f) => f.key !== primaryDisk?.key).slice(0, 3);
   const [timeRange, setTimeRange] = useState<typeof TIME_RANGES[number]>(TIME_RANGES[0]);
 
   const { data: historyData, isLoading: historyLoading } = useQuery({
@@ -210,19 +236,57 @@ export default function HostResourcesSection({ systemHealth }: {
               </svg>
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('hostResources.disk')}</span>
             </div>
-            <span className={`text-lg font-bold ${getUsageTextColor(systemHealth.disk_usage)}`}>
+            <span className={`text-lg font-bold ${diskTextColor(systemHealth.disk_usage, storage)}`}>
               {systemHealth.disk_usage?.toFixed(1) || '0'}%
             </span>
           </div>
           <div className="w-full bg-gray-200 dark:bg-slate-600 rounded-full h-2.5">
             <div
-              className={`h-2.5 rounded-full transition-all duration-500 ${getUsageColor(systemHealth.disk_usage)}`}
+              data-testid="disk-usage-bar"
+              className={`h-2.5 rounded-full transition-all duration-500 ${diskColor(systemHealth.disk_usage, storage)}`}
               style={{ width: `${Math.min(systemHealth.disk_usage || 0, 100)}%` }}
             ></div>
           </div>
           <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
             {formatBytes(systemHealth.disk_used || 0)} / {formatBytes(systemHealth.disk_total || 0)}
           </div>
+          {systemHealth.disk_path && systemHealth.disk_path !== '/' && (
+            <div className="text-[11px] text-gray-400 dark:text-gray-500 truncate" title={systemHealth.disk_path}>
+              {systemHealth.disk_path}
+            </div>
+          )}
+          {/* Other disks NPG writes to, when they are separate. At most five
+              roles exist and the list is capped anyway (unbounded lists in a
+              card cell broke layouts before). */}
+          {otherDisks.length > 0 && (
+            <ul className="mt-2 space-y-1" data-testid="disk-other-filesystems">
+              {otherDisks.map((f) => (
+                <li key={f.key} className="text-[11px] text-gray-500 dark:text-gray-400">
+                  <div className="flex justify-between gap-2">
+                    <span className="truncate" title={f.path}>
+                      {f.roles.map((r) => t(`storage.roles.${r}`, { defaultValue: r })).join(', ')}
+                    </span>
+                    <span className={diskTextColor(f.used_percent, storage)}>{f.used_percent.toFixed(1)}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 dark:bg-slate-600 rounded-full h-1">
+                    <div className={`h-1 rounded-full ${diskColor(f.used_percent, storage)}`} style={{ width: `${Math.min(f.used_percent, 100)}%` }} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+          {storage && !storage.database.measured && (
+            <div className="mt-1 text-[11px] text-amber-600 dark:text-amber-400" data-testid="disk-db-not-measured">
+              {t('storage.dbNotMeasured', { reason: t(`storage.dbReason.${storage.database.reason || 'db_container_not_found'}`) })}
+            </div>
+          )}
+          {storage?.stalled && storage.stalled.length > 0 && (
+            <div className="mt-1 text-[11px] text-amber-600 dark:text-amber-400 break-all" data-testid="disk-stalled">
+              {t('storage.stalled', {
+                disks: storage.stalled.slice(0, 3).map((d) => `${t(`storage.roles.${d.role}`, { defaultValue: d.role })} (${d.path})`).join(', '),
+              })}
+            </div>
+          )}
         </div>
 
         {/* Network I/O */}

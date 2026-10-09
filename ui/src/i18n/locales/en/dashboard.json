@@ -74,5 +74,47 @@
     "topCountries": "Top Countries (24h)",
     "total": "Total: {{count}} requests",
     "totalRequests": "Total: {{count}} requests"
+  },
+  "storage": {
+    "banner": {
+      "low": "Disk space is running low",
+      "critical": "Disk space is critical",
+      "usage": "{{percent}}% used — {{free}} free of {{total}} on the disk holding {{roles}}",
+      "forecast": "Growing about {{growth}} a day; at this rate it is full in about {{days}} days.",
+      "hint": "Logs are what fills a home server. Shorten log retention or add disk space before the database runs out of room.",
+      "retentionLink": "Log retention",
+      "alertsLink": "Disk alerts"
+    },
+    "emergency": {
+      "running": "Compressing older log chunks to win space back (nothing is deleted): {{done}}/{{total}}",
+      "done": "Compressed {{count}} older log chunk(s) and freed {{freed}}. Nothing was deleted.",
+      "dryRun": "Dry run: {{count}} older log chunk(s) could be compressed. Nothing was changed (NPG_DISK_EMERGENCY_COMPRESS=dryrun).",
+      "off": "Emergency compression is turned off (NPG_DISK_EMERGENCY_COMPRESS=off). Free some space by hand.",
+      "blocked": {
+        "insufficient_space": "Too little free space to compress older logs safely. Free some space by hand.",
+        "nothing_to_compress": "Older logs are already compressed. Free some space by hand.",
+        "policy_running": "The scheduled log compression is running right now; trying again in a minute.",
+        "another_pass_running": "Another job is rewriting log chunks right now; trying again in a minute.",
+        "chunks_busy": "The older log chunks are busy with another job; trying again in a minute.",
+        "db_disk_unmeasured": "The database disk could not be measured, so nothing was compressed.",
+        "compress_failed": "Compressing older logs failed. See the API container log.",
+        "error": "Emergency compression stopped. See the API container log."
+      }
+    },
+    "roles": {
+      "db": "database",
+      "nginx_logs": "nginx logs",
+      "archive": "raw log archive",
+      "backups": "backups",
+      "docker": "Docker images and container logs"
+    },
+    "dbNotMeasured": "Database disk not measured: {{reason}}",
+    "dbReason": {
+      "db_container_not_found": "set NPG_DB_CONTAINER to your database container's name",
+      "db_external": "the database is not on this host",
+      "db_exec_failed": "running stat in the database container failed",
+      "docker_unavailable": "Docker is not reachable from the API"
+    },
+    "stalled": "Not answering, so not measured (a hung network mount?): {{disks}}"
   }
 }

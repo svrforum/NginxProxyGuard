@@ -74,5 +74,47 @@
     "topCountries": "상위 국가 (24시간)",
     "total": "총: {{count}} 요청",
     "totalRequests": "총: {{count}} 요청"
+  },
+  "storage": {
+    "banner": {
+      "low": "디스크 공간이 부족해지고 있습니다",
+      "critical": "디스크 공간이 위험합니다",
+      "usage": "{{roles}}이(가) 있는 디스크 {{percent}}% 사용 — 전체 {{total}} 중 {{free}} 남음",
+      "forecast": "하루 약 {{growth}}씩 늘고 있어, 이대로면 약 {{days}}일 뒤 가득 찹니다.",
+      "hint": "홈서버 디스크를 채우는 건 대부분 로그입니다. 데이터베이스가 쓸 공간을 잃기 전에 로그 보관 기간을 줄이거나 디스크를 늘리세요.",
+      "retentionLink": "로그 보관 기간",
+      "alertsLink": "디스크 알림"
+    },
+    "emergency": {
+      "running": "지난 로그 청크를 압축해 공간을 되찾는 중입니다(지우는 데이터 없음): {{done}}/{{total}}",
+      "done": "지난 로그 청크 {{count}}개를 압축해 {{freed}}를 확보했습니다. 지운 데이터는 없습니다.",
+      "dryRun": "시험 실행: 지난 로그 청크 {{count}}개를 압축할 수 있습니다. 바뀐 것은 없습니다(NPG_DISK_EMERGENCY_COMPRESS=dryrun).",
+      "off": "비상 압축이 꺼져 있습니다(NPG_DISK_EMERGENCY_COMPRESS=off). 공간을 직접 확보하세요.",
+      "blocked": {
+        "insufficient_space": "지난 로그를 안전하게 압축할 여유 공간이 없습니다. 공간을 직접 확보하세요.",
+        "nothing_to_compress": "지난 로그는 이미 압축되어 있습니다. 공간을 직접 확보하세요.",
+        "policy_running": "예약된 로그 압축이 지금 실행 중이라 1분 뒤 다시 시도합니다.",
+        "another_pass_running": "다른 작업이 로그 청크를 다시 쓰는 중이라 1분 뒤 다시 시도합니다.",
+        "chunks_busy": "지난 로그 청크를 다른 작업이 쓰고 있어 1분 뒤 다시 시도합니다.",
+        "db_disk_unmeasured": "데이터베이스 디스크를 측정하지 못해 압축하지 않았습니다.",
+        "compress_failed": "지난 로그 압축에 실패했습니다. API 컨테이너 로그를 확인하세요.",
+        "error": "비상 압축이 중단되었습니다. API 컨테이너 로그를 확인하세요."
+      }
+    },
+    "roles": {
+      "db": "데이터베이스",
+      "nginx_logs": "nginx 로그",
+      "archive": "원본 로그 보관소",
+      "backups": "백업",
+      "docker": "Docker 이미지·컨테이너 로그"
+    },
+    "dbNotMeasured": "데이터베이스 디스크를 측정하지 못했습니다: {{reason}}",
+    "dbReason": {
+      "db_container_not_found": "NPG_DB_CONTAINER에 데이터베이스 컨테이너 이름을 지정하세요",
+      "db_external": "데이터베이스가 이 호스트에 없습니다",
+      "db_exec_failed": "데이터베이스 컨테이너에서 stat 실행에 실패했습니다",
+      "docker_unavailable": "API에서 Docker에 접근할 수 없습니다"
+    },
+    "stalled": "응답이 없어 측정하지 못했습니다(네트워크 마운트 멈춤?): {{disks}}"
   }
 }

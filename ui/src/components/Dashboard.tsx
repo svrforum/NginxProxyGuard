@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getDashboard, runSelfCheck, getContainerStats, getGeoIPStats } from '../api/settings';
 import WorldMapVisualization from './WorldMapVisualization';
 import HostResourcesSection from './dashboard/HostResourcesSection';
+import StorageAlertBanner from './dashboard/StorageAlertBanner';
 import ContainerStatsSection from './dashboard/ContainerStatsSection';
 
 function formatBytes(bytes: number): string {
@@ -103,9 +104,12 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* A disk filling up (D4): above the rest of the dashboard on purpose. */}
+      <StorageAlertBanner storage={dashboard?.storage} />
+
       {/* Host System Resources */}
       {dashboard?.system_health && (
-        <HostResourcesSection systemHealth={dashboard.system_health} />
+        <HostResourcesSection systemHealth={dashboard.system_health} storage={dashboard.storage} />
       )}
 
       {/* Container Resources - Collapsible */}

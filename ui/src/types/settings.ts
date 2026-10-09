@@ -1,3 +1,5 @@
+import type { StorageStatus } from './storage';
+
 // Global Settings Types
 export interface GlobalSettings {
   id: string;
@@ -257,6 +259,9 @@ export interface DashboardSummary {
   top_countries: CountryStat[];
   top_ips: IPStat[];
   top_user_agents: UserAgentStat[];
+  /** Live disk picture from DiskGuard (D1-D4). Absent until its first
+   *  measurement, when it is disabled, and from APIs older than this field. */
+  storage?: StorageStatus;
 }
 
 // Backup Types
