@@ -121,6 +121,11 @@ type fsState struct {
 	level        DiskLevel
 	pending      DiskLevel
 	pendingCount int
+	// lastSampleAt is when the last counted sample was taken. A provider may
+	// hand back the same measurement twice (the database disk is measured
+	// through docker exec every few minutes, not every tick); the same
+	// sample must not confirm itself.
+	lastSampleAt time.Time
 	// announcedLow / announcedCritical mirror notification_state, so the
 	// guard calls EmitTransition only on a change instead of every minute.
 	announcedLow      bool
@@ -229,14 +234,20 @@ func (g *DiskGuard) Tick(ctx context.Context) {
 		st := g.stateFor(ctx, fs.Key)
 		st.missingSince = time.Time{}
 		prev := st.level
-		g.advance(st, fs.UsedPercent)
+		g.advance(st, fs.UsedPercent, fs.MeasuredAt)
 		fs.Level = st.level
 		g.record(fs.Key, now, fs.Used)
 		if st.level != prev {
 			g.logTransition(*fs, prev, st.level)
 		}
-		g.announce(ctx, *fs, st, now)
-		if st.level >= DiskLevelLow {
+		// Nothing is announced until the alert state is known; it is read
+		// again next tick.
+		if st.loaded {
+			g.announce(ctx, *fs, st, now)
+		}
+		// Past the warning line, or a level change waiting for its
+		// confirming sample: measure the database disk afresh next tick.
+		if st.level >= DiskLevelLow || st.pendingCount > 0 {
 			urgent = true
 		}
 		// Compressing the database only frees space on the database's disk.
@@ -284,8 +295,12 @@ func primaryDiskKey(fss []FSUsage) string {
 	return ""
 }
 
-// stateFor loads a filesystem's level from notification_state the first time
-// it is seen, so a restart neither re-announces nor forgets an open alert.
+// stateFor loads a filesystem's alert state from notification_state the first
+// time it is seen, so a restart neither re-announces nor forgets an open
+// alert. A read that fails (the database is busy, or down because it is the
+// full disk) is retried next tick; until then the level is still tracked but
+// nothing is announced, because an open alert that was never read could not
+// be closed.
 func (g *DiskGuard) stateFor(ctx context.Context, key string) *fsState {
 	g.mu.Lock()
 	st := g.fs[key]
@@ -297,29 +312,45 @@ func (g *DiskGuard) stateFor(ctx context.Context, key string) *fsState {
 	if st.loaded {
 		return st
 	}
-	st.loaded = true
 	if g.state == nil {
+		st.loaded = true
 		return st
 	}
-	if s, err := g.state.GetState(ctx, eventDiskCritical, key); err == nil && s == stateFailing {
-		st.announcedCritical = true
+	crit, errCrit := g.state.GetState(ctx, eventDiskCritical, key)
+	low, errLow := g.state.GetState(ctx, eventDiskLow, key)
+	if errCrit != nil || errLow != nil {
+		return st
 	}
-	if s, err := g.state.GetState(ctx, eventDiskLow, key); err == nil && s == stateFailing {
-		st.announcedLow = true
-	}
+	st.loaded = true
+	st.announcedCritical = crit == stateFailing
+	st.announcedLow = low == stateFailing
+	restored := DiskLevelOK
 	switch {
 	case st.announcedCritical:
-		st.level = DiskLevelCritical
+		restored = DiskLevelCritical
 	case st.announcedLow:
-		st.level = DiskLevelLow
+		restored = DiskLevelLow
 	}
-	st.pending = st.level
+	// The higher of what was announced and what has been measured since: the
+	// samples then take it from there, with the usual confirmation.
+	if restored > st.level {
+		st.level = restored
+	}
+	st.pending, st.pendingCount = st.level, 0
 	return st
 }
 
 // advance moves the level only after ConfirmSamples consecutive samples agree,
 // so a momentary spike — a backup tarball written and moved — is not an alert.
-func (g *DiskGuard) advance(st *fsState, pct float64) {
+// A sample taken at the same moment as the last one is the same sample and is
+// not counted again.
+func (g *DiskGuard) advance(st *fsState, pct float64, at time.Time) {
+	if !at.IsZero() {
+		if at.Equal(st.lastSampleAt) {
+			return
+		}
+		st.lastSampleAt = at
+	}
 	cand := nextDiskLevel(st.level, pct, g.opts.Thresholds)
 	if cand == st.level {
 		st.pending, st.pendingCount = st.level, 0

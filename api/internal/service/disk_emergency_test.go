@@ -417,3 +417,28 @@ func TestDiskCriticalActionIsTranslated(t *testing.T) {
 		t.Error("action must pass the allowlist")
 	}
 }
+
+// panickyRepo blows up mid-pass.
+type panickyRepo struct{ fakeEmergencyRepo }
+
+func (p *panickyRepo) CompressionCandidates(context.Context, int64) ([]repository.ChunkCandidate, error) {
+	panic("unexpected nil in a chunk row")
+}
+
+// A pass runs off the scheduler's goroutine; a panic in it must end the pass,
+// not the API.
+func TestEmergencyPassSurvivesAPanic(t *testing.T) {
+	repo := &panickyRepo{fakeEmergencyRepo{disk: &FSUsage{Total: 100, Used: 95, Avail: 5}}}
+	e := NewEmergencyCompressor(context.Background(), repo, func(context.Context) (*FSUsage, error) {
+		d := *repo.disk
+		return &d, nil
+	}, EmergencyOn)
+	e.TriggerAsync(*repo.disk)
+	e.Wait()
+	if st := e.Status(); st.State != "blocked" || st.Reason != "error" {
+		t.Fatalf("status after a panic = %#v", st)
+	}
+	if e.running.Load() {
+		t.Fatal("the pass slot stayed taken after a panic")
+	}
+}

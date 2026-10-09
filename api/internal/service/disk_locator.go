@@ -64,14 +64,27 @@ func databaseHost(dsn string) string {
 	return ""
 }
 
-func (l *dbLocator) running(ctx context.Context, name string) bool {
+// runningByName returns the canonical name of the running container that is
+// called exactly name, or "" when there is none.
+//
+// `container inspect`, not `inspect`: an image or volume named "db" must not
+// answer for a container. And the name it reports must be the one asked for:
+// Docker also resolves an argument as a container-ID prefix, and the release
+// compose's host "db" is two hex digits — any running container whose ID
+// starts with "db" would otherwise answer, and its disk would be measured.
+func (l *dbLocator) runningByName(ctx context.Context, name string) string {
 	if !containerNameRe.MatchString(name) {
-		return false
+		return ""
 	}
-	// `container inspect`, not `inspect`: an image or volume named "db" must
-	// not answer for a container.
-	out, err := l.run(ctx, "container", "inspect", "-f", "{{.State.Running}}", "--", name)
-	return err == nil && strings.TrimSpace(string(out)) == "true"
+	out, err := l.run(ctx, "container", "inspect", "-f", "{{.Name}}|{{.State.Running}}", "--", name)
+	if err != nil {
+		return ""
+	}
+	got, running, _ := strings.Cut(strings.TrimSpace(string(out)), "|")
+	if strings.TrimPrefix(got, "/") != name || running != "true" {
+		return ""
+	}
+	return name
 }
 
 // locate names the container that serves DATABASE_URL, or explains why not
@@ -85,8 +98,8 @@ func (l *dbLocator) running(ctx context.Context, name string) bool {
 // e2e stack it would measure the wrong database.
 func (l *dbLocator) locate(ctx context.Context) (name, reason string) {
 	if l.env != "" {
-		if l.running(ctx, l.env) {
-			return l.env, ""
+		if n := l.runningByName(ctx, l.env); n != "" {
+			return n, ""
 		}
 		return "", "db_container_not_found"
 	}
@@ -97,8 +110,8 @@ func (l *dbLocator) locate(ctx context.Context) (name, reason string) {
 	if ip := net.ParseIP(h); ip != nil && ip.IsLoopback() {
 		return "", "db_container_not_found"
 	}
-	if l.running(ctx, h) {
-		return h, ""
+	if n := l.runningByName(ctx, h); n != "" {
+		return n, ""
 	}
 	addrs, err := l.lookup(ctx, h)
 	if err != nil || len(addrs) == 0 {

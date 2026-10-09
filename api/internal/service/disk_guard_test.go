@@ -21,6 +21,9 @@ type fakeDiskUsage struct {
 	stalled []StalledDisk
 	urgent  bool
 	dbErr   error
+	// fixedAt, when set, is reported as every sample's measurement time:
+	// the provider handing back one cached measurement.
+	fixedAt time.Time
 }
 
 const diskTestTotal = uint64(200 << 30)
@@ -31,8 +34,12 @@ func (f *fakeDiskUsage) fs(key string, p float64) FSUsage {
 	if roles == nil {
 		roles = []DiskRole{DiskRole(key)}
 	}
+	at := time.Now()
+	if !f.fixedAt.IsZero() {
+		at = f.fixedAt
+	}
 	return FSUsage{Key: key, Roles: roles, Path: "npg-db:/var/lib/postgresql/data",
-		Total: diskTestTotal, Used: used, Avail: diskTestTotal - used, UsedPercent: p, MeasuredAt: time.Now()}
+		Total: diskTestTotal, Used: used, Avail: diskTestTotal - used, UsedPercent: p, MeasuredAt: at}
 }
 
 func (f *fakeDiskUsage) Measure(context.Context) ([]FSUsage, []StalledDisk, error) {
@@ -473,5 +480,75 @@ func TestDiskGuardLogsAFailingAlertOnceAndRetries(t *testing.T) {
 	g.Tick(context.Background())
 	if strings.Join(n.sent, " ") != "disk.space_low/true disk.space_critical/true" {
 		t.Fatalf("after the database recovered: %v", n.sent)
+	}
+}
+
+// Without a volume on the same disk, the database disk is measured through
+// docker exec every few minutes and the provider hands back the last result in
+// between. One cached sample must not confirm itself, and a pending change
+// must ask for a fresh measurement.
+func TestDiskGuardSameSampleDoesNotConfirmItself(t *testing.T) {
+	g, u, store, c := newTestDiskGuard(t)
+	u.fixedAt = time.Date(2026, 10, 9, 11, 58, 0, 0, time.UTC)
+	diskTickAt(g, u, c, 86)
+	if !u.urgent {
+		t.Fatal("a pending level change must ask for a fresh database measurement")
+	}
+	diskTickAt(g, u, c, 86)
+	if len(store.enqueued) != 0 {
+		t.Fatalf("one cached sample confirmed itself: %v", diskEvents(store))
+	}
+	u.fixedAt = u.fixedAt.Add(2 * time.Minute) // a fresh exec
+	diskTickAt(g, u, c, 86)
+	if got := diskEvents(store); len(got) != 1 || got[0] != "disk.space_low/warning" {
+		t.Fatalf("got %v, want one disk.space_low/warning", got)
+	}
+}
+
+// flakyStateReader fails the first reads, as a database that is busy (or down)
+// right after the API starts.
+type flakyStateReader struct {
+	fails int
+	store *fakeStore
+}
+
+func (f *flakyStateReader) GetState(ctx context.Context, key, subject string) (string, error) {
+	if f.fails > 0 {
+		f.fails--
+		return "", errors.New("database is starting up")
+	}
+	return f.store.GetState(ctx, key, subject)
+}
+
+// An alert left open by the previous process (the disk recovered while the
+// API was down) must be read before anything is announced, even when the
+// first read fails; otherwise it is never closed, and the next episode on that
+// disk is swallowed because the state already says "failing".
+func TestDiskGuardRetriesAFailedStateRead(t *testing.T) {
+	store := newFakeStore(eventDiskLow, eventDiskCritical, eventDiskRecovered)
+	store.state[eventDiskLow+"|db"] = stateFailing
+	u := &fakeDiskUsage{pct: map[string]float64{"db": 70}, roles: map[string][]DiskRole{"db": {DiskRoleDB}}}
+	c := &diskClock{t: time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)}
+	g := NewDiskGuard(u, NewNotificationServiceWithStore(store), &flakyStateReader{fails: 2, store: store}, nil,
+		DiskGuardOptions{ConfirmSamples: 2, Now: c.now})
+	for i := 0; i < 4; i++ {
+		diskTickAt(g, u, c, 70)
+	}
+	if got := diskEvents(store); len(got) != 1 || got[0] != "disk.space_recovered/resolved" {
+		t.Fatalf("got %v, want the stale alert closed with one recovery", got)
+	}
+	if s, _ := store.GetState(context.Background(), eventDiskLow, "db"); s != stateOK {
+		t.Fatalf("state = %q", s)
+	}
+}
+
+func TestDiskPathFitsTheColumn(t *testing.T) {
+	long := "npg-db:/" + strings.Repeat("데이터/", 120) + "pgdata"
+	got := fitDiskPath(long)
+	if n := len([]rune(got)); n != maxDiskPathRunes || !strings.HasSuffix(got, "pgdata") || !strings.HasPrefix(got, "…") {
+		t.Fatalf("fitDiskPath = %d runes %q", n, got)
+	}
+	if fitDiskPath("npg-db:/var/lib/postgresql/data") != "npg-db:/var/lib/postgresql/data" {
+		t.Fatal("a normal path must pass through")
 	}
 }

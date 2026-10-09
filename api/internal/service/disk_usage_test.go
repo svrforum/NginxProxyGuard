@@ -114,8 +114,12 @@ type diskFakeDocker struct {
 	mu      sync.Mutex
 	calls   []string
 	running map[string]bool
-	ps      string
-	inspect string
+	// idPrefix maps an argument to the container Docker resolves it to by
+	// ID prefix (a different name), as `docker container inspect db` does when
+	// some container's ID starts with "db".
+	idPrefix map[string]string
+	ps       string
+	inspect  string
 }
 
 func (f *diskFakeDocker) run(_ context.Context, args ...string) ([]byte, error) {
@@ -124,8 +128,12 @@ func (f *diskFakeDocker) run(_ context.Context, args ...string) ([]byte, error) 
 	f.mu.Unlock()
 	switch {
 	case args[0] == "container" && strings.Contains(strings.Join(args, " "), "{{.State.Running}}"):
-		if f.running[args[len(args)-1]] {
-			return []byte("true\n"), nil
+		name := args[len(args)-1]
+		if f.running[name] {
+			return []byte("/" + name + "|true\n"), nil
+		}
+		if other := f.idPrefix[name]; other != "" {
+			return []byte("/" + other + "|true\n"), nil
 		}
 		return nil, errors.New("No such container")
 	case args[0] == "ps":
@@ -179,6 +187,20 @@ func TestDBLocator(t *testing.T) {
 		if name, reason := l.locate(ctx); name != "" || reason != "db_container_not_found" {
 			t.Fatalf("host %q: got %q (%s)", h, name, reason)
 		}
+	}
+
+	// The release compose's host "db" is also a valid container-ID prefix.
+	// A container whose ID starts with "db" must not answer for it: the
+	// address match finds the real database.
+	d = &diskFakeDocker{running: map[string]bool{}, idPrefix: map[string]string{"db": "some-other-stack-app"},
+		ps: "aaa\nbbb\n", inspect: "/some-other-stack-app|192.0.2.7 \n/npg-db|192.0.2.3 \n"}
+	l = &dbLocator{run: d.run, dbHost: "db", lookup: lookup}
+	if name, reason := l.locate(ctx); name != "npg-db" {
+		t.Fatalf("ID-prefix match: got %q (%s), want npg-db", name, reason)
+	}
+	l = &dbLocator{run: d.run, env: "db", lookup: lookup}
+	if name, reason := l.locate(ctx); name != "" || reason != "db_container_not_found" {
+		t.Fatalf("NPG_DB_CONTAINER matching only an ID prefix: got %q (%s)", name, reason)
 	}
 
 	// A name that could be read as a flag is never passed to docker.

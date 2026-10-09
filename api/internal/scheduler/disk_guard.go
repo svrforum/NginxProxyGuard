@@ -35,8 +35,11 @@ type DiskGuardScheduler struct {
 // NewDiskGuardScheduler takes the context everything DiskGuard starts is tied
 // to, so Stop also ends work it left running.
 func NewDiskGuardScheduler(ctx context.Context, cancel context.CancelFunc, g *service.DiskGuard, interval time.Duration) *DiskGuardScheduler {
-	if interval < diskGuardMinInterval {
+	switch {
+	case interval <= 0:
 		interval = time.Minute
+	case interval < diskGuardMinInterval:
+		interval = diskGuardMinInterval
 	}
 	return &DiskGuardScheduler{guard: g, interval: interval, ctx: ctx, cancel: cancel}
 }

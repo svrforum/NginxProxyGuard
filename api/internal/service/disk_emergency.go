@@ -215,6 +215,18 @@ func (e *EmergencyCompressor) TriggerAsync(fs FSUsage) {
 	go func() {
 		defer e.wg.Done()
 		defer e.running.Store(false)
+		// The pass runs off the scheduler's goroutine, so the scheduler's
+		// recover does not cover it; a panic here would end the whole API.
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[DiskGuard] emergency compression panicked: %v", r)
+				e.mu.Lock()
+				now := e.now()
+				e.status.State, e.status.Reason, e.status.FinishedAt = "blocked", "error", &now
+				e.lastEnd, e.wait, e.lastQuiet = now, emergencyRetryAfter, ""
+				e.mu.Unlock()
+			}
+		}()
 		ctx, cancel := context.WithTimeout(e.base, emergencyPassTimeout)
 		defer cancel()
 		e.runPass(ctx, fs)

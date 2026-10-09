@@ -35,13 +35,28 @@ func primaryDiskUsage(src diskPrimarySource) (pct float64, total, used uint64, p
 				// whichever role happens to name the shared filesystem.
 				return fs.UsedPercent, fs.Total, fs.Used, "/", true
 			}
-			return fs.UsedPercent, fs.Total, fs.Used, fs.Path, true
+			return fs.UsedPercent, fs.Total, fs.Used, fitDiskPath(fs.Path), true
 		}
 	}
 	if d, err := disk.Usage("/"); err == nil {
 		return d.UsedPercent, d.Total, d.Used, "/", true
 	}
 	return 0, 0, 0, "", false
+}
+
+// maxDiskPathRunes is system_health.disk_path's varchar(255). The database's
+// path is "<container>:<data_directory>", which a long data_directory could
+// push past it — and a rejected row would stop system_health altogether.
+const maxDiskPathRunes = 255
+
+// fitDiskPath keeps the end of an over-long path, the part that tells disks
+// apart.
+func fitDiskPath(p string) string {
+	r := []rune(p)
+	if len(r) <= maxDiskPathRunes {
+		return p
+	}
+	return "…" + string(r[len(r)-(maxDiskPathRunes-1):])
 }
 
 // SetDiskSource wires DiskGuard into the stats collector, which writes
