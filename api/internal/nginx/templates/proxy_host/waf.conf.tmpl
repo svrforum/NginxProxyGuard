@@ -38,8 +38,9 @@
         # runs as an auth_request subrequest (ACCESS phase) - so ModSecurity
         # phase 2 inspects the request BEFORE any challenge redirect. A
         # rewrite-phase `return 302` here would silently skip phase 2.
-        # Cookieless geo-blocked visitors get a local 401 from the gate (no API
-        # round-trip); API returns 200 for search bots, so they aren't redirected.
+        # The gate answers locally for everyone except a challenged visitor
+        # carrying a token; search bots the host allows were already cleared
+        # from $geo_blocked by _security.
         auth_request /_challenge/validate;
         error_page 401 = @challenge_redirect;
         error_page 500 502 503 504 = @api_fallback;
@@ -147,8 +148,9 @@
         # runs as an auth_request subrequest (ACCESS phase) - so ModSecurity
         # phase 2 inspects the request BEFORE any challenge redirect. A
         # rewrite-phase `return 302` here would silently skip phase 2.
-        # Cookieless geo-blocked visitors get a local 401 from the gate (no API
-        # round-trip); API returns 200 for search bots, so they aren't redirected.
+        # The gate answers locally for everyone except a challenged visitor
+        # carrying a token; search bots the host allows were already cleared
+        # from $geo_blocked by _security.
         auth_request /_challenge/validate;
         error_page 401 = @challenge_redirect;
         error_page 500 502 503 504 = @api_fallback;

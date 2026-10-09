@@ -10094,19 +10094,24 @@ paths:
       tags: [Challenge]
       summary: Validate a challenge bypass token (public, called by nginx auth_request)
       description: |
-        The `auth_request` target nginx calls on every request to a
-        challenge-protected host. Answers with a bare status code and NO body:
-        200 lets the request through, 401 makes nginx send the visitor to the
-        challenge page.
+        The token check behind nginx's challenge gate. Answers with a bare
+        status code and NO body: 200 lets the request through, 401 makes nginx
+        send the visitor to the challenge page.
+
+        nginx decides who is challenged. Its internal `/_challenge/validate`
+        location answers 204 itself for a visitor the host does not challenge
+        and 401 for a challenged visitor without a token, and calls this
+        endpoint only for a challenged visitor carrying a token, with
+        `X-Geo-Blocked: 1`. On a challenge-mode host nginx answers the public
+        path `/api/v1/challenge/validate` with 404.
 
         All input arrives in headers/cookies, none in the query string:
 
-        - `X-Geo-Blocked: 0` — country is allowed; passes immediately (200) without
-          looking at any token.
-        - Known search-engine crawler `User-Agent` (Googlebot, bingbot, …) — passes
-          immediately (200).
+        - `X-Geo-Blocked` — set by nginx. `0` (sent only by configs rendered by
+          older versions) means "not challenged" and returns 200 without looking
+          at any token; any other value, or none, requires a token.
         - `X-Challenge-Token` header, else cookie `ng_challenge` — the token to
-          validate. Missing → 401.
+          validate. Missing → 401. The User-Agent is never consulted.
         - `X-Proxy-Host-ID` — optional; scopes the token check to that host.
 
         Public — no authentication, no permission.
@@ -10115,7 +10120,7 @@ paths:
         - name: X-Geo-Blocked
           in: header
           required: false
-          description: '`0` means "not geo-blocked" and short-circuits to 200.'
+          description: 'Set by nginx. `0` (configs rendered by older versions) means "not challenged" and short-circuits to 200; anything else requires a token.'
           schema:
             type: string
         - name: X-Challenge-Token
@@ -10133,7 +10138,7 @@ paths:
             format: uuid
       responses:
         '200':
-          description: Allowed — valid token, allowed country, or a known search bot (empty body)
+          description: 'Allowed — valid token, or `X-Geo-Blocked: 0` from a config rendered by an older version (empty body)'
         '401':
           description: No token, or the token is invalid/expired/revoked (empty body)
   /challenge/favicon.ico:

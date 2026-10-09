@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/labstack/echo/v4"
@@ -47,17 +46,6 @@ func escapeJS(s string) string {
 // Uses the standard html.EscapeString for proper HTML entity encoding
 func escapeHTML(s string) string {
 	return html.EscapeString(s)
-}
-
-// searchBotPattern matches known search engine bot user agents
-var searchBotPattern = regexp.MustCompile(`(?i)(Googlebot|Googlebot-Mobile|Googlebot-Image|Googlebot-News|Googlebot-Video|AdsBot-Google|AdsBot-Google-Mobile|Mediapartners-Google|APIs-Google|FeedFetcher-Google|Google-Read-Aloud|DuplexWeb-Google|Storebot-Google|Google-InspectionTool|GoogleOther|bingbot|msnbot|BingPreview|Slurp|DuckDuckBot|Baiduspider|YandexBot|yandex|Sogou|Exabot|facebot|ia_archiver|applebot|naverbot|Yeti|seznambot|petalbot|360spider|qwantify)`)
-
-// isSearchBot checks if the user agent is a known search engine bot
-func isSearchBot(userAgent string) bool {
-	if userAgent == "" {
-		return false
-	}
-	return searchBotPattern.MatchString(strings.ToLower(userAgent))
 }
 
 // Embedded favicon data (loaded at startup)
@@ -299,17 +287,21 @@ func sanitizeReturnURL(returnURL, requestHost string) string {
 	return "/"
 }
 
-// ValidateToken validates a bypass token (internal endpoint for nginx auth_request)
+// ValidateToken checks a challenge token for nginx's auth_request gate.
+//
+// nginx decides whether a visitor has to pass the challenge. Its
+// /_challenge/validate location answers 204 itself for a visitor the host does
+// not challenge ($geo_blocked is 0: an allowed country, a private, priority or
+// trusted IP, or a search bot the host allows) and 401 for a challenged
+// visitor without a token. It asks this endpoint only about a challenged
+// visitor that carries a token, so the answer depends on the token alone.
+// Nothing the client controls, such as the User-Agent, may grant access here.
 func (h *ChallengeHandler) ValidateToken(c echo.Context) error {
-	// Check if country is allowed (not geo-blocked) - pass through without challenge
-	geoBlocked := c.Request().Header.Get("X-Geo-Blocked")
-	if geoBlocked == "0" {
-		return c.NoContent(http.StatusOK)
-	}
-
-	// Check if request is from a search engine bot - allow them through
-	userAgent := c.Request().UserAgent()
-	if isSearchBot(userAgent) {
+	// Configs rendered by older versions also ask about visitors nginx does
+	// not challenge, flagged X-Geo-Blocked: 0. nginx sets this header itself
+	// (proxy_set_header replaces a copy sent by the client); current configs
+	// always send 1. Missing or any other value: the token decides.
+	if c.Request().Header.Get("X-Geo-Blocked") == "0" {
 		return c.NoContent(http.StatusOK)
 	}
 
