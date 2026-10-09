@@ -377,8 +377,9 @@ func (s *reclaimSession) ReleaseSharedLock() error {
 	}
 	err := ReleaseMaintenanceLock(s.conn)
 	if err != nil {
-		// Unlocking failed, so end the session: the server drops its locks
-		// with it, and the next statement fails instead of running unlocked.
+		// Unlocking failed, so ReleaseMaintenanceLock has ended the session
+		// and the server dropped its locks with it. Mark it closed: the next
+		// statement fails instead of running unlocked.
 		s.discard()
 	}
 	s.sharedHeld = false

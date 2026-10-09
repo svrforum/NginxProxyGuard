@@ -3,11 +3,15 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/lib/pq"
+
+	"nginx-proxy-guard/internal/database"
 )
 
 // StorageMaintenanceRepository holds the SQL behind DiskGuard's handling of
@@ -50,13 +54,19 @@ const StorageMaintenanceLockKey int64 = 0x6e70675f73746f72 // "npg_stor"
 // cancelled caller still releases.
 const maintenanceUnlockTimeout = 5 * time.Second
 
+// discardUnlockTimeout bounds the best-effort pg_advisory_unlock_all of a
+// session that is being ended anyway.
+const discardUnlockTimeout = 2 * time.Second
+
 // TryMaintenanceLock takes StorageMaintenanceLockKey on conn without waiting.
 // false means another job holds it; wait and try again.
 //
 // An advisory lock belongs to the database session, so conn must be a
 // connection the caller pins (sql.DB.Conn) for as long as it holds the lock,
-// and the lock is released by ReleaseMaintenanceLock on that same conn. It is
-// re-entrant per session: every successful call needs its own release.
+// and the lock is released by ReleaseMaintenanceLock on that same conn.
+// Closing conn does not release it: Close hands the connection back to the
+// pool with its session, and the lock, still alive. It is re-entrant per
+// session: every successful call needs its own release.
 func TryMaintenanceLock(ctx context.Context, conn *sql.Conn) (bool, error) {
 	var got bool
 	if err := conn.QueryRowContext(ctx, `SELECT pg_try_advisory_lock($1)`, StorageMaintenanceLockKey).Scan(&got); err != nil {
@@ -65,19 +75,41 @@ func TryMaintenanceLock(ctx context.Context, conn *sql.Conn) (bool, error) {
 	return got, nil
 }
 
-// ReleaseMaintenanceLock releases what TryMaintenanceLock took on conn. If it
-// fails, close conn: the server drops a session's advisory locks with it.
+// ReleaseMaintenanceLock releases what TryMaintenanceLock took on conn. When
+// the unlock fails, or reports that this session did not hold the lock, it
+// ends conn's session (discardSession) and returns the error: the server
+// drops a session's advisory locks when the session ends, whereas a session
+// handed back to the pool would keep a lock the unlock left behind until the
+// pool retires the connection. conn is unusable after a failed release.
 func ReleaseMaintenanceLock(conn *sql.Conn) error {
 	ctx, cancel := context.WithTimeout(context.Background(), maintenanceUnlockTimeout)
 	defer cancel()
 	var released bool
 	if err := conn.QueryRowContext(ctx, `SELECT pg_advisory_unlock($1)`, StorageMaintenanceLockKey).Scan(&released); err != nil {
+		discardSession(conn)
 		return fmt.Errorf("failed to release the storage maintenance lock: %w", err)
 	}
 	if !released {
+		discardSession(conn)
 		return errors.New("the storage maintenance lock was not held by this session")
 	}
 	return nil
+}
+
+// discardSession ends conn's database session instead of handing the
+// connection back to the pool, which is all sql.Conn.Close does. A Raw
+// callback that reports driver.ErrBadConn makes database/sql close the driver
+// connection, and the server then releases every advisory lock the session
+// held. pg_advisory_unlock_all first frees them at once rather than when the
+// server notices the session is gone; it is best effort (in a failed
+// transaction, for one, it errors too), and the connection is closed either
+// way.
+func discardSession(conn *sql.Conn) {
+	ctx, cancel := context.WithTimeout(context.Background(), discardUnlockTimeout)
+	_, _ = conn.ExecContext(ctx, `SELECT pg_advisory_unlock_all()`)
+	cancel()
+	_ = conn.Raw(func(any) error { return driver.ErrBadConn })
+	_ = conn.Close()
 }
 
 // WithMaintenanceLock runs fn while holding StorageMaintenanceLockKey on a
@@ -88,12 +120,19 @@ func (r *StorageMaintenanceRepository) WithMaintenanceLock(ctx context.Context, 
 	if err != nil {
 		return false, err
 	}
-	defer conn.Close() // after the unlock below; closing would release it too
+	// Back to the pool after the unlock below. Close alone would not release
+	// the lock; a failed unlock ends the session instead.
+	defer conn.Close()
 	got, err := TryMaintenanceLock(ctx, conn)
 	if err != nil || !got {
 		return false, err
 	}
-	defer func() { _ = ReleaseMaintenanceLock(conn) }()
+	defer func() {
+		if err := ReleaseMaintenanceLock(conn); err != nil {
+			log.Printf("[StorageMaintenance] %s; its database session was ended instead, which frees the lock",
+				database.ScrubDriverText(err.Error()))
+		}
+	}()
 	return true, fn(ctx, connCompressor{conn: conn})
 }
 
