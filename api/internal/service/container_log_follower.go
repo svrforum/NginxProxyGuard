@@ -23,7 +23,8 @@ package service
 //  4. Reconnects lose nothing and repeat nothing. Lines carry docker's own
 //     timestamp (--timestamps); a reconnect resumes with --since <timestamp of
 //     the last delivered line> and drops the lines already delivered at
-//     exactly that timestamp (--since is inclusive at nanosecond precision).
+//     exactly that timestamp (--since is inclusive at nanosecond precision),
+//     however long the daemon takes to answer.
 //  5. A stuck follow is noticed on a busy container too. The stall probe
 //     runs only after the follower has been silent for probeAfter, so a line
 //     on its stream after the cursor that docker has held for more than
@@ -123,14 +124,6 @@ const (
 	// is logged for the first failure and then at most this often.
 	followerFailLogEvery = 10 * time.Minute
 
-	// followerReplayWindow bounds the replay phase of a run. The lines a
-	// reconnect repeats come first (docker returns them in order, starting
-	// at the cursor) and the whole bounded replay takes about a second, so
-	// a run that has seen no new line for this long is live: from then on
-	// nothing is dropped, not even a line stamped behind the cursor (a host
-	// clock stepped back while the stream was quiet).
-	followerReplayWindow = 30 * time.Second
-
 	// dockerPartialChunk is the daemon's log copier buffer (moby
 	// daemon/logger/copier.go). A longer line is stored as partial entries
 	// that share one timestamp, and with --timestamps every partial gets the
@@ -177,8 +170,7 @@ type containerLogFollower struct {
 	cursorNanos atomic.Int64 // cursor, for the watchdog goroutine
 	atCursor    map[uint64]int
 	replayed    map[uint64]int
-	replaying   bool      // from (re)attach until the first line not seen before
-	replayStart time.Time // when the current replay phase began
+	replaying   bool // from (re)attach until the first line not seen before
 
 	lastDataAt atomic.Int64 // unix nanos of the last byte received
 	runs       atomic.Int64 // docker logs --follow processes started
@@ -604,22 +596,19 @@ func (f *containerLogFollower) deliver(raw []byte) bool {
 // accept decides whether a line is new and moves the cursor.
 //
 // Duplicates only exist at the start of a run: --since is inclusive, so the
-// lines already delivered at exactly the cursor's timestamp come back first.
-// Once one new line has been seen the run is live and every line is
-// delivered, even one older than the cursor: a host clock stepping back must
-// not silently drop live lines.
+// lines already delivered at exactly the cursor's timestamp come back first,
+// and nothing older comes back at all (docker filters followed lines by
+// --since as well). The replay phase therefore ends at the first line that
+// is not one of them, by content, not after some time: a daemon busy with a
+// large log can take minutes to answer a reconnect, and its first line is
+// still the boundary. From then on every line is delivered, even one older
+// than the cursor: a host clock stepping back must not silently drop live
+// lines.
 func (f *containerLogFollower) accept(ts time.Time, content []byte) bool {
 	h := fnv.New64a()
 	_, _ = h.Write(content)
 	sum := h.Sum64()
-	if f.replaying && time.Since(f.replayStart) >= followerReplayWindow {
-		f.replaying = false
-		clear(f.replayed)
-	}
 	if f.replaying {
-		if ts.Before(f.cursor) {
-			return false
-		}
 		if ts.Equal(f.cursor) {
 			f.replayed[sum]++
 			if f.replayed[sum] <= f.atCursor[sum] {
@@ -643,7 +632,6 @@ func (f *containerLogFollower) accept(ts time.Time, content []byte) bool {
 // already delivered at the cursor's timestamp.
 func (f *containerLogFollower) beginReplay() {
 	f.replaying = true
-	f.replayStart = time.Now()
 	clear(f.replayed)
 }
 

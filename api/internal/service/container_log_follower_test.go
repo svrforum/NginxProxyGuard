@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -509,16 +510,62 @@ func TestFollower_AcceptDropsOnlyTheReplayedBoundary(t *testing.T) {
 		t.Fatalf("cursor moved backwards to %v", f.cursor)
 	}
 
-	// A run that stayed quiet past the replay window is live: a line stamped
-	// behind the cursor (host clock stepped back meanwhile) is delivered.
+	// Only content ends a replay: the boundary is dropped whenever it
+	// arrives, and the first line that is not part of it ends the replay and
+	// is delivered, here one stamped behind the cursor after a clock step.
 	f.beginReplay()
-	f.replayStart = time.Now().Add(-followerReplayWindow - time.Second)
+	if f.accept(t1, []byte("a")) {
+		t.Fatal("replayed boundary line delivered twice")
+	}
 	if !f.accept(t0, []byte("after a clock step")) {
-		t.Fatal("a line after the replay window was dropped")
+		t.Fatal("the first line after the boundary was dropped")
 	}
 	if f.replaying {
 		t.Fatal("replay phase did not end")
 	}
+}
+
+// A daemon that is slow to answer a reconnect (a large log on a slow disk, a
+// busy daemon) must not make the follower deliver the boundary again: the
+// lines a replay repeats come first however late they arrive. The replay
+// phase used to end 30 s after the process started, so a slower answer
+// handed the last delivered line to the handler a second time - one more
+// WAF row and one more auto-ban count per slow reconnect.
+func TestFollower_SlowReplayDoesNotRepeatTheBoundary(t *testing.T) {
+	if testing.Short() {
+		t.Skip("waits 31 s for a slow replay")
+	}
+	store := filepath.Join(t.TempDir(), "store")
+	if err := os.WriteFile(store, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	inv := installFakeDocker(t, "store", map[string]string{"NPG_FAKE_STORE": store})
+	sink := &lineSink{}
+	f := newTestFollower("stdout", sink)
+	f.maxAge = time.Hour
+	f.probeAfter = time.Hour // only the kill below ends a run
+
+	stop := startFollower(t, f)
+	waitFor(t, 10*time.Second, "first attach", func() bool { return followsReady(inv) > 0 })
+	appendFakeRecord(t, store, time.Now(), "o", `{"transaction":{"n":1}}`)
+	waitFor(t, 10*time.Second, "record 1", func() bool { return sink.len() == 1 })
+
+	// From now on docker takes 31 s to answer a reconnect.
+	t.Setenv("NPG_FAKE_REPLAY_DELAY", "31s")
+	follows := followInvocations(inv)
+	if err := syscall.Kill(follows[len(follows)-1].pid, syscall.SIGKILL); err != nil { // the follow ends: reconnect
+		t.Fatal(err)
+	}
+	waitFor(t, 60*time.Second, "the slow replay answered", func() bool { return followsReady(inv) >= 2 })
+	appendFakeRecord(t, store, time.Now(), "o", `{"transaction":{"n":2}}`)
+	waitFor(t, 10*time.Second, "record 2", func() bool { return sink.len() >= 2 })
+	stop()
+
+	want := []string{`{"transaction":{"n":1}}`, `{"transaction":{"n":2}}`}
+	if got := sink.snapshot(); !slices.Equal(got, want) {
+		t.Fatalf("got %q, want each record once (follow runs=%d)", got, f.runs.Load())
+	}
+	waitAllReaped(t, readInvocations(inv))
 }
 
 func TestForEachLine_SkipsOverLongLinesAndKeepsHead(t *testing.T) {
