@@ -1588,6 +1588,54 @@ BEGIN
     INSERT INTO schema_migrations (version) VALUES ('credential_scrub_v1') ON CONFLICT DO NOTHING;
 END $$`,
 		},
+		{
+			// Logs used to be compressed only once a chunk was 7 days old, and
+			// an uncompressed day is about ten times its compressed size, so a
+			// busy install kept a week of uncompressed chunks on disk; on the
+			// busiest one that filled the disk. New installs now get a 1-day
+			// policy from setupTimescaleDBCompression. This moves an existing
+			// install only while its policy is still exactly the old 7-day
+			// default ('168 hours' compares equal): a value the operator chose
+			// is kept. It runs once — the 'logs_compress_after_1d_v1' row in
+			// schema_migrations commits with it — so an operator who goes back
+			// to 7 days afterwards keeps that too. A fresh install has no
+			// policy yet at this point and only records the marker; the policy
+			// is created later, at 1 day. alter_job does not wait for a running
+			// policy job, and the job's next run (within 12 hours) compresses
+			// the older days in one go.
+			desc: "compress logs after 1 day (one-shot; only installs still on the 7-day default)",
+			sql: `DO $$
+DECLARE
+    jid integer;
+    cfg jsonb;
+    cur interval;
+BEGIN
+    IF EXISTS (SELECT 1 FROM schema_migrations WHERE version = 'logs_compress_after_1d_v1') THEN
+        RETURN;
+    END IF;
+    IF to_regclass('timescaledb_information.jobs') IS NOT NULL THEN
+        SELECT j.job_id, j.config INTO jid, cfg
+          FROM timescaledb_information.jobs j
+         WHERE j.proc_name = 'policy_compression'
+           AND j.hypertable_schema = 'public'
+           AND j.hypertable_name = 'logs_partitioned'
+         ORDER BY j.job_id
+         LIMIT 1;
+        IF jid IS NOT NULL AND jsonb_typeof(cfg->'compress_after') = 'string' THEN
+            BEGIN
+                cur := (cfg->>'compress_after')::interval;
+            EXCEPTION WHEN others THEN
+                cur := NULL;
+            END;
+            IF cur = interval '7 days' THEN
+                PERFORM alter_job(jid, config => jsonb_set(cfg, '{compress_after}', to_jsonb('1 day'::text)));
+                RAISE NOTICE '[Migration] logs_partitioned compression policy (job %) moved from 7 days to 1 day', jid;
+            END IF;
+        END IF;
+    END IF;
+    INSERT INTO schema_migrations (version) VALUES ('logs_compress_after_1d_v1') ON CONFLICT DO NOTHING;
+END $$`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {
@@ -2307,6 +2355,33 @@ func (db *DB) setupTableCompression(tableName, segmentBy string) {
 	}
 }
 
+// logsCompressAfterDefault is how old a logs_partitioned chunk gets before the
+// compression policy compresses it on a new install. It was 7 days, and an
+// uncompressed day is about ten times its compressed size (about 8 GB a day on
+// the busiest install), so the week of uncompressed chunks was what filled a
+// disk. Compressed days still answer the log screens: aggregating one measured
+// faster than an uncompressed day, and the newest-first list stops in the
+// newest chunk.
+const logsCompressAfterDefault = "1 day"
+
+// logsCompressionPolicy returns the logs_partitioned compression job and its
+// compress_after as stored, or job 0 when there is none.
+func (db *DB) logsCompressionPolicy() (int, string, error) {
+	var jobID int
+	var after string
+	err := db.QueryRow(`
+		SELECT job_id, COALESCE(config->>'compress_after', config->>'compress_created_before', '?')
+		FROM timescaledb_information.jobs
+		WHERE proc_name = 'policy_compression'
+		  AND hypertable_schema = 'public' AND hypertable_name = 'logs_partitioned'
+		ORDER BY job_id
+		LIMIT 1`).Scan(&jobID, &after)
+	if err == sql.ErrNoRows {
+		return 0, "", nil
+	}
+	return jobID, after, err
+}
+
 // setupTimescaleDBCompression sets up compression policy for the hypertable
 func (db *DB) setupTimescaleDBCompression() {
 	if !db.isTimescaleDBAvailable() {
@@ -2334,16 +2409,30 @@ func (db *DB) setupTimescaleDBCompression() {
 		return
 	}
 
-	// Add compression policy (compress chunks older than 7 days)
-	_, err = db.Exec(`
-		SELECT add_compression_policy('logs_partitioned', INTERVAL '7 days', if_not_exists => true)
-	`)
+	// Add the policy only when there is none. add_compression_policy with
+	// if_not_exists does not change an existing policy: given other arguments
+	// it only warns ("A policy already exists with different arguments"), and
+	// it would do that on every boot of every install that kept 7 days or
+	// chose its own value. Existing installs are moved off the old 7-day
+	// default once, by the logs_compress_after_1d_v1 upgrade.
+	jobID, after, err := db.logsCompressionPolicy()
+	if err == nil && jobID == 0 {
+		_, err = db.Exec(`SELECT add_compression_policy('logs_partitioned', INTERVAL '` + logsCompressAfterDefault + `', if_not_exists => true)`)
+		if err == nil {
+			jobID, after, err = db.logsCompressionPolicy()
+		}
+	}
+	if err == nil && jobID == 0 {
+		err = fmt.Errorf("no compression job listed for logs_partitioned after adding one")
+	}
 	if err != nil {
-		log.Printf("[TimescaleDB] Warning: failed to add compression policy: %v", err)
+		log.Printf("[TimescaleDB] Warning: could not set up the logs compression policy: %v", err)
 		return
 	}
 
-	log.Println("[TimescaleDB] Compression policy enabled: chunks older than 7 days will be compressed")
+	// Read back from the jobs view, so the line states what this install
+	// actually does rather than what the code would have chosen.
+	log.Printf("[TimescaleDB] Compression policy (job %d): chunks older than %s are compressed", jobID, after)
 
 	// Show current compression status
 	var compressedChunks, totalChunks int

@@ -4576,3 +4576,47 @@ CREATE INDEX IF NOT EXISTS idx_proxy_hosts_tags ON public.proxy_hosts USING gin 
 --       END IF;
 --       INSERT INTO schema_migrations (version) VALUES ('credential_scrub_v1') ON CONFLICT DO NOTHING;
 --   END $$;
+
+-- Logs compressed after 1 day — DOCUMENTATION ONLY.
+-- The logs_partitioned compression policy used to compress a chunk once it was 7 days
+-- old, and an uncompressed day is about ten times its compressed size, so a busy install
+-- kept a week of uncompressed chunks on disk. New installs get a 1-day policy from
+-- setupTimescaleDBCompression in database/migration.go, created only when there is no
+-- policy (add_compression_policy given other arguments only warns, and would do so on
+-- every boot). Existing installs move once, and only while the policy still holds the
+-- old default of exactly 7 days: a value the operator chose is kept. The one-shot is
+-- recorded in schema_migrations as 'logs_compress_after_1d_v1' in the same transaction,
+-- so going back to 7 days afterwards also sticks. A fresh install has no policy when
+-- this runs and only records the marker. The side tables (system_logs, challenge_logs,
+-- audit_logs) keep 7 days. Executable copy lives in database/migration.go `upgrades`.
+--   DO $$
+--   DECLARE
+--       jid integer;
+--       cfg jsonb;
+--       cur interval;
+--   BEGIN
+--       IF EXISTS (SELECT 1 FROM schema_migrations WHERE version = 'logs_compress_after_1d_v1') THEN
+--           RETURN;
+--       END IF;
+--       IF to_regclass('timescaledb_information.jobs') IS NOT NULL THEN
+--           SELECT j.job_id, j.config INTO jid, cfg
+--             FROM timescaledb_information.jobs j
+--            WHERE j.proc_name = 'policy_compression'
+--              AND j.hypertable_schema = 'public'
+--              AND j.hypertable_name = 'logs_partitioned'
+--            ORDER BY j.job_id
+--            LIMIT 1;
+--           IF jid IS NOT NULL AND jsonb_typeof(cfg->'compress_after') = 'string' THEN
+--               BEGIN
+--                   cur := (cfg->>'compress_after')::interval;
+--               EXCEPTION WHEN others THEN
+--                   cur := NULL;
+--               END;
+--               IF cur = interval '7 days' THEN
+--                   PERFORM alter_job(jid, config => jsonb_set(cfg, '{compress_after}', to_jsonb('1 day'::text)));
+--                   RAISE NOTICE '[Migration] logs_partitioned compression policy (job %) moved from 7 days to 1 day', jid;
+--               END IF;
+--           END IF;
+--       END IF;
+--       INSERT INTO schema_migrations (version) VALUES ('logs_compress_after_1d_v1') ON CONFLICT DO NOTHING;
+--   END $$;
