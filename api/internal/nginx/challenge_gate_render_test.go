@@ -131,6 +131,99 @@ func TestPublicChallengeValidateAnswers404(t *testing.T) {
 	}
 }
 
+// Every location of a challenge-mode server sits behind the gate, locations
+// from Advanced Config included, and gets the same token check as
+// location /. NPG's own pass-through locations opt out.
+func TestChallengeGateCoversCustomLocations(t *testing.T) {
+	for _, adv := range []string{
+		"",
+		"location / {\n    proxy_pass http://192.0.2.20:8080;\n}\n",
+		"location /app/ {\n    proxy_pass http://192.0.2.20:8080;\n}\n",
+	} {
+		for _, mode := range gateTLSModes {
+			name := mode.name + " " + strings.SplitN(adv, " {", 2)[0]
+			out := renderForTest(t, ProxyHostConfigData{
+				Host:           gateTestHost("00000000-0000-0000-0000-0000000000e6", mode.ssl, mode.force, adv),
+				GeoRestriction: geoChallenge(false),
+			})
+			if strings.Contains(out, "$need_challenge") {
+				t.Errorf("%s: cookie-presence check still rendered", name)
+			}
+			for i, b := range splitServerBlocks(t, out) {
+				if mode.force && i == 0 {
+					// The HTTP server of a forced-HTTPS host redirects every path
+					// except ACME and the challenge endpoints: it serves no content.
+					if !strings.Contains(b, "return 301 https://$host$request_uri;") {
+						t.Errorf("%s: the HTTP server of a forced-HTTPS host does not redirect", name)
+					}
+					continue
+				}
+				for _, want := range []string{
+					"\n    auth_request /_challenge/validate;\n",
+					"\n    auth_request_set $challenge_gate_status $upstream_status;\n",
+					"\n    error_page 401 = @challenge_redirect;\n",
+				} {
+					if !strings.Contains(b, want) {
+						t.Errorf("%s server %d: server-level gate lacks %q", name, i, strings.TrimSpace(want))
+					}
+				}
+				if !strings.Contains(blockAt(b, "location @challenge_redirect {"), "return 302 /api/v1/challenge/page?") {
+					t.Errorf("%s server %d: @challenge_redirect missing", name, i)
+				}
+				for _, loc := range []string{"location /api/v1/challenge/ {", "location @api_fallback {", "location /.well-known/acme-challenge/ {"} {
+					if l := blockAt(b, loc); l != "" && !strings.Contains(l, "auth_request off;") {
+						t.Errorf("%s server %d: %s is gated", name, i, loc)
+					}
+				}
+				if adv == "" {
+					// location / keeps failing open to @api_fallback when the API is down.
+					if root := blockAt(b, "location / {"); !strings.Contains(root, "error_page 500 502 503 504 = @api_fallback;") {
+						t.Errorf("%s server %d: location / lost its API-down fallback", name, i)
+					}
+				}
+			}
+		}
+	}
+
+	m, _ := newRequestPathTestManager(t)
+	common := string(m.hostCommonIncludeContent())
+	if !strings.Contains(blockAt(common, "location @blocked {"), "auth_request off;") {
+		t.Error("@blocked would be gated again (a 401 would replace the 403)")
+	}
+	for _, code := range []string{"502", "503", "504"} {
+		if !strings.Contains(common, "location = /error_"+code+".html { internal; auth_request off;") {
+			t.Errorf("error page %s is gated", code)
+		}
+	}
+}
+
+// The gate covers locations that may send a 401 of their own, such as Basic
+// auth in a custom location, which nginx checks before the gate. Only the
+// gate's 401 redirects to the challenge: a challenged visitor without a token,
+// or with one the API rejected. Any other 401 is passed on as a 401, so a
+// Basic auth prompt still appears; both answers refuse the request.
+func TestChallengeRedirectOnlyForTheGates401(t *testing.T) {
+	out := renderForTest(t, ProxyHostConfigData{
+		Host:           gateTestHost("00000000-0000-0000-0000-0000000000e8", true, false, "location /app/ {\n    proxy_pass http://192.0.2.20:8080;\n}\n"),
+		GeoRestriction: geoChallenge(false),
+	})
+	for i, b := range splitServerBlocks(t, out) {
+		r := blockAt(b, "location @challenge_redirect {")
+		for _, want := range []string{
+			"if ($geo_blocked = 0) {\n            return 401;",
+			"set $challenge_refused 401;\n        if ($cookie_ng_challenge != \"\") {\n            set $challenge_refused $challenge_gate_status;",
+			"if ($challenge_refused != 401) {\n            return 401;",
+		} {
+			if !strings.Contains(r, want) {
+				t.Errorf("server %d: @challenge_redirect lacks %q:\n%s", i, want, r)
+			}
+		}
+		if strings.Index(r, "return 302") < strings.Index(r, "$challenge_refused != 401") {
+			t.Errorf("server %d: @challenge_redirect redirects before checking who sent the 401:\n%s", i, r)
+		}
+	}
+}
+
 // An access list in "satisfy any" mode would accept a request when ANY access
 // check passes, and the gate passes every visitor it does not challenge: next
 // to the gate, the list would stop applying to them. On challenge-mode hosts

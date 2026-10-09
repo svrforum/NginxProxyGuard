@@ -432,21 +432,25 @@ func TestExemptionPredicatesReadNormalizedPath(t *testing.T) {
 		wants []string
 	}{
 		{
-			// Server-level $need_challenge for a custom `location /`: waf.conf.tmpl
-			// (HTTP server, no SSL) and cache.conf.tmpl (HTTPS server).
-			name: "challenge_bypass_http_custom_root",
+			// The challenge gate is server-level, with a custom `location /` as
+			// well: NPG's own locations opt out by location, matched on nginx's
+			// normalized path, not by a predicate on the request target.
+			// waf.conf.tmpl (HTTP server) and cache.conf.tmpl (HTTPS server).
+			name: "challenge_exemptions_http_custom_root",
 			data: ProxyHostConfigData{Host: httpHost, GeoRestriction: geoChallenge},
 			wants: []string{
-				"    if ($npg_request_path ~ \"^/api/v1/challenge/\") {\n        set $need_challenge 0;",
-				"    if ($npg_request_path ~ \"^/\\.well-known/acme-challenge/\") {\n        set $need_challenge 0;",
+				"    location /api/v1/challenge/ {\n        auth_request off;",
+				"    location @api_fallback {\n        auth_request off;",
+				"        allow all;\n        auth_request off;\n        root /etc/nginx/acme-challenge;",
 			},
 		},
 		{
-			name: "challenge_bypass_ssl_custom_root",
+			name: "challenge_exemptions_ssl_custom_root",
 			data: ProxyHostConfigData{Host: sslNoForce, GeoRestriction: geoChallenge},
 			wants: []string{
-				"    if ($npg_request_path ~ \"^/api/v1/challenge/\") {\n        set $need_challenge 0;",
-				"    if ($npg_request_path ~ \"^/\\.well-known/acme-challenge/\") {\n        set $need_challenge 0;",
+				"    location /api/v1/challenge/ {\n        auth_request off;",
+				"    location @api_fallback {\n        auth_request off;",
+				"        allow all;\n        auth_request off;\n        root /etc/nginx/acme-challenge;",
 			},
 		},
 		{
@@ -663,40 +667,6 @@ func TestExemptionPatternCallSites(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("rendered config is missing %q", want)
 		}
-	}
-}
-
-// The ACME challenge skip must spell the "." in "^/.well-known/..." escaped, so
-// the regex does not also match "/Xwell-known/...". An SSL host without forced
-// HTTPS renders that line twice — once in the HTTP server (waf.conf.tmpl) and
-// once in the HTTPS server (cache.conf.tmpl) — so a whole-config Contains on the
-// escaped line passes even when one copy regresses. This asserts it per server
-// block: reverting either template is caught in the block it belongs to.
-func TestChallengeACMESkipEscapedInEveryServerBlock(t *testing.T) {
-	certID := "00000000-0000-0000-0000-00000000cert"
-	host := baseHost("00000000-0000-0000-0000-0000000000f8", "192.0.2.20", true)
-	host.SSLEnabled, host.CertificateID = true, &certID
-	host.AdvancedConfig = "location / {\n    proxy_pass http://192.0.2.20:8080;\n}\n"
-	out := renderForTest(t, ProxyHostConfigData{
-		Host:           host,
-		GeoRestriction: &model.GeoRestriction{Enabled: true, Mode: "whitelist", Countries: []string{"KR"}, ChallengeMode: true},
-	})
-	blocks := splitServerBlocks(t, out)
-	if len(blocks) != 2 {
-		t.Fatalf("an SSL host without forced HTTPS should render an HTTP and an HTTPS server block, got %d", len(blocks))
-	}
-	seen := 0
-	for i, b := range blocks {
-		if !strings.Contains(b, "acme-challenge/") {
-			continue
-		}
-		seen++
-		if !strings.Contains(b, `if ($npg_request_path ~ "^/\.well-known/acme-challenge/")`) {
-			t.Errorf("server block %d skips the ACME challenge on an unescaped dot (matches /Xwell-known/...):\n%s", i, b)
-		}
-	}
-	if seen < 2 {
-		t.Errorf("expected the ACME skip in both the HTTP (waf.conf) and HTTPS (cache.conf) server blocks, saw it in %d", seen)
 	}
 }
 

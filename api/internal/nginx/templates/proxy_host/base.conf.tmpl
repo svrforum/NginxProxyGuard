@@ -29,6 +29,9 @@ server {
     location /.well-known/acme-challenge/ {
         # Allow all access for certificate validation
         allow all;
+{{- if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}
+        auth_request off;
+{{- end}}{{end}}
         root /etc/nginx/acme-challenge;
         try_files $uri =404;
     }
@@ -79,6 +82,7 @@ server {
 
     # API error fallback - allow traffic through when API is down
     location @api_fallback {
+        auth_request off;
         # API is down - allow request to proceed (graceful degradation)
         # Log this event for monitoring
         access_log /etc/nginx/logs/access_raw.log main buffer=64k flush=5s;
@@ -101,6 +105,7 @@ server {
 
     # Challenge API - Bypass GeoIP and proxy to API service (HTTP server block)
     location /api/v1/challenge/ {
+        auth_request off;
         modsecurity off;
 
         proxy_pass http://{{apiHost}}/api/v1/challenge/;

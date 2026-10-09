@@ -45,13 +45,16 @@ if ($npg_request_path ~ "^/api/v1/challenge/") {
 error_page 502 /error_502.html;
 error_page 503 /error_503.html;
 error_page 504 /error_504.html;
-location = /error_502.html { internal; root /etc/nginx/html; try_files /502.html =502; }
-location = /error_503.html { internal; root /etc/nginx/html; try_files /503.html =503; }
-location = /error_504.html { internal; root /etc/nginx/html; try_files /504.html =504; }
+location = /error_502.html { internal; auth_request off; root /etc/nginx/html; try_files /502.html =502; }
+location = /error_503.html { internal; auth_request off; root /etc/nginx/html; try_files /503.html =503; }
+location = /error_504.html { internal; auth_request off; root /etc/nginx/html; try_files /504.html =504; }
 
 # Custom error page for security blocks (WAF, block_exploits, geo restriction, bot filter, etc.)
 error_page 403 @blocked;
 location @blocked {
+    # A challenge-mode host gates every location with auth_request; a block
+    # page must not be gated again (a 401 would replace the 403).
+    auth_request off;
     root /etc/nginx/html;
     default_type text/html;
     # try_files hands the request to the static module, which answers any

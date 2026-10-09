@@ -7,30 +7,17 @@
         return 301 https://$host$request_uri;
     }
     {{else}}
-{{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}{{if .HasCustomLocationRoot}}
-    # Server-level challenge redirect for custom location / (HTTP server, SSL no ForceHTTPS)
-    set $need_challenge 0;
-    if ($geo_blocked = 1) {
-        set $need_challenge 1;
-    }
-    if ($cookie_ng_challenge != "") {
-        set $need_challenge 0;
-    }
-    if ($npg_request_path ~ "^/api/v1/challenge/") {
-        set $need_challenge 0;
-    }
-    if ($npg_request_path ~ "^/\.well-known/acme-challenge/") {
-        set $need_challenge 0;
-    }
-{{if .GeoRestriction.AllowSearchBots}}
-    if ($is_search_bot = 1) {
-        set $need_challenge 0;
-    }
-{{end}}
-    if ($need_challenge = 1) {
-        return 302 /api/v1/challenge/page?host={{.Host.ID}}&reason=geo_restriction&return={{if .Host.SSLEnabled}}https{{else}}$scheme{{end}}://$host$request_uri;
-    }
-{{end}}{{end}}{{end}}
+{{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}
+    # Challenge gate for every location of this server: the generated
+    # location / and any location from Advanced Config alike. NPG's own
+    # pass-through locations (ACME, /api/v1/challenge/, @api_fallback and
+    # the error pages) opt out with "auth_request off".
+    auth_request /_challenge/validate;
+    # The API's answer to the gate (empty when the gate answered itself),
+    # so @challenge_redirect can tell the gate's 401 from any other.
+    auth_request_set $challenge_gate_status $upstream_status;
+    error_page 401 = @challenge_redirect;
+{{end}}{{end}}
 {{if not .HasCustomLocationRoot}}
     location / {
 {{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}
@@ -109,38 +96,39 @@
         {{.AdvancedConfigLocationLevel}}
 {{end}}{{end}}
     }
-{{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}
+
+{{end}}{{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}
     location @challenge_redirect {
+        # Only the gate's own 401 means "solve the challenge": a challenged
+        # visitor without a token, or one whose token the API rejected. Any
+        # other 401 (Basic auth in a custom location, say, which nginx checks
+        # before the gate) stays a 401. Both answers refuse the request.
+        if ($geo_blocked = 0) {
+            return 401;
+        }
+        set $challenge_refused 401;
+        if ($cookie_ng_challenge != "") {
+            set $challenge_refused $challenge_gate_status;
+        }
+        if ($challenge_refused != 401) {
+            return 401;
+        }
         return 302 /api/v1/challenge/page?host={{.Host.ID}}&reason=geo_restriction&return={{if .Host.SSLEnabled}}https{{else}}$scheme{{end}}://$host$request_uri;
     }
 {{end}}{{end}}
-{{end}}
     {{end}}
 {{else}}
-{{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}{{if .HasCustomLocationRoot}}
-    # Server-level challenge redirect for custom location / (HTTP server, no SSL)
-    set $need_challenge 0;
-    if ($geo_blocked = 1) {
-        set $need_challenge 1;
-    }
-    if ($cookie_ng_challenge != "") {
-        set $need_challenge 0;
-    }
-    if ($npg_request_path ~ "^/api/v1/challenge/") {
-        set $need_challenge 0;
-    }
-    if ($npg_request_path ~ "^/\.well-known/acme-challenge/") {
-        set $need_challenge 0;
-    }
-{{if .GeoRestriction.AllowSearchBots}}
-    if ($is_search_bot = 1) {
-        set $need_challenge 0;
-    }
-{{end}}
-    if ($need_challenge = 1) {
-        return 302 /api/v1/challenge/page?host={{.Host.ID}}&reason=geo_restriction&return={{if .Host.SSLEnabled}}https{{else}}$scheme{{end}}://$host$request_uri;
-    }
-{{end}}{{end}}{{end}}
+{{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}
+    # Challenge gate for every location of this server: the generated
+    # location / and any location from Advanced Config alike. NPG's own
+    # pass-through locations (ACME, /api/v1/challenge/, @api_fallback and
+    # the error pages) opt out with "auth_request off".
+    auth_request /_challenge/validate;
+    # The API's answer to the gate (empty when the gate answered itself),
+    # so @challenge_redirect can tell the gate's 401 from any other.
+    auth_request_set $challenge_gate_status $upstream_status;
+    error_page 401 = @challenge_redirect;
+{{end}}{{end}}
 {{if not .HasCustomLocationRoot}}
     location / {
 {{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}
@@ -219,12 +207,26 @@
         {{.AdvancedConfigLocationLevel}}
 {{end}}{{end}}
     }
-{{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}
+
+{{end}}{{if .GeoRestriction}}{{if .GeoRestriction.ChallengeMode}}
     location @challenge_redirect {
+        # Only the gate's own 401 means "solve the challenge": a challenged
+        # visitor without a token, or one whose token the API rejected. Any
+        # other 401 (Basic auth in a custom location, say, which nginx checks
+        # before the gate) stays a 401. Both answers refuse the request.
+        if ($geo_blocked = 0) {
+            return 401;
+        }
+        set $challenge_refused 401;
+        if ($cookie_ng_challenge != "") {
+            set $challenge_refused $challenge_gate_status;
+        }
+        if ($challenge_refused != 401) {
+            return 401;
+        }
         return 302 /api/v1/challenge/page?host={{.Host.ID}}&reason=geo_restriction&return={{if .Host.SSLEnabled}}https{{else}}$scheme{{end}}://$host$request_uri;
     }
 {{end}}{{end}}
-{{end}}
 {{end}}
 
 {{if .RateLimit}}{{if .RateLimit.Enabled}}
