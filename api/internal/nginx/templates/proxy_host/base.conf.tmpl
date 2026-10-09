@@ -103,6 +103,23 @@ server {
         return 404;
     }
 
+    # The challenge page is not access-logged: it is NPG's own answer to a
+    # request that was already logged (the 302 carrying block_reason), and
+    # on a challenged host under attack it was a large share of all rows.
+    # verify, verify-redirect and favicon stay logged (prefix location).
+    location = /api/v1/challenge/page {
+        access_log off;
+        auth_request off;
+        modsecurity off;
+
+        proxy_pass http://{{apiHost}}/api/v1/challenge/page;
+        proxy_pass_request_body on;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
     # Challenge API - Bypass GeoIP and proxy to API service (HTTP server block)
     location /api/v1/challenge/ {
         auth_request off;

@@ -170,7 +170,7 @@ func TestChallengeGateCoversCustomLocations(t *testing.T) {
 				if !strings.Contains(blockAt(b, "location @challenge_redirect {"), "return 302 /api/v1/challenge/page?") {
 					t.Errorf("%s server %d: @challenge_redirect missing", name, i)
 				}
-				for _, loc := range []string{"location /api/v1/challenge/ {", "location @api_fallback {", "location /.well-known/acme-challenge/ {"} {
+				for _, loc := range []string{"location /api/v1/challenge/ {", "location = /api/v1/challenge/page {", "location @api_fallback {", "location /.well-known/acme-challenge/ {"} {
 					if l := blockAt(b, loc); l != "" && !strings.Contains(l, "auth_request off;") {
 						t.Errorf("%s server %d: %s is gated", name, i, loc)
 					}
@@ -244,5 +244,70 @@ func TestChallengeGateDoesNotLoosenAccessLists(t *testing.T) {
 		if !strings.Contains(plain, "    satisfy any;") {
 			t.Errorf("%s: \"satisfy any\" lost on a host without the challenge", mode.name)
 		}
+	}
+}
+
+// directives returns the directive lines of a location block: trimmed, without
+// the header, the closing brace, comments and blank lines.
+func directives(block string) []string {
+	var out []string
+	lines := strings.Split(block, "\n")
+	for _, l := range lines[1 : len(lines)-1] {
+		if l = strings.TrimSpace(l); l != "" && !strings.HasPrefix(l, "#") {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+// The challenge page is NPG's answer to a request that was already logged (the
+// 302 carrying block_reason). Every server block that serves the challenge
+// endpoints gets an exact-match page location that is not access-logged and
+// otherwise proxies exactly like the prefix location; verify, verify-redirect
+// and favicon stay logged.
+func TestChallengePageIsNotAccessLogged(t *testing.T) {
+	cases := []struct {
+		name string
+		data ProxyHostConfigData
+	}{
+		{"cloud ssl", ProxyHostConfigData{Host: gateTestHost("00000000-0000-0000-0000-0000000000e5", true, true, ""),
+			BlockedCloudIPRanges: []string{"198.51.100.0/24"}, CloudProviderChallengeMode: true}},
+	}
+	for _, mode := range gateTLSModes {
+		cases = append(cases, struct {
+			name string
+			data ProxyHostConfigData
+		}{"geo " + mode.name, ProxyHostConfigData{Host: gateTestHost("00000000-0000-0000-0000-0000000000e2", mode.ssl, mode.force, ""),
+			GeoRestriction: geoChallenge(false)}})
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			seen := 0
+			for i, b := range splitServerBlocks(t, renderForTest(t, tc.data)) {
+				prefix := blockAt(b, "location /api/v1/challenge/ {")
+				if prefix == "" {
+					continue
+				}
+				seen++
+				page := blockAt(b, "location = /api/v1/challenge/page {")
+				if page == "" {
+					t.Fatalf("server %d serves /api/v1/challenge/ without the unlogged page location", i)
+				}
+				if strings.Contains(prefix, "access_log") {
+					t.Errorf("server %d: verify and favicon are no longer logged:\n%s", i, prefix)
+				}
+				// Same directives as the prefix location, plus access_log off.
+				want := []string{"access_log off;"}
+				for _, d := range directives(prefix) {
+					want = append(want, strings.Replace(d, "/api/v1/challenge/;", "/api/v1/challenge/page;", 1))
+				}
+				if got := directives(page); strings.Join(got, "\n") != strings.Join(want, "\n") {
+					t.Errorf("server %d: page location\n%s\nwant\n%s", i, strings.Join(got, "\n"), strings.Join(want, "\n"))
+				}
+			}
+			if seen == 0 {
+				t.Fatal("no server block serves the challenge endpoints")
+			}
+		})
 	}
 }
