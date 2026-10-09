@@ -7,6 +7,7 @@ import (
 
 	"nginx-proxy-guard/internal/config"
 	"nginx-proxy-guard/internal/database"
+	"nginx-proxy-guard/internal/metrics"
 	"nginx-proxy-guard/internal/nginx"
 	"nginx-proxy-guard/internal/repository"
 	"nginx-proxy-guard/internal/scheduler"
@@ -76,6 +77,10 @@ func containerReconcileInterval() time.Duration {
 
 // NewSchedulers constructs (but does not start) each scheduler.
 func NewSchedulers(cfg *config.Config, db *database.DB, nginxManager *nginx.Manager, repos *Repositories, svcs *Services) *Schedulers {
+	// Raw log rotation metrics (npg_raw_log_rotate_runs_total), registered
+	// where the rotation scheduler is wired.
+	metrics.RegisterRawLogMetrics()
+
 	s := &Schedulers{
 		Renewal: scheduler.NewRenewalScheduler(
 			repos.Certificate,
@@ -89,7 +94,7 @@ func NewSchedulers(cfg *config.Config, db *database.DB, nginxManager *nginx.Mana
 			repos.SystemLog,
 			repos.Dashboard,
 		),
-		LogRotate:      scheduler.NewLogRotateScheduler(nginxManager),
+		LogRotate:      scheduler.NewLogRotateScheduler(nginxManager, nil),
 		Backup:         scheduler.NewBackupScheduler(repos.Backup, repos.SystemSettings, cfg.BackupPath),
 		FilterRefresh:  scheduler.NewFilterRefreshScheduler(svcs.FilterSubscription),
 		SessionCleanup: scheduler.NewSessionCleanupScheduler(svcs.Auth, svcs.SSO),

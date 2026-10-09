@@ -7426,13 +7426,22 @@ paths:
       tags: [Logs]
       summary: Trigger log rotation now
       description: |
-        Regenerates the logrotate config and runs `logrotate -f`. Requires raw log files
-        to be enabled.
+        Regenerates the logrotate config and runs `logrotate -f` in the nginx container.
+        Requires raw log files to be enabled.
+
+        Besides this, the API rotates by itself at the top of every hour: forced at
+        00:00, and otherwise only a file past raw_log_max_size_mb (or not yet rotated
+        that day). Rotated files older than raw_log_retention_days are deleted at a
+        rotation. A manual request does not wait for a rotation already running: it
+        answers 200 with status "skipped" and reason "busy".
       security:
         - BearerAuth: []
       responses:
         '200':
-          description: Rotation completed
+          description: >-
+            Rotation completed, or skipped with a reason: empty (nothing to
+            rotate), already_rotated (a rotation ran this same second) or busy
+            (a rotation is already running).
           content:
             application/json:
               schema:
@@ -7440,6 +7449,10 @@ paths:
                 properties:
                   status:
                     type: string
+                    enum: [completed, skipped]
+                  reason:
+                    type: string
+                    enum: [empty, already_rotated, busy]
                   message:
                     type: string
         '400':

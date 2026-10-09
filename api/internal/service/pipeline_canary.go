@@ -8,6 +8,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -263,18 +265,49 @@ func (p *PipelineCanary) awaitRow(ctx context.Context, nonce string, since time.
 // localize gathers evidence at the file checkpoint to classify the failure.
 func (p *PipelineCanary) localize(reachable bool, nonce string) string {
 	actual := p.collector.AccessLogPathActual()
-	inFile := actual != "" && fileContainsRecent(actual, nonce)
+	inFile := actual != "" && fileOrNewestRotatedContains(actual, nonce)
 	pathMatch := true
 	// If nginx wrote the nonce but to a file the tail isn't reading, the nonce
 	// won't be in `actual`; check the canonical file to distinguish a path
 	// mismatch from nginx not writing at all.
-	if !inFile && actual != canonicalAccessLogPath && fileContainsRecent(canonicalAccessLogPath, nonce) {
+	if !inFile && actual != canonicalAccessLogPath && fileOrNewestRotatedContains(canonicalAccessLogPath, nonce) {
 		inFile = true
 		pathMatch = false
 	}
 	accessFlushFresh := p.collector.AccessLastFlushUnix() != 0 &&
 		time.Since(time.Unix(p.collector.AccessLastFlushUnix(), 0)) < 2*p.interval
 	return classifyCanaryFailure(reachable, inFile, pathMatch, accessFlushFresh)
+}
+
+// fileOrNewestRotatedContains also looks in the newest rotated copy of path
+// (path-YYYYMMDD-HHMMSS; delaycompress keeps the newest one uncompressed).
+// The raw logs are cut by size every hour, so the line nginx wrote may
+// already sit in the file logrotate just renamed — which would otherwise read
+// as "nginx never wrote it" and trigger a raw-log re-apply that cannot help.
+func fileOrNewestRotatedContains(path, needle string) bool {
+	if fileContainsRecent(path, needle) {
+		return true
+	}
+	rotated := newestRotatedCopy(path)
+	return rotated != "" && fileContainsRecent(rotated, needle)
+}
+
+// rotatedSuffix is what logrotate's dateext appends (#301 added the time).
+var rotatedSuffix = regexp.MustCompile(`^-[0-9]{8}(-[0-9]{6})?$`)
+
+// newestRotatedCopy returns the newest uncompressed rotated copy of path, or "".
+func newestRotatedCopy(path string) string {
+	matches, err := filepath.Glob(path + "-*")
+	if err != nil {
+		return ""
+	}
+	newest := ""
+	for _, m := range matches {
+		if rotatedSuffix.MatchString(strings.TrimPrefix(m, path)) && m > newest {
+			newest = m
+		}
+	}
+	return newest
 }
 
 // fileContainsRecent scans the tail (last 64KB) of a file for a substring.

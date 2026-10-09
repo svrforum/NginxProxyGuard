@@ -96,7 +96,18 @@ const (
 	ContextTimeout          = 30 * time.Second
 	NginxTestTimeout        = 60 * time.Second
 	NginxReloadTimeout      = 30 * time.Second
-	NginxLogrotateTimeout   = 60 * time.Second
+)
+
+// Raw log rotation (nginx.Manager.RotateLogs and RotateLogsScheduled). A
+// timeout kills the docker CLI, not logrotate inside the nginx container: it
+// keeps running there, and the next run reports busy.
+const (
+	// The hourly and midnight runs wait for the rotation lock, and the first
+	// run after an upgrade may compress one large file that predates size
+	// cuts (about 35 s for 2.7 GB, longer on slow home hardware).
+	NginxLogrotateScheduledTimeout = 10 * time.Minute
+	// "Rotate now" answers busy at once instead of queueing behind a run.
+	NginxLogrotateManualTimeout = 2 * time.Minute
 )
 
 // Reload retry behavior — governs testAndReloadNginxWithRetry.
