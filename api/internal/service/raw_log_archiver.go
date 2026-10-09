@@ -568,8 +568,10 @@ func (a *RawLogArchiver) decorate(st RawLogArchiveStatus) RawLogArchiveStatus {
 // measured it, without touching the filesystem — DiskGuard's archive source:
 // a hung share must not freeze disk alerts. total and avail are bytes as df
 // shows them (avail excludes root-reserved blocks). stalledSince is set while
-// archive calls time out. ok is false when archiving is off, the archive is
-// not mounted, or it was never measured.
+// the archive is stalled (see stalledSinceLocked); a share that hung before
+// this process ever measured it is reported stalled with zero sizes. ok is
+// false when archiving is off, the archive is not mounted, or it was never
+// measured and is not stalled.
 func (a *RawLogArchiver) CachedDiskUsage() (path string, total, avail uint64, measuredAt time.Time, stalledSince *time.Time, ok bool) {
 	raw, at, stalled, ok := a.cachedStatfs()
 	if !ok {
@@ -588,17 +590,54 @@ func (a *RawLogArchiver) cachedStatfs() (raw rawStatfs, measuredAt time.Time, st
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	// A stalled share is still reported (with stalledSince); a missing one is not.
-	if !a.status.Enabled || a.status.Status == ArchiveStatusNotMounted || a.statfsAt.IsZero() {
+	if !a.status.Enabled || a.status.Status == ArchiveStatusNotMounted {
 		return rawStatfs{}, time.Time{}, nil, false
 	}
-	if a.ioStallSince != nil {
-		s := *a.ioStallSince
-		stalledSince = &s
-	} else if a.status.StalledSince != nil {
-		s := *a.status.StalledSince
-		stalledSince = &s
+	stalledSince = a.stalledSinceLocked()
+	if a.statfsAt.IsZero() && stalledSince == nil {
+		return rawStatfs{}, time.Time{}, nil, false
 	}
 	return a.statfsRaw, a.statfsAt, stalledSince, true
+}
+
+// stalledSinceLocked is when the archive stopped answering, or nil: a call
+// that timed out (and has not come back), a pass that has made no progress
+// for stallAfter — the rule decorate applies to the status; a copy blocked on
+// a hung share holds the pass, and the refreshes queued behind it, so nothing
+// else would notice — or the stall the last probe recorded. a.mu held.
+func (a *RawLogArchiver) stalledSinceLocked() *time.Time {
+	var since time.Time
+	switch {
+	case a.ioStallSince != nil:
+		since = *a.ioStallSince
+	case a.running.Load() && !a.progressAt.IsZero() && a.now().Sub(a.progressAt) > a.stallAfter:
+		since = a.progressAt
+	case a.status.StalledSince != nil:
+		since = *a.status.StalledSince
+	default:
+		return nil
+	}
+	return &since
+}
+
+// ArchiveUsageSource adapts the archiver to HostUsageProvider.SetArchiveUsage:
+// DiskGuard sees the archive through the archiver's own last measurement,
+// read under its lock and never by a filesystem call, so a hung share cannot
+// hold the tick. It reports the archive only while archiving is on and the
+// archive has been measured, and a stalled share as stalled (with no numbers
+// when it never answered). Safe with a nil archiver, which reports nothing.
+func ArchiveUsageSource(a *RawLogArchiver) func() (ArchiveDiskUsage, bool) {
+	return func() (ArchiveDiskUsage, bool) {
+		raw, at, stalled, ok := a.cachedStatfs()
+		if !ok {
+			return ArchiveDiskUsage{}, false
+		}
+		u := ArchiveDiskUsage{Path: a.Dir(), Stat: raw, MeasuredAt: at}
+		if stalled != nil {
+			u.StalledSince = *stalled
+		}
+		return u, true
+	}
 }
 
 // settledLocal lists the local rotated files ready to move, oldest first.

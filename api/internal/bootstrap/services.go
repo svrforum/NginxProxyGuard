@@ -226,7 +226,8 @@ func InitServices(
 	svcs.RawLogArchiver = service.NewRawLogArchiver(cfg.RawLogArchiveDir, "/etc/nginx/logs", cfg.RawLogArchiveSettle, repos.SystemSettings.Get)
 
 	// Disk guard (D1-D4): after Notification, StatsCollector and Settings,
-	// which it is wired into.
+	// which it is wired into, and after RawLogArchiver, whose cached archive
+	// measurement it reads.
 	initDiskGuard(cfg, db, repos, svcs)
 
 	// Opt-in removal of the raw_log copies kept in old compressed logs.

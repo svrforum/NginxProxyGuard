@@ -84,17 +84,12 @@ func diskEmergencyMode() service.EmergencyMode {
 	return mode
 }
 
-// initDiskGuard builds DiskGuard and its emergency compressor and wires them
-// into the stats collector and the dashboard. It leaves svcs.DiskGuard nil
-// when the guard is disabled.
-func initDiskGuard(cfg *config.Config, db *database.DB, repos *Repositories, svcs *Services) {
-	if diskGuardDisabled() {
-		log.Println("[DiskGuard] disabled by NPG_DISK_GUARD_DISABLED: no disk alerts and no storage warning on the dashboard")
-		return
-	}
-	metrics.RegisterDiskMetrics()
-
-	maint := repository.NewStorageMaintenanceRepository(db.DB)
+// newDiskUsageProvider measures the disks DiskGuard watches: the nginx log
+// volume, the backups, Docker's storage, the database's disk through docker
+// exec, and the raw-log archive (B6) as the archiver last measured it. DiskGuard
+// never runs statfs on the archive itself: a hung NAS would freeze every disk
+// alert with it.
+func newDiskUsageProvider(cfg *config.Config, maint *repository.StorageMaintenanceRepository, archiver *service.RawLogArchiver) *service.HostUsageProvider {
 	// The nginx log volume as the API mounts it. NGINX_ACCESS_LOG outside
 	// /etc/nginx (the dev compose's /var/log/nginx) is not that volume.
 	logsDir := "/etc/nginx/logs"
@@ -107,10 +102,23 @@ func initDiskGuard(cfg *config.Config, db *database.DB, repos *Repositories, svc
 			defer cancel()
 			return maint.DataDirectory(ctx)
 		})
-	// Raw-log archive (B6): hand DiskGuard the archiver's cached usage once
-	// it exists — provider.SetArchiveUsage(<archiver's non-blocking accessor>).
-	// DiskGuard must never statfs the archive itself: a hung NAS would freeze
-	// every disk alert with it.
+	provider.SetArchiveUsage(service.ArchiveUsageSource(archiver))
+	return provider
+}
+
+// initDiskGuard builds DiskGuard and its emergency compressor and wires them
+// into the stats collector and the dashboard. It reads the raw-log archive
+// through svcs.RawLogArchiver, which must be built first. It leaves
+// svcs.DiskGuard nil when the guard is disabled.
+func initDiskGuard(cfg *config.Config, db *database.DB, repos *Repositories, svcs *Services) {
+	if diskGuardDisabled() {
+		log.Println("[DiskGuard] disabled by NPG_DISK_GUARD_DISABLED: no disk alerts and no storage warning on the dashboard")
+		return
+	}
+	metrics.RegisterDiskMetrics()
+
+	maint := repository.NewStorageMaintenanceRepository(db.DB)
+	provider := newDiskUsageProvider(cfg, maint, svcs.RawLogArchiver)
 
 	// Stopping the scheduler cancels this, which also ends an emergency pass
 	// in flight: the chunk being compressed rolls back cleanly (verified).

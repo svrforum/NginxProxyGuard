@@ -109,7 +109,8 @@ func NewHostUsageProvider(nginxLogsDir, backupPath, envDBContainer, databaseURL 
 
 // SetArchiveUsage wires the raw-log archive (B6). fn must return at once —
 // the archiver's cached result, never a fresh statfs of the share — and
-// ok=false when no archive is configured or mounted.
+// ok=false when no archive is configured or mounted. ArchiveUsageSource is
+// that fn for a RawLogArchiver.
 func (p *HostUsageProvider) SetArchiveUsage(fn func() (ArchiveDiskUsage, bool)) {
 	p.mu.Lock()
 	p.archiveFn = fn
