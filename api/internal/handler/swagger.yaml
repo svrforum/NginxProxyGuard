@@ -6959,12 +6959,13 @@ paths:
     get:
       tags: [Logs]
       summary: Distinct hosts seen in logs
+      description: Values seen in the last 24 hours.
       security:
         - BearerAuth: []
       parameters:
         - name: q
           in: query
-          description: Substring filter; omit for the most common values.
+          description: Substring filter; omit for the first values in alphabetical order.
           schema:
             type: string
         - name: limit
@@ -6986,6 +6987,7 @@ paths:
     get:
       tags: [Logs]
       summary: Distinct client IPs seen in logs
+      description: Values seen in the last 24 hours.
       security:
         - BearerAuth: []
       parameters:
@@ -7012,6 +7014,7 @@ paths:
     get:
       tags: [Logs]
       summary: Distinct User-Agents seen in logs
+      description: Values seen in the last 24 hours.
       security:
         - BearerAuth: []
       parameters:
@@ -7038,6 +7041,7 @@ paths:
     get:
       tags: [Logs]
       summary: Distinct request URIs seen in logs
+      description: Values seen in the last 24 hours.
       security:
         - BearerAuth: []
       parameters:
@@ -7064,7 +7068,7 @@ paths:
     get:
       tags: [Logs]
       summary: Distinct countries seen in logs
-      description: Takes no parameters — unlike the other autocomplete endpoints it accepts neither `q` nor `limit`, and it returns counts rather than bare strings.
+      description: Values seen in the last 24 hours. Takes no parameters — unlike the other autocomplete endpoints it accepts neither `q` nor `limit`, and it returns counts rather than bare strings.
       security:
         - BearerAuth: []
       responses:
@@ -7080,7 +7084,7 @@ paths:
     get:
       tags: [Logs]
       summary: Distinct HTTP methods seen in logs
-      description: Takes no parameters.
+      description: Values seen in the last 24 hours. Takes no parameters.
       security:
         - BearerAuth: []
       responses:
