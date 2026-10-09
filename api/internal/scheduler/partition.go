@@ -420,6 +420,18 @@ func (s *PartitionScheduler) enforceRetention() {
 	s.dropOldChunks(ctx, "system_logs", settings.SystemLogRetentionDays)
 	s.dropOldChunks(ctx, "audit_logs", settings.AuditLogRetentionDays)
 
+	// challenge_logs had no retention at all: every challenge ever shown was
+	// kept. It follows the access-log retention rather than a setting of its
+	// own — a challenge record describes a request, so it should not outlive
+	// that request's log row, and nothing reads it past the last 24 hours
+	// (the challenge stats). Chunks are dropped where it is a hypertable; the
+	// rows are deleted in batches where it is a plain table.
+	if s.isHypertable(ctx, "challenge_logs") {
+		s.dropOldChunks(ctx, "challenge_logs", settings.AccessLogRetentionDays)
+	} else {
+		s.cleanupChallengeLogs(ctx, settings.AccessLogRetentionDays)
+	}
+
 	// 4. Drop old stats partitions (dashboard_stats_hourly_partitioned)
 	statsRetentionMonths := settings.StatsRetentionDays / 30
 	if statsRetentionMonths < 1 {
@@ -470,6 +482,46 @@ func (s *PartitionScheduler) dropOldChunks(ctx context.Context, hypertable strin
 	}
 	if dropped > 0 {
 		log.Printf("[PartitionScheduler] Dropped %d old chunks from %s (retention: %d days)", dropped, hypertable, retentionDays)
+	}
+}
+
+// cleanupChallengeLogs deletes challenge_logs rows older than retentionDays
+// where the table is not a TimescaleDB hypertable, in batches so no single
+// transaction holds the table for long. A retention below 1 day means "unset"
+// and deletes nothing, as in dropOldChunks.
+func (s *PartitionScheduler) cleanupChallengeLogs(ctx context.Context, retentionDays int) {
+	if retentionDays < 1 {
+		return
+	}
+	const batchSize = 10000
+	var total int64
+	for {
+		result, err := s.db.ExecContext(ctx, `
+			DELETE FROM challenge_logs
+			WHERE id IN (
+				SELECT id FROM challenge_logs
+				WHERE created_at < NOW() - make_interval(days => $1)
+				LIMIT $2
+			)
+		`, retentionDays, batchSize)
+		if err != nil {
+			log.Printf("[PartitionScheduler] Failed to clean up challenge_logs after %d rows: %v", total, err)
+			return
+		}
+		deleted, _ := result.RowsAffected()
+		total += deleted
+		if deleted < batchSize {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			log.Printf("[PartitionScheduler] challenge_logs cleanup stopped after %d rows: %v", total, ctx.Err())
+			return
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+	if total > 0 {
+		log.Printf("[PartitionScheduler] Deleted %d challenge records older than %d days", total, retentionDays)
 	}
 }
 

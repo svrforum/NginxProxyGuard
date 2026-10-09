@@ -17,15 +17,31 @@ import (
 // login_attempts is now keyed per (account, IP) for the lockout, so it
 // accumulates faster, and it is the table an operator looks at after a
 // brute-force attempt. (#222)
+//
+// It also deletes expired challenge tokens; see SetChallengeService.
 type SessionCleanupScheduler struct {
 	service  *service.AuthService
 	sso      *service.SSOService
+	captcha  challengeTokenCleaner
 	interval time.Duration
 	stopChan chan struct{}
 	stopOnce sync.Once
 	running  bool
 	mu       sync.Mutex
 }
+
+// challengeTokenCleaner deletes expired challenge tokens. ChallengeService
+// satisfies it; the interface lets the scheduler be tested without a database.
+type challengeTokenCleaner interface {
+	CleanupExpiredTokens(ctx context.Context) (int, error)
+}
+
+// challengeTokenCleanupTimeout bounds one challenge-token sweep. The shared
+// ContextTimeout (30 s) is too short for the first run on an install that has
+// never pruned the table (a third of a million expired rows on the largest
+// one); the batches stop where the deadline finds them and the next run
+// continues from there.
+const challengeTokenCleanupTimeout = 5 * time.Minute
 
 func NewSessionCleanupScheduler(svc *service.AuthService, sso *service.SSOService) *SessionCleanupScheduler {
 	return &SessionCleanupScheduler{
@@ -34,6 +50,13 @@ func NewSessionCleanupScheduler(svc *service.AuthService, sso *service.SSOServic
 		interval: config.SessionCleanupInterval,
 		stopChan: make(chan struct{}),
 	}
+}
+
+// SetChallengeService wires the challenge-token cleanup. The cleanup method
+// existed with no caller, so challenge_tokens kept every token ever issued.
+// Call before Start.
+func (s *SessionCleanupScheduler) SetChallengeService(c challengeTokenCleaner) {
+	s.captcha = c
 }
 
 func (s *SessionCleanupScheduler) Start() {
@@ -88,8 +111,10 @@ func (s *SessionCleanupScheduler) cleanup() {
 	}()
 	ctx, cancel := context.WithTimeout(context.Background(), config.ContextTimeout)
 	defer cancel()
-	if err := s.service.CleanupSessions(ctx); err != nil {
-		log.Printf("[Scheduler] Session cleanup failed: %v", err)
+	if s.service != nil {
+		if err := s.service.CleanupSessions(ctx); err != nil {
+			log.Printf("[Scheduler] Session cleanup failed: %v", err)
+		}
 	}
 	// Half-finished SSO sign-ins leave a state row behind; they expire in ten
 	// minutes but nothing would delete them. (#227)
@@ -99,5 +124,31 @@ func (s *SessionCleanupScheduler) cleanup() {
 		} else if n > 0 {
 			log.Printf("[Scheduler] Removed %d expired SSO login states", n)
 		}
+	}
+	s.cleanupChallengeTokens()
+}
+
+// cleanupChallengeTokens runs on its own deadline (challengeTokenCleanupTimeout)
+// and ends early when the scheduler stops.
+func (s *SessionCleanupScheduler) cleanupChallengeTokens() {
+	if s.captcha == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), challengeTokenCleanupTimeout)
+	defer cancel()
+	go func() {
+		select {
+		case <-s.stopChan:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+	n, err := s.captcha.CleanupExpiredTokens(ctx)
+	if err != nil {
+		log.Printf("[Scheduler] Challenge token cleanup failed after %d rows: %v", n, err)
+		return
+	}
+	if n > 0 {
+		log.Printf("[Scheduler] Removed %d expired challenge tokens", n)
 	}
 }

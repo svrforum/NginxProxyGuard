@@ -338,15 +338,42 @@ func (r *ChallengeRepository) RevokeAllTokensForIP(ctx context.Context, clientIP
 	return err
 }
 
-// CleanupExpiredTokens removes expired tokens
+// challengeTokenCleanupBatch is how many expired tokens one DELETE removes.
+// challenge_tokens is written whenever a visitor passes a challenge, so the
+// cleanup works in short transactions rather than one long one: a backlog of
+// 362k expired rows went in 5000-row batches of about 0.3 s each.
+const challengeTokenCleanupBatch = 5000
+
+// CleanupExpiredTokens removes tokens that expired more than a day ago, in
+// batches, and returns how many it removed. When ctx ends between batches it
+// returns the count so far with ctx's error; the next run picks up the rest.
 func (r *ChallengeRepository) CleanupExpiredTokens(ctx context.Context) (int, error) {
-	result, err := r.db.ExecContext(ctx, `
-		DELETE FROM challenge_tokens WHERE expires_at < NOW() - INTERVAL '1 day'`)
-	if err != nil {
-		return 0, err
+	total := 0
+	for {
+		result, err := r.db.ExecContext(ctx, `
+			DELETE FROM challenge_tokens t
+			USING (
+				SELECT id FROM challenge_tokens
+				WHERE expires_at < NOW() - INTERVAL '1 day'
+				ORDER BY expires_at
+				LIMIT $1
+				FOR UPDATE SKIP LOCKED
+			) d
+			WHERE t.id = d.id`, challengeTokenCleanupBatch)
+		if err != nil {
+			return total, err
+		}
+		count, _ := result.RowsAffected()
+		total += int(count)
+		if count < challengeTokenCleanupBatch {
+			return total, nil
+		}
+		select {
+		case <-ctx.Done():
+			return total, ctx.Err()
+		case <-time.After(50 * time.Millisecond):
+		}
 	}
-	count, _ := result.RowsAffected()
-	return int(count), nil
 }
 
 // GetActiveTokenCount returns count of active tokens

@@ -107,6 +107,8 @@ func NewSchedulers(cfg *config.Config, db *database.DB, nginxManager *nginx.Mana
 	s.ContainerReconcile.SetSystemLogRepo(repos.SystemLog)
 	// Notifications (#221): setter injection, like the service graph does.
 	s.Backup.SetNotificationService(svcs.Notification)
+	// Expired challenge (CAPTCHA) tokens are pruned with the sessions.
+	s.SessionCleanup.SetChallengeService(svcs.Challenge)
 
 	return s
 }

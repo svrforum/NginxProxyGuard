@@ -395,7 +395,7 @@
         "title": "로그 보관 기간 설정",
         "description": "각 로그 유형별로 보관 기간을 설정할 수 있습니다. 보관 기간이 지난 로그는 자동으로 삭제됩니다.",
         "access": "Access Logs",
-        "accessDesc": "모든 HTTP 요청 (봇 필터, Exploit 차단 포함)",
+        "accessDesc": "모든 HTTP 요청 (봇 필터, Exploit 차단 포함) · 챌린지(CAPTCHA) 기록에도 적용",
         "waf": "WAF Events",
         "wafDesc": "ModSecurity 차단/탐지 이벤트",
         "error": "Error Logs",

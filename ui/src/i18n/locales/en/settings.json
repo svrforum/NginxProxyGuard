@@ -391,7 +391,7 @@
         "title": "Log Retention Settings",
         "description": "Set retention period for each log type. Logs older than this period will be automatically deleted.",
         "access": "Access Logs",
-        "accessDesc": "All HTTP requests including Bot Filter and Exploit block events",
+        "accessDesc": "All HTTP requests including Bot Filter and Exploit block events · also applies to challenge (CAPTCHA) records",
         "waf": "WAF Events",
         "wafDesc": "ModSecurity block/detect events",
         "error": "Error Logs",
