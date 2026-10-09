@@ -475,12 +475,24 @@ func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.Pr
 				data.AIBotsList = strings.Join(model.AIBots, "\n")
 			}
 		}
-		if data.BotFilter.AllowSearchEngines {
-			if settings != nil && settings.BotListSearchEngines != "" {
-				data.SearchEnginesList = settings.BotListSearchEngines
-			} else {
-				data.SearchEnginesList = strings.Join(model.SearchEngineBots, "\n")
-			}
+	}
+
+	// $is_search_bot is shared by three features: the bot filter's "allow
+	// search engines", geo restriction's "allow search bots" and cloud
+	// blocking's "allow search bots". Its detection used to be rendered only
+	// for the bot filter, so the other two toggles did nothing on a host
+	// without the bot filter (a search bot was geo-blocked or challenged
+	// anyway). Render it whenever one of them asks for it; each consumer is
+	// still gated on its own toggle in the template.
+	if searchBotDetectionNeeded(&data) {
+		var settings *model.SystemSettings
+		if s.systemSettingsRepo != nil {
+			settings, _ = s.systemSettingsRepo.Get(ctx)
+		}
+		if settings != nil && settings.BotListSearchEngines != "" {
+			data.SearchEnginesList = settings.BotListSearchEngines
+		} else {
+			data.SearchEnginesList = strings.Join(model.SearchEngineBots, "\n")
 		}
 	}
 
@@ -545,4 +557,12 @@ func (s *ProxyHostService) getHostConfigData(ctx context.Context, host *model.Pr
 	}
 
 	return data, nil
+}
+
+// searchBotDetectionNeeded reports whether any feature on the host consumes
+// $is_search_bot, so the template has to render the search-bot detection.
+func searchBotDetectionNeeded(d *nginx.ProxyHostConfigData) bool {
+	return (d.BotFilter != nil && d.BotFilter.Enabled && d.BotFilter.AllowSearchEngines) ||
+		(d.GeoRestriction != nil && d.GeoRestriction.Enabled && d.GeoRestriction.AllowSearchBots) ||
+		(len(d.BlockedCloudIPRanges) > 0 && d.CloudProviderAllowSearchBots)
 }
