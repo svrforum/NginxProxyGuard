@@ -1109,8 +1109,10 @@ func (c *LogCollector) streamFileAccessLogs(ctx context.Context) {
 			return
 		case <-c.restartTail:
 			// Re-resolve the source (env/path may have been corrected) and
-			// reopen it from the end. The inode already being read is kept as
-			// is, so a restart never reads a line twice.
+			// reopen it: a corrected path from its end, a new file logrotate
+			// created at the same path from its start (see fileTail.reopen).
+			// The inode already being read is kept as is, so a restart never
+			// reads a line twice.
 			newPath := c.resolveTailPath()
 			c.actualTailPath.Store(newPath)
 			log.Printf("[LogCollector] file-tail restart requested — re-resolved to %s", newPath)

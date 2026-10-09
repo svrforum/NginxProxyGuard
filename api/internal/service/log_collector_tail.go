@@ -139,13 +139,17 @@ func (t *fileTail) open(seekEnd bool) error {
 // reopen serves RestartTail: a new path (or a replaced file) becomes current
 // and the old inode keeps draining. Re-resolving to the inode already being
 // read does nothing - opening it a second time would read every later line
-// twice.
+// twice. seekEnd skips what a different path already holds. A new file at
+// the path already followed is logrotate's successor, created while the tail
+// was still behind on the renamed one: nothing in it has been read, so it is
+// read from its start, as poll's own switch does.
 func (t *fileTail) reopen(path string, seekEnd bool) error {
+	samePath := path == t.path
 	t.path = path
 	if t.cur != nil && inodeOf(path) == t.cur.ino {
 		return nil
 	}
-	s, err := t.openSource(seekEnd)
+	s, err := t.openSource(seekEnd && !samePath)
 	if err != nil {
 		return err
 	}

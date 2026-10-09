@@ -184,6 +184,40 @@ func TestFileTail_ReopenSameInodeDoesNotDuplicate(t *testing.T) {
 	}
 }
 
+// RestartTail (the pipeline canary's heal) can arrive while the tail is still
+// behind on a file logrotate has just renamed. The new file at the same path
+// has held nginx's lines since the rotation, and none of them has been read:
+// it is read from its start, as poll's own switch would. Only a different
+// path skips what its file already holds.
+func TestFileTail_RestartAfterUnseenRotationReadsTheNewFileFromItsStart(t *testing.T) {
+	r := newTailRig(t)
+	writeString(t, r.writer(r.path), "a1\n")
+	r.rotate("-20261010-000000") // the tail has not polled since
+	nw := r.writer(r.path)       // logrotate's create; nginx reopens on USR1
+	writeString(t, nw, "b1\nb2\n")
+	if err := r.tail.reopen(r.path, true); err != nil { // as streamFileAccessLogs does
+		t.Fatal(err)
+	}
+	writeString(t, nw, "b3\n")
+	r.poll()
+	if want := []string{"a1", "b1", "b2", "b3"}; !reflect.DeepEqual(r.got, want) {
+		t.Fatalf("got %v want %v", r.got, want)
+	}
+
+	other := filepath.Join(filepath.Dir(r.path), "other.log")
+	if err := os.WriteFile(other, []byte("history\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.tail.reopen(other, true); err != nil {
+		t.Fatal(err)
+	}
+	writeString(t, r.writer(other), "c1\n")
+	r.poll()
+	if want := []string{"a1", "b1", "b2", "b3", "c1"}; !reflect.DeepEqual(r.got, want) {
+		t.Fatalf("after a restart onto another path: got %v want %v", r.got, want)
+	}
+}
+
 func TestFileTail_TruncationRestartsFromZero(t *testing.T) {
 	r := newTailRig(t)
 	w := r.writer(r.path)
