@@ -1,9 +1,12 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"log"
 	"strings"
 	"testing"
 	"time"
@@ -423,5 +426,52 @@ func TestDiskGuardPrimaryIsTheDatabaseDisk(t *testing.T) {
 	g.Tick(context.Background())
 	if pct, _, _, path, ok := primaryDiskUsage(g); !ok || path != "/" || pct != 61 {
 		t.Fatalf("without the database: %.1f %q %v", pct, path, ok)
+	}
+}
+
+// failingNotifier fails like a database that cannot write, then recovers.
+type failingNotifier struct {
+	err   error
+	calls int
+	sent  []string
+}
+
+func (f *failingNotifier) EmitTransition(_ context.Context, key, _ string, failing bool, _ string, _ map[string]string) error {
+	f.calls++
+	if f.err != nil {
+		return f.err
+	}
+	f.sent = append(f.sent, fmt.Sprintf("%s/%v", key, failing))
+	return nil
+}
+func (f *failingNotifier) ResolveQuietly(context.Context, string, string) error { return nil }
+
+// With the database on the full disk, recording the alert fails every tick.
+// That is logged once, retried every tick, and goes out once it can.
+func TestDiskGuardLogsAFailingAlertOnceAndRetries(t *testing.T) {
+	var buf bytes.Buffer
+	prev, flags := log.Writer(), log.Flags()
+	log.SetOutput(&buf)
+	log.SetFlags(0)
+	defer func() { log.SetOutput(prev); log.SetFlags(flags) }()
+
+	n := &failingNotifier{err: errors.New("failed to write notification state: pq: could not extend file: No space left on device (53100)")}
+	u := &fakeDiskUsage{pct: map[string]float64{"db": 95}, roles: map[string][]DiskRole{"db": {DiskRoleDB}}}
+	c := &diskClock{t: time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)}
+	g := NewDiskGuard(u, n, nil, nil, DiskGuardOptions{ConfirmSamples: 1, Now: c.now})
+	for i := 0; i < 5; i++ {
+		g.Tick(context.Background())
+		c.advance(time.Minute)
+	}
+	if got := strings.Count(buf.String(), "could not record"); got != 2 { // low and critical, once each
+		t.Fatalf("logged %d times:\n%s", got, buf.String())
+	}
+	if n.calls < 10 {
+		t.Fatalf("the alert was retried %d times in 5 ticks, want every tick", n.calls)
+	}
+	n.err = nil
+	g.Tick(context.Background())
+	if strings.Join(n.sent, " ") != "disk.space_low/true disk.space_critical/true" {
+		t.Fatalf("after the database recovered: %v", n.sent)
 	}
 }

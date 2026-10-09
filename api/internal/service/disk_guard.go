@@ -168,6 +168,7 @@ type DiskGuard struct {
 	// Tick goroutine only.
 	metricKeys map[string]bool
 	lastErr    string
+	emitErrs   map[string]string // event|key -> the alert error last logged
 }
 
 func NewDiskGuard(usage diskUsageProvider, notify diskNotifier, state diskStateReader, history diskHistory, opts DiskGuardOptions) *DiskGuard {
@@ -183,7 +184,7 @@ func NewDiskGuard(usage diskUsageProvider, notify diskNotifier, state diskStateR
 	return &DiskGuard{
 		usage: usage, notify: notify, state: state, history: history, opts: opts,
 		fs: map[string]*fsState{}, ring: map[string][]usageSample{}, growth: map[string]growthEstimate{},
-		metricKeys: map[string]bool{},
+		metricKeys: map[string]bool{}, emitErrs: map[string]string{},
 	}
 }
 
@@ -349,8 +350,9 @@ func (g *DiskGuard) announce(ctx context.Context, fs FSUsage, st *fsState, now t
 		held := wantLow && !st.recoveredAt.IsZero() && now.Sub(st.recoveredAt) < g.opts.Cooldown && !wantCrit
 		if !held {
 			if err := g.notify.EmitTransition(ctx, eventDiskLow, fs.Key, wantLow, fields["detail"], fields); err != nil {
-				log.Printf("[DiskGuard] could not record the %s alert for %s: %v", eventDiskLow, fs.Path, err)
+				g.logEmitFailure(eventDiskLow, fs, err)
 			} else {
+				delete(g.emitErrs, eventDiskLow+"|"+fs.Key)
 				if !wantLow {
 					st.recoveredAt = now
 				}
@@ -366,11 +368,24 @@ func (g *DiskGuard) announce(ctx context.Context, fs FSUsage, st *fsState, now t
 			fields["action"] = g.emerg.Plan(ctx, fs).Action
 		}
 		if err := g.notify.EmitTransition(ctx, eventDiskCritical, fs.Key, wantCrit, fields["detail"], fields); err != nil {
-			log.Printf("[DiskGuard] could not record the %s alert for %s: %v", eventDiskCritical, fs.Path, err)
+			g.logEmitFailure(eventDiskCritical, fs, err)
 		} else {
+			delete(g.emitErrs, eventDiskCritical+"|"+fs.Key)
 			st.announcedCritical = wantCrit
 		}
 	}
+}
+
+// logEmitFailure logs a failed alert once per distinct error. When the full
+// disk is the database's, recording the alert fails the same way every tick
+// until the database can write again; the next tick retries regardless.
+func (g *DiskGuard) logEmitFailure(event string, fs FSUsage, err error) {
+	k, msg := event+"|"+fs.Key, err.Error()
+	if g.emitErrs[k] == msg {
+		return
+	}
+	g.emitErrs[k] = msg
+	log.Printf("[DiskGuard] could not record the %s alert for %s (retrying every check): %v", event, fs.Path, err)
 }
 
 // fields is the message. Values are language-neutral (sizes, a path, codes);
