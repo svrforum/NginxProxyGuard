@@ -148,7 +148,9 @@ func (p *HostUsageProvider) Measure(ctx context.Context) ([]FSUsage, []StalledDi
 
 // MeasureDB returns a fresh measurement of the database filesystem. The
 // emergency compressor calls it before every chunk, and DiskGuard.DBFree
-// through it.
+// through it: both decide from it whether there is room right now, so it
+// fails when neither docker exec nor the verified alias answers, instead of
+// handing back an older reading.
 func (p *HostUsageProvider) MeasureDB(ctx context.Context) (*FSUsage, error) {
 	m, ok := p.measureDB(ctx, true, nil)
 	if !ok {
@@ -252,14 +254,14 @@ func (p *HostUsageProvider) measureDB(ctx context.Context, force bool, local []d
 
 	name, dir, reason := p.locateDB(ctx)
 	if name == "" {
-		return p.dbUnreachable(ctx, now, "", "", reason, nil)
+		return p.dbUnreachable(ctx, now, "", "", reason, nil, force)
 	}
 	raw, source, err := p.execStatfs(ctx, name, dir)
 	if err != nil {
 		p.mu.Lock()
 		p.locatedAt = time.Time{} // re-locate next time: the container may have been recreated
 		p.mu.Unlock()
-		return p.dbUnreachable(ctx, now, name, dir, "db_exec_failed", err)
+		return p.dbUnreachable(ctx, now, name, dir, "db_exec_failed", err, force)
 	}
 
 	m := diskMeasurement{role: DiskRoleDB, display: name + ":" + dir, source: source, raw: raw, at: now}
@@ -291,8 +293,10 @@ func (p *HostUsageProvider) measureDB(ctx context.Context, force bool, local []d
 // dbUnreachable handles a database container that could not be asked: the
 // verified alias keeps answering; without one the last measurement is reused
 // for up to dbStaleAfter, and after that the database disk is reported as not
-// measured — never guessed from another disk.
-func (p *HostUsageProvider) dbUnreachable(ctx context.Context, now time.Time, name, dir, reason string, cause error) (diskMeasurement, bool) {
+// measured — never guessed from another disk. A forced measurement (MeasureDB)
+// gets no reuse: its caller decides from it whether there is room right now,
+// and a reading up to dbStaleAfter old is not an answer to that.
+func (p *HostUsageProvider) dbUnreachable(ctx context.Context, now time.Time, name, dir, reason string, cause error, force bool) (diskMeasurement, bool) {
 	p.mu.Lock()
 	p.lastExec, p.execFailing = now, true
 	alias, display := p.alias, p.dbDisplay()
@@ -307,6 +311,9 @@ func (p *HostUsageProvider) dbUnreachable(ctx context.Context, now time.Time, na
 	}
 	p.setInfo(model.DatabaseDiskInfo{Measured: false, Container: name, DataDir: dir, Reason: reason})
 	p.warnOnce("db:"+reason, dbNotMeasuredLine(reason, name, cause))
+	if force {
+		return diskMeasurement{}, false
+	}
 	return p.staleDB(now)
 }
 

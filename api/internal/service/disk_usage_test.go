@@ -347,6 +347,49 @@ func TestProviderKeepsAliasWhileExecFails(t *testing.T) {
 	}
 }
 
+// A measurement that decides whether there is room right now (an emergency
+// compression pass and the raw log reclaim, through MeasureDB and DBFree) is
+// fresh or nothing. With docker exec failing and no volume on the database's
+// disk, it used to hand back the last reading, up to 15 minutes old, as
+// current. The minute tick keeps that reuse, so one failed exec does not make
+// the disk vanish from the dashboard.
+func TestProviderForcedDatabaseMeasurementIsFreshOrNothing(t *testing.T) {
+	now := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+	var execOK atomic.Bool
+	execOK.Store(true)
+	// The nginx log volume is on another disk: no alias.
+	other := rawStatfs{FSID: "1111", Type: 0xef53, Frsize: 4096, Blocks: 1 << 20, Bfree: 1 << 19, Bavail: 1 << 19, Files: 1 << 16}
+	p := newDiskTestProvider(statfsReturns(other), func(_ context.Context, args ...string) ([]byte, error) {
+		if args[0] == "exec" && execOK.Load() {
+			return []byte(busyboxStatLine), nil
+		}
+		return nil, errors.New("docker exec: context deadline exceeded")
+	}, func() time.Time { return now })
+	if fs, err := p.MeasureDB(context.Background()); err != nil || !fs.MeasuredAt.Equal(now) {
+		t.Fatalf("first MeasureDB = %#v, %v", fs, err)
+	}
+	execOK.Store(false)
+	now = now.Add(14 * time.Minute)
+	if fs, err := p.MeasureDB(context.Background()); err == nil {
+		t.Fatalf("MeasureDB handed back the reading of %s as fresh", fs.MeasuredAt.Format(time.Kitchen))
+	}
+	g := NewDiskGuard(p, nil, nil, nil, DiskGuardOptions{Now: func() time.Time { return now }})
+	if free, ok := g.DBFree(context.Background()); ok {
+		t.Fatalf("DBFree = %d, ok while the database disk cannot be measured", free)
+	}
+	if info := p.DatabaseInfo(); info.Measured || info.Reason != "db_exec_failed" {
+		t.Fatalf("database info = %#v", info)
+	}
+	got, _, err := p.Measure(context.Background())
+	if err != nil || len(got) != 2 {
+		t.Fatalf("tick: %#v, %v; want the database disk kept from its last reading", got, err)
+	}
+	now = now.Add(2 * time.Minute)
+	if got, _, _ := p.Measure(context.Background()); len(got) != 1 || got[0].HasRole(DiskRoleDB) {
+		t.Fatalf("tick 16 minutes later: %#v; want the database disk no longer reported", got)
+	}
+}
+
 // Without a container to ask, the database disk is reported as not measured —
 // never guessed from another disk — and the other disks are still watched.
 func TestProviderReportsUnmeasuredDatabase(t *testing.T) {
