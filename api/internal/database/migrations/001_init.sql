@@ -471,6 +471,7 @@ CREATE TABLE IF NOT EXISTS public.dashboard_stats_hourly (
     status_4xx bigint DEFAULT 0 NOT NULL,
     status_5xx bigint DEFAULT 0 NOT NULL,
     avg_response_time double precision DEFAULT 0,
+    timed_requests bigint DEFAULT 0 NOT NULL,
     max_response_time double precision DEFAULT 0,
     min_response_time double precision DEFAULT 0,
     p95_response_time double precision DEFAULT 0,
@@ -4721,3 +4722,9 @@ CREATE TABLE IF NOT EXISTS public.raw_log_reclaim_chunks (
 -- operator has initialised it (marker file .npg-raw-log-archive). Off by default.
 ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS raw_log_archive_enabled boolean DEFAULT false NOT NULL;
 ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS raw_log_archive_retention_days integer DEFAULT 365 NOT NULL;
+
+-- Dashboard response time: how many requests each hourly average covers (the requests
+-- with a measured time, WebSocket upgrades left out). The 24h figure weights each hour's
+-- average by it; total_requests also counts instant answers, which have no time.
+-- The hourly rollup fills it; the last 25 hours are rebuilt at every boot.
+ALTER TABLE public.dashboard_stats_hourly ADD COLUMN IF NOT EXISTS timed_requests bigint DEFAULT 0 NOT NULL;

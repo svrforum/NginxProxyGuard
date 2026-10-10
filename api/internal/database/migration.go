@@ -1712,6 +1712,14 @@ END $$`,
 			desc: "system_settings.raw_log_archive_retention_days",
 			sql:  `ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS raw_log_archive_retention_days integer DEFAULT 365 NOT NULL`,
 		},
+		// The dashboard's 24h response time weights each hourly average by
+		// the requests it covers (the ones with a measured time), not by
+		// total_requests, which also counts instant answers. The hourly
+		// rollup fills it and rebuilds the last 25 hours at boot.
+		{
+			desc: "dashboard_stats_hourly.timed_requests",
+			sql:  `ALTER TABLE public.dashboard_stats_hourly ADD COLUMN IF NOT EXISTS timed_requests bigint DEFAULT 0 NOT NULL`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

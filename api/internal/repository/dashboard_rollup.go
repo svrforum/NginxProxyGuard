@@ -18,7 +18,10 @@ import (
 // request_uri is NULL count like any other (instant answers are stored with a
 // NULL request_time); the average response time covers the requests with a
 // measured time and leaves out WebSocket upgrades (101), whose time is the
-// connection's lifetime (#148).
+// connection's lifetime (#148). timed_requests is how many requests that
+// average covers: an average over several hours weights each hour by it, not
+// by total_requests, or an hour of instant answers (blocked scanners, say)
+// would multiply the time of its few measured requests.
 const hourlyRollupRecomputeSQL = `
 WITH hours AS (
     SELECT generate_series(date_trunc('hour', $1::timestamptz, 'UTC'),
@@ -31,6 +34,7 @@ WITH hours AS (
            count(*) FILTER (WHERE status_code BETWEEN 400 AND 499) AS s4,
            count(*) FILTER (WHERE status_code >= 500)              AS s5,
            avg(request_time) FILTER (WHERE status_code IS DISTINCT FROM 101) * 1000 AS avg_ms,
+           count(request_time) FILTER (WHERE status_code IS DISTINCT FROM 101) AS timed,
            COALESCE(sum(body_bytes_sent), 0)                       AS bytes,
            count(*) FILTER (WHERE block_reason = 'waf')            AS waf,
            count(*) FILTER (WHERE block_reason = 'rate_limit')     AS rl,
@@ -49,12 +53,12 @@ WITH hours AS (
 INSERT INTO dashboard_stats_hourly (
     proxy_host_id, hour_bucket, total_requests,
     status_2xx, status_3xx, status_4xx, status_5xx,
-    avg_response_time, bytes_sent,
+    avg_response_time, timed_requests, bytes_sent,
     waf_blocked, rate_limited, bot_blocked
 )
 SELECT NULL, h.hour_bucket, COALESCE(a.total, 0),
        COALESCE(a.s2, 0), COALESCE(a.s3, 0), COALESCE(a.s4, 0), COALESCE(a.s5, 0),
-       COALESCE(a.avg_ms, 0), COALESCE(a.bytes, 0),
+       COALESCE(a.avg_ms, 0), COALESCE(a.timed, 0), COALESCE(a.bytes, 0),
        COALESCE(a.waf, 0), COALESCE(a.rl, 0), COALESCE(a.bot, 0)
 FROM hours h
 LEFT JOIN agg a USING (hour_bucket)
@@ -68,6 +72,7 @@ ON CONFLICT (hour_bucket) WHERE proxy_host_id IS NULL DO UPDATE SET
     status_4xx        = EXCLUDED.status_4xx,
     status_5xx        = EXCLUDED.status_5xx,
     avg_response_time = EXCLUDED.avg_response_time,
+    timed_requests    = EXCLUDED.timed_requests,
     bytes_sent        = EXCLUDED.bytes_sent,
     waf_blocked       = EXCLUDED.waf_blocked,
     rate_limited      = EXCLUDED.rate_limited,

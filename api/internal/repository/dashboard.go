@@ -23,6 +23,27 @@ func NewDashboardRepository(db *sql.DB) *DashboardRepository {
 	return &DashboardRepository{db: db}
 }
 
+// dashboardSummary24hSQL is the dashboard's 24h request, bandwidth, response
+// time and error totals, from the hourly rollup since $1.
+//
+// The response time is weighted by each hour's timed requests, the requests
+// its average covers. AVG(avg_response_time) averaged the hourly averages,
+// so an hour with two requests counted as much as an hour with a hundred
+// thousand (#251). Weighting by total_requests repeated that the other way
+// round: total_requests counts the instant answers too (stored without a
+// time), so an hour of blocked scanners multiplied the time of its few
+// measured requests by every scanner request.
+const dashboardSummary24hSQL = `
+		SELECT COALESCE(SUM(total_requests), 0),
+		       COALESCE(SUM(bytes_sent + bytes_received), 0),
+		       COALESCE(SUM(avg_response_time * timed_requests)
+		                / NULLIF(SUM(timed_requests), 0), 0),
+		       COALESCE(SUM(status_4xx + status_5xx), 0),
+		       COALESCE(SUM(total_requests), 1)
+		FROM dashboard_stats_hourly
+		WHERE hour_bucket >= $1
+	`
+
 // GetSummary returns the main dashboard summary
 func (r *DashboardRepository) GetSummary(ctx context.Context) (*model.DashboardSummary, error) {
 	summary := &model.DashboardSummary{}
@@ -38,20 +59,7 @@ func (r *DashboardRepository) GetSummary(ctx context.Context) (*model.DashboardS
 	last24h := now.Add(-24 * time.Hour)
 
 	// Total requests, bandwidth, response time in last 24h
-	row := r.db.QueryRowContext(ctx, `
-		SELECT COALESCE(SUM(total_requests), 0),
-		       COALESCE(SUM(bytes_sent + bytes_received), 0),
-		       -- Weighted by request count. AVG(avg_response_time) averaged the
-		       -- hourly averages, so an hour with two requests counted as much
-		       -- as an hour with a hundred thousand — one slow request in a
-		       -- quiet hour dragged the whole 24h figure into the seconds. (#251)
-		       COALESCE(SUM(avg_response_time * total_requests)
-		                / NULLIF(SUM(total_requests), 0), 0),
-		       COALESCE(SUM(status_4xx + status_5xx), 0),
-		       COALESCE(SUM(total_requests), 1)
-		FROM dashboard_stats_hourly
-		WHERE hour_bucket >= $1
-	`, last24h)
+	row := r.db.QueryRowContext(ctx, dashboardSummary24hSQL, last24h)
 
 	var totalReq, totalBW, totalErrors, totalForRate int64
 	var avgRT float64
@@ -944,11 +952,11 @@ func (r *DashboardRepository) AggregateToDaily(ctx context.Context, date time.Ti
 		       waf_blocked, rate_limited, bot_blocked)
 		SELECT proxy_host_id, DATE($1), SUM(total_requests),
 		       SUM(status_2xx), SUM(status_3xx), SUM(status_4xx), SUM(status_5xx),
-		       -- Weighted, for the same reason as the 24h summary above (#251);
-		       -- here it also PERSISTS, so an unweighted value would keep
-		       -- misreporting that day forever.
-		       COALESCE(SUM(avg_response_time * total_requests)
-		                / NULLIF(SUM(total_requests), 0), 0),
+		       -- Weighted by timed requests, for the same reason as the 24h
+		       -- summary (dashboardSummary24hSQL, #251); here it also PERSISTS,
+		       -- so a wrongly weighted value would keep misreporting that day.
+		       COALESCE(SUM(avg_response_time * timed_requests)
+		                / NULLIF(SUM(timed_requests), 0), 0),
 		       MAX(max_response_time), SUM(bytes_sent), SUM(bytes_received),
 		       SUM(waf_blocked), SUM(rate_limited), SUM(bot_blocked)
 		FROM dashboard_stats_hourly

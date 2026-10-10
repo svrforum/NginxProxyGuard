@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"database/sql"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -20,7 +22,7 @@ func TestHourlyRollupOverwritesAndFiltersLikeTheDashboard(t *testing.T) {
 		}
 	}
 	for _, col := range []string{"total_requests", "status_2xx", "status_3xx", "status_4xx", "status_5xx",
-		"avg_response_time", "bytes_sent", "waf_blocked", "rate_limited", "bot_blocked"} {
+		"avg_response_time", "timed_requests", "bytes_sent", "waf_blocked", "rate_limited", "bot_blocked"} {
 		if !strings.Contains(hourlyRollupRecomputeSQL, "= EXCLUDED."+col) {
 			t.Errorf("hourlyRollupRecomputeSQL does not overwrite %s", col)
 		}
@@ -31,16 +33,14 @@ func TestHourlyRollupOverwritesAndFiltersLikeTheDashboard(t *testing.T) {
 }
 
 type hourlyRow struct {
-	total, s2, s3, s4, s5, bytes, waf, rl, bot int64
-	avgMs                                      float64
+	total, s2, s3, s4, s5, bytes, waf, rl, bot, timed int64
+	avgMs                                             float64
 }
 
-// One recompute over a fixed window: the counts match what the logs hold,
-// NULL fields count, NPG's own and internal requests do not, the latency
-// average leaves out WebSocket upgrades and requests without a time, a wrong
-// row is overwritten, an hour without requests is zeroed, and hours outside
-// the window and per-host rows are left alone. A second run changes nothing.
-func TestRecomputeHourlyRollup(t *testing.T) {
+// openRollupTestDB returns a test database with the columns the hourly rollup
+// reads and writes.
+func openRollupTestDB(t *testing.T) *sql.DB {
+	t.Helper()
 	db, _ := openSchemaTestDB(t)
 	mustExec(t, db,
 		`CREATE TYPE log_type AS ENUM ('access', 'error', 'modsec')`,
@@ -59,6 +59,7 @@ func TestRecomputeHourlyRollup(t *testing.T) {
 			status_4xx bigint DEFAULT 0 NOT NULL,
 			status_5xx bigint DEFAULT 0 NOT NULL,
 			avg_response_time double precision DEFAULT 0,
+			timed_requests bigint DEFAULT 0 NOT NULL,
 			bytes_sent bigint DEFAULT 0 NOT NULL,
 			bytes_received bigint DEFAULT 0 NOT NULL,
 			waf_blocked bigint DEFAULT 0 NOT NULL,
@@ -67,6 +68,18 @@ func TestRecomputeHourlyRollup(t *testing.T) {
 			created_at timestamp with time zone DEFAULT now() NOT NULL,
 			UNIQUE (proxy_host_id, hour_bucket))`,
 		`CREATE UNIQUE INDEX idx_dashboard_stats_hourly_null_host_bucket ON dashboard_stats_hourly (hour_bucket) WHERE proxy_host_id IS NULL`,
+	)
+	return db
+}
+
+// One recompute over a fixed window: the counts match what the logs hold,
+// NULL fields count, NPG's own and internal requests do not, the latency
+// average leaves out WebSocket upgrades and requests without a time, a wrong
+// row is overwritten, an hour without requests is zeroed, and hours outside
+// the window and per-host rows are left alone. A second run changes nothing.
+func TestRecomputeHourlyRollup(t *testing.T) {
+	db := openRollupTestDB(t)
+	mustExec(t, db,
 
 		// 10:00 UTC: nine requests that count.
 		`INSERT INTO logs_partitioned (log_type, host, request_uri, status_code, request_time, body_bytes_sent, block_reason, created_at) VALUES
@@ -111,7 +124,7 @@ func TestRecomputeHourlyRollup(t *testing.T) {
 		rows, err := db.Query(`
 			SELECT to_char(hour_bucket AT TIME ZONE 'UTC', 'HH24:MI') || CASE WHEN proxy_host_id IS NULL THEN '' ELSE ' host' END,
 			       total_requests, status_2xx, status_3xx, status_4xx, status_5xx, avg_response_time,
-			       bytes_sent, waf_blocked, rate_limited, bot_blocked
+			       bytes_sent, waf_blocked, rate_limited, bot_blocked, timed_requests
 			FROM dashboard_stats_hourly`)
 		if err != nil {
 			t.Fatalf("read rollup: %v", err)
@@ -121,7 +134,7 @@ func TestRecomputeHourlyRollup(t *testing.T) {
 		for rows.Next() {
 			var k string
 			var r hourlyRow
-			if err := rows.Scan(&k, &r.total, &r.s2, &r.s3, &r.s4, &r.s5, &r.avgMs, &r.bytes, &r.waf, &r.rl, &r.bot); err != nil {
+			if err := rows.Scan(&k, &r.total, &r.s2, &r.s3, &r.s4, &r.s5, &r.avgMs, &r.bytes, &r.waf, &r.rl, &r.bot, &r.timed); err != nil {
 				t.Fatalf("scan rollup: %v", err)
 			}
 			r.avgMs = float64(int64(r.avgMs*1000+0.5)) / 1000 // compare to the microsecond
@@ -147,8 +160,8 @@ func TestRecomputeHourlyRollup(t *testing.T) {
 		// 9 requests: 2xx /ok /fast and the NULL URI, 3xx /moved, 4xx three,
 		// 5xx one; the 101 counts as a request but in no class. Latency
 		// averages 0.1, 0.3, 0.2, 0.4 and 0.2 s: not the 101, not the NULLs.
-		"10:00":      {total: 9, s2: 3, s3: 1, s4: 3, s5: 1, avgMs: 240, bytes: 23246, waf: 1, rl: 1, bot: 1},
-		"11:00":      {total: 2, s2: 1, s4: 1, avgMs: 100, bytes: 40},
+		"10:00":      {total: 9, s2: 3, s3: 1, s4: 3, s5: 1, avgMs: 240, timed: 5, bytes: 23246, waf: 1, rl: 1, bot: 1},
+		"11:00":      {total: 2, s2: 1, s4: 1, avgMs: 100, timed: 2, bytes: 40},
 		"12:00":      {},
 		"13:00":      {total: 777, s2: 777},
 		"10:00 host": {total: 5, s2: 5},
@@ -171,5 +184,64 @@ func TestRecomputeHourlyRollup(t *testing.T) {
 		if again[k] != w {
 			t.Errorf("a second run changed hour %s from %+v to %+v", k, w, again[k])
 		}
+	}
+}
+
+// The dashboard's 24h response time is the average over the requests that
+// have a measured time, whichever hours they fall in. The hourly rows keep
+// each hour's average; the 24h figure weights them by timed_requests. It
+// weighted them by total_requests, which also counts the instant answers
+// (blocked scanners, redirects: stored without a time), so an hour of those
+// multiplied the time of its few measured requests: here 367.6 ms instead of
+// 72.7.
+func TestDashboardResponseTimeAveragesTimedRequests(t *testing.T) {
+	db := openRollupTestDB(t)
+	mustExec(t, db,
+		// 21:00 UTC: 2,000 instant answers, 20 proxied requests at 400 ms and a
+		// WebSocket upgrade (its time is the connection's lifetime).
+		`INSERT INTO logs_partitioned (log_type, host, request_uri, status_code, request_time, body_bytes_sent, block_reason, created_at)
+		 SELECT 'access', 'a.example.com', '/scan', 403, NULL, 0, 'bot_filter', '2026-10-08 21:00:00+00'::timestamptz + g * interval '1 second'
+		 FROM generate_series(1, 2000) g`,
+		`INSERT INTO logs_partitioned (log_type, host, request_uri, status_code, request_time, body_bytes_sent, created_at)
+		 SELECT 'access', 'a.example.com', '/app', 200, 0.400, 100, '2026-10-08 21:40:00+00'::timestamptz + g * interval '1 second'
+		 FROM generate_series(1, 20) g`,
+		`INSERT INTO logs_partitioned (log_type, host, request_uri, status_code, request_time, body_bytes_sent, created_at) VALUES
+			('access', 'a.example.com', '/ws', 101, 3600.0, 10, '2026-10-08 21:50:00+00')`,
+		// 22:00 UTC: 200 requests at 40 ms, none instant.
+		`INSERT INTO logs_partitioned (log_type, host, request_uri, status_code, request_time, body_bytes_sent, created_at)
+		 SELECT 'access', 'a.example.com', '/app', 200, 0.040, 100, '2026-10-08 22:00:00+00'::timestamptz + g * interval '1 second'
+		 FROM generate_series(1, 200) g`,
+	)
+	repo := NewDashboardRepository(db)
+	ctx := context.Background()
+	if _, err := repo.RecomputeHourlyRollup(ctx, time.Date(2026, 10, 8, 21, 0, 0, 0, time.UTC), time.Date(2026, 10, 8, 23, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatalf("RecomputeHourlyRollup: %v", err)
+	}
+	var total, bandwidth, errorsN, forRate int64
+	var avgMs float64
+	since := time.Date(2026, 10, 8, 20, 30, 0, 0, time.UTC)
+	if err := db.QueryRowContext(ctx, dashboardSummary24hSQL, since).Scan(&total, &bandwidth, &avgMs, &errorsN, &forRate); err != nil {
+		t.Fatalf("24h summary: %v", err)
+	}
+	// (20 x 400 ms + 200 x 40 ms) / 220 timed requests
+	if want := 16000.0 / 220; math.Abs(avgMs-want) > 0.01 {
+		t.Errorf("24h average response time %.1f ms, want %.1f (the mean over the 220 timed requests)", avgMs, want)
+	}
+	if total != 2221 || errorsN != 2000 {
+		t.Errorf("24h totals: %d requests and %d errors, want 2221 and 2000", total, errorsN)
+	}
+
+	// Hours without a timed request do not pull the average to 0.
+	mustExec(t, db, `INSERT INTO logs_partitioned (log_type, host, request_uri, status_code, request_time, body_bytes_sent, created_at)
+		 SELECT 'access', 'a.example.com', '/scan', 403, NULL, 0, '2026-10-08 23:00:00+00'::timestamptz + g * interval '1 second'
+		 FROM generate_series(1, 500) g`)
+	if _, err := repo.RecomputeHourlyRollup(ctx, time.Date(2026, 10, 8, 23, 0, 0, 0, time.UTC), time.Date(2026, 10, 9, 0, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatalf("RecomputeHourlyRollup 23:00: %v", err)
+	}
+	if err := db.QueryRowContext(ctx, dashboardSummary24hSQL, since).Scan(&total, &bandwidth, &avgMs, &errorsN, &forRate); err != nil {
+		t.Fatalf("24h summary: %v", err)
+	}
+	if want := 16000.0 / 220; math.Abs(avgMs-want) > 0.01 || total != 2721 {
+		t.Errorf("with an hour of instant answers only: %.1f ms over %d requests, want %.1f ms over 2721", avgMs, total, want)
 	}
 }
