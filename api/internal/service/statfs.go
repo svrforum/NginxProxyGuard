@@ -49,6 +49,17 @@ type rawStatfs struct {
 // usage returns df's numbers. Used excludes the root-reserved blocks and the
 // percentage is used/(used+avail): that is what Postgres, a non-root writer,
 // sees — at "100%" it can no longer extend a file even though root could.
+//
+// On ZFS (TrueNAS SCALE, Proxmox) a Docker volume is a dataset, and statfs
+// describes the dataset, not the pool: f_blocks is what the dataset holds plus
+// the pool's free space, f_bavail the pool's free space. avail (and so "free"
+// and "days to full") is right, but the percentage is relative to the
+// dataset: a dataset holding 20 GB on a pool with 40 GB free reads 33% while
+// the pool is 98% full, and reaches the 90% line only with about 2.2 GB left.
+// df reports the same numbers; the pool's own figure is `zpool list`. A
+// percentage line cannot see this, so an operator on ZFS should watch the
+// pool as well, or set NPG_DISK_WARN_PERCENT / NPG_DISK_CRITICAL_PERCENT low
+// enough for the dataset's size.
 func (r rawStatfs) usage() (total, used, avail uint64, pct float64) {
 	total = r.Blocks * r.Frsize
 	used = (r.Blocks - r.Bfree) * r.Frsize
