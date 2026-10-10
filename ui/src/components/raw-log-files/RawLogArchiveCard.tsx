@@ -7,7 +7,7 @@ import type { RawLogArchiveStatus, RawLogUsage } from '../../types/rawLogFiles';
 import type { UpdateSystemSettingsRequest } from '../../types/settings';
 import { ModalShell } from '../common/ModalShell';
 import { usePermissions } from '../../hooks/usePermissions';
-import { RAW_LOG_ARCHIVE_RETENTION, formatFileSize, type RawLogMessage } from './shared';
+import { RAW_LOG_ARCHIVE_RETENTION, formatFileSize, shownArchiveStatus, type RawLogMessage } from './shared';
 
 interface RawLogArchiveCardProps {
   archive: RawLogArchiveStatus | undefined;
@@ -84,7 +84,7 @@ export default function RawLogArchiveCard({ archive, usage, onMessage }: RawLogA
   const retention = edited.raw_log_archive_retention_days ?? settings?.raw_log_archive_retention_days ?? 365;
   const retentionInvalid = 'raw_log_archive_retention_days' in edited &&
     !(Number.isInteger(retention) && retention >= RAW_LOG_ARCHIVE_RETENTION.min && retention <= RAW_LOG_ARCHIVE_RETENTION.max);
-  const shown = probe ?? archive;
+  const shown = shownArchiveStatus(probe, archive);
   const busy = checkMutation.isPending || initMutation.isPending || runMutation.isPending;
 
   const projected = usage && usage.basis !== 'none' && Number.isFinite(retention) ? usage.avg_daily_bytes * retention : undefined;
