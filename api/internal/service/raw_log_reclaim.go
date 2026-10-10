@@ -50,8 +50,8 @@ const (
 	rawReclaimSupportTTL     = 10 * time.Minute
 	rawReclaimStopWait       = 10 * time.Second
 	// A day that hits an unexpected error this many times becomes failed and
-	// is left alone, so one bad day cannot hold up the rest; an explicit Start
-	// gives it one more try, after every other day.
+	// is left alone, so one bad day cannot hold up the rest; a run started by
+	// hand gives it one more try, after every other day, when it gets to it.
 	rawReclaimFailAfter            = 3
 	rawReclaimMargin         int64 = 1 << 30
 	rawReclaimVerifyMinBytes int64 = 1 << 20
@@ -90,6 +90,7 @@ type rawReclaimStore interface {
 
 	ListChunkRows(ctx context.Context) ([]repository.ReclaimChunk, error)
 	PlanChunk(ctx context.Context, p repository.ReclaimPlanRow) error
+	ReviveChunk(ctx context.Context, name string) (string, error)
 	MarkGoneChunks(ctx context.Context) error
 	MarkGone(ctx context.Context, name string) error
 	MarkSkipped(ctx context.Context, name, reason string) error
@@ -283,14 +284,14 @@ func (s *RawLogReclaimService) Start(ctx context.Context, user string, maxChunks
 	if !got {
 		return nil, ErrRawReclaimRunning // another API process runs it
 	}
-	if err := s.plan(ctx, true); err != nil {
+	if err := s.plan(ctx); err != nil {
 		return nil, err
 	}
 	rows, err := s.store.ListChunkRows(ctx)
 	if err != nil {
 		return nil, err
 	}
-	work := workOrder(rows, nil)
+	work := workOrder(rows, nil, true)
 	free, fok := probe.DBFree(ctx)
 	s.setFree(free, fok)
 	if !fok {
@@ -323,7 +324,7 @@ func (s *RawLogReclaimService) Start(ctx context.Context, user string, maxChunks
 	}
 	log.Printf("[RawLogReclaim] started by %s: %d day(s) hold about %s of access/error raw_log; working on %s, largest first",
 		userOrSystem(user), len(work), formatBytes(raw), limit)
-	s.launch(sess, job)
+	s.launch(sess, job, true)
 	started = true
 	return s.Status(ctx, false)
 }
@@ -335,13 +336,15 @@ func userOrSystem(u string) string {
 	return u
 }
 
-func (s *RawLogReclaimService) launch(sess repository.ReclaimSession, job repository.ReclaimJob) {
+// launch starts the runner. retryFailed (a Start, never a resume) has it
+// give each failed day one more try, after every other day.
+func (s *RawLogReclaimService) launch(sess repository.ReclaimSession, job repository.ReclaimJob, retryFailed bool) {
 	ctx, cancel := context.WithCancel(s.base)
 	s.mu.Lock()
 	s.cancel, s.done, s.stopping = cancel, make(chan struct{}), false
 	done := s.done
 	s.mu.Unlock()
-	go s.run(ctx, sess, job, done)
+	go s.run(ctx, sess, job, retryFailed, done)
 }
 
 // Stop records 'paused' and cancels the runner: the statement in flight is
@@ -483,7 +486,7 @@ func (s *RawLogReclaimService) resume(ctx context.Context) (launched, retry bool
 		_ = sess.Close()
 		return false, true
 	}
-	if err := s.plan(ctx, false); err != nil {
+	if err := s.plan(ctx); err != nil {
 		_ = sess.Close()
 		if ctx.Err() != nil {
 			return false, false // the API is stopping: the job stays running for the next start
@@ -497,7 +500,7 @@ func (s *RawLogReclaimService) resume(ctx context.Context) (launched, retry bool
 		return false, err != nil
 	}
 	log.Printf("[RawLogReclaim] resuming the reclaim requested by %s", userOrSystem(job.RequestedBy))
-	s.launch(sess, job)
+	s.launch(sess, job, false)
 	return true, false
 }
 

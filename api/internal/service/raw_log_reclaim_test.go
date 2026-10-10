@@ -262,7 +262,7 @@ func (f *fakeReclaimStore) PlanChunk(_ context.Context, p repository.ReclaimPlan
 			State: "pending", BytesBefore: p.BytesBefore, RawBytes: p.RawBytes}
 		return nil
 	}
-	if r.State == "skipped" || r.State == "failed" {
+	if r.State == "skipped" {
 		if r.UpdateXID == nil {
 			r.State, r.BytesBefore, r.RawBytes = "pending", p.BytesBefore, p.RawBytes
 		} else {
@@ -271,6 +271,21 @@ func (f *fakeReclaimStore) PlanChunk(_ context.Context, p repository.ReclaimPlan
 		r.LastError = ""
 	}
 	return nil
+}
+
+func (f *fakeReclaimStore) ReviveChunk(_ context.Context, name string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	r := f.rows[name]
+	if r == nil || r.State != "failed" {
+		return "", nil
+	}
+	r.State = "pending"
+	if r.UpdateXID != nil {
+		r.State = "nulled"
+	}
+	f.log("revive " + name)
+	return r.State, nil
 }
 
 func (f *fakeReclaimStore) MarkGoneChunks(ctx context.Context) error {
@@ -1097,6 +1112,61 @@ func TestRawReclaimStartRetriesFailedDaysLast(t *testing.T) {
 	}
 }
 
+// A failed day keeps its state and its last error until a run started by
+// hand actually takes it: not when max_chunks ends the run first, and not
+// when the Start is refused, after which a resume that was waiting leaves it
+// alone as well.
+func TestRawReclaimFailedDayKeepsItsStateUntilARunTakesIt(t *testing.T) {
+	t.Run("max_chunks ends the run first", func(t *testing.T) {
+		f := newFakeReclaimStore(t)
+		f.addDay(1, 300, 200, 0)
+		f.addDay(2, 200, 100, 0)
+		bad := f.addDay(3, 900, 500, 0)
+		f.failedDay(bad, false)
+		s := newTestReclaim(t, f, plenty())
+		one := 1
+		if _, err := s.Start(context.Background(), "admin", &one); err != nil {
+			t.Fatal(err)
+		}
+		waitRun(t, s)
+		if r := f.row(bad); r.State != "failed" || r.Attempts != rawReclaimFailAfter || r.LastError != "boom" {
+			t.Fatalf("failed day the run never reached = %+v; want still failed, with its error", r)
+		}
+		if ev := eventsMatching(f.eventLog(), "null "+bad); len(ev) != 0 {
+			t.Fatalf("the failed day was worked on: %v", ev)
+		}
+	})
+	t.Run("a refused Start, then a resume", func(t *testing.T) {
+		f := newFakeReclaimStore(t)
+		good := f.addDay(1, 4096, 1024, 0) // needs 2 x 3 GiB + 1 GiB
+		bad := f.addDay(2, 100, 40, 0)
+		f.failedDay(bad, false)
+		s := newTestReclaim(t, f, &fakeProbe{free: uint64(5 << 30), ok: true})
+		var pre *RawReclaimPreconditionError
+		if _, err := s.Start(context.Background(), "admin", nil); !errors.As(err, &pre) || pre.Code != "insufficient_space" {
+			t.Fatalf("Start: %v; want it refused for space", err)
+		}
+		if r := f.row(bad); r.State != "failed" || r.Attempts != rawReclaimFailAfter || r.LastError != "boom" {
+			t.Fatalf("failed day after a refused Start = %+v; want untouched", r)
+		}
+		// A run the previous process left running resumes: it carries on with
+		// that request and leaves failed days to the next Start.
+		start := f.clock.Add(-time.Hour)
+		f.mu.Lock()
+		f.job = repository.ReclaimJob{Status: model.RawReclaimRunning, RequestedAt: &start, RequestedBy: "admin"}
+		f.mu.Unlock()
+		s2 := newTestReclaim(t, f, plenty())
+		s2.ResumeIfRunning(context.Background())
+		waitRun(t, s2)
+		if r := f.row(bad); r.State != "failed" || r.LastError != "boom" {
+			t.Fatalf("failed day after the resume = %+v; want untouched", r)
+		}
+		if r := f.row(good); r.State != "done" {
+			t.Fatalf("the other day after the resume = %+v; want done", r)
+		}
+	})
+}
+
 // A resume after a restart carries on with the request as it was: failed
 // days stay failed until someone presses Start.
 func TestRawReclaimResumeLeavesFailedDaysAlone(t *testing.T) {
@@ -1197,12 +1267,25 @@ func TestWorkOrder(t *testing.T) {
 		{Name: "failed-before", State: "nulled", RawBytes: 99, Attempts: rawReclaimFailAfter, RangeStart: t0},
 	}
 	var got []string
-	for _, r := range workOrder(rows, &req) {
+	for _, r := range workOrder(rows, &req, false) {
 		got = append(got, r.Name)
 	}
 	want := "pending-started,nulled,nulled-retried,pending-big,pending-old-request,pending-small,failed-before"
 	if strings.Join(got, ",") != want {
 		t.Fatalf("order %v; want %s", got, want)
+	}
+	// A run started by hand takes the failed days too, after all of those:
+	// the one whose raw_log is gone first.
+	xid := int64(7)
+	rows = append(rows,
+		repository.ReclaimChunk{Name: "failed-big", State: "failed", RawBytes: 500, Attempts: rawReclaimFailAfter, RangeStart: t0},
+		repository.ReclaimChunk{Name: "failed-nulled", State: "failed", RawBytes: 1, Attempts: rawReclaimFailAfter, UpdateXID: &xid, RangeStart: t0})
+	got = nil
+	for _, r := range workOrder(rows, &req, true) {
+		got = append(got, r.Name)
+	}
+	if strings.Join(got, ",") != want+",failed-nulled,failed-big" {
+		t.Fatalf("order with failed days %v; want %s,failed-nulled,failed-big", got, want)
 	}
 	if countWorked(rows, &req) != 1 {
 		t.Fatal("countWorked")

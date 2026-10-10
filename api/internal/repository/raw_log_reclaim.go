@@ -658,11 +658,10 @@ type ReclaimPlanRow struct {
 }
 
 // PlanChunk records a day as pending. A day recorded earlier is left alone,
-// except a skipped or a failed one, which comes back: as nulled when its
-// raw_log was already removed (it still needs its VACUUM FULL), else as
-// pending. A failed day keeps its attempts, so the run takes it after the
-// others and one more counted error fails it again (the service plans failed
-// days only for an explicit Start).
+// except a skipped one, which comes back: as nulled when its raw_log was
+// already removed (it still needs its VACUUM FULL), else as pending. A failed
+// day stays failed, with its error; ReviveChunk gives it its one more try
+// when a run takes it.
 func (r *RawLogReclaimRepository) PlanChunk(ctx context.Context, p ReclaimPlanRow) error {
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO raw_log_reclaim_chunks AS c (chunk_name, range_start, range_end, state, bytes_before, raw_bytes, updated_at)
@@ -673,11 +672,32 @@ func (r *RawLogReclaimRepository) PlanChunk(ctx context.Context, p ReclaimPlanRo
 		       raw_bytes = CASE WHEN c.update_xid IS NULL THEN EXCLUDED.raw_bytes ELSE c.raw_bytes END,
 		       range_start = EXCLUDED.range_start, range_end = EXCLUDED.range_end,
 		       last_error = NULL, updated_at = now()
-		 WHERE c.state IN ('skipped', 'failed')`, p.Name, p.RangeStart, p.RangeEnd, p.BytesBefore, p.RawBytes)
+		 WHERE c.state = 'skipped'`, p.Name, p.RangeStart, p.RangeEnd, p.BytesBefore, p.RawBytes)
 	if err != nil {
 		return fmt.Errorf("failed to record a raw log reclaim day: %w", err)
 	}
 	return nil
+}
+
+// ReviveChunk brings a failed day back for one more try, as the run takes it:
+// nulled when its raw_log was already removed, else pending. It keeps its
+// attempts and its last error, so one more counted error fails it again and
+// the error shows until this try ends. Returns the state it got, "" when the
+// day was not failed (any more).
+func (r *RawLogReclaimRepository) ReviveChunk(ctx context.Context, name string) (string, error) {
+	var state string
+	err := r.db.QueryRowContext(ctx, `
+		UPDATE raw_log_reclaim_chunks
+		   SET state = CASE WHEN update_xid IS NULL THEN 'pending' ELSE 'nulled' END, updated_at = now()
+		 WHERE chunk_name = $1 AND state = 'failed'
+		RETURNING state`, name).Scan(&state)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to retry a failed raw log reclaim day: %w", err)
+	}
+	return state, nil
 }
 
 // MarkGoneChunks retires unfinished days whose chunk retention has dropped.

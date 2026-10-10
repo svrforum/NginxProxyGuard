@@ -87,7 +87,7 @@ func (s *RawLogReclaimService) Status(ctx context.Context, refreshEstimate bool)
 		reclaimable, modsec, days, at := est.reclaimable, est.modsec, est.days, est.at
 		st.EstimatedReclaimableBytes, st.ModSecRawBytes, st.EstimateChunks, st.EstimatedAt = &reclaimable, &modsec, &days, &at
 	}
-	if work := workOrder(rows, job.RequestedAt); len(work) > 0 {
+	if work := workOrder(rows, job.RequestedAt, true); len(work) > 0 {
 		st.RequiredFreeBytes = rawReclaimNeed(work[0].BytesBefore, work[0].RawBytes)
 	} else if est != nil && est.days > 0 {
 		st.RequiredFreeBytes = est.firstNeed

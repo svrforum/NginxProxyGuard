@@ -19,10 +19,11 @@ import (
 // ── planning ───────────────────────────────────────────────────────────────
 
 // plan records the days that have raw_log to remove, retires dropped ones and
-// sets aside those that no longer qualify. retryFailed (an explicit Start,
-// never a resume) gives each failed day one more try: back to pending, or to
-// nulled when its raw_log is gone already, and taken after every other day.
-func (s *RawLogReclaimService) plan(ctx context.Context, retryFailed bool) error {
+// sets aside those that no longer qualify. Failed days stay as they are: a
+// run started by hand takes them last (workOrder) and brings each back only
+// as it gets to it (reclaimOne), so a refused Start, or one whose max_chunks
+// ends before them, leaves them failed with their error.
+func (s *RawLogReclaimService) plan(ctx context.Context) error {
 	if err := s.store.MarkGoneChunks(ctx); err != nil {
 		return err
 	}
@@ -49,7 +50,7 @@ func (s *RawLogReclaimService) plan(ctx context.Context, retryFailed bool) error
 			}
 			continue
 		}
-		if isKnown && state != "skipped" && !(retryFailed && state == "failed") {
+		if isKnown && state != "skipped" {
 			continue
 		}
 		st, ok := cached[c.Name]
@@ -79,11 +80,12 @@ func (s *RawLogReclaimService) plan(ctx context.Context, retryFailed bool) error
 // request already started (so max_chunks counts each once), then days whose
 // UPDATE committed, fewer failed attempts, the most raw_log, the oldest. A
 // day given one more try after failing (rawReclaimFailAfter attempts) comes
-// after all of those.
-func workOrder(rows []repository.ReclaimChunk, requestedAt *time.Time) []repository.ReclaimChunk {
+// after all of those, and with retryFailed (a run started by hand) the failed
+// days still waiting for their try come last of all.
+func workOrder(rows []repository.ReclaimChunk, requestedAt *time.Time, retryFailed bool) []repository.ReclaimChunk {
 	var out []repository.ReclaimChunk
 	for _, r := range rows {
-		if r.State == "pending" || r.State == "nulled" {
+		if r.State == "pending" || r.State == "nulled" || (retryFailed && r.State == "failed") {
 			out = append(out, r)
 		}
 	}
@@ -92,10 +94,13 @@ func workOrder(rows []repository.ReclaimChunk, requestedAt *time.Time) []reposit
 		if wa, wb := workedSince(a, requestedAt), workedSince(b, requestedAt); wa != wb {
 			return wa
 		}
+		if fa, fb := a.State == "failed", b.State == "failed"; fa != fb {
+			return fb
+		}
 		if xa, xb := a.Attempts >= rawReclaimFailAfter, b.Attempts >= rawReclaimFailAfter; xa != xb {
 			return xb
 		}
-		if na, nb := a.State == "nulled", b.State == "nulled"; na != nb {
+		if na, nb := a.UpdateXID != nil || a.State == "nulled", b.UpdateXID != nil || b.State == "nulled"; na != nb {
 			return na
 		}
 		if a.Attempts != b.Attempts {
@@ -125,7 +130,7 @@ func countWorked(rows []repository.ReclaimChunk, since *time.Time) int {
 
 // ── the run ────────────────────────────────────────────────────────────────
 
-func (s *RawLogReclaimService) run(ctx context.Context, sess repository.ReclaimSession, job repository.ReclaimJob, done chan struct{}) {
+func (s *RawLogReclaimService) run(ctx context.Context, sess repository.ReclaimSession, job repository.ReclaimJob, retryFailed bool, done chan struct{}) {
 	defer func() {
 		_ = sess.Close()
 		s.mu.Lock()
@@ -155,7 +160,7 @@ func (s *RawLogReclaimService) run(ctx context.Context, sess repository.ReclaimS
 			return
 		}
 		var next *repository.ReclaimChunk
-		for _, w := range workOrder(rows, job.RequestedAt) {
+		for _, w := range workOrder(rows, job.RequestedAt, retryFailed) {
 			if !attempted[w.Name] {
 				w := w
 				next = &w
@@ -226,12 +231,25 @@ func (s *RawLogReclaimService) reclaimOne(ctx context.Context, sess repository.R
 	defer s.clearCurrent()
 	day := dayLabel(c)
 	first := model.RawReclaimStepNulling
-	if c.State == "nulled" {
+	if c.State == "nulled" || c.UpdateXID != nil {
 		first = model.RawReclaimStepWaiting
 	}
 	s.setStep(c, first)
 	if !s.waitWhileCritical(ctx, c, first) {
 		return rawOutcome{kind: rawOutcomeCanceled}
+	}
+	if c.State == "failed" {
+		// Its one more try, now that the run gets to it: it leaves "failed"
+		// only here, and keeps its attempts and its last error until this try
+		// ends.
+		state, err := s.store.ReviveChunk(ctx, c.Name)
+		if err != nil {
+			return s.chunkError(ctx, c, "checking", err)
+		}
+		if state == "" {
+			return rawOutcome{kind: rawOutcomeSkipped} // no longer failed: changed meanwhile
+		}
+		c.State = state
 	}
 	info, err := s.store.LookupChunk(ctx, c.Name)
 	if err != nil {

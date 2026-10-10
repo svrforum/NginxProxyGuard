@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -305,5 +306,99 @@ func TestRawReclaimDBShutdownWhileAResumePlansKeepsTheJob(t *testing.T) {
 	}
 	if job.Status != model.RawReclaimRunning || job.LastError != "" {
 		t.Fatalf("job = %+v; want still running, to be resumed after the next start", job)
+	}
+}
+
+// qualifyingDays plans the fixture's two old days through the repository and
+// returns them, the larger first.
+func qualifyingDays(t *testing.T, repo *repository.RawLogReclaimRepository) []repository.ReclaimChunkInfo {
+	t.Helper()
+	ctx := context.Background()
+	infos, err := repo.ListChunks(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var days []repository.ReclaimChunkInfo
+	for _, c := range infos {
+		if c.SkipReason() != "" {
+			continue
+		}
+		st, err := repo.RawLogStats(ctx, c.CompressedRel)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := repo.PlanChunk(ctx, repository.ReclaimPlanRow{Name: c.Name, RangeStart: c.RangeStart, RangeEnd: c.RangeEnd,
+			BytesBefore: c.Bytes, RawBytes: st.RawBytes}); err != nil {
+			t.Fatal(err)
+		}
+		days = append(days, c)
+	}
+	if len(days) != 2 {
+		t.Fatalf("days that qualify: %+v; want the two old ones", infos)
+	}
+	return days
+}
+
+func chunkRow(t *testing.T, repo *repository.RawLogReclaimRepository, name string) repository.ReclaimChunk {
+	t.Helper()
+	rows, err := repo.ListChunkRows(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range rows {
+		if r.Name == name {
+			return r
+		}
+	}
+	t.Fatalf("no row for %s", name)
+	return repository.ReclaimChunk{}
+}
+
+// Against the real tables: a failed day keeps its state and its last error
+// when a Start is refused for space, and when max_chunks ends the run before
+// the day; the Start that reaches it gives it its one more try.
+func TestRawReclaimDBFailedDayKeepsItsStateUntilARunTakesIt(t *testing.T) {
+	_, repo := openReclaimServiceDB(t)
+	ctx := context.Background()
+	days := qualifyingDays(t, repo)
+	failed, other := days[0].Name, days[1].Name
+	for i := 0; i < rawReclaimFailAfter; i++ {
+		if _, err := repo.NoteChunkError(ctx, failed, "boom", true, rawReclaimFailAfter); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if r := chunkRow(t, repo, failed); r.State != "failed" {
+		t.Fatalf("setup: %+v", r)
+	}
+	s := dbReclaimService(t, repo)
+
+	s.SetDiskProbe(&fakeProbe{free: 1 << 20, ok: true})
+	var pre *RawReclaimPreconditionError
+	if _, err := s.Start(ctx, "admin", nil); !errors.As(err, &pre) || pre.Code != "insufficient_space" {
+		t.Fatalf("Start with 1 MiB free: %v; want it refused for space", err)
+	}
+	if r := chunkRow(t, repo, failed); r.State != "failed" || r.Attempts != rawReclaimFailAfter || r.LastError != "boom" {
+		t.Fatalf("failed day after a refused Start = %+v; want untouched", r)
+	}
+
+	s.SetDiskProbe(plenty())
+	one := 1
+	if _, err := s.Start(ctx, "admin", &one); err != nil {
+		t.Fatal(err)
+	}
+	waitRun(t, s)
+	if r := chunkRow(t, repo, other); r.State != "done" {
+		t.Fatalf("the other day after a one-day run = %+v; want done", r)
+	}
+	if r := chunkRow(t, repo, failed); r.State != "failed" || r.Attempts != rawReclaimFailAfter || r.LastError != "boom" {
+		t.Fatalf("failed day a one-day run did not reach = %+v; want untouched", r)
+	}
+
+	if _, err := s.Start(ctx, "admin", nil); err != nil {
+		t.Fatal(err)
+	}
+	waitRun(t, s)
+	if r := chunkRow(t, repo, failed); r.State != "done" || r.LastError != "" || r.BytesAfter >= r.BytesBefore {
+		t.Fatalf("failed day after the Start that reached it = %+v; want done", r)
 	}
 }

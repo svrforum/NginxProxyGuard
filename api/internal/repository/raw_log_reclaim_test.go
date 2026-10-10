@@ -501,9 +501,10 @@ func TestRawLogReclaimStateTables(t *testing.T) {
 	if got := rows()[b]; got.Attempts != 3 || got.LastError != "boom: A database error occurred" {
 		t.Fatalf("b = %+v; the stored error must not carry driver text", got)
 	}
-	// Planning again (an explicit Start) brings failed days back with their
-	// attempts: pending with fresh sizes when no UPDATE is on record, nulled
-	// with its sizes when one is. One more counted error fails them again.
+	// Planning again leaves failed days failed, with their errors. A run that
+	// gets to one brings it back with its attempts and its error: nulled with
+	// its sizes when an UPDATE is on record, else pending. One more counted
+	// error fails it again.
 	for i := 0; i < 2; i++ {
 		if _, err := r.NoteChunkError(ctx, a, "boom", true, 3); err != nil {
 			t.Fatal(err)
@@ -521,11 +522,27 @@ func TestRawLogReclaimStateTables(t *testing.T) {
 		}
 	}
 	m = rows()
-	if m[a].State != "nulled" || m[a].BytesBefore != 1000 || m[a].RawBytes != 400 || m[a].Attempts != 3 || m[a].LastError != "" {
-		t.Fatalf("a back from failed = %+v; want nulled with its sizes and attempts", m[a])
+	if m[a].State != "failed" || m[a].Attempts != 3 || m[a].LastError != "boom" {
+		t.Fatalf("a planned again = %+v; want still failed, with its error", m[a])
 	}
-	if m[b].State != "pending" || m[b].BytesBefore != 700 || m[b].RawBytes != 200 || m[b].Attempts != 3 {
-		t.Fatalf("b back from failed = %+v; want pending with fresh sizes and its attempts", m[b])
+	if m[b].State != "failed" || m[b].Attempts != 3 || m[b].LastError != "boom: A database error occurred" {
+		t.Fatalf("b planned again = %+v; want still failed, with its error", m[b])
+	}
+	if st, err := r.ReviveChunk(ctx, a); err != nil || st != "nulled" {
+		t.Fatalf("ReviveChunk(a) = %q, %v; want nulled", st, err)
+	}
+	if st, err := r.ReviveChunk(ctx, b); err != nil || st != "pending" {
+		t.Fatalf("ReviveChunk(b) = %q, %v; want pending", st, err)
+	}
+	if st, err := r.ReviveChunk(ctx, b); err != nil || st != "" {
+		t.Fatalf("ReviveChunk of a day that is not failed = %q, %v; want nothing", st, err)
+	}
+	m = rows()
+	if m[a].State != "nulled" || m[a].BytesBefore != 1000 || m[a].RawBytes != 400 || m[a].Attempts != 3 || m[a].LastError != "boom" {
+		t.Fatalf("a back from failed = %+v; want nulled with its sizes, attempts and error", m[a])
+	}
+	if m[b].State != "pending" || m[b].BytesBefore != 800 || m[b].RawBytes != 250 || m[b].Attempts != 3 || m[b].LastError == "" {
+		t.Fatalf("b back from failed = %+v; want pending with its sizes, attempts and error", m[b])
 	}
 	if st, err := r.NoteChunkError(ctx, b, "boom", true, 3); err != nil || st != "failed" {
 		t.Fatalf("one more error on a retried day: %q, %v; want failed", st, err)
