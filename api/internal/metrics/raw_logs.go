@@ -43,14 +43,14 @@ var (
 	// the others.
 	RawLogArchiveStatus = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "npg_raw_log_archive_status",
-		Help: "Raw log archive status: 1 for the current one (disabled, not_mounted, not_initialized, foreign, unwritable, insufficient_space, stalled, ready).",
+		Help: "Raw log archive status: 1 for the current one (disabled, not_mounted, not_initialized, foreign, unwritable, insufficient_space, stalled, ready, log_dir).",
 	}, []string{"status"})
 )
 
 // rawLogArchiveStatuses are the values service.RawLogArchiver reports.
 var rawLogArchiveStatuses = []string{
 	"disabled", "not_mounted", "not_initialized", "foreign",
-	"unwritable", "insufficient_space", "stalled", "ready",
+	"unwritable", "insufficient_space", "stalled", "ready", "log_dir",
 }
 
 // SetRawLogArchiveStatus marks status as the archive's current one.

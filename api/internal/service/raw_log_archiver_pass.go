@@ -24,13 +24,18 @@ import (
 // ErrArchiveFileName is the answer for a name that is not an archived raw log.
 var ErrArchiveFileName = errors.New("invalid archive file name")
 
-// errArchiveConflict: a file of the same name but different content is
-// already in the archive. Both are kept; the local one stays local.
-type errArchiveConflict struct{ name string }
+// errArchiveConflict: the archive already holds something under this name
+// that is not an earlier copy of the local file — a different file, or a
+// link. Both are kept; the local one stays local.
+type errArchiveConflict struct{ name, reason string }
 
-func (e *errArchiveConflict) Error() string {
-	return e.name + " already exists in the archive with different content; both copies are kept"
-}
+func (e *errArchiveConflict) Error() string { return e.name + " " + e.reason }
+
+const (
+	conflictDifferentContent = "already exists in the archive with different content; both copies are kept"
+	conflictNotAFile         = "exists in the archive but is not a regular file (a link or a directory); the local file is kept"
+	conflictSameFile         = "in the archive is another name for the local file itself; the local file is kept"
+)
 
 // archiveListTTL caches the archive listing: listing a large NAS directory
 // is slow, and the raw log page asks on every refresh.
@@ -174,7 +179,21 @@ func (a *RawLogArchiver) moveOne(f RawLogFile) error {
 	final := filepath.Join(a.root, f.Name)
 	a.touch()
 
-	if fi, err := os.Stat(final); err == nil {
+	srcInfo, err := os.Lstat(src)
+	if err != nil {
+		return err
+	}
+	// Lstat: what is under the name in the archive counts, not where a link
+	// leads. Only a separate regular file can be an earlier copy; a link to
+	// the local file, or the local file under a second name, would make
+	// deleting the source delete the only copy.
+	if fi, err := os.Lstat(final); err == nil {
+		switch {
+		case !fi.Mode().IsRegular():
+			return &errArchiveConflict{name: f.Name, reason: conflictNotAFile}
+		case os.SameFile(srcInfo, fi):
+			return &errArchiveConflict{name: f.Name, reason: conflictSameFile}
+		}
 		// Left by a pass that died after the rename and before deleting the
 		// source — or a genuinely different file of the same name.
 		same, err := sameFileContent(src, final, fi.Size())
@@ -182,7 +201,7 @@ func (a *RawLogArchiver) moveOne(f RawLogFile) error {
 			return err
 		}
 		if !same {
-			return &errArchiveConflict{name: f.Name}
+			return &errArchiveConflict{name: f.Name, reason: conflictDifferentContent}
 		}
 		return removeIfExists(src)
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -217,7 +236,7 @@ func (a *RawLogArchiver) moveOne(f RawLogFile) error {
 	}
 	_ = os.Chtimes(final, f.ModifiedAt, f.ModifiedAt) // pruning uses the name, so a share without mtimes is fine
 	_ = syncDir(a.root)
-	if fi, err := os.Stat(final); err != nil || fi.Size() != f.Size {
+	if fi, err := os.Lstat(final); err != nil || !fi.Mode().IsRegular() || fi.Size() != f.Size || os.SameFile(srcInfo, fi) {
 		return fmt.Errorf("verifying %s in the archive failed; the local file is kept", f.Name)
 	}
 	a.touch()
@@ -334,6 +353,9 @@ func (a *RawLogArchiver) ListArchive(ctx context.Context) ([]RawLogFile, error) 
 		fi, err := os.Stat(a.root)
 		if err != nil || !fi.IsDir() {
 			return fmt.Errorf("%w (%s): %s is not mounted", ErrArchiveNotReady, ArchiveStatusNotMounted, a.root)
+		}
+		if a.leadsToLogDir(fi) {
+			return fmt.Errorf("%w (%s): %s is the nginx log directory", ErrArchiveNotReady, ArchiveStatusLogDir, a.root)
 		}
 		files, err = scanRawLogs(a.root, RawLogLocationArchive, IsArchivedRawLogName)
 		return err

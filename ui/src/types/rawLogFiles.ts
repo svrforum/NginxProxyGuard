@@ -43,7 +43,9 @@ export type RawLogArchiveState =
   | 'unwritable'
   | 'insufficient_space'
   | 'stalled'
-  | 'ready';
+  | 'ready'
+  /** The directory is the nginx log directory (or contains it): never used. */
+  | 'log_dir';
 
 /**
  * The raw log archive directory: another disk or a NAS share bound into the
@@ -55,7 +57,10 @@ export interface RawLogArchiveStatus {
   /** The directory inside the API container (NPG_RAW_LOG_ARCHIVE_DIR). */
   dir: string;
   status: RawLogArchiveState;
-  /** The directory exists in the API container (the marker tells whether the share is really there). */
+  /**
+   * A directory other than the log directory exists in the API container (the
+   * marker tells whether the share is really there). False for not_mounted and log_dir.
+   */
   mounted: boolean;
   marker?: 'missing' | 'ours' | 'foreign' | 'unreadable';
   /** Write test result (check and init only). */

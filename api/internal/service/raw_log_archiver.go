@@ -87,6 +87,10 @@ const (
 	ArchiveStatusInsufficientSpace = "insufficient_space"
 	ArchiveStatusStalled           = "stalled"
 	ArchiveStatusReady             = "ready"
+	// The directory is the nginx log directory, by another path or not, or
+	// one of its parents: nothing moved there would leave the log disk, and
+	// a file "moved" onto itself would be deleted. Never written to.
+	ArchiveStatusLogDir = "log_dir"
 )
 
 // Marker states reported beside the status.
@@ -293,7 +297,7 @@ func (a *RawLogArchiver) probe(ctx context.Context, enabled bool, instance strin
 func (a *RawLogArchiver) probeDir(ctx context.Context, enabled bool, instance string, writeTest bool) archiveState {
 	now := a.now()
 	st := RawLogArchiveStatus{Enabled: enabled, Dir: a.root, CheckedAt: &now}
-	var isDir bool
+	var isDir, logDir bool
 	var marker []byte
 	var markerErr error
 	err := a.fsCall(ctx, func() error {
@@ -303,6 +307,9 @@ func (a *RawLogArchiver) probeDir(ctx context.Context, enabled bool, instance st
 		}
 		isDir = fi.IsDir()
 		if !isDir {
+			return nil
+		}
+		if logDir = a.leadsToLogDir(fi); logDir {
 			return nil
 		}
 		marker, markerErr = readArchiveMarker(filepath.Join(a.root, rawLogArchiveMarker))
@@ -317,6 +324,10 @@ func (a *RawLogArchiver) probeDir(ctx context.Context, enabled bool, instance st
 	case err != nil || !isDir:
 		st.Status = ArchiveStatusNotMounted
 		st.Detail = fmt.Sprintf("%s does not exist in the API container (or is not a directory): mount the share on the host and bind it to %s on the api service", a.root, a.root)
+		return archiveState{status: st}
+	case logDir:
+		st.Status = ArchiveStatusLogDir
+		st.Detail = fmt.Sprintf("%s is the nginx log directory %s (or one of its parents), so nothing there would leave the log disk: bind a directory on another disk or a NAS share to %s instead", a.root, a.localDir, a.root)
 		return archiveState{status: st}
 	}
 	st.Mounted = true
@@ -380,6 +391,27 @@ func (a *RawLogArchiver) probeDir(ctx context.Context, enabled bool, instance st
 		st.Detail = fmt.Sprintf("only %d MiB free on the archive; %d MiB are kept free", st.FreeBytes>>20, archiveReserve(st.TotalBytes)>>20)
 	}
 	return archiveState{status: st, ours: ours}
+}
+
+// leadsToLogDir reports whether the archive root — root is os.Stat of it, so
+// symlinks are followed — is the nginx log directory or one of its parents.
+// It compares identities (device and inode), so a second bind mount of the
+// same directory is caught as well as a symlink or the same path.
+func (a *RawLogArchiver) leadsToLogDir(root os.FileInfo) bool {
+	dir := filepath.Clean(a.localDir)
+	if real, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = real
+	}
+	for {
+		if fi, err := os.Stat(dir); err == nil && os.SameFile(root, fi) {
+			return true
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return false
+		}
+		dir = parent
+	}
 }
 
 // archiveReserve is the space a pass leaves free: 2% of the filesystem, and
@@ -453,7 +485,7 @@ func (a *RawLogArchiver) Initialise(ctx context.Context) (RawLogArchiveStatus, e
 	}
 	pre := a.probe(ctx, true, instance, true).status
 	switch pre.Status {
-	case ArchiveStatusNotMounted, ArchiveStatusUnwritable, ArchiveStatusStalled:
+	case ArchiveStatusNotMounted, ArchiveStatusUnwritable, ArchiveStatusStalled, ArchiveStatusLogDir:
 		pre.RetentionDays = retention
 		return pre, fmt.Errorf("%w (%s): %s", ErrArchiveNotReady, pre.Status, pre.Detail)
 	}
@@ -589,8 +621,9 @@ func (a *RawLogArchiver) cachedStatfs() (raw rawStatfs, measuredAt time.Time, st
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	// A stalled share is still reported (with stalledSince); a missing one is not.
-	if !a.status.Enabled || a.status.Status == ArchiveStatusNotMounted {
+	// A stalled share is still reported (with stalledSince); a missing one is
+	// not, nor the log directory standing in for one.
+	if !a.status.Enabled || a.status.Status == ArchiveStatusNotMounted || a.status.Status == ArchiveStatusLogDir {
 		return rawStatfs{}, time.Time{}, nil, false
 	}
 	stalledSince = a.stalledSinceLocked()

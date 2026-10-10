@@ -677,7 +677,8 @@
         "unwritable": "Not writable",
         "insufficient_space": "Out of space",
         "stalled": "Not answering",
-        "ready": "In use"
+        "ready": "In use",
+        "log_dir": "Log directory"
       },
       "help": {
         "not_mounted": "The archive directory does not exist in the API container. Mount the share on the host, bind it on the api service and recreate the container.",
@@ -686,6 +687,7 @@
         "unwritable": "The API cannot write to this directory. Check the share's permissions (root_squash and the like).",
         "insufficient_space": "The archive is out of space, so moving stopped. The files stay on the log disk.",
         "stalled": "The archive directory is not answering (a hung or disconnected NAS). The files stay on the log disk.",
+        "log_dir": "This is the nginx log directory itself (or a folder that contains it), so nothing moved here would leave the log disk. Bind a directory on another disk or a NAS share here instead.",
         "readyToEnable": "This directory is set up for this install. Switch moving on and save to use it."
       }
     },

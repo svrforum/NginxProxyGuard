@@ -16081,15 +16081,17 @@ components:
           description: The archive directory inside the API container (NPG_RAW_LOG_ARCHIVE_DIR)
         status:
           type: string
-          enum: [disabled, not_mounted, not_initialized, foreign, unwritable, insufficient_space, stalled, ready]
+          enum: [disabled, not_mounted, not_initialized, foreign, unwritable, insufficient_space, stalled, ready, log_dir]
           description: |
             not_mounted: the directory does not exist in the container. not_initialized: no
             marker (never initialised, or the share is not mounted and an empty mount point
             is bound). foreign: initialised by another install (or before a backup was
-            restored here). stalled: the share stopped answering.
+            restored here). stalled: the share stopped answering. log_dir: the directory is
+            the nginx log directory (by any path, a bind mount included) or one of its
+            parents; it is never initialised or written to.
         mounted:
           type: boolean
-          description: The directory exists in the API container
+          description: A directory other than the log directory exists in the API container (false for not_mounted and log_dir)
         marker:
           type: string
           enum: [missing, ours, foreign, unreadable]
