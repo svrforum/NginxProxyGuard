@@ -109,6 +109,7 @@ func (r *LogRepository) Create(ctx context.Context, req *model.CreateLogRequest)
 			http_referer, http_user_agent, http_x_forwarded_for,
 			severity, error_message,
 			rule_id, rule_message, rule_severity, rule_data, attack_type, action_taken,
+			block_reason, bot_category, exploit_rule,
 			proxy_host_id, raw_log
 		) VALUES (
 			$1, $2, NULLIF($3, ''), NULLIF($4, '')::inet,
@@ -119,7 +120,8 @@ func (r *LogRepository) Create(ctx context.Context, req *model.CreateLogRequest)
 			NULLIF($19, ''), NULLIF($20, ''), NULLIF($21, ''),
 			NULLIF($22, '')::log_severity, NULLIF($23, ''),
 			NULLIF($24::bigint, 0), NULLIF($25, ''), NULLIF($26, ''), NULLIF($27, ''), NULLIF($28, ''), NULLIF($29, ''),
-			NULLIF($30, '')::uuid, NULLIF($31, '')
+			COALESCE(NULLIF($30, '')::block_reason, 'none'), NULLIF($31, ''), NULLIF($32, ''),
+			NULLIF($33, '')::uuid, NULLIF($34, '')
 		)
 		RETURNING id, log_type, timestamp, host, client_ip,
 			geo_country, geo_country_code, geo_city, geo_asn, geo_org,
@@ -129,6 +131,7 @@ func (r *LogRepository) Create(ctx context.Context, req *model.CreateLogRequest)
 			http_referer, http_user_agent, http_x_forwarded_for,
 			severity, error_message,
 			rule_id, rule_message, rule_severity, rule_data, attack_type, action_taken,
+			block_reason, bot_category, exploit_rule,
 			proxy_host_id, raw_log, created_at
 	`
 
@@ -148,6 +151,7 @@ func (r *LogRepository) Create(ctx context.Context, req *model.CreateLogRequest)
 	var httpReferer, httpUserAgent, httpXForwardedFor sql.NullString
 	var severity, errorMessage sql.NullString
 	var ruleMessage, ruleSeverity, ruleData, attackType, actionTaken sql.NullString
+	var blockReason, botCategory, exploitRule sql.NullString
 	var proxyHostID, rawLog sql.NullString
 
 	err := r.db.QueryRowContext(ctx, query,
@@ -159,6 +163,7 @@ func (r *LogRepository) Create(ctx context.Context, req *model.CreateLogRequest)
 		req.HTTPReferer, req.HTTPUserAgent, req.HTTPXForwardedFor,
 		req.Severity, req.ErrorMessage,
 		req.RuleID, req.RuleMessage, req.RuleSeverity, req.RuleData, req.AttackType, req.ActionTaken,
+		req.BlockReason, req.BotCategory, req.ExploitRule,
 		req.ProxyHostID, req.RawLog,
 	).Scan(
 		&log.ID, &log.LogType, &log.Timestamp, &host, &clientIP,
@@ -169,6 +174,7 @@ func (r *LogRepository) Create(ctx context.Context, req *model.CreateLogRequest)
 		&httpReferer, &httpUserAgent, &httpXForwardedFor,
 		&severity, &errorMessage,
 		&ruleID, &ruleMessage, &ruleSeverity, &ruleData, &attackType, &actionTaken,
+		&blockReason, &botCategory, &exploitRule,
 		&proxyHostID, &rawLog, &log.CreatedAt,
 	)
 
@@ -261,6 +267,17 @@ func (r *LogRepository) Create(ctx context.Context, req *model.CreateLogRequest)
 	}
 	if actionTaken.Valid {
 		log.ActionTaken = &actionTaken.String
+	}
+	// Mapped as List maps them, so a stored entry reads back the same way.
+	if blockReason.Valid {
+		br := model.BlockReason(blockReason.String)
+		log.BlockReason = &br
+	}
+	if botCategory.Valid {
+		log.BotCategory = &botCategory.String
+	}
+	if exploitRule.Valid && exploitRule.String != "" {
+		log.ExploitRule = &exploitRule.String
 	}
 	if proxyHostID.Valid {
 		log.ProxyHostID = &proxyHostID.String

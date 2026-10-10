@@ -390,6 +390,12 @@ func (h *LogHandler) Create(w http.ResponseWriter, r *http.Request) {
 		httpJSONError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
+	// Checked here, not by the database: a value the logs table refuses used
+	// to come back as 500 "Failed to create log" (#325).
+	if err := model.ValidateCreateLogRequest(&req); err != nil {
+		httpJSONError(w, strings.TrimPrefix(err.Error(), model.ErrInvalidInput.Error()+": "), http.StatusBadRequest)
+		return
+	}
 
 	log, err := h.logRepo.Create(ctx, &req)
 	if err != nil {

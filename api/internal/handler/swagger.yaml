@@ -3235,7 +3235,16 @@ paths:
     post:
       tags: [Logs]
       summary: Insert a log entry manually
-      description: Administrative ingestion path; requires settings:write, not logs access.
+      description: |
+        Administrative ingestion path; requires settings:write, not logs access.
+
+        The body is checked before anything is stored. A value the logs table would
+        refuse answers **400** naming the field (and, for an enum, the accepted values)
+        instead of a 500: `log_type` missing or outside its enum, `severity` or
+        `block_reason` outside theirs, a `client_ip` that is not one IPv4/IPv6 address,
+        a `proxy_host_id` that is not a UUID, a `status_code` outside 100-599 (0 or
+        absent means none), a `geo_country_code` over 2 or `exploit_rule` over 50
+        characters, and a NUL character (`\u0000`) in any string.
       security:
         - BearerAuth: []
       requestBody:
@@ -3252,7 +3261,14 @@ paths:
               schema:
                 $ref: '#/components/schemas/LogEntry'
         '400':
-          description: Invalid request body
+          description: >-
+            Malformed JSON ("Invalid request body"), or a field the logs table would
+            refuse — `error` names the field, e.g. `invalid severity "err": must be one
+            of debug, info, notice, warn, error, crit, alert, emerg`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /logs/stats:
     get:
       tags: [Logs]
@@ -15684,6 +15700,10 @@ components:
             created_at sort; pass it back as the `cursor` query parameter.
     CreateLog:
       type: object
+      description: >-
+        Request body for POST /logs. Every constraint below is checked before the
+        entry is stored; a value outside one answers 400 naming the field. No string
+        may contain a NUL character.
       required: [log_type]
       properties:
         log_type:
@@ -15696,10 +15716,12 @@ components:
           type: string
         client_ip:
           type: string
+          description: One IPv4 or IPv6 address; a range such as 192.0.2.0/24 is refused.
         geo_country:
           type: string
         geo_country_code:
           type: string
+          maxLength: 2
         geo_city:
           type: string
         geo_asn:
@@ -15714,6 +15736,9 @@ components:
           type: string
         status_code:
           type: integer
+          minimum: 100
+          maximum: 599
+          description: 0 or absent stores no status.
         body_bytes_sent:
           type: integer
           format: int64
@@ -15766,13 +15791,16 @@ components:
             - cloud_provider_block
             - access_denied
             - filter_subscription
+          default: none
         bot_category:
           type: string
         exploit_rule:
           type: string
+          maxLength: 50
         proxy_host_id:
           type: string
           format: uuid
+          description: The 36-character form, xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.
         raw_log:
           type: string
     LogStats:

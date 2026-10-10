@@ -101,6 +101,23 @@ func IsValidSeverity(s string) bool { return validSeverities[s] }
 // IsValidBlockReason reports whether s is a valid block_reason enum value.
 func IsValidBlockReason(s string) bool { _, ok := validBlockReasons[s]; return ok }
 
+// LogTypes, LogSeverities and BlockReasons hold the values the maps above
+// accept, in the order the database enums declare them, so a rejection can
+// name the accepted set. log_create_test.go keeps each list equal to its map.
+var (
+	LogTypes      = []string{string(LogTypeAccess), string(LogTypeError), string(LogTypeModSec)}
+	LogSeverities = []string{
+		string(LogSeverityDebug), string(LogSeverityInfo), string(LogSeverityNotice), string(LogSeverityWarn),
+		string(LogSeverityError), string(LogSeverityCrit), string(LogSeverityAlert), string(LogSeverityEmerg),
+	}
+	BlockReasons = []string{
+		string(BlockReasonNone), string(BlockReasonWAF), string(BlockReasonBotFilter), string(BlockReasonRateLimit),
+		string(BlockReasonGeoBlock), string(BlockReasonExploitBlock), string(BlockReasonBannedIP), string(BlockReasonURIBlock),
+		string(BlockReasonCloudProviderChallenge), string(BlockReasonCloudProviderBlock), string(BlockReasonAccessDenied),
+		string(BlockReasonFilterSubscription),
+	}
+)
+
 type Log struct {
 	ID        string    `json:"id"`
 	LogType   LogType   `json:"log_type"`
@@ -168,6 +185,10 @@ type Log struct {
 const CanaryURIPrefix = "/__npg_canary"
 
 
+// CreateLogRequest is one log row, from the log collector or from a manual
+// POST /logs. The `validate:` tag below is documentation only — this project
+// runs no struct validator. ValidateCreateLogRequest is what checks a manual
+// entry (#325).
 type CreateLogRequest struct {
 	LogType   LogType   `json:"log_type" validate:"required,oneof=access error modsec"`
 	Timestamp time.Time `json:"timestamp"`
