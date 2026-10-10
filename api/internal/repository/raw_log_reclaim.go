@@ -272,6 +272,13 @@ type SnapshotBlockers struct {
 // and replication slots holding xmin. Seeing other sessions' backend_xmin
 // needs superuser or pg_read_all_stats; with less this under-counts and the
 // size check after VACUUM FULL catches the result.
+//
+// A lazy VACUUM (manual or autovacuum: a backend in pg_stat_progress_vacuum)
+// is left out. The server leaves such backends out of the horizon (they run
+// with PROC_IN_VACUUM), so VACUUM FULL returns the space all the same; a
+// long one on a big table would otherwise hold the day for nothing and be
+// blamed for it. VACUUM FULL and CLUSTER (pg_stat_progress_cluster) and the
+// ANALYZE phase do hold the horizon and still count.
 func (r *RawLogReclaimRepository) OlderSnapshots(ctx context.Context, xid int64) (SnapshotBlockers, error) {
 	var b SnapshotBlockers
 	var pid sql.NullInt64
@@ -282,6 +289,7 @@ func (r *RawLogReclaimRepository) OlderSnapshots(ctx context.Context, xid int64)
 		  SELECT a.pid, COALESCE(a.backend_type, '') AS kind, COALESCE(a.state, '') AS state, a.xact_start AS since
 		    FROM pg_stat_activity a, x
 		   WHERE a.pid <> pg_backend_pid()
+		     AND a.pid NOT IN (SELECT pid FROM pg_stat_progress_vacuum)
 		     AND ((a.backend_xmin IS NOT NULL AND age(a.backend_xmin) >= age(x.v))
 		       OR (a.backend_xid IS NOT NULL AND age(a.backend_xid) >= age(x.v)))
 		  UNION ALL

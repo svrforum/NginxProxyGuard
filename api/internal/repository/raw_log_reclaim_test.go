@@ -554,3 +554,107 @@ func TestValidReclaimRelation(t *testing.T) {
 		t.Fatal("VacuumFull accepted an unexpected name")
 	}
 }
+
+// A lazy VACUUM (manual or autovacuum) running since before the UPDATE does
+// not hold the space: the server leaves such backends' xmin out of the
+// horizon, so VACUUM FULL can return the space and the wait must not count
+// it. A snapshot taken by anything else still counts (above).
+func TestRawLogReclaimHorizonIgnoresLazyVacuum(t *testing.T) {
+	db, schema := openReclaimTestDB(t)
+	ctx := context.Background()
+	r := NewRawLogReclaimRepository(db)
+	big, upd := schema+".big_t", schema+".upd_t"
+	mustExec(t, db,
+		`CREATE TABLE `+big+` (id int, pad text) WITH (autovacuum_enabled = off)`,
+		`INSERT INTO `+big+` SELECT g, repeat('x', 200) FROM generate_series(1, 20000) g`,
+		`DELETE FROM `+big+` WHERE id % 2 = 0`,
+		`CREATE TABLE `+upd+` (id int, pad text) WITH (autovacuum_enabled = off)`,
+		`INSERT INTO `+upd+` SELECT g, md5(g::text) || repeat('y', 400) FROM generate_series(1, 20000) g`)
+
+	// A lazy VACUUM throttled to about ten pages a second: a minute or more.
+	vac, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer vac.Close()
+	var vacPID int
+	if err := vac.QueryRowContext(ctx, `SELECT pg_backend_pid()`).Scan(&vacPID); err != nil {
+		t.Fatal(err)
+	}
+	mustConnExec(t, vac, `SET vacuum_cost_delay = 100`, `SET vacuum_cost_limit = 1`)
+	vacDone := make(chan error, 1)
+	go func() {
+		_, err := vac.ExecContext(ctx, `VACUUM `+big)
+		vacDone <- err
+	}()
+	defer func() {
+		_, _ = db.Exec(`SELECT pg_cancel_backend($1)`, vacPID)
+		<-vacDone
+	}()
+	vacuuming := func() bool {
+		var running bool
+		if err := db.QueryRow(`SELECT EXISTS (SELECT 1 FROM pg_stat_progress_vacuum WHERE pid = $1)
+		       AND (SELECT backend_xmin IS NOT NULL FROM pg_stat_activity WHERE pid = $1)`, vacPID).Scan(&running); err != nil {
+			t.Fatal(err)
+		}
+		return running
+	}
+	for deadline := time.Now().Add(10 * time.Second); !vacuuming(); time.Sleep(20 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("the VACUUM never showed up in pg_stat_progress_vacuum with a snapshot")
+		}
+	}
+
+	// The "UPDATE": a committed transaction newer than the vacuum's snapshot
+	// that removes most of upd_t.
+	var xid int64
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(`DELETE FROM ` + upd + ` WHERE id > 1000`); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.QueryRow(`SELECT xid(pg_current_xact_id())::text::bigint`).Scan(&xid); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	var older bool
+	if err := db.QueryRow(`SELECT age(backend_xmin) >= age($2::text::xid) FROM pg_stat_activity WHERE pid = $1`, vacPID, fmt.Sprint(xid)).Scan(&older); err != nil || !older {
+		t.Fatalf("the vacuum's snapshot is not older than the UPDATE (%v, %v): the test proves nothing", older, err)
+	}
+
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		b, err := r.OlderSnapshots(ctx, xid)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if b.Count == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the lazy VACUUM (pid %d) is counted as holding the space: %+v", vacPID, b)
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	// And the space really comes back while that VACUUM still runs: the
+	// server ignored its snapshot, as the check did.
+	var before, after int64
+	if err := db.QueryRow(`SELECT pg_total_relation_size($1::regclass)`, upd).Scan(&before); err != nil {
+		t.Fatal(err)
+	}
+	mustExec(t, db, `VACUUM FULL `+upd)
+	if err := db.QueryRow(`SELECT pg_total_relation_size($1::regclass)`, upd).Scan(&after); err != nil {
+		t.Fatal(err)
+	}
+	if after > before/4 {
+		t.Fatalf("VACUUM FULL kept the removed rows (%d -> %d bytes): the lazy VACUUM did hold the horizon", before, after)
+	}
+	t.Logf("VACUUM FULL during a lazy VACUUM: %d -> %d bytes", before, after)
+	if !vacuuming() {
+		t.Fatal("the VACUUM ended before the check: run it on a bigger table")
+	}
+}
