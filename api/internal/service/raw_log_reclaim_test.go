@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -1303,5 +1304,45 @@ func TestRawReclaimEstimateDoesNotWaitForACompaction(t *testing.T) {
 	st, err = s.Status(context.Background(), true)
 	if err != nil || st.EstimatedReclaimableBytes == nil || st.EstimatedAt == nil {
 		t.Fatalf("status after the run = %+v, %v; want a fresh estimate", st, err)
+	}
+}
+
+// The day being worked on is reported in UTC, as the server names days in
+// its log and messages: a database session in a zone behind UTC returns the
+// day's start as the evening before, which the card showed as that date.
+func TestRawReclaimCurrentDayIsReportedInUTC(t *testing.T) {
+	f := newFakeReclaimStore(t)
+	day := f.addDay(33, 100, 40, 0) // 2026-10-04 in UTC
+	behind := time.FixedZone("UTC-4", -4*3600)
+	d := f.days[day]
+	d.info.RangeStart, d.info.RangeEnd = d.info.RangeStart.In(behind), d.info.RangeEnd.In(behind)
+	in := make(chan struct{})
+	release := make(chan struct{})
+	f.inVacuum = in
+	f.vacuumHook = func(ctx context.Context) error {
+		select {
+		case <-release:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	s := newTestReclaim(t, f, plenty())
+	if _, err := s.Start(context.Background(), "admin", nil); err != nil {
+		t.Fatal(err)
+	}
+	<-in
+	st, err := s.Status(context.Background(), false)
+	close(release)
+	waitRun(t, s)
+	if err != nil || st.CurrentChunk == nil {
+		t.Fatalf("status = %+v, %v", st, err)
+	}
+	b, err := json.Marshal(st.CurrentChunk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `"range_start":"2026-10-04T00:00:00Z"`) || !strings.Contains(string(b), `"range_end":"2026-10-05T00:00:00Z"`) {
+		t.Fatalf("current day %s; want it in UTC, 2026-10-04", b)
 	}
 }

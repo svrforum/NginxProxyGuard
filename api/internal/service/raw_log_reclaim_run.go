@@ -546,7 +546,9 @@ func (s *RawLogReclaimService) setStep(c repository.ReclaimChunk, step string) {
 	if cur := s.current; cur != nil && cur.Step == step && cur.RangeStart.Equal(c.RangeStart) {
 		return
 	}
-	s.current = &model.LogRawReclaimChunkProgress{RangeStart: c.RangeStart, RangeEnd: c.RangeEnd, Step: step, Since: s.now()}
+	// In UTC, as dayLabel names the day: the database session's zone would
+	// give a day's start as the evening before when it is behind UTC.
+	s.current = &model.LogRawReclaimChunkProgress{RangeStart: c.RangeStart.UTC(), RangeEnd: c.RangeEnd.UTC(), Step: step, Since: s.now()}
 }
 
 func (s *RawLogReclaimService) clearCurrent() {

@@ -17,9 +17,11 @@ function formatBytes(bytes: number | undefined): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
-// Days are UTC chunks on the server; show the same date it logs.
+// Days are UTC chunks on the server; show the same date it logs, whatever
+// offset the timestamp carries.
 function dayOf(iso: string): string {
-  return iso.slice(0, 10);
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso.slice(0, 10) : d.toISOString().slice(0, 10);
 }
 
 // In the UI's language, not the browser's: the sentence around it is.
