@@ -157,12 +157,25 @@ func (s *NotificationService) EmitTransition(ctx context.Context, eventKey, subj
 // it for a filesystem that is no longer measured (the database moved to
 // another disk): its last state would otherwise sit in the digest's "still
 // failing" section forever, and announcing a recovery that did not happen
-// would be worse.
+// would be worse. The state's detail says so (quietlyResolved), so that the
+// close is not taken for a recovery later.
 func (s *NotificationService) ResolveQuietly(ctx context.Context, eventKey, subject string) error {
 	if ok, err := s.available(ctx); !ok {
 		return err
 	}
-	return s.store.SetState(ctx, eventKey, subject, "", stateOK, "")
+	return s.store.SetState(ctx, eventKey, subject, "", stateOK, quietlyResolved)
+}
+
+// quietlyResolved is the detail of a state ResolveQuietly recorded: "ok"
+// because the subject is no longer watched, not because it was seen to
+// recover. Nothing shows the detail of an "ok" state; DiskGuard reads it so
+// that a quiet close does not hold the next warning the way a recovery does.
+const quietlyResolved = "closed quietly: no longer measured"
+
+// isQuietlyResolved reports whether a recorded state is one ResolveQuietly
+// wrote.
+func isQuietlyResolved(s model.NotificationState) bool {
+	return s.State == stateOK && s.LastDetail == quietlyResolved
 }
 
 // available reports whether notifications can be recorded: false with a nil

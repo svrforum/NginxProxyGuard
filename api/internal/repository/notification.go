@@ -254,21 +254,21 @@ func (r *NotificationRepository) GetState(ctx context.Context, eventKey, subject
 	return state, nil
 }
 
-// StateSince returns the last known state for a subject and when it was
-// entered, or "" and the zero time when unseen.
-func (r *NotificationRepository) StateSince(ctx context.Context, eventKey, subject string) (string, time.Time, error) {
-	var state string
-	var since time.Time
-	err := r.db.QueryRowContext(ctx,
-		`SELECT state, since FROM notification_state WHERE event_key = $1 AND subject = $2`,
-		eventKey, subject).Scan(&state, &since)
+// StateRecord returns the last known state for a subject with when it was
+// entered and its detail, or the zero value (State "") when unseen.
+func (r *NotificationRepository) StateRecord(ctx context.Context, eventKey, subject string) (model.NotificationState, error) {
+	s := model.NotificationState{EventKey: eventKey, Subject: subject}
+	err := r.db.QueryRowContext(ctx, `
+		SELECT state, since, COALESCE(subject_label, ''), COALESCE(last_detail, '')
+		FROM notification_state WHERE event_key = $1 AND subject = $2`,
+		eventKey, subject).Scan(&s.State, &s.Since, &s.Label, &s.LastDetail)
 	if err == sql.ErrNoRows {
-		return "", time.Time{}, nil
+		return model.NotificationState{}, nil
 	}
 	if err != nil {
-		return "", time.Time{}, fmt.Errorf("failed to read notification state: %w", err)
+		return model.NotificationState{}, fmt.Errorf("failed to read notification state: %w", err)
 	}
-	return state, since, nil
+	return s, nil
 }
 
 func (r *NotificationRepository) SetState(ctx context.Context, eventKey, subject, label, state, detail string) error {

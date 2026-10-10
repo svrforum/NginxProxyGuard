@@ -100,7 +100,7 @@ type diskNotifier interface {
 // diskStateReader restores the hysteresis level and the low-alert cooldown
 // after a restart, and re-reads the recorded state after a failed alert.
 type diskStateReader interface {
-	StateSince(ctx context.Context, eventKey, subject string) (state string, since time.Time, err error)
+	StateRecord(ctx context.Context, eventKey, subject string) (model.NotificationState, error)
 }
 
 // diskHistory answers "how full was this disk a day ago" from system_health,
@@ -326,13 +326,13 @@ func (g *DiskGuard) stateFor(ctx context.Context, key string) *fsState {
 		st.loaded, st.resync = true, false
 		return st
 	}
-	crit, _, errCrit := g.state.StateSince(ctx, eventDiskCritical, key)
-	low, lowSince, errLow := g.state.StateSince(ctx, eventDiskLow, key)
+	crit, errCrit := g.state.StateRecord(ctx, eventDiskCritical, key)
+	low, errLow := g.state.StateRecord(ctx, eventDiskLow, key)
 	if errCrit != nil || errLow != nil {
 		return st
 	}
-	st.announcedCritical = crit == stateFailing
-	st.announcedLow = low == stateFailing
+	st.announcedCritical = crit.State == stateFailing
+	st.announcedLow = low.State == stateFailing
 	if st.resync {
 		st.resync = false
 		return st
@@ -340,9 +340,11 @@ func (g *DiskGuard) stateFor(ctx context.Context, key string) *fsState {
 	st.loaded = true
 	// A recovery is recorded as disk.space_low turning "ok"; its since is
 	// when. The cooldown that holds a new warning counts from there, across
-	// a restart too.
-	if low == stateOK {
-		st.recoveredAt = lowSince
+	// a restart too. An alert closed because the filesystem was no longer
+	// measured did not recover: a disk that comes back still full is
+	// announced at once.
+	if low.State == stateOK && !isQuietlyResolved(low) {
+		st.recoveredAt = low.Since
 	}
 	restored := DiskLevelOK
 	switch {

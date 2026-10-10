@@ -19,6 +19,7 @@ type fakeStore struct {
 	digestSubscribed map[string]bool
 	state            map[string]string
 	since            map[string]time.Time
+	details          map[string]string
 	labels           map[string]string
 	enqueued         []model.RenderedMessage
 	parked           []string
@@ -29,7 +30,7 @@ type fakeStore struct {
 
 func newFakeStore(events ...string) *fakeStore {
 	f := &fakeStore{subscribed: map[string]bool{}, digestSubscribed: map[string]bool{}, state: map[string]string{},
-		since: map[string]time.Time{}, labels: map[string]string{}}
+		since: map[string]time.Time{}, details: map[string]string{}, labels: map[string]string{}}
 	for _, e := range events {
 		f.subscribed[e] = true
 	}
@@ -42,17 +43,23 @@ func (f *fakeStore) GetState(_ context.Context, key, subject string) (string, er
 	return f.state[key+"|"+subject], nil
 }
 
-func (f *fakeStore) StateSince(_ context.Context, key, subject string) (string, time.Time, error) {
-	return f.state[key+"|"+subject], f.since[key+"|"+subject], nil
+func (f *fakeStore) StateRecord(_ context.Context, key, subject string) (model.NotificationState, error) {
+	k := key + "|" + subject
+	if f.state[k] == "" {
+		return model.NotificationState{}, nil
+	}
+	return model.NotificationState{EventKey: key, Subject: subject, Label: f.labels[k], State: f.state[k],
+		Since: f.since[k], LastDetail: f.details[k]}, nil
 }
 
-func (f *fakeStore) SetState(_ context.Context, key, subject, label, state, _ string) error {
+func (f *fakeStore) SetState(_ context.Context, key, subject, label, state, detail string) error {
 	now := time.Now
 	if f.clock != nil {
 		now = f.clock
 	}
 	f.state[key+"|"+subject] = state
 	f.since[key+"|"+subject] = now()
+	f.details[key+"|"+subject] = detail
 	f.labels[key+"|"+subject] = label
 	return nil
 }

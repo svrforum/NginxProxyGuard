@@ -67,6 +67,15 @@ func TestResolveQuietlySendsNothing(t *testing.T) {
 	if got, _ := store.GetState(ctx, "disk.space_low", "backups"); got != stateOK {
 		t.Fatalf("state = %q, want ok", got)
 	}
+	// Recorded as a quiet close, which a recovery is not.
+	if rec, _ := store.StateRecord(ctx, "disk.space_low", "backups"); !isQuietlyResolved(rec) {
+		t.Fatalf("a quiet close reads as a recovery: %+v", rec)
+	}
+	_ = s.EmitTransition(ctx, "disk.space_low", "db", true, "87.0%", nil)
+	_ = s.EmitTransition(ctx, "disk.space_low", "db", false, "", nil)
+	if rec, _ := store.StateRecord(ctx, "disk.space_low", "db"); rec.State != stateOK || isQuietlyResolved(rec) {
+		t.Fatalf("a recovery reads as a quiet close: %+v", rec)
+	}
 }
 
 // Roles travel as codes (a webhook keys off them) and are translated for

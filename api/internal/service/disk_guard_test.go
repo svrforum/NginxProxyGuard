@@ -512,12 +512,12 @@ type flakyStateReader struct {
 	store *fakeStore
 }
 
-func (f *flakyStateReader) StateSince(ctx context.Context, key, subject string) (string, time.Time, error) {
+func (f *flakyStateReader) StateRecord(ctx context.Context, key, subject string) (model.NotificationState, error) {
 	if f.fails > 0 {
 		f.fails--
-		return "", time.Time{}, errors.New("database is starting up")
+		return model.NotificationState{}, errors.New("database is starting up")
 	}
-	return f.store.StateSince(ctx, key, subject)
+	return f.store.StateRecord(ctx, key, subject)
 }
 
 // An alert left open by the previous process (the disk recovered while the
@@ -577,11 +577,11 @@ func (d *downStore) GetState(ctx context.Context, key, subject string) (string, 
 	return d.fakeStore.GetState(ctx, key, subject)
 }
 
-func (d *downStore) StateSince(ctx context.Context, key, subject string) (string, time.Time, error) {
+func (d *downStore) StateRecord(ctx context.Context, key, subject string) (model.NotificationState, error) {
 	if d.down {
-		return "", time.Time{}, errDBDown
+		return model.NotificationState{}, errDBDown
 	}
-	return d.fakeStore.StateSince(ctx, key, subject)
+	return d.fakeStore.StateRecord(ctx, key, subject)
 }
 
 func (d *downStore) SetState(ctx context.Context, key, subject, label, state, detail string) error {
@@ -721,5 +721,68 @@ func TestDiskGuardCooldownSurvivesARestart(t *testing.T) {
 	diskTickAt(g4, u3, c3, 92)
 	if got := diskEvents(store3); got[len(got)-1] != "disk.space_critical/error" {
 		t.Fatalf("critical was held by the restored cooldown: %v", got)
+	}
+}
+
+// A filesystem that stops being measured has its open alert closed quietly
+// ("ok" without a recovery message). That is not a recovery: a disk that
+// comes back still low is announced at once, in the same process and after a
+// restart, while a real recovery still holds a new warning for the cooldown.
+func TestDiskGuardQuietCloseStartsNoCooldown(t *testing.T) {
+	g, u, store, c := newTestDiskGuard(t)
+	store.clock = c.now
+	u.roles["backups"] = []DiskRole{DiskRoleBackups}
+	vanishAndReturn := func(g *DiskGuard) {
+		u.pct["backups"] = 87
+		diskTickAt(g, u, c, 50)
+		diskTickAt(g, u, c, 50)
+		delete(u.pct, "backups")
+		for i := 0; i < 12; i++ {
+			diskTickAt(g, u, c, 50)
+		}
+		if s, _ := store.GetState(context.Background(), eventDiskLow, "backups"); s != stateOK {
+			t.Fatalf("the vanished disk's alert was not closed (state %q)", s)
+		}
+	}
+	vanishAndReturn(g)
+	if got := strings.Join(diskEvents(store), " "); got != "disk.space_low/warning" {
+		t.Fatalf("before the disk came back: %q", got)
+	}
+	// Back within the cooldown, still at 87%: announced at once.
+	u.pct["backups"] = 87
+	diskTickAt(g, u, c, 50)
+	diskTickAt(g, u, c, 50)
+	if got := strings.Join(diskEvents(store), " "); got != "disk.space_low/warning disk.space_low/warning" {
+		t.Fatalf("a disk back after a quiet close was held: %q", got)
+	}
+
+	// The same after a restart that follows the quiet close.
+	vanishAndReturn(g)
+	g2 := NewDiskGuard(u, NewNotificationServiceWithStore(store), store, nil, DiskGuardOptions{
+		Thresholds: DefaultDiskThresholds, ConfirmSamples: 2, Cooldown: 6 * time.Hour, Now: c.now,
+	})
+	u.pct["backups"] = 87
+	diskTickAt(g2, u, c, 50)
+	diskTickAt(g2, u, c, 50)
+	want := "disk.space_low/warning disk.space_low/warning disk.space_low/warning"
+	if got := strings.Join(diskEvents(store), " "); got != want {
+		t.Fatalf("after a restart, a disk back after a quiet close was held: %q", got)
+	}
+
+	// A real recovery still holds the next warning, across a restart too.
+	u.pct["backups"] = 79
+	diskTickAt(g2, u, c, 50)
+	diskTickAt(g2, u, c, 50)
+	want += " disk.space_recovered/resolved"
+	u.pct["backups"] = 87
+	diskTickAt(g2, u, c, 50)
+	diskTickAt(g2, u, c, 50)
+	g3 := NewDiskGuard(u, NewNotificationServiceWithStore(store), store, nil, DiskGuardOptions{
+		Thresholds: DefaultDiskThresholds, ConfirmSamples: 2, Cooldown: 6 * time.Hour, Now: c.now,
+	})
+	diskTickAt(g3, u, c, 50)
+	diskTickAt(g3, u, c, 50)
+	if got := strings.Join(diskEvents(store), " "); got != want {
+		t.Fatalf("a real recovery's cooldown did not hold: %q, want %q", got, want)
 	}
 }
