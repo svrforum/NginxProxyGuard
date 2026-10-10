@@ -90,12 +90,16 @@ func (l *dbLocator) runningByName(ctx context.Context, name string) string {
 // locate names the container that serves DATABASE_URL, or explains why not
 // with a reason code: db_container_not_found, db_external, docker_unavailable.
 //
-// Order: NPG_DB_CONTAINER; the host itself when it is a container name (the
-// dev compose connects to "npg-db"); otherwise the container whose network
-// address is what the host resolves to (the release compose connects to the
-// service alias "db", which `docker container inspect` does not know). There
-// is deliberately no hard-coded "npg-db" guess: on a box that also runs the
-// e2e stack it would measure the wrong database.
+// Order: NPG_DB_CONTAINER; then, when the host resolves, the container whose
+// network address is what it resolves to (the release compose connects to the
+// service alias "db", which `docker container inspect` does not know; the dev
+// compose's "npg-db" resolves to npg-db's own address); only a host that does
+// not resolve from here is taken as a container name. A container that is
+// merely called like a resolvable host is not the database: another stack's
+// container_name "db" would otherwise answer for the release compose's alias
+// and its disk would be measured. There is deliberately no hard-coded "npg-db"
+// guess either: on a box that also runs the e2e stack it would measure the
+// wrong database.
 func (l *dbLocator) locate(ctx context.Context) (name, reason string) {
 	if l.env != "" {
 		if n := l.runningByName(ctx, l.env); n != "" {
@@ -110,11 +114,16 @@ func (l *dbLocator) locate(ctx context.Context) (name, reason string) {
 	if ip := net.ParseIP(h); ip != nil && ip.IsLoopback() {
 		return "", "db_container_not_found"
 	}
-	if n := l.runningByName(ctx, h); n != "" {
-		return n, ""
+	var addrs []string
+	if l.lookup != nil {
+		if a, err := l.lookup(ctx, h); err == nil {
+			addrs = a
+		}
 	}
-	addrs, err := l.lookup(ctx, h)
-	if err != nil || len(addrs) == 0 {
+	if len(addrs) == 0 {
+		if n := l.runningByName(ctx, h); n != "" {
+			return n, ""
+		}
 		return "", "db_container_not_found"
 	}
 	want := map[string]bool{}
@@ -136,12 +145,13 @@ func (l *dbLocator) locate(ctx context.Context) (name, reason string) {
 	}
 	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
 		nm, ips, ok := strings.Cut(line, "|")
-		if !ok {
+		nm = strings.TrimPrefix(nm, "/")
+		if !ok || !containerNameRe.MatchString(nm) {
 			continue
 		}
 		for _, ip := range strings.Fields(ips) {
 			if want[ip] {
-				return strings.TrimPrefix(nm, "/"), ""
+				return nm, ""
 			}
 		}
 	}

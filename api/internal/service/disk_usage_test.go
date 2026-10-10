@@ -161,11 +161,34 @@ func TestDBLocator(t *testing.T) {
 		t.Fatalf("alias: got %q (%s)", name, reason)
 	}
 
-	// The dev compose connects to the container name directly.
-	d = &diskFakeDocker{running: map[string]bool{"npg-db": true}}
+	// The dev compose connects to the container name, which resolves to the
+	// container's own address.
+	d = &diskFakeDocker{running: map[string]bool{"npg-db": true}, ps: "aaa\n", inspect: "/npg-db|192.0.2.3 \n"}
 	l = &dbLocator{run: d.run, dbHost: "npg-db", lookup: lookup}
 	if name, _ := l.locate(ctx); name != "npg-db" {
 		t.Fatalf("container name: got %q", name)
+	}
+
+	// A host that does not resolve from the API container can only be a
+	// container name.
+	noDNS := func(context.Context, string) ([]string, error) { return nil, errors.New("no such host") }
+	l = &dbLocator{run: d.run, dbHost: "npg-db", lookup: noDNS}
+	if name, _ := l.locate(ctx); name != "npg-db" {
+		t.Fatalf("container name that does not resolve: got %q", name)
+	}
+
+	// Another stack's container called exactly like the release compose's
+	// alias ("container_name: db" is common for MariaDB or Postgres) is not
+	// the database: "db" resolves to npg-db's address, and that decides.
+	d = &diskFakeDocker{running: map[string]bool{"db": true}, ps: "aaa\nbbb\n", inspect: "/db|198.51.100.7 \n/npg-db|192.0.2.3 \n"}
+	l = &dbLocator{run: d.run, dbHost: "db", lookup: lookup}
+	if name, reason := l.locate(ctx); name != "npg-db" {
+		t.Fatalf("a foreign container named like the alias: got %q (%s), want npg-db", name, reason)
+	}
+	for _, c := range d.calls {
+		if strings.HasSuffix(c, "-- db") {
+			t.Fatalf("the foreign container was asked for by name: %v", d.calls)
+		}
 	}
 
 	// An explicit override wins, and a wrong one is reported, not guessed past.
