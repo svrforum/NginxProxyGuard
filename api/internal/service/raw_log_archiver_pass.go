@@ -63,6 +63,9 @@ func (a *RawLogArchiver) runPass(ctx context.Context) {
 		return
 	}
 	state := a.probe(ctx, enabled, instance, false)
+	if state.cancelled {
+		return // stopping
+	}
 	st := state.status
 	st.RetentionDays = retention
 	usable := enabled && state.ours && (st.Status == ArchiveStatusReady || st.Status == ArchiveStatusInsufficientSpace)
@@ -80,7 +83,7 @@ func (a *RawLogArchiver) runPass(ctx context.Context) {
 	metrics.RawLogArchiveMovedBytesTotal.Add(float64(movedBytes))
 	if moved > 0 || pruned > 0 {
 		a.mu.Lock()
-		a.list, a.listAt = nil, time.Time{}
+		a.invalidateListLocked()
 		a.mu.Unlock()
 	}
 
@@ -90,7 +93,11 @@ func (a *RawLogArchiver) runPass(ctx context.Context) {
 		stop = ArchiveStatusUnwritable
 	}
 	// Re-measure after the moves; a stop is the pass's own verdict.
-	st = a.probe(ctx, enabled, instance, false).status
+	after := a.probe(ctx, enabled, instance, false)
+	if after.cancelled {
+		return // stopping
+	}
+	st = after.status
 	st.RetentionDays = retention
 	if stop != "" && st.Status == ArchiveStatusReady {
 		st.Status = stop
@@ -335,21 +342,27 @@ func (a *RawLogArchiver) prune(retentionDays int) (int, error) {
 	return removed, errors.Join(errs...)
 }
 
-// ListArchive lists the archived raw logs, cached for a minute.
+// ListArchive lists the archived raw logs, cached for a minute. A listing
+// counts as stalled only once it stops making progress, however long a large
+// archive on a slow share takes, and it is cached when it finishes even if
+// the request that started it has given up: requests meanwhile wait for it
+// rather than list the share again.
 func (a *RawLogArchiver) ListArchive(ctx context.Context) ([]RawLogFile, error) {
 	if a == nil {
 		return nil, ErrArchiveNotReady
 	}
-	a.mu.Lock()
-	if !a.listAt.IsZero() && a.now().Sub(a.listAt) < archiveListTTL {
-		files := append([]RawLogFile(nil), a.list...)
-		a.mu.Unlock()
+	if files, ok := a.cachedList(); ok {
 		return files, nil
 	}
-	a.mu.Unlock()
-
 	var files []RawLogFile
-	err := a.fsCall(ctx, func() error {
+	err := a.fsCallProgress(ctx, func(tick func()) error {
+		if cached, ok := a.cachedList(); ok { // finished while this call waited
+			files = cached
+			return nil
+		}
+		a.mu.Lock()
+		gen := a.listGen
+		a.mu.Unlock()
 		fi, err := os.Stat(a.root)
 		if err != nil || !fi.IsDir() {
 			return fmt.Errorf("%w (%s): %s is not mounted", ErrArchiveNotReady, ArchiveStatusNotMounted, a.root)
@@ -357,16 +370,58 @@ func (a *RawLogArchiver) ListArchive(ctx context.Context) ([]RawLogFile, error) 
 		if a.leadsToLogDir(fi) {
 			return fmt.Errorf("%w (%s): %s is the nginx log directory", ErrArchiveNotReady, ArchiveStatusLogDir, a.root)
 		}
-		files, err = scanRawLogs(a.root, RawLogLocationArchive, IsArchivedRawLogName)
-		return err
+		list, err := a.listDir(a.root, tick)
+		if err != nil {
+			return err
+		}
+		a.mu.Lock()
+		if a.listGen == gen { // else a pass or a delete changed the archive meanwhile
+			a.list, a.listAt = list, a.now()
+		}
+		a.mu.Unlock()
+		files = list
+		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	a.mu.Lock()
-	a.list, a.listAt = files, a.now()
-	a.mu.Unlock()
 	return append([]RawLogFile(nil), files...), nil
+}
+
+// ListArchiveQuick is ListArchive for a caller that can do without the
+// archive's files this time, such as the log disk estimate: it waits at most
+// the call timeout for a listing that is not cached, which then goes on and
+// is cached for the next call.
+func (a *RawLogArchiver) ListArchiveQuick(ctx context.Context) ([]RawLogFile, error) {
+	if a == nil {
+		return nil, ErrArchiveNotReady
+	}
+	ctx, cancel := context.WithTimeout(ctx, a.ioTimeout)
+	defer cancel()
+	return a.ListArchive(ctx)
+}
+
+// cachedList is the archive listing while it is fresh.
+func (a *RawLogArchiver) cachedList() ([]RawLogFile, bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.listAt.IsZero() || a.now().Sub(a.listAt) >= archiveListTTL {
+		return nil, false
+	}
+	return append([]RawLogFile(nil), a.list...), true
+}
+
+// invalidateListLocked drops the cached listing, and any listing still
+// running, after the archive changed. a.mu held.
+func (a *RawLogArchiver) invalidateListLocked() {
+	a.list, a.listAt = nil, time.Time{}
+	a.listGen++
+}
+
+// listArchiveDir is the archive listing: the archived names, ticking as it
+// reads.
+func listArchiveDir(dir string, tick func()) ([]RawLogFile, error) {
+	return scanRawLogsTick(dir, RawLogLocationArchive, IsArchivedRawLogName, tick)
 }
 
 // OpenArchiveFile opens one archived file for reading. Reading it can still
@@ -430,6 +485,9 @@ func (a *RawLogArchiver) DeleteArchiveFile(ctx context.Context, name string) err
 		return err
 	}
 	if st := a.probe(ctx, true, instance, false); !st.ours {
+		if st.cancelled {
+			return ctx.Err()
+		}
 		if st.status.Status == ArchiveStatusStalled && st.status.StalledSince != nil {
 			return &ArchiveStalledError{Since: *st.status.StalledSince}
 		}
@@ -448,7 +506,7 @@ func (a *RawLogArchiver) DeleteArchiveFile(ctx context.Context, name string) err
 	})
 	if err == nil {
 		a.mu.Lock()
-		a.list, a.listAt = nil, time.Time{}
+		a.invalidateListLocked()
 		a.mu.Unlock()
 	}
 	return err

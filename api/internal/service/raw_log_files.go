@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"errors"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -143,6 +145,48 @@ func scanRawLogs(dir, location string, allowed func(string) bool) ([]RawLogFile,
 			files = append(files, f)
 		}
 	}
+	return files, nil
+}
+
+// scanRawLogsTick is scanRawLogs for a directory that may be large and slow
+// (the archive on a NAS): it reads the directory in batches and calls tick
+// after each batch and each file, so the caller can tell a long listing that
+// is moving from one that hangs. The result is in name order, as ReadDir's.
+func scanRawLogsTick(dir, location string, allowed func(string) bool, tick func()) ([]RawLogFile, error) {
+	d, err := os.Open(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer d.Close()
+	var files []RawLogFile
+	for {
+		entries, err := d.ReadDir(256)
+		tick()
+		for _, e := range entries {
+			if !allowed(e.Name()) {
+				continue
+			}
+			// Lstat, through Info: a symlink is reported as one, never followed.
+			info, ierr := e.Info()
+			tick()
+			if ierr != nil {
+				continue
+			}
+			if f, ok := newRawLogFile(info, location, allowed); ok {
+				files = append(files, f)
+			}
+		}
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	sort.Slice(files, func(i, j int) bool { return files[i].Name < files[j].Name })
 	return files, nil
 }
 

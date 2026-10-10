@@ -86,13 +86,19 @@ func (h *SystemSettingsHandler) ListLogFiles(c echo.Context) error {
 
 	// The archive: its status always, its files when it answers. For the
 	// local tab an archive that does not answer only drops out of the
-	// estimate; for the archive tab it is the answer.
+	// estimate, and a slow listing is not waited for past the call timeout
+	// (it goes on and is cached for the next view); for the archive tab it is
+	// the answer.
 	var archived []service.RawLogFile
 	if h.archiver != nil {
 		st := h.archiver.Status(ctx)
 		response.Archive = &st
 		if st.Mounted {
-			archived, err = h.archiver.ListArchive(ctx)
+			list := h.archiver.ListArchive
+			if location == service.RawLogLocationLocal {
+				list = h.archiver.ListArchiveQuick
+			}
+			archived, err = list(ctx)
 			if err != nil {
 				if location == service.RawLogLocationArchive {
 					return h.archiveError(c, err)

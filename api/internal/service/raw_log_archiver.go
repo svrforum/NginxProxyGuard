@@ -36,9 +36,10 @@ import (
 //     renamed, given its original mtime, and only then deleted locally.
 //   - Archive retention goes by the time in the file name, not by mtime,
 //     which some network filesystems do not keep.
-//   - Every request-side filesystem call goes through one slot with a
-//     timeout: a hung NFS mount blocks the kernel, so one stuck call marks
-//     the archive stalled and later calls fail at once instead of piling up.
+//   - Every request-side filesystem call goes through one slot and is
+//     watched (raw_log_archiver_io.go): a hung NFS mount blocks the kernel,
+//     so a call that stops making progress marks the archive stalled and
+//     later calls fail at once instead of piling up.
 //
 // When the archive is missing, unwritable or full, rotated files simply stay
 // local, where logrotate's maxage (the local retention) still bounds them.
@@ -56,6 +57,7 @@ type RawLogArchiver struct {
 	stallAfter   time.Duration
 	bootDelay    time.Duration
 	refreshEvery time.Duration
+	listDir      func(dir string, tick func()) ([]RawLogFile, error) // the archive listing; injectable for tests
 
 	slot    chan struct{} // request-side filesystem calls, one at a time
 	wake    chan struct{}
@@ -69,10 +71,13 @@ type RawLogArchiver struct {
 	statfsRaw    rawStatfs
 	statfsAt     time.Time
 	ioStallSince *time.Time
+	call         *archiveCall  // the request-side call holding the slot
+	stallSignal  chan struct{} // closed, and replaced, when a call is given up on
 	progressAt   time.Time
 	logged       string
 	list         []RawLogFile
 	listAt       time.Time
+	listGen      int // bumped when the archive changes, so a listing begun before is not kept
 }
 
 const rawLogArchiveMarker = ".npg-raw-log-archive"
@@ -157,11 +162,13 @@ func NewRawLogArchiver(root, localDir string, settle time.Duration, settings fun
 		statfs:       guard.stat,
 		writeProbe:   archiveWriteProbe,
 		changedAt:    func(f RawLogFile) time.Time { return f.changedAt },
+		listDir:      listArchiveDir,
 		ioTimeout:    8 * time.Second,
 		stallAfter:   2 * time.Minute,
 		bootDelay:    2 * time.Minute,
 		refreshEvery: 5 * time.Minute,
 		slot:         make(chan struct{}, 1),
+		stallSignal:  make(chan struct{}),
 		wake:         make(chan struct{}, 1),
 		stop:         make(chan struct{}),
 	}
@@ -229,57 +236,25 @@ func (a *RawLogArchiver) Wake() {
 	}
 }
 
-// fsCall runs fn — archive filesystem work for a request — in its own
-// goroutine, one at a time, waiting at most ioTimeout. A call that does not
-// come back marks the archive stalled until it does; meanwhile every other
-// call fails at once rather than parking another goroutine on the mount.
-func (a *RawLogArchiver) fsCall(ctx context.Context, fn func() error) error {
-	a.mu.Lock()
-	if a.ioStallSince != nil {
-		since := *a.ioStallSince
-		a.mu.Unlock()
-		return &ArchiveStalledError{Since: since}
-	}
-	a.mu.Unlock()
-
-	timer := time.NewTimer(a.ioTimeout)
-	defer timer.Stop()
-	select {
-	case a.slot <- struct{}{}:
-	case <-timer.C:
-		return &ArchiveStalledError{Since: a.now()}
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-	start := a.now()
-	done := make(chan error, 1)
-	go func() {
-		err := fn()
-		a.mu.Lock()
-		a.ioStallSince = nil // it answered
-		a.mu.Unlock()
-		<-a.slot
-		done <- err
-	}()
-	select {
-	case err := <-done:
-		return err
-	case <-timer.C:
-		a.mu.Lock()
-		if a.ioStallSince == nil {
-			a.ioStallSince = &start
-		}
-		a.mu.Unlock()
-		return &ArchiveStalledError{Since: start}
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
 // archiveState is one look at the archive root.
 type archiveState struct {
 	status RawLogArchiveStatus
 	ours   bool // marker present and naming this install
+	// cancelled: the caller gave up before the archive answered, so nothing
+	// was learnt; status is the last one remembered.
+	cancelled bool
+}
+
+// isContextErr reports an error that says only that the caller gave up.
+func isContextErr(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+}
+
+// lastStatus is the status as last remembered.
+func (a *RawLogArchiver) lastStatus() RawLogArchiveStatus {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.status
 }
 
 // probe looks at the root without writing (unless writeTest): mounted, its
@@ -288,7 +263,7 @@ type archiveState struct {
 // fix and nothing to be told about.
 func (a *RawLogArchiver) probe(ctx context.Context, enabled bool, instance string, writeTest bool) archiveState {
 	s := a.probeDir(ctx, enabled, instance, writeTest)
-	if !enabled {
+	if !enabled && !s.cancelled {
 		s.status.Status = ArchiveStatusDisabled
 	}
 	return s
@@ -321,6 +296,8 @@ func (a *RawLogArchiver) probeDir(ctx context.Context, enabled bool, instance st
 		st.Status, st.StalledSince = ArchiveStatusStalled, &stalled.Since
 		st.Detail = stalled.Error()
 		return archiveState{status: st}
+	case isContextErr(err):
+		return archiveState{status: a.lastStatus(), cancelled: true}
 	case err != nil || !isDir:
 		st.Status = ArchiveStatusNotMounted
 		st.Detail = fmt.Sprintf("%s does not exist in the API container (or is not a directory): mount the share on the host and bind it to %s on the api service", a.root, a.root)
@@ -377,6 +354,9 @@ func (a *RawLogArchiver) probeDir(ctx context.Context, enabled bool, instance st
 		ok := true
 		if err := a.fsCall(ctx, func() error { return a.writeProbe(a.root) }); err != nil {
 			ok = false
+			if isContextErr(err) {
+				return archiveState{status: a.lastStatus(), cancelled: true}
+			}
 			if errors.As(err, &stalled) {
 				st.Status, st.StalledSince, st.Detail = ArchiveStatusStalled, &stalled.Since, stalled.Error()
 				return archiveState{status: st}
@@ -483,7 +463,11 @@ func (a *RawLogArchiver) Initialise(ctx context.Context) (RawLogArchiveStatus, e
 	if err != nil {
 		return RawLogArchiveStatus{Dir: a.root}, err
 	}
-	pre := a.probe(ctx, true, instance, true).status
+	p := a.probe(ctx, true, instance, true)
+	if p.cancelled {
+		return p.status, ctx.Err()
+	}
+	pre := p.status
 	switch pre.Status {
 	case ArchiveStatusNotMounted, ArchiveStatusUnwritable, ArchiveStatusStalled, ArchiveStatusLogDir:
 		pre.RetentionDays = retention
@@ -523,16 +507,19 @@ func (a *RawLogArchiver) Initialise(ctx context.Context) (RawLogArchiveStatus, e
 }
 
 // Status reports the archive, re-probing it (without writing) when the last
-// look is older than 15 seconds.
+// look is older than 15 seconds — unless a call that is still answering holds
+// the slot (a long listing of a slow share): the archive evidently works, and
+// a probe would only queue behind it, so the last look stands meanwhile.
 func (a *RawLogArchiver) Status(ctx context.Context) RawLogArchiveStatus {
 	if a == nil {
 		return RawLogArchiveStatus{Status: ArchiveStatusNotMounted, Detail: "the raw log archive is not available"}
 	}
 	a.mu.Lock()
 	fresh := !a.statusAt.IsZero() && a.now().Sub(a.statusAt) < 15*time.Second
+	busy := !a.statusAt.IsZero() && a.call != nil && a.ioStallSince == nil
 	st := a.status
 	a.mu.Unlock()
-	if fresh {
+	if fresh || busy {
 		return a.decorate(st)
 	}
 	return a.refreshStatus(ctx)
@@ -543,7 +530,11 @@ func (a *RawLogArchiver) refreshStatus(ctx context.Context) RawLogArchiveStatus 
 	if err != nil {
 		return a.decorate(RawLogArchiveStatus{Dir: a.root, Status: ArchiveStatusNotInitialized, Detail: "cannot read the settings: " + err.Error()})
 	}
-	st := a.probe(ctx, enabled, instance, false).status
+	s := a.probe(ctx, enabled, instance, false)
+	if s.cancelled {
+		return a.decorate(s.status) // the caller gave up: nothing new to remember
+	}
+	st := s.status
 	st.RetentionDays = retention
 	st.PendingFiles = len(a.settledLocal(compress))
 	return a.decorate(a.remember(st))
