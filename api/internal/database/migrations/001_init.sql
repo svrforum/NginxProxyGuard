@@ -4729,7 +4729,8 @@ ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS raw_log_archive_enab
 ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS raw_log_archive_retention_days integer DEFAULT 365 NOT NULL;
 
 -- Dashboard response time: how many requests each hourly average covers (the requests
--- with a measured time, WebSocket upgrades left out). The 24h figure weights each hour's
--- average by it; total_requests also counts instant answers, which have no time.
+-- with a measured time of at most 60 seconds, WebSocket upgrades left out; see
+-- averagedRequestFilter). The 24h figure weights each hour's average by it;
+-- total_requests also counts instant answers, which have no time, and those left out.
 -- The hourly rollup fills it; the last 25 hours are rebuilt at every boot.
 ALTER TABLE public.dashboard_stats_hourly ADD COLUMN IF NOT EXISTS timed_requests bigint DEFAULT 0 NOT NULL;

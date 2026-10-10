@@ -6,6 +6,24 @@ import (
 	"time"
 )
 
+// averagedRequestFilter picks the requests an average response time is taken
+// over. The hourly average and timed_requests, the count by which the 24h
+// figure weights each hour, both use it, so they always cover the same
+// requests.
+//
+// A request that took more than 60 seconds is left out (#324). An event
+// stream or a long poll holds its request open for minutes on purpose: its
+// time is how long the client stayed connected, not how fast the server
+// answered, and one of them outweighs thousands of real answers. A request
+// that waited out an upstream timeout of a minute or more is left out with
+// them; its 504 still counts as an error. A WebSocket upgrade (101) is left
+// out however short it was: its time is the connection's lifetime (#148).
+// Leaving a request out of the average changes nothing else: it still counts
+// in the request totals, the status classes and the bytes sent. Requests
+// stored without a time (instant answers) have nothing to average; avg and
+// count skip them on their own.
+const averagedRequestFilter = `status_code IS DISTINCT FROM 101 AND request_time <= 60`
+
 // hourlyRollupRecomputeSQL rebuilds the global rows (proxy_host_id IS NULL) of
 // dashboard_stats_hourly for every UTC hour in [$1, $2) from logs_partitioned.
 //
@@ -16,9 +34,8 @@ import (
 // access rows for a real host, without NPG's own health, status, ACME and
 // pipeline-canary requests. Rows whose request_time, body_bytes_sent or
 // request_uri is NULL count like any other (instant answers are stored with a
-// NULL request_time); the average response time covers the requests with a
-// measured time and leaves out WebSocket upgrades (101), whose time is the
-// connection's lifetime (#148). timed_requests is how many requests that
+// NULL request_time); the average response time covers only the requests
+// averagedRequestFilter picks. timed_requests is how many requests that
 // average covers: an average over several hours weights each hour by it, not
 // by total_requests, or an hour of instant answers (blocked scanners, say)
 // would multiply the time of its few measured requests.
@@ -33,8 +50,8 @@ WITH hours AS (
            count(*) FILTER (WHERE status_code BETWEEN 300 AND 399) AS s3,
            count(*) FILTER (WHERE status_code BETWEEN 400 AND 499) AS s4,
            count(*) FILTER (WHERE status_code >= 500)              AS s5,
-           avg(request_time) FILTER (WHERE status_code IS DISTINCT FROM 101) * 1000 AS avg_ms,
-           count(request_time) FILTER (WHERE status_code IS DISTINCT FROM 101) AS timed,
+           avg(request_time) FILTER (WHERE ` + averagedRequestFilter + `) * 1000 AS avg_ms,
+           count(request_time) FILTER (WHERE ` + averagedRequestFilter + `) AS timed,
            COALESCE(sum(body_bytes_sent), 0)                       AS bytes,
            count(*) FILTER (WHERE block_reason = 'waf')            AS waf,
            count(*) FILTER (WHERE block_reason = 'rate_limit')     AS rl,

@@ -12005,6 +12005,11 @@ components:
         avg_response_time_24h:
           type: number
           format: double
+          description: >-
+            Milliseconds, averaged over the requests with a measured time.
+            WebSocket upgrades (101) and requests that took more than 60 seconds
+            (event streams, long polling) are left out of the average; they
+            still count in total_requests_24h.
         error_rate_24h:
           type: number
           format: double

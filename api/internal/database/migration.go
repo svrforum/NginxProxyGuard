@@ -1722,8 +1722,8 @@ END $$`,
 			sql:  `ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS raw_log_archive_retention_days integer DEFAULT 365 NOT NULL`,
 		},
 		// The dashboard's 24h response time weights each hourly average by
-		// the requests it covers (the ones with a measured time), not by
-		// total_requests, which also counts instant answers. The hourly
+		// the requests it covers (see repository.averagedRequestFilter), not
+		// by total_requests, which also counts instant answers. The hourly
 		// rollup fills it and rebuilds the last 25 hours at boot.
 		{
 			desc: "dashboard_stats_hourly.timed_requests",

@@ -16,6 +16,11 @@ func TestHourlyRollupOverwritesAndFiltersLikeTheDashboard(t *testing.T) {
 		canaryURIExclusion,
 		"status_code IS DISTINCT FROM 101",
 		"ON CONFLICT (hour_bucket) WHERE proxy_host_id IS NULL",
+		// The average and the count that weights it cover the same requests,
+		// which leave out the ones held open past a minute (#324).
+		"avg(request_time) FILTER (WHERE " + averagedRequestFilter + ")",
+		"count(request_time) FILTER (WHERE " + averagedRequestFilter + ")",
+		"request_time <= 60",
 	} {
 		if !strings.Contains(hourlyRollupRecomputeSQL, want) {
 			t.Errorf("hourlyRollupRecomputeSQL lost %q", want)
@@ -243,5 +248,74 @@ func TestDashboardResponseTimeAveragesTimedRequests(t *testing.T) {
 	}
 	if want := 16000.0 / 220; math.Abs(avgMs-want) > 0.01 || total != 2721 {
 		t.Errorf("with an hour of instant answers only: %.1f ms over %d requests, want %.1f ms over 2721", avgMs, total, want)
+	}
+}
+
+// An event stream or a long poll holds its request open for minutes on
+// purpose: its time is how long the client stayed connected, not how fast the
+// server answered. It still counts as a request (in the totals, its status
+// class and its bytes), but not in the average response time, nor in
+// timed_requests, by which the 24h figure weights each hour. One five-minute
+// event stream among twenty 50 ms requests put the hour at 14.3 s (#324). A
+// request that took a minute or less is averaged as before, and a WebSocket
+// upgrade is left out however short it was (#148).
+func TestAverageResponseTimeLeavesOutLongRequests(t *testing.T) {
+	db := openRollupTestDB(t)
+	repo := NewDashboardRepository(db)
+	ctx := context.Background()
+
+	hour := func(bucket string) hourlyRow {
+		t.Helper()
+		var r hourlyRow
+		if err := db.QueryRowContext(ctx, `
+			SELECT total_requests, status_2xx, status_5xx, bytes_sent, timed_requests, avg_response_time
+			FROM dashboard_stats_hourly
+			WHERE proxy_host_id IS NULL AND hour_bucket = $1::timestamptz`, bucket).
+			Scan(&r.total, &r.s2, &r.s5, &r.bytes, &r.timed, &r.avgMs); err != nil {
+			t.Fatalf("read hour %s: %v", bucket, err)
+		}
+		r.avgMs = float64(int64(r.avgMs*1000+0.5)) / 1000 // compare to the microsecond
+		return r
+	}
+
+	// 14:00 UTC: twenty requests at 50 ms, an event stream held open for five
+	// minutes and a WebSocket that lasted 30 seconds.
+	mustExec(t, db,
+		`INSERT INTO logs_partitioned (log_type, host, request_uri, status_code, request_time, body_bytes_sent, created_at)
+		 SELECT 'access', 'a.example.com', '/api', 200, 0.050, 100, '2026-10-08 14:00:00+00'::timestamptz + g * interval '1 second'
+		 FROM generate_series(1, 20) g`,
+		`INSERT INTO logs_partitioned (log_type, host, request_uri, status_code, request_time, body_bytes_sent, created_at) VALUES
+			('access', 'a.example.com', '/events', 200, 300.0, 5000, '2026-10-08 14:30:00+00'),
+			('access', 'a.example.com', '/ws',     101, 30.0,  10,   '2026-10-08 14:40:00+00')`,
+	)
+	if _, err := repo.RecomputeHourlyRollup(ctx, time.Date(2026, 10, 8, 14, 0, 0, 0, time.UTC), time.Date(2026, 10, 8, 15, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatalf("RecomputeHourlyRollup 14:00: %v", err)
+	}
+	// All 22 requests count (the 101 in no status class); the average and
+	// timed_requests cover the twenty 50 ms answers only.
+	if got, want := hour("2026-10-08 14:00:00+00"), (hourlyRow{total: 22, s2: 21, bytes: 7010, timed: 20, avgMs: 50}); got != want {
+		t.Errorf("14:00 = %+v, want %+v", got, want)
+	}
+	var total, bandwidth, errorsN, forRate int64
+	var avgMs float64
+	if err := db.QueryRowContext(ctx, dashboardSummary24hSQL, time.Date(2026, 10, 8, 13, 30, 0, 0, time.UTC)).
+		Scan(&total, &bandwidth, &avgMs, &errorsN, &forRate); err != nil {
+		t.Fatalf("24h summary: %v", err)
+	}
+	if math.Abs(avgMs-50) > 0.01 || total != 22 || bandwidth != 7010 {
+		t.Errorf("24h: %.1f ms over %d requests and %d bytes, want 50.0 ms over 22 requests and 7010 bytes", avgMs, total, bandwidth)
+	}
+
+	// 15:00 UTC: one request answered in exactly a minute, one just over it.
+	mustExec(t, db,
+		`INSERT INTO logs_partitioned (log_type, host, request_uri, status_code, request_time, body_bytes_sent, created_at) VALUES
+			('access', 'a.example.com', '/report', 200, 60.0, 100, '2026-10-08 15:10:00+00'),
+			('access', 'a.example.com', '/report', 200, 60.5, 100, '2026-10-08 15:20:00+00')`,
+	)
+	if _, err := repo.RecomputeHourlyRollup(ctx, time.Date(2026, 10, 8, 15, 0, 0, 0, time.UTC), time.Date(2026, 10, 8, 16, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatalf("RecomputeHourlyRollup 15:00: %v", err)
+	}
+	if got, want := hour("2026-10-08 15:00:00+00"), (hourlyRow{total: 2, s2: 2, bytes: 200, timed: 1, avgMs: 60000}); got != want {
+		t.Errorf("15:00 = %+v, want %+v (a minute is averaged, anything longer is not)", got, want)
 	}
 }
