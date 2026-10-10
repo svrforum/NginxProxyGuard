@@ -3239,12 +3239,14 @@ paths:
         Administrative ingestion path; requires settings:write, not logs access.
 
         The body is checked before anything is stored. A value the logs table would
-        refuse answers **400** naming the field (and, for an enum, the accepted values)
-        instead of a 500: `log_type` missing or outside its enum, `severity` or
-        `block_reason` outside theirs, a `client_ip` that is not one IPv4/IPv6 address,
-        a `proxy_host_id` that is not a UUID, a `status_code` outside 100-599 (0 or
-        absent means none), a `geo_country_code` over 2 or `exploit_rule` over 50
-        characters, and a NUL character (`\u0000`) in any string.
+        refuse, or could not hand back as JSON, answers **400** naming the field (and,
+        for an enum, the accepted values) instead of a 500 or an empty response:
+        `log_type` missing or outside its enum, `severity` or `block_reason` outside
+        theirs, a `timestamp` outside the years 1-9998 in UTC, a `host` over 500
+        characters, a `client_ip` that is not one IPv4/IPv6 address, a `proxy_host_id`
+        that is not a UUID, a `status_code` outside 100-599 (0 or absent means none),
+        a `geo_country_code` over 2 or `exploit_rule` over 50 characters, and a NUL
+        character (`\u0000`) in any string.
       security:
         - BearerAuth: []
       requestBody:
@@ -3262,8 +3264,8 @@ paths:
                 $ref: '#/components/schemas/LogEntry'
         '400':
           description: >-
-            Malformed JSON ("Invalid request body"), or a field the logs table would
-            refuse — `error` names the field, e.g. `invalid severity "err": must be one
+            Malformed JSON ("Invalid request body"), or a field that fails a check
+            above — `error` names the field, e.g. `invalid severity "err": must be one
             of debug, info, notice, warn, error, crit, alert, emerg`.
           content:
             application/json:
@@ -15712,8 +15714,14 @@ components:
         timestamp:
           type: string
           format: date-time
+          description: >-
+            Absent means now. Any UTC offset is accepted; the instant is stored, not
+            the offset. Must fall in the years 1-9998 in UTC: the database hands it back
+            in its own time zone, and a JSON date carries only the years 0-9999.
         host:
           type: string
+          maxLength: 500
+          description: At most 500 characters, the length the log collector keeps.
         client_ip:
           type: string
           description: One IPv4 or IPv6 address; a range such as 192.0.2.0/24 is refused.
@@ -15736,9 +15744,9 @@ components:
           type: string
         status_code:
           type: integer
-          minimum: 100
+          minimum: 0
           maximum: 599
-          description: 0 or absent stores no status.
+          description: 0 or absent stores no status; otherwise 100-599.
         body_bytes_sent:
           type: integer
           format: int64

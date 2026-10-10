@@ -139,6 +139,9 @@ func (r *LogRepository) Create(ctx context.Context, req *model.CreateLogRequest)
 	if timestamp.IsZero() {
 		timestamp = time.Now()
 	}
+	// Sent as UTC: the column keeps the instant, not the offset, and Postgres
+	// refuses an offset past ±15:59 that RFC 3339 allows up to ±23:59 (#325).
+	timestamp = timestamp.UTC()
 
 	var log model.Log
 	var host, clientIP, requestMethod, requestURI, requestProtocol sql.NullString

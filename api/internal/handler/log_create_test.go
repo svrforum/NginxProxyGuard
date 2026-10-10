@@ -65,6 +65,14 @@ func TestCreateLog_InvalidFieldAnswers400(t *testing.T) {
 		{"geo_country_code past varchar(2)", `{"log_type":"access","geo_country_code":"USA"}`, "geo_country_code", ""},
 		{"exploit_rule past varchar(50)", `{"log_type":"modsec","exploit_rule":"` + longExploitID + `"}`, "exploit_rule", ""},
 		{"NUL in a text field", `{"log_type":"access","http_user_agent":"a\u0000b"}`, "http_user_agent", ""},
+		// Stored, then unreadable: read back in the database's time zone, a
+		// year outside 0-9999 emptied the 201 and every log page holding the
+		// row. Years 1-9998 in UTC are taken, a year clear of both ends.
+		{"timestamp before year 1 in UTC", `{"log_type":"access","timestamp":"0000-01-01T00:00:00+01:00"}`, "timestamp", ""},
+		{"timestamp past year 9999 in UTC", `{"log_type":"access","timestamp":"9999-12-31T23:59:59-01:00"}`, "timestamp", ""},
+		{"timestamp in year 9999", `{"log_type":"access","timestamp":"9999-01-01T00:00:00Z"}`, "timestamp", ""},
+		// host's btree index refuses an entry over 2704 bytes.
+		{"host past 500 characters", `{"log_type":"access","host":"` + strings.Repeat("h", 501) + `"}`, "host", ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -123,16 +131,31 @@ func insertedRow(logType string, set map[string]driver.Value) *sqlmock.Rows {
 	return sqlmock.NewRows(cols).AddRow(vals...)
 }
 
+// insertArgs matches any value for each of the INSERT's 34 parameters; a test
+// pins the ones it is about.
+func insertArgs() []driver.Value {
+	args := make([]driver.Value, 34)
+	for i := range args {
+		args[i] = sqlmock.AnyArg()
+	}
+	return args
+}
+
+// utcInstant matches a time sent in UTC at the given instant.
+type utcInstant time.Time
+
+func (u utcInstant) Match(v driver.Value) bool {
+	t, ok := v.(time.Time)
+	return ok && t.Location() == time.UTC && t.Equal(time.Time(u))
+}
+
 // A valid entry is stored and answered 201 — including block_reason,
 // bot_category and exploit_rule, which the request and the swagger schema
 // always accepted but the INSERT left out, so they were silently dropped.
 func TestCreateLog_ValidEntryIsStored(t *testing.T) {
 	// The report's control: a severity inside the enum.
 	rec := createLog(t, `{"log_type":"error","severity":"error"}`, func(m sqlmock.Sqlmock) {
-		args := make([]driver.Value, 34)
-		for i := range args {
-			args[i] = sqlmock.AnyArg()
-		}
+		args := insertArgs()
 		args[0], args[21] = "error", "error"
 		m.ExpectQuery(regexp.QuoteMeta("INSERT INTO logs_partitioned")).WithArgs(args...).
 			WillReturnRows(insertedRow("error", map[string]driver.Value{"severity": "error"}))
@@ -145,10 +168,7 @@ func TestCreateLog_ValidEntryIsStored(t *testing.T) {
 	body := `{"log_type":"modsec","client_ip":"2001:db8::7","status_code":403,"rule_id":942100,` +
 		`"block_reason":"waf","bot_category":"bad_bot","exploit_rule":"SQLI-001","proxy_host_id":"` + hostID + `"}`
 	rec = createLog(t, body, func(m sqlmock.Sqlmock) {
-		args := make([]driver.Value, 34)
-		for i := range args {
-			args[i] = sqlmock.AnyArg()
-		}
+		args := insertArgs()
 		args[0], args[3] = "modsec", "2001:db8::7"
 		// $30-$33: block_reason, bot_category, exploit_rule, proxy_host_id.
 		args[29], args[30], args[31], args[32] = "waf", "bad_bot", "SQLI-001", hostID
@@ -172,5 +192,18 @@ func TestCreateLog_ValidEntryIsStored(t *testing.T) {
 		if got[field] != want {
 			t.Errorf("response %s = %v, want %v", field, got[field], want)
 		}
+	}
+
+	// RFC 3339 and the JSON decoder take an offset up to ±23:59, Postgres only
+	// up to ±15:59 in what it is sent: +20:00 answered 500. The column keeps
+	// the instant, so the instant goes as UTC ($2).
+	rec = createLog(t, `{"log_type":"access","timestamp":"2026-10-11T00:00:00+20:00"}`, func(m sqlmock.Sqlmock) {
+		args := insertArgs()
+		args[0], args[1] = "access", utcInstant(time.Date(2026, 10, 10, 4, 0, 0, 0, time.UTC))
+		m.ExpectQuery(regexp.QuoteMeta("INSERT INTO logs_partitioned")).WithArgs(args...).
+			WillReturnRows(insertedRow("access", nil))
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("offset +20:00: status %d, want 201: %s", rec.Code, rec.Body.String())
 	}
 }

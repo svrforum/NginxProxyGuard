@@ -5,15 +5,31 @@ import (
 	"net"
 	"reflect"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
 )
 
-// Columns of logs_partitioned narrower than the text a request can carry.
+// Text a request can carry at any length, but logs_partitioned cannot store.
 const (
 	logGeoCountryCodeMaxLen = 2  // geo_country_code varchar(2)
 	logExploitRuleMaxLen    = 50 // exploit_rule varchar(50)
+	// host is text, but its btree index (idx_logs_part_host, idx_logs_ht_host)
+	// refuses an entry over 2704 bytes, and how many bytes a value takes there
+	// depends on how well it compresses. 500 characters, what the log
+	// collector keeps of a host, are at most 2000 bytes and always fit.
+	logHostMaxLen = 500
+)
+
+// The database hands a timestamp back in its own time zone (the TZ the
+// operator sets; a real zone is less than 16 hours from UTC), and a JSON date
+// carries only the years 0 to 9999: a stored year 10000 left the 201 and every
+// log page holding the row with an empty body. A year clear of each end reads
+// back in any zone.
+const (
+	logTimestampMinYear = 1
+	logTimestampMaxYear = 9998
 )
 
 // ValidateCreateLogRequest rejects a manual log entry (POST /logs) holding a
@@ -21,8 +37,9 @@ const (
 // the handler answered 500 "Failed to create log" for what was the caller's
 // mistake (#325): log_type, severity and block_reason are enums, client_ip and
 // proxy_host_id are cast to inet and uuid, status_code is an integer column,
-// geo_country_code and exploit_rule are varchar(2) and varchar(50), and no
-// text column takes a NUL character.
+// geo_country_code and exploit_rule are varchar(2) and varchar(50), host has a
+// btree index, and no text column takes a NUL character. It also rejects a
+// timestamp the table stores but cannot hand back as JSON.
 //
 // Every error wraps ErrInvalidInput and names the field; an enum error also
 // lists the accepted values.
@@ -44,6 +61,18 @@ func ValidateCreateLogRequest(req *CreateLogRequest) error {
 		if err := logEnumOrError("block_reason", string(req.BlockReason), IsValidBlockReason, BlockReasons); err != nil {
 			return err
 		}
+	}
+
+	// Zero means absent: the entry is stamped now. Otherwise the UTC year
+	// decides; the offset it was sent with is not stored.
+	if !req.Timestamp.IsZero() {
+		if y := req.Timestamp.UTC().Year(); y < logTimestampMinYear || y > logTimestampMaxYear {
+			return fmt.Errorf("%w: invalid timestamp %q: must be between the years %d and %d in UTC", ErrInvalidInput,
+				req.Timestamp.Format(time.RFC3339Nano), logTimestampMinYear, logTimestampMaxYear)
+		}
+	}
+	if utf8.RuneCountInString(req.Host) > logHostMaxLen {
+		return fmt.Errorf("%w: invalid host: must be at most %d characters", ErrInvalidInput, logHostMaxLen)
 	}
 
 	// One address. inet would also take a range such as "192.0.2.0/24", which

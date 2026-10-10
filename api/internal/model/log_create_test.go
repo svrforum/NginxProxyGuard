@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 // The lists only word the 400; the IsValid* maps decide. A value added to one
@@ -52,6 +53,12 @@ func TestValidateCreateLogRequest_AcceptsWhatTheTableStores(t *testing.T) {
 		{LogType: LogTypeAccess, GeoCountryCode: "KR"},
 		{LogType: LogTypeAccess, GeoCountryCode: "한국"}, // varchar counts characters
 		{LogType: LogTypeModSec, ExploitRule: strings.Repeat("규", 50)},
+		{LogType: LogTypeAccess, Host: strings.Repeat("𠀀", 500)}, // 2000 bytes, inside host's btree index
+		// The ends of the accepted range, and an offset Postgres refuses in a
+		// literal (the instant is sent in UTC).
+		{LogType: LogTypeAccess, Timestamp: time.Date(1, 1, 1, 0, 0, 0, 1000, time.UTC)},
+		{LogType: LogTypeAccess, Timestamp: time.Date(9998, 12, 31, 23, 59, 59, 999999000, time.UTC)},
+		{LogType: LogTypeAccess, Timestamp: time.Date(2026, 10, 11, 0, 0, 0, 0, time.FixedZone("", 20*60*60))},
 	}
 	for _, v := range LogTypes {
 		reqs = append(reqs, CreateLogRequest{LogType: LogType(v)})
@@ -65,6 +72,40 @@ func TestValidateCreateLogRequest_AcceptsWhatTheTableStores(t *testing.T) {
 	for _, r := range reqs {
 		if err := ValidateCreateLogRequest(&r); err != nil {
 			t.Errorf("%+v refused: %v", r, err)
+		}
+	}
+}
+
+// The database hands a timestamp back in its own time zone (a real zone is
+// less than 16 hours from UTC), and a JSON date carries only the years 0 to
+// 9999, so a stored year 10000 emptied the 201 and every log page holding the
+// row. A timestamp must keep a year clear of both ends in UTC, whatever offset
+// it was sent with.
+func TestValidateCreateLogRequest_TimestampRange(t *testing.T) {
+	plus := func(h int) *time.Location { return time.FixedZone("", h*60*60) }
+	for _, tc := range []struct {
+		ts     time.Time
+		accept bool
+	}{
+		{time.Time{}, true}, // absent: stamped now
+		{time.Date(1, 1, 1, 0, 0, 0, 1, time.UTC), true},
+		{time.Date(9998, 12, 31, 23, 59, 59, 999999999, time.UTC), true},
+		{time.Date(9999, 1, 1, 8, 0, 0, 0, plus(9)), true}, // 9998-12-31T23:00Z
+		{time.Date(0, 12, 31, 23, 59, 59, 999999999, time.UTC), false},
+		{time.Date(9999, 1, 1, 0, 0, 0, 0, time.UTC), false},
+		{time.Date(1, 1, 1, 0, 0, 0, 0, plus(1)), false},          // 0000-12-31T23:00Z
+		{time.Date(9998, 12, 31, 23, 59, 59, 0, plus(-1)), false}, // 9999-01-01T00:59:59Z
+		{time.Date(9999, 12, 31, 23, 59, 59, 0, plus(-1)), false}, // year 10000 in UTC
+		{time.Date(0, 1, 1, 0, 0, 0, 0, plus(1)), false},          // year -1 in UTC
+	} {
+		err := ValidateCreateLogRequest(&CreateLogRequest{LogType: LogTypeAccess, Timestamp: tc.ts})
+		switch {
+		case tc.accept && err != nil:
+			t.Errorf("%s refused: %v", tc.ts.Format(time.RFC3339Nano), err)
+		case !tc.accept && err == nil:
+			t.Errorf("%s accepted", tc.ts.Format(time.RFC3339Nano))
+		case !tc.accept && (!errors.Is(err, ErrInvalidInput) || !strings.Contains(err.Error(), "timestamp")):
+			t.Errorf("%s: error does not name timestamp: %v", tc.ts.Format(time.RFC3339Nano), err)
 		}
 	}
 }
