@@ -549,6 +549,44 @@ func TestArchiverStatusFollowsTheSwitchAtOnce(t *testing.T) {
 	}
 }
 
+// The page shows the answer to Check until a status measured at or after it
+// arrives (both carry checked_at). A pass running, or a stall, is news as of
+// the status request, not of the last look it decorates: it must carry that
+// time, or an earlier Check answer goes on hiding it.
+func TestArchiverLiveNewsIsDatedNow(t *testing.T) {
+	h := newArchiverHarness(t, true)
+	h.initialise()
+	h.a.runPass(context.Background()) // remembers a look at h.now
+	h.now = h.now.Add(5 * time.Second)
+	chk := h.a.Check(context.Background())
+	h.now = h.now.Add(5 * time.Second) // the last look is still fresh
+
+	h.a.running.Store(true)
+	h.a.touch()
+	st := h.a.Status(context.Background())
+	if !st.Running || st.CheckedAt == nil || st.CheckedAt.Before(*chk.CheckedAt) {
+		t.Fatalf("a running pass reported with checked_at %v, before the Check answer of %v", st.CheckedAt, chk.CheckedAt)
+	}
+	h.a.running.Store(false)
+
+	since := h.now.Add(-time.Second)
+	h.a.mu.Lock()
+	h.a.ioStallSince = &since
+	h.a.mu.Unlock()
+	st = h.a.Status(context.Background())
+	if st.Status != ArchiveStatusStalled || st.CheckedAt == nil || st.CheckedAt.Before(*chk.CheckedAt) {
+		t.Fatalf("a stall reported as %s with checked_at %v, before the Check answer of %v", st.Status, st.CheckedAt, chk.CheckedAt)
+	}
+	h.a.mu.Lock()
+	h.a.ioStallSince = nil
+	h.a.mu.Unlock()
+
+	// Nothing new: the last look keeps its own time.
+	if st := h.a.Status(context.Background()); st.Running || st.CheckedAt == nil || !st.CheckedAt.Before(*chk.CheckedAt) {
+		t.Fatalf("an idle status reported checked_at %v; want the last look's time, before %v", st.CheckedAt, chk.CheckedAt)
+	}
+}
+
 // Most installs never mount an archive: with archiving off and no directory
 // the status is simply "disabled" (and says nothing in the log), while Check
 // still tells the operator what is there.

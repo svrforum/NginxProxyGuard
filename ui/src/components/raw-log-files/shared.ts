@@ -39,15 +39,17 @@ export type RawLogMessage = { type: 'success' | 'error' | 'info'; text: string }
 /**
  * The archive status the archive card shows: the answer to Check or "Use this
  * directory" until the page's list brings a status measured at or after it
- * (both carry checked_at from the server's clock). The list's is the live one:
- * a stall, a full or unmounted archive, the last move and the files waiting to
- * move show only there.
+ * (both carry checked_at from the server's clock; the server dates a running
+ * pass or a stall at the request). The list's is the live one: a stall, a full
+ * or unmounted archive, the last move and the files waiting to move show only
+ * there. A pass running always shows: the answer never knows about passes.
  */
 export function shownArchiveStatus(
   probe: RawLogArchiveStatus | null,
   live: RawLogArchiveStatus | undefined,
 ): RawLogArchiveStatus | undefined {
   if (!probe) return live;
+  if (live?.running) return live;
   if (!live?.checked_at) return probe;
   if (!probe.checked_at) return live;
   return Date.parse(live.checked_at) >= Date.parse(probe.checked_at) ? live : probe;

@@ -607,23 +607,31 @@ func (a *RawLogArchiver) remember(st RawLogArchiveStatus) RawLogArchiveStatus {
 }
 
 // decorate adds what only the running process knows: a pass in progress
-// and a stalled copy or call.
+// and a stalled copy or call. Either is as of now, so it dates the status
+// now (checked_at): the page shows the answer to an earlier Check only until
+// a status checked at or after it arrives.
 func (a *RawLogArchiver) decorate(st RawLogArchiveStatus) RawLogArchiveStatus {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	st.Running = a.running.Load()
-	if !st.Enabled {
-		return st
+	news := st.Running
+	if st.Enabled {
+		if a.passStalledLocked() {
+			since := a.progressAt
+			st.Status, st.StalledSince = ArchiveStatusStalled, &since
+			st.Detail = "moving a file to the archive has made no progress since " + since.Format(time.RFC3339)
+			news = true
+		}
+		if a.ioStallSince != nil {
+			since := *a.ioStallSince
+			st.Status, st.StalledSince = ArchiveStatusStalled, &since
+			st.Detail = (&ArchiveStalledError{Since: since}).Error()
+			news = true
+		}
 	}
-	if a.passStalledLocked() {
-		since := a.progressAt
-		st.Status, st.StalledSince = ArchiveStatusStalled, &since
-		st.Detail = "moving a file to the archive has made no progress since " + since.Format(time.RFC3339)
-	}
-	if a.ioStallSince != nil {
-		since := *a.ioStallSince
-		st.Status, st.StalledSince = ArchiveStatusStalled, &since
-		st.Detail = (&ArchiveStalledError{Since: since}).Error()
+	if news {
+		now := a.now()
+		st.CheckedAt = &now
 	}
 	return st
 }

@@ -16136,6 +16136,9 @@ components:
         checked_at:
           type: string
           format: date-time
+          description: |
+            When the directory was last looked at. A pass in progress or a stall is
+            reported as of the request, and dated then.
         last_move_at:
           type: string
           format: date-time
