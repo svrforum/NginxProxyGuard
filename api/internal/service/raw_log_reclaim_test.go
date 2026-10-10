@@ -55,6 +55,7 @@ type fakeReclaimStore struct {
 	nullHook    func(ctx context.Context) error
 	vacuumHook  func(ctx context.Context) error
 	failNull    map[string]error // the UPDATE of these days fails so
+	planHook    func(ctx context.Context) error
 	inNull      chan struct{}
 	inVacuum    chan struct{}
 	finishCalls []string
@@ -257,7 +258,15 @@ func (f *fakeReclaimStore) PlanChunk(_ context.Context, p repository.ReclaimPlan
 	return nil
 }
 
-func (f *fakeReclaimStore) MarkGoneChunks(context.Context) error {
+func (f *fakeReclaimStore) MarkGoneChunks(ctx context.Context) error {
+	f.mu.Lock()
+	hook := f.planHook
+	f.mu.Unlock()
+	if hook != nil {
+		if err := hook(ctx); err != nil {
+			return err
+		}
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for name, r := range f.rows {
@@ -1200,5 +1209,33 @@ func TestRawReclaimNeedAndVerify(t *testing.T) {
 	}
 	if vacuumIneffective(10*mib, 10*mib, 512<<10) {
 		t.Fatal("below 1 MiB of raw_log the size cannot tell")
+	}
+}
+
+// An API stop while a resumed run is still planning leaves the job running,
+// to be resumed after the next start, instead of failed.
+func TestRawReclaimShutdownWhileAResumePlansKeepsTheJob(t *testing.T) {
+	f := newFakeReclaimStore(t)
+	f.addDay(1, 100, 40, 0)
+	start := f.clock.Add(-time.Hour)
+	f.job = repository.ReclaimJob{Status: model.RawReclaimRunning, RequestedAt: &start, RequestedBy: "admin"}
+	planning := make(chan struct{})
+	f.planHook = func(ctx context.Context) error {
+		close(planning)
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	s := newTestReclaim(t, f, plenty())
+	done := make(chan struct{})
+	go func() { s.ResumeIfRunning(context.Background()); close(done) }()
+	<-planning
+	s.Shutdown()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the resume did not end with the API")
+	}
+	if j := f.jobState(); j.Status != model.RawReclaimRunning || j.LastError != "" || len(f.finishCalls) != 0 {
+		t.Fatalf("job = %+v after %v; want still running, nothing recorded", j, f.finishCalls)
 	}
 }

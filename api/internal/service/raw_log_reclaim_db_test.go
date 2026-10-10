@@ -129,7 +129,7 @@ func dbReclaimService(t *testing.T, repo *repository.RawLogReclaimRepository) *R
 func waitingBackends(t *testing.T, db *sql.DB, prefix string) []int {
 	t.Helper()
 	rows, err := db.Query(`SELECT pid FROM pg_stat_activity
-		 WHERE datname = current_database() AND wait_event_type = 'Lock' AND ltrim(query) LIKE $1 || '%'`, prefix)
+		 WHERE datname = current_database() AND wait_event_type = 'Lock' AND ltrim(query, E' \t\r\n') LIKE $1 || '%'`, prefix)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,8 +146,10 @@ func waitingBackends(t *testing.T, db *sql.DB, prefix string) []int {
 }
 
 // holdLocks keeps the tables locked in mode from a session of its own until
-// the returned function is called. The session holds no snapshot meanwhile,
-// so the reclaim's horizon check does not wait for it.
+// the returned function is called. In ACCESS SHARE mode the session holds no
+// snapshot or transaction id meanwhile, so a run's horizon check does not
+// wait for it (ACCESS EXCLUSIVE takes a transaction id: for tests where no
+// run follows).
 func holdLocks(t *testing.T, db *sql.DB, mode string, tables ...string) (release func()) {
 	t.Helper()
 	ctx := context.Background()
@@ -164,9 +166,11 @@ func holdLocks(t *testing.T, db *sql.DB, mode string, tables ...string) (release
 			t.Fatalf("%s: %v", s, err)
 		}
 	}
-	var held bool
-	if err := db.QueryRow(`SELECT backend_xmin IS NOT NULL OR backend_xid IS NOT NULL FROM pg_stat_activity WHERE pid = $1`, pid).Scan(&held); err != nil || held {
-		t.Fatalf("the lock holder keeps a snapshot or a transaction id (%v, %v): the reclaim would wait for it", held, err)
+	if mode == "ACCESS SHARE" {
+		var held bool
+		if err := db.QueryRow(`SELECT backend_xmin IS NOT NULL OR backend_xid IS NOT NULL FROM pg_stat_activity WHERE pid = $1`, pid).Scan(&held); err != nil || held {
+			t.Fatalf("the lock holder keeps a snapshot or a transaction id (%v, %v): the reclaim would wait for it", held, err)
+		}
 	}
 	return func() {
 		_, _ = conn.ExecContext(ctx, `COMMIT`)
@@ -266,5 +270,40 @@ func TestRawReclaimDBConnectionLossKeepsTheDay(t *testing.T) {
 	}
 	if job, _ := repo.LoadJob(ctx); job.Status != model.RawReclaimDone {
 		t.Fatalf("job = %+v", job)
+	}
+}
+
+// An API stop while a resumed run waits in its planning (here, for a lock on
+// the day table) leaves the job running for the next start, instead of
+// recording "planning the reclaim failed: context canceled".
+func TestRawReclaimDBShutdownWhileAResumePlansKeepsTheJob(t *testing.T) {
+	db, repo := openReclaimServiceDB(t)
+	ctx := context.Background()
+	if _, err := repo.BeginJob(ctx, "admin", nil); err != nil {
+		t.Fatal(err)
+	}
+	release := holdLocks(t, db, "ACCESS EXCLUSIVE", "raw_log_reclaim_chunks")
+	defer release()
+	s := dbReclaimService(t, repo)
+	done := make(chan struct{})
+	go func() { s.ResumeIfRunning(ctx); close(done) }()
+	for deadline := time.Now().Add(10 * time.Second); len(waitingBackends(t, db, "UPDATE raw_log_reclaim_chunks SET state = 'gone'")) == 0; time.Sleep(20 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("the resume never reached its planning")
+		}
+	}
+	s.Shutdown()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the resume did not end with the API")
+	}
+	release()
+	job, err := repo.LoadJob(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job.Status != model.RawReclaimRunning || job.LastError != "" {
+		t.Fatalf("job = %+v; want still running, to be resumed after the next start", job)
 	}
 }

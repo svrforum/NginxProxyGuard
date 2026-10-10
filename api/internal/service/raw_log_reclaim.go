@@ -480,6 +480,9 @@ func (s *RawLogReclaimService) resume(ctx context.Context) (launched, retry bool
 	}
 	if err := s.plan(ctx, false); err != nil {
 		_ = sess.Close()
+		if ctx.Err() != nil {
+			return false, false // the API is stopping: the job stays running for the next start
+		}
 		s.finishNow(model.RawReclaimFailed, "planning the reclaim failed: "+err.Error())
 		return false, false
 	}
