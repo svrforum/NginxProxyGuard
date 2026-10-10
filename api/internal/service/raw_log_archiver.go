@@ -33,7 +33,10 @@ import (
 //   - Only finished files move: a rotated name, compressed when compression
 //     is on (delaycompress keeps the newest one plain), and untouched (ctime)
 //     for the settle time. Each is copied to <name>.part, synced, checked,
-//     renamed, given its original mtime, and only then deleted locally.
+//     renamed, given its original mtime, and only then deleted locally —
+//     after being set aside under a new name and the copy checked once more
+//     (releaseLocal), so a root that turns out to be the log directory
+//     itself never costs the only copy.
 //   - Archive retention goes by the time in the file name, not by mtime,
 //     which some network filesystems do not keep.
 //   - Every request-side filesystem call goes through one slot and is
@@ -58,6 +61,10 @@ type RawLogArchiver struct {
 	bootDelay    time.Duration
 	refreshEvery time.Duration
 	listDir      func(dir string, tick func()) ([]RawLogFile, error) // the archive listing; injectable for tests
+	// sameFile compares a file under the root with one in the log directory
+	// by device and inode; injectable so tests can stand in for another
+	// mount of the log directory, which shares neither.
+	sameFile func(a, b os.FileInfo) bool
 
 	slot    chan struct{} // request-side filesystem calls, one at a time
 	wake    chan struct{}
@@ -78,6 +85,9 @@ type RawLogArchiver struct {
 	list         []RawLogFile
 	listAt       time.Time
 	listGen      int // bumped when the archive changes, so a listing begun before is not kept
+	// logDirShownAt: where the last probe file check (or a move) found a file
+	// of the log directory under the root; "" when it found none.
+	logDirShownAt string
 }
 
 const rawLogArchiveMarker = ".npg-raw-log-archive"
@@ -93,8 +103,9 @@ const (
 	ArchiveStatusStalled           = "stalled"
 	ArchiveStatusReady             = "ready"
 	// The directory is the nginx log directory, by another path or not, or
-	// one of its parents: nothing moved there would leave the log disk, and
-	// a file "moved" onto itself would be deleted. Never written to.
+	// one of its parents — or shows it through another mount (a share or an
+	// overlay of the same folder): nothing moved there would leave the log
+	// disk, and a file "moved" onto itself would be deleted. Never written to.
 	ArchiveStatusLogDir = "log_dir"
 )
 
@@ -163,6 +174,7 @@ func NewRawLogArchiver(root, localDir string, settle time.Duration, settings fun
 		writeProbe:   archiveWriteProbe,
 		changedAt:    func(f RawLogFile) time.Time { return f.changedAt },
 		listDir:      listArchiveDir,
+		sameFile:     os.SameFile,
 		ioTimeout:    8 * time.Second,
 		stallAfter:   2 * time.Minute,
 		bootDelay:    2 * time.Minute,
@@ -257,22 +269,36 @@ func (a *RawLogArchiver) lastStatus() RawLogArchiveStatus {
 	return a.status
 }
 
-// probe looks at the root without writing (unless writeTest): mounted, its
-// filesystem, the marker. enabled=false still reports all of it but with
-// status disabled — an install that does not use the archive has nothing to
-// fix and nothing to be told about.
-func (a *RawLogArchiver) probe(ctx context.Context, enabled bool, instance string, writeTest bool) archiveState {
-	s := a.probeDir(ctx, enabled, instance, writeTest)
+// probeDepth is how far a probe goes beyond looking at the root.
+type probeDepth int
+
+const (
+	probeLook probeDepth = iota // look only; the last probe file check stands
+	// probeLogDir also runs the probe file check (showsLogDir): a file
+	// created in the log directory, and removed again, that must not show
+	// up under the root. Check, "Use this directory", every pass and every
+	// delete request.
+	probeLogDir
+	probeWriteTest // probeLogDir, plus a write test in the root
+)
+
+// probe looks at the root without writing to it (unless probeWriteTest):
+// mounted, its filesystem, the marker. enabled=false still reports all of it
+// but with status disabled — an install that does not use the archive has
+// nothing to fix and nothing to be told about.
+func (a *RawLogArchiver) probe(ctx context.Context, enabled bool, instance string, depth probeDepth) archiveState {
+	s := a.probeDir(ctx, enabled, instance, depth)
 	if !enabled && !s.cancelled {
 		s.status.Status = ArchiveStatusDisabled
 	}
 	return s
 }
 
-func (a *RawLogArchiver) probeDir(ctx context.Context, enabled bool, instance string, writeTest bool) archiveState {
+func (a *RawLogArchiver) probeDir(ctx context.Context, enabled bool, instance string, depth probeDepth) archiveState {
 	now := a.now()
 	st := RawLogArchiveStatus{Enabled: enabled, Dir: a.root, CheckedAt: &now}
-	var isDir, logDir bool
+	var isDir bool
+	var logDir string // why the root counts as the log directory; "" when it does not
 	var marker []byte
 	var markerErr error
 	err := a.fsCall(ctx, func() error {
@@ -284,7 +310,7 @@ func (a *RawLogArchiver) probeDir(ctx context.Context, enabled bool, instance st
 		if !isDir {
 			return nil
 		}
-		if logDir = a.leadsToLogDir(fi); logDir {
+		if logDir = a.logDirDetail(fi, depth >= probeLogDir); logDir != "" {
 			return nil
 		}
 		marker, markerErr = readArchiveMarker(filepath.Join(a.root, rawLogArchiveMarker))
@@ -302,9 +328,9 @@ func (a *RawLogArchiver) probeDir(ctx context.Context, enabled bool, instance st
 		st.Status = ArchiveStatusNotMounted
 		st.Detail = fmt.Sprintf("%s does not exist in the API container (or is not a directory): mount the share on the host and bind it to %s on the api service", a.root, a.root)
 		return archiveState{status: st}
-	case logDir:
+	case logDir != "":
 		st.Status = ArchiveStatusLogDir
-		st.Detail = fmt.Sprintf("%s is the nginx log directory %s (or one of its parents), so nothing there would leave the log disk: bind a directory on another disk or a NAS share to %s instead", a.root, a.localDir, a.root)
+		st.Detail = logDir
 		return archiveState{status: st}
 	}
 	st.Mounted = true
@@ -350,7 +376,7 @@ func (a *RawLogArchiver) probeDir(ctx context.Context, enabled bool, instance st
 		}
 	}
 
-	if writeTest {
+	if depth >= probeWriteTest {
 		ok := true
 		if err := a.fsCall(ctx, func() error { return a.writeProbe(a.root) }); err != nil {
 			ok = false
@@ -376,14 +402,16 @@ func (a *RawLogArchiver) probeDir(ctx context.Context, enabled bool, instance st
 // leadsToLogDir reports whether the archive root — root is os.Stat of it, so
 // symlinks are followed — is the nginx log directory or one of its parents.
 // It compares identities (device and inode), so a second bind mount of the
-// same directory is caught as well as a symlink or the same path.
+// same directory is caught as well as a symlink or the same path. Another
+// mount of it (a share, an overlay) has identities of its own; the probe file
+// check (showsLogDir) catches that.
 func (a *RawLogArchiver) leadsToLogDir(root os.FileInfo) bool {
 	dir := filepath.Clean(a.localDir)
 	// The log directory right inside the root: a host folder bound as the
 	// archive while its logs subfolder is bound as the log directory, which
 	// the parents of the log directory's own path do not show.
 	if local, err := os.Stat(dir); err == nil {
-		if fi, err := os.Lstat(filepath.Join(a.root, filepath.Base(dir))); err == nil && os.SameFile(fi, local) {
+		if fi, err := os.Lstat(filepath.Join(a.root, filepath.Base(dir))); err == nil && a.sameFile(fi, local) {
 			return true
 		}
 	}
@@ -391,7 +419,7 @@ func (a *RawLogArchiver) leadsToLogDir(root os.FileInfo) bool {
 		dir = real
 	}
 	for {
-		if fi, err := os.Stat(dir); err == nil && os.SameFile(root, fi) {
+		if fi, err := os.Stat(dir); err == nil && a.sameFile(root, fi) {
 			return true
 		}
 		parent := filepath.Dir(dir)
@@ -456,7 +484,7 @@ func (a *RawLogArchiver) Check(ctx context.Context) RawLogArchiveStatus {
 	if err != nil {
 		return RawLogArchiveStatus{Dir: a.root, Status: ArchiveStatusNotInitialized, Detail: "cannot read the settings: " + err.Error()}
 	}
-	st := a.probe(ctx, true, instance, true).status
+	st := a.probe(ctx, true, instance, probeWriteTest).status
 	st.RetentionDays = retention
 	return st
 }
@@ -471,7 +499,7 @@ func (a *RawLogArchiver) Initialise(ctx context.Context) (RawLogArchiveStatus, e
 	if err != nil {
 		return RawLogArchiveStatus{Dir: a.root}, err
 	}
-	p := a.probe(ctx, true, instance, true)
+	p := a.probe(ctx, true, instance, probeWriteTest)
 	if p.cancelled {
 		return p.status, ctx.Err()
 	}
@@ -504,7 +532,7 @@ func (a *RawLogArchiver) Initialise(ctx context.Context) (RawLogArchiveStatus, e
 	log.Printf("[RawLogArchive] %s initialised for this install", a.root)
 	// Answer as Check does (as if archiving were on), so the operator sees
 	// "ready" before switching it on; remember the real state.
-	st := a.probe(ctx, true, instance, false).status
+	st := a.probe(ctx, true, instance, probeLook).status
 	st.RetentionDays = retention
 	st.Writable = pre.Writable
 	a.refreshStatus(ctx)
@@ -538,7 +566,7 @@ func (a *RawLogArchiver) refreshStatus(ctx context.Context) RawLogArchiveStatus 
 	if err != nil {
 		return a.decorate(RawLogArchiveStatus{Dir: a.root, Status: ArchiveStatusNotInitialized, Detail: "cannot read the settings: " + err.Error()})
 	}
-	s := a.probe(ctx, enabled, instance, false)
+	s := a.probe(ctx, enabled, instance, probeLook)
 	if s.cancelled {
 		return a.decorate(s.status) // the caller gave up: nothing new to remember
 	}

@@ -49,7 +49,10 @@ export type RawLogArchiveState =
   | 'insufficient_space'
   | 'stalled'
   | 'ready'
-  /** The directory is the nginx log directory (or contains it): never used. */
+  /**
+   * The directory is the nginx log directory (or contains it), by any path or
+   * through another mount such as a share of the same folder: never used.
+   */
   | 'log_dir';
 
 /**

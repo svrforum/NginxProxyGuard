@@ -16107,7 +16107,9 @@ components:
             is bound). foreign: initialised by another install (or before a backup was
             restored here). stalled: the share stopped answering. log_dir: the directory is
             the nginx log directory (by any path, a bind mount included) or one of its
-            parents; it is never initialised or written to.
+            parents, or shows it through another mount (an overlay or a share of the same
+            folder: a file created in the log directory appears there); it is never
+            initialised or written to.
         mounted:
           type: boolean
           description: A directory other than the log directory exists in the API container (false for not_mounted and log_dir)

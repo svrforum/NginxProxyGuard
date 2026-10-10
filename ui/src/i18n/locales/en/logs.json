@@ -688,7 +688,7 @@
         "unwritable": "The API cannot write to this directory. Check the share's permissions (root_squash and the like).",
         "insufficient_space": "The archive is out of space, so moving stopped. The files stay on the log disk.",
         "stalled": "The archive directory is not answering (a hung or disconnected NAS). The files stay on the log disk.",
-        "log_dir": "This is the nginx log directory itself (or a folder that contains it), so nothing moved here would leave the log disk. Bind a directory on another disk or a NAS share here instead.",
+        "log_dir": "This is the nginx log directory itself (or a folder that contains it), by this path or through another mount such as a share of the same folder, so nothing moved here would leave the log disk. Bind a directory on another disk or a NAS share here instead.",
         "readyToEnable": "This directory is set up for this install. Switch moving on and save to use it."
       }
     },

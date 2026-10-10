@@ -48,6 +48,9 @@ func (h *archiverHarness) refusesRoot() {
 	if _, err := h.a.ListArchive(context.Background()); !errors.Is(err, ErrArchiveNotReady) {
 		h.t.Fatalf("listing the log directory as the archive: %v", err)
 	}
+	if err := h.a.DeleteArchiveFile(context.Background(), settledName); !errors.Is(err, ErrArchiveNotReady) {
+		h.t.Fatalf("deleting from the log directory as the archive: %v", err)
+	}
 	h.keepsSettledFile()
 	if got := h.ls(h.local); !eq(got, before) {
 		h.t.Fatalf("the log directory changed:\n got %v\nwant %v", got, before)
@@ -77,6 +80,117 @@ func TestArchiverRefusesAParentOfTheLogDirectory(t *testing.T) {
 	h := newArchiverHarness(t, false)
 	h.a = rebuildArchiver(h, filepath.Dir(h.local))
 	h.refusesRoot()
+}
+
+// anotherMount makes the harness's archiver see device and inode numbers that
+// never match between the root and the log directory, as through an overlay,
+// an SMB or NFS share or a FUSE view of the same folder: a symlink then stands
+// for such a mount.
+func (h *archiverHarness) anotherMount() {
+	h.a.sameFile = func(os.FileInfo, os.FileInfo) bool { return false }
+}
+
+// /archive showing the log directory through another mount (an overlay with
+// the log directory as its lower layer, a share of the same folder): no
+// device or inode in common, so only the probe file tells.
+func TestArchiverRefusesTheLogDirectorySeenThroughAnotherMount(t *testing.T) {
+	h := newArchiverHarness(t, false)
+	if err := os.Symlink(h.local, h.root); err != nil {
+		t.Fatal(err)
+	}
+	h.anotherMount()
+	h.refusesRoot()
+	if st := h.a.Check(context.Background()); !strings.Contains(st.Detail, "through another mount") {
+		t.Fatalf("detail %q; want it to say the log directory shows through another mount", st.Detail)
+	}
+}
+
+// The same for a folder that holds the log directory, seen through another
+// mount: root/<log directory name> is the log directory.
+func TestArchiverRefusesAParentOfTheLogDirectorySeenThroughAnotherMount(t *testing.T) {
+	h := newArchiverHarness(t, false)
+	if err := os.Symlink(filepath.Dir(h.local), h.root); err != nil {
+		t.Fatal(err)
+	}
+	h.anotherMount()
+	h.refusesRoot()
+}
+
+// The last guard on its own: a move whose archive "copy" is the local file
+// seen through another mount — after the probe file check said otherwise
+// (or could not run) — keeps the local file under its name, stops the pass
+// and reports the archive as the log directory.
+func TestArchiverMoveKeepsAFileTheArchiveOnlyShowsThroughAnotherMount(t *testing.T) {
+	h := newArchiverHarness(t, false)
+	if err := os.Symlink(h.local, h.root); err != nil {
+		t.Fatal(err)
+	}
+	h.anotherMount()
+	h.write(h.local, settledName, "precious", h.now.Add(-30*time.Hour))
+	before := h.ls(h.local)
+	files := h.a.settledLocal(true)
+	if len(files) != 1 {
+		t.Fatalf("settled files %+v", files)
+	}
+
+	err := h.a.moveOne(files[0])
+	if !errors.Is(err, errArchiveShowsLogDir) {
+		t.Fatalf("moving onto the log directory itself: %v; want errArchiveShowsLogDir", err)
+	}
+	h.keepsSettledFile()
+	if got := h.ls(h.local); !eq(got, before) {
+		t.Fatalf("the log directory changed:\n got %v\nwant %v", got, before)
+	}
+	if moved, _, stop, err := h.a.moveSettled(context.Background(), true); moved != 0 || stop != ArchiveStatusLogDir || !errors.Is(err, errArchiveShowsLogDir) {
+		t.Fatalf("pass: moved %d, stop %q, %v; want nothing moved and stopped as log_dir", moved, stop, err)
+	}
+	h.keepsSettledFile()
+	if st := h.a.Status(context.Background()); st.Status != ArchiveStatusLogDir {
+		t.Fatalf("status %s (%s); want log_dir", st.Status, st.Detail)
+	}
+}
+
+// An archive set up before these checks existed, through another mount of the
+// log directory — its marker sits in the log directory itself — lets neither
+// a delete request nor the pruning remove the local files it shows.
+func TestArchiverDeletesNothingThroughAnOlderSetupOfTheLogDirectory(t *testing.T) {
+	h := newArchiverHarness(t, false)
+	if err := os.Symlink(h.local, h.root); err != nil {
+		t.Fatal(err)
+	}
+	h.anotherMount()
+	old := "access_raw.log-" + h.now.AddDate(-2, 0, 0).Format("20060102") + "-000000.gz"
+	h.write(h.local, old, "precious", h.now.AddDate(-2, 0, 0))
+	h.write(h.local, rawLogArchiveMarker, `{"instance":"`+testInstance+`"}`, time.Time{})
+	before := h.ls(h.local)
+
+	if err := h.a.DeleteArchiveFile(context.Background(), old); !errors.Is(err, ErrArchiveNotReady) {
+		t.Fatalf("delete request: %v; want it refused", err)
+	}
+	if n, err := h.a.prune(365); n != 0 || err != nil {
+		t.Fatalf("prune removed %d, %v; want nothing", n, err)
+	}
+	if got := h.ls(h.local); !eq(got, before) {
+		t.Fatalf("the log directory changed:\n got %v\nwant %v", got, before)
+	}
+}
+
+// A file a pass set aside and never got to delete or put back (the process
+// stopped in between) goes back under its own name and moves like any other.
+func TestArchiverPutsBackAFileLeftSetAside(t *testing.T) {
+	h := newArchiverHarness(t, true)
+	h.initialise()
+	aside := setAsidePrefix + "0123456789abcdef-" + settledName
+	h.write(h.local, aside, "precious", h.now.Add(-30*time.Hour))
+
+	h.a.runPass(context.Background())
+
+	if got := h.ls(h.local); len(got) != 0 {
+		t.Fatalf("local after the pass: %v; want the file moved", got)
+	}
+	if b, err := os.ReadFile(filepath.Join(h.root, settledName)); err != nil || string(b) != "precious" {
+		t.Fatalf("archived copy %q, %v", b, err)
+	}
 }
 
 // rebuildArchiver is the harness's archiver with another root.

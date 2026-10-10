@@ -35,6 +35,8 @@ const (
 	conflictDifferentContent = "already exists in the archive with different content; both copies are kept"
 	conflictNotAFile         = "exists in the archive but is not a regular file (a link or a directory); the local file is kept"
 	conflictSameFile         = "in the archive is another name for the local file itself; the local file is kept"
+	conflictCopyGone         = "in the archive changed or went away when the local file was set aside, so it may have been the local file itself; the local file is kept"
+	conflictLocalChanged     = "changed in the log directory while it was being moved; the local file is kept"
 )
 
 // archiveListTTL caches the archive listing: listing a large NAS directory
@@ -62,7 +64,7 @@ func (a *RawLogArchiver) runPass(ctx context.Context) {
 		log.Printf("[RawLogArchive] cannot read the settings: %v", err)
 		return
 	}
-	state := a.probe(ctx, enabled, instance, false)
+	state := a.probe(ctx, enabled, instance, probeLogDir)
 	if state.cancelled {
 		return // stopping
 	}
@@ -75,6 +77,7 @@ func (a *RawLogArchiver) runPass(ctx context.Context) {
 		return
 	}
 
+	a.restoreSetAside()
 	a.removeStaleParts()
 	pruned, pruneErr := a.prune(retention)
 	moved, movedBytes, stop, moveErr := a.moveSettled(ctx, compress)
@@ -93,7 +96,7 @@ func (a *RawLogArchiver) runPass(ctx context.Context) {
 		stop = ArchiveStatusUnwritable
 	}
 	// Re-measure after the moves; a stop is the pass's own verdict.
-	after := a.probe(ctx, enabled, instance, false)
+	after := a.probe(ctx, enabled, instance, probeLook)
 	if after.cancelled {
 		return // stopping
 	}
@@ -153,6 +156,9 @@ func (a *RawLogArchiver) moveSettled(ctx context.Context, compress bool) (moved 
 			return moved, movedBytes, ArchiveStatusInsufficientSpace, errors.Join(errs...)
 		}
 		if merr := a.moveOne(f); merr != nil {
+			if errors.Is(merr, errArchiveShowsLogDir) { // every other file would be the same
+				return moved, movedBytes, ArchiveStatusLogDir, errors.Join(append(errs, merr)...)
+			}
 			var conflict *errArchiveConflict
 			if errors.As(merr, &conflict) {
 				errs = append(errs, merr)
@@ -180,7 +186,8 @@ func (p progressWriter) Write(b []byte) (int, error) {
 }
 
 // moveOne copies one file to <name>.part, syncs and checks it, renames it into
-// place, restores its mtime, and only then deletes the local file.
+// place, restores its mtime, and only then deletes the local file — through
+// releaseLocal, which checks the copy once more with the local file set aside.
 func (a *RawLogArchiver) moveOne(f RawLogFile) error {
 	src := filepath.Join(a.localDir, f.Name)
 	final := filepath.Join(a.root, f.Name)
@@ -198,19 +205,21 @@ func (a *RawLogArchiver) moveOne(f RawLogFile) error {
 		switch {
 		case !fi.Mode().IsRegular():
 			return &errArchiveConflict{name: f.Name, reason: conflictNotAFile}
-		case os.SameFile(srcInfo, fi):
+		case a.sameFile(srcInfo, fi):
 			return &errArchiveConflict{name: f.Name, reason: conflictSameFile}
 		}
 		// Left by a pass that died after the rename and before deleting the
-		// source — or a genuinely different file of the same name.
-		same, err := sameFileContent(src, final, fi.Size())
+		// source — or a genuinely different file of the same name. Or the
+		// local file itself, seen through another mount of the log directory
+		// (no device or inode in common): releaseLocal tells that apart.
+		sum, same, err := sameFileContent(src, final, fi.Size())
 		if err != nil {
 			return err
 		}
 		if !same {
 			return &errArchiveConflict{name: f.Name, reason: conflictDifferentContent}
 		}
-		return removeIfExists(src)
+		return a.releaseLocal(src, final, srcInfo, fi.Size(), sum)
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
@@ -243,30 +252,32 @@ func (a *RawLogArchiver) moveOne(f RawLogFile) error {
 	}
 	_ = os.Chtimes(final, f.ModifiedAt, f.ModifiedAt) // pruning uses the name, so a share without mtimes is fine
 	_ = syncDir(a.root)
-	if fi, err := os.Lstat(final); err != nil || !fi.Mode().IsRegular() || fi.Size() != f.Size || os.SameFile(srcInfo, fi) {
+	if fi, err := os.Lstat(final); err != nil || !fi.Mode().IsRegular() || fi.Size() != f.Size || a.sameFile(srcInfo, fi) {
 		return fmt.Errorf("verifying %s in the archive failed; the local file is kept", f.Name)
 	}
 	a.touch()
-	return removeIfExists(src)
+	return a.releaseLocal(src, final, srcInfo, f.Size, nil)
 }
 
-func sameFileContent(a, b string, bSize int64) (bool, error) {
+// sameFileContent compares file a with file b (bSize bytes) and returns a's
+// SHA-256 with the answer.
+func sameFileContent(a, b string, bSize int64) (sum []byte, same bool, err error) {
 	ai, err := os.Stat(a)
 	if err != nil {
-		return false, err
+		return nil, false, err
 	}
 	if ai.Size() != bSize {
-		return false, nil
+		return nil, false, nil
 	}
 	ha, err := fileSHA256(a)
 	if err != nil {
-		return false, err
+		return nil, false, err
 	}
 	hb, err := fileSHA256(b)
 	if err != nil {
-		return false, err
+		return nil, false, err
 	}
-	return bytes.Equal(ha, hb), nil
+	return ha, bytes.Equal(ha, hb), nil
 }
 
 func fileSHA256(path string) ([]byte, error) {
@@ -280,13 +291,6 @@ func fileSHA256(path string) ([]byte, error) {
 		return nil, err
 	}
 	return h.Sum(nil), nil
-}
-
-func removeIfExists(path string) error {
-	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	return nil
 }
 
 func syncDir(dir string) error {
@@ -314,7 +318,8 @@ func (a *RawLogArchiver) removeStaleParts() {
 }
 
 // prune deletes archived files whose name says they were rotated more than
-// retention days ago. Nothing else in the directory is touched.
+// retention days ago, unless the log directory still has a file of that name.
+// Nothing else in the directory is touched.
 func (a *RawLogArchiver) prune(retentionDays int) (int, error) {
 	entries, err := os.ReadDir(a.root)
 	if err != nil {
@@ -330,6 +335,11 @@ func (a *RawLogArchiver) prune(retentionDays int) (int, error) {
 		}
 		at, ok := ParseRotatedAt(name)
 		if !ok || !at.Before(cutoff) {
+			continue
+		}
+		// A file of the same name still in the log directory may be the same
+		// file, seen through another mount; it goes once the local one has.
+		if lstatFound(filepath.Join(a.localDir, name)) {
 			continue
 		}
 		a.touch()
@@ -367,7 +377,7 @@ func (a *RawLogArchiver) ListArchive(ctx context.Context) ([]RawLogFile, error) 
 		if err != nil || !fi.IsDir() {
 			return fmt.Errorf("%w (%s): %s is not mounted", ErrArchiveNotReady, ArchiveStatusNotMounted, a.root)
 		}
-		if a.leadsToLogDir(fi) {
+		if a.logDirDetail(fi, false) != "" {
 			return fmt.Errorf("%w (%s): %s is the nginx log directory", ErrArchiveNotReady, ArchiveStatusLogDir, a.root)
 		}
 		list, err := a.listDir(a.root, tick)
@@ -472,7 +482,8 @@ func (a *RawLogArchiver) OpenArchiveFile(ctx context.Context, name string) (*os.
 }
 
 // DeleteArchiveFile deletes one archived file. Like every archive write it
-// needs the marker of this install.
+// needs the marker of this install, and a root that is not the log directory
+// by any mount (the probe file check runs first).
 func (a *RawLogArchiver) DeleteArchiveFile(ctx context.Context, name string) error {
 	if a == nil {
 		return ErrArchiveNotReady
@@ -484,7 +495,7 @@ func (a *RawLogArchiver) DeleteArchiveFile(ctx context.Context, name string) err
 	if err != nil {
 		return err
 	}
-	if st := a.probe(ctx, true, instance, false); !st.ours {
+	if st := a.probe(ctx, true, instance, probeLogDir); !st.ours {
 		if st.cancelled {
 			return ctx.Err()
 		}
