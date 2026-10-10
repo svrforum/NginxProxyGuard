@@ -68,6 +68,9 @@ func (a *RawLogArchiver) runPass(ctx context.Context) {
 	if state.cancelled {
 		return // stopping
 	}
+	// The probe may have waited for the slot behind a long listing: time the
+	// pass spent waiting, not time it made no progress.
+	a.touch()
 	st := state.status
 	st.RetentionDays = retention
 	usable := enabled && state.ours && (st.Status == ArchiveStatusReady || st.Status == ArchiveStatusInsufficientSpace)

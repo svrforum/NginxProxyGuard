@@ -610,7 +610,7 @@ func (a *RawLogArchiver) decorate(st RawLogArchiveStatus) RawLogArchiveStatus {
 	if !st.Enabled {
 		return st
 	}
-	if st.Running && !a.progressAt.IsZero() && a.now().Sub(a.progressAt) > a.stallAfter {
+	if a.passStalledLocked() {
 		since := a.progressAt
 		st.Status, st.StalledSince = ArchiveStatusStalled, &since
 		st.Detail = "moving a file to the archive has made no progress since " + since.Format(time.RFC3339)
@@ -670,7 +670,7 @@ func (a *RawLogArchiver) stalledSinceLocked() *time.Time {
 	switch {
 	case a.ioStallSince != nil:
 		since = *a.ioStallSince
-	case a.running.Load() && !a.progressAt.IsZero() && a.now().Sub(a.progressAt) > a.stallAfter:
+	case a.passStalledLocked():
 		since = a.progressAt
 	case a.status.StalledSince != nil:
 		since = *a.status.StalledSince
@@ -678,6 +678,14 @@ func (a *RawLogArchiver) stalledSinceLocked() *time.Time {
 		return nil
 	}
 	return &since
+}
+
+// passStalledLocked: a pass has made no progress for stallAfter. Not while a
+// filesystem call holds the slot: the pass may be waiting for it (behind a
+// long listing that keeps answering), and the call's own watchdog marks the
+// archive stalled if it stops answering. a.mu held.
+func (a *RawLogArchiver) passStalledLocked() bool {
+	return a.running.Load() && a.call == nil && !a.progressAt.IsZero() && a.now().Sub(a.progressAt) > a.stallAfter
 }
 
 // ArchiveUsageSource adapts the archiver to HostUsageProvider.SetArchiveUsage:

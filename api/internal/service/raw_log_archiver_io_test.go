@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"errors"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -207,6 +209,91 @@ func TestArchiverStatusDoesNotQueueBehindAListing(t *testing.T) {
 		t.Fatalf("status during a listing: %s", st.Status)
 	}
 	<-done
+}
+
+// A pass that waits for the slot behind a listing that keeps answering — a
+// large archive on a slow share, for longer than a stalled copy is given — is
+// waiting, not hung: neither the status nor DiskGuard calls the archive
+// stalled, then or once the pass goes on.
+func TestArchiverPassQueuedBehindAListingIsNotAStall(t *testing.T) {
+	h := newArchiverHarness(t, true)
+	h.initialise()
+	h.write(h.local, "access_raw.log-20261005-000002.gz", "gz-1005", h.now.Add(-5*24*time.Hour))
+	h.a.ioTimeout = 5 * time.Second // the watchdog stays out of it: the listing ticks
+	var clockMu sync.Mutex
+	clock := h.now
+	h.a.now = func() time.Time {
+		clockMu.Lock()
+		defer clockMu.Unlock()
+		return clock
+	}
+	// Each step of the listing takes 30 seconds of the archiver's clock;
+	// halfway through, well past stallAfter, it waits for the test to look.
+	halfway, resume := make(chan struct{}), make(chan struct{})
+	var calls int32
+	var listingDone, sawStall atomic.Bool
+	h.a.listDir = func(_ string, tick func()) ([]RawLogFile, error) {
+		h.a.mu.Lock()
+		calls++
+		h.a.mu.Unlock()
+		for i := 1; i <= 12; i++ {
+			time.Sleep(time.Millisecond)
+			clockMu.Lock()
+			clock = clock.Add(30 * time.Second)
+			clockMu.Unlock()
+			tick()
+			if i == 6 {
+				close(halfway)
+				<-resume
+			}
+		}
+		listingDone.Store(true)
+		return nil, nil
+	}
+	// Once the pass has the slot and goes on to move, it is not hung either:
+	// look while it picks the files to move.
+	changedAt := h.a.changedAt
+	h.a.changedAt = func(f RawLogFile) time.Time {
+		if listingDone.Load() && h.a.running.Load() {
+			if _, _, _, _, stalled, _ := h.a.CachedDiskUsage(); stalled != nil {
+				sawStall.Store(true)
+			}
+		}
+		return changedAt(f)
+	}
+	listed := make(chan struct{})
+	go func() { _, _ = h.a.ListArchive(context.Background()); close(listed) }()
+	for listCalls(h, &calls) == 0 {
+		time.Sleep(time.Millisecond)
+	}
+	passed := make(chan struct{})
+	go func() { h.a.runPass(context.Background()); close(passed) }()
+	for !h.a.running.Load() {
+		time.Sleep(time.Millisecond)
+	}
+	<-halfway
+	time.Sleep(20 * time.Millisecond) // the pass is parked on the slot
+	if since := 3 * time.Minute; h.a.now().Sub(h.now) < since || since <= h.a.stallAfter {
+		t.Fatalf("the clock moved %v; the test needs more than stallAfter (%v)", h.a.now().Sub(h.now), h.a.stallAfter)
+	}
+	st := h.a.Status(context.Background())
+	_, _, _, _, stalled, _ := h.a.CachedDiskUsage()
+	close(resume)
+	if st.Status == ArchiveStatusStalled || stalled != nil {
+		t.Fatalf("status %s (%s), DiskGuard stalled since %v; want a pass that waits behind a listing not to count as hung", st.Status, st.Detail, stalled)
+	}
+	if !st.Running {
+		t.Fatal("the waiting pass is not reported as running")
+	}
+	<-listed
+	<-passed
+	if sawStall.Load() {
+		t.Fatal("the pass counted as hung once it had the slot: the time it waited for it was taken for no progress")
+	}
+	st = h.a.Status(context.Background())
+	if st.Status != ArchiveStatusReady || st.LastMoved != 1 || st.StalledSince != nil {
+		t.Fatalf("after the pass: %+v; want ready with the file moved", st)
+	}
 }
 
 // A pass that moved or deleted files makes a listing that was running
