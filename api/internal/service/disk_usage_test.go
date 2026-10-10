@@ -157,15 +157,15 @@ func TestDBLocator(t *testing.T) {
 	// The release compose connects to the service alias "db".
 	d := &diskFakeDocker{running: map[string]bool{}, ps: "aaa\nbbb\n", inspect: "/npg-valkey|192.0.2.2 \n/npg-db|192.0.2.3 \n"}
 	l := &dbLocator{run: d.run, dbHost: "db", lookup: lookup}
-	if name, reason := l.locate(ctx); name != "npg-db" {
-		t.Fatalf("alias: got %q (%s)", name, reason)
+	if name, reason, provisional := l.locate(ctx); name != "npg-db" || provisional {
+		t.Fatalf("alias: got %q (%s, provisional %v)", name, reason, provisional)
 	}
 
 	// The dev compose connects to the container name, which resolves to the
 	// container's own address.
 	d = &diskFakeDocker{running: map[string]bool{"npg-db": true}, ps: "aaa\n", inspect: "/npg-db|192.0.2.3 \n"}
 	l = &dbLocator{run: d.run, dbHost: "npg-db", lookup: lookup}
-	if name, _ := l.locate(ctx); name != "npg-db" {
+	if name, _, _ := l.locate(ctx); name != "npg-db" {
 		t.Fatalf("container name: got %q", name)
 	}
 
@@ -173,8 +173,8 @@ func TestDBLocator(t *testing.T) {
 	// container name.
 	noDNS := func(context.Context, string) ([]string, error) { return nil, errors.New("no such host") }
 	l = &dbLocator{run: d.run, dbHost: "npg-db", lookup: noDNS}
-	if name, _ := l.locate(ctx); name != "npg-db" {
-		t.Fatalf("container name that does not resolve: got %q", name)
+	if name, _, provisional := l.locate(ctx); name != "npg-db" || !provisional {
+		t.Fatalf("container name that does not resolve: got %q (provisional %v), want a provisional npg-db", name, provisional)
 	}
 
 	// Another stack's container called exactly like the release compose's
@@ -182,7 +182,7 @@ func TestDBLocator(t *testing.T) {
 	// the database: "db" resolves to npg-db's address, and that decides.
 	d = &diskFakeDocker{running: map[string]bool{"db": true}, ps: "aaa\nbbb\n", inspect: "/db|198.51.100.7 \n/npg-db|192.0.2.3 \n"}
 	l = &dbLocator{run: d.run, dbHost: "db", lookup: lookup}
-	if name, reason := l.locate(ctx); name != "npg-db" {
+	if name, reason, _ := l.locate(ctx); name != "npg-db" {
 		t.Fatalf("a foreign container named like the alias: got %q (%s), want npg-db", name, reason)
 	}
 	for _, c := range d.calls {
@@ -193,21 +193,21 @@ func TestDBLocator(t *testing.T) {
 
 	// An explicit override wins, and a wrong one is reported, not guessed past.
 	l = &dbLocator{run: d.run, env: "custom-db", dbHost: "npg-db", lookup: lookup}
-	if name, reason := l.locate(ctx); name != "" || reason != "db_container_not_found" {
+	if name, reason, _ := l.locate(ctx); name != "" || reason != "db_container_not_found" {
 		t.Fatalf("bad override: got %q (%s)", name, reason)
 	}
 
 	// A database no container here owns is external: nothing to watch.
 	d = &diskFakeDocker{running: map[string]bool{}, ps: "aaa\n", inspect: "/other|192.0.2.9 \n"}
 	l = &dbLocator{run: d.run, dbHost: "pg.example.com", lookup: lookup}
-	if name, reason := l.locate(ctx); name != "" || reason != "db_external" {
+	if name, reason, _ := l.locate(ctx); name != "" || reason != "db_external" {
 		t.Fatalf("external: got %q (%s)", name, reason)
 	}
 
 	// Loopback and sockets cannot be mapped to a container.
 	for _, h := range []string{"localhost", "127.0.0.1", "/var/run/postgresql", ""} {
 		l = &dbLocator{run: d.run, dbHost: h, lookup: lookup}
-		if name, reason := l.locate(ctx); name != "" || reason != "db_container_not_found" {
+		if name, reason, _ := l.locate(ctx); name != "" || reason != "db_container_not_found" {
 			t.Fatalf("host %q: got %q (%s)", h, name, reason)
 		}
 	}
@@ -218,18 +218,18 @@ func TestDBLocator(t *testing.T) {
 	d = &diskFakeDocker{running: map[string]bool{}, idPrefix: map[string]string{"db": "some-other-stack-app"},
 		ps: "aaa\nbbb\n", inspect: "/some-other-stack-app|192.0.2.7 \n/npg-db|192.0.2.3 \n"}
 	l = &dbLocator{run: d.run, dbHost: "db", lookup: lookup}
-	if name, reason := l.locate(ctx); name != "npg-db" {
+	if name, reason, _ := l.locate(ctx); name != "npg-db" {
 		t.Fatalf("ID-prefix match: got %q (%s), want npg-db", name, reason)
 	}
 	l = &dbLocator{run: d.run, env: "db", lookup: lookup}
-	if name, reason := l.locate(ctx); name != "" || reason != "db_container_not_found" {
+	if name, reason, _ := l.locate(ctx); name != "" || reason != "db_container_not_found" {
 		t.Fatalf("NPG_DB_CONTAINER matching only an ID prefix: got %q (%s)", name, reason)
 	}
 
 	// A name that could be read as a flag is never passed to docker.
 	l = &dbLocator{run: d.run, env: "--privileged", lookup: lookup}
 	before := d.callCount()
-	if name, _ := l.locate(ctx); name != "" || d.callCount() != before {
+	if name, _, _ := l.locate(ctx); name != "" || d.callCount() != before {
 		t.Fatalf("flag-like name reached docker: %v", d.calls[before:])
 	}
 }
@@ -248,12 +248,15 @@ func TestValidDataDir(t *testing.T) {
 }
 
 // newDiskTestProvider measures one local volume (nginx logs) with statfsFn and
-// asks the "npg-db" container through execFn.
+// asks the "npg-db" container through execFn. The database host resolves to
+// npg-db's address, as in production.
 func newDiskTestProvider(statfsFn func(ctx context.Context, path string) (rawStatfs, error), execFn dockerRunner, now func() time.Time) *HostUsageProvider {
+	docker := &diskFakeDocker{running: map[string]bool{"npg-db": true}, ps: "aaa\n", inspect: "/npg-db|192.0.2.3 \n"}
+	resolve := func(context.Context, string) ([]string, error) { return []string{"192.0.2.3"}, nil }
 	return &HostUsageProvider{
 		local:   []diskTarget{{Role: DiskRoleNginxLogs, Path: "/etc/nginx/logs"}},
 		statfs:  statfsFn,
-		locator: &dbLocator{run: (&diskFakeDocker{running: map[string]bool{"npg-db": true}}).run, dbHost: "npg-db"},
+		locator: &dbLocator{run: docker.run, dbHost: "npg-db", lookup: resolve},
 		run:     execFn,
 		now:     now,
 		dbEvery: dbMeasureEvery,
@@ -423,6 +426,69 @@ func TestProviderForcedDatabaseMeasurementIsFreshOrNothing(t *testing.T) {
 	now = now.Add(2 * time.Minute)
 	if got, _, _ := p.Measure(context.Background()); len(got) != 1 || got[0].HasRole(DiskRoleDB) {
 		t.Fatalf("tick 16 minutes later: %#v; want the database disk no longer reported", got)
+	}
+}
+
+// While the database container is restarting, its host (the release
+// compose's alias "db") does not resolve, and the container taken by that
+// name can be another stack's "db". Such a pick is kept only until the host
+// resolves again, checked at most once a minute, and vouches for no volume
+// alias: the database is then found by its address, not an hour later.
+func TestProviderRelocatesWhenTheHostResolvesAgain(t *testing.T) {
+	now := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+	var resolving atomic.Bool
+	var lookups atomic.Int32
+	var mu sync.Mutex
+	var execs []string
+	docker := &diskFakeDocker{running: map[string]bool{"db": true}, ps: "aaa\nbbb\n", inspect: "/db|198.51.100.7 \n/npg-db|192.0.2.3 \n"}
+	p := newDiskTestProvider(statfsReturns(diskTestExt4), func(_ context.Context, args ...string) ([]byte, error) {
+		if args[0] == "exec" {
+			mu.Lock()
+			execs = append(execs, args[1])
+			mu.Unlock()
+			return []byte(busyboxStatLine), nil
+		}
+		return nil, errors.New("unexpected")
+	}, func() time.Time { return now })
+	p.locator = &dbLocator{run: docker.run, dbHost: "db", lookup: func(context.Context, string) ([]string, error) {
+		lookups.Add(1)
+		if resolving.Load() {
+			return []string{"192.0.2.3"}, nil
+		}
+		return nil, errors.New("no such host")
+	}}
+	p.SetUrgent(true) // a fresh database measurement every tick
+	tick := func(after time.Duration) string {
+		t.Helper()
+		now = now.Add(after)
+		if _, _, err := p.Measure(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		return strings.Join(execs, " ")
+	}
+
+	if got := tick(0); got != "db" {
+		t.Fatalf("while the host does not resolve: exec into %q, want the container called db", got)
+	}
+	if got := tick(time.Minute); got != "db db" {
+		t.Fatalf("while the host does not resolve: exec into %q, want the container called db asked again (no volume alias for a pick by name)", got)
+	}
+	before := lookups.Load()
+	if got := tick(10 * time.Second); got != "db db db" || lookups.Load() != before {
+		t.Fatalf("the host was looked up again within a minute (%d lookups) or the pick changed: %q", lookups.Load()-before, got)
+	}
+	resolving.Store(true)
+	if got := tick(time.Minute); got != "db db db npg-db" {
+		t.Fatalf("a minute after the host resolves again: exec into %q, want npg-db", got)
+	}
+	if info := p.DatabaseInfo(); info.Container != "npg-db" {
+		t.Fatalf("database info = %#v", info)
+	}
+	// Found by its address, the database vouches for the volume on its disk.
+	if got := tick(time.Minute); got != "db db db npg-db" {
+		t.Fatalf("the volume alias was not used after the database was found: %q", got)
 	}
 }
 

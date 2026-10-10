@@ -27,6 +27,10 @@ const (
 	dbAliasTTL = time.Hour
 	// dbLocateTTL bounds how long a located container name is trusted.
 	dbLocateTTL = time.Hour
+	// dbRecheckEvery is how often a container taken by its name because the
+	// database host did not resolve (a provisional pick) checks whether the
+	// host resolves again, at which point the database is located anew.
+	dbRecheckEvery = time.Minute
 	// dbStaleAfter keeps the last good database measurement through a
 	// transient exec failure, so the filesystem does not "vanish" for a tick.
 	dbStaleAfter = 15 * time.Minute
@@ -73,6 +77,8 @@ type HostUsageProvider struct {
 	dbName        string
 	dbDataDir     string
 	locatedAt     time.Time
+	dbProvisional bool      // dbName was taken by name: the host did not resolve
+	dbRecheckAt   time.Time // when a provisional dbName next checks the host
 	dbLast        *diskMeasurement
 	dbInfo        model.DatabaseDiskInfo
 	alias         string    // local path verified to be on the database's filesystem
@@ -258,7 +264,7 @@ func (p *HostUsageProvider) measureDB(ctx context.Context, force bool, local []d
 	}
 	p.mu.Unlock()
 
-	name, dir, reason := p.locateDB(ctx)
+	name, dir, reason, provisional := p.locateDB(ctx)
 	if name == "" {
 		return p.dbUnreachable(ctx, now, "", "", reason, nil, force)
 	}
@@ -281,9 +287,11 @@ func (p *HostUsageProvider) measureDB(ctx context.Context, force bool, local []d
 	}
 	p.dbLast = &m
 	p.dbInfo = model.DatabaseDiskInfo{Measured: true, Container: name, DataDir: dir}
+	// A provisional pick vouches for no volume: the alias would keep
+	// answering for it after the host resolves again.
 	if local != nil {
 		p.alias = ""
-		if id := raw.identity(); id != "" {
+		if id := raw.identity(); id != "" && !provisional {
 			for _, l := range local {
 				if l.raw.identity() == id && l.role != DiskRoleDocker {
 					p.alias, p.aliasVerified = l.display, now
@@ -362,18 +370,35 @@ func (p *HostUsageProvider) setInfo(i model.DatabaseDiskInfo) {
 	p.mu.Unlock()
 }
 
-func (p *HostUsageProvider) locateDB(ctx context.Context) (name, dir, reason string) {
+// locateDB returns the database container, located again after dbLocateTTL.
+// A provisional pick (taken by name because the host did not resolve: the
+// database may be restarting, and another container may be called like the
+// host) is kept only until the host resolves again, which it checks at most
+// once per dbRecheckEvery.
+func (p *HostUsageProvider) locateDB(ctx context.Context) (name, dir, reason string, provisional bool) {
+	now := p.now()
 	p.mu.Lock()
-	if p.dbName != "" && p.now().Sub(p.locatedAt) < dbLocateTTL {
-		name, dir = p.dbName, p.dbDataDir
-		p.mu.Unlock()
-		return name, dir, ""
+	cached := p.dbName != "" && now.Sub(p.locatedAt) < dbLocateTTL
+	name, dir, provisional = p.dbName, p.dbDataDir, p.dbProvisional
+	recheck := cached && provisional && !now.Before(p.dbRecheckAt)
+	if recheck {
+		p.dbRecheckAt = now.Add(dbRecheckEvery)
 	}
 	p.mu.Unlock()
+	if cached && !(recheck && p.locator.resolves(ctx)) {
+		return name, dir, "", provisional
+	}
+	if recheck {
+		// The host resolves again: its address decides, and the pick by
+		// name is not kept even if locating fails now.
+		p.mu.Lock()
+		p.dbName, p.dbProvisional = "", false
+		p.mu.Unlock()
+	}
 
-	name, reason = p.locator.locate(ctx)
+	name, reason, provisional = p.locator.locate(ctx)
 	if name == "" {
-		return "", "", reason
+		return "", "", reason, false
 	}
 	dir = defaultPGDataDir
 	if p.dataDirFn != nil {
@@ -385,8 +410,9 @@ func (p *HostUsageProvider) locateDB(ctx context.Context) (name, dir, reason str
 	}
 	p.mu.Lock()
 	p.dbName, p.dbDataDir, p.locatedAt = name, dir, p.now()
+	p.dbProvisional, p.dbRecheckAt = provisional, p.now().Add(dbRecheckEvery)
 	p.mu.Unlock()
-	return name, dir, ""
+	return name, dir, "", provisional
 }
 
 // execStatfs runs `stat -f` inside the database container: a fixed argv, the

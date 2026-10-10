@@ -20,6 +20,9 @@ import (
 const (
 	defaultPGDataDir  = "/var/lib/postgresql/data"
 	dockerCallTimeout = 5 * time.Second
+	// dbResolveTimeout bounds the check whether the database host resolves
+	// again, which a provisional pick makes at most once per dbRecheckEvery.
+	dbResolveTimeout = 2 * time.Second
 )
 
 // dockerRunner runs the docker CLI. Injected so tests need no Docker.
@@ -100,19 +103,25 @@ func (l *dbLocator) runningByName(ctx context.Context, name string) string {
 // and its disk would be measured. There is deliberately no hard-coded "npg-db"
 // guess either: on a box that also runs the e2e stack it would measure the
 // wrong database.
-func (l *dbLocator) locate(ctx context.Context) (name, reason string) {
+//
+// provisional is true for a container taken by its name because the host did
+// not resolve. That happens while the database container is restarting or
+// stopped (Docker's DNS does not answer for it then), which is also when
+// another stack's container called like the host is the one found: the
+// caller keeps such a pick only until the host resolves again.
+func (l *dbLocator) locate(ctx context.Context) (name, reason string, provisional bool) {
 	if l.env != "" {
 		if n := l.runningByName(ctx, l.env); n != "" {
-			return n, ""
+			return n, "", false
 		}
-		return "", "db_container_not_found"
+		return "", "db_container_not_found", false
 	}
 	h := l.dbHost
 	if h == "" || strings.HasPrefix(h, "/") || h == "localhost" {
-		return "", "db_container_not_found"
+		return "", "db_container_not_found", false
 	}
 	if ip := net.ParseIP(h); ip != nil && ip.IsLoopback() {
-		return "", "db_container_not_found"
+		return "", "db_container_not_found", false
 	}
 	var addrs []string
 	if l.lookup != nil {
@@ -122,9 +131,9 @@ func (l *dbLocator) locate(ctx context.Context) (name, reason string) {
 	}
 	if len(addrs) == 0 {
 		if n := l.runningByName(ctx, h); n != "" {
-			return n, ""
+			return n, "", true
 		}
-		return "", "db_container_not_found"
+		return "", "db_container_not_found", false
 	}
 	want := map[string]bool{}
 	for _, a := range addrs {
@@ -132,16 +141,16 @@ func (l *dbLocator) locate(ctx context.Context) (name, reason string) {
 	}
 	ids, err := l.run(ctx, "ps", "-q", "--no-trunc")
 	if err != nil {
-		return "", "docker_unavailable"
+		return "", "docker_unavailable", false
 	}
 	idList := strings.Fields(string(ids))
 	if len(idList) == 0 {
-		return "", "db_external"
+		return "", "db_external", false
 	}
 	args := []string{"container", "inspect", "-f", "{{.Name}}|{{range .NetworkSettings.Networks}}{{.IPAddress}} {{.GlobalIPv6Address}} {{end}}", "--"}
 	out, err := l.run(ctx, append(args, idList...)...)
 	if err != nil && len(out) == 0 {
-		return "", "docker_unavailable"
+		return "", "docker_unavailable", false
 	}
 	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
 		nm, ips, ok := strings.Cut(line, "|")
@@ -151,13 +160,25 @@ func (l *dbLocator) locate(ctx context.Context) (name, reason string) {
 		}
 		for _, ip := range strings.Fields(ips) {
 			if want[ip] {
-				return nm, ""
+				return nm, "", false
 			}
 		}
 	}
 	// Resolvable but no container here owns that address: a managed or
 	// remote database. Its disk is not this host's to watch.
-	return "", "db_external"
+	return "", "db_external", false
+}
+
+// resolves reports whether the database host resolves from here now, within
+// dbResolveTimeout.
+func (l *dbLocator) resolves(ctx context.Context) bool {
+	if l.lookup == nil || l.dbHost == "" {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(ctx, dbResolveTimeout)
+	defer cancel()
+	addrs, err := l.lookup(ctx, l.dbHost)
+	return err == nil && len(addrs) > 0
 }
 
 // validDataDir rejects anything that is not a plain absolute path. The value
