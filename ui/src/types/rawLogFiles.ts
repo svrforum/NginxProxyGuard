@@ -23,6 +23,11 @@ export interface RawLogUsage {
   compressed: boolean;
   archive_enabled: boolean;
   archive_retention_days?: number;
+  /**
+   * Archiving is on and the archive is ready, so settled rotated files leave
+   * the log disk. While it is on but cannot take them, they stay here.
+   */
+  archive_in_use: boolean;
   /** Server-side projection with the saved settings. */
   projected_local_bytes: number;
   projected_archive_bytes: number;

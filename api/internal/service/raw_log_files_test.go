@@ -41,7 +41,7 @@ func TestEstimateRawLogUsage(t *testing.T) {
 	daily = append(daily, rotated(day(20), 900*fileMiB, true))
 	files := append(append([]RawLogFile{}, daily...), live(50*fileMiB), rotated(now.Add(-time.Hour), 300*fileMiB, false))
 
-	u := EstimateRawLogUsage(files, nil, now, rot, false, 0)
+	u := EstimateRawLogUsage(files, nil, now, rot, RawLogArchiveUse{})
 	if u.Basis != RawLogUsageBasisWeek || u.BasisDays != 7 || u.AvgDailyBytes != 100*fileMiB {
 		t.Fatalf("daily files: basis=%s days=%d avg=%d MiB, want last_7_days/7/100", u.Basis, u.BasisDays, u.AvgDailyBytes/fileMiB)
 	}
@@ -63,7 +63,7 @@ func TestEstimateRawLogUsage(t *testing.T) {
 			hourly = append(hourly, rotated(at, 100*fileMiB/24, true))
 		}
 	}
-	if u := EstimateRawLogUsage(hourly, nil, now, rot, false, 0); u.AvgDailyBytes < 99*fileMiB || u.AvgDailyBytes > 100*fileMiB {
+	if u := EstimateRawLogUsage(hourly, nil, now, rot, RawLogArchiveUse{}); u.AvgDailyBytes < 99*fileMiB || u.AvgDailyBytes > 100*fileMiB {
 		t.Fatalf("hourly cuts: avg = %d bytes, want about 100 MiB", u.AvgDailyBytes)
 	}
 
@@ -73,26 +73,26 @@ func TestEstimateRawLogUsage(t *testing.T) {
 	for d := 1; d <= 7; d++ {
 		uncompressed = append(uncompressed, rotated(day(d), 700*fileMiB, false))
 	}
-	if u := EstimateRawLogUsage(uncompressed, nil, now, plain, false, 0); u.AvgDailyBytes != 700*fileMiB || u.PendingBytes != 0 {
+	if u := EstimateRawLogUsage(uncompressed, nil, now, plain, RawLogArchiveUse{}); u.AvgDailyBytes != 700*fileMiB || u.PendingBytes != 0 {
 		t.Fatalf("compression off: avg=%d MiB pending=%d, want 700 MiB and 0", u.AvgDailyBytes/fileMiB, u.PendingBytes)
 	}
 	// ...and with compression on, those same files are only pending.
-	if u := EstimateRawLogUsage(uncompressed, nil, now, rot, false, 0); u.Basis != RawLogUsageBasisNone || u.PendingBytes != 7*700*fileMiB {
+	if u := EstimateRawLogUsage(uncompressed, nil, now, rot, RawLogArchiveUse{}); u.Basis != RawLogUsageBasisNone || u.PendingBytes != 7*700*fileMiB {
 		t.Fatalf("compression on, nothing compressed: basis=%s pending=%d MiB", u.Basis, u.PendingBytes/fileMiB)
 	}
 
 	// A fresh install has nothing to average.
-	if u := EstimateRawLogUsage([]RawLogFile{live(fileMiB)}, nil, now, rot, false, 0); u.Basis != RawLogUsageBasisNone || u.AvgDailyBytes != 0 || u.ProjectedLocalBytes != fileMiB {
+	if u := EstimateRawLogUsage([]RawLogFile{live(fileMiB)}, nil, now, rot, RawLogArchiveUse{}); u.Basis != RawLogUsageBasisNone || u.AvgDailyBytes != 0 || u.ProjectedLocalBytes != fileMiB {
 		t.Fatalf("fresh install: %+v", u)
 	}
 	// Rotated only today: still nothing finished before today.
-	if u := EstimateRawLogUsage([]RawLogFile{rotated(now.Add(-2*time.Hour), fileMiB, true)}, nil, now, rot, false, 0); u.Basis != RawLogUsageBasisNone {
+	if u := EstimateRawLogUsage([]RawLogFile{rotated(now.Add(-2*time.Hour), fileMiB, true)}, nil, now, rot, RawLogArchiveUse{}); u.Basis != RawLogUsageBasisNone {
 		t.Fatalf("rotated only today: basis = %s", u.Basis)
 	}
 
 	// Three days of history: averaged over three days, not seven.
 	short := []RawLogFile{rotated(day(3), 30*fileMiB, true), rotated(day(2), 30*fileMiB, true), rotated(day(1), 30*fileMiB, true)}
-	if u := EstimateRawLogUsage(short, nil, now, rot, false, 0); u.Basis != RawLogUsageBasisHistory || u.BasisDays != 3 || u.AvgDailyBytes != 30*fileMiB {
+	if u := EstimateRawLogUsage(short, nil, now, rot, RawLogArchiveUse{}); u.Basis != RawLogUsageBasisHistory || u.BasisDays != 3 || u.AvgDailyBytes != 30*fileMiB {
 		t.Fatalf("short history: basis=%s days=%d avg=%d MiB", u.Basis, u.BasisDays, u.AvgDailyBytes/fileMiB)
 	}
 
@@ -103,12 +103,23 @@ func TestEstimateRawLogUsage(t *testing.T) {
 		f.Location = RawLogLocationArchive
 		moved = append(moved, f)
 	}
-	u = EstimateRawLogUsage([]RawLogFile{live(50 * fileMiB), rotated(now.Add(-time.Hour), 300*fileMiB, false)}, moved, now, rot, true, 365)
-	if u.AvgDailyBytes != 100*fileMiB || u.ProjectedLocalBytes != 350*fileMiB || u.ProjectedArchiveBytes != 365*100*fileMiB {
-		t.Fatalf("archive on: avg=%d local=%d archive=%d MiB", u.AvgDailyBytes/fileMiB, u.ProjectedLocalBytes/fileMiB, u.ProjectedArchiveBytes/fileMiB)
+	current := []RawLogFile{live(50 * fileMiB), rotated(now.Add(-time.Hour), 300*fileMiB, false)}
+	u = EstimateRawLogUsage(current, moved, now, rot, RawLogArchiveUse{Enabled: true, Status: ArchiveStatusReady, RetentionDays: 365})
+	if u.AvgDailyBytes != 100*fileMiB || u.ProjectedLocalBytes != 350*fileMiB || u.ProjectedArchiveBytes != 365*100*fileMiB || !u.ArchiveInUse {
+		t.Fatalf("archive on: avg=%d local=%d archive=%d MiB, in use %v", u.AvgDailyBytes/fileMiB, u.ProjectedLocalBytes/fileMiB, u.ProjectedArchiveBytes/fileMiB, u.ArchiveInUse)
 	}
 	if u.ArchiveFiles != 7 || u.ArchiveBytes != 700*fileMiB || u.ArchiveRetentionDays != 365 {
 		t.Fatalf("archive totals: %+v", u)
+	}
+
+	// Archiving on but the archive cannot take files: they stay on the log
+	// disk under the local retention, so the projection counts them there.
+	for _, status := range []string{ArchiveStatusNotMounted, ArchiveStatusNotInitialized, ArchiveStatusForeign, ArchiveStatusUnwritable, ArchiveStatusInsufficientSpace, ArchiveStatusStalled, ArchiveStatusLogDir, ""} {
+		u = EstimateRawLogUsage(current, moved, now, rot, RawLogArchiveUse{Enabled: true, Status: status, RetentionDays: 365})
+		if u.ArchiveInUse || !u.ArchiveEnabled || u.ProjectedLocalBytes != 350*fileMiB+int64(rot.RetentionDays)*100*fileMiB || u.ProjectedArchiveBytes != 0 {
+			t.Errorf("archive %q: in use %v, local=%d archive=%d MiB; want the files counted on the log disk",
+				status, u.ArchiveInUse, u.ProjectedLocalBytes/fileMiB, u.ProjectedArchiveBytes/fileMiB)
+		}
 	}
 }
 

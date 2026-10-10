@@ -112,8 +112,11 @@ func (h *SystemSettingsHandler) ListLogFiles(c echo.Context) error {
 	}
 
 	rot, _ := settings.EffectiveRawLogRotation()
-	archiveRetention := settings.RawLogArchiveRetentionDays
-	usage := service.EstimateRawLogUsage(local, archived, time.Now(), rot, settings.RawLogArchiveEnabled, archiveRetention)
+	arch := service.RawLogArchiveUse{Enabled: settings.RawLogArchiveEnabled, RetentionDays: settings.RawLogArchiveRetentionDays}
+	if response.Archive != nil {
+		arch.Status = response.Archive.Status
+	}
+	usage := service.EstimateRawLogUsage(local, archived, time.Now(), rot, arch)
 	if fsType, total, avail, err := service.RawLogFilesystem(ctx, nginxLogsPath); err == nil {
 		usage.LocalFSType, usage.LocalTotalBytes, usage.LocalFreeBytes = fsType, total, avail
 	}

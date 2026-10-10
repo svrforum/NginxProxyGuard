@@ -257,9 +257,14 @@ type RawLogUsage struct {
 	Compressed           bool `json:"compressed"`
 	ArchiveEnabled       bool `json:"archive_enabled"`
 	ArchiveRetentionDays int  `json:"archive_retention_days,omitempty"`
+	// ArchiveInUse: archiving is on and the archive is ready, so settled
+	// rotated files leave the log disk. While it is on but cannot take them
+	// (not mounted, full, stalled, ...) they stay and follow the local
+	// retention.
+	ArchiveInUse bool `json:"archive_in_use"`
 
-	// Server-side projection with the saved settings. With archiving on,
-	// rotated files leave the log disk once settled.
+	// Server-side projection with the saved settings. While the archive is
+	// in use, rotated files leave the log disk once settled.
 	ProjectedLocalBytes   int64 `json:"projected_local_bytes"`
 	ProjectedArchiveBytes int64 `json:"projected_archive_bytes"`
 
@@ -282,20 +287,29 @@ const (
 
 const rawLogUsageWindowDays = 7
 
+// RawLogArchiveUse is the archive as the estimate sees it.
+type RawLogArchiveUse struct {
+	Enabled       bool   // raw_log_archive_enabled
+	Status        string // the archive's status (ArchiveStatus...); "" without an archiver
+	RetentionDays int    // raw_log_archive_retention_days
+}
+
 // EstimateRawLogUsage averages the finished rotated files (compressed ones
 // when compression is on) whose rotation fell on the last 7 local calendar
 // days before today — or on the days since the oldest rotated file, when
 // history is shorter — local and archived alike, since archived files left
-// the log disk but were written all the same.
-func EstimateRawLogUsage(local, archive []RawLogFile, now time.Time, rot model.RawLogRotation, archiveOn bool, archiveRetentionDays int) RawLogUsage {
+// the log disk but were written all the same. Rotated files count as leaving
+// the log disk only while the archive takes them: switched on and ready.
+func EstimateRawLogUsage(local, archive []RawLogFile, now time.Time, rot model.RawLogRotation, arch RawLogArchiveUse) RawLogUsage {
 	u := RawLogUsage{
 		Basis:          RawLogUsageBasisNone,
 		RetentionDays:  rot.RetentionDays,
 		Compressed:     rot.Compress,
-		ArchiveEnabled: archiveOn,
+		ArchiveEnabled: arch.Enabled,
+		ArchiveInUse:   arch.Enabled && arch.Status == ArchiveStatusReady,
 	}
-	if archiveOn {
-		u.ArchiveRetentionDays = archiveRetentionDays
+	if arch.Enabled {
+		u.ArchiveRetentionDays = arch.RetentionDays
 	}
 	finished := func(f RawLogFile) bool { return f.RotatedAt != nil && (f.IsCompressed || !rot.Compress) }
 
@@ -350,8 +364,8 @@ func EstimateRawLogUsage(local, archive []RawLogFile, now time.Time, rot model.R
 	}
 
 	u.ProjectedLocalBytes = u.LiveBytes + u.PendingBytes
-	if archiveOn {
-		u.ProjectedArchiveBytes = u.AvgDailyBytes * int64(archiveRetentionDays)
+	if u.ArchiveInUse {
+		u.ProjectedArchiveBytes = u.AvgDailyBytes * int64(arch.RetentionDays)
 	} else {
 		u.ProjectedLocalBytes += u.AvgDailyBytes * int64(rot.RetentionDays)
 	}

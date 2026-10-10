@@ -16006,7 +16006,8 @@ components:
         finished rotated files (compressed ones when compression is on) of the last 7
         local days before today, or of the days since the oldest rotated file when there
         is less history. A projection is avg_daily_bytes x retention + live_bytes +
-        pending_bytes; with archiving on, rotated files leave the log disk once settled.
+        pending_bytes; while the archive is in use, rotated files leave the log disk once
+        settled.
       properties:
         basis:
           type: string
@@ -16041,8 +16042,16 @@ components:
           type: boolean
         archive_enabled:
           type: boolean
+          description: raw_log_archive_enabled
         archive_retention_days:
           type: integer
+        archive_in_use:
+          type: boolean
+          description: |
+            Archiving is on and the archive status is ready, so settled rotated files leave
+            the log disk. While archiving is on but the archive cannot take them (not
+            mounted, full, stalled, ...) they stay on the log disk and follow the local
+            retention, and the projections count them there.
         projected_local_bytes:
           type: integer
           format: int64

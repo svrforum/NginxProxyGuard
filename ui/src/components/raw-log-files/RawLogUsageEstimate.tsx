@@ -21,9 +21,10 @@ export default function RawLogUsageEstimate({ usage, retentionDays }: RawLogUsag
   const current = usage.live_bytes + usage.pending_bytes;
   const hasBasis = usage.basis !== 'none';
   const retention = Number.isFinite(retentionDays) && retentionDays > 0 ? retentionDays : usage.retention_days;
-  // With the archive on, rotated files leave the log disk once settled; the
-  // archive card shows what they take there.
-  const archiveOn = usage.archive_enabled;
+  // While the archive takes them, rotated files leave the log disk once
+  // settled; the archive card shows what they take there. Switched on but not
+  // usable (not mounted, full, stalled), it takes nothing and they stay here.
+  const archiveOn = usage.archive_in_use;
   const projected = (archiveOn ? 0 : usage.avg_daily_bytes * retention) + current;
   // The raw logs already on the disk are part of the projection, so they count
   // as room it can use.
@@ -56,6 +57,9 @@ export default function RawLogUsageEstimate({ usage, retentionDays }: RawLogUsag
         </p>
       ) : (
         <p className="text-xs text-slate-500 dark:text-slate-400">{t('rawFiles.estimate.none')}</p>
+      )}
+      {usage.archive_enabled && !archiveOn && (
+        <p className="text-xs text-amber-700 dark:text-amber-400">{t('rawFiles.estimate.archiveNotInUse')}</p>
       )}
       <p className="text-xs text-slate-500 dark:text-slate-400">
         {t('rawFiles.estimate.current', { count: usage.local_files, size: formatFileSize(usage.local_bytes) })}
