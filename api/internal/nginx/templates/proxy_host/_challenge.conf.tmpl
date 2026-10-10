@@ -1,0 +1,22 @@
+{{- /* Error pages of the challenge gate's location / (base, waf and cache
+       server blocks). An error_page in a location replaces every error_page
+       of the server, so location / repeats the server's own: the pages of
+       host_common.conf and the ones _security sets. */ -}}
+{{- define "_challenge_root_error_pages"}}
+        # Only the gate's own failure lets the request through: auth_request
+        # answers 500 when the API cannot be reached or does not answer in
+        # time. A 503 from the rate or connection limit comes before the gate
+        # and must not reach @api_fallback, which skips it.
+        error_page 500 = @api_fallback;
+        # An error_page here replaces all of the server's: repeated below.
+        error_page 502 /error_502.html;
+        error_page 503 /error_503.html;
+        error_page 504 /error_504.html;
+        error_page 403 @blocked;
+{{- if .Host.BlockExploits}}{{if or (not (hasExploitRules .ExploitBlockRules)) (hasRulesOfType .ExploitBlockRules "request_method")}}
+        error_page 405 = @blocked_method;
+{{- end}}{{end}}
+{{- if .RateLimit}}{{if .RateLimit.Enabled}}
+        error_page {{.RateLimit.LimitResponse}} = @rate_limited;
+{{- end}}{{end}}
+{{- end -}}

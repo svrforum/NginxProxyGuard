@@ -102,6 +102,12 @@ server {
     # API error fallback - allow traffic through when API is down
     location @api_fallback {
         auth_request off;
+        # Only for the gate's own failure: the API's answer (502, 503, 504)
+        # is then in $challenge_gate_status. Empty means the gate never asked
+        # the API, so this 500 came from somewhere else: not passed on.
+        if ($challenge_gate_status = "") {
+            return 500;
+        }
         # API is down - allow request to proceed (graceful degradation)
         # Log this event for monitoring
         access_log /etc/nginx/logs/access_raw.log main buffer=64k flush=5s;

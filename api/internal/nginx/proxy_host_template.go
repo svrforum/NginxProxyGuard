@@ -32,6 +32,7 @@ var proxyHostTemplateSectionOrder = []string{
 	"upstream.conf.tmpl",
 	"_security.conf.tmpl",
 	"auth_request.conf.tmpl",
+	"_challenge.conf.tmpl",
 	"base.conf.tmpl",
 	"waf.conf.tmpl",
 	"ssl.conf.tmpl",

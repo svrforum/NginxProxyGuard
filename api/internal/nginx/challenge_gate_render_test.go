@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -207,7 +208,7 @@ func TestChallengeGateCoversCustomLocations(t *testing.T) {
 					}
 					if adv == "" {
 						// location / keeps failing open to @api_fallback when the API is down.
-						if root := blockAt(b, "location / {"); !strings.Contains(root, "error_page 500 502 503 504 = @api_fallback;") {
+						if root := blockAt(b, "location / {"); !strings.Contains(root, "error_page 500 = @api_fallback;") {
 							t.Errorf("%s server %d: location / lost its API-down fallback", name, i)
 						}
 					}
@@ -460,7 +461,7 @@ func TestChallengeGateYieldsToAdvancedConfigAuthRequest(t *testing.T) {
 				for _, want := range []string{
 					"auth_request /_challenge/validate;",
 					"error_page 401 = @challenge_redirect;",
-					"error_page 500 502 503 504 = @api_fallback;",
+					"error_page 500 = @api_fallback;",
 				} {
 					if !strings.Contains(root, want) {
 						t.Errorf("%s server %d: location / lacks %q", name, i, want)
@@ -567,9 +568,135 @@ func TestChallengeGateRefusesWhenTheAPIRefuses(t *testing.T) {
 							t.Errorf("%s server %d: an unreachable API (%s) refuses at the gate; location / must keep its fallback", name, i, c)
 						}
 					}
-					if root := blockAt(b, "location / {"); root != "" && adv == "" && !strings.Contains(root, "error_page 500 502 503 504 = @api_fallback;") {
+					if root := blockAt(b, "location / {"); root != "" && adv == "" && !strings.Contains(root, "error_page 500 = @api_fallback;") {
 						t.Errorf("%s server %d: location / lost its fallback for an unreachable API", name, i)
 					}
+				}
+			}
+		}
+	}
+}
+
+// errorPageTargets maps each status code to the target of the first
+// error_page naming it, the one nginx uses ("= @api_fallback", "@blocked",
+// "/error_503.html").
+func errorPageTargets(dirs []string) map[string]string {
+	targets := map[string]string{}
+	for _, d := range dirs {
+		f := strings.Fields(strings.TrimSuffix(d, ";"))
+		if len(f) < 3 || f[0] != "error_page" {
+			continue
+		}
+		n := 1
+		for n < len(f) && strings.Trim(f[n], "0123456789") == "" {
+			n++
+		}
+		for _, code := range f[1:n] {
+			if _, seen := targets[code]; !seen {
+				targets[code] = strings.Join(f[n:], " ")
+			}
+		}
+	}
+	return targets
+}
+
+// @api_fallback passes a request to the upstream without the gate. It is
+// for the gate's own failure only: auth_request answers 500 when the API
+// cannot be reached or does not answer in time. location / used to send 502,
+// 503 and 504 there too, and the rate limit and the connection limit answer
+// 503 before the gate runs: a challenged visitor without a token who went
+// over a 503 rate limit, or over the global connection limit, was served by
+// the upstream. location / sends nothing but 500 there and keeps every other
+// error page the server sets (an error_page in a location replaces all of
+// the server's); @api_fallback refuses a 500 the gate did not cause.
+func TestChallengeFallbackOnlyForTheGatesFailure(t *testing.T) {
+	m, _ := newRequestPathTestManager(t)
+	var common []string
+	for _, l := range strings.Split(string(m.hostCommonIncludeContent()), "\n") {
+		if strings.HasPrefix(l, "error_page ") {
+			common = append(common, l)
+		}
+	}
+	if len(common) == 0 {
+		t.Fatal("host_common.conf sets no error_page; this test guards nothing")
+	}
+	rateLimit := func(code int) func(*ProxyHostConfigData) {
+		return func(d *ProxyHostConfigData) {
+			d.RateLimit = &model.RateLimit{Enabled: true, RequestsPerSecond: 1, BurstSize: 1, ZoneSize: "10m", LimitBy: "ip", LimitResponse: code}
+		}
+	}
+	exploitRule := func(patternType, pattern string) func(*ProxyHostConfigData) {
+		return func(d *ProxyHostConfigData) {
+			d.Host.BlockExploits = true
+			d.ExploitBlockRules = []model.ExploitBlockRuleForRender{{ExploitBlockRule: model.ExploitBlockRule{
+				ID: "00000000-0000-0000-0000-0000000000f1", Name: "rule", Pattern: pattern, PatternType: patternType, Enabled: true},
+				IDSanitized: "00000000_0000_0000_0000_0000000000f1"}}
+		}
+	}
+	for _, v := range []struct {
+		name, adv string
+		set       func(*ProxyHostConfigData)
+	}{
+		{"plain", "", func(*ProxyHostConfigData) {}},
+		{"rate limit 503", "", rateLimit(503)},
+		{"rate limit 429", "", rateLimit(429)},
+		{"exploit fallback rules", "", func(d *ProxyHostConfigData) { d.Host.BlockExploits = true }},
+		{"exploit method rules", "", exploitRule("request_method", "^TRACE$")},
+		// No method rule: no @blocked_method, which location / must not name.
+		{"exploit query rules", "", exploitRule("query_string", "union.*select")},
+		{"legacy auth_request, rate limit 503", "auth_request /ext;\nlocation = /ext {\n    internal;\n    proxy_pass http://192.0.2.20:9000/auth;\n}\n", rateLimit(503)},
+	} {
+		for _, ch := range gateChallenges {
+			if ch.cloud && v.adv != "" {
+				continue // no gate: next to the host's own auth_request the cloud challenge blocks
+			}
+			for _, mode := range gateTLSModes {
+				name := v.name + " " + ch.name + " " + mode.name
+				d := challengeData(gateTestHost("00000000-0000-0000-0000-0000000000f0", mode.ssl, mode.force, v.adv), ch.set)
+				v.set(&d)
+				seen := 0
+				for i, b := range splitServerBlocks(t, renderForTest(t, d)) {
+					if fb := blockAt(b, "location @api_fallback {"); !strings.Contains(fb, "if ($challenge_gate_status = \"\") {\n            return 500;\n        }") ||
+						strings.Index(fb, "$challenge_gate_status") > strings.Index(fb, "proxy_pass ") {
+						t.Errorf("%s server %d: @api_fallback passes on a 500 the gate did not cause:\n%s", name, i, fb)
+					}
+					root := blockAt(b, "location / {")
+					if !strings.Contains(root, "auth_request /_challenge/validate;") {
+						continue // the HTTP server of a forced-HTTPS host redirects
+					}
+					seen++
+					got := errorPageTargets(directives(root))
+					for code, target := range got {
+						if target == "= @api_fallback" && code != "500" {
+							t.Errorf("%s server %d: location / sends %s to @api_fallback, which skips the gate", name, i, code)
+						}
+					}
+					if got["500"] != "= @api_fallback" || got["401"] != "= @challenge_redirect" {
+						t.Errorf("%s server %d: location / gate errors: 401 -> %q, 500 -> %q", name, i, got["401"], got["500"])
+					}
+					// Every error page the server sets (host_common.conf is
+					// included before the server's own) reaches location / too,
+					// and no other: a page the server does not have is a
+					// location that does not exist.
+					want := errorPageTargets(append(append([]string{}, common...), serverLevel(b, "error_page")...))
+					codes := map[string]bool{}
+					for code := range got {
+						codes[code] = true
+					}
+					for code := range want {
+						codes[code] = true
+					}
+					for code := range codes {
+						if code != "401" && code != "500" && got[code] != want[code] {
+							t.Errorf("%s server %d: location / answers %s with %q, the server with %q", name, i, code, got[code], want[code])
+						}
+					}
+					if d.RateLimit != nil && want[strconv.Itoa(d.RateLimit.LimitResponse)] == "" {
+						t.Errorf("%s server %d: the rate limit's %d has no error page; this case guards nothing", name, i, d.RateLimit.LimitResponse)
+					}
+				}
+				if seen == 0 {
+					t.Errorf("%s: no location / behind the gate", name)
 				}
 			}
 		}
