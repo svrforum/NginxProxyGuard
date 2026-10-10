@@ -12,7 +12,11 @@ import (
 // Status is what the Maintenance card shows. refreshEstimate measures the
 // compressed days again when the cached estimate is older than 10 minutes
 // (about 2 ms per day, more when the database is cold); without it the
-// status reads only the job's own small tables, cheap enough to poll.
+// status reads only the job's own small tables, cheap enough to poll. While
+// this process runs the job nothing is measured: the size of each compressed
+// relation waits for the ACCESS EXCLUSIVE lock VACUUM FULL holds on the day
+// it compacts, so the card would stay loading until that day is done. The
+// last figures stand until the run ends.
 func (s *RawLogReclaimService) Status(ctx context.Context, refreshEstimate bool) (*model.LogRawReclaimStatus, error) {
 	ok, reason, err := s.supported(ctx)
 	if err != nil {
@@ -26,7 +30,7 @@ func (s *RawLogReclaimService) Status(ctx context.Context, refreshEstimate bool)
 	if err != nil {
 		return nil, err
 	}
-	if refreshEstimate && ok {
+	if refreshEstimate && ok && !s.runnerActive() {
 		s.refreshEstimate(ctx)
 	}
 
@@ -140,6 +144,13 @@ func (s *RawLogReclaimService) refreshEstimate(ctx context.Context) {
 	s.mu.Lock()
 	s.est = est
 	s.mu.Unlock()
+}
+
+// runnerActive reports a runner in this process.
+func (s *RawLogReclaimService) runnerActive() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.cancel != nil
 }
 
 // cachedChunkStats lends planning the estimate's per-day measurements while

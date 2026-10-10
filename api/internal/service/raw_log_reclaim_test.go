@@ -56,6 +56,7 @@ type fakeReclaimStore struct {
 	vacuumHook  func(ctx context.Context) error
 	failNull    map[string]error // the UPDATE of these days fails so
 	planHook    func(ctx context.Context) error
+	listHook    func(ctx context.Context) error // ListChunks waits on it, as on a lock
 	inNull      chan struct{}
 	inVacuum    chan struct{}
 	finishCalls []string
@@ -133,7 +134,15 @@ func (f *fakeReclaimStore) Support(context.Context) (bool, string, error) {
 	return true, "", nil
 }
 
-func (f *fakeReclaimStore) ListChunks(context.Context) ([]repository.ReclaimChunkInfo, error) {
+func (f *fakeReclaimStore) ListChunks(ctx context.Context) ([]repository.ReclaimChunkInfo, error) {
+	f.mu.Lock()
+	hook := f.listHook
+	f.mu.Unlock()
+	if hook != nil {
+		if err := hook(ctx); err != nil {
+			return nil, err
+		}
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	var out []repository.ReclaimChunkInfo
@@ -1237,5 +1246,62 @@ func TestRawReclaimShutdownWhileAResumePlansKeepsTheJob(t *testing.T) {
 	}
 	if j := f.jobState(); j.Status != model.RawReclaimRunning || j.LastError != "" || len(f.finishCalls) != 0 {
 		t.Fatalf("job = %+v after %v; want still running, nothing recorded", j, f.finishCalls)
+	}
+}
+
+// The status with ?estimate=1 — what the Maintenance card asks for when it
+// opens — answers at once while this process compacts a day, instead of
+// waiting behind VACUUM FULL's lock until the day is done; it measures again
+// once the run is over.
+func TestRawReclaimEstimateDoesNotWaitForACompaction(t *testing.T) {
+	f := newFakeReclaimStore(t)
+	f.addDay(1, 100, 40, 0)
+	in := make(chan struct{})
+	release := make(chan struct{})
+	f.inVacuum = in
+	f.vacuumHook = func(ctx context.Context) error {
+		select {
+		case <-release:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	s := newTestReclaim(t, f, plenty())
+	if _, err := s.Start(context.Background(), "admin", nil); err != nil {
+		t.Fatal(err)
+	}
+	<-in
+	// Measuring the compressed days now would wait for the VACUUM FULL.
+	f.mu.Lock()
+	f.listHook = func(ctx context.Context) error {
+		select {
+		case <-release:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	f.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	start := time.Now()
+	st, err := s.Status(ctx, true)
+	if took := time.Since(start); err != nil || took > 500*time.Millisecond {
+		t.Fatalf("status with estimate during VACUUM FULL: %v after %v; want an answer at once", err, took)
+	}
+	if st.Status != model.RawReclaimRunning || st.CurrentChunk == nil || st.CurrentChunk.Step != model.RawReclaimStepVacuum {
+		t.Fatalf("status = %+v; want running, compacting", st)
+	}
+
+	close(release)
+	waitRun(t, s)
+	f.mu.Lock()
+	f.listHook = nil
+	f.mu.Unlock()
+	st, err = s.Status(context.Background(), true)
+	if err != nil || st.EstimatedReclaimableBytes == nil || st.EstimatedAt == nil {
+		t.Fatalf("status after the run = %+v, %v; want a fresh estimate", st, err)
 	}
 }
