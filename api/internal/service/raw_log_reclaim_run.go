@@ -77,11 +77,13 @@ func (s *RawLogReclaimService) plan(ctx context.Context) error {
 }
 
 // workOrder is what is left to do, in the order a run does it: days this
-// request already started (so max_chunks counts each once), then days whose
-// UPDATE committed, fewer failed attempts, the most raw_log, the oldest. A
-// day given one more try after failing (rawReclaimFailAfter attempts) comes
-// after all of those, and with retryFailed (a run started by hand) the failed
-// days still waiting for their try come last of all.
+// request already started (so max_chunks counts each once), then fewer lost
+// connections in a row (a day whose statement ends the session every time
+// must not stay first in line), days whose UPDATE committed, fewer failed
+// attempts, the most raw_log, the oldest. A day given one more try after
+// failing (rawReclaimFailAfter attempts) comes after all of those, and with
+// retryFailed (a run started by hand) the failed days still waiting for
+// their try come last of all.
 func workOrder(rows []repository.ReclaimChunk, requestedAt *time.Time, retryFailed bool) []repository.ReclaimChunk {
 	var out []repository.ReclaimChunk
 	for _, r := range rows {
@@ -99,6 +101,9 @@ func workOrder(rows []repository.ReclaimChunk, requestedAt *time.Time, retryFail
 		}
 		if xa, xb := a.Attempts >= rawReclaimFailAfter, b.Attempts >= rawReclaimFailAfter; xa != xb {
 			return xb
+		}
+		if a.ConnLosses != b.ConnLosses {
+			return a.ConnLosses < b.ConnLosses
 		}
 		if na, nb := a.UpdateXID != nil || a.State == "nulled", b.UpdateXID != nil || b.State == "nulled"; na != nb {
 			return na
@@ -515,7 +520,7 @@ func (s *RawLogReclaimService) chunkError(ctx context.Context, c repository.Recl
 	day := dayLabel(c)
 	var msg string
 	kind := rawOutcomeDeferred
-	count := false
+	count, lost := false, false
 	switch {
 	case repository.IsLockTimeout(err):
 		msg = fmt.Sprintf("%s was in use while %s it", day, doing)
@@ -529,12 +534,15 @@ func (s *RawLogReclaimService) chunkError(ctx context.Context, c repository.Recl
 		count = true
 	case repository.IsConnectionError(err):
 		// The session ended (a database restart, a dropped connection), not
-		// the day's work: the run stops, and the day is not counted.
+		// necessarily because of the day: the run stops, and it counts not
+		// as an attempt but as a lost connection, three of which in a row
+		// fail the day (the driver reports a crash or any FATAL error as a
+		// lost connection, so a day can cause one every time).
 		msg = fmt.Sprintf("the connection to the database was lost while %s %s; run the reclaim again to go on", doing, day)
 		if code := repository.SQLState(err); code != "" {
 			msg += " (SQLSTATE " + code + ")"
 		}
-		kind = rawOutcomeFatal
+		kind, lost = rawOutcomeFatal, true
 	default:
 		msg = fmt.Sprintf("%s %s failed: %s", doing, day, database.ScrubDriverText(err.Error()))
 		if code := repository.SQLState(err); code != "" {
@@ -542,9 +550,51 @@ func (s *RawLogReclaimService) chunkError(ctx context.Context, c repository.Recl
 		}
 		kind, count = rawOutcomeFatal, true
 	}
-	s.noteChunk(c, msg, count)
 	log.Printf("[RawLogReclaim] %s", msg)
+	if lost {
+		s.noteConnectionLoss(ctx, c, msg)
+	} else {
+		s.noteChunk(c, msg, count)
+	}
 	return rawOutcome{kind: kind, msg: msg}
+}
+
+// noteConnectionLoss records a lost connection against the day, waiting for
+// the database to come back if need be (whileUnreachable): a loss that is
+// never recorded would leave the day first in line.
+func (s *RawLogReclaimService) noteConnectionLoss(ctx context.Context, c repository.ReclaimChunk, msg string) {
+	var state string
+	err := s.whileUnreachable(ctx, func(ctx context.Context) error {
+		var err error
+		state, err = s.store.NoteConnectionLoss(ctx, c.Name, msg, rawReclaimFailAfter)
+		return err
+	})
+	if err != nil {
+		log.Printf("[RawLogReclaim] could not record the lost connection for %s: %s", dayLabel(c), database.ScrubDriverText(err.Error()))
+	} else if state == "failed" {
+		log.Printf("[RawLogReclaim] %s lost the database connection %d times in a row; later runs leave it alone", dayLabel(c), rawReclaimFailAfter)
+	}
+}
+
+// whileUnreachable runs fn until the database takes it. After a lost
+// connection the database may be restarting: while fn fails for want of a
+// connection it is tried again every rawReclaimRecordRetry, for up to
+// rawReclaimRecordFor, unless ctx ends first (Stop, or the API stopping).
+// Each try gets ten seconds of its own, so a cancelled run still records.
+func (s *RawLogReclaimService) whileUnreachable(ctx context.Context, fn func(ctx context.Context) error) error {
+	deadline := s.now().Add(rawReclaimRecordFor)
+	for {
+		tctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		err := fn(tctx)
+		cancel()
+		if err == nil || !repository.IsConnectionError(err) || !s.now().Before(deadline) {
+			return err
+		}
+		s.sleep(ctx, rawReclaimRecordRetry)
+		if ctx.Err() != nil {
+			return err
+		}
+	}
 }
 
 func (s *RawLogReclaimService) noteChunk(c repository.ReclaimChunk, msg string, countAttempt bool) {

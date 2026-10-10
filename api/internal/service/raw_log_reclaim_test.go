@@ -60,6 +60,7 @@ type fakeReclaimStore struct {
 	planHook    func(ctx context.Context) error
 	listHook    func(ctx context.Context) error // ListChunks waits on it, as on a lock
 	beginErr    error                           // BeginJob fails with it
+	lossHook    func(ctx context.Context) error // NoteConnectionLoss fails while it does
 	inNull      chan struct{}
 	inVacuum    chan struct{}
 	finishCalls []string
@@ -338,6 +339,7 @@ func (f *fakeReclaimStore) MarkWorked(_ context.Context, name string) error {
 func (f *fakeReclaimStore) MarkNulled(_ context.Context, name string, before, raw, batches, xid int64) error {
 	return f.update(name, func(r *repository.ReclaimChunk) {
 		r.State, r.BytesBefore, r.RawBytes, r.UpdateXID, r.LastError = "nulled", before, raw, &xid, ""
+		r.ConnLosses = 0
 		f.log("state " + name + " nulled")
 	})
 }
@@ -345,6 +347,7 @@ func (f *fakeReclaimStore) MarkNulled(_ context.Context, name string, before, ra
 func (f *fakeReclaimStore) MarkDone(_ context.Context, name string, before, after, raw int64) error {
 	return f.update(name, func(r *repository.ReclaimChunk) {
 		r.State, r.BytesBefore, r.BytesAfter, r.RawBytes, r.LastError = "done", before, after, raw, ""
+		r.ConnLosses = 0
 		f.log("state " + name + " done")
 	})
 }
@@ -352,6 +355,7 @@ func (f *fakeReclaimStore) MarkDone(_ context.Context, name string, before, afte
 func (f *fakeReclaimStore) MarkVacuumIneffective(_ context.Context, name string, after int64, msg string) error {
 	return f.update(name, func(r *repository.ReclaimChunk) {
 		r.Attempts++
+		r.ConnLosses = 0
 		r.BytesAfter, r.LastError = after, msg
 	})
 }
@@ -367,6 +371,28 @@ func (f *fakeReclaimStore) NoteChunkError(_ context.Context, name, msg string, c
 		}
 		r.LastError = msg
 		state = r.State
+	})
+	return state, err
+}
+
+func (f *fakeReclaimStore) NoteConnectionLoss(ctx context.Context, name, msg string, failAfter int) (string, error) {
+	f.mu.Lock()
+	hook := f.lossHook
+	f.mu.Unlock()
+	if hook != nil {
+		if err := hook(ctx); err != nil {
+			return "", err
+		}
+	}
+	var state string
+	err := f.update(name, func(r *repository.ReclaimChunk) {
+		r.ConnLosses++
+		if r.ConnLosses >= failAfter && (r.State == "pending" || r.State == "nulled") {
+			r.State = "failed"
+		}
+		r.LastError = msg
+		state = r.State
+		f.log("lost " + name)
 	})
 	return state, err
 }
@@ -1028,8 +1054,9 @@ func TestRawReclaimUnexpectedErrorStopsTheJobAndCountsAnAttempt(t *testing.T) {
 	}
 }
 
-// A lost database connection is not the day's fault: the run stops and says
-// so, but the day is not counted, so it never becomes failed this way.
+// A lost database connection is not necessarily the day's fault: the run
+// stops and says so, and the day is not counted an attempt. But the loss is
+// counted on its own: three in a row fail the day.
 func TestRawReclaimConnectionLossIsNotCountedAgainstTheDay(t *testing.T) {
 	for _, lost := range []error{
 		&pq.Error{Code: "57P01", Message: "terminating connection due to administrator command"},
@@ -1052,11 +1079,80 @@ func TestRawReclaimConnectionLossIsNotCountedAgainstTheDay(t *testing.T) {
 				if j := f.jobState(); j.Status != model.RawReclaimFailed || !strings.Contains(j.LastError, "connection to the database was lost") {
 					t.Fatalf("run %d: job = %+v; want failed, naming the lost connection", i, j)
 				}
-			}
-			if r := f.row(day); r.State != "pending" || r.Attempts != 0 {
-				t.Fatalf("day = %+v; want still pending, no attempt counted", r)
+				want := "pending"
+				if i >= rawReclaimFailAfter {
+					want = "failed" // and the Start after that gives it its one more try
+				}
+				if r := f.row(day); r.State != want || r.Attempts != 0 || r.ConnLosses != i {
+					t.Fatalf("run %d: day = %+v; want %s, %d lost connections, no attempt counted", i, r, want, i)
+				}
 			}
 		})
+	}
+}
+
+// A day whose statement ends the database session every time — lib/pq
+// reports any FATAL or PANIC as a bad connection, and PostgreSQL restarts
+// after a crash — must not stay first in line for ever: the other days get
+// their turn, and three losses in a row fail it.
+func TestRawReclaimRepeatedConnectionLossLetsTheOtherDaysRun(t *testing.T) {
+	f := newFakeReclaimStore(t)
+	bad := f.addDay(1, 900, 500, 0) // the most raw_log: first in line
+	b := f.addDay(2, 300, 200, 0)
+	c := f.addDay(3, 100, 40, 0)
+	f.failNull = map[string]error{bad: driver.ErrBadConn}
+	s := newTestReclaim(t, f, plenty())
+	start := func() {
+		t.Helper()
+		f.mu.Lock()
+		f.clock = f.clock.Add(time.Minute) // each Start is a new request
+		f.mu.Unlock()
+		if _, err := s.Start(context.Background(), "admin", nil); err != nil {
+			t.Fatal(err)
+		}
+		waitRun(t, s)
+	}
+	runs := 0
+	for ; runs < 6 && (f.row(b).State != "done" || f.row(c).State != "done"); runs++ {
+		start()
+	}
+	if f.row(b).State != "done" || f.row(c).State != "done" {
+		t.Fatalf("after %d runs: b %s, c %s; the day that keeps losing the connection held up the others", runs, f.row(b).State, f.row(c).State)
+	}
+	for ; runs < 8 && f.row(bad).State != "failed"; runs++ {
+		start()
+	}
+	if r := f.row(bad); r.State != "failed" || r.Attempts != 0 || r.ConnLosses != rawReclaimFailAfter || !strings.Contains(r.LastError, "connection to the database was lost") {
+		t.Fatalf("after %d runs the day = %+v; want failed after %d lost connections in a row, no attempt counted", runs, r, rawReclaimFailAfter)
+	}
+}
+
+// After a crash the database refuses connections while it recovers: the lost
+// connection is recorded once it answers again, so it still counts.
+func TestRawReclaimConnectionLossIsRecordedOnceTheDatabaseIsBack(t *testing.T) {
+	f := newFakeReclaimStore(t)
+	day := f.addDay(1, 100, 40, 0)
+	f.failNull = map[string]error{day: driver.ErrBadConn}
+	refused := 3
+	f.lossHook = func(context.Context) error {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		if refused > 0 {
+			refused--
+			return &pq.Error{Code: "57P03", Message: "the database system is in recovery mode"}
+		}
+		return nil
+	}
+	s := newTestReclaim(t, f, plenty())
+	if _, err := s.Start(context.Background(), "admin", nil); err != nil {
+		t.Fatal(err)
+	}
+	waitRun(t, s)
+	if r := f.row(day); r.ConnLosses != 1 {
+		t.Fatalf("day = %+v; want the lost connection recorded once the database answered", r)
+	}
+	if n := len(eventsMatching(f.eventLog(), "sleep 5s")); n != 3 {
+		t.Fatalf("waited %d times for the database; want 3", n)
 	}
 }
 
@@ -1198,29 +1294,30 @@ func TestRawReclaimChunkErrorKinds(t *testing.T) {
 		err     error
 		kind    rawOutcomeKind
 		counted bool
+		lost    bool
 	}{
-		{&pq.Error{Code: "55P03"}, rawOutcomeDeferred, false},
-		{&pq.Error{Code: "42P01"}, rawOutcomeDeferred, false},
-		{&pq.Error{Code: "57014"}, rawOutcomeDeferred, true},
-		{&pq.Error{Code: "53100"}, rawOutcomeFatal, false},
-		{&pq.Error{Code: "57P01"}, rawOutcomeFatal, false},
-		{&pq.Error{Code: "57P03"}, rawOutcomeFatal, false},
-		{&pq.Error{Code: "08003"}, rawOutcomeFatal, false},
-		{driver.ErrBadConn, rawOutcomeFatal, false},
-		{sql.ErrConnDone, rawOutcomeFatal, false},
-		{io.EOF, rawOutcomeFatal, false},
-		{&net.OpError{Op: "read", Net: "tcp", Err: syscall.ECONNRESET}, rawOutcomeFatal, false},
-		{&pq.Error{Code: "XX000"}, rawOutcomeFatal, true},
-		{errors.New("something else"), rawOutcomeFatal, true},
+		{&pq.Error{Code: "55P03"}, rawOutcomeDeferred, false, false},
+		{&pq.Error{Code: "42P01"}, rawOutcomeDeferred, false, false},
+		{&pq.Error{Code: "57014"}, rawOutcomeDeferred, true, false},
+		{&pq.Error{Code: "53100"}, rawOutcomeFatal, false, false},
+		{&pq.Error{Code: "57P01"}, rawOutcomeFatal, false, true},
+		{&pq.Error{Code: "57P03"}, rawOutcomeFatal, false, true},
+		{&pq.Error{Code: "08003"}, rawOutcomeFatal, false, true},
+		{driver.ErrBadConn, rawOutcomeFatal, false, true},
+		{sql.ErrConnDone, rawOutcomeFatal, false, true},
+		{io.EOF, rawOutcomeFatal, false, true},
+		{&net.OpError{Op: "read", Net: "tcp", Err: syscall.ECONNRESET}, rawOutcomeFatal, false, true},
+		{&pq.Error{Code: "XX000"}, rawOutcomeFatal, true, false},
+		{errors.New("something else"), rawOutcomeFatal, true, false},
 	} {
-		before := f.row(day).Attempts
+		before := f.row(day)
 		out := s.chunkError(context.Background(), f.row(day), "compacting", tc.err)
-		counted := f.row(day).Attempts > before
-		if out.kind != tc.kind || counted != tc.counted {
-			t.Errorf("%v: kind %d counted %v; want kind %d counted %v", tc.err, out.kind, counted, tc.kind, tc.counted)
+		counted, lost := f.row(day).Attempts > before.Attempts, f.row(day).ConnLosses > before.ConnLosses
+		if out.kind != tc.kind || counted != tc.counted || lost != tc.lost {
+			t.Errorf("%v: kind %d counted %v lost %v; want kind %d counted %v lost %v", tc.err, out.kind, counted, lost, tc.kind, tc.counted, tc.lost)
 		}
 		f.mu.Lock()
-		f.rows[day].Attempts, f.rows[day].State = 0, "pending"
+		f.rows[day].Attempts, f.rows[day].ConnLosses, f.rows[day].State = 0, 0, "pending"
 		f.mu.Unlock()
 	}
 }
@@ -1265,12 +1362,14 @@ func TestWorkOrder(t *testing.T) {
 		{Name: "pending-old-request", State: "pending", RawBytes: 3, WorkedAt: &earlier, RangeStart: t0},
 		{Name: "skipped", State: "skipped", RawBytes: 70, RangeStart: t0},
 		{Name: "failed-before", State: "nulled", RawBytes: 99, Attempts: rawReclaimFailAfter, RangeStart: t0},
+		{Name: "lost-twice", State: "nulled", RawBytes: 98, ConnLosses: 2, RangeStart: t0},
+		{Name: "lost-once", State: "pending", RawBytes: 97, ConnLosses: 1, RangeStart: t0},
 	}
 	var got []string
 	for _, r := range workOrder(rows, &req, false) {
 		got = append(got, r.Name)
 	}
-	want := "pending-started,nulled,nulled-retried,pending-big,pending-old-request,pending-small,failed-before"
+	want := "pending-started,nulled,nulled-retried,pending-big,pending-old-request,pending-small,lost-once,lost-twice,failed-before"
 	if strings.Join(got, ",") != want {
 		t.Fatalf("order %v; want %s", got, want)
 	}

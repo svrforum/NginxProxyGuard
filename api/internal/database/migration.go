@@ -1661,12 +1661,21 @@ CREATE TABLE IF NOT EXISTS public.raw_log_reclaim_chunks (
     batches_nulled integer,
     update_xid bigint,
     attempts integer DEFAULT 0 NOT NULL,
+    conn_losses integer DEFAULT 0 NOT NULL,
     last_error text,
     worked_at timestamp with time zone,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT raw_log_reclaim_chunks_pkey PRIMARY KEY (chunk_name),
     CONSTRAINT chk_raw_log_reclaim_chunks_state CHECK (state IN ('pending', 'nulled', 'done', 'skipped', 'gone', 'failed'))
 );`,
+		},
+		{
+			// Lost database connections in a row while a day was worked on:
+			// three fail the day, as three counted errors do. Part of the
+			// CREATE TABLE above; this adds it to a table created before the
+			// column existed (pre-release builds).
+			desc: "raw_log_reclaim_chunks.conn_losses",
+			sql:  `ALTER TABLE public.raw_log_reclaim_chunks ADD COLUMN IF NOT EXISTS conn_losses integer DEFAULT 0 NOT NULL`,
 		},
 		{
 			// Raw log retention by days takes over from the rotated-file

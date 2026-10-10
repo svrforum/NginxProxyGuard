@@ -180,10 +180,11 @@ func holdLocks(t *testing.T, db *sql.DB, mode string, tables ...string) (release
 }
 
 // A database connection lost in the middle of a day — the runner's session
-// terminated while its VACUUM FULL waits for a lock — stops the run but does
-// not count against the day: three in a row leave it to be finished, and the
-// next run finishes it.
-func TestRawReclaimDBConnectionLossKeepsTheDay(t *testing.T) {
+// terminated while its VACUUM FULL waits for a lock — stops the run. It is
+// not counted an attempt, but as a lost connection: the day with fewer losses
+// goes first, three in a row fail a day, and a run without losses then
+// finishes both days, the failed ones last.
+func TestRawReclaimDBRepeatedConnectionLoss(t *testing.T) {
 	db, repo := openReclaimServiceDB(t)
 	ctx := context.Background()
 	infos, err := repo.ListChunks(ctx)
@@ -201,8 +202,11 @@ func TestRawReclaimDBConnectionLossKeepsTheDay(t *testing.T) {
 	}
 	s := dbReclaimService(t, repo)
 
-	var worked string
-	for run := 1; run <= rawReclaimFailAfter; run++ {
+	losses := map[string]int{}
+	for run := 1; ; run++ {
+		if run > 2*rawReclaimFailAfter {
+			t.Fatalf("both days are not failed after %d runs: %v", run-1, losses)
+		}
 		release := holdLocks(t, db, "ACCESS SHARE", rels...)
 		if _, err := s.Start(ctx, "admin", nil); err != nil {
 			release()
@@ -239,19 +243,42 @@ func TestRawReclaimDBConnectionLossKeepsTheDay(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		fewest := -1
 		for _, r := range rows {
-			if r.WorkedAt != nil {
-				if worked != "" && worked != r.Name {
-					t.Fatalf("run %d worked on %s, not %s", run, r.Name, worked)
-				}
-				worked = r.Name
-				if r.State != "nulled" || r.Attempts != 0 {
-					t.Fatalf("run %d: the day = %+v; want nulled with no attempt counted", run, r)
+			if r.State != "failed" || losses[r.Name] < rawReclaimFailAfter {
+				if fewest < 0 || losses[r.Name] < fewest {
+					fewest = losses[r.Name]
 				}
 			}
 		}
-		if worked == "" {
-			t.Fatalf("run %d worked on no day: %+v", run, rows)
+		worked, allFailed := "", true
+		for _, r := range rows {
+			if r.ConnLosses != losses[r.Name] {
+				if worked != "" || r.ConnLosses != losses[r.Name]+1 {
+					t.Fatalf("run %d: lost connections %v -> %+v; want one more on one day", run, losses, rows)
+				}
+				worked = r.Name
+			}
+			want := "pending" // not reached yet
+			switch {
+			case r.ConnLosses >= rawReclaimFailAfter:
+				want = "failed"
+			case r.WorkedAt != nil:
+				want = "nulled" // its UPDATE completed; its VACUUM FULL lost the session
+			}
+			if r.State != want || r.Attempts != 0 {
+				t.Fatalf("run %d: day = %+v; want %s, no attempt counted", run, r, want)
+			}
+			allFailed = allFailed && r.State == "failed"
+		}
+		if worked == "" || losses[worked] != fewest {
+			t.Fatalf("run %d worked on %q with %d lost connections; another day had %d (%v)", run, worked, losses[worked], fewest, losses)
+		}
+		for _, r := range rows {
+			losses[r.Name] = r.ConnLosses
+		}
+		if allFailed {
+			break
 		}
 	}
 
@@ -265,7 +292,7 @@ func TestRawReclaimDBConnectionLossKeepsTheDay(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, r := range rows {
-		if r.State != "done" || r.BytesAfter >= r.BytesBefore {
+		if r.State != "done" || r.BytesAfter >= r.BytesBefore || r.ConnLosses != 0 {
 			t.Fatalf("day after the last run = %+v; want done and smaller", r)
 		}
 	}

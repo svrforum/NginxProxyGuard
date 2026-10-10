@@ -18554,7 +18554,10 @@ components:
           description: Days left alone because they no longer qualify (e.g. partially compressed).
         chunks_failed:
           type: integer
-          description: Days that failed three times and are left alone.
+          description: >-
+            Days left alone after three failed attempts, or after losing the database
+            connection three times in a row; the next start gives each one more try after
+            every other day.
         bytes_before:
           type: integer
           format: int64

@@ -49,10 +49,16 @@ const (
 	rawReclaimEstimateTTL    = 10 * time.Minute
 	rawReclaimSupportTTL     = 10 * time.Minute
 	rawReclaimStopWait       = 10 * time.Second
-	// A day that hits an unexpected error this many times becomes failed and
-	// is left alone, so one bad day cannot hold up the rest; a run started by
+	// A day that hits an unexpected error this many times, or loses the
+	// database connection this many times in a row, becomes failed and is
+	// left alone, so one bad day cannot hold up the rest; a run started by
 	// hand gives it one more try, after every other day, when it gets to it.
-	rawReclaimFailAfter            = 3
+	rawReclaimFailAfter = 3
+	// After a lost connection the database may be restarting (a crash ends
+	// every session and recovery refuses new ones for a while): what the run
+	// must record is tried again every few seconds, for a while.
+	rawReclaimRecordRetry          = 5 * time.Second
+	rawReclaimRecordFor            = 5 * time.Minute
 	rawReclaimMargin         int64 = 1 << 30
 	rawReclaimVerifyMinBytes int64 = 1 << 20
 )
@@ -99,6 +105,7 @@ type rawReclaimStore interface {
 	MarkDone(ctx context.Context, name string, bytesBefore, bytesAfter, rawBytes int64) error
 	MarkVacuumIneffective(ctx context.Context, name string, bytesAfter int64, msg string) error
 	NoteChunkError(ctx context.Context, name, msg string, countAttempt bool, failAfter int) (string, error)
+	NoteConnectionLoss(ctx context.Context, name, msg string, failAfter int) (string, error)
 }
 
 // ErrRawReclaimRunning: a runner already exists (409).

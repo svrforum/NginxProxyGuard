@@ -613,6 +613,7 @@ type ReclaimChunk struct {
 	RawBytes    int64
 	UpdateXID   *int64
 	Attempts    int
+	ConnLosses  int // database connections lost in a row while it was worked on
 	LastError   string
 	WorkedAt    *time.Time
 	UpdatedAt   time.Time
@@ -623,7 +624,7 @@ type ReclaimChunk struct {
 func (r *RawLogReclaimRepository) ListChunkRows(ctx context.Context) ([]ReclaimChunk, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT chunk_name, range_start, range_end, state, COALESCE(bytes_before, 0), COALESCE(bytes_after, 0),
-		       COALESCE(raw_bytes, 0), update_xid, attempts, COALESCE(last_error, ''), worked_at, updated_at
+		       COALESCE(raw_bytes, 0), update_xid, attempts, conn_losses, COALESCE(last_error, ''), worked_at, updated_at
 		  FROM raw_log_reclaim_chunks ORDER BY range_start`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read the raw log reclaim days: %w", err)
@@ -635,7 +636,7 @@ func (r *RawLogReclaimRepository) ListChunkRows(ctx context.Context) ([]ReclaimC
 		var xid sql.NullInt64
 		var worked sql.NullTime
 		if err := rows.Scan(&c.Name, &c.RangeStart, &c.RangeEnd, &c.State, &c.BytesBefore, &c.BytesAfter,
-			&c.RawBytes, &xid, &c.Attempts, &c.LastError, &worked, &c.UpdatedAt); err != nil {
+			&c.RawBytes, &xid, &c.Attempts, &c.ConnLosses, &c.LastError, &worked, &c.UpdatedAt); err != nil {
 			return nil, err
 		}
 		if xid.Valid {
@@ -737,12 +738,13 @@ func (r *RawLogReclaimRepository) MarkWorked(ctx context.Context, name string) e
 		UPDATE raw_log_reclaim_chunks SET worked_at = now(), updated_at = now() WHERE chunk_name = $1`, name)
 }
 
-// MarkNulled records the committed UPDATE and its transaction id.
+// MarkNulled records the committed UPDATE and its transaction id. A statement
+// that completed ends a run of lost connections.
 func (r *RawLogReclaimRepository) MarkNulled(ctx context.Context, name string, bytesBefore, rawBytes, batches, xid int64) error {
 	return r.exec(ctx, "record removed raw_log", `
 		UPDATE raw_log_reclaim_chunks
 		   SET state = 'nulled', bytes_before = $2, raw_bytes = $3, batches_nulled = $4, update_xid = $5,
-		       last_error = NULL, updated_at = now()
+		       conn_losses = 0, last_error = NULL, updated_at = now()
 		 WHERE chunk_name = $1`, name, bytesBefore, rawBytes, batches, xid)
 }
 
@@ -750,7 +752,8 @@ func (r *RawLogReclaimRepository) MarkNulled(ctx context.Context, name string, b
 func (r *RawLogReclaimRepository) MarkDone(ctx context.Context, name string, bytesBefore, bytesAfter, rawBytes int64) error {
 	return r.exec(ctx, "record a finished day", `
 		UPDATE raw_log_reclaim_chunks
-		   SET state = 'done', bytes_before = $2, bytes_after = $3, raw_bytes = $4, last_error = NULL, updated_at = now()
+		   SET state = 'done', bytes_before = $2, bytes_after = $3, raw_bytes = $4, conn_losses = 0, last_error = NULL,
+		       updated_at = now()
 		 WHERE chunk_name = $1`, name, bytesBefore, bytesAfter, rawBytes)
 }
 
@@ -759,7 +762,7 @@ func (r *RawLogReclaimRepository) MarkDone(ctx context.Context, name string, byt
 func (r *RawLogReclaimRepository) MarkVacuumIneffective(ctx context.Context, name string, bytesAfter int64, msg string) error {
 	return r.exec(ctx, "record an ineffective VACUUM FULL", `
 		UPDATE raw_log_reclaim_chunks
-		   SET attempts = attempts + 1, bytes_after = $2, last_error = $3, updated_at = now()
+		   SET attempts = attempts + 1, conn_losses = 0, bytes_after = $2, last_error = $3, updated_at = now()
 		 WHERE chunk_name = $1`, name, bytesAfter, msg)
 }
 
@@ -780,6 +783,30 @@ func (r *RawLogReclaimRepository) NoteChunkError(ctx context.Context, name, msg 
 	}
 	if err != nil {
 		return "", fmt.Errorf("failed to record a raw log reclaim error: %w", err)
+	}
+	return state, nil
+}
+
+// NoteConnectionLoss records that the database session ended while the day
+// was worked on. It is not counted as an attempt (a database restart is not
+// the day's fault), but a day whose statement ends the session every time —
+// a crash, a FATAL error, which the driver reports as a lost connection —
+// must not hold up every run: failAfter losses in a row (nothing completed
+// in between) fail it. Returns the day's state afterwards.
+func (r *RawLogReclaimRepository) NoteConnectionLoss(ctx context.Context, name, msg string, failAfter int) (string, error) {
+	var state string
+	err := r.db.QueryRowContext(ctx, `
+		UPDATE raw_log_reclaim_chunks
+		   SET conn_losses = conn_losses + 1,
+		       state = CASE WHEN $3 > 0 AND conn_losses + 1 >= $3 AND state IN ('pending', 'nulled') THEN 'failed' ELSE state END,
+		       last_error = $2, updated_at = now()
+		 WHERE chunk_name = $1
+		RETURNING state`, name, database.ScrubDriverText(msg), failAfter).Scan(&state)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to record a lost connection: %w", err)
 	}
 	return state, nil
 }

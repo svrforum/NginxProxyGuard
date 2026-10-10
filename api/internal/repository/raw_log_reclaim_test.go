@@ -548,6 +548,47 @@ func TestRawLogReclaimStateTables(t *testing.T) {
 		t.Fatalf("one more error on a retried day: %q, %v; want failed", st, err)
 	}
 
+	// Lost connections are not attempts. Three in a row fail a day; a
+	// statement that completes in between starts the count again.
+	c := "_timescaledb_internal._hyper_999999_3_chunk"
+	if err := r.PlanChunk(ctx, ReclaimPlanRow{Name: c, RangeStart: day.AddDate(0, 0, 2), RangeEnd: day.AddDate(0, 0, 3), BytesBefore: 600, RawBytes: 100}); err != nil {
+		t.Fatal(err)
+	}
+	for i, want := range []string{"pending", "pending"} {
+		if st, err := r.NoteConnectionLoss(ctx, c, "lost", 3); err != nil || st != want {
+			t.Fatalf("loss %d: %q, %v; want %s", i+1, st, err, want)
+		}
+	}
+	if got := rows()[c]; got.ConnLosses != 2 || got.Attempts != 0 {
+		t.Fatalf("c after two losses = %+v", got)
+	}
+	if err := r.MarkNulled(ctx, c, 600, 100, 3, 4343); err != nil {
+		t.Fatal(err)
+	}
+	if got := rows()[c]; got.ConnLosses != 0 {
+		t.Fatalf("c after its UPDATE completed = %+v; want the count started again", got)
+	}
+	for i, want := range []string{"nulled", "nulled", "failed"} {
+		if st, err := r.NoteConnectionLoss(ctx, c, "lost: pq: terminating connection due to administrator command", 3); err != nil || st != want {
+			t.Fatalf("loss %d after the UPDATE: %q, %v; want %s", i+1, st, err, want)
+		}
+	}
+	if got := rows()[c]; got.ConnLosses != 3 || got.Attempts != 0 || got.LastError != "lost: A database error occurred" {
+		t.Fatalf("c = %+v; want failed by lost connections, no attempt, no driver text", got)
+	}
+	if st, err := r.ReviveChunk(ctx, c); err != nil || st != "nulled" {
+		t.Fatalf("ReviveChunk(c) = %q, %v", st, err)
+	}
+	if st, err := r.NoteConnectionLoss(ctx, c, "lost", 3); err != nil || st != "failed" {
+		t.Fatalf("one more loss on a retried day: %q, %v; want failed", st, err)
+	}
+	if err := r.MarkDone(ctx, c, 600, 500, 100); err != nil {
+		t.Fatal(err)
+	}
+	if got := rows()[c]; got.State != "done" || got.ConnLosses != 0 {
+		t.Fatalf("c done = %+v", got)
+	}
+
 	if err := r.MarkDone(ctx, a, 1000, 600, 400); err != nil {
 		t.Fatal(err)
 	}

@@ -4684,12 +4684,17 @@ CREATE TABLE IF NOT EXISTS public.raw_log_reclaim_chunks (
     batches_nulled integer,
     update_xid bigint,
     attempts integer DEFAULT 0 NOT NULL,
+    conn_losses integer DEFAULT 0 NOT NULL,
     last_error text,
     worked_at timestamp with time zone,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT raw_log_reclaim_chunks_pkey PRIMARY KEY (chunk_name),
     CONSTRAINT chk_raw_log_reclaim_chunks_state CHECK (state IN ('pending', 'nulled', 'done', 'skipped', 'gone', 'failed'))
 );
+-- raw_log_reclaim_chunks.conn_losses (lost database connections in a row while the day
+-- was worked on; three fail it) — DOCUMENTATION ONLY: the CREATE TABLE above has it, and
+-- database/migration.go `upgrades` adds it to tables created before it existed:
+--   ALTER TABLE public.raw_log_reclaim_chunks ADD COLUMN IF NOT EXISTS conn_losses integer DEFAULT 0 NOT NULL;
 
 -- Raw log retention by days takes over from the rotated-file count — DOCUMENTATION ONLY.
 -- The raw-log logrotate stanza now deletes rotated files by age (maxage
