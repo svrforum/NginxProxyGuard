@@ -545,7 +545,10 @@ func (a *RawLogArchiver) Initialise(ctx context.Context) (RawLogArchiveStatus, e
 // Status reports the archive, re-probing it (without writing) when the last
 // look is older than 15 seconds — unless a call that is still answering holds
 // the slot (a long listing of a slow share): the archive evidently works, and
-// a probe would only queue behind it, so the last look stands meanwhile.
+// a probe would only queue behind it, so the last look stands meanwhile. A
+// look taken before archiving was switched on or off never stands: it would
+// show the archive off right after it was switched on (a pass started by the
+// switch remembers its look only when it ends).
 func (a *RawLogArchiver) Status(ctx context.Context) RawLogArchiveStatus {
 	if a == nil {
 		return RawLogArchiveStatus{Status: ArchiveStatusNotMounted, Detail: "the raw log archive is not available"}
@@ -556,7 +559,9 @@ func (a *RawLogArchiver) Status(ctx context.Context) RawLogArchiveStatus {
 	st := a.status
 	a.mu.Unlock()
 	if fresh || busy {
-		return a.decorate(st)
+		if s, err := a.settings(ctx); err == nil && s.RawLogArchiveEnabled == st.Enabled {
+			return a.decorate(st)
+		}
 	}
 	return a.refreshStatus(ctx)
 }

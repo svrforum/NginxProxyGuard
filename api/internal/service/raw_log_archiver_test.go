@@ -519,6 +519,36 @@ func TestArchiverRunsOnWake(t *testing.T) {
 	}
 }
 
+// Switching moving on right after "Use this directory": the next status says
+// the archive is in use (the log disk estimate and the card go by it), not
+// the "off" remembered a moment before — and switching it off is followed as
+// promptly.
+func TestArchiverStatusFollowsTheSwitchAtOnce(t *testing.T) {
+	h := newArchiverHarness(t, true)
+	h.seed()
+	h.settings.RawLogArchiveEnabled = false
+	h.initialise()
+	if st := h.a.Status(context.Background()); st.Status != ArchiveStatusDisabled || st.Enabled || st.Marker != archiveMarkerOurs {
+		t.Fatalf("after Use this directory with moving off: %+v", st)
+	}
+
+	h.settings.RawLogArchiveEnabled = true // saved; the clock has not moved
+	st := h.a.Status(context.Background())
+	if st.Status != ArchiveStatusReady || !st.Enabled {
+		t.Fatalf("right after switching moving on: %s enabled=%v; want ready", st.Status, st.Enabled)
+	}
+	use := EstimateRawLogUsage(nil, nil, h.now, model.RawLogRotation{RetentionDays: 7, Compress: true},
+		RawLogArchiveUse{Enabled: h.settings.RawLogArchiveEnabled, Status: st.Status, RetentionDays: 365})
+	if !use.ArchiveInUse {
+		t.Fatal("the log disk estimate does not count the archive as in use right after switching it on")
+	}
+
+	h.settings.RawLogArchiveEnabled = false
+	if st := h.a.Status(context.Background()); st.Status != ArchiveStatusDisabled || st.Enabled {
+		t.Fatalf("right after switching moving off: %s enabled=%v; want disabled", st.Status, st.Enabled)
+	}
+}
+
 // Most installs never mount an archive: with archiving off and no directory
 // the status is simply "disabled" (and says nothing in the log), while Check
 // still tells the operator what is there.
