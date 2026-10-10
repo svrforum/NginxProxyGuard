@@ -696,3 +696,145 @@ func TestRawLogReclaimHorizonIgnoresLazyVacuum(t *testing.T) {
 		t.Fatal("the VACUUM ended before the check: run it on a bigger table")
 	}
 }
+
+// A parallel VACUUM runs its index passes in parallel workers: backends of
+// type 'parallel worker' whose leader_pid is the VACUUM, with its snapshot,
+// that pg_stat_progress_vacuum does not list (it lists the leader). The
+// server leaves them out of the horizon with their leader, so VACUUM FULL
+// returns the space all the same, and the wait must not count them either.
+func TestRawLogReclaimHorizonIgnoresParallelVacuumWorkers(t *testing.T) {
+	db, schema := openReclaimTestDB(t)
+	ctx := context.Background()
+	r := NewRawLogReclaimRepository(db)
+	big, upd := schema+".pv_big", schema+".pv_upd"
+	mustExec(t, db,
+		`CREATE TABLE `+big+` (id int, a text, b text, c text) WITH (autovacuum_enabled = off)`,
+		`INSERT INTO `+big+` SELECT g, md5(g::text), md5((g + 1)::text), md5((g + 2)::text) FROM generate_series(1, 200000) g`,
+		`CREATE INDEX ON `+big+` (a)`,
+		`CREATE INDEX ON `+big+` (b)`,
+		`CREATE INDEX ON `+big+` (c)`,
+		`CREATE TABLE `+upd+` (id int, pad text) WITH (autovacuum_enabled = off)`,
+		`INSERT INTO `+upd+` SELECT g, md5(g::text) || repeat('y', 400) FROM generate_series(1, 20000) g`)
+	// All-visible first, so the throttled VACUUM below skips the heap and
+	// spends its time in the indexes, in parallel workers. A transaction
+	// another test package has open at the moment keeps pages from being
+	// marked, hence the retries.
+	for deadline := time.Now().Add(60 * time.Second); ; time.Sleep(200 * time.Millisecond) {
+		mustExec(t, db, `VACUUM `+big)
+		var visible bool
+		if err := db.QueryRow(`SELECT relallvisible >= relpages * 0.99 FROM pg_class WHERE oid = $1::regclass`, big).Scan(&visible); err != nil {
+			t.Fatal(err)
+		}
+		if visible {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the table never became all-visible")
+		}
+	}
+	// Dead rows the VACUUM can remove: nothing older than their DELETE open.
+	var delXID int64
+	dtx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := dtx.Exec(`DELETE FROM ` + big + ` WHERE id <= 3000`); err != nil {
+		t.Fatal(err)
+	}
+	if err := dtx.QueryRow(`SELECT xid(pg_current_xact_id())::text::bigint`).Scan(&delXID); err != nil {
+		t.Fatal(err)
+	}
+	if err := dtx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	waitNoOlderSnapshots(t, r, delXID)
+
+	vac, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer vac.Close()
+	var vacPID int
+	if err := vac.QueryRowContext(ctx, `SELECT pg_backend_pid()`).Scan(&vacPID); err != nil {
+		t.Fatal(err)
+	}
+	mustConnExec(t, vac, `SET max_parallel_maintenance_workers = 2`, `SET min_parallel_index_scan_size = 0`,
+		`SET vacuum_cost_delay = 10`, `SET vacuum_cost_limit = 1`)
+	vacDone := make(chan error, 1)
+	go func() {
+		_, err := vac.ExecContext(ctx, `VACUUM (PARALLEL 2, INDEX_CLEANUP ON) `+big)
+		vacDone <- err
+	}()
+	defer func() {
+		_, _ = db.Exec(`SELECT pg_cancel_backend($1)`, vacPID)
+		<-vacDone
+	}()
+	workers := func() int {
+		var n int
+		if err := db.QueryRow(`SELECT count(*) FROM pg_stat_activity
+		       WHERE leader_pid = $1 AND pid <> $1 AND backend_xmin IS NOT NULL
+		         AND pid NOT IN (SELECT pid FROM pg_stat_progress_vacuum)`, vacPID).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	for deadline := time.Now().Add(30 * time.Second); workers() == 0; time.Sleep(50 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("the VACUUM never started parallel workers with a snapshot")
+		}
+	}
+
+	// The "UPDATE": a committed transaction newer than the workers' snapshot
+	// that removes most of upd_t.
+	var xid int64
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(`DELETE FROM ` + upd + ` WHERE id > 1000`); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.QueryRow(`SELECT xid(pg_current_xact_id())::text::bigint`).Scan(&xid); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	var older int
+	if err := db.QueryRow(`SELECT count(*) FROM pg_stat_activity
+	       WHERE leader_pid = $1 AND pid <> $1 AND age(backend_xmin) >= age($2::text::xid)`, vacPID, fmt.Sprint(xid)).Scan(&older); err != nil || older == 0 {
+		t.Fatalf("no worker holds a snapshot older than the UPDATE (%d, %v): the test proves nothing", older, err)
+	}
+
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		b, err := r.OlderSnapshots(ctx, xid)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if b.Count == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the parallel VACUUM's workers are counted as holding the space: %+v", b)
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	// And the space really comes back while those workers still run: the
+	// server ignored their snapshot, as the check did.
+	var before, after int64
+	if err := db.QueryRow(`SELECT pg_total_relation_size($1::regclass)`, upd).Scan(&before); err != nil {
+		t.Fatal(err)
+	}
+	mustExec(t, db, `VACUUM FULL `+upd)
+	if err := db.QueryRow(`SELECT pg_total_relation_size($1::regclass)`, upd).Scan(&after); err != nil {
+		t.Fatal(err)
+	}
+	if after > before/4 {
+		t.Fatalf("VACUUM FULL kept the removed rows (%d -> %d bytes): the parallel workers did hold the horizon", before, after)
+	}
+	t.Logf("VACUUM FULL during a parallel VACUUM: %d -> %d bytes", before, after)
+	if workers() == 0 {
+		t.Fatal("the parallel workers ended before the check: give the VACUUM more index pages")
+	}
+}
