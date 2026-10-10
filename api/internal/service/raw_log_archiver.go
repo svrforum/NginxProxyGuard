@@ -379,6 +379,14 @@ func (a *RawLogArchiver) probeDir(ctx context.Context, enabled bool, instance st
 // same directory is caught as well as a symlink or the same path.
 func (a *RawLogArchiver) leadsToLogDir(root os.FileInfo) bool {
 	dir := filepath.Clean(a.localDir)
+	// The log directory right inside the root: a host folder bound as the
+	// archive while its logs subfolder is bound as the log directory, which
+	// the parents of the log directory's own path do not show.
+	if local, err := os.Stat(dir); err == nil {
+		if fi, err := os.Lstat(filepath.Join(a.root, filepath.Base(dir))); err == nil && os.SameFile(fi, local) {
+			return true
+		}
+	}
 	if real, err := filepath.EvalSymlinks(dir); err == nil {
 		dir = real
 	}
