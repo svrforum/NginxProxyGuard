@@ -537,3 +537,32 @@ func TestArchiverOffAndUnmountedIsQuiet(t *testing.T) {
 		t.Fatalf("check while off: %s, want not_mounted", chk.Status)
 	}
 }
+
+// A rotated-looking name whose time does not parse (month 13) is not a rotated
+// log: it is neither moved nor allowed to stop the pass, which used to crash
+// the API on every start.
+func TestArchiverIgnoresAStrayRotatedName(t *testing.T) {
+	const stray = "access_raw.log-20261301-000000.gz"
+	if IsArchivedRawLogName(stray) {
+		t.Fatalf("%s is not a rotation time, but counts as an archived name", stray)
+	}
+	h := newArchiverHarness(t, true)
+	h.initialise()
+	h.write(h.local, stray, "stray", h.now.Add(-48*time.Hour))
+	h.write(h.local, "access_raw.log-20261001-000000.gz", "settled", h.now.Add(-48*time.Hour))
+	h.write(h.local, "error_raw.log-20261002-000000.gz", "settled too", h.now.Add(-48*time.Hour))
+
+	h.a.runPass(context.Background())
+
+	if got := h.ls(h.local); !eq(got, []string{stray}) {
+		t.Fatalf("local after the pass: %v; want only the stray file", got)
+	}
+	if st := h.a.Status(context.Background()); st.LastMoved != 2 || st.PendingFiles != 0 {
+		t.Fatalf("status %+v; want both settled files moved", st)
+	}
+	// The archive does not list or serve such a name either.
+	h.write(h.root, stray, "stray", time.Time{})
+	if files, err := h.a.ListArchive(context.Background()); err != nil || len(files) != 2 {
+		t.Fatalf("archive listing %+v, %v; want the two moved files", files, err)
+	}
+}

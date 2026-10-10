@@ -682,6 +682,9 @@ func (a *RawLogArchiver) settledLocal(compress bool) []RawLogFile {
 	now := a.now()
 	var out []RawLogFile
 	for _, f := range files {
+		if f.RotatedAt == nil {
+			continue // no rotation time to order by; IsArchivedRawLogName rules these out too
+		}
 		if compress && !f.IsCompressed {
 			continue // delaycompress: compressed at the next rotation
 		}

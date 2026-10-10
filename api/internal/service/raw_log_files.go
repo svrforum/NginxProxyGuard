@@ -41,8 +41,16 @@ var datedRawLogRE = regexp.MustCompile(`^(access|error)_raw\.log-([0-9]{8})(?:-(
 func IsRawLogFileName(name string) bool { return rawLogNameRE.MatchString(name) }
 
 // IsArchivedRawLogName reports whether name is a rotated copy the archive
-// may hold.
-func IsArchivedRawLogName(name string) bool { return rotatedRawLogRE.MatchString(name) }
+// may hold: the dateext pattern with a time ParseRotatedAt accepts, so every
+// such name has a rotation time (a stray access_raw.log-20261301-000000.gz
+// does not, and is left where it is).
+func IsArchivedRawLogName(name string) bool {
+	if !rotatedRawLogRE.MatchString(name) {
+		return false
+	}
+	_, ok := ParseRotatedAt(name)
+	return ok
+}
 
 // IsActiveRawLog reports whether name is a file nginx is writing right now.
 func IsActiveRawLog(name string) bool { return name == "access_raw.log" || name == "error_raw.log" }
