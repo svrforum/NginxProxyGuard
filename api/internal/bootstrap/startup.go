@@ -2,9 +2,11 @@ package bootstrap
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"nginx-proxy-guard/internal/config"
 	"nginx-proxy-guard/internal/nginx"
@@ -44,24 +46,25 @@ func resolveAccessLogPath() string {
 	return "/etc/nginx/logs/access_raw.log"
 }
 
-// runStartup performs startup-time side effects: ensure include files,
-// load global settings, sync configs, and spin up background services.
-// Mirrors the original ordering in main.go.
-func runStartup(ctx context.Context, c *Container) error {
-	if err := c.Nginx.EnsureFilterSubscriptionFiles(); err != nil {
-		log.Printf("[Startup] Warning: failed to ensure filter subscription files: %v", err)
-	}
+// While compose recreates the containers on an upgrade, nginx starts after
+// the API, so the startup steps that validate with nginx -t roll back to the
+// previous release's files. They run again once nginx is up: checked every
+// bootNginxPoll, for at most bootNginxWait.
+const (
+	bootNginxPoll = 5 * time.Second
+	bootNginxWait = 10 * time.Minute
+)
 
-	directIPAction := loadGlobalSettingsForStartup(ctx, c)
-
-	// Regenerate main nginx.conf from global settings so operator-edited
-	// values (brotli, timeouts, custom_http/stream_config, …) actually
-	// reach nginx (issue #121). We do this before syncing host configs so
-	// the very first reload after boot is already on the DB-driven file.
-	log.Println("[Startup] Regenerating main nginx.conf from global settings...")
-	if settings, err := c.Repositories.GlobalSettings.Get(ctx); err != nil {
-		log.Printf("[Startup] Warning: failed to load global settings for nginx.conf: %v", err)
-	} else {
+// mainNginxConfStep regenerates the main nginx.conf from global settings so
+// operator-edited values (brotli, timeouts, custom_http/stream_config, …)
+// actually reach nginx (issue #121). The settings are read each time it runs,
+// so the run once nginx is up applies a save made in the meantime.
+func mainNginxConfStep(c *Container) nginx.DeferredStep {
+	return nginx.DeferredStep{Name: "nginx.conf", Apply: func(ctx context.Context) error {
+		settings, err := c.Repositories.GlobalSettings.Get(ctx)
+		if err != nil {
+			return fmt.Errorf("load global settings: %w", err)
+		}
 		// Pull global trusted IPs so the http-level limit_conn / limit_req
 		// zones honor the same whitelist the per-host configs already use.
 		var trustedIPs []string
@@ -74,22 +77,51 @@ func runStartup(ctx context.Context, c *Container) error {
 			trustedBypassWAF = sys.GlobalTrustedIPsBypassWAF
 			trustedProxies = service.ResolveTrustedProxyConfig(sys)
 		}
-		if err := c.Nginx.GenerateMainNginxConfig(ctx, settings, trustedIPs, trustedBypassWAF, trustedProxies); err != nil {
-			log.Printf("[Startup] Warning: failed to regenerate nginx.conf: %v", err)
-		} else {
-			log.Println("[Startup] nginx.conf regenerated successfully")
-		}
+		return c.Nginx.GenerateMainNginxConfig(ctx, settings, trustedIPs, trustedBypassWAF, trustedProxies)
+	}}
+}
+
+// filterSubscriptionStep writes the shared filter subscription configs from
+// the enabled subscriptions' entries as they are when it runs.
+func filterSubscriptionStep(c *Container) nginx.DeferredStep {
+	return nginx.DeferredStep{Name: "filter subscription configs", Apply: func(ctx context.Context) error {
+		tmp := service.NewFilterSubscriptionService(c.Repositories.FilterSubscription, nil, c.Nginx, nil)
+		return tmp.RegenerateSharedConfigs(ctx)
+	}}
+}
+
+// runStartup performs startup-time side effects: ensure include files,
+// load global settings, sync configs, and spin up background services.
+// Mirrors the original ordering in main.go. It returns the steps nginx could
+// not validate because it was not running, for applyWhenNginxUp.
+func runStartup(ctx context.Context, c *Container) ([]nginx.DeferredStep, error) {
+	if err := c.Nginx.EnsureFilterSubscriptionFiles(); err != nil {
+		log.Printf("[Startup] Warning: failed to ensure filter subscription files: %v", err)
+	}
+
+	directIPAction := loadGlobalSettingsForStartup(ctx, c)
+
+	var later nginx.DeferredSteps
+
+	// Main nginx.conf first, before syncing host configs, so the very first
+	// reload after boot is already on the DB-driven file.
+	log.Println("[Startup] Regenerating main nginx.conf from global settings...")
+	if deferred, err := later.Run(ctx, mainNginxConfStep(c)); deferred {
+		log.Printf("[Startup] nginx is not running yet; nginx.conf stays on its previous version and is applied once nginx is up: %v", err)
+	} else if err != nil {
+		log.Printf("[Startup] Warning: failed to regenerate nginx.conf: %v", err)
+	} else {
+		log.Println("[Startup] nginx.conf regenerated successfully")
 	}
 
 	// Generate shared filter subscription config files BEFORE syncing host configs.
 	log.Println("[Startup] Generating shared filter subscription configs...")
-	{
-		tmp := service.NewFilterSubscriptionService(c.Repositories.FilterSubscription, nil, c.Nginx, nil)
-		if err := tmp.RegenerateSharedConfigs(ctx); err != nil {
-			log.Printf("[Startup] Warning: failed to generate filter subscription configs: %v", err)
-		} else {
-			log.Println("[Startup] Filter subscription configs generated successfully")
-		}
+	if deferred, err := later.Run(ctx, filterSubscriptionStep(c)); deferred {
+		log.Printf("[Startup] nginx is not running yet; filter subscription configs stay on their previous version and are applied once nginx is up: %v", err)
+	} else if err != nil {
+		log.Printf("[Startup] Warning: failed to generate filter subscription configs: %v", err)
+	} else {
+		log.Println("[Startup] Filter subscription configs generated successfully")
 	}
 
 	// Recover certificates stranded in 'pending'/'renewing' by a previous
@@ -157,7 +189,35 @@ func runStartup(ctx context.Context, c *Container) error {
 			"protected endpoints are blocked until you change them via the UI / /api/v1/auth/change-credentials")
 	}
 
-	return nil
+	return later.Steps(), nil
+}
+
+// applyWhenNginxUp runs, in the background, the startup steps nginx could not
+// validate because it was not running yet, once it is up, and reloads it. ctx
+// must be the API's root context: startup's own context ends when Startup
+// returns, and shutdown cancels the root one.
+func applyWhenNginxUp(ctx context.Context, c *Container, steps []nginx.DeferredStep) {
+	if len(steps) == 0 {
+		return
+	}
+	names := make([]string, len(steps))
+	for i, s := range steps {
+		names[i] = s.Name
+	}
+	what := strings.Join(names, " and ")
+	go func() {
+		err := c.Nginx.ApplyWhenUp(ctx, steps, bootNginxPoll, bootNginxWait)
+		switch {
+		case err == nil:
+			log.Printf("[Startup] nginx is up; applied the %s it could not test at boot, and reloaded it", what)
+		case ctx.Err() != nil:
+			// Shutting down.
+		default:
+			// err names the part that failed; a step that failed has
+			// rolled back to its previous version.
+			log.Printf("[Startup] ERROR: applying the %s nginx could not test at boot failed: %v", what, err)
+		}
+	}()
 }
 
 // loadGlobalSettingsForStartup loads IPv6/direct-IP settings so nginx

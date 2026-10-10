@@ -120,11 +120,13 @@ func wirePipelineCanaryHealer(svcs *Services, handlers *Handlers) {
 func (c *Container) Startup(ctx context.Context) error {
 	startupCtx, cancel := context.WithTimeout(ctx, startupTimeout)
 	defer cancel()
-	if err := runStartup(startupCtx, c); err != nil {
+	deferred, err := runStartup(startupCtx, c)
+	if err != nil {
 		return err
 	}
 
 	startBackgroundServices(ctx, c)
+	applyWhenNginxUp(ctx, c, deferred)
 	return nil
 }
 
