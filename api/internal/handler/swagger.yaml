@@ -5730,6 +5730,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '500':
+          description: >-
+            The channel could not be created or read back, for example because
+            the database cannot be reached
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '503':
           description: Notification tables are missing — check the migration log
           content:
