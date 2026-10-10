@@ -61,6 +61,7 @@ type fakeReclaimStore struct {
 	listHook    func(ctx context.Context) error // ListChunks waits on it, as on a lock
 	beginErr    error                           // BeginJob fails with it
 	lossHook    func(ctx context.Context) error // NoteConnectionLoss fails while it does
+	finishHook  func(status string) error       // FinishJob fails while it does
 	inNull      chan struct{}
 	inVacuum    chan struct{}
 	finishCalls []string
@@ -236,6 +237,12 @@ func (f *fakeReclaimStore) ResumeJob(context.Context) (repository.ReclaimJob, bo
 func (f *fakeReclaimStore) FinishJob(_ context.Context, status, lastError string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.finishHook != nil {
+		if err := f.finishHook(status); err != nil {
+			f.log("finish refused " + status)
+			return err
+		}
+	}
 	now := f.clock
 	f.job.Status, f.job.LastError, f.job.FinishedAt = status, lastError, &now
 	f.finishCalls = append(f.finishCalls, status)
@@ -1153,6 +1160,91 @@ func TestRawReclaimConnectionLossIsRecordedOnceTheDatabaseIsBack(t *testing.T) {
 	}
 	if n := len(eventsMatching(f.eventLog(), "sleep 5s")); n != 3 {
 		t.Fatalf("waited %d times for the database; want 3", n)
+	}
+}
+
+// A run whose statement took the database down with it ends while the
+// database is still recovering: its end is recorded once the database
+// answers again, instead of the job staying "running" with no runner until
+// the API restarts.
+func TestRawReclaimRecordsTheEndOnceTheDatabaseIsBack(t *testing.T) {
+	f := newFakeReclaimStore(t)
+	day := f.addDay(1, 100, 40, 0)
+	f.failNull = map[string]error{day: driver.ErrBadConn}
+	recovery := &pq.Error{Code: "57P03", Message: "the database system is in recovery mode"}
+	refused := 4
+	f.finishHook = func(string) error { // f.mu held
+		if refused > 0 {
+			refused--
+			return recovery
+		}
+		return nil
+	}
+	s := newTestReclaim(t, f, plenty())
+	if _, err := s.Start(context.Background(), "admin", nil); err != nil {
+		t.Fatal(err)
+	}
+	waitRun(t, s)
+	if j := f.jobState(); j.Status != model.RawReclaimFailed || !strings.Contains(j.LastError, "connection to the database was lost") {
+		t.Fatalf("job = %+v; want failed on the lost connection once the database answered", j)
+	}
+	if r := f.row(day); r.ConnLosses != 1 {
+		t.Fatalf("day = %+v; want the lost connection recorded", r)
+	}
+}
+
+// Waiting for the database to take the end of a run gives way to a Stop,
+// whose "paused" stands, and to the API stopping, which leaves the job
+// running to be resumed after the next start.
+func TestRawReclaimWaitingToRecordTheEndGivesWay(t *testing.T) {
+	for _, how := range []string{"stop", "shutdown"} {
+		t.Run(how, func(t *testing.T) {
+			f := newFakeReclaimStore(t)
+			day := f.addDay(1, 100, 40, 0)
+			f.failNull = map[string]error{day: driver.ErrBadConn}
+			down := true
+			f.finishHook = func(string) error { // f.mu held
+				if down {
+					return &pq.Error{Code: "57P03"}
+				}
+				return nil
+			}
+			s := newTestReclaim(t, f, plenty())
+			waiting := make(chan struct{}, 1)
+			s.sleep = func(ctx context.Context, d time.Duration) {
+				select {
+				case waiting <- struct{}{}:
+				default:
+				}
+				<-ctx.Done()
+			}
+			if _, err := s.Start(context.Background(), "admin", nil); err != nil {
+				t.Fatal(err)
+			}
+			select { // the run ended and waits for the database
+			case <-waiting:
+			case <-time.After(5 * time.Second):
+				t.Fatal("the run never waited for the database to take its end")
+			}
+			f.mu.Lock()
+			down = false
+			f.mu.Unlock()
+			if how == "stop" {
+				if _, err := s.Stop(context.Background()); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				s.Shutdown()
+			}
+			waitRun(t, s)
+			want := model.RawReclaimPaused
+			if how == "shutdown" {
+				want = model.RawReclaimRunning
+			}
+			if j := f.jobState(); j.Status != want {
+				t.Fatalf("job %s after the %s; want %s", j.Status, how, want)
+			}
+		})
 	}
 }
 

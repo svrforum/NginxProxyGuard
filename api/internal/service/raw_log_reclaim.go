@@ -524,11 +524,36 @@ func (s *RawLogReclaimService) finishNow(status, msg string) {
 }
 
 // finish records how a run ended, unless Stop already recorded 'paused'.
-func (s *RawLogReclaimService) finish(status, msg string) {
+// When the run ended because its statement took the database down with it,
+// the database may refuse connections for a while: the end is tried again
+// (whileUnreachable) rather than leaving the job "running" with no runner
+// until the API restarts. A Stop ends the wait (its "paused" stands), and so
+// does the API stopping, which leaves the job running to be resumed.
+func (s *RawLogReclaimService) finish(ctx context.Context, status, msg string) {
+	waiting := false
+	err := s.whileUnreachable(ctx, func(tctx context.Context) error {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if s.stopping {
+			return nil
+		}
+		err := s.store.FinishJob(tctx, status, msg)
+		if err != nil && !waiting && repository.IsConnectionError(err) {
+			waiting = true
+			log.Printf("[RawLogReclaim] the database cannot record the end of the run yet; trying again every %s", rawReclaimRecordRetry)
+		}
+		return err
+	})
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.stopping {
+	stopped := s.stopping
+	s.mu.Unlock()
+	if stopped {
 		return
 	}
-	s.finishNow(status, msg)
+	if err != nil {
+		log.Printf("[RawLogReclaim] could not record the job state: %s", database.ScrubDriverText(err.Error()))
+	}
+	if msg != "" {
+		log.Printf("[RawLogReclaim] stopped: %s", database.ScrubDriverText(msg))
+	}
 }

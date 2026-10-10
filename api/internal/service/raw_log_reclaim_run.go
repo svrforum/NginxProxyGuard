@@ -146,7 +146,7 @@ func (s *RawLogReclaimService) run(ctx context.Context, sess repository.ReclaimS
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("[RawLogReclaim] the runner panicked: %v", r)
-			s.finish(model.RawReclaimFailed, fmt.Sprintf("the reclaim stopped unexpectedly: %v", r))
+			s.finish(ctx, model.RawReclaimFailed, fmt.Sprintf("the reclaim stopped unexpectedly: %v", r))
 		}
 	}()
 
@@ -160,7 +160,7 @@ func (s *RawLogReclaimService) run(ctx context.Context, sess repository.ReclaimS
 		rows, err := s.store.ListChunkRows(ctx)
 		if err != nil {
 			if ctx.Err() == nil {
-				s.finish(model.RawReclaimFailed, "reading the reclaim state failed: "+err.Error())
+				s.finish(ctx, model.RawReclaimFailed, "reading the reclaim state failed: "+err.Error())
 			}
 			return
 		}
@@ -178,12 +178,12 @@ func (s *RawLogReclaimService) run(ctx context.Context, sess repository.ReclaimS
 		}
 		if next == nil {
 			if deferred > 0 {
-				s.finish(model.RawReclaimFailed, fmt.Sprintf(
+				s.finish(ctx, model.RawReclaimFailed, fmt.Sprintf(
 					"%d day(s) could not be finished; the last: %s. Run the reclaim again later to retry them.", deferred, lastDeferred))
 				return
 			}
 			log.Printf("[RawLogReclaim] finished: %d day(s) done, %s returned to the disk", finished, formatBytes(reclaimed))
-			s.finish(model.RawReclaimDone, "")
+			s.finish(ctx, model.RawReclaimDone, "")
 			return
 		}
 		attempted[next.Name] = true
@@ -200,7 +200,7 @@ func (s *RawLogReclaimService) run(ctx context.Context, sess repository.ReclaimS
 		case rawOutcomeCanceled:
 			return
 		case rawOutcomeFatal:
-			s.finish(model.RawReclaimFailed, out.msg)
+			s.finish(ctx, model.RawReclaimFailed, out.msg)
 			return
 		case rawOutcomeDeferred:
 			deferred++
@@ -578,16 +578,18 @@ func (s *RawLogReclaimService) noteConnectionLoss(ctx context.Context, c reposit
 
 // whileUnreachable runs fn until the database takes it. After a lost
 // connection the database may be restarting: while fn fails for want of a
-// connection it is tried again every rawReclaimRecordRetry, for up to
-// rawReclaimRecordFor, unless ctx ends first (Stop, or the API stopping).
-// Each try gets ten seconds of its own, so a cancelled run still records.
+// connection, or gets no answer within its ten seconds, it is tried again
+// every rawReclaimRecordRetry, for up to rawReclaimRecordFor, unless ctx ends
+// first (Stop, or the API stopping). Each try's ten seconds are its own, so
+// a cancelled run still records.
 func (s *RawLogReclaimService) whileUnreachable(ctx context.Context, fn func(ctx context.Context) error) error {
 	deadline := s.now().Add(rawReclaimRecordFor)
 	for {
 		tctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		err := fn(tctx)
+		unanswered := tctx.Err() != nil
 		cancel()
-		if err == nil || !repository.IsConnectionError(err) || !s.now().Before(deadline) {
+		if err == nil || !(repository.IsConnectionError(err) || unanswered) || !s.now().Before(deadline) {
 			return err
 		}
 		s.sleep(ctx, rawReclaimRecordRetry)
