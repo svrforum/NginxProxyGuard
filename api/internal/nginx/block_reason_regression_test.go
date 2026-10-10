@@ -69,9 +69,9 @@ func TestBlockReasonRegression(t *testing.T) {
 				return d
 			},
 			wantReason: "geo_block",
-			// Challenge mode sets $geo_blocked + $block_reason_var but does NOT
-			// emit `return 403` at the security partial; later challenge logic
-			// handles the redirect. Status check skipped.
+			// Challenge mode only sets $geo_blocked in the security partial; the
+			// reason is set by @challenge_redirect on its 302 (see
+			// TestChallengeBlockReasonOnlyOnTheRedirect). Status check skipped.
 			wantStatus: 0,
 		},
 		{
@@ -238,7 +238,8 @@ func TestBlockReasonRegression(t *testing.T) {
 			},
 			wantReason: "cloud_provider_challenge",
 			// Like the geo challenge, the cloud check only marks the request;
-			// the challenge gate redirects in the access phase. Status check
+			// the challenge gate redirects in the access phase and
+			// @challenge_redirect sets the reason on its 302. Status check
 			// skipped.
 			wantStatus:  0,
 			wantNeedles: []string{"set $cloud_challenge 1;", "reason=cloud_provider"},

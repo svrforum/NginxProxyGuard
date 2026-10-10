@@ -154,16 +154,16 @@
 {{if .GeoRestriction}}{{if .GeoRestriction.Enabled}}{{if .GeoRestriction.ChallengeMode}}
     # Geo Restriction ({{.GeoRestriction.Mode}}) - Challenge Mode (processed AFTER WAF){{if .GeoRestriction.AllowPrivateIPs}} - Private IPs Allowed{{end}}{{if .GeoRestriction.AllowSearchBots}} - Search Bots Allowed{{end}}
     # Challenge mode: show CAPTCHA instead of blocking
+    # This only marks the request. @challenge_redirect sets the block reason
+    # when it refuses: a visitor who passes the challenge is not blocked.
     set $geo_blocked 0;
 {{if eq .GeoRestriction.Mode "whitelist"}}
     if ($geoip2_country_code !~ "^({{join .GeoRestriction.Countries "|"}}{{if .GeoRestriction.AllowPrivateIPs}}|--{{end}})$") {
         set $geo_blocked 1;
-        set $block_reason_var "geo_block";
     }
 {{else}}
     if ($geoip2_country_code ~ "^({{join .GeoRestriction.Countries "|"}})$") {
         set $geo_blocked 1;
-        set $block_reason_var "geo_block";
     }
 {{if .GeoRestriction.AllowPrivateIPs}}
     # Allow private IPs (geo code "--")
@@ -178,12 +178,10 @@
 {{if isCIDR .}}
     if ($remote_addr ~ "{{cidrToNginxPattern .}}") {
         set $geo_blocked 0;
-        set $block_reason_var "-";
     }
 {{else}}
     if ($remote_addr = "{{.}}") {
         set $geo_blocked 0;
-        set $block_reason_var "-";
     }
 {{end}}
 {{end}}
@@ -192,14 +190,12 @@
     # Allow search engine bots - bypass geo challenge
     if ($is_search_bot = 1) {
         set $geo_blocked 0;
-        set $block_reason_var "-";
     }
 {{end}}
 {{if $.GlobalTrustedIPs}}
     # Global trusted IPs - bypass geo restriction
     if ($trusted_ip_{{sanitizeID $.Host.ID}} = 1) {
         set $geo_blocked 0;
-        set $block_reason_var "-";
     }
 {{end}}
 {{end}}{{end}}{{end}}
@@ -507,11 +503,11 @@
 {{if .CloudChallenge}}
     # Challenge mode (skip for priority IPs, search bots, and ACME/challenge paths):
     # mark the request. The challenge gate (/_challenge/validate) decides in the
-    # access phase, after ModSecurity, and lets a visitor with a valid token in.
+    # access phase, after ModSecurity, and lets a visitor with a valid token in;
+    # @challenge_redirect sets the block reason when it refuses.
     set $cloud_challenge 0;
     if ($cloud_block_check_{{sanitizeID .Host.ID}} = "10") {
         set $cloud_challenge 1;
-        set $block_reason_var "cloud_provider_challenge";
     }
 {{else}}
 {{- if .CloudProviderChallengeMode}}
