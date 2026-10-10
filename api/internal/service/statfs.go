@@ -118,50 +118,61 @@ type statfsGuard struct {
 	now     func() time.Time
 
 	mu       sync.Mutex
-	inflight map[string]time.Time // path -> when its still-running call started
+	inflight map[string]*statfsCall // path -> its still-running call
+}
+
+// statfsCall is one statfs in flight. raw and err are set before done is
+// closed and only read after.
+type statfsCall struct {
+	since time.Time
+	done  chan struct{}
+	raw   rawStatfs
+	err   error
 }
 
 func newStatfsGuard(call func(path string) (rawStatfs, error), timeout time.Duration) *statfsGuard {
 	if timeout <= 0 {
 		timeout = statfsTimeout
 	}
-	return &statfsGuard{call: call, timeout: timeout, now: time.Now, inflight: map[string]time.Time{}}
+	return &statfsGuard{call: call, timeout: timeout, now: time.Now, inflight: map[string]*statfsCall{}}
 }
 
 // stat measures path, waiting at most the guard's timeout (or until ctx ends).
-// A call still stuck from an earlier attempt makes it return a stall at once.
+// A call already in flight for the path is shared, not repeated: a caller
+// that arrives while it is young waits for its answer, within the same
+// timeout, so two checks measuring one disk at the same moment both get the
+// numbers. Only a call that has run past the timeout, still stuck from an
+// earlier attempt, makes stat return a stall at once.
 func (g *statfsGuard) stat(ctx context.Context, path string) (rawStatfs, error) {
 	g.mu.Lock()
-	if since, busy := g.inflight[path]; busy {
+	c := g.inflight[path]
+	if c != nil && g.now().Sub(c.since) >= g.timeout {
 		g.mu.Unlock()
-		return rawStatfs{}, &statfsStalledError{Path: path, Since: since}
+		return rawStatfs{}, &statfsStalledError{Path: path, Since: c.since}
 	}
-	since := g.now()
-	g.inflight[path] = since
+	if c == nil {
+		c = &statfsCall{since: g.now(), done: make(chan struct{})}
+		g.inflight[path] = c
+		// The goroutine outlives a caller that gave up: a hung mount costs
+		// this one goroutine until the server answers.
+		go func() {
+			raw, err := g.call(path)
+			g.mu.Lock()
+			c.raw, c.err = raw, err
+			delete(g.inflight, path)
+			g.mu.Unlock()
+			close(c.done)
+		}()
+	}
 	g.mu.Unlock()
 
-	type result struct {
-		raw rawStatfs
-		err error
-	}
-	// Buffered, so a call that answers after the caller gave up can still
-	// deliver and exit instead of leaking.
-	done := make(chan result, 1)
-	go func() {
-		raw, err := g.call(path)
-		g.mu.Lock()
-		delete(g.inflight, path)
-		g.mu.Unlock()
-		done <- result{raw, err}
-	}()
-
-	timer := time.NewTimer(g.timeout)
+	timer := time.NewTimer(max(g.timeout-g.now().Sub(c.since), 0))
 	defer timer.Stop()
 	select {
-	case r := <-done:
-		return r.raw, r.err
+	case <-c.done:
+		return c.raw, c.err
 	case <-timer.C:
-		return rawStatfs{}, &statfsStalledError{Path: path, Since: since}
+		return rawStatfs{}, &statfsStalledError{Path: path, Since: c.since}
 	case <-ctx.Done():
 		return rawStatfs{}, ctx.Err()
 	}

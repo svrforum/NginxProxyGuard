@@ -65,6 +65,52 @@ func TestStatfsGuardReportsAHungMountAsStalled(t *testing.T) {
 	}
 }
 
+// Two checks measuring the same path at the same moment (the minute tick and
+// an emergency pass, or two requests for the log files page) share one
+// statfs. The second used to be told the path was a hung mount at once,
+// however young the first call was: a false "not answering" warning, and
+// DiskGuard dropped the volume it measures the database disk through.
+func TestStatfsGuardSharesAYoungCall(t *testing.T) {
+	var calls atomic.Int32
+	g := newStatfsGuard(func(string) (rawStatfs, error) {
+		calls.Add(1)
+		time.Sleep(40 * time.Millisecond)
+		return rawStatfs{FSID: "77", Frsize: 4096, Blocks: 100, Bfree: 50, Bavail: 40}, nil
+	}, time.Second)
+	errs := make(chan error, 2)
+	go func() {
+		_, err := g.stat(context.Background(), "/etc/nginx/logs")
+		errs <- err
+	}()
+	time.Sleep(10 * time.Millisecond)
+	raw, err := g.stat(context.Background(), "/etc/nginx/logs")
+	if err != nil || raw.FSID != "77" {
+		t.Fatalf("the second caller got %#v, %v; want the shared answer", raw, err)
+	}
+	if err := <-errs; err != nil {
+		t.Fatalf("the first caller: %v", err)
+	}
+	if n := calls.Load(); n != 1 {
+		t.Fatalf("statfs ran %d times for two overlapping callers, want 1", n)
+	}
+
+	// A shared call that does not answer within the timeout is a stall for
+	// every caller waiting on it, with its own start time.
+	release := make(chan struct{})
+	defer close(release)
+	g = newStatfsGuard(func(string) (rawStatfs, error) { <-release; return rawStatfs{}, nil }, 60*time.Millisecond)
+	go func() { _, _ = g.stat(context.Background(), "/mnt/nas") }()
+	time.Sleep(10 * time.Millisecond)
+	start := time.Now()
+	_, err = g.stat(context.Background(), "/mnt/nas")
+	if _, ok := asStatfsStalled(err); !ok {
+		t.Fatalf("waiting on a hung call: %v", err)
+	}
+	if waited := time.Since(start); waited > 500*time.Millisecond {
+		t.Fatalf("the second caller waited %v, more than the first call's timeout", waited)
+	}
+}
+
 func TestStatfsGuardPassesErrorsAndHonoursTheContext(t *testing.T) {
 	boom := errors.New("no such file or directory")
 	g := newStatfsGuard(func(string) (rawStatfs, error) { return rawStatfs{}, boom }, time.Second)

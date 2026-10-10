@@ -347,6 +347,42 @@ func TestProviderKeepsAliasWhileExecFails(t *testing.T) {
 	}
 }
 
+// The volume verified to share the database's disk is kept when it is only
+// slow to answer (a stall, or a caller that gave up): it is still on that
+// disk. Dropping it there sent every later database measurement through
+// docker exec until a tick verified it again.
+func TestProviderKeepsAliasThroughAStall(t *testing.T) {
+	var execs atomic.Int32
+	var stall atomic.Bool
+	p := newDiskTestProvider(func(_ context.Context, path string) (rawStatfs, error) {
+		if stall.Load() {
+			return rawStatfs{}, &statfsStalledError{Path: path, Since: time.Now()}
+		}
+		return diskTestExt4, nil
+	}, func(_ context.Context, args ...string) ([]byte, error) {
+		if args[0] == "exec" {
+			execs.Add(1)
+			return []byte(busyboxStatLine), nil
+		}
+		return nil, errors.New("unexpected")
+	}, time.Now)
+	if got, _, _ := p.Measure(context.Background()); len(got) != 1 || got[0].Key != "db" {
+		t.Fatalf("first measure: %#v", got)
+	}
+	stall.Store(true)
+	if _, err := p.MeasureDB(context.Background()); err != nil {
+		t.Fatalf("MeasureDB while the alias stalls: %v", err)
+	}
+	stall.Store(false)
+	before := execs.Load()
+	if _, err := p.MeasureDB(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if execs.Load() != before {
+		t.Fatal("the alias was dropped after a stall: MeasureDB went back to docker exec")
+	}
+}
+
 // A measurement that decides whether there is room right now (an emergency
 // compression pass and the raw log reclaim, through MeasureDB and DBFree) is
 // fresh or nothing. With docker exec failing and no volume on the database's

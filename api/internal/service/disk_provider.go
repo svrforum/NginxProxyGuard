@@ -232,12 +232,18 @@ func (p *HostUsageProvider) measureDB(ctx context.Context, force bool, local []d
 	// rename the shared disk from "db" to "nginx_logs" and repeat an open
 	// alert under the new name.
 	if alias != "" && (aliasFresh || backingOff) {
-		if raw, err := p.statfs(ctx, alias); err == nil {
+		raw, err := p.statfs(ctx, alias)
+		if err == nil {
 			return diskMeasurement{role: DiskRoleDB, display: display, source: "docker_exec", raw: raw, at: now}, true
 		}
-		p.mu.Lock()
-		p.alias = "" // the path no longer answers; exec decides below
-		p.mu.Unlock()
+		// The path no longer answers: exec decides below. A path that is
+		// only slow (a stall) or a caller that gave up keeps its alias; the
+		// path is still on the database's disk.
+		if _, stalled := asStatfsStalled(err); !stalled && ctx.Err() == nil {
+			p.mu.Lock()
+			p.alias = ""
+			p.mu.Unlock()
+		}
 	}
 
 	p.mu.Lock()
