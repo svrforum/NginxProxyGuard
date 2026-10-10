@@ -6,7 +6,10 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"io"
+	"net"
 	"regexp"
+	"strings"
 	"time"
 
 	"nginx-proxy-guard/internal/database"
@@ -653,8 +656,11 @@ type ReclaimPlanRow struct {
 }
 
 // PlanChunk records a day as pending. A day recorded earlier is left alone,
-// except a skipped one, which comes back: as nulled when its raw_log was
-// already removed (it still needs its VACUUM FULL), else as pending.
+// except a skipped or a failed one, which comes back: as nulled when its
+// raw_log was already removed (it still needs its VACUUM FULL), else as
+// pending. A failed day keeps its attempts, so the run takes it after the
+// others and one more counted error fails it again (the service plans failed
+// days only for an explicit Start).
 func (r *RawLogReclaimRepository) PlanChunk(ctx context.Context, p ReclaimPlanRow) error {
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO raw_log_reclaim_chunks AS c (chunk_name, range_start, range_end, state, bytes_before, raw_bytes, updated_at)
@@ -665,7 +671,7 @@ func (r *RawLogReclaimRepository) PlanChunk(ctx context.Context, p ReclaimPlanRo
 		       raw_bytes = CASE WHEN c.update_xid IS NULL THEN EXCLUDED.raw_bytes ELSE c.raw_bytes END,
 		       range_start = EXCLUDED.range_start, range_end = EXCLUDED.range_end,
 		       last_error = NULL, updated_at = now()
-		 WHERE c.state = 'skipped'`, p.Name, p.RangeStart, p.RangeEnd, p.BytesBefore, p.RawBytes)
+		 WHERE c.state IN ('skipped', 'failed')`, p.Name, p.RangeStart, p.RangeEnd, p.BytesBefore, p.RawBytes)
 	if err != nil {
 		return fmt.Errorf("failed to record a raw log reclaim day: %w", err)
 	}
@@ -768,3 +774,22 @@ func IsUndefinedTable(err error) bool { return sqlStateOf(err) == "42P01" }
 
 // SQLState is the error's SQLSTATE, "" when it carries none.
 func SQLState(err error) string { return sqlStateOf(err) }
+
+// IsConnectionError reports an error that ended the database session rather
+// than the statement: the server closed it (SQLSTATE class 08; 57P01-57P03,
+// an administrator, a crash or a restart; 57P05, idle_session_timeout), or
+// the driver found the connection gone.
+func IsConnectionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	switch code := sqlStateOf(err); {
+	case strings.HasPrefix(code, "08"), code == "57P01", code == "57P02", code == "57P03", code == "57P05":
+		return true
+	case code != "":
+		return false
+	}
+	var netErr net.Error
+	return errors.Is(err, driver.ErrBadConn) || errors.Is(err, sql.ErrConnDone) ||
+		errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || errors.As(err, &netErr)
+}

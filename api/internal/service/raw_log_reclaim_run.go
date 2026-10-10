@@ -19,8 +19,10 @@ import (
 // ── planning ───────────────────────────────────────────────────────────────
 
 // plan records the days that have raw_log to remove, retires dropped ones and
-// sets aside those that no longer qualify.
-func (s *RawLogReclaimService) plan(ctx context.Context) error {
+// sets aside those that no longer qualify. retryFailed (an explicit Start,
+// never a resume) gives each failed day one more try: back to pending, or to
+// nulled when its raw_log is gone already, and taken after every other day.
+func (s *RawLogReclaimService) plan(ctx context.Context, retryFailed bool) error {
 	if err := s.store.MarkGoneChunks(ctx); err != nil {
 		return err
 	}
@@ -47,7 +49,7 @@ func (s *RawLogReclaimService) plan(ctx context.Context) error {
 			}
 			continue
 		}
-		if isKnown && state != "skipped" {
+		if isKnown && state != "skipped" && !(retryFailed && state == "failed") {
 			continue
 		}
 		st, ok := cached[c.Name]
@@ -75,7 +77,9 @@ func (s *RawLogReclaimService) plan(ctx context.Context) error {
 
 // workOrder is what is left to do, in the order a run does it: days this
 // request already started (so max_chunks counts each once), then days whose
-// UPDATE committed, fewer failed attempts, the most raw_log, the oldest.
+// UPDATE committed, fewer failed attempts, the most raw_log, the oldest. A
+// day given one more try after failing (rawReclaimFailAfter attempts) comes
+// after all of those.
 func workOrder(rows []repository.ReclaimChunk, requestedAt *time.Time) []repository.ReclaimChunk {
 	var out []repository.ReclaimChunk
 	for _, r := range rows {
@@ -87,6 +91,9 @@ func workOrder(rows []repository.ReclaimChunk, requestedAt *time.Time) []reposit
 		a, b := out[i], out[j]
 		if wa, wb := workedSince(a, requestedAt), workedSince(b, requestedAt); wa != wb {
 			return wa
+		}
+		if xa, xb := a.Attempts >= rawReclaimFailAfter, b.Attempts >= rawReclaimFailAfter; xa != xb {
+			return xb
 		}
 		if na, nb := a.State == "nulled", b.State == "nulled"; na != nb {
 			return na
@@ -502,6 +509,14 @@ func (s *RawLogReclaimService) chunkError(ctx context.Context, c repository.Recl
 	case repository.IsQueryCanceled(err):
 		msg = fmt.Sprintf("%s %s took longer than its time limit and was cancelled", doing, day)
 		count = true
+	case repository.IsConnectionError(err):
+		// The session ended (a database restart, a dropped connection), not
+		// the day's work: the run stops, and the day is not counted.
+		msg = fmt.Sprintf("the connection to the database was lost while %s %s; run the reclaim again to go on", doing, day)
+		if code := repository.SQLState(err); code != "" {
+			msg += " (SQLSTATE " + code + ")"
+		}
+		kind = rawOutcomeFatal
 	default:
 		msg = fmt.Sprintf("%s %s failed: %s", doing, day, database.ScrubDriverText(err.Error()))
 		if code := repository.SQLState(err); code != "" {

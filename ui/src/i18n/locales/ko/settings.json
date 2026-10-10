@@ -485,7 +485,7 @@
         "reclaimed": "{{size}} 회수됨",
         "remaining": "남은 원문 사본 {{size}}",
         "skipped": "건너뜀 {{count}}일",
-        "failedDays": "실패 {{count}}일",
+        "failedDays": "실패 {{count}}일 (다시 시작하면 한 번 더 시도)",
         "current": "처리 중: {{day}}",
         "since": "{{time}}부터",
         "preparing": "준비 중…",

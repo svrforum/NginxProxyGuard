@@ -2,11 +2,16 @@ package service
 
 import (
 	"context"
+	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"fmt"
+	"io"
+	"net"
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -49,6 +54,7 @@ type fakeReclaimStore struct {
 	sharedBusy  func() bool // another job holds the shared lock right now
 	nullHook    func(ctx context.Context) error
 	vacuumHook  func(ctx context.Context) error
+	failNull    map[string]error // the UPDATE of these days fails so
 	inNull      chan struct{}
 	inVacuum    chan struct{}
 	finishCalls []string
@@ -240,7 +246,7 @@ func (f *fakeReclaimStore) PlanChunk(_ context.Context, p repository.ReclaimPlan
 			State: "pending", BytesBefore: p.BytesBefore, RawBytes: p.RawBytes}
 		return nil
 	}
-	if r.State == "skipped" {
+	if r.State == "skipped" || r.State == "failed" {
 		if r.UpdateXID == nil {
 			r.State, r.BytesBefore, r.RawBytes = "pending", p.BytesBefore, p.RawBytes
 		} else {
@@ -385,6 +391,10 @@ func (s *fakeReclaimSession) NullRawLog(ctx context.Context, rel string) (int64,
 		s.f.t.Error("UPDATE ran without the shared maintenance lock")
 	}
 	d := s.f.dayByRel(rel)
+	if err := s.f.failNull[d.info.Name]; err != nil {
+		s.f.log("null failed " + d.info.Name)
+		return 0, 0, err
+	}
 	d.nulled = true
 	s.f.nextXID++
 	s.f.log("null " + d.info.Name)
@@ -958,12 +968,166 @@ func TestRawReclaimUnexpectedErrorStopsTheJobAndCountsAnAttempt(t *testing.T) {
 	if r := f.row(day); r.State != "failed" {
 		t.Fatalf("day = %+v; want failed after %d attempts", r, rawReclaimFailAfter)
 	}
-	// A failed day is left alone: the next start finds nothing to do.
+	// Another Start gives it one more try, which fails it again at once.
 	if _, err := s.Start(context.Background(), "admin", nil); err != nil {
 		t.Fatal(err)
 	}
-	if j := f.jobState(); j.Status != model.RawReclaimDone {
-		t.Fatalf("job = %+v; want done with nothing left", j)
+	waitRun(t, s)
+	if r := f.row(day); r.State != "failed" || r.Attempts != rawReclaimFailAfter+1 {
+		t.Fatalf("day = %+v; want failed again after one more try", r)
+	}
+	// Once whatever broke it is fixed, a Start finishes it.
+	f.mu.Lock()
+	f.nullHook = nil
+	f.mu.Unlock()
+	if _, err := s.Start(context.Background(), "admin", nil); err != nil {
+		t.Fatal(err)
+	}
+	waitRun(t, s)
+	if r := f.row(day); r.State != "done" {
+		t.Fatalf("day = %+v; want done once it no longer fails", r)
+	}
+}
+
+// A lost database connection is not the day's fault: the run stops and says
+// so, but the day is not counted, so it never becomes failed this way.
+func TestRawReclaimConnectionLossIsNotCountedAgainstTheDay(t *testing.T) {
+	for _, lost := range []error{
+		&pq.Error{Code: "57P01", Message: "terminating connection due to administrator command"},
+		&pq.Error{Code: "57P02", Message: "terminating connection due to crash of another server process"},
+		&pq.Error{Code: "08006", Message: "connection failure"},
+		driver.ErrBadConn,
+		io.EOF,
+		fmt.Errorf("update: %w", io.ErrUnexpectedEOF),
+	} {
+		t.Run(lost.Error(), func(t *testing.T) {
+			f := newFakeReclaimStore(t)
+			day := f.addDay(1, 100, 40, 0)
+			f.failNull = map[string]error{day: lost}
+			s := newTestReclaim(t, f, plenty())
+			for i := 1; i <= rawReclaimFailAfter+1; i++ {
+				if _, err := s.Start(context.Background(), "admin", nil); err != nil {
+					t.Fatalf("run %d: %v", i, err)
+				}
+				waitRun(t, s)
+				if j := f.jobState(); j.Status != model.RawReclaimFailed || !strings.Contains(j.LastError, "connection to the database was lost") {
+					t.Fatalf("run %d: job = %+v; want failed, naming the lost connection", i, j)
+				}
+			}
+			if r := f.row(day); r.State != "pending" || r.Attempts != 0 {
+				t.Fatalf("day = %+v; want still pending, no attempt counted", r)
+			}
+		})
+	}
+}
+
+// failedDay records name as failed after rawReclaimFailAfter attempts; nulled
+// says its UPDATE had committed, so its raw_log is gone already.
+func (f *fakeReclaimStore) failedDay(name string, nulled bool) {
+	d := f.days[name]
+	r := &repository.ReclaimChunk{Name: name, RangeStart: d.info.RangeStart, RangeEnd: d.info.RangeEnd, State: "failed",
+		BytesBefore: d.info.Bytes, RawBytes: d.raw, Attempts: rawReclaimFailAfter, LastError: "boom"}
+	if nulled {
+		xid := int64(500)
+		r.UpdateXID = &xid
+		d.nulled = true
+	}
+	f.rows[name] = r
+}
+
+// An explicit Start gives each failed day one more try, after every other
+// day, so a day that keeps failing cannot hold up the rest; one whose
+// raw_log was already removed comes back to be compacted.
+func TestRawReclaimStartRetriesFailedDaysLast(t *testing.T) {
+	f := newFakeReclaimStore(t)
+	bad := f.addDay(1, 900, 500, 0) // the most raw_log: it would go first
+	nulled := f.addDay(2, 300, 200, 0)
+	good := f.addDay(3, 100, 40, 0)
+	f.failedDay(bad, false)
+	f.failedDay(nulled, true)
+	f.failNull = map[string]error{bad: &pq.Error{Code: "XX000", Message: "still broken"}}
+	s := newTestReclaim(t, f, plenty())
+	if _, err := s.Start(context.Background(), "admin", nil); err != nil {
+		t.Fatal(err)
+	}
+	waitRun(t, s)
+
+	var order []string
+	for _, e := range f.eventLog() {
+		if strings.HasPrefix(e, "null ") || strings.HasPrefix(e, "vacuum ") {
+			order = append(order, e)
+		}
+	}
+	want := []string{"null " + good, "vacuum " + good, "vacuum " + nulled, "null failed " + bad}
+	if strings.Join(order, "|") != strings.Join(want, "|") {
+		t.Fatalf("order %v; want %v", order, want)
+	}
+	if r := f.row(nulled); r.State != "done" {
+		t.Fatalf("the failed day whose raw_log was gone = %+v; want compacted", r)
+	}
+	if r := f.row(bad); r.State != "failed" || r.Attempts != rawReclaimFailAfter+1 {
+		t.Fatalf("the day that still fails = %+v; want failed after one more try", r)
+	}
+	if j := f.jobState(); j.Status != model.RawReclaimFailed {
+		t.Fatalf("job = %+v", j)
+	}
+}
+
+// A resume after a restart carries on with the request as it was: failed
+// days stay failed until someone presses Start.
+func TestRawReclaimResumeLeavesFailedDaysAlone(t *testing.T) {
+	f := newFakeReclaimStore(t)
+	bad := f.addDay(1, 900, 500, 0)
+	good := f.addDay(2, 100, 40, 0)
+	f.failedDay(bad, false)
+	start := f.clock.Add(-time.Hour)
+	f.job = repository.ReclaimJob{Status: model.RawReclaimRunning, RequestedAt: &start, RequestedBy: "admin"}
+	s := newTestReclaim(t, f, plenty())
+	s.ResumeIfRunning(context.Background())
+	waitRun(t, s)
+	if r := f.row(bad); r.State != "failed" || r.Attempts != rawReclaimFailAfter {
+		t.Fatalf("failed day after a resume = %+v; want left alone", r)
+	}
+	if r := f.row(good); r.State != "done" || f.jobState().Status != model.RawReclaimDone {
+		t.Fatalf("other day %+v, job %s", r, f.jobState().Status)
+	}
+}
+
+// How a failed step is taken: what stops the run, and what counts against
+// the day.
+func TestRawReclaimChunkErrorKinds(t *testing.T) {
+	f := newFakeReclaimStore(t)
+	day := f.addDay(1, 100, 40, 0)
+	f.rows[day] = &repository.ReclaimChunk{Name: day, RangeStart: f.days[day].info.RangeStart, State: "pending"}
+	s := newTestReclaim(t, f, plenty())
+	for _, tc := range []struct {
+		err     error
+		kind    rawOutcomeKind
+		counted bool
+	}{
+		{&pq.Error{Code: "55P03"}, rawOutcomeDeferred, false},
+		{&pq.Error{Code: "42P01"}, rawOutcomeDeferred, false},
+		{&pq.Error{Code: "57014"}, rawOutcomeDeferred, true},
+		{&pq.Error{Code: "53100"}, rawOutcomeFatal, false},
+		{&pq.Error{Code: "57P01"}, rawOutcomeFatal, false},
+		{&pq.Error{Code: "57P03"}, rawOutcomeFatal, false},
+		{&pq.Error{Code: "08003"}, rawOutcomeFatal, false},
+		{driver.ErrBadConn, rawOutcomeFatal, false},
+		{sql.ErrConnDone, rawOutcomeFatal, false},
+		{io.EOF, rawOutcomeFatal, false},
+		{&net.OpError{Op: "read", Net: "tcp", Err: syscall.ECONNRESET}, rawOutcomeFatal, false},
+		{&pq.Error{Code: "XX000"}, rawOutcomeFatal, true},
+		{errors.New("something else"), rawOutcomeFatal, true},
+	} {
+		before := f.row(day).Attempts
+		out := s.chunkError(context.Background(), f.row(day), "compacting", tc.err)
+		counted := f.row(day).Attempts > before
+		if out.kind != tc.kind || counted != tc.counted {
+			t.Errorf("%v: kind %d counted %v; want kind %d counted %v", tc.err, out.kind, counted, tc.kind, tc.counted)
+		}
+		f.mu.Lock()
+		f.rows[day].Attempts, f.rows[day].State = 0, "pending"
+		f.mu.Unlock()
 	}
 }
 
@@ -1006,12 +1170,13 @@ func TestWorkOrder(t *testing.T) {
 		{Name: "pending-started", State: "pending", RawBytes: 2, WorkedAt: &worked, RangeStart: t0},
 		{Name: "pending-old-request", State: "pending", RawBytes: 3, WorkedAt: &earlier, RangeStart: t0},
 		{Name: "skipped", State: "skipped", RawBytes: 70, RangeStart: t0},
+		{Name: "failed-before", State: "nulled", RawBytes: 99, Attempts: rawReclaimFailAfter, RangeStart: t0},
 	}
 	var got []string
 	for _, r := range workOrder(rows, &req) {
 		got = append(got, r.Name)
 	}
-	want := "pending-started,nulled,nulled-retried,pending-big,pending-old-request,pending-small"
+	want := "pending-started,nulled,nulled-retried,pending-big,pending-old-request,pending-small,failed-before"
 	if strings.Join(got, ",") != want {
 		t.Fatalf("order %v; want %s", got, want)
 	}

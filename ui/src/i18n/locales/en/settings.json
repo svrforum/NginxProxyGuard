@@ -481,7 +481,7 @@
         "reclaimed": "{{size}} reclaimed",
         "remaining": "{{size}} of raw copies left",
         "skipped": "{{count}} skipped",
-        "failedDays": "{{count}} failed",
+        "failedDays": "{{count}} failed (tried once more when the reclaim is started again)",
         "current": "Working on {{day}}",
         "since": "since {{time}}",
         "preparing": "Preparing…",

@@ -7636,7 +7636,8 @@ paths:
 
         Plans the work, checks the free space on the database disk against the first day
         (twice its size without raw_log, plus 1 GiB) and starts a background runner; a
-        paused or failed job continues where it stopped. Each day takes a short UPDATE,
+        paused or failed job continues where it stopped, and a day that failed gets one
+        more try after every other day. Each day takes a short UPDATE,
         a wait for older transactions to end, and a VACUUM FULL during which queries on
         that day wait (about a minute for a large day). The job waits while the database
         disk is critical and pauses 30 seconds between days (`NPG_RAW_RECLAIM_PAUSE`).

@@ -500,6 +500,35 @@ func TestRawLogReclaimStateTables(t *testing.T) {
 	if got := rows()[b]; got.Attempts != 3 || got.LastError != "boom: A database error occurred" {
 		t.Fatalf("b = %+v; the stored error must not carry driver text", got)
 	}
+	// Planning again (an explicit Start) brings failed days back with their
+	// attempts: pending with fresh sizes when no UPDATE is on record, nulled
+	// with its sizes when one is. One more counted error fails them again.
+	for i := 0; i < 2; i++ {
+		if _, err := r.NoteChunkError(ctx, a, "boom", true, 3); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := rows()[a]; got.State != "failed" || got.Attempts != 3 {
+		t.Fatalf("a = %+v; want failed", got)
+	}
+	for _, p := range []ReclaimPlanRow{
+		{Name: a, RangeStart: day, RangeEnd: day.AddDate(0, 0, 1), BytesBefore: 5, RawBytes: 5},
+		{Name: b, RangeStart: day.AddDate(0, 0, 1), RangeEnd: day.AddDate(0, 0, 2), BytesBefore: 700, RawBytes: 200},
+	} {
+		if err := r.PlanChunk(ctx, p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	m = rows()
+	if m[a].State != "nulled" || m[a].BytesBefore != 1000 || m[a].RawBytes != 400 || m[a].Attempts != 3 || m[a].LastError != "" {
+		t.Fatalf("a back from failed = %+v; want nulled with its sizes and attempts", m[a])
+	}
+	if m[b].State != "pending" || m[b].BytesBefore != 700 || m[b].RawBytes != 200 || m[b].Attempts != 3 {
+		t.Fatalf("b back from failed = %+v; want pending with fresh sizes and its attempts", m[b])
+	}
+	if st, err := r.NoteChunkError(ctx, b, "boom", true, 3); err != nil || st != "failed" {
+		t.Fatalf("one more error on a retried day: %q, %v; want failed", st, err)
+	}
 
 	if err := r.MarkDone(ctx, a, 1000, 600, 400); err != nil {
 		t.Fatal(err)

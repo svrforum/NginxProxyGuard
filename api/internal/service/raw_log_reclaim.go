@@ -49,7 +49,8 @@ const (
 	rawReclaimSupportTTL     = 10 * time.Minute
 	rawReclaimStopWait       = 10 * time.Second
 	// A day that hits an unexpected error this many times becomes failed and
-	// is left alone, so one bad day cannot hold up the rest.
+	// is left alone, so one bad day cannot hold up the rest; an explicit Start
+	// gives it one more try, after every other day.
 	rawReclaimFailAfter            = 3
 	rawReclaimMargin         int64 = 1 << 30
 	rawReclaimVerifyMinBytes int64 = 1 << 20
@@ -277,7 +278,7 @@ func (s *RawLogReclaimService) Start(ctx context.Context, user string, maxChunks
 	if !got {
 		return nil, ErrRawReclaimRunning // another API process runs it
 	}
-	if err := s.plan(ctx); err != nil {
+	if err := s.plan(ctx, true); err != nil {
 		return nil, err
 	}
 	rows, err := s.store.ListChunkRows(ctx)
@@ -477,7 +478,7 @@ func (s *RawLogReclaimService) resume(ctx context.Context) (launched, retry bool
 		_ = sess.Close()
 		return false, true
 	}
-	if err := s.plan(ctx); err != nil {
+	if err := s.plan(ctx, false); err != nil {
 		_ = sess.Close()
 		s.finishNow(model.RawReclaimFailed, "planning the reclaim failed: "+err.Error())
 		return false, false
