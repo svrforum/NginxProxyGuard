@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"sync"
 	"time"
 
@@ -102,8 +103,12 @@ type rawReclaimStore interface {
 // ErrRawReclaimRunning: a runner already exists (409).
 var ErrRawReclaimRunning = errors.New("the raw log reclaim is already running")
 
-// ErrRawReclaimInvalid: max_chunks below 1 (400).
-var ErrRawReclaimInvalid = errors.New("max_chunks must be at least 1")
+// RawReclaimMaxChunks is the largest max_chunks: it is stored in an integer
+// column.
+const RawReclaimMaxChunks = math.MaxInt32
+
+// ErrRawReclaimInvalid: max_chunks below 1 or above RawReclaimMaxChunks (400).
+var ErrRawReclaimInvalid = errors.New("max_chunks must be between 1 and 2147483647")
 
 // RawReclaimPreconditionError is why the job cannot start now (412). Code is
 // unsupported, free_space_unknown or insufficient_space.
@@ -239,7 +244,7 @@ func (s *RawLogReclaimService) release() {
 
 // Start plans the work and starts a runner. user is recorded as requested_by.
 func (s *RawLogReclaimService) Start(ctx context.Context, user string, maxChunks *int) (*model.LogRawReclaimStatus, error) {
-	if maxChunks != nil && *maxChunks < 1 {
+	if maxChunks != nil && (*maxChunks < 1 || *maxChunks > RawReclaimMaxChunks) {
 		return nil, ErrRawReclaimInvalid
 	}
 	if !s.claim() {
@@ -296,11 +301,11 @@ func (s *RawLogReclaimService) Start(ctx context.Context, user string, maxChunks
 			return nil, &RawReclaimPreconditionError{Code: "insufficient_space", FreeBytes: int64(free), RequiredBytes: need}
 		}
 	}
-	s.cancelPendingResume()
 	job, err := s.store.BeginJob(ctx, user, maxChunks)
 	if err != nil {
-		return nil, err
+		return nil, err // a resume waiting for its turn still comes
 	}
+	s.cancelPendingResume()
 	if len(work) == 0 {
 		if err := s.store.FinishJob(ctx, model.RawReclaimDone, ""); err != nil {
 			return nil, err

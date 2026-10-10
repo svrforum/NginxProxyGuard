@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"sort"
 	"strings"
@@ -58,6 +59,7 @@ type fakeReclaimStore struct {
 	failNull    map[string]error // the UPDATE of these days fails so
 	planHook    func(ctx context.Context) error
 	listHook    func(ctx context.Context) error // ListChunks waits on it, as on a lock
+	beginErr    error                           // BeginJob fails with it
 	inNull      chan struct{}
 	inVacuum    chan struct{}
 	finishCalls []string
@@ -211,6 +213,9 @@ func (f *fakeReclaimStore) LoadJob(context.Context) (repository.ReclaimJob, erro
 func (f *fakeReclaimStore) BeginJob(_ context.Context, by string, maxChunks *int) (repository.ReclaimJob, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.beginErr != nil {
+		return repository.ReclaimJob{}, f.beginErr
+	}
 	now := f.clock
 	f.job = repository.ReclaimJob{Status: model.RawReclaimRunning, MaxChunks: maxChunks, RequestedAt: &now, RequestedBy: by, StartedAt: &now}
 	return f.job, nil
@@ -1344,5 +1349,58 @@ func TestRawReclaimCurrentDayIsReportedInUTC(t *testing.T) {
 	}
 	if !strings.Contains(string(b), `"range_start":"2026-10-04T00:00:00Z"`) || !strings.Contains(string(b), `"range_end":"2026-10-05T00:00:00Z"`) {
 		t.Fatalf("current day %s; want it in UTC, 2026-10-04", b)
+	}
+}
+
+// max_chunks is stored in an integer column: a larger value is refused before
+// anything is planned, not after a full planning pass with a 500.
+func TestRawReclaimRefusesMaxChunksBeyondTheColumn(t *testing.T) {
+	f := newFakeReclaimStore(t)
+	f.addDay(1, 100, 40, 0)
+	s := newTestReclaim(t, f, plenty())
+	for _, n := range []int{0, -1, math.MaxInt32 + 1, 3000000000} {
+		if _, err := s.Start(context.Background(), "admin", &n); !errors.Is(err, ErrRawReclaimInvalid) {
+			t.Fatalf("max_chunks %d: %v; want ErrRawReclaimInvalid", n, err)
+		}
+	}
+	if len(f.rows) != 0 || f.sessions != 0 || f.jobState().Status != model.RawReclaimIdle {
+		t.Fatalf("rows %v, sessions %d, job %s: a refused request must not plan or open anything", f.rows, f.sessions, f.jobState().Status)
+	}
+	most := math.MaxInt32
+	if _, err := s.Start(context.Background(), "admin", &most); err != nil {
+		t.Fatalf("max_chunks %d: %v", most, err)
+	}
+	waitRun(t, s)
+}
+
+// A Start that cannot record the request leaves a resume that waits for its
+// turn in place: cancelling it first left the job "running" with no runner
+// until the next restart.
+func TestRawReclaimFailedStartKeepsAPendingResume(t *testing.T) {
+	f := newFakeReclaimStore(t)
+	f.addDay(1, 100, 40, 0)
+	start := f.clock.Add(-time.Hour)
+	f.job = repository.ReclaimJob{Status: model.RawReclaimRunning, RequestedAt: &start, RequestedBy: "admin"}
+	s := newTestReclaim(t, f, plenty())
+	s.sleep = func(ctx context.Context, d time.Duration) { <-ctx.Done() } // the resume delay lasts
+	go s.ResumeIfRunning(context.Background())
+	pending := func() bool {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		return s.resumeAt != nil
+	}
+	for deadline := time.Now().Add(5 * time.Second); !pending(); time.Sleep(time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("the resume never got pending")
+		}
+	}
+	f.mu.Lock()
+	f.beginErr = errors.New("recording the request failed")
+	f.mu.Unlock()
+	if _, err := s.Start(context.Background(), "admin", nil); err == nil {
+		t.Fatal("Start succeeded although recording the request failed")
+	}
+	if !pending() {
+		t.Fatal("the failed Start cancelled the resume that was waiting")
 	}
 }

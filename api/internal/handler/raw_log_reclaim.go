@@ -48,7 +48,7 @@ func (h *RawLogReclaimHandler) Start(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return badRequestError(c, "Invalid request body")
 	}
-	if req.MaxChunks != nil && *req.MaxChunks < 1 {
+	if req.MaxChunks != nil && (*req.MaxChunks < 1 || *req.MaxChunks > service.RawReclaimMaxChunks) {
 		return badRequestError(c, service.ErrRawReclaimInvalid.Error())
 	}
 	user := ExtractUserInfo(c).Email

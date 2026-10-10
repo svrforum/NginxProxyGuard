@@ -89,6 +89,7 @@ func TestRawLogReclaimStartAnswers(t *testing.T) {
 		{"accepted without a body", "", nil, http.StatusAccepted, ""},
 		{"accepted with max_chunks", `{"max_chunks":2}`, nil, http.StatusAccepted, ""},
 		{"max_chunks below 1", `{"max_chunks":0}`, nil, http.StatusBadRequest, ""},
+		{"max_chunks above the column", `{"max_chunks":3000000000}`, nil, http.StatusBadRequest, ""},
 		{"already running", "", service.ErrRawReclaimRunning, http.StatusConflict, "already_running"},
 		{"unsupported", "", &service.RawReclaimPreconditionError{Code: "unsupported", Reason: "catalog_changed"}, http.StatusPreconditionFailed, "unsupported"},
 		{"free space unknown", "", &service.RawReclaimPreconditionError{Code: "free_space_unknown"}, http.StatusPreconditionFailed, "free_space_unknown"},
@@ -116,7 +117,7 @@ func TestRawLogReclaimStartAnswers(t *testing.T) {
 				if job.gotMax != nil || !job.started {
 					t.Fatalf("max %v started %v", job.gotMax, job.started)
 				}
-			case "max_chunks below 1":
+			case "max_chunks below 1", "max_chunks above the column":
 				if job.gotUser != "" {
 					t.Fatal("the service was called for an invalid request")
 				}

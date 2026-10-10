@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -556,6 +557,14 @@ func TestRawLogReclaimStateTables(t *testing.T) {
 	j, err = r.BeginJob(ctx, "", nil)
 	if err != nil || j.Status != "running" || j.MaxChunks != nil || j.LastError != "" || j.FinishedAt != nil || j.RequestedBy != "" {
 		t.Fatalf("second BeginJob = %+v, %v", j, err)
+	}
+	// max_chunks is an integer column: the service refuses anything larger.
+	most, over := math.MaxInt32, math.MaxInt32+1
+	if j, err := r.BeginJob(ctx, "admin", &most); err != nil || j.MaxChunks == nil || *j.MaxChunks != most {
+		t.Fatalf("BeginJob with max_chunks %d = %+v, %v", most, j, err)
+	}
+	if _, err := r.BeginJob(ctx, "admin", &over); SQLState(err) != "22003" {
+		t.Fatalf("BeginJob with max_chunks %d: %v; want numeric_value_out_of_range", over, err)
 	}
 }
 
