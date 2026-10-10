@@ -18,7 +18,7 @@ export function ErrorMessageBlock({ errorMessage }: { errorMessage?: string }) {
   const { t } = useTranslation('logs');
   return (
     <div className="mb-4">
-      <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">{t('detail.errorMsg')}</label>
+      <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">{t('detail.errorMessage')}</label>
       <p className="text-sm text-red-700 dark:text-red-400 font-mono bg-red-50 dark:bg-red-900/30 p-3 rounded-lg">
         {errorMessage || '-'}
       </p>
@@ -59,7 +59,7 @@ export function URIRow({ log, onToggleBlockForm }: URIRowProps) {
   const { t } = useTranslation('logs');
   return (
     <div className="mb-4">
-      <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">{t('detail.uri')}</label>
+      <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">{t('detail.requestURI')}</label>
       <div className="bg-slate-50 dark:bg-slate-800 p-2 rounded-lg">
         {log.request_uri ? (
           <button

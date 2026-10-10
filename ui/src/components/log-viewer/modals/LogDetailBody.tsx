@@ -559,7 +559,7 @@ export function ModsecLogBody({ log }: { log: Log }) {
       </div>
       {log.rule_message && (
         <div className="mb-4">
-          <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">{t('detail.ruleMsg')}</label>
+          <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">{t('detail.ruleMessage')}</label>
           <p className="text-sm text-orange-700 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/30 p-3 rounded-lg">{log.rule_message}</p>
         </div>
       )}

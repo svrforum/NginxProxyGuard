@@ -336,7 +336,8 @@
     "cancel": "취소",
     "success": "URI 패턴이 차단되었습니다",
     "failed": "URI 차단 실패: {{error}}",
-    "noHost": "URI를 차단할 수 없습니다: 호스트 정보가 없습니다"
+    "noHost": "URI를 차단할 수 없습니다: 호스트 정보가 없습니다",
+    "loadingHost": "호스트 정보를 불러오는 중..."
   },
   "stats": {
     "total": "전체",

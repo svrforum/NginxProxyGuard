@@ -55,5 +55,9 @@
   "ddnsAlreadyEnabled": "DDNS 켜짐",
   "checkIntervalMinutes": "갱신 주기(분)",
   "checkIntervalDesc": "스케줄러가 공인 IP를 확인하고 DDNS 레코드를 갱신하는 주기입니다. (최소 1분)",
-  "checkIntervalSaved": "저장됨"
+  "checkIntervalSaved": "저장됨",
+  "pagination": {
+    "prev": "이전",
+    "next": "다음"
+  }
 }

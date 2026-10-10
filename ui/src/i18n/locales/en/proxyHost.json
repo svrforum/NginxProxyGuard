@@ -219,6 +219,8 @@
       "fail2banSettings": "Fail2ban Settings",
       "fail2banSettingsDescription": "Configure ban time, max retries, and other settings.",
       "configureSettings": "Configure",
+      "blockExploitsExceptionsPlaceholder": "^/wp-json/\n^/api/v1/webhook/",
+      "blockExploitsExceptionsDescription": "URI path patterns that skip RFI/exploit blocking, one per line. Example: ^/wp-json/ allows the WordPress REST API.",
       "accessList": "Access List",
       "noAccessList": "No access restrictions",
       "selectAccessList": "Select Access List",

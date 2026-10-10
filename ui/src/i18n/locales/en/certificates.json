@@ -312,5 +312,9 @@
     "list": "Certificate List",
     "history": "Issuance/Renewal History",
     "dnsProviders": "DNS Providers"
+  },
+  "pagination": {
+    "prev": "Previous",
+    "next": "Next"
   }
 }

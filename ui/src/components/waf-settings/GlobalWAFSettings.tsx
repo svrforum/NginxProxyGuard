@@ -298,7 +298,7 @@ export function GlobalWAFSettings() {
               </div>
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
-                  {t('disableModal.reasonLabel')} <span className="text-gray-400 dark:text-slate-500">({t('common.optional', { defaultValue: '선택' })})</span>
+                  {t('disableModal.reasonLabel')} <span className="text-gray-400 dark:text-slate-500">({t('disableModal.optional')})</span>
                 </label>
                 <textarea
                   value={disableReason}

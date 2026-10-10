@@ -55,5 +55,9 @@
   "ddnsAlreadyEnabled": "DDNS on",
   "checkIntervalMinutes": "Renewal interval (minutes)",
   "checkIntervalDesc": "How often the scheduler checks the public IP and renews DDNS records. (minimum 1 minute)",
-  "checkIntervalSaved": "Saved"
+  "checkIntervalSaved": "Saved",
+  "pagination": {
+    "prev": "Previous",
+    "next": "Next"
+  }
 }

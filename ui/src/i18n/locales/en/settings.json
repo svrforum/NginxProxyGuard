@@ -137,6 +137,7 @@
       "botfilter": "Bot Filter",
       "security": "WAF Auto-Ban",
       "maintenance": "Maintenance",
+      "logfiles": "Log Files",
       "systemlogs": "System Logs"
     },
     "systemlogs": {
@@ -175,7 +176,11 @@
       "download": "Download",
       "delete": "Delete",
       "cancel": "Cancel",
-      "test": "Test Settings",
+      "test": {
+        "label": "Test Settings",
+        "testing": "Testing...",
+        "cancel": "Cancel"
+      },
       "testing": "Testing...",
       "rotate": "Rotate Logs",
       "rotating": "Rotating..."
@@ -1410,8 +1415,17 @@
       "staging": "Use Staging for testing to avoid rate limits. Certificates are NOT trusted. Disable for production.",
       "renewBefore": "Renew certificates this many days before expiration. Default (30) is recommended."
     },
+    "botFilter": {
+      "defaults": "These settings apply as defaults for NEW Proxy Hosts only. Existing hosts are unaffected.",
+      "lists": "Manage the User-Agent block and allow lists shared by all proxy hosts.",
+      "badBots": "Blocks known bad bots like scrapers and spammers.",
+      "aiBots": "Blocks AI data scrapers like GPTBot and ClaudeBot.",
+      "searchEngines": "Always allow search engine crawlers (Google, Bing) to protect SEO.",
+      "suspicious": "Challenges suspicious clients (curl, python-requests) with a JavaScript challenge."
+    },
     "botfilter": {
       "defaults": "These settings apply as defaults for NEW Proxy Hosts only. Existing hosts are unaffected.",
+      "lists": "Manage the User-Agent block and allow lists shared by all proxy hosts.",
       "badBots": "Blocks known bad bots like scrapers and spammers.",
       "aiBots": "Blocks AI data scrapers like GPTBot and ClaudeBot.",
       "searchEngines": "Always allow search engine crawlers (Google, Bing) to protect SEO.",

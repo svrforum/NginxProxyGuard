@@ -186,7 +186,7 @@ export default function DNSProviderList() {
             disabled={page === 1}
             className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-sm disabled:opacity-50 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
           >
-            {t('pagination.prev', { defaultValue: '이전' })}
+            {t('pagination.prev')}
           </button>
           <span className="px-4 py-1.5 text-sm text-slate-600 dark:text-slate-400">
             {page} / {data?.total_pages || 1}
@@ -196,7 +196,7 @@ export default function DNSProviderList() {
             disabled={page === (data?.total_pages || 1)}
             className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-sm disabled:opacity-50 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
           >
-            {t('pagination.next', { defaultValue: '다음' })}
+            {t('pagination.next')}
           </button>
         </div>
       )}

@@ -59,7 +59,7 @@ export function LogDetailGeoIP({ log }: { log: Log }) {
   if (!log.geo_country_code) return null;
   return (
     <div className="mb-4 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg">
-      <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase mb-2 block">{t('detail.geoIp')}</label>
+      <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase mb-2 block">{t('detail.geoLocation')}</label>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div>
           <span className="text-xs text-slate-500 dark:text-slate-400">{t('detail.country')}</span>
@@ -88,7 +88,7 @@ export function LogDetailGeoIP({ log }: { log: Log }) {
         )}
         {log.geo_org && (
           <div className="col-span-2 md:col-span-1">
-            <span className="text-xs text-slate-500 dark:text-slate-400">{t('detail.org')}</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400">{t('detail.organization')}</span>
             <p className="text-sm text-slate-900 dark:text-white truncate" title={log.geo_org}>{log.geo_org}</p>
           </div>
         )}

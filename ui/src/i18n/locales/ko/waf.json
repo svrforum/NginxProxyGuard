@@ -394,6 +394,7 @@
   "disableModal": {
     "title": "규칙 비활성화",
     "reasonLabel": "비활성화 사유",
+    "optional": "선택",
     "reasonPlaceholder": "예: 정상적인 요청이 차단되어 비활성화",
     "cancel": "취소",
     "confirm": "비활성화",
@@ -550,6 +551,12 @@
         "enabled": "활성화",
         "disabled": "비활성화"
       }
+    },
+    "bulkAdd": {
+      "applyToAll": "모든 호스트에 적용",
+      "willApplyToAll": "{{count}}개 호스트에 적용됩니다",
+      "success": "규칙이 {{count}}/{{total}}개 호스트에 추가되었습니다",
+      "failed": "규칙 추가 실패: {{error}}"
     },
     "templates": {
       "wpAdmin": "WP 관리자 차단",

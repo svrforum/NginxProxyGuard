@@ -394,6 +394,7 @@
   "disableModal": {
     "title": "Disable Rule",
     "reasonLabel": "Reason for disabling",
+    "optional": "optional",
     "reasonPlaceholder": "e.g., False positive for legitimate request",
     "cancel": "Cancel",
     "confirm": "Disable",
