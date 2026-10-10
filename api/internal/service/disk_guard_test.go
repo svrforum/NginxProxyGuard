@@ -552,3 +552,125 @@ func TestDiskPathFitsTheColumn(t *testing.T) {
 		t.Fatal("a normal path must pass through")
 	}
 }
+
+// downStore is the notification store of a database that cannot be reached
+// while down is set: every query fails, as while npg-db is crash-looping or
+// still recovering after a full disk.
+type downStore struct {
+	*fakeStore
+	down bool
+}
+
+var errDBDown = errors.New("dial unix /var/run/postgresql/.s.PGSQL.5432: connect: connection refused")
+
+func (d *downStore) TablesExist(ctx context.Context) (bool, error) {
+	if d.down {
+		return false, fmt.Errorf("failed to check the notification tables: %w", errDBDown)
+	}
+	return d.fakeStore.TablesExist(ctx)
+}
+
+func (d *downStore) GetState(ctx context.Context, key, subject string) (string, error) {
+	if d.down {
+		return "", errDBDown
+	}
+	return d.fakeStore.GetState(ctx, key, subject)
+}
+
+func (d *downStore) SetState(ctx context.Context, key, subject, label, state, detail string) error {
+	if d.down {
+		return errDBDown
+	}
+	return d.fakeStore.SetState(ctx, key, subject, label, state, detail)
+}
+
+func newDownStoreGuard(t *testing.T) (*DiskGuard, *fakeDiskUsage, *downStore, *diskClock) {
+	t.Helper()
+	store := newFakeStore(eventDiskLow, eventDiskCritical, eventDiskRecovered)
+	db := &downStore{fakeStore: store}
+	u := &fakeDiskUsage{pct: map[string]float64{}, roles: map[string][]DiskRole{"db": {DiskRoleDB}}}
+	c := &diskClock{t: time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)}
+	g := NewDiskGuard(u, NewNotificationServiceWithStore(db), db, nil,
+		DiskGuardOptions{ConfirmSamples: 2, Cooldown: 6 * time.Hour, Now: c.now})
+	return g, u, db, c
+}
+
+// A level change confirmed at a tick when the database cannot be reached is
+// not lost. The notification check used to read "cannot reach the database"
+// as "no notification tables" and report success, so the guard believed the
+// alert was recorded and never tried again: the alert never went out, the
+// recorded state kept saying "failing" after a recovery, and the next episode
+// on that disk was swallowed because nothing seemed to change.
+func TestDiskGuardRetriesAnAlertTheDatabaseCouldNotRecord(t *testing.T) {
+	g, u, db, c := newDownStoreGuard(t)
+	tick := func(pct float64, down bool) {
+		db.down = down
+		diskTickAt(g, u, c, pct)
+	}
+	tick(70, false)
+	tick(92, false)
+	tick(92, true) // confirms "critical" while the database is down
+	if len(db.enqueued) != 0 {
+		t.Fatalf("sent while the database was down: %v", diskEvents(db.fakeStore))
+	}
+	tick(92, false)
+	want := []string{"disk.space_low/warning", "disk.space_critical/error"}
+	if got := diskEvents(db.fakeStore); strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Fatalf("once the database is back: %v, want %v", got, want)
+	}
+
+	// Space freed while npg-db is still recovering: the recovery is
+	// confirmed while it is down and goes out once it answers.
+	tick(70, false)
+	tick(70, true)
+	tick(70, true)
+	tick(70, false)
+	want = append(want, "disk.space_recovered/resolved")
+	if got := diskEvents(db.fakeStore); strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Fatalf("recovery: %v, want %v", got, want)
+	}
+	for _, ev := range []string{eventDiskLow, eventDiskCritical} {
+		if s, _ := db.fakeStore.GetState(context.Background(), ev, "db"); s != stateOK {
+			t.Fatalf("%s is still %q after the recovery", ev, s)
+		}
+	}
+
+	// The next episode is announced again.
+	c.advance(7 * time.Hour)
+	for _, p := range []float64{87, 87, 92, 92} {
+		tick(p, false)
+	}
+	want = append(want, "disk.space_low/warning", "disk.space_critical/error")
+	if got := diskEvents(db.fakeStore); strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Fatalf("next episode: %v, want %v", got, want)
+	}
+}
+
+// A filesystem that is no longer measured has its open alert closed quietly,
+// and is forgotten only once that is recorded: with the database down at that
+// moment the alert stayed "failing" for good.
+func TestDiskGuardClosesAVanishedDisksAlertOnceItCan(t *testing.T) {
+	g, u, db, c := newDownStoreGuard(t)
+	u.roles["backups"] = []DiskRole{DiskRoleBackups}
+	u.pct["backups"] = 95
+	diskTickAt(g, u, c, 50)
+	diskTickAt(g, u, c, 50)
+	if got := strings.Join(diskEvents(db.fakeStore), " "); got != "disk.space_low/warning disk.space_critical/error" {
+		t.Fatalf("got %q", got)
+	}
+	delete(u.pct, "backups")
+	db.down = true
+	for i := 0; i < 15; i++ {
+		diskTickAt(g, u, c, 50)
+	}
+	db.down = false
+	diskTickAt(g, u, c, 50)
+	for _, ev := range []string{eventDiskLow, eventDiskCritical} {
+		if s, _ := db.fakeStore.GetState(context.Background(), ev, "backups"); s != stateOK {
+			t.Fatalf("%s of the vanished disk is still %q", ev, s)
+		}
+	}
+	if len(db.enqueued) != 2 {
+		t.Fatalf("closing a vanished disk's alert sent %v", diskEvents(db.fakeStore)[2:])
+	}
+}

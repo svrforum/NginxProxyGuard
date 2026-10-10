@@ -31,7 +31,7 @@ import (
 // the emission rules can be tested without a database — those rules are the
 // part that would flood somebody's phone if they were wrong.
 type notifyStore interface {
-	TablesExist(ctx context.Context) bool
+	TablesExist(ctx context.Context) (bool, error)
 	GetState(ctx context.Context, eventKey, subject string) (string, error)
 	SetState(ctx context.Context, eventKey, subject, label, state, detail string) error
 	SetSubjectLabel(ctx context.Context, eventKey, subject, label string) error
@@ -94,9 +94,13 @@ func NewNotificationServiceWithStore(store notifyStore) *NotificationService {
 // The recovery message travels under its own event key — cert.renewal_failed
 // becomes cert.renewed — so a channel that only subscribed to failures is not
 // told about recoveries it did not ask for.
+//
+// Without the notification schema it does nothing. A database that cannot be
+// reached is an error, though: the transition was not recorded, and a caller
+// that keeps its own copy of the state (DiskGuard) must try again.
 func (s *NotificationService) EmitTransition(ctx context.Context, eventKey, subject string, failing bool, detail string, fields map[string]string) error {
-	if s == nil || s.store == nil || !s.store.TablesExist(ctx) {
-		return nil
+	if ok, err := s.available(ctx); !ok {
+		return err
 	}
 
 	want := stateOK
@@ -155,17 +159,27 @@ func (s *NotificationService) EmitTransition(ctx context.Context, eventKey, subj
 // failing" section forever, and announcing a recovery that did not happen
 // would be worse.
 func (s *NotificationService) ResolveQuietly(ctx context.Context, eventKey, subject string) error {
-	if s == nil || s.store == nil || !s.store.TablesExist(ctx) {
-		return nil
+	if ok, err := s.available(ctx); !ok {
+		return err
 	}
 	return s.store.SetState(ctx, eventKey, subject, "", stateOK, "")
+}
+
+// available reports whether notifications can be recorded: false with a nil
+// error when the schema is missing (nothing to do), false with the error when
+// the database could not be asked.
+func (s *NotificationService) available(ctx context.Context) (bool, error) {
+	if s == nil || s.store == nil {
+		return false, nil
+	}
+	return s.store.TablesExist(ctx)
 }
 
 // EmitBatched records a high-frequency event. Nothing is sent until FlushBatches
 // runs, which the dispatcher does every batchWindow.
 func (s *NotificationService) EmitBatched(ctx context.Context, eventKey string, fields map[string]string) error {
-	if s == nil || s.store == nil || !s.store.TablesExist(ctx) {
-		return nil
+	if ok, err := s.available(ctx); !ok {
+		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()

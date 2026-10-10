@@ -46,7 +46,7 @@ func NewNotificationDispatcher(repo *repository.NotificationRepository, notify *
 
 // DispatchOnce sends everything currently due. Returns the number sent.
 func (d *NotificationDispatcher) DispatchOnce(ctx context.Context) (int, error) {
-	if d == nil || d.repo == nil || !d.repo.TablesExist(ctx) {
+	if d == nil || d.repo == nil || !d.tablesReady(ctx) {
 		return 0, nil
 	}
 	entries, err := d.repo.ClaimDue(ctx, d.batchSize)
@@ -145,7 +145,7 @@ func (d *NotificationDispatcher) FlushBatches(ctx context.Context) {
 
 // Prune trims the outbox.
 func (d *NotificationDispatcher) Prune(ctx context.Context) {
-	if d == nil || d.repo == nil || !d.repo.TablesExist(ctx) {
+	if d == nil || d.repo == nil || !d.tablesReady(ctx) {
 		return
 	}
 	// Stale first, then prune. A message that has waited longer than this is no
@@ -223,4 +223,13 @@ type UnsupportedChannelError struct{ Type string }
 
 func (e *UnsupportedChannelError) Error() string {
 	return "no adapter for channel type " + e.Type
+}
+
+// tablesReady skips a run when the schema is missing or the database cannot
+// be asked. Nothing is lost by skipping: queued messages wait in the outbox
+// for the next run, 30 seconds later, and a database outage is not logged
+// twice a minute.
+func (d *NotificationDispatcher) tablesReady(ctx context.Context) bool {
+	ok, err := d.repo.TablesExist(ctx)
+	return err == nil && ok
 }

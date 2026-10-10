@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -96,7 +97,8 @@ type diskNotifier interface {
 	ResolveQuietly(ctx context.Context, eventKey, subject string) error
 }
 
-// diskStateReader restores the hysteresis level after a restart.
+// diskStateReader restores the hysteresis level after a restart, and re-reads
+// the recorded state after a failed alert.
 type diskStateReader interface {
 	GetState(ctx context.Context, eventKey, subject string) (string, error)
 }
@@ -130,8 +132,12 @@ type fsState struct {
 	// guard calls EmitTransition only on a change instead of every minute.
 	announcedLow      bool
 	announcedCritical bool
-	recoveredAt       time.Time
-	missingSince      time.Time
+	// resync is set when recording an alert failed: what notification_state
+	// holds is read again before the next announcement, so the copy above
+	// cannot drift from it.
+	resync       bool
+	recoveredAt  time.Time
+	missingSince time.Time
 }
 
 type usageSample struct {
@@ -242,7 +248,7 @@ func (g *DiskGuard) Tick(ctx context.Context) {
 		}
 		// Nothing is announced until the alert state is known; it is read
 		// again next tick.
-		if st.loaded {
+		if st.loaded && !st.resync {
 			g.announce(ctx, *fs, st, now)
 		}
 		// Past the warning line, or a level change waiting for its
@@ -301,6 +307,10 @@ func primaryDiskKey(fss []FSUsage) string {
 // full disk) is retried next tick; until then the level is still tracked but
 // nothing is announced, because an open alert that was never read could not
 // be closed.
+//
+// After an alert could not be recorded (resync), the state is read again the
+// same way, but only the announced flags are taken from it: the level stays
+// what the samples confirmed.
 func (g *DiskGuard) stateFor(ctx context.Context, key string) *fsState {
 	g.mu.Lock()
 	st := g.fs[key]
@@ -309,11 +319,11 @@ func (g *DiskGuard) stateFor(ctx context.Context, key string) *fsState {
 		g.fs[key] = st
 	}
 	g.mu.Unlock()
-	if st.loaded {
+	if st.loaded && !st.resync {
 		return st
 	}
 	if g.state == nil {
-		st.loaded = true
+		st.loaded, st.resync = true, false
 		return st
 	}
 	crit, errCrit := g.state.GetState(ctx, eventDiskCritical, key)
@@ -321,9 +331,13 @@ func (g *DiskGuard) stateFor(ctx context.Context, key string) *fsState {
 	if errCrit != nil || errLow != nil {
 		return st
 	}
-	st.loaded = true
 	st.announcedCritical = crit == stateFailing
 	st.announcedLow = low == stateFailing
+	if st.resync {
+		st.resync = false
+		return st
+	}
+	st.loaded = true
 	restored := DiskLevelOK
 	switch {
 	case st.announcedCritical:
@@ -382,6 +396,7 @@ func (g *DiskGuard) announce(ctx context.Context, fs FSUsage, st *fsState, now t
 		if !held {
 			if err := g.notify.EmitTransition(ctx, eventDiskLow, fs.Key, wantLow, fields["detail"], fields); err != nil {
 				g.logEmitFailure(eventDiskLow, fs, err)
+				st.resync = true
 			} else {
 				delete(g.emitErrs, eventDiskLow+"|"+fs.Key)
 				if !wantLow {
@@ -400,6 +415,7 @@ func (g *DiskGuard) announce(ctx context.Context, fs FSUsage, st *fsState, now t
 		}
 		if err := g.notify.EmitTransition(ctx, eventDiskCritical, fs.Key, wantCrit, fields["detail"], fields); err != nil {
 			g.logEmitFailure(eventDiskCritical, fs, err)
+			st.resync = true
 		} else {
 			delete(g.emitErrs, eventDiskCritical+"|"+fs.Key)
 			st.announcedCritical = wantCrit
@@ -409,7 +425,8 @@ func (g *DiskGuard) announce(ctx context.Context, fs FSUsage, st *fsState, now t
 
 // logEmitFailure logs a failed alert once per distinct error. When the full
 // disk is the database's, recording the alert fails the same way every tick
-// until the database can write again; the next tick retries regardless.
+// until the database can write again; the next tick re-reads the recorded
+// state and retries regardless.
 func (g *DiskGuard) logEmitFailure(event string, fs FSUsage, err error) {
 	k, msg := event+"|"+fs.Key, err.Error()
 	if g.emitErrs[k] == msg {
@@ -542,8 +559,16 @@ func (g *DiskGuard) forgetVanished(ctx context.Context, present map[string]bool,
 	}
 	g.mu.Unlock()
 	for _, key := range gone {
-		_ = g.notify.ResolveQuietly(ctx, eventDiskLow, key)
-		_ = g.notify.ResolveQuietly(ctx, eventDiskCritical, key)
+		// Forgotten only once both are recorded: an alert left "failing"
+		// would stay in the digest, and swallow the next episode if the
+		// filesystem comes back.
+		errLow := g.notify.ResolveQuietly(ctx, eventDiskLow, key)
+		errCrit := g.notify.ResolveQuietly(ctx, eventDiskCritical, key)
+		if err := errors.Join(errLow, errCrit); err != nil {
+			g.logEmitFailure("closing of the", FSUsage{Key: key, Path: key}, err)
+			continue
+		}
+		delete(g.emitErrs, "closing of the|"+key)
 		g.mu.Lock()
 		delete(g.fs, key)
 		g.mu.Unlock()

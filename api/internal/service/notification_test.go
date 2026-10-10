@@ -2,11 +2,14 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"strings"
 	"testing"
 	"time"
 
+	"nginx-proxy-guard/internal/database"
 	"nginx-proxy-guard/internal/model"
+	"nginx-proxy-guard/internal/repository"
 )
 
 // fakeStore stands in for the repository so the emission rules can be tested
@@ -28,7 +31,7 @@ func newFakeStore(events ...string) *fakeStore {
 	return f
 }
 
-func (f *fakeStore) TablesExist(context.Context) bool { return true }
+func (f *fakeStore) TablesExist(context.Context) (bool, error) { return true, nil }
 
 func (f *fakeStore) GetState(_ context.Context, key, subject string) (string, error) {
 	return f.state[key+"|"+subject], nil
@@ -296,6 +299,30 @@ func TestEmitIsNoOpWithoutTables(t *testing.T) {
 
 type noTablesStore struct{ fakeStore }
 
-func (n *noTablesStore) TablesExist(context.Context) bool { return false }
+// A database that cannot be reached is not a missing schema. It used to read
+// as one, and EmitTransition reported success for a transition nobody
+// recorded: DiskGuard then never retried a disk alert confirmed while npg-db
+// was down. The real repository on a database that does not answer.
+func TestEmitTransitionReportsAnUnreachableDatabase(t *testing.T) {
+	sqlDB, err := sql.Open("postgres", "host=/nonexistent-npg-test-socket user=npg dbname=npg sslmode=disable connect_timeout=2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sqlDB.Close()
+	repo := repository.NewNotificationRepository(&database.DB{DB: sqlDB})
+	ctx := context.Background()
+	if ok, err := repo.TablesExist(ctx); ok || err == nil {
+		t.Fatalf("TablesExist = %v, %v; want false and the error", ok, err)
+	}
+	s := NewNotificationService(repo)
+	if err := s.EmitTransition(ctx, eventDiskCritical, "db", true, "92.0%", nil); err == nil {
+		t.Error("EmitTransition reported success with the database down")
+	}
+	if err := s.ResolveQuietly(ctx, eventDiskLow, "db"); err == nil {
+		t.Error("ResolveQuietly reported success with the database down")
+	}
+}
+
+func (n *noTablesStore) TablesExist(context.Context) (bool, error) { return false, nil }
 
 var _ = time.Second

@@ -28,13 +28,20 @@ func NewNotificationRepository(db *database.DB) *NotificationRepository {
 // warn-and-continue in this codebase, so every entry point checks first and
 // behaves as "no channels configured" rather than erroring — an install whose
 // upgrade failed must still serve its dashboard.
-func (r *NotificationRepository) TablesExist(ctx context.Context) bool {
+//
+// A query that fails is an error, not "missing": a database that is down or
+// still recovering must not read as an install without notifications, or a
+// caller recording an alert reports success for an alert nobody recorded.
+func (r *NotificationRepository) TablesExist(ctx context.Context) (bool, error) {
 	var ok bool
 	err := r.db.QueryRowContext(ctx,
 		`SELECT to_regclass('public.notification_channels') IS NOT NULL
 		    AND to_regclass('public.notification_state') IS NOT NULL
 		    AND to_regclass('public.notification_outbox') IS NOT NULL`).Scan(&ok)
-	return err == nil && ok
+	if err != nil {
+		return false, fmt.Errorf("failed to check the notification tables: %w", err)
+	}
+	return ok, nil
 }
 
 const channelColumns = `id, name, type, enabled, config, events, digest_events, rich_format, language, COALESCE(dashboard_url, ''), digest_enabled, digest_hour,

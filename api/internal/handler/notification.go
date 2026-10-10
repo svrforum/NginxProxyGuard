@@ -56,7 +56,9 @@ func maskChannel(c *model.NotificationChannel) {
 
 func (h *NotificationHandler) List(c echo.Context) error {
 	ctx := c.Request().Context()
-	if !h.repo.TablesExist(ctx) {
+	if ok, err := h.repo.TablesExist(ctx); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to list channels"})
+	} else if !ok {
 		return c.JSON(http.StatusOK, map[string]any{"data": []model.NotificationChannel{}})
 	}
 	channels, err := h.repo.List(ctx)
@@ -82,7 +84,9 @@ func (h *NotificationHandler) List(c echo.Context) error {
 
 func (h *NotificationHandler) Create(c echo.Context) error {
 	ctx := c.Request().Context()
-	if !h.repo.TablesExist(ctx) {
+	if ok, err := h.repo.TablesExist(ctx); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to create channel"})
+	} else if !ok {
 		return c.JSON(http.StatusServiceUnavailable, map[string]string{
 			"error": "Notification tables are missing — check the migration log"})
 	}
@@ -188,7 +192,9 @@ func (h *NotificationHandler) Test(c echo.Context) error {
 // Deliveries answers "why did I not get an alert".
 func (h *NotificationHandler) Deliveries(c echo.Context) error {
 	ctx := c.Request().Context()
-	if !h.repo.TablesExist(ctx) {
+	if ok, err := h.repo.TablesExist(ctx); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to list deliveries"})
+	} else if !ok {
 		return c.JSON(http.StatusOK, map[string]any{"data": []model.OutboxEntry{}})
 	}
 	entries, err := h.repo.RecentDeliveries(ctx, c.Param("id"), 50)

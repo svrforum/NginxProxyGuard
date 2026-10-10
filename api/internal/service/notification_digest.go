@@ -341,7 +341,12 @@ func (s *NotificationDigestService) BuildPreview(ctx context.Context, ch *model.
 // SendDue queues a digest for every channel whose hour has come and which has
 // not already had one today.
 func (s *NotificationDigestService) SendDue(ctx context.Context, now time.Time) (int, error) {
-	if s.repo == nil || !s.repo.TablesExist(ctx) {
+	if s.repo == nil {
+		return 0, nil
+	}
+	// A missing schema, or a database that cannot be asked: skipped like
+	// before, the next hourly run tries again.
+	if ok, err := s.repo.TablesExist(ctx); err != nil || !ok {
 		return 0, nil
 	}
 	channels, err := s.repo.ChannelsForDigest(ctx, now.Hour(), now)
