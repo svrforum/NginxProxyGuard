@@ -108,8 +108,10 @@
         # visitor without a token, or one whose token the API rejected. Any
         # other 401 (Basic auth in a custom location, say, which nginx checks
         # before the gate) stays a 401. Both answers refuse the request.
-        # The block reason is set here, on the redirect: _security only marks
-        # the request, and a visitor who passes the gate is not blocked.
+        # The block reason is set on refusals only: _security just marks the
+        # request, and a visitor who passes the gate is not blocked. A
+        # refusal of the gate already carries it (@challenge_gate_deny); it
+        # is set here too for a 401 that did not come from the gate.
 {{- if .CloudChallenge}}
         set $challenge_needed "${geo_blocked}${cloud_challenge}";
         if ($challenge_needed = "00") {
@@ -241,8 +243,10 @@
         # visitor without a token, or one whose token the API rejected. Any
         # other 401 (Basic auth in a custom location, say, which nginx checks
         # before the gate) stays a 401. Both answers refuse the request.
-        # The block reason is set here, on the redirect: _security only marks
-        # the request, and a visitor who passes the gate is not blocked.
+        # The block reason is set on refusals only: _security just marks the
+        # request, and a visitor who passes the gate is not blocked. A
+        # refusal of the gate already carries it (@challenge_gate_deny); it
+        # is set here too for a 401 that did not come from the gate.
 {{- if .CloudChallenge}}
         set $challenge_needed "${geo_blocked}${cloud_challenge}";
         if ($challenge_needed = "00") {

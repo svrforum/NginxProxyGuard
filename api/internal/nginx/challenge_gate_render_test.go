@@ -296,48 +296,35 @@ func TestChallengeRedirectNamesTheReason(t *testing.T) {
 	}
 }
 
-// A challenged visitor is blocked only by the redirect to the challenge page.
+// A challenged visitor is blocked only when the challenge refuses the request.
 // _security used to set the block reason on every request from a challenged
 // country or cloud range, so a visitor who had solved the challenge was
 // logged as blocked on every page: counted in the dashboard's blocked
 // requests and IPs and listed among the top blocked IPs of the digest. The
-// reason is now set by @challenge_redirect, right before the 302: geo_block
-// for a visitor the geo restriction challenges (on a host with both
-// challenges, too), cloud_provider_challenge for one challenged for a cloud
-// range only. Geo restriction in block mode keeps geo_block on its 403.
-func TestChallengeBlockReasonOnlyOnTheRedirect(t *testing.T) {
-	reasons := []string{"set $block_reason_var \"geo_block\";", "set $block_reason_var \"cloud_provider_challenge\";"}
+// reason is set where the challenge refuses: in @challenge_gate_deny, where
+// every refusal of the gate ends (its own 401 for a visitor without a token,
+// and the API's refusals), and by @challenge_redirect right before its 302.
+// The gate's subrequest shares the request's variables, so a refusal that
+// never reaches the redirect is logged as blocked too: a location from
+// Advanced Config with an error_page of its own sends the gate's 401 out
+// as it is, and the redirect itself answers a plain 401 when the API
+// refused with another status. geo_block for a visitor the geo restriction
+// challenges (on a host with both challenges, too),
+// cloud_provider_challenge for one challenged for a cloud range only. Geo
+// restriction in block mode keeps geo_block on its 403.
+func TestChallengeBlockReasonOnlyOnARefusal(t *testing.T) {
 	for _, ch := range gateChallenges {
-		for _, mode := range gateTLSModes {
-			d := challengeData(gateTestHost("00000000-0000-0000-0000-0000000000f2", mode.ssl, mode.force, ""), ch.set)
-			if d.GeoRestriction != nil {
-				d.GeoRestriction.AllowSearchBots = true
-				d.GeoRestriction.AllowedIPs = []string{"192.0.2.0/24"}
-			}
-			d.SearchEnginesList = "Googlebot"
-			name := ch.name + " " + mode.name
-			for i, b := range splitServerBlocks(t, renderForTest(t, d)) {
-				r := blockAt(b, "location @challenge_redirect {")
-				rest := strings.Replace(b, r, "", 1)
-				for _, reason := range reasons {
-					if strings.Contains(rest, reason) {
-						t.Errorf("%s server %d: %s outside @challenge_redirect: every request from the challenged range is logged as blocked", name, i, reason)
-					}
+		for _, adv := range []string{"", "location /app/ {\n    error_page 404 /nope;\n    proxy_pass http://192.0.2.20:8080;\n}\n"} {
+			for _, mode := range gateTLSModes {
+				d := challengeData(gateTestHost("00000000-0000-0000-0000-0000000000f2", mode.ssl, mode.force, adv), ch.set)
+				if d.GeoRestriction != nil {
+					d.GeoRestriction.AllowSearchBots = true
+					d.GeoRestriction.AllowedIPs = []string{"192.0.2.0/24"}
 				}
-				if r == "" {
-					continue // the HTTP server of a forced-HTTPS host redirects
-				}
-				want := []string{"set $block_reason_var \"geo_block\";\n        return 302 /api/v1/challenge/page?host=00000000-0000-0000-0000-0000000000f2&reason=geo_restriction&"}
-				if ch.cloud {
-					want = append(want, "set $block_reason_var \"cloud_provider_challenge\";\n            return 302 /api/v1/challenge/page?host=00000000-0000-0000-0000-0000000000f2&reason=cloud_provider&")
-				}
-				for _, w := range want {
-					if !strings.Contains(r, w) {
-						t.Errorf("%s server %d: @challenge_redirect does not set the block reason right before its redirect %q:\n%s", name, i, w, r)
-					}
-				}
-				if strings.Count(r, "set $block_reason_var") != len(want) {
-					t.Errorf("%s server %d: @challenge_redirect sets the block reason on a path that does not redirect:\n%s", name, i, r)
+				d.SearchEnginesList = "Googlebot"
+				name := ch.name + " " + mode.name + " " + strings.SplitN(adv, " {", 2)[0]
+				for i, b := range splitServerBlocks(t, renderForTest(t, d)) {
+					checkChallengeBlockReason(t, name, i, ch.cloud, b)
 				}
 			}
 		}
@@ -346,6 +333,53 @@ func TestChallengeBlockReasonOnlyOnTheRedirect(t *testing.T) {
 		GeoRestriction: &model.GeoRestriction{Enabled: true, Mode: "whitelist", Countries: []string{"KR"}}})
 	if !strings.Contains(direct, "set $block_reason_var \"geo_block\";") || !strings.Contains(direct, "return 403;") {
 		t.Error("geo restriction in block mode lost its geo_block 403")
+	}
+}
+
+// checkChallengeBlockReason checks one server block of a challenge host: the
+// reason is set in @challenge_gate_deny and @challenge_redirect only.
+func checkChallengeBlockReason(t *testing.T, name string, i int, cloud bool, b string) {
+	t.Helper()
+	r := blockAt(b, "location @challenge_redirect {")
+	deny := blockAt(b, "location @challenge_gate_deny {")
+	rest := strings.Replace(strings.Replace(b, r, "", 1), deny, "", 1)
+	for _, reason := range []string{"set $block_reason_var \"geo_block\";", "set $block_reason_var \"cloud_provider_challenge\";"} {
+		if strings.Contains(rest, reason) {
+			t.Errorf("%s server %d: %s outside the challenge's refusals: a request the challenge lets through is logged as blocked", name, i, reason)
+		}
+	}
+	// Every refusal of the gate goes through @challenge_gate_deny: the API's
+	// (intercepted) and the gate's own 401 for a visitor without a token.
+	gate := blockAt(b, "location = /_challenge/validate {")
+	for _, want := range []string{"error_page 401 = @challenge_gate_deny;", "if ($cookie_ng_challenge = \"\") {\n            return 401;"} {
+		if !strings.Contains(gate, want) {
+			t.Errorf("%s server %d: the gate lacks %q:\n%s", name, i, want, gate)
+		}
+	}
+	wantDeny := []string{"set $block_reason_var \"geo_block\";", "return 401;"}
+	if cloud {
+		wantDeny = []string{"set $block_reason_var \"geo_block\";", "if ($geo_blocked != 1) {",
+			"set $block_reason_var \"cloud_provider_challenge\";", "}", "return 401;"}
+	}
+	if got := directives(deny); !slices.Equal(got, wantDeny) {
+		t.Errorf("%s server %d: @challenge_gate_deny = %q, want %q", name, i, got, wantDeny)
+	}
+	if r == "" {
+		return // the HTTP server of a forced-HTTPS host redirects
+	}
+	// The redirect sets it right before its 302, for a 401 that did not
+	// come from the gate (one the gate sent has it already).
+	want := []string{"set $block_reason_var \"geo_block\";\n        return 302 /api/v1/challenge/page?host=00000000-0000-0000-0000-0000000000f2&reason=geo_restriction&"}
+	if cloud {
+		want = append(want, "set $block_reason_var \"cloud_provider_challenge\";\n            return 302 /api/v1/challenge/page?host=00000000-0000-0000-0000-0000000000f2&reason=cloud_provider&")
+	}
+	for _, w := range want {
+		if !strings.Contains(r, w) {
+			t.Errorf("%s server %d: @challenge_redirect does not set the block reason right before its redirect %q:\n%s", name, i, w, r)
+		}
+	}
+	if strings.Count(r, "set $block_reason_var") != len(want) {
+		t.Errorf("%s server %d: @challenge_redirect sets the block reason on a path that does not redirect:\n%s", name, i, r)
 	}
 }
 
