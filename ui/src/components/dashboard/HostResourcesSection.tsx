@@ -89,7 +89,7 @@ export default function HostResourcesSection({ systemHealth, storage }: {
     network_out: number;
   }
 }) {
-  const { t } = useTranslation('dashboard');
+  const { t, i18n } = useTranslation('dashboard');
   const [showCharts, setShowCharts] = useState(false);
   // The tile shows the primary disk (the database's, else Docker's); the
   // other filesystems are listed under it.
@@ -126,8 +126,8 @@ export default function HostResourcesSection({ systemHealth, storage }: {
       const timeFormat = { hour: '2-digit', minute: '2-digit' } as const;
 
       return {
-        time: date.toLocaleTimeString('ko-KR', timeFormat),
-        fullTime: date.toLocaleString('ko-KR'),
+        time: date.toLocaleTimeString(i18n.language, timeFormat),
+        fullTime: date.toLocaleString(i18n.language),
         cpu: item.cpu_usage,
         memory: item.memory_usage,
         disk: item.disk_usage,
@@ -135,7 +135,7 @@ export default function HostResourcesSection({ systemHealth, storage }: {
         networkOut: networkOutRate / 1024,
       };
     }).slice(1);
-  }, [historyData?.data]);
+  }, [historyData?.data, i18n.language]);
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-lg shadow">

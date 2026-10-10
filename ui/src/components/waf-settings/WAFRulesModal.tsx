@@ -423,7 +423,7 @@ function RuleRow({ rule, onToggle, onRemoveScope, isPending }: { rule: WAFRule; 
 }
 
 function PolicyHistoryPanel({ history, isLoading, error }: { history: WAFPolicyHistory[]; isLoading: boolean; error: Error | null; }) {
-  const { t } = useTranslation('waf');
+  const { t, i18n } = useTranslation('waf');
   const [historySearch, setHistorySearch] = useState('');
   const filteredHistory = useMemo(() => {
     if (!historySearch.trim()) return history;
@@ -479,7 +479,7 @@ function PolicyHistoryPanel({ history, isLoading, error }: { history: WAFPolicyH
                     {item.rule_description && <p className="text-sm text-gray-700 dark:text-slate-300 mb-1">{item.rule_description}</p>}
                     {item.reason && <p className="text-sm text-gray-500 dark:text-slate-400"><span className="font-medium">{t('policyManager.history.reason')}:</span> {item.reason}</p>}
                     <div className="flex items-center gap-4 mt-2 text-xs text-gray-400 dark:text-slate-500">
-                      <span>{new Date(item.created_at).toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                      <span>{new Date(item.created_at).toLocaleString(i18n.language, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
                       {item.changed_by && <span>by {item.changed_by}</span>}
                     </div>
                   </div>
