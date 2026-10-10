@@ -97,10 +97,10 @@ type diskNotifier interface {
 	ResolveQuietly(ctx context.Context, eventKey, subject string) error
 }
 
-// diskStateReader restores the hysteresis level after a restart, and re-reads
-// the recorded state after a failed alert.
+// diskStateReader restores the hysteresis level and the low-alert cooldown
+// after a restart, and re-reads the recorded state after a failed alert.
 type diskStateReader interface {
-	GetState(ctx context.Context, eventKey, subject string) (string, error)
+	StateSince(ctx context.Context, eventKey, subject string) (state string, since time.Time, err error)
 }
 
 // diskHistory answers "how full was this disk a day ago" from system_health,
@@ -303,10 +303,10 @@ func primaryDiskKey(fss []FSUsage) string {
 
 // stateFor loads a filesystem's alert state from notification_state the first
 // time it is seen, so a restart neither re-announces nor forgets an open
-// alert. A read that fails (the database is busy, or down because it is the
-// full disk) is retried next tick; until then the level is still tracked but
-// nothing is announced, because an open alert that was never read could not
-// be closed.
+// alert, nor forgets the low-alert cooldown of a recent recovery. A read that
+// fails (the database is busy, or down because it is the full disk) is
+// retried next tick; until then the level is still tracked but nothing is
+// announced, because an open alert that was never read could not be closed.
 //
 // After an alert could not be recorded (resync), the state is read again the
 // same way, but only the announced flags are taken from it: the level stays
@@ -326,8 +326,8 @@ func (g *DiskGuard) stateFor(ctx context.Context, key string) *fsState {
 		st.loaded, st.resync = true, false
 		return st
 	}
-	crit, errCrit := g.state.GetState(ctx, eventDiskCritical, key)
-	low, errLow := g.state.GetState(ctx, eventDiskLow, key)
+	crit, _, errCrit := g.state.StateSince(ctx, eventDiskCritical, key)
+	low, lowSince, errLow := g.state.StateSince(ctx, eventDiskLow, key)
 	if errCrit != nil || errLow != nil {
 		return st
 	}
@@ -338,6 +338,12 @@ func (g *DiskGuard) stateFor(ctx context.Context, key string) *fsState {
 		return st
 	}
 	st.loaded = true
+	// A recovery is recorded as disk.space_low turning "ok"; its since is
+	// when. The cooldown that holds a new warning counts from there, across
+	// a restart too.
+	if low == stateOK {
+		st.recoveredAt = lowSince
+	}
 	restored := DiskLevelOK
 	switch {
 	case st.announcedCritical:

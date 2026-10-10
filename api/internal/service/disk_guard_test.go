@@ -512,12 +512,12 @@ type flakyStateReader struct {
 	store *fakeStore
 }
 
-func (f *flakyStateReader) GetState(ctx context.Context, key, subject string) (string, error) {
+func (f *flakyStateReader) StateSince(ctx context.Context, key, subject string) (string, time.Time, error) {
 	if f.fails > 0 {
 		f.fails--
-		return "", errors.New("database is starting up")
+		return "", time.Time{}, errors.New("database is starting up")
 	}
-	return f.store.GetState(ctx, key, subject)
+	return f.store.StateSince(ctx, key, subject)
 }
 
 // An alert left open by the previous process (the disk recovered while the
@@ -577,6 +577,13 @@ func (d *downStore) GetState(ctx context.Context, key, subject string) (string, 
 	return d.fakeStore.GetState(ctx, key, subject)
 }
 
+func (d *downStore) StateSince(ctx context.Context, key, subject string) (string, time.Time, error) {
+	if d.down {
+		return "", time.Time{}, errDBDown
+	}
+	return d.fakeStore.StateSince(ctx, key, subject)
+}
+
 func (d *downStore) SetState(ctx context.Context, key, subject, label, state, detail string) error {
 	if d.down {
 		return errDBDown
@@ -590,6 +597,7 @@ func newDownStoreGuard(t *testing.T) (*DiskGuard, *fakeDiskUsage, *downStore, *d
 	db := &downStore{fakeStore: store}
 	u := &fakeDiskUsage{pct: map[string]float64{}, roles: map[string][]DiskRole{"db": {DiskRoleDB}}}
 	c := &diskClock{t: time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)}
+	store.clock = c.now
 	g := NewDiskGuard(u, NewNotificationServiceWithStore(db), db, nil,
 		DiskGuardOptions{ConfirmSamples: 2, Cooldown: 6 * time.Hour, Now: c.now})
 	return g, u, db, c
@@ -672,5 +680,46 @@ func TestDiskGuardClosesAVanishedDisksAlertOnceItCan(t *testing.T) {
 	}
 	if len(db.enqueued) != 2 {
 		t.Fatalf("closing a vanished disk's alert sent %v", diskEvents(db.fakeStore)[2:])
+	}
+}
+
+// The low-alert cooldown after a recovery holds across a restart: it counts
+// from when the recovery was recorded, not from when this process saw it.
+func TestDiskGuardCooldownSurvivesARestart(t *testing.T) {
+	g, u, store, c := newTestDiskGuard(t)
+	store.clock = c.now
+	for _, p := range []float64{86, 86, 79, 79} {
+		diskTickAt(g, u, c, p)
+	}
+	if got := strings.Join(diskEvents(store), " "); got != "disk.space_low/warning disk.space_recovered/resolved" {
+		t.Fatalf("got %q", got)
+	}
+	c.advance(time.Hour) // an upgrade restarts the API
+	g2 := NewDiskGuard(u, NewNotificationServiceWithStore(store), store, nil, DiskGuardOptions{
+		Thresholds: DefaultDiskThresholds, ConfirmSamples: 2, Cooldown: 6 * time.Hour, Now: c.now,
+	})
+	diskTickAt(g2, u, c, 86)
+	diskTickAt(g2, u, c, 86)
+	if n := len(store.enqueued); n != 2 {
+		t.Fatalf("low re-announced inside the cooldown after a restart: %v", diskEvents(store))
+	}
+	c.advance(6 * time.Hour)
+	diskTickAt(g2, u, c, 86)
+	if got := diskEvents(store); got[len(got)-1] != "disk.space_low/warning" {
+		t.Fatalf("low not announced after the cooldown: %v", got)
+	}
+	// Critical is never held.
+	g3, u3, store3, c3 := newTestDiskGuard(t)
+	store3.clock = c3.now
+	for _, p := range []float64{86, 86, 79, 79} {
+		diskTickAt(g3, u3, c3, p)
+	}
+	g4 := NewDiskGuard(u3, NewNotificationServiceWithStore(store3), store3, nil, DiskGuardOptions{
+		Thresholds: DefaultDiskThresholds, ConfirmSamples: 2, Cooldown: 6 * time.Hour, Now: c3.now,
+	})
+	diskTickAt(g4, u3, c3, 92)
+	diskTickAt(g4, u3, c3, 92)
+	if got := diskEvents(store3); got[len(got)-1] != "disk.space_critical/error" {
+		t.Fatalf("critical was held by the restored cooldown: %v", got)
 	}
 }

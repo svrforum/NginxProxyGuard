@@ -254,6 +254,23 @@ func (r *NotificationRepository) GetState(ctx context.Context, eventKey, subject
 	return state, nil
 }
 
+// StateSince returns the last known state for a subject and when it was
+// entered, or "" and the zero time when unseen.
+func (r *NotificationRepository) StateSince(ctx context.Context, eventKey, subject string) (string, time.Time, error) {
+	var state string
+	var since time.Time
+	err := r.db.QueryRowContext(ctx,
+		`SELECT state, since FROM notification_state WHERE event_key = $1 AND subject = $2`,
+		eventKey, subject).Scan(&state, &since)
+	if err == sql.ErrNoRows {
+		return "", time.Time{}, nil
+	}
+	if err != nil {
+		return "", time.Time{}, fmt.Errorf("failed to read notification state: %w", err)
+	}
+	return state, since, nil
+}
+
 func (r *NotificationRepository) SetState(ctx context.Context, eventKey, subject, label, state, detail string) error {
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO notification_state (event_key, subject, subject_label, state, since, last_detail)
