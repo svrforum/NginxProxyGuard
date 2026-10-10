@@ -662,6 +662,12 @@ func errorPageTargets(dirs []string) map[string]string {
 // the upstream. location / sends nothing but 500 there and keeps every other
 // error page the server sets (an error_page in a location replaces all of
 // the server's); @api_fallback refuses a 500 the gate did not cause.
+//
+// nginx uses the first error_page naming a code. The gate's 401 and 500 come
+// first in location /, so Advanced Config cannot take them over; the server's
+// pages come after Advanced Config, so an operator's own page for a code
+// (403, 405, the rate limit's, 502-504) wins, as on a host without the
+// challenge.
 func TestChallengeFallbackOnlyForTheGatesFailure(t *testing.T) {
 	m, _ := newRequestPathTestManager(t)
 	var common []string
@@ -686,6 +692,11 @@ func TestChallengeFallbackOnlyForTheGatesFailure(t *testing.T) {
 				IDSanitized: "00000000_0000_0000_0000_0000000000f1"}}
 		}
 	}
+	// An operator's own error pages in Advanced Config, rendered into
+	// location /: one for every code the server sets and for the gate's two.
+	operatorPages := "error_page 403 /operator_403.html;\nerror_page 405 /operator_405.html;\n" +
+		"error_page 429 /operator_429.html;\nerror_page 502 503 504 /operator_50x.html;\n" +
+		"error_page 401 /operator_401.html;\nerror_page 500 /operator_500.html;\n"
 	for _, v := range []struct {
 		name, adv string
 		set       func(*ProxyHostConfigData)
@@ -698,15 +709,33 @@ func TestChallengeFallbackOnlyForTheGatesFailure(t *testing.T) {
 		// No method rule: no @blocked_method, which location / must not name.
 		{"exploit query rules", "", exploitRule("query_string", "union.*select")},
 		{"legacy auth_request, rate limit 503", "auth_request /ext;\nlocation = /ext {\n    internal;\n    proxy_pass http://192.0.2.20:9000/auth;\n}\n", rateLimit(503)},
+		{"advanced config error pages", operatorPages, func(d *ProxyHostConfigData) { rateLimit(429)(d); d.Host.BlockExploits = true }},
 	} {
+		// Advanced Config without a location is rendered into location /,
+		// after the gate's error pages and before the server's.
+		var advPages []string
+		if !strings.Contains(v.adv, "location ") {
+			for _, l := range strings.Split(v.adv, "\n") {
+				if l = strings.TrimSpace(l); strings.HasPrefix(l, "error_page ") {
+					advPages = append(advPages, l)
+				}
+			}
+		}
 		for _, ch := range gateChallenges {
-			if ch.cloud && v.adv != "" {
+			if ch.cloud && strings.Contains(v.adv, "auth_request") {
 				continue // no gate: next to the host's own auth_request the cloud challenge blocks
 			}
 			for _, mode := range gateTLSModes {
 				name := v.name + " " + ch.name + " " + mode.name
 				d := challengeData(gateTestHost("00000000-0000-0000-0000-0000000000f0", mode.ssl, mode.force, v.adv), ch.set)
 				v.set(&d)
+				// The same host without the challenge, for the operator's pages.
+				plain := ProxyHostConfigData{Host: gateTestHost("00000000-0000-0000-0000-0000000000f0", mode.ssl, mode.force, v.adv)}
+				v.set(&plain)
+				plainRoots := map[int]string{}
+				for i, b := range splitServerBlocks(t, renderForTest(t, plain)) {
+					plainRoots[i] = blockAt(b, "location / {")
+				}
 				seen := 0
 				for i, b := range splitServerBlocks(t, renderForTest(t, d)) {
 					if fb := blockAt(b, "location @api_fallback {"); !strings.Contains(fb, "if ($challenge_gate_status = \"\") {\n            return 500;\n        }") ||
@@ -727,11 +756,21 @@ func TestChallengeFallbackOnlyForTheGatesFailure(t *testing.T) {
 					if got["500"] != "= @api_fallback" || got["401"] != "= @challenge_redirect" {
 						t.Errorf("%s server %d: location / gate errors: 401 -> %q, 500 -> %q", name, i, got["401"], got["500"])
 					}
+					var pages []string
+					for _, dir := range directives(root) {
+						if strings.HasPrefix(dir, "error_page ") {
+							pages = append(pages, dir)
+						}
+					}
+					if len(pages) < 2 || pages[0] != "error_page 401 = @challenge_redirect;" || pages[1] != "error_page 500 = @api_fallback;" {
+						t.Errorf("%s server %d: the gate's error pages are not the first in location /: %q", name, i, pages)
+					}
 					// Every error page the server sets (host_common.conf is
 					// included before the server's own) reaches location / too,
 					// and no other: a page the server does not have is a
-					// location that does not exist.
-					want := errorPageTargets(append(append([]string{}, common...), serverLevel(b, "error_page")...))
+					// location that does not exist. Advanced Config's own come
+					// before them.
+					want := errorPageTargets(append(append(append([]string{}, advPages...), common...), serverLevel(b, "error_page")...))
 					codes := map[string]bool{}
 					for code := range got {
 						codes[code] = true
@@ -746,6 +785,17 @@ func TestChallengeFallbackOnlyForTheGatesFailure(t *testing.T) {
 					}
 					if d.RateLimit != nil && want[strconv.Itoa(d.RateLimit.LimitResponse)] == "" {
 						t.Errorf("%s server %d: the rate limit's %d has no error page; this case guards nothing", name, i, d.RateLimit.LimitResponse)
+					}
+					if len(advPages) > 0 {
+						// The operator's page answers every code it names but
+						// the gate's two, as on the same host without the
+						// challenge.
+						plainGot := errorPageTargets(directives(plainRoots[i]))
+						for _, code := range []string{"403", "405", "429", "502", "503", "504"} {
+							if !strings.HasPrefix(got[code], "/operator_") || got[code] != plainGot[code] {
+								t.Errorf("%s server %d: location / answers %s with %q; the operator's page is %q", name, i, code, got[code], plainGot[code])
+							}
+						}
 					}
 				}
 				if seen == 0 {

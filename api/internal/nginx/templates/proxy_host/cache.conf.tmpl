@@ -157,7 +157,7 @@
         # carrying a token; search bots the host allows were already cleared
         # from $geo_blocked by _security.
         auth_request /_challenge/validate;
-        error_page 401 = @challenge_redirect;{{template "_challenge_root_error_pages" .}}
+        error_page 401 = @challenge_redirect;{{template "_challenge_gate_error_pages" .}}
 {{end}}
 {{if .AuthProvider}}{{template "_auth_gate" .}}{{end}}
         {{if and .Upstream .Upstream.Servers}}proxy_pass {{upstreamScheme .Upstream}}://{{.Upstream.Name}};{{if eq (upstreamScheme .Upstream) "https"}}
@@ -252,7 +252,7 @@
 {{if .AdvancedConfigLocationLevel}}{{if not .AdvancedConfigHasLocation}}
         # Custom configuration
         {{.AdvancedConfigLocationLevel}}
-{{end}}{{end}}
+{{end}}{{end}}{{if .ChallengeGate}}{{template "_challenge_server_error_pages" .}}{{end}}
     }
 
 

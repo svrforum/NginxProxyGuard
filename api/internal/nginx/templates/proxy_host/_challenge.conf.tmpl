@@ -1,14 +1,22 @@
 {{- /* Error pages of the challenge gate's location / (base, waf and cache
-       server blocks). An error_page in a location replaces every error_page
-       of the server, so location / repeats the server's own: the pages of
-       host_common.conf and the ones _security sets. */ -}}
-{{- define "_challenge_root_error_pages"}}
+       server blocks). nginx uses the first error_page naming a code. The
+       gate's own come first, right after its "error_page 401", so that
+       Advanced Config cannot take them over. An error_page in a location
+       replaces every error_page of the server, so location / repeats the
+       server's own: the pages of host_common.conf and the ones _security
+       sets. Those come last, after the location's Advanced Config, so that
+       an operator's own page for a code wins there, as it does on a host
+       without the challenge. */ -}}
+{{- define "_challenge_gate_error_pages"}}
         # Only the gate's own failure lets the request through: auth_request
         # answers 500 when the API cannot be reached or does not answer in
         # time. A 503 from the rate or connection limit comes before the gate
         # and must not reach @api_fallback, which skips it.
         error_page 500 = @api_fallback;
-        # An error_page here replaces all of the server's: repeated below.
+{{- end -}}
+{{- define "_challenge_server_error_pages"}}
+        # The server's error pages, which an error_page here replaces: after
+        # Advanced Config, so that its own page for a code wins.
         error_page 502 /error_502.html;
         error_page 503 /error_503.html;
         error_page 504 /error_504.html;
