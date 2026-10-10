@@ -14826,6 +14826,15 @@ components:
         avg_response_time:
           type: number
           format: double
+          description: >-
+            Milliseconds, averaged over the hour's requests with a measured
+            time. WebSocket upgrades (101) and requests that took more than 60
+            seconds (event streams, long polling) are left out of the average;
+            they still count in total_requests. NPG rebuilds the last 25 hours
+            from the logs at startup; older hours stored before this rule
+            (#324) keep the average they were stored with, long requests
+            included, until they age out (stats_retention_days, 90 days by
+            default). A chart over a longer window can drop at the upgrade.
         max_response_time:
           type: number
           format: double
