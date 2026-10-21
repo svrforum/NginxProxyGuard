@@ -49,7 +49,7 @@
 **Robust Security, Easy Management** - Reduced Nginx complexity, maximized security
 
 ### 🔒 SSL Automation
-Let's Encrypt integration with automatic renewal. Supports wildcard certificates via DNS-01 challenge. Multiple DNS providers supported: **Cloudflare**, **AWS Route 53**, **DuckDNS**, **Dynu**.
+Let's Encrypt integration with automatic renewal. Supports wildcard certificates via DNS-01 challenge. Multiple DNS providers supported: **Cloudflare**, **AWS Route 53**, **DuckDNS**, **Dynu**, **IONOS**.
 
 ### 🤖 Bot Protection
 Block 80+ malicious bots and 50+ AI crawlers automatically. Search engine allowlist ensures legitimate traffic. CAPTCHA challenge mode for suspicious requests.

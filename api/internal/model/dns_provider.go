@@ -12,6 +12,7 @@ const (
 	DNSProviderDuckDNS    = "duckdns"
 	DNSProviderDynu       = "dynu"
 	DNSProviderManual     = "manual"
+	DNSProviderIonos      = "ionos"
 )
 
 // DNSProvider represents a DNS provider configuration for ACME DNS-01 challenges
@@ -54,10 +55,20 @@ type DynuCredentials struct {
 	APIKey string `json:"api_key"` // Dynu API key
 }
 
+// IonosCredentials holds the credential pair IONOS hands out: an API
+// key prefix, the public identifier, and the secret key that goes with
+// it. lego carries them joined by a dot as one value in the X-Api-Key
+// header of every request, so the halves are stored separately here and
+// joined only where the provider is built.
+type IonosCredentials struct {
+	APIKeyPrefix string `json:"api_key_prefix" validate:"required"`
+	APIKey       string `json:"api_key" validate:"required"`
+}
+
 // CreateDNSProviderRequest is the request body for creating a DNS provider
 type CreateDNSProviderRequest struct {
 	Name         string          `json:"name" validate:"required"`
-	ProviderType string          `json:"provider_type" validate:"required,oneof=cloudflare route53 duckdns dynu manual"`
+	ProviderType string          `json:"provider_type" validate:"required,oneof=cloudflare route53 duckdns dynu manual ionos"`
 	Credentials  json.RawMessage `json:"credentials" validate:"required"`
 	IsDefault    bool            `json:"is_default"`
 }
@@ -120,6 +131,16 @@ func (p *DNSProvider) ValidateCredentials() error {
 			return err
 		}
 		if creds.APIKey == "" {
+			return ErrInvalidCredentials
+		}
+	case DNSProviderIonos:
+		// IONOS hands the credential over as a pair: prefix and secret key.
+		// A row that carries only one half cannot authenticate.
+		var creds IonosCredentials
+		if err := json.Unmarshal(p.Credentials, &creds); err != nil {
+			return err
+		}
+		if creds.APIKeyPrefix == "" || creds.APIKey == "" {
 			return ErrInvalidCredentials
 		}
 	case DNSProviderManual:

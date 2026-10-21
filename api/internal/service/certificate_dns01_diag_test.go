@@ -20,7 +20,7 @@ func TestDiagnoseDNS01ErrorGivesZoneAdviceOnlyForCloudflare(t *testing.T) {
 	if got := diagnoseDNS01Error(timedOut, model.DNSProviderCloudflare); !strings.Contains(got, "Zone:Read") {
 		t.Errorf("Cloudflare lost the token permission advice: %s", got)
 	}
-	for _, providerType := range []string{model.DNSProviderDynu, model.DNSProviderRoute53, model.DNSProviderDuckDNS} {
+	for _, providerType := range []string{model.DNSProviderDynu, model.DNSProviderRoute53, model.DNSProviderDuckDNS, model.DNSProviderIonos} {
 		got := diagnoseDNS01Error(timedOut, providerType)
 		if strings.Contains(got, "Zone") {
 			t.Errorf("%s gets Cloudflare's token advice: %s", providerType, got)
@@ -37,7 +37,7 @@ func TestDiagnoseDNS01ErrorGivesZoneAdviceOnlyForCloudflare(t *testing.T) {
 // provider.
 func TestDiagnoseDNS01ErrorReportsRejectedCredentialsForEveryProvider(t *testing.T) {
 	rejected := errors.New("[example.com] acme: error presenting token: unexpected status code: [status code: 401] body: {}")
-	for _, providerType := range []string{model.DNSProviderCloudflare, model.DNSProviderDynu, model.DNSProviderRoute53, model.DNSProviderDuckDNS} {
+	for _, providerType := range []string{model.DNSProviderCloudflare, model.DNSProviderDynu, model.DNSProviderRoute53, model.DNSProviderDuckDNS, model.DNSProviderIonos} {
 		got := diagnoseDNS01Error(rejected, providerType)
 		if !strings.HasPrefix(got, "Authentication failed:") || !strings.Contains(got, rejected.Error()) {
 			t.Errorf("%s: %s", providerType, got)

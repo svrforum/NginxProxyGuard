@@ -29,6 +29,7 @@ import (
 	"github.com/go-acme/lego/v4/providers/dns/cloudflare"
 	"github.com/go-acme/lego/v4/providers/dns/duckdns"
 	"github.com/go-acme/lego/v4/providers/dns/dynu"
+	"github.com/go-acme/lego/v4/providers/dns/ionos"
 	"github.com/go-acme/lego/v4/providers/dns/route53"
 	"github.com/go-acme/lego/v4/registration"
 
@@ -742,6 +743,22 @@ func (s *Service) createDNSProvider(provider *model.DNSProvider) (challenge.Prov
 		cfg.PollingInterval = dynuPollingInterval
 		cfg.APIKey = creds.APIKey
 		return dynu.NewDNSProviderConfig(cfg)
+
+	case model.DNSProviderIonos:
+		var creds model.IonosCredentials
+		if err := json.Unmarshal(provider.Credentials, &creds); err != nil {
+			return nil, fmt.Errorf("invalid ionos credentials: %w", err)
+		}
+
+		cfg := ionos.NewDefaultConfig()
+		cfg.PropagationTimeout = 180 * time.Second
+		cfg.PollingInterval = 5 * time.Second
+		// IONOS hands the credential over as a pair, an API key prefix and a
+		// secret key; lego puts the dot-joined pair in the X-Api-Key header of
+		// every request, and the zone and subdomain come from the certificate
+		// domains.
+		cfg.APIKey = creds.APIKeyPrefix + "." + creds.APIKey
+		return ionos.NewDNSProviderConfig(cfg)
 
 	default:
 		return nil, fmt.Errorf("unsupported DNS provider type: %s", provider.ProviderType)

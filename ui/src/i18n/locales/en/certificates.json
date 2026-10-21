@@ -160,6 +160,7 @@
       "route53": "AWS Route 53",
       "duckdns": "DuckDNS",
       "dynu": "Dynu",
+      "ionos": "IONOS",
       "manual": "Manual"
     },
     "default": "Default",
@@ -177,7 +178,14 @@
       "addTitle": "Add DNS Provider",
       "editTitle": "Edit DNS Provider",
       "providerName": "Provider Name",
-      "providerNamePlaceholder": "My Cloudflare Account",
+      "providerNamePlaceholder": {
+        "cloudflare": "My Cloudflare Account",
+        "route53": "My AWS Account",
+        "duckdns": "My DuckDNS Account",
+        "dynu": "My Dynu Account",
+        "ionos": "My IONOS Account",
+        "manual": "My Manual Setup"
+      },
       "providerType": "Provider Type",
       "setDefault": "Set as Default",
       "setDefaultDesc": "Used as default when creating new certificates",
@@ -219,6 +227,15 @@
         "apiKey": "API Key",
         "apiKeyPlaceholder": "Enter your Dynu API key",
         "apiKeyHelp": "Get your API key from Dynu Control Panel > API Credentials"
+      },
+      "ionos": {
+        "title": "IONOS Credentials",
+        "apiKeyPrefix": "API Key Prefix",
+        "apiKeyPrefixPlaceholder": "Enter your IONOS API key prefix",
+        "apiKeyPrefixHelp": "IONOS hands credentials out as a pair: the public prefix shown next to the key in IONOS Account > API Credentials (certbot stores it as dns_ionos_prefix)",
+        "apiKey": "API Key",
+        "apiKeyPlaceholder": "Enter your IONOS API key",
+        "apiKeyHelp": "The secret half paired with the prefix, from IONOS Account > API Credentials (the one you use with the ACME/certbot plugin; certbot stores it as dns_ionos_secret)"
       },
       "test": {
         "button": "Test Connection",

@@ -160,6 +160,7 @@
       "route53": "AWS Route 53",
       "duckdns": "DuckDNS",
       "dynu": "Dynu",
+      "ionos": "IONOS",
       "manual": "수동 설정"
     },
     "default": "기본값",
@@ -177,7 +178,14 @@
       "addTitle": "DNS 제공자 추가",
       "editTitle": "DNS 제공자 수정",
       "providerName": "제공자 이름",
-      "providerNamePlaceholder": "예: 내 Cloudflare 계정",
+      "providerNamePlaceholder": {
+        "cloudflare": "예: 내 Cloudflare 계정",
+        "route53": "예: 내 AWS Route 53 계정",
+        "duckdns": "예: 내 DuckDNS 계정",
+        "dynu": "예: 내 Dynu 계정",
+        "ionos": "예: 내 IONOS 계정",
+        "manual": "예: 내 수동 설정"
+      },
       "providerType": "제공자 유형",
       "setDefault": "기본값으로 설정",
       "setDefaultDesc": "새 인증서 생성 시 기본으로 사용됩니다",
@@ -219,6 +227,15 @@
         "apiKey": "API 키",
         "apiKeyPlaceholder": "Dynu API 키 입력",
         "apiKeyHelp": "Dynu 제어판 > API Credentials에서 API 키를 확인하세요"
+      },
+      "ionos": {
+        "title": "IONOS 자격 증명",
+        "apiKeyPrefix": "API 키 Prefix",
+        "apiKeyPrefixPlaceholder": "IONOS API 키 Prefix 입력",
+        "apiKeyPrefixHelp": "IONOS 계정 > API Credentials에서 API 키를 확인하세요（certbot DNS plugin・public half: dns_ionos_prefix・）",
+        "apiKey": "API 키",
+        "apiKeyPlaceholder": "IONOS API 키 입력",
+        "apiKeyHelp": "IONOS 계정 > API Credentials에서 API 키를 확인하세요（certbot DNS plugin・secret half: dns_ionos_secret・）"
       },
       "test": {
         "button": "연결 테스트",

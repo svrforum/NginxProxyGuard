@@ -109,7 +109,7 @@ func TestDNS01ChallengeOptionsWrapLegosCheckOnlyForDynu(t *testing.T) {
 		t.Error("dns01ChallengeOptions does not wrap lego's check for Dynu")
 	}
 
-	for _, providerType := range []string{model.DNSProviderCloudflare, model.DNSProviderRoute53, model.DNSProviderDuckDNS} {
+	for _, providerType := range []string{model.DNSProviderCloudflare, model.DNSProviderRoute53, model.DNSProviderDuckDNS, model.DNSProviderIonos} {
 		if got := len(dns01ChallengeOptionsWith(providerType, resolver.lookup)); got != 0 {
 			t.Errorf("%s gets %d challenge options, want none: lego's defaults", providerType, got)
 		}

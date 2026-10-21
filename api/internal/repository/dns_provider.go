@@ -277,6 +277,19 @@ func (r *DNSProviderRepository) TestConnection(ctx context.Context, providerType
 		if creds.APIKey == "" {
 			return model.ErrInvalidCredentials
 		}
+	case model.DNSProviderIonos:
+		// The IONOS api_key has no read-only endpoint worth calling here; the
+		// format check below mirrors the dynu case.
+		var creds model.IonosCredentials
+		if err := json.Unmarshal(credentials, &creds); err != nil {
+			return fmt.Errorf("%w: ionos credentials are not valid JSON: %v", model.ErrInvalidCredentials, err)
+		}
+		if creds.APIKeyPrefix == "" || creds.APIKey == "" {
+			// IONOS hands the credential over as a pair, and lego only ever
+			// sees the dot-joined value, so naming the halves beats the
+			// bare sentinel a single-field provider answers with.
+			return fmt.Errorf("%w: ionos credentials need both api_key_prefix and api_key", model.ErrInvalidCredentials)
+		}
 	case model.DNSProviderManual:
 		// Manual DNS has no credentials to verify — the operator creates the
 		// TXT record themselves. Listed explicitly so the default branch below
@@ -286,10 +299,11 @@ func (r *DNSProviderRepository) TestConnection(ctx context.Context, providerType
 		// with a value nothing can use — the failure only appeared later, at
 		// certificate issuance ("unsupported DNS provider type"). provider_type
 		// is immutable, so the row could only be deleted, never corrected.
-		return fmt.Errorf("%w: unsupported provider_type %q — supported: %s, %s, %s, %s, %s",
+		return fmt.Errorf("%w: unsupported provider_type %q — supported: %s, %s, %s, %s, %s, %s",
 			model.ErrInvalidInput, providerType,
 			model.DNSProviderCloudflare, model.DNSProviderRoute53,
-			model.DNSProviderDuckDNS, model.DNSProviderDynu, model.DNSProviderManual)
+			model.DNSProviderDuckDNS, model.DNSProviderDynu,
+			model.DNSProviderManual, model.DNSProviderIonos)
 	}
 	return nil
 }

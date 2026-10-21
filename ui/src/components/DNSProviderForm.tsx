@@ -12,7 +12,7 @@ interface DNSProviderFormProps {
   onSuccess: () => void
 }
 
-type ProviderType = 'cloudflare' | 'route53' | 'duckdns' | 'dynu' | 'manual'
+type ProviderType = 'cloudflare' | 'route53' | 'duckdns' | 'dynu' | 'ionos' | 'manual'
 
 export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSProviderFormProps) {
   const { t } = useTranslation(['certificates', 'common'])
@@ -46,6 +46,10 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
   // Dynu credentials
   const [dynuApiKey, setDynuApiKey] = useState('')
 
+  // IONOS credentials
+  const [ionosKeyPrefix, setIonosKeyPrefix] = useState('')
+  const [ionosApiKey, setIonosApiKey] = useState('')
+
   // Track whether credentials were modified during editing
   const [credentialsModified, setCredentialsModified] = useState(false)
 
@@ -76,6 +80,12 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
     if (providerType === 'dynu') {
       const creds: Record<string, string> = {}
       if (dynuApiKey) creds.api_key = dynuApiKey
+      return creds
+    }
+    if (providerType === 'ionos') {
+      const creds: Record<string, string> = {}
+      if (ionosKeyPrefix) creds.api_key_prefix = ionosKeyPrefix
+      if (ionosApiKey) creds.api_key = ionosApiKey
       return creds
     }
     return {}
@@ -233,7 +243,7 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder={t('dnsProviders.form.providerNamePlaceholder')}
+              placeholder={t(`dnsProviders.form.providerNamePlaceholder.${providerType}`)}
               className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors placeholder:text-slate-400 bg-white dark:bg-slate-700 dark:text-white"
               required
             />
@@ -253,6 +263,7 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
               <option value="route53">AWS Route 53</option>
               <option value="duckdns">DuckDNS</option>
               <option value="dynu">Dynu</option>
+              <option value="ionos">IONOS</option>
               <option value="manual">{t('dnsProviders.types.manual')}</option>
             </select>
           </div>
@@ -484,6 +495,61 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
                 />
                 <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
                   {t('dnsProviders.form.dynu.apiKeyHelp')}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* IONOS Credentials */}
+          {providerType === 'ionos' && (
+            <div className="space-y-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/40 p-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                <svg className="w-5 h-5 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+                </svg>
+                {t('dnsProviders.form.ionos.title')}
+              </h3>
+
+              {hasExistingCredentials && !credentialsModified && (
+                <div className="bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-lg p-3 text-violet-700 dark:text-violet-400 text-xs flex items-center gap-2">
+                  <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                  </svg>
+                  {t('dnsProviders.form.credentialsConfigured')}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-2">
+                  {t('dnsProviders.form.ionos.apiKeyPrefix')}
+                  <HelpTip content={t('dnsProviders.form.ionos.apiKeyPrefixHelp')} />
+                </label>
+                <input
+                  type="text"
+                  value={ionosKeyPrefix}
+                  onChange={(e) => { setIonosKeyPrefix(e.target.value); setCredentialsModified(true) }}
+                  placeholder={t('dnsProviders.form.ionos.apiKeyPrefixPlaceholder')}
+                  className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors placeholder:text-slate-400 bg-white dark:bg-slate-700 dark:text-white font-mono"
+                />
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                  {t('dnsProviders.form.ionos.apiKeyPrefixHelp')}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-2">
+                  {t('dnsProviders.form.ionos.apiKey')}
+                  <HelpTip content={t('dnsProviders.form.ionos.apiKeyHelp')} />
+                </label>
+                <input
+                  type="password"
+                  value={ionosApiKey}
+                  onChange={(e) => { setIonosApiKey(e.target.value); setCredentialsModified(true) }}
+                  placeholder={hasExistingCredentials ? '••••••••' : t('dnsProviders.form.ionos.apiKeyPlaceholder')}
+                  className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors placeholder:text-slate-400 bg-white dark:bg-slate-700 dark:text-white"
+                />
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                  {t('dnsProviders.form.ionos.apiKeyHelp')}
                 </p>
               </div>
             </div>
