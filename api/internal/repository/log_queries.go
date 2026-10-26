@@ -9,7 +9,10 @@ import (
 	"nginx-proxy-guard/internal/model"
 )
 
-// autocomplete cache TTL
+// autocomplete cache TTL. Empty lists are neither cached nor served from the
+// cache: on a fresh or quiet install the first look at the logs page would
+// otherwise pin an empty list for the hour and hide the logs that arrive next
+// (#340). The read side also skips the empty values older versions stored.
 const autocompleteCacheTTL = 1 * time.Hour
 
 // autocompleteWindowSQL bounds every autocomplete lookup to the last 24 hours.
@@ -28,7 +31,7 @@ func (r *LogRepository) GetDistinctHosts(ctx context.Context, search string, lim
 	// Cache initial load (no search term)
 	if search == "" && r.cache != nil {
 		var cached []string
-		if err := r.cache.Get(ctx, "autocomplete:hosts", &cached); err == nil {
+		if err := r.cache.Get(ctx, "autocomplete:hosts", &cached); err == nil && len(cached) > 0 {
 			if len(cached) > limit {
 				return cached[:limit], nil
 			}
@@ -82,7 +85,11 @@ func (r *LogRepository) GetDistinctHosts(ctx context.Context, search string, lim
 		hosts = append(hosts, host)
 	}
 
-	if search == "" && r.cache != nil {
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if search == "" && r.cache != nil && len(hosts) > 0 {
 		r.cache.Set(ctx, "autocomplete:hosts", hosts, autocompleteCacheTTL)
 	}
 	return hosts, nil
@@ -96,7 +103,7 @@ func (r *LogRepository) GetDistinctIPs(ctx context.Context, search string, limit
 
 	if search == "" && r.cache != nil {
 		var cached []string
-		if err := r.cache.Get(ctx, "autocomplete:ips", &cached); err == nil {
+		if err := r.cache.Get(ctx, "autocomplete:ips", &cached); err == nil && len(cached) > 0 {
 			if len(cached) > limit {
 				return cached[:limit], nil
 			}
@@ -138,7 +145,11 @@ func (r *LogRepository) GetDistinctIPs(ctx context.Context, search string, limit
 		ips = append(ips, ip)
 	}
 
-	if search == "" && r.cache != nil {
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if search == "" && r.cache != nil && len(ips) > 0 {
 		r.cache.Set(ctx, "autocomplete:ips", ips, autocompleteCacheTTL)
 	}
 	return ips, nil
@@ -152,7 +163,7 @@ func (r *LogRepository) GetDistinctUserAgents(ctx context.Context, search string
 
 	if search == "" && r.cache != nil {
 		var cached []string
-		if err := r.cache.Get(ctx, "autocomplete:user_agents", &cached); err == nil {
+		if err := r.cache.Get(ctx, "autocomplete:user_agents", &cached); err == nil && len(cached) > 0 {
 			if len(cached) > limit {
 				return cached[:limit], nil
 			}
@@ -193,7 +204,11 @@ func (r *LogRepository) GetDistinctUserAgents(ctx context.Context, search string
 		agents = append(agents, agent)
 	}
 
-	if search == "" && r.cache != nil {
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if search == "" && r.cache != nil && len(agents) > 0 {
 		r.cache.Set(ctx, "autocomplete:user_agents", agents, autocompleteCacheTTL)
 	}
 	return agents, nil
@@ -203,7 +218,7 @@ func (r *LogRepository) GetDistinctUserAgents(ctx context.Context, search string
 func (r *LogRepository) GetDistinctCountries(ctx context.Context) ([]model.CountryStat, error) {
 	if r.cache != nil {
 		var cached []model.CountryStat
-		if err := r.cache.Get(ctx, "autocomplete:countries", &cached); err == nil {
+		if err := r.cache.Get(ctx, "autocomplete:countries", &cached); err == nil && len(cached) > 0 {
 			return cached, nil
 		}
 	}
@@ -238,7 +253,11 @@ func (r *LogRepository) GetDistinctCountries(ctx context.Context) ([]model.Count
 		countries = append(countries, stat)
 	}
 
-	if r.cache != nil {
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if r.cache != nil && len(countries) > 0 {
 		r.cache.Set(ctx, "autocomplete:countries", countries, autocompleteCacheTTL)
 	}
 	return countries, nil
@@ -252,7 +271,7 @@ func (r *LogRepository) GetDistinctURIs(ctx context.Context, search string, limi
 
 	if search == "" && r.cache != nil {
 		var cached []string
-		if err := r.cache.Get(ctx, "autocomplete:uris", &cached); err == nil {
+		if err := r.cache.Get(ctx, "autocomplete:uris", &cached); err == nil && len(cached) > 0 {
 			if len(cached) > limit {
 				return cached[:limit], nil
 			}
@@ -295,7 +314,11 @@ func (r *LogRepository) GetDistinctURIs(ctx context.Context, search string, limi
 		uris = append(uris, uri)
 	}
 
-	if search == "" && r.cache != nil {
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if search == "" && r.cache != nil && len(uris) > 0 {
 		r.cache.Set(ctx, "autocomplete:uris", uris, autocompleteCacheTTL)
 	}
 	return uris, nil
@@ -305,7 +328,7 @@ func (r *LogRepository) GetDistinctURIs(ctx context.Context, search string, limi
 func (r *LogRepository) GetDistinctMethods(ctx context.Context) ([]string, error) {
 	if r.cache != nil {
 		var cached []string
-		if err := r.cache.Get(ctx, "autocomplete:methods", &cached); err == nil {
+		if err := r.cache.Get(ctx, "autocomplete:methods", &cached); err == nil && len(cached) > 0 {
 			return cached, nil
 		}
 	}
@@ -333,7 +356,11 @@ func (r *LogRepository) GetDistinctMethods(ctx context.Context) ([]string, error
 		methods = append(methods, method)
 	}
 
-	if r.cache != nil {
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if r.cache != nil && len(methods) > 0 {
 		r.cache.Set(ctx, "autocomplete:methods", methods, autocompleteCacheTTL)
 	}
 	return methods, nil
