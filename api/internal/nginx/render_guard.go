@@ -172,6 +172,25 @@ func renderableGeo(hostID string, g *model.GeoRestriction) *model.GeoRestriction
 	return &geo
 }
 
+// geoForAuthProvider blocks rather than challenges the visitors a host's
+// geo restriction refuses when the host has ForwardAuth. The challenge gate
+// and ForwardAuth each need the auth_request of location /, which takes
+// one, so nginx -t refused the config: a GeoIP challenge on such a host, or a
+// global GeoIP default in challenge mode that it inherits, could not be
+// saved (500, #341). The cloud provider challenge blocks on such a host the
+// same way (CloudChallenge).
+func geoForAuthProvider(hostID string, g *model.GeoRestriction, authProvider bool) *model.GeoRestriction {
+	if g == nil || !g.ChallengeMode || !authProvider {
+		return g
+	}
+	warnSkippedOnce("geo challenge "+hostID,
+		"[WARN] Host %s: GeoIP challenge mode cannot run next to ForwardAuth (both need the auth_request of location /), so the visitors the geo restriction refuses get 403 instead of the challenge.",
+		hostID)
+	geo := *g
+	geo.ChallengeMode = false
+	return &geo
+}
+
 // renderableCountries returns the country codes in upper case, leaving out
 // what is not a country code (see renderableGeo).
 func renderableCountries(hostID string, countries []string) []string {

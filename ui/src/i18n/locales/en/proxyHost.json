@@ -285,7 +285,7 @@
         "modeAllow": "Allow Only",
         "modeAllowDescription": "Allow only selected countries",
         "challengeMode": "Challenge Mode",
-        "challengeModeDescription": "Show CAPTCHA instead of blocking",
+        "challengeModeDescription": "Show CAPTCHA instead of blocking. Hosts with ForwardAuth still block.",
         "allowPrivateIPs": "Allow Private IPs",
         "allowPrivateIPsDescription": "Private IP ranges (10.x.x.x, 172.16-31.x.x, 192.168.x.x) bypass GeoIP blocking",
         "allowSearchBots": "Allow Search Bots",

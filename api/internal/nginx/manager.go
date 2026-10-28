@@ -730,6 +730,7 @@ func (m *Manager) GenerateConfigFull(ctx context.Context, data ProxyHostConfigDa
 	// Geo restriction entries are written into if conditions and a geo block
 	// as they are, and rows saved before the API checked them can hold anything.
 	data.GeoRestriction = renderableGeo(data.Host.ID, data.GeoRestriction)
+	data.GeoRestriction = geoForAuthProvider(data.Host.ID, data.GeoRestriction, data.AuthProvider != nil)
 	// So are ban addresses and URI block exception IPs, into geo blocks. The
 	// API checks both, but a restore did not.
 	data.BannedIPs = renderableBans(data.BannedIPs)

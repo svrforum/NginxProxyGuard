@@ -285,7 +285,7 @@
         "modeAllow": "허용만",
         "modeAllowDescription": "선택한 국가만 허용",
         "challengeMode": "챌린지 모드",
-        "challengeModeDescription": "차단 대신 CAPTCHA를 표시합니다",
+        "challengeModeDescription": "차단 대신 CAPTCHA를 표시합니다. ForwardAuth를 켠 호스트는 그대로 차단합니다.",
         "allowPrivateIPs": "사설 IP 허용",
         "allowPrivateIPsDescription": "사설 IP 대역(10.x.x.x, 172.16-31.x.x, 192.168.x.x)은 GeoIP 차단을 우회합니다",
         "allowSearchBots": "검색봇 허용",
