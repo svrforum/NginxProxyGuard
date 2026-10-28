@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -64,6 +65,9 @@ func (h *DDNSHandler) Create(c echo.Context) error {
 
 	rec, err := h.service.Create(c.Request().Context(), &req)
 	if err != nil {
+		if errors.Is(err, model.ErrInvalidInput) {
+			return badRequestError(c, trimInvalidInputPrefix(err))
+		}
 		if strings.Contains(err.Error(), "already exist") {
 			return conflictError(c, err.Error())
 		}
@@ -86,6 +90,9 @@ func (h *DDNSHandler) Update(c echo.Context) error {
 	if err != nil {
 		if err == model.ErrNotFound {
 			return notFoundError(c, "DDNS record")
+		}
+		if errors.Is(err, model.ErrInvalidInput) {
+			return badRequestError(c, trimInvalidInputPrefix(err))
 		}
 		if strings.Contains(err.Error(), "already exist") {
 			return conflictError(c, err.Error())

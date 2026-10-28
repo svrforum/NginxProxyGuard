@@ -9902,7 +9902,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/DDNSRecord'
         '400':
-          description: '`hostname` or `dns_provider_id` missing, or malformed body'
+          description: '`hostname` or `dns_provider_id` missing, `dns_provider_id` not the ID of a DNS provider, or malformed body'
           content:
             application/json:
               schema:
@@ -10078,7 +10078,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/DDNSRecord'
         '400':
-          description: Malformed body
+          description: Malformed body, or `dns_provider_id` not the ID of a DNS provider
           content:
             application/json:
               schema:

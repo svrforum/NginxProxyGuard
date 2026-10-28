@@ -7,6 +7,8 @@ import (
 	"log"
 	"time"
 
+	"github.com/google/uuid"
+
 	"nginx-proxy-guard/internal/model"
 )
 
@@ -197,7 +199,27 @@ func (s *DDNSService) syncRecord(ctx context.Context, rec model.DDNSRecord, ip s
 
 // Create persists a new DDNS record.
 func (s *DDNSService) Create(ctx context.Context, req *model.CreateDDNSRecordRequest) (*model.DDNSRecord, error) {
+	if err := s.checkProvider(ctx, req.DNSProviderID); err != nil {
+		return nil, err
+	}
 	return s.records.Create(ctx, req)
+}
+
+// checkProvider turns a dns_provider_id that names no DNS provider into
+// invalid input (400). Left to the database, the foreign key or the uuid
+// type rejected it and the client got a 500 (#344).
+func (s *DDNSService) checkProvider(ctx context.Context, id string) error {
+	if _, err := uuid.Parse(id); err != nil {
+		return fmt.Errorf("%w: dns_provider_id is not a valid ID", model.ErrInvalidInput)
+	}
+	prov, err := s.providers.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if prov == nil {
+		return fmt.Errorf("%w: dns_provider_id does not match a DNS provider", model.ErrInvalidInput)
+	}
+	return nil
 }
 
 // GetByID retrieves a single DDNS record.
@@ -240,6 +262,11 @@ func (s *DDNSService) Update(ctx context.Context, id string, req *model.UpdateDD
 	if existing != nil && existing.ProxyHostID != nil {
 		req.Hostname = nil
 		req.DNSProviderID = nil
+	}
+	if existing != nil && req.DNSProviderID != nil {
+		if err := s.checkProvider(ctx, *req.DNSProviderID); err != nil {
+			return nil, err
+		}
 	}
 	settingsChanged := req.Proxied != nil || req.TTL != nil
 	updated, err := s.records.Update(ctx, id, req)
