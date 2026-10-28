@@ -118,9 +118,12 @@ func (d ProxyHostConfigData) RateLimitEnabled() bool {
 // ChallengeGate reports whether the host renders the challenge gate: the
 // internal /_challenge/validate location, the challenge endpoints,
 // @challenge_redirect and the auth_request in front of the content. Geo
-// restriction in challenge mode or the cloud provider challenge.
+// restriction in challenge mode or the cloud provider challenge. A host with
+// ForwardAuth renders neither (geoForAuthProvider, CloudChallenge); the
+// check here keeps callers that build the data themselves, such as the DNS
+// entry host index, in step with the config.
 func (d ProxyHostConfigData) ChallengeGate() bool {
-	return (d.GeoRestriction != nil && d.GeoRestriction.ChallengeMode) || d.CloudChallenge()
+	return (d.GeoRestriction != nil && d.GeoRestriction.ChallengeMode && d.AuthProvider == nil) || d.CloudChallenge()
 }
 
 // AccessPhaseAuth reports whether the host asks for a login: an auth

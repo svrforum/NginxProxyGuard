@@ -19,8 +19,20 @@ func TestGeoChallengeOnAForwardAuthHostBlocks(t *testing.T) {
 
 	host := goldenBaseHost(id, "fa-geo.example.com")
 	host.AuthProviderID = &apID
-	out := generateForTest(t, ProxyHostConfigData{Host: host, GlobalSettings: baseGlobalSettings(), GeoRestriction: geo,
-		AuthProvider: &model.AuthProvider{ID: apID, Name: "authelia", Type: "authelia", ProviderURL: "http://127.0.0.1:9091", TimeoutMs: 5000, Enabled: true}})
+	data := ProxyHostConfigData{Host: host, GlobalSettings: baseGlobalSettings(), GeoRestriction: geo,
+		AuthProvider: &model.AuthProvider{ID: apID, Name: "authelia", Type: "authelia", ProviderURL: "http://127.0.0.1:9091", TimeoutMs: 5000, Enabled: true}}
+	// Callers that read the data without rendering it (the DNS entry host
+	// index) must see no gate either.
+	if data.ChallengeGate() {
+		t.Errorf("ChallengeGate = true on a ForwardAuth host")
+	}
+	withList := data
+	withList.AccessList = &model.AccessList{ID: "00000000-0000-0000-0000-0000000003a3", Name: "office", SatisfyAny: true,
+		Items: []model.AccessListItem{{ID: "i1", Directive: "allow", Address: "192.0.2.64/26"}}}
+	if !withList.ListSkipsLogin() {
+		t.Errorf("ListSkipsLogin = false, but with no gate the list renders satisfy any and skips the ForwardAuth login")
+	}
+	out := generateForTest(t, data)
 
 	n := 0
 	for _, line := range strings.Split(locationBlock(t, out, "    location / {"), "\n") {

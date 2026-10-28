@@ -368,11 +368,13 @@ func applyUpdateCandidate(existing *model.ProxyHost, req *model.UpdateProxyHostR
 	return candidate
 }
 
-// validateAuthProviderConflict rejects a ForwardAuth assignment that would create a
-// duplicate auth_request (geo challenge mode), land on an uninjectable custom
-// "location /", or attach a cookie-secure provider (Authelia/Authentik) to a non-SSL
-// host ("conflict:"-prefixed → HTTP 409), and validates that the per-host bypass paths
-// are safe to template into a `location <path>` block ("invalid:"-prefixed → HTTP 400).
+// validateAuthProviderConflict rejects a ForwardAuth assignment that would land on an
+// uninjectable custom "location /", or attach a cookie-secure provider (Authelia/Authentik)
+// to a non-SSL host ("conflict:"-prefixed → HTTP 409), and validates that the per-host
+// bypass paths are safe to template into a `location <path>` block ("invalid:"-prefixed →
+// HTTP 400). A geo challenge on the same host is no conflict: it renders as a block there
+// (nginx geoForAuthProvider, #341). Refusing it here made every later edit of a host that
+// had both fail with 409.
 // Must be called from Create, Update AND UpdateDBOnly (UI saves via UpdateDBOnly). (#179, #181)
 func (s *ProxyHostService) validateAuthProviderConflict(ctx context.Context, hostID string, authProviderID *string, proxyType, advancedConfig string, bypassPaths []string, sslEnabled bool) error {
 	if authProviderID == nil || *authProviderID == "" || proxyType == model.ProxyTypeStream {
@@ -380,12 +382,6 @@ func (s *ProxyHostService) validateAuthProviderConflict(ctx context.Context, hos
 	}
 	if nginx.HasCustomLocationRootInConfig(advancedConfig) {
 		return fmt.Errorf("conflict: auth provider cannot be combined with a custom \"location /\" block in advanced config")
-	}
-	if s.geoRepo != nil && hostID != "" {
-		geo, err := s.geoRepo.GetByProxyHostID(ctx, hostID)
-		if err == nil && geo != nil && geo.ChallengeMode {
-			return fmt.Errorf("conflict: auth provider cannot be combined with geo challenge (CAPTCHA) mode on the same host")
-		}
 	}
 	// Authelia/Authentik set Secure session cookies and reject a non-https protected
 	// URL — attaching them to a non-SSL host produces auth that silently never

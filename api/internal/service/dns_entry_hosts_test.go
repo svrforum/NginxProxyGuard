@@ -65,7 +65,7 @@ const (
 	dnsGateH1 = "00000000-0000-4000-8000-000000000001" // satisfy all
 	dnsGateH2 = "00000000-0000-4000-8000-000000000002" // satisfy any + ForwardAuth
 	dnsGateH3 = "00000000-0000-4000-8000-000000000003" // satisfy any + auth_basic inside a location
-	dnsGateH4 = "00000000-0000-4000-8000-000000000004" // satisfy any + ForwardAuth + geo challenge
+	dnsGateH4 = "00000000-0000-4000-8000-000000000004" // satisfy any + auth_basic inside a location + geo challenge
 	dnsGateH5 = "00000000-0000-4000-8000-000000000005" // Advanced Config allow/deny of its own
 	dnsGateH7 = "00000000-0000-4000-8000-000000000007" // stream host
 	dnsGateH8 = "00000000-0000-4000-8000-000000000008" // config data cannot be built
@@ -104,8 +104,11 @@ func dnsGateRig(t *testing.T) (*dnsTestRig, *dnsTestHosts) {
 	h3 := host(dnsGateH3, "app3.example.com")
 	h3.AdvancedConfig = "location /admin { auth_basic \"admin\"; auth_basic_user_file /etc/nginx/htpasswd; }"
 	h.add(h3, listB, nginx.ProxyHostConfigData{})
-	h.add(host(dnsGateH4, "app4.example.com"), listB, nginx.ProxyHostConfigData{AuthProvider: forwardAuth,
-		GeoRestriction: &model.GeoRestriction{Enabled: true, ChallengeMode: true}})
+	// A login next to the challenge gate. Not ForwardAuth: on such a host the
+	// geo challenge renders as a block, with no gate (#341).
+	h4 := host(dnsGateH4, "app4.example.com")
+	h4.AdvancedConfig = "location /admin { auth_basic \"admin\"; auth_basic_user_file /etc/nginx/htpasswd; }"
+	h.add(h4, listB, nginx.ProxyHostConfigData{GeoRestriction: &model.GeoRestriction{Enabled: true, ChallengeMode: true}})
 	h5 := host(dnsGateH5, "app5.example.com")
 	h5.AdvancedConfig = "location /status { allow all; }"
 	h.add(h5, listA, nginx.ProxyHostConfigData{})
@@ -674,7 +677,7 @@ const (
 
 	dnsTrustH1 = "00000000-0000-4000-8000-000000000021" // list C: the trusted domains are in its block
 	dnsTrustH2 = "00000000-0000-4000-8000-000000000022" // list D + ForwardAuth: the login decides
-	dnsTrustH3 = "00000000-0000-4000-8000-000000000023" // list D + ForwardAuth + geo challenge
+	dnsTrustH3 = "00000000-0000-4000-8000-000000000023" // list D + auth_basic inside a location + geo challenge
 	dnsTrustH4 = "00000000-0000-4000-8000-000000000024" // list C + Advanced Config allow/deny of its own
 	dnsTrustH5 = "00000000-0000-4000-8000-000000000025" // list E: no access list block
 	dnsTrustH6 = "00000000-0000-4000-8000-000000000026" // no access list
@@ -715,8 +718,9 @@ func dnsTrustedGateRig(t *testing.T) (*dnsTestRig, *dnsTestHosts) {
 	h := &dnsTestHosts{byList: map[string][]model.ProxyHost{}, data: map[string]nginx.ProxyHostConfigData{}, fail: map[string]bool{}}
 	h.add(host(dnsTrustH1, "trust1.example.com"), listC, trusted(nginx.ProxyHostConfigData{}))
 	h.add(host(dnsTrustH2, "trust2.example.com"), listD, trusted(nginx.ProxyHostConfigData{AuthProvider: forwardAuth}))
-	h.add(host(dnsTrustH3, "trust3.example.com"), listD, trusted(nginx.ProxyHostConfigData{AuthProvider: forwardAuth,
-		GeoRestriction: &model.GeoRestriction{Enabled: true, ChallengeMode: true}}))
+	t3 := host(dnsTrustH3, "trust3.example.com")
+	t3.AdvancedConfig = "location /admin { auth_basic \"admin\"; auth_basic_user_file /etc/nginx/htpasswd; }"
+	h.add(t3, listD, trusted(nginx.ProxyHostConfigData{GeoRestriction: &model.GeoRestriction{Enabled: true, ChallengeMode: true}}))
 	h4 := host(dnsTrustH4, "trust4.example.com")
 	h4.AdvancedConfig = "location /status { allow all; }"
 	h.add(h4, listC, trusted(nginx.ProxyHostConfigData{}))
