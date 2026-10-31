@@ -1,6 +1,7 @@
 {
   "menu": {
     "dashboard": "대시보드",
+    "traffic": "트래픽",
     "proxyHosts": "프록시 호스트",
     "hosts": "호스트",
     "redirects": "리다이렉트",

@@ -1,6 +1,7 @@
 {
   "menu": {
     "dashboard": "Dashboard",
+    "traffic": "Traffic",
     "proxyHosts": "Proxy Hosts",
     "hosts": "Hosts",
     "redirects": "Redirects",

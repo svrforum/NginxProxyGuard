@@ -41,7 +41,7 @@ const dashboardSummary24hSQL = `
 		       COALESCE(SUM(status_4xx + status_5xx), 0),
 		       COALESCE(SUM(total_requests), 1)
 		FROM dashboard_stats_hourly
-		WHERE hour_bucket >= $1
+		WHERE hour_bucket >= $1 AND proxy_host_id IS NULL
 	`
 
 // GetSummary returns the main dashboard summary
@@ -175,7 +175,7 @@ func (r *DashboardRepository) getAllChartData(ctx context.Context, start, end ti
 		       SUM(status_2xx), SUM(status_3xx), SUM(status_4xx), SUM(status_5xx),
 		       SUM(waf_blocked), SUM(rate_limited), SUM(bot_blocked)
 		FROM dashboard_stats_hourly
-		WHERE hour_bucket >= $1 AND hour_bucket <= $2
+		WHERE hour_bucket >= $1 AND hour_bucket <= $2 AND proxy_host_id IS NULL
 		GROUP BY hour_bucket
 		ORDER BY hour_bucket
 		LIMIT 200

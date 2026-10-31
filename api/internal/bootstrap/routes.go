@@ -380,6 +380,7 @@ func registerTokenProtectedRoutes(v1 *echo.Group, c *Container) {
 	registerSecurityRoutes(v1, c.Handlers.Security)
 	registerExceptionDNSRoutes(v1, c.Handlers.ExceptionDNS)
 	registerSettingsRoutes(v1, c.Handlers.Settings)
+	registerTrafficRoutes(v1, c.Handlers.Traffic)
 	registerSystemLogRoutes(v1, c.Handlers.SystemLog)
 	registerSystemSettingsRoutes(v1, c.Handlers.SystemSettings)
 	registerRawLogReclaimRoutes(v1, c.Handlers.RawLogReclaim)
@@ -879,6 +880,15 @@ func registerSettingsRoutes(v1 *echo.Group, h *handler.SettingsHandler) {
 	backups.GET("/:id/download", h.DownloadBackup, backupRead)
 	backups.DELETE("/:id", h.DeleteBackup, backupCreate)
 	backups.POST("/:id/restore", h.RestoreBackup, backupRestore)
+}
+
+func registerTrafficRoutes(v1 *echo.Group, h *handler.TrafficHandler) {
+	read := authMiddleware.RequireAPIPermission("dashboard:read")
+	g := v1.Group("/traffic")
+	g.GET("/summary", h.Summary, read)
+	g.GET("/timeseries", h.Timeseries, read)
+	g.GET("/realtime", h.Realtime, read)
+	g.GET("/export", h.Export, read)
 }
 
 func registerSystemLogRoutes(v1 *echo.Group, h *handler.SystemLogHandler) {
