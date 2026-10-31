@@ -17,6 +17,7 @@ import { SyncProgressModal, SyncAllResult } from './components/SyncProgressModal
 
 // Lazy-loaded route components
 const Dashboard = lazy(() => import('./components/Dashboard'))
+const TrafficPage = lazy(() => import('./pages/TrafficPage'))
 const ProxyHostList = lazy(() => import('./components/ProxyHostList').then(m => ({ default: m.ProxyHostList })))
 const ProxyHostForm = lazy(() => import('./components/ProxyHostForm').then(m => ({ default: m.ProxyHostForm })))
 const RedirectHostManager = lazy(() => import('./components/RedirectHostManager'))
@@ -41,7 +42,7 @@ async function fetchHealth(): Promise<HealthResponse> {
 }
 
 
-type Tab = 'dashboard' | 'proxy-hosts' | 'redirects' | 'waf' | 'access' | 'auth-providers' | 'certificates' | 'logs' | 'settings'
+type Tab = 'dashboard' | 'traffic' | 'proxy-hosts' | 'redirects' | 'waf' | 'access' | 'auth-providers' | 'certificates' | 'logs' | 'settings'
 
 interface AppContentProps {
   user: User
@@ -55,7 +56,7 @@ function AppContent({ user, onLogout }: AppContentProps) {
   const { isDark, toggle } = useDarkMode()
   // Menus the caller has no permission for are hidden. This is convenience, not
   // a boundary — every endpoint behind them is enforced server-side. (#222)
-  const { canArea } = usePermissions()
+  const { can, canArea } = usePermissions()
 
   // A restricted role must not land on a page it cannot load. Pick the first
   // area it can actually see, in menu order. (#222)
@@ -76,6 +77,7 @@ function AppContent({ user, onLogout }: AppContentProps) {
   // Derive active tab from URL
   const getActiveTab = (): Tab => {
     const path = location.pathname
+    if (path.startsWith('/traffic')) return 'traffic'
     if (path.startsWith('/redirects')) return 'redirects'
     if (path.startsWith('/waf')) return 'waf'
     if (path.startsWith('/auth-providers')) return 'auth-providers'
@@ -170,6 +172,9 @@ function AppContent({ user, onLogout }: AppContentProps) {
     switch (tab) {
       case 'dashboard':
         navigate('/dashboard')
+        break
+      case 'traffic':
+        navigate('/traffic')
         break
       case 'proxy-hosts':
         navigate('/proxy-hosts')
@@ -362,6 +367,17 @@ function AppContent({ user, onLogout }: AppContentProps) {
                 <span className="sm:hidden">{t('menu.sslCerts')}</span>
               </button>
             )}
+            {can('dashboard:read') && (
+              <button
+                onClick={() => handleTabClick('traffic')}
+                className={`py-3 px-2 lg:px-1 text-xs lg:text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'traffic'
+                  ? 'border-primary-600 text-primary-600 dark:text-primary-400'
+                  : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+              >
+                {t('menu.traffic')}
+              </button>
+            )}
             {canArea('logs') && (
               <button
                 onClick={() => handleTabClick('logs')}
@@ -398,6 +414,7 @@ function AppContent({ user, onLogout }: AppContentProps) {
         <Routes>
           <Route path="/" element={<Navigate to={landingPath} replace />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/traffic" element={can('dashboard:read') ? <TrafficPage /> : <Navigate to={landingPath} replace />} />
           <Route path="/proxy-hosts" element={<ProxyHostList onEdit={handleEdit} onAdd={handleAdd} />} />
           <Route path="/certificates" element={<Navigate to="/certificates/list" replace />} />
           <Route path="/certificates/list" element={<CertificatesPage subTab="certificates" />} />

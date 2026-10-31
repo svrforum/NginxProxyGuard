@@ -46,6 +46,7 @@ export type LocaleParity = {
   navigation: Same<Keys<typeof import('./locales/ko/navigation.json')>, Keys<typeof import('./locales/en/navigation.json')>>
   auth: Same<Keys<typeof import('./locales/ko/auth.json')>, Keys<typeof import('./locales/en/auth.json')>>
   dashboard: Same<Keys<typeof import('./locales/ko/dashboard.json')>, Keys<typeof import('./locales/en/dashboard.json')>>
+  traffic: Same<Keys<typeof import('./locales/ko/traffic.json')>, Keys<typeof import('./locales/en/traffic.json')>>
   accessControl: Same<Keys<typeof import('./locales/ko/accessControl.json')>, Keys<typeof import('./locales/en/accessControl.json')>>
   authProvider: Same<Keys<typeof import('./locales/ko/authProvider.json')>, Keys<typeof import('./locales/en/authProvider.json')>>
   proxyHost: Same<Keys<typeof import('./locales/ko/proxyHost.json')>, Keys<typeof import('./locales/en/proxyHost.json')>>
