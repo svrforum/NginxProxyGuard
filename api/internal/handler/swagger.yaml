@@ -3058,23 +3058,71 @@ paths:
   /challenge/verify:
     post:
       tags: [Challenge]
-      summary: Verify CAPTCHA solution
-      description: Public endpoint for CAPTCHA verification
+      summary: Verify a solved CAPTCHA (public, JSON)
+      description: |
+        Public endpoint for CAPTCHA verification. The challenge page itself
+        posts a form to `/challenge/verify-redirect`; this is the JSON form of
+        the same check.
+
+        `proxy_host_id` selects that host's own CAPTCHA config; without it the
+        global config is used.
+      security: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [token, solution]
+              required: [token]
               properties:
                 token:
                   type: string
-                solution:
+                  description: CAPTCHA provider response token.
+                proxy_host_id:
                   type: string
+                  format: uuid
+                  description: Proxy host that triggered the challenge; selects the config.
+                challenge_reason:
+                  type: string
+                  description: Recorded on the issued token / challenge log.
       responses:
         '200':
-          description: Verification result
+          description: >-
+            Verification result. `success` is false, with `error`, when the
+            provider rejected the token; on success `token` is the bypass
+            token and `expires_at` / `expires_in` its lifetime.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  token:
+                    type: string
+                  expires_at:
+                    type: string
+                    format: date-time
+                  expires_in:
+                    type: integer
+                    description: Seconds
+                  error:
+                    type: string
+                  score:
+                    type: number
+                    description: reCAPTCHA v3 score
+        '400':
+          description: Malformed body, `token` missing, or `proxy_host_id` not a valid ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Challenge not enabled, or no CAPTCHA configured, in the selected config
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   # ============================================================================
   # Cloud Providers
