@@ -10650,7 +10650,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/ExploitRuleHostRulesResponse'
         '400':
-          description: Host ID missing from the path
+          description: Host ID missing from the path, or not a valid ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Proxy host not found
           content:
             application/json:
               schema:
@@ -10717,7 +10723,7 @@ paths:
                 $ref: '#/components/schemas/HostExploitRuleExclusion'
         '400':
           description: >-
-            Host or rule ID missing; or `uri_pattern` is invalid — over 512
+            Host or rule ID missing or not a valid ID; or `uri_pattern` is invalid — over 512
             characters, containing `$`, `"` or a control character, or not a
             compilable regex; or `uri_pattern` was sent for a rule whose
             `pattern_type` is not `query_string` or `request_uri`.
@@ -10726,10 +10732,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '404':
-          description: >-
-            Rule not found. Only checked when `uri_pattern` is supplied — a
-            rule-wide exclusion for an unknown rule ID reaches the insert and
-            surfaces as 500.
+          description: Proxy host or rule not found
           content:
             application/json:
               schema:
@@ -10755,7 +10758,7 @@ paths:
         exactly.
 
         Answers 204 even when nothing matched — the affected-row count is not
-        checked.
+        checked. An unknown host is 404.
 
         The host's nginx config is regenerated after the delete; a failure there is
         logged only.
@@ -10792,7 +10795,13 @@ paths:
         '204':
           description: Exclusion removed (no body)
         '400':
-          description: Host or rule ID missing, or `uri_pattern` failed validation
+          description: Host or rule ID missing or not a valid ID, or `uri_pattern` failed validation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Proxy host not found
           content:
             application/json:
               schema:
@@ -10851,7 +10860,7 @@ paths:
                 $ref: '#/components/schemas/GlobalExploitRuleExclusion'
         '400':
           description: >-
-            Rule ID missing; or `uri_pattern` invalid (over 512 characters,
+            Rule ID missing or not a valid ID; or `uri_pattern` invalid (over 512 characters,
             containing `$`, `"` or a control character, or not a compilable
             regex); or `uri_pattern` sent for a rule whose `pattern_type` is not
             `query_string` or `request_uri`.
@@ -10860,8 +10869,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '404':
-          description: >-
-            Rule not found. Only checked when `uri_pattern` is supplied.
+          description: Rule not found
           content:
             application/json:
               schema:
@@ -10915,7 +10923,7 @@ paths:
         '204':
           description: Global exclusion removed (no body)
         '400':
-          description: Rule ID missing, or `uri_pattern` failed validation
+          description: Rule ID missing or not a valid ID, or `uri_pattern` failed validation
           content:
             application/json:
               schema:
