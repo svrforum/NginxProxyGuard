@@ -22,6 +22,7 @@ type Handlers struct {
 	Geo                *handler.GeoHandler
 	Security           *handler.SecurityHandler
 	Settings           *handler.SettingsHandler
+	Traffic            *handler.TrafficHandler
 	SystemLog          *handler.SystemLogHandler
 	LogFilterPreset    *handler.LogFilterPresetHandler
 	Auth               *handler.AuthHandler
@@ -78,6 +79,7 @@ func InitHandlers(
 	h.Security = handler.NewSecurityHandler(svcs.Security, svcs.Audit)
 	h.Security.SetDNSEntries(svcs.DNSEntries)
 	h.Settings = handler.NewSettingsHandler(svcs.Settings, svcs.Audit, svcs.CloudflareTunnel)
+	h.Traffic = handler.NewTrafficHandler(repos.Dashboard)
 	h.Settings.SetDNSEntries(svcs.DNSEntries)
 	h.SystemLog = handler.NewSystemLogHandler(repos.SystemLog)
 	h.LogFilterPreset = handler.NewLogFilterPresetHandler(repos.LogFilterPreset)

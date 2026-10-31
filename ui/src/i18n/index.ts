@@ -28,6 +28,7 @@ const EAGER_NAMESPACES = ['common', 'navigation'] as const
 const LAZY_NAMESPACES = [
   'auth',
   'dashboard',
+  'traffic',
   'accessControl',
   'authProvider',
   'proxyHost',

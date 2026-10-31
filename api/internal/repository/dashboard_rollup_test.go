@@ -50,8 +50,9 @@ func openRollupTestDB(t *testing.T) *sql.DB {
 	mustExec(t, db,
 		`CREATE TYPE log_type AS ENUM ('access', 'error', 'modsec')`,
 		`CREATE TYPE block_reason AS ENUM ('none', 'waf', 'bot_filter', 'rate_limit', 'geo_block')`,
+		`CREATE TABLE proxy_hosts (id uuid PRIMARY KEY, domain_names text[] NOT NULL)`,
 		`CREATE TABLE logs_partitioned (
-			log_type log_type NOT NULL, host text, request_uri text, status_code integer,
+			log_type log_type NOT NULL, host text, proxy_host_id uuid, request_uri text, status_code integer,
 			request_time double precision, body_bytes_sent bigint,
 			block_reason block_reason DEFAULT 'none', created_at timestamptz NOT NULL)`,
 		`CREATE TABLE dashboard_stats_hourly (
@@ -73,6 +74,10 @@ func openRollupTestDB(t *testing.T) *sql.DB {
 			created_at timestamp with time zone DEFAULT now() NOT NULL,
 			UNIQUE (proxy_host_id, hour_bucket))`,
 		`CREATE UNIQUE INDEX idx_dashboard_stats_hourly_null_host_bucket ON dashboard_stats_hourly (hour_bucket) WHERE proxy_host_id IS NULL`,
+		`CREATE TABLE traffic_hourly_backfill (
+			id smallint PRIMARY KEY CHECK (id = 1),
+			next_hour timestamptz NOT NULL,
+			updated_at timestamptz NOT NULL DEFAULT now())`,
 	)
 	return db
 }
@@ -81,7 +86,7 @@ func openRollupTestDB(t *testing.T) *sql.DB {
 // NULL fields count, NPG's own and internal requests do not, the latency
 // average leaves out WebSocket upgrades and requests without a time, a wrong
 // row is overwritten, an hour without requests is zeroed, and hours outside
-// the window and per-host rows are left alone. A second run changes nothing.
+// the window are left alone. An orphan host row is removed on replay.
 func TestRecomputeHourlyRollup(t *testing.T) {
 	db := openRollupTestDB(t)
 	mustExec(t, db,
@@ -116,7 +121,7 @@ func TestRecomputeHourlyRollup(t *testing.T) {
 			('access', 'b.example.com', '/', 200, 0.050, 10, '2026-10-08 09:59:59+00'),
 			('access', 'b.example.com', '/', 200, 0.050, 10, '2026-10-08 13:00:00+00')`,
 		// What the old rollup left behind: a wrong 10:00, a stale 12:00 whose
-		// requests are gone, 13:00 outside the window, and a per-host row.
+		// requests are gone, 13:00 outside the window, and an orphan host row.
 		`INSERT INTO dashboard_stats_hourly (proxy_host_id, hour_bucket, total_requests, status_2xx) VALUES
 			(NULL, '2026-10-08 10:00:00+00', 999999, 999999),
 			(NULL, '2026-10-08 12:00:00+00', 999, 999),
@@ -169,7 +174,6 @@ func TestRecomputeHourlyRollup(t *testing.T) {
 		"11:00":      {total: 2, s2: 1, s4: 1, avgMs: 100, timed: 2, bytes: 40},
 		"12:00":      {},
 		"13:00":      {total: 777, s2: 777},
-		"10:00 host": {total: 5, s2: 5},
 	}
 	got := read()
 	if len(got) != len(want) {

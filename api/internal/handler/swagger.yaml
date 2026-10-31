@@ -58,6 +58,8 @@ tags:
     description: IP-based access control lists
   - name: Settings
     description: Global settings and dashboard
+  - name: Traffic
+    description: Per-proxy-host HTTP access traffic statistics
   - name: Backups
     description: Backup and restore operations
   - name: Logs
@@ -1226,6 +1228,107 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Dashboard'
+  /traffic/summary:
+    get:
+      tags: [Traffic]
+      summary: HTTP response-body traffic totals by proxy host
+      description: |
+        Requires dashboard:read. Counts completed access-log requests and their
+        response body bytes, excluding NPG internal requests. These figures
+        are not network interface bandwidth or request upload bytes. For ranges
+        longer than 24 hours, complete UTC hours use hourly rollups and partial
+        hours use raw access logs. Unclassified includes traffic without an
+        associated proxy host and any older traffic without host rollups.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TrafficStart'
+        - $ref: '#/components/parameters/TrafficEnd'
+      responses:
+        '200':
+          description: Traffic totals and a breakdown by proxy host
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrafficSummary'
+        '400':
+          description: Invalid date range
+        '401':
+          description: Authentication required
+        '403':
+          description: Missing dashboard:read permission
+  /traffic/timeseries:
+    get:
+      tags: [Traffic]
+      summary: Time-bucketed HTTP response-body traffic
+      description: Requires dashboard:read. Buckets use UTC hour/day or 5-minute intervals.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TrafficStart'
+        - $ref: '#/components/parameters/TrafficEnd'
+        - $ref: '#/components/parameters/TrafficHostID'
+      responses:
+        '200':
+          description: Traffic time series
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrafficSeries'
+        '400':
+          description: Invalid date range or host identifier
+        '401':
+          description: Authentication required
+        '403':
+          description: Missing dashboard:read permission
+  /traffic/realtime:
+    get:
+      tags: [Traffic]
+      summary: Traffic in the last 3 minutes and 30-second average rate
+      description: |
+        Requires dashboard:read. Buckets are 10 seconds wide. Average bytes
+        per second is calculated from completed response-body bytes.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TrafficHostID'
+      responses:
+        '200':
+          description: Recent traffic and average response-body rate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrafficRealtime'
+        '400':
+          description: Invalid host identifier
+        '401':
+          description: Authentication required
+        '403':
+          description: Missing dashboard:read permission
+  /traffic/export:
+    get:
+      tags: [Traffic]
+      summary: Export proxy-host traffic totals to CSV
+      description: Requires dashboard:read. CSV columns are domain, proxy_host_id, response_bytes, requests, percentage.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TrafficStart'
+        - $ref: '#/components/parameters/TrafficEnd'
+      responses:
+        '200':
+          description: CSV attachment
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Invalid date range
+        '401':
+          description: Authentication required
+        '403':
+          description: Missing dashboard:read permission
   /dashboard/health:
     get:
       tags: [Settings]
@@ -11540,6 +11643,26 @@ components:
         `/status`, `/health/detailed`) are reachable with either credential. (#249)
 
   parameters:
+    TrafficStart:
+      name: start
+      in: query
+      description: Inclusive RFC3339 start. Defaults to now minus 24 hours.
+      schema:
+        type: string
+        format: date-time
+    TrafficEnd:
+      name: end
+      in: query
+      description: Exclusive RFC3339 end. Defaults to now. Range must be within the last 90 days and at most 90 days long.
+      schema:
+        type: string
+        format: date-time
+    TrafficHostID:
+      name: proxy_host_id
+      in: query
+      description: Proxy host UUID, `unclassified`, or omit for all hosts.
+      schema:
+        type: string
     ProxyHostId:
       name: id
       in: path
@@ -11570,6 +11693,86 @@ components:
             $ref: '#/components/schemas/Error'
 
   schemas:
+    TrafficHost:
+      type: object
+      required: [id, domain, bytes, requests, percentage]
+      properties:
+        id:
+          type: string
+        domain:
+          type: string
+        bytes:
+          type: integer
+          format: int64
+        requests:
+          type: integer
+          format: int64
+        percentage:
+          type: number
+          format: double
+    TrafficSummary:
+      type: object
+      required: [start, end, bytes, requests, hosts, source]
+      properties:
+        start:
+          type: string
+          format: date-time
+        end:
+          type: string
+          format: date-time
+        bytes:
+          type: integer
+          format: int64
+        requests:
+          type: integer
+          format: int64
+        hosts:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrafficHost'
+        source:
+          type: string
+          enum: [access_logs, hourly_and_access_logs]
+    TrafficPoint:
+      type: object
+      required: [timestamp, bytes, requests]
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        bytes:
+          type: integer
+          format: int64
+        requests:
+          type: integer
+          format: int64
+    TrafficSeries:
+      type: object
+      required: [points, resolution]
+      properties:
+        points:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrafficPoint'
+        resolution:
+          type: string
+          enum: [5min, hour, day]
+    TrafficRealtime:
+      allOf:
+        - $ref: '#/components/schemas/TrafficSeries'
+        - type: object
+          properties:
+            bytes_per_second:
+              type: number
+              format: double
+            requests_per_second:
+              type: number
+              format: double
+            interval_seconds:
+              type: integer
+            updated_at:
+              type: string
+              format: date-time
     Error:
       type: object
       properties:

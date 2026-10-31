@@ -68,6 +68,12 @@ type hourlyRollupRecomputer interface {
 	RecomputeHourlyRollup(ctx context.Context, from, to time.Time) (int64, error)
 }
 
+// Historical backfill is optional so collectors used by older tests and
+// environments without a configured dashboard repository still work.
+type trafficHourlyBackfiller interface {
+	BackfillTrafficHourly(ctx context.Context, now time.Time) (from, to time.Time, complete bool, err error)
+}
+
 const (
 	// rollupInterval is how often the current hour is rebuilt.
 	rollupInterval = time.Minute
@@ -81,6 +87,10 @@ const (
 	rollupBootSweep = 25 * time.Hour
 	// rollupTimeout bounds one rebuild; the boot sweep reads a day of logs.
 	rollupTimeout = 2 * time.Minute
+	// Each historical pass touches at most six UTC hours; leave time between
+	// passes so a new installation does not rescan months of logs at once.
+	trafficBackfillInterval = time.Minute
+	trafficBackfillTimeout  = 90 * time.Second
 )
 
 type NginxStatus struct {
@@ -147,6 +157,9 @@ func (sc *StatsCollector) SetRollupRepo(r hourlyRollupRecomputer) {
 
 func (sc *StatsCollector) Start(ctx context.Context) {
 	log.Println("Starting stats collector...")
+	if backfiller, ok := sc.rollup.(trafficHourlyBackfiller); ok {
+		go sc.backfillTraffic(ctx, backfiller)
+	}
 
 	// Collect stats every 30 seconds
 	ticker := time.NewTicker(30 * time.Second)
@@ -165,6 +178,34 @@ func (sc *StatsCollector) Start(ctx context.Context) {
 			return
 		case <-ticker.C:
 			sc.collectStats()
+		}
+	}
+}
+
+// The first pass waits for the boot-time dashboard sweep to start. Cursor
+// updates are transactional: a timeout or shutdown retries the same hours.
+func (sc *StatsCollector) backfillTraffic(ctx context.Context, repo trafficHourlyBackfiller) {
+	ticker := time.NewTicker(trafficBackfillInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-sc.stopCh:
+			return
+		case <-ticker.C:
+			batchCtx, cancel := context.WithTimeout(ctx, trafficBackfillTimeout)
+			from, to, complete, err := repo.BackfillTrafficHourly(batchCtx, time.Now())
+			cancel()
+			if err != nil {
+				log.Printf("[StatsCollector] Traffic history backfill failed (will retry): %v", err)
+				continue
+			}
+			if complete {
+				log.Println("[StatsCollector] Historical proxy-host traffic backfill complete")
+				return
+			}
+			log.Printf("[StatsCollector] Backfilled proxy-host traffic for %s to %s UTC", from.UTC().Format(time.RFC3339), to.UTC().Format(time.RFC3339))
 		}
 	}
 }

@@ -76,3 +76,7 @@ jobs:
       - name: Typecheck
         working-directory: ui
         run: npx tsc -b
+
+      - name: Traffic chart regression tests
+        working-directory: ui
+        run: node --test test/traffic.test.mjs
