@@ -689,26 +689,6 @@ func advancedConfigHasTopLevel(advancedConfig, name string) bool {
 	return false
 }
 
-// advancedAuthRequestWarned holds the IDs of the hosts already named in the
-// warning below, so each is named once per process, not at every
-// regeneration.
-var advancedAuthRequestWarned sync.Map
-
-func warnAdvancedAuthRequestOnce(host *model.ProxyHost, customRoot bool) {
-	if _, seen := advancedAuthRequestWarned.LoadOrStore(host.ID, struct{}{}); seen {
-		return
-	}
-	effect := "covers only location /, not the locations in its Advanced Config"
-	if customRoot {
-		effect = "is not applied, because its Advanced Config replaces location / as well"
-	}
-	log.Printf("[WARN] Host %s (%s): its Advanced Config sets its own auth_request for the whole server, "+
-		"so the geo challenge %s. Advanced Config no longer accepts auth_request: move this login to an "+
-		"auth provider (ForwardAuth) and remove auth_request from the Advanced Config. A host uses either "+
-		"an auth provider or the geo challenge.",
-		host.ID, strings.Join(host.DomainNames, ", "), effect)
-}
-
 // GenerateConfigFull generates nginx config with all Phase 6 features support
 func (m *Manager) GenerateConfigFull(ctx context.Context, data ProxyHostConfigData) error {
 	start := time.Now()
@@ -730,7 +710,7 @@ func (m *Manager) GenerateConfigFull(ctx context.Context, data ProxyHostConfigDa
 	// Geo restriction entries are written into if conditions and a geo block
 	// as they are, and rows saved before the API checked them can hold anything.
 	data.GeoRestriction = renderableGeo(data.Host.ID, data.GeoRestriction)
-	data.GeoRestriction = geoForAuthProvider(data.Host.ID, data.GeoRestriction, data.AuthProvider != nil)
+	data.GeoRestriction = geoWithOwnAuthRequest(data.Host, data.GeoRestriction, data.AuthProvider != nil)
 	// So are ban addresses and URI block exception IPs, into geo blocks. The
 	// API checks both, but a restore did not.
 	data.BannedIPs = renderableBans(data.BannedIPs)
@@ -829,18 +809,6 @@ func (m *Manager) GenerateConfigFull(ctx context.Context, data ProxyHostConfigDa
 		serverPart, locationPart := splitAdvancedConfigByContext(data.Host.AdvancedConfig)
 		data.AdvancedConfigServerLevel = serverPart
 		data.AdvancedConfigLocationLevel = locationPart
-
-		// Advanced Config has refused auth_request since v2.25.0, but a host
-		// saved before then, or restored from a backup, can still carry one
-		// at its top level. Rendered into the server block next to the geo
-		// challenge's server-level gate, it would fail nginx -t ("auth_request
-		// directive is duplicate"), and the boot sync would drop the host.
-		// Such a host keeps the gate in location / only.
-		data.AdvancedConfigAuthRequest = (data.AdvancedConfigHasLocation || data.HasCustomLocationRoot) &&
-			advancedConfigHasTopLevel(data.Host.AdvancedConfig, "auth_request")
-		if data.AdvancedConfigAuthRequest && data.GeoRestriction != nil && data.GeoRestriction.ChallengeMode {
-			warnAdvancedAuthRequestOnce(data.Host, data.HasCustomLocationRoot)
-		}
 	}
 
 	tmpl, err := template.New("proxy_host").Funcs(funcMap).Parse(proxyHostTemplate)

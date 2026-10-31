@@ -494,65 +494,75 @@ func serverLevel(serverBlock, name string) []string {
 	return out
 }
 
-// A legacy Advanced Config can still hold an auth_request of its own for the
-// whole server: refused when saving since v2.25.0, but kept by hosts saved
-// before and by restored backups. A block takes one auth_request, so next to
-// the challenge's server-level gate nginx -t failed and the boot sync dropped
-// the host. Such a host keeps the gate in location / only; an auth_request
-// inside a location, or in a comment, leaves the server-level gate in place.
-func TestChallengeGateYieldsToAdvancedConfigAuthRequest(t *testing.T) {
+// A legacy Advanced Config can still hold an auth_request of its own at its
+// top level: refused when saving since v2.25.0, but kept by hosts saved
+// before and by restored backups. The challenge gate needs the one
+// auth_request of location /, so next to that login nginx -t failed and the
+// host was dropped, or, with locations in the Advanced Config, the gate in
+// location / replaced the login there and let visitors past it. Such a host
+// blocks the visitors its geo restriction refuses (403) and keeps its own
+// login on location /. An auth_request inside a location, or in a comment,
+// leaves the challenge in place.
+func TestGeoChallengeNextToAdvancedConfigAuthRequestBlocks(t *testing.T) {
 	ext := "location = /ext {\n    internal;\n    proxy_pass http://192.0.2.20:9000/auth;\n}\n"
 	app := "location /app/ {\n    proxy_pass http://192.0.2.20:8080;\n}\n"
 	for _, tc := range []struct {
 		name, adv  string
-		own        string // the Advanced Config's server-level auth_request, "" if none
+		own        string // the Advanced Config's top-level auth_request, "" if none
 		customRoot bool
 	}{
 		{"server level", "auth_request /ext;\n" + app + ext, "auth_request /ext;", false},
 		{"server level off", "auth_request off;\n" + app, "auth_request off;", false},
 		{"custom location /", "auth_request /ext;\nlocation / {\n    proxy_pass http://192.0.2.20:8080;\n}\n" + ext, "auth_request /ext;", true},
+		{"no location", "auth_request /ext;\n", "auth_request /ext;", false},
 		{"inside a location", "location /app/ {\n    auth_request /ext;\n    proxy_pass http://192.0.2.20:8080;\n}\n" + ext, "", false},
 		{"commented out", "# auth_request /ext;\n" + app, "", false},
 	} {
 		for _, mode := range gateTLSModes {
 			name := tc.name + " " + mode.name
-			out := renderForTest(t, ProxyHostConfigData{
+			geo := geoChallenge(false)
+			data := ProxyHostConfigData{
 				Host:           gateTestHost("00000000-0000-0000-0000-0000000000ea", mode.ssl, mode.force, tc.adv),
-				GeoRestriction: geoChallenge(false),
-			})
+				GeoRestriction: geo,
+			}
+			// The DNS entry host index reads this without rendering.
+			if got := data.ChallengeGate(); got != (tc.own == "") {
+				t.Errorf("%s: ChallengeGate = %v", name, got)
+			}
+			out := renderForTest(t, data)
+			if !geo.ChallengeMode {
+				t.Fatalf("%s: rendering changed the caller's geo restriction", name)
+			}
+			if tc.own == "" {
+				if !strings.Contains(out, "auth_request /_challenge/validate;") {
+					t.Errorf("%s: the challenge gate is gone", name)
+				}
+				continue
+			}
+			if strings.Contains(out, "/_challenge/validate") {
+				t.Errorf("%s: the challenge gate is rendered next to the host's own auth_request", name)
+			}
+			if !strings.Contains(out, "Direct Block Mode") {
+				t.Errorf("%s: the geo restriction does not block", name)
+			}
 			for i, b := range splitServerBlocks(t, out) {
 				if mode.force && i == 0 {
 					continue // redirects everything but ACME and the challenge endpoints
 				}
-				auth := serverLevel(b, "auth_request")
-				if tc.own == "" {
-					if len(auth) != 1 || auth[0] != "auth_request /_challenge/validate;" {
-						t.Errorf("%s server %d: server-level auth_request %q, want only the gate", name, i, auth)
+				own := slices.Contains(serverLevel(b, "auth_request"), tc.own)
+				if !tc.customRoot {
+					// location / either inherits the host's login or holds it
+					// itself, and holds no other auth_request.
+					for _, d := range directives(blockAt(b, "location / {")) {
+						if d == tc.own {
+							own = true
+						} else if strings.HasPrefix(d, "auth_request ") {
+							t.Errorf("%s server %d: location / has %q next to the host's own login", name, i, d)
+						}
 					}
-					continue
 				}
-				if len(auth) != 1 || auth[0] != tc.own {
-					t.Errorf("%s server %d: server-level auth_request %q, want only the host's own %q", name, i, auth, tc.own)
-				}
-				if ep := serverLevel(b, "error_page"); slices.Contains(ep, "error_page 401 = @challenge_redirect;") {
-					t.Errorf("%s server %d: the gate's error_page 401 is still set for the whole server", name, i)
-				}
-				// @challenge_redirect reads $challenge_gate_status: still declared.
-				if set := serverLevel(b, "auth_request_set"); !slices.Equal(set, []string{"auth_request_set $challenge_gate_status $upstream_status;"}) {
-					t.Errorf("%s server %d: server-level auth_request_set %q", name, i, set)
-				}
-				if tc.customRoot {
-					continue // no location / of NPG's own to keep the gate in
-				}
-				root := blockAt(b, "location / {")
-				for _, want := range []string{
-					"auth_request /_challenge/validate;",
-					"error_page 401 = @challenge_redirect;",
-					"error_page 500 = @api_fallback;",
-				} {
-					if !strings.Contains(root, want) {
-						t.Errorf("%s server %d: location / lacks %q", name, i, want)
-					}
+				if !own {
+					t.Errorf("%s server %d: the host's own %q is gone", name, i, tc.own)
 				}
 			}
 		}
@@ -589,7 +599,7 @@ func TestAdvancedConfigAuthRequestWarnsOnce(t *testing.T) {
 	t.Cleanup(func() { log.SetOutput(os.Stderr) })
 	m, _ := newRequestPathTestManager(t)
 	h := gateTestHost("00000000-0000-0000-0000-0000000000eb", false, false, "auth_request /ext;\nlocation = /ext {\n    internal;\n    proxy_pass http://192.0.2.20:9000/auth;\n}\n")
-	advancedAuthRequestWarned.Delete(h.ID) // -count > 1
+	skippedWarned.Delete("geo challenge " + h.ID) // -count > 1
 	for i := 0; i < 3; i++ {
 		if err := m.GenerateConfigFull(context.Background(), ProxyHostConfigData{Host: h, GeoRestriction: geoChallenge(false)}); err != nil {
 			t.Fatal(err)
@@ -598,8 +608,8 @@ func TestAdvancedConfigAuthRequestWarnsOnce(t *testing.T) {
 	if n := strings.Count(buf.String(), h.ID); n != 1 {
 		t.Fatalf("host named %d times, want once:\n%s", n, buf.String())
 	}
-	if !strings.Contains(buf.String(), "auth provider (ForwardAuth)") {
-		t.Errorf("the warning does not say what to do instead:\n%s", buf.String())
+	if !strings.Contains(buf.String(), "Advanced Config") || !strings.Contains(buf.String(), "403") {
+		t.Errorf("the warning does not say why the host blocks:\n%s", buf.String())
 	}
 }
 
@@ -629,8 +639,8 @@ func TestChallengeGateRefusesWhenTheAPIRefuses(t *testing.T) {
 			"location / {\n    proxy_pass http://192.0.2.20:8080;\n}\n",
 			"auth_request /ext;\nlocation = /ext {\n    internal;\n    proxy_pass http://192.0.2.20:9000/auth;\n}\n",
 		} {
-			if ch.name == "cloud" && strings.HasPrefix(adv, "auth_request") {
-				continue // no gate: next to the host's own auth_request the cloud challenge blocks
+			if strings.HasPrefix(adv, "auth_request") {
+				continue // no gate: next to the host's own auth_request either challenge blocks
 			}
 			for _, mode := range gateTLSModes {
 				name := ch.name + " " + mode.name + " " + strings.SplitN(adv, "\n", 2)[0]
@@ -742,7 +752,6 @@ func TestChallengeFallbackOnlyForTheGatesFailure(t *testing.T) {
 		{"exploit method rules", "", exploitRule("request_method", "^TRACE$")},
 		// No method rule: no @blocked_method, which location / must not name.
 		{"exploit query rules", "", exploitRule("query_string", "union.*select")},
-		{"legacy auth_request, rate limit 503", "auth_request /ext;\nlocation = /ext {\n    internal;\n    proxy_pass http://192.0.2.20:9000/auth;\n}\n", rateLimit(503)},
 		{"advanced config error pages", operatorPages, func(d *ProxyHostConfigData) { rateLimit(429)(d); d.Host.BlockExploits = true }},
 	} {
 		// Advanced Config without a location is rendered into location /,
@@ -756,9 +765,6 @@ func TestChallengeFallbackOnlyForTheGatesFailure(t *testing.T) {
 			}
 		}
 		for _, ch := range gateChallenges {
-			if ch.cloud && strings.Contains(v.adv, "auth_request") {
-				continue // no gate: next to the host's own auth_request the cloud challenge blocks
-			}
 			for _, mode := range gateTLSModes {
 				name := v.name + " " + ch.name + " " + mode.name
 				d := challengeData(gateTestHost("00000000-0000-0000-0000-0000000000f0", mode.ssl, mode.force, v.adv), ch.set)
@@ -942,18 +948,20 @@ func TestCloudChallengeBlocksNextToItsOwnAuthRequest(t *testing.T) {
 		}
 	}
 
-	// Geo and cloud challenge next to a legacy server-wide auth_request: the
-	// geo challenge keeps its gate in location / (as before), the cloud
-	// challenge blocks.
+	// Geo and cloud challenge next to a legacy server-wide auth_request: both
+	// block, and location / keeps the host's own login.
 	d := challengeData(gateTestHost("00000000-0000-0000-0000-0000000000ef", true, false, "auth_request /ext;\n"+app+ext), cloudChallenge)
 	d.GeoRestriction = geoChallenge(false)
 	out := renderForTest(t, d)
 	if !strings.Contains(out, "set $block_reason_var \"cloud_provider_block\";\n        return 403;") || strings.Contains(out, "$cloud_challenge") {
 		t.Error("geo+cloud next to a legacy auth_request: the cloud challenge does not block")
 	}
+	if strings.Contains(out, "/_challenge/validate") || !strings.Contains(out, "Direct Block Mode") {
+		t.Error("geo+cloud next to a legacy auth_request: the geo challenge does not block")
+	}
 	for i, b := range splitServerBlocks(t, out) {
-		if !strings.Contains(blockAt(b, "location / {"), "auth_request /_challenge/validate;") {
-			t.Errorf("geo+cloud next to a legacy auth_request, server %d: location / lost the geo gate", i)
+		if !slices.Equal(serverLevel(b, "auth_request"), []string{"auth_request /ext;"}) || strings.Contains(blockAt(b, "location / {"), "auth_request ") {
+			t.Errorf("geo+cloud next to a legacy auth_request, server %d: location / does not keep the host's own login", i)
 		}
 	}
 }

@@ -172,20 +172,33 @@ func renderableGeo(hostID string, g *model.GeoRestriction) *model.GeoRestriction
 	return &geo
 }
 
-// geoForAuthProvider blocks rather than challenges the visitors a host's
-// geo restriction refuses when the host has ForwardAuth. The challenge gate
-// and ForwardAuth each need the auth_request of location /, which takes
-// one, so nginx -t refused the config: a GeoIP challenge on such a host, or a
-// global GeoIP default in challenge mode that it inherits, could not be
-// saved (500, #341). The cloud provider challenge blocks on such a host the
-// same way (CloudChallenge).
-func geoForAuthProvider(hostID string, g *model.GeoRestriction, authProvider bool) *model.GeoRestriction {
-	if g == nil || !g.ChallengeMode || !authProvider {
+// geoWithOwnAuthRequest blocks rather than challenges the visitors a host's
+// geo restriction refuses when location / of the host already has an
+// auth_request: ForwardAuth's, or one at the top level of a legacy Advanced
+// Config (refused since v2.25.0, but kept by hosts saved before then and by
+// restored backups). location / takes one auth_request and the challenge gate
+// needs it. Next to ForwardAuth nginx -t refused the config, so a GeoIP
+// challenge, or a global GeoIP default in challenge mode that the host
+// inherits, could not be saved (500, #341). Next to the legacy login nginx -t
+// refused it as well, or, with locations in the Advanced Config, the gate
+// replaced the login on location /. The cloud provider challenge blocks on
+// such a host the same way (CloudChallenge).
+func geoWithOwnAuthRequest(host *model.ProxyHost, g *model.GeoRestriction, authProvider bool) *model.GeoRestriction {
+	if g == nil || !g.ChallengeMode {
 		return g
 	}
-	warnSkippedOnce("geo challenge "+hostID,
-		"[WARN] Host %s: GeoIP challenge mode cannot run next to ForwardAuth (both need the auth_request of location /), so the visitors the geo restriction refuses get 403 instead of the challenge.",
-		hostID)
+	switch {
+	case authProvider:
+		warnSkippedOnce("geo challenge "+host.ID,
+			"[WARN] Host %s: GeoIP challenge mode cannot run next to ForwardAuth (both need the auth_request of location /), so the visitors the geo restriction refuses get 403 instead of the challenge.",
+			host.ID)
+	case advancedConfigHasTopLevel(host.AdvancedConfig, "auth_request"):
+		warnSkippedOnce("geo challenge "+host.ID,
+			"[WARN] Host %s: GeoIP challenge mode cannot run next to the auth_request in its Advanced Config (both need the auth_request of location /), so the visitors the geo restriction refuses get 403 instead of the challenge.",
+			host.ID)
+	default:
+		return g
+	}
 	geo := *g
 	geo.ChallengeMode = false
 	return &geo

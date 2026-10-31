@@ -86,7 +86,6 @@ type ProxyHostConfigData struct {
 	AdvancedConfigDirectives      map[string]bool       // Set of directive names present in AdvancedConfig (e.g. "proxy_connect_timeout")
 	AdvancedConfigServerLevel     string                // Server-level directives extracted from AdvancedConfig (ssl_stapling, etc.)
 	AdvancedConfigLocationLevel   string                // Location-level directives extracted from AdvancedConfig
-	AdvancedConfigAuthRequest     bool                  // True if AdvancedConfig is rendered into the server block and sets auth_request at its top level (legacy, see GenerateConfigFull)
 	GlobalTrustedIPs              []string              // Global trusted IPs that bypass all security (from system settings)
 	TrustedHostnames              []string              // Global trusted domains (#320): their addresses get the GlobalTrustedIPs bypasses except the ban override, the filter subscription bypass and the WAF bypass (exception_list_dns.go)
 	LegacyRateZoneAlias           bool                  // Also define rate_<id>, the zone's name before v2.62.0, which Advanced Config or the custom HTTP config still uses (LegacyZoneRefs)
@@ -119,11 +118,14 @@ func (d ProxyHostConfigData) RateLimitEnabled() bool {
 // internal /_challenge/validate location, the challenge endpoints,
 // @challenge_redirect and the auth_request in front of the content. Geo
 // restriction in challenge mode or the cloud provider challenge. A host with
-// ForwardAuth renders neither (geoForAuthProvider, CloudChallenge); the
-// check here keeps callers that build the data themselves, such as the DNS
-// entry host index, in step with the config.
+// an auth_request of its own, ForwardAuth or one at the top level of a legacy
+// Advanced Config, renders neither (geoWithOwnAuthRequest, CloudChallenge);
+// the check here keeps callers that build the data themselves, such as the
+// DNS entry host index, in step with the config.
 func (d ProxyHostConfigData) ChallengeGate() bool {
-	return (d.GeoRestriction != nil && d.GeoRestriction.ChallengeMode && d.AuthProvider == nil) || d.CloudChallenge()
+	geo := d.GeoRestriction != nil && d.GeoRestriction.ChallengeMode && d.AuthProvider == nil &&
+		(d.Host == nil || !advancedConfigHasTopLevel(d.Host.AdvancedConfig, "auth_request"))
+	return geo || d.CloudChallenge()
 }
 
 // AccessPhaseAuth reports whether the host asks for a login: an auth

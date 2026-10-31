@@ -1,6 +1,6 @@
 {{- /* ForwardAuth partials (#179). Invoked from base/waf/cache server blocks.
        Exactly one auth_request per location: a host with ForwardAuth renders no
-       challenge gate. Its geo challenge mode becomes a block (geoForAuthProvider,
+       challenge gate. Its geo challenge mode becomes a block (geoWithOwnAuthRequest,
        #341) and the cloud provider challenge skips it (CloudChallenge). */ -}}
 {{- define "_auth_verify_location" -}}
     # --- ForwardAuth ({{.AuthProvider.Type}}) verify endpoint ---

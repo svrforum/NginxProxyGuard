@@ -373,7 +373,7 @@ func applyUpdateCandidate(existing *model.ProxyHost, req *model.UpdateProxyHostR
 // to a non-SSL host ("conflict:"-prefixed → HTTP 409), and validates that the per-host
 // bypass paths are safe to template into a `location <path>` block ("invalid:"-prefixed →
 // HTTP 400). A geo challenge on the same host is no conflict: it renders as a block there
-// (nginx geoForAuthProvider, #341). Refusing it here made every later edit of a host that
+// (nginx geoWithOwnAuthRequest, #341). Refusing it here made every later edit of a host that
 // had both fail with 409.
 // Must be called from Create, Update AND UpdateDBOnly (UI saves via UpdateDBOnly). (#179, #181)
 func (s *ProxyHostService) validateAuthProviderConflict(ctx context.Context, hostID string, authProviderID *string, proxyType, advancedConfig string, bypassPaths []string, sslEnabled bool) error {

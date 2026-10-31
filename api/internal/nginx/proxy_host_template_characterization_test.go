@@ -46,6 +46,7 @@ func renderProxyHostConfig(_ context.Context, w *bytes.Buffer, data ProxyHostCon
 	}
 	if data.Host != nil {
 		data.GeoRestriction = renderableGeo(data.Host.ID, data.GeoRestriction)
+		data.GeoRestriction = geoWithOwnAuthRequest(data.Host, data.GeoRestriction, data.AuthProvider != nil)
 		data.BannedIPs = renderableBans(data.BannedIPs)
 		data.URIBlock = renderableURIBlock(data.Host.ID, data.URIBlock)
 	}
@@ -72,8 +73,6 @@ func renderProxyHostConfig(_ context.Context, w *bytes.Buffer, data ProxyHostCon
 		serverPart, locationPart := splitAdvancedConfigByContext(data.Host.AdvancedConfig)
 		data.AdvancedConfigServerLevel = serverPart
 		data.AdvancedConfigLocationLevel = locationPart
-		data.AdvancedConfigAuthRequest = (data.AdvancedConfigHasLocation || data.HasCustomLocationRoot) &&
-			advancedConfigHasTopLevel(data.Host.AdvancedConfig, "auth_request")
 	}
 
 	tmpl, err := template.New("proxy_host").Funcs(funcMap).Parse(proxyHostTemplate)
