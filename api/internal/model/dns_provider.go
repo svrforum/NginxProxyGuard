@@ -2,6 +2,7 @@ package model
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -38,12 +39,33 @@ type CloudflareCredentials struct {
 	ZoneID   string `json:"zone_id,omitempty"`   // Optional: Cloudflare Zone ID (bypasses SOA-based zone detection)
 }
 
-// Route53Credentials represents AWS Route53 credentials
+// Route53Credentials represents AWS Route53 credentials. The access key pair
+// is optional: with neither key, lego builds its AWS client without static
+// credentials and the SDK's default credential chain supplies them — the
+// environment, the shared config and credentials files, an ECS task role or
+// an EC2 instance role read from the instance metadata service. That is how
+// AWS recommends a host authenticate, without a permanent key. One key
+// without the other is refused.
 type Route53Credentials struct {
 	AccessKeyID     string `json:"access_key_id"`
 	SecretAccessKey string `json:"secret_access_key"`
 	Region          string `json:"region,omitempty"`
 	HostedZoneID    string `json:"hosted_zone_id,omitempty"`
+}
+
+// UsesDefaultCredentialChain reports whether the row leaves authentication
+// to the AWS SDK: neither key is set.
+func (c Route53Credentials) UsesDefaultCredentialChain() bool {
+	return c.AccessKeyID == "" && c.SecretAccessKey == ""
+}
+
+// Validate refuses one key without the other. lego refuses the pair too, but
+// only when a certificate is issued; here it is a 400 on create and update.
+func (c Route53Credentials) Validate() error {
+	if (c.AccessKeyID == "") != (c.SecretAccessKey == "") {
+		return fmt.Errorf("%w: route53 needs both access_key_id and secret_access_key, or neither to use the AWS default credential chain", ErrInvalidCredentials)
+	}
+	return nil
 }
 
 // DuckDNSCredentials represents DuckDNS API credentials
@@ -129,8 +151,8 @@ func (p *DNSProvider) ValidateCredentials() error {
 		if err := json.Unmarshal(p.Credentials, &creds); err != nil {
 			return err
 		}
-		if creds.AccessKeyID == "" || creds.SecretAccessKey == "" {
-			return ErrInvalidCredentials
+		if err := creds.Validate(); err != nil {
+			return err
 		}
 	case DNSProviderDuckDNS:
 		var creds DuckDNSCredentials

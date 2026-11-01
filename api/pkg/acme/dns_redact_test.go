@@ -81,6 +81,10 @@ func TestDNS01ProviderWrapperRedactsEveryCredentialField(t *testing.T) {
 			[]string{"global-key-0123456789"}, []string{"admin@example.com"}},
 		{"route53", model.Route53Credentials{AccessKeyID: "AKIAEXAMPLEKEYID", SecretAccessKey: "aws/secret+key0123456789"},
 			[]string{"aws/secret+key0123456789", "aws%2Fsecret%2Bkey0123456789"}, []string{"AKIAEXAMPLEKEYID"}},
+		// No keys stored: the AWS default credential chain authenticates, and
+		// there is nothing to redact — in particular, not the empty string.
+		{"route53 default chain", model.Route53Credentials{Region: "eu-west-1", HostedZoneID: "Z0123456789EXAMPLE"},
+			nil, []string{"eu-west-1", "Z0123456789EXAMPLE"}},
 		{"dynu", model.DynuCredentials{APIKey: "dynu-key-0123456789"}, []string{"dynu-key-0123456789"}, nil},
 		{"duckdns", model.DuckDNSCredentials{Token: duckTestToken}, []string{duckTestToken}, nil},
 		{"ionos", model.IonosCredentials{APIKeyPrefix: "pubprefix0123", APIKey: "ionos+secret/0123456789"},

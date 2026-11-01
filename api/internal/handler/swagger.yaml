@@ -13420,7 +13420,9 @@ components:
           type: object
           description: >-
             Provider-specific object. cloudflare: api_token (or api_key + email), plus
-            optional zone_id. route53: access_key_id, secret_access_key, optional region
+            optional zone_id. route53: access_key_id and secret_access_key, both or
+            neither (neither: the AWS SDK's default credential chain — environment,
+            shared config files, ECS task role, EC2 instance role), optional region
             and hosted_zone_id. duckdns: token. dynu: api_key. ionos: api_key_prefix and
             api_key (IONOS public prefix and secret; sent to IONOS as prefix.secret).
             manual: none required.
