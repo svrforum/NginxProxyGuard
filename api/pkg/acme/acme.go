@@ -731,8 +731,16 @@ func (s *Service) createDNSProvider(provider *model.DNSProvider) (challenge.Prov
 		cfg := route53.NewDefaultConfig()
 		cfg.PropagationTimeout = 180 * time.Second
 		cfg.PollingInterval = 5 * time.Second
-		cfg.AccessKeyID = creds.AccessKeyID
-		cfg.SecretAccessKey = creds.SecretAccessKey
+		// Static keys only when the row has them. Without any, lego builds
+		// its AWS client with no credentials of its own and the SDK's default
+		// credential chain supplies them: the environment, the shared config
+		// and credentials files, an ECS task role or an EC2 instance role
+		// read from the instance metadata service. lego itself refuses one
+		// key without the other.
+		if !creds.UsesDefaultCredentialChain() {
+			cfg.AccessKeyID = creds.AccessKeyID
+			cfg.SecretAccessKey = creds.SecretAccessKey
+		}
 		if creds.Region != "" {
 			cfg.Region = creds.Region
 		}

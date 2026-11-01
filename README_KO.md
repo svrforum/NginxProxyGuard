@@ -51,6 +51,8 @@
 ### 🔒 SSL 자동화
 Let's Encrypt 통합 및 자동 갱신. DNS-01 챌린지를 통한 와일드카드 인증서 지원. **Cloudflare**, **AWS Route 53**, **DuckDNS**, **Dynu**, **IONOS** 등 다양한 DNS 프로바이더 지원.
 
+Route 53은 액세스 키 쌍 없이도 사용할 수 있습니다. 두 키를 모두 비워 두면 AWS 기본 자격 증명 체인(EC2 인스턴스 역할, ECS 태스크 역할, 또는 `api` 컨테이너의 `AWS_*` 환경 변수)으로 인증합니다. API 컨테이너는 bridge 네트워크에서 실행되므로 EC2에서는 인스턴스 메타데이터 서비스가 두 번째 홉을 허용해야 합니다: IMDSv2에 `HttpPutResponseHopLimit` 2 (`aws ec2 modify-instance-metadata-options --instance-id <id> --http-tokens required --http-put-response-hop-limit 2`).
+
 ### 🤖 봇 보호
 80개 이상의 악성 봇과 50개 이상의 AI 크롤러를 자동 차단. 검색 엔진 허용 목록으로 정상 트래픽 보장. 의심스러운 요청에 대한 CAPTCHA 챌린지 모드.
 

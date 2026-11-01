@@ -213,6 +213,8 @@
         "title": "AWS 자격 증명",
         "accessKeyId": "Access Key ID",
         "secretAccessKey": "Secret Access Key",
+        "optional": "선택사항",
+        "keysHelp": "두 키를 모두 비워 두면 AWS 기본 자격 증명 체인을 사용합니다: EC2 인스턴스 역할, ECS 태스크 역할 또는 API 컨테이너의 AWS_* 환경 변수. 고정 액세스 키 쌍을 사용하려면 두 키를 모두 입력하세요.",
         "region": "리전",
         "hostedZoneId": "Hosted Zone ID (선택사항)"
       },

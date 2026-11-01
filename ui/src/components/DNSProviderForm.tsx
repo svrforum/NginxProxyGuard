@@ -372,8 +372,9 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-2">
                     {t('dnsProviders.form.route53.accessKeyId')}
+                    <span className="text-xs font-normal text-slate-400 dark:text-slate-500">({t('dnsProviders.form.route53.optional')})</span>
                   </label>
                   <input
                     type="text"
@@ -384,8 +385,9 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-2">
                     {t('dnsProviders.form.route53.secretAccessKey')}
+                    <span className="text-xs font-normal text-slate-400 dark:text-slate-500">({t('dnsProviders.form.route53.optional')})</span>
                   </label>
                   <input
                     type="password"
@@ -396,6 +398,9 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
                   />
                 </div>
               </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {t('dnsProviders.form.route53.keysHelp')}
+              </p>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>

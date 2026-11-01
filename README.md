@@ -51,6 +51,8 @@
 ### 🔒 SSL Automation
 Let's Encrypt integration with automatic renewal. Supports wildcard certificates via DNS-01 challenge. Multiple DNS providers supported: **Cloudflare**, **AWS Route 53**, **DuckDNS**, **Dynu**, **IONOS**.
 
+Route 53 needs no access key pair: leave both keys empty and the AWS default credential chain authenticates — an EC2 instance role, an ECS task role, or `AWS_*` environment variables on the `api` container. The API container runs on a bridge network, so on EC2 the instance metadata service must allow a second hop: IMDSv2 with `HttpPutResponseHopLimit` of 2 (`aws ec2 modify-instance-metadata-options --instance-id <id> --http-tokens required --http-put-response-hop-limit 2`).
+
 ### 🤖 Bot Protection
 Block 80+ malicious bots and 50+ AI crawlers automatically. Search engine allowlist ensures legitimate traffic. CAPTCHA challenge mode for suspicious requests.
 

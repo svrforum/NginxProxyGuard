@@ -258,8 +258,13 @@ func (r *DNSProviderRepository) TestConnection(ctx context.Context, providerType
 		if err := json.Unmarshal(credentials, &creds); err != nil {
 			return fmt.Errorf("%w: route53 credentials are not valid JSON: %v", model.ErrInvalidCredentials, err)
 		}
-		if creds.AccessKeyID == "" || creds.SecretAccessKey == "" {
-			return model.ErrInvalidCredentials
+		// Both keys or neither: with neither, the AWS SDK's default credential
+		// chain authenticates (environment, shared config files, an ECS task
+		// role, an EC2 instance role). Nothing is sent to AWS here, so whether
+		// that chain finds a credential is only known when a certificate is
+		// issued.
+		if err := creds.Validate(); err != nil {
+			return err
 		}
 	case model.DNSProviderDuckDNS:
 		var creds model.DuckDNSCredentials
