@@ -23,7 +23,9 @@ FROM nginx:alpine
 # Install openssl for certificate generation. libcap is needed to grant the
 # nginx binary CAP_NET_BIND_SERVICE so the non-root user below can still bind
 # the privileged port 443.
-RUN apk add --no-cache openssl libcap
+# Apply available security fixes to the runtime packages.
+RUN apk upgrade --no-cache \
+    && apk add --no-cache openssl libcap
 
 # Copy built files
 COPY --from=builder /app/dist /usr/share/nginx/html
