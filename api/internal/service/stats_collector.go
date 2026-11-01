@@ -185,6 +185,7 @@ func (sc *StatsCollector) Start(ctx context.Context) {
 // The first pass waits for the boot-time dashboard sweep to start. Cursor
 // updates are transactional: a timeout or shutdown retries the same hours.
 func (sc *StatsCollector) backfillTraffic(ctx context.Context, repo trafficHourlyBackfiller) {
+	log.Println("[StatsCollector] Starting historical proxy-host traffic backfill")
 	ticker := time.NewTicker(trafficBackfillInterval)
 	defer ticker.Stop()
 	for {
@@ -195,7 +196,7 @@ func (sc *StatsCollector) backfillTraffic(ctx context.Context, repo trafficHourl
 			return
 		case <-ticker.C:
 			batchCtx, cancel := context.WithTimeout(ctx, trafficBackfillTimeout)
-			from, to, complete, err := repo.BackfillTrafficHourly(batchCtx, time.Now())
+			_, _, complete, err := repo.BackfillTrafficHourly(batchCtx, time.Now())
 			cancel()
 			if err != nil {
 				log.Printf("[StatsCollector] Traffic history backfill failed (will retry): %v", err)
@@ -205,7 +206,6 @@ func (sc *StatsCollector) backfillTraffic(ctx context.Context, repo trafficHourl
 				log.Println("[StatsCollector] Historical proxy-host traffic backfill complete")
 				return
 			}
-			log.Printf("[StatsCollector] Backfilled proxy-host traffic for %s to %s UTC", from.UTC().Format(time.RFC3339), to.UTC().Format(time.RFC3339))
 		}
 	}
 }

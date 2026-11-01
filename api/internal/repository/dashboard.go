@@ -222,32 +222,10 @@ func (r *DashboardRepository) getAllChartData(ctx context.Context, start, end ti
 }
 
 func (r *DashboardRepository) getTopHosts(ctx context.Context, since time.Time) []model.HostStat {
-	// First try to get from dashboard_stats_hourly with proxy_host_id
-	rows, err := r.db.QueryContext(ctx, `
-		SELECT h.proxy_host_id, p.domain_names[1], SUM(h.total_requests) as total
-		FROM dashboard_stats_hourly h
-		JOIN proxy_hosts p ON p.id = h.proxy_host_id
-		WHERE h.hour_bucket >= $1 AND h.proxy_host_id IS NOT NULL
-		GROUP BY h.proxy_host_id, p.domain_names[1]
-		ORDER BY total DESC
-		LIMIT 10
-	`, since)
-	if err == nil {
-		defer rows.Close()
-		var stats []model.HostStat
-		for rows.Next() {
-			var s model.HostStat
-			rows.Scan(&s.HostID, &s.Domain, &s.Requests)
-			stats = append(stats, s)
-		}
-		if len(stats) > 0 {
-			return stats
-		}
-	}
-
-	// Fallback: aggregate from logs_partitioned table directly using host column
+	// Host rollups merge aliases and omit unregistered domains. Rank the raw
+	// requested hostnames so enabling host rollups does not change this chart.
 	// Exclude health check hosts (nginx, localhost, IPs, _, 0.0.0.0)
-	rows, err = r.db.QueryContext(ctx, `
+	rows, err := r.db.QueryContext(ctx, `
 		SELECT COALESCE(proxy_host_id::TEXT, ''), host, COUNT(*) as total
 		FROM logs_partitioned
 		WHERE created_at >= $1
@@ -814,6 +792,8 @@ func (r *DashboardRepository) GetHourlyStats(ctx context.Context, params *model.
 	if params.ProxyHostID != "" {
 		query += " AND proxy_host_id = $3"
 		args = append(args, params.ProxyHostID)
+	} else {
+		query += " AND proxy_host_id IS NULL"
 	}
 
 	query += " ORDER BY hour_bucket DESC LIMIT 1000"

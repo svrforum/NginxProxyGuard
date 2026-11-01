@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"sort"
 	"time"
@@ -42,10 +43,10 @@ const trafficAccessFilter = `
     AND (request_uri NOT LIKE '/.well-known/%' OR request_uri IS NULL)
     AND ` + canaryURIExclusion
 
-// Recent windows read the raw logs for exact time boundaries. Historical
-// windows read the hourly table to avoid scanning weeks of request logs.
+// Short windows read raw logs for fine-grained buckets. Ranges of 24 hours
+// or more use hourly rollups plus raw edges to avoid rescanning a day of logs.
 func TrafficUsesRaw(start, end time.Time) bool {
-	return end.Sub(start) <= 24*time.Hour
+	return end.Sub(start) < 24*time.Hour
 }
 
 // Only complete UTC hours may be read from hourly aggregates. The fractional
@@ -174,7 +175,9 @@ func (r *DashboardRepository) GetTrafficSummary(ctx context.Context, start, end 
 	return summary, nil
 }
 
-func (r *DashboardRepository) GetTrafficSeries(ctx context.Context, start, end time.Time, hostID string, realtime bool) ([]TrafficPoint, error) {
+// Keep the query available to the opt-in EXPLAIN benchmark so measurements
+// exercise the same SQL and parameters as the traffic endpoint.
+func trafficSeriesQuery(start, end time.Time, hostID string, realtime bool) (string, []any) {
 	var query string
 	args := []any{start, end, hostID}
 	if realtime || TrafficUsesRaw(start, end) {
@@ -222,6 +225,11 @@ func (r *DashboardRepository) GetTrafficSeries(ctx context.Context, start, end t
 		      THEN bytes ELSE 0 END), 0), 0)::bigint
 		FROM samples GROUP BY 1 ORDER BY 1 LIMIT 800`, trafficAccessFilter, bucket)
 	}
+	return query, args
+}
+
+func (r *DashboardRepository) GetTrafficSeries(ctx context.Context, start, end time.Time, hostID string, realtime bool) ([]TrafficPoint, error) {
+	query, args := trafficSeriesQuery(start, end, hostID, realtime)
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -275,9 +283,13 @@ func (r *DashboardRepository) BackfillTrafficHourly(ctx context.Context, now tim
 	}
 	defer tx.Rollback()
 
-	// MIN is bounded by the configured history window. If there are no old
-	// access logs, advance to the cutoff and leave retained hourly totals alone.
-	_, err = tx.ExecContext(ctx, `
+	// Lock an existing checkpoint before considering initialization. Resumed
+	// batches never run the MIN scan. If two workers initialize together, the
+	// unique key serializes the insert and the subsequent FOR UPDATE reads
+	// the winning worker's committed cursor under READ COMMITTED.
+	err = tx.QueryRowContext(ctx, `SELECT next_hour FROM traffic_hourly_backfill WHERE id = 1 FOR UPDATE`).Scan(&from)
+	if err == sql.ErrNoRows {
+		_, err = tx.ExecContext(ctx, `
 		INSERT INTO traffic_hourly_backfill (id, next_hour)
 		SELECT 1, GREATEST(
 		    COALESCE(date_trunc('hour', MIN(created_at), 'UTC'), $2::timestamptz),
@@ -285,10 +297,12 @@ func (r *DashboardRepository) BackfillTrafficHourly(ctx context.Context, now tim
 		FROM logs_partitioned
 		WHERE log_type = 'access' AND created_at >= $1 AND created_at < $2
 		ON CONFLICT (id) DO NOTHING`, oldest, cutoff)
-	if err != nil {
-		return from, to, false, fmt.Errorf("initialize traffic backfill: %w", err)
+		if err != nil {
+			return from, to, false, fmt.Errorf("initialize traffic backfill: %w", err)
+		}
+		err = tx.QueryRowContext(ctx, `SELECT next_hour FROM traffic_hourly_backfill WHERE id = 1 FOR UPDATE`).Scan(&from)
 	}
-	if err = tx.QueryRowContext(ctx, `SELECT next_hour FROM traffic_hourly_backfill WHERE id = 1 FOR UPDATE`).Scan(&from); err != nil {
+	if err != nil {
 		return from, to, false, fmt.Errorf("read traffic backfill cursor: %w", err)
 	}
 	if !from.Before(cutoff) {

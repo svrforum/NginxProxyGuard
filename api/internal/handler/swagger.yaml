@@ -1236,7 +1236,7 @@ paths:
         Requires dashboard:read. Counts completed access-log requests and their
         response body bytes, excluding NPG internal requests. These figures
         are not network interface bandwidth or request upload bytes. For ranges
-        longer than 24 hours, complete UTC hours use hourly rollups and partial
+        of 24 hours or longer, complete UTC hours use hourly rollups and partial
         hours use raw access logs. Unclassified includes traffic without an
         associated proxy host and any older traffic without host rollups.
       security:
@@ -7015,7 +7015,8 @@ paths:
       description: |
         Returns hourly rollup buckets. An unparseable `start`/`end` silently falls back
         to the default window; a `proxy_host_id` that is not a valid UUID is dropped
-        (the response then covers all hosts).
+        (the response then covers all hosts). Without a proxy_host_id, only
+        global rollup rows are returned; with an ID, only that host's rows.
       security:
         - BearerAuth: []
       parameters:

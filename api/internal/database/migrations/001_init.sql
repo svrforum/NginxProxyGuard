@@ -489,6 +489,11 @@ CREATE TABLE IF NOT EXISTS public.dashboard_stats_hourly (
     top_ips jsonb DEFAULT '[]'::jsonb,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
+CREATE TABLE IF NOT EXISTS public.traffic_hourly_backfill (
+    id smallint PRIMARY KEY CHECK (id = 1),
+    next_hour timestamptz NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
 CREATE TABLE IF NOT EXISTS public.dashboard_stats_hourly_partitioned (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     proxy_host_id uuid,
@@ -4745,6 +4750,13 @@ ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS raw_log_archive_rete
 -- total_requests also counts instant answers, which have no time, and those left out.
 -- The hourly rollup fills it; the last 25 hours are rebuilt at every boot.
 ALTER TABLE public.dashboard_stats_hourly ADD COLUMN IF NOT EXISTS timed_requests bigint DEFAULT 0 NOT NULL;
+
+-- Resumable historical proxy-host hourly rollup checkpoint (matches migration.go).
+CREATE TABLE IF NOT EXISTS public.traffic_hourly_backfill (
+    id smallint PRIMARY KEY CHECK (id = 1),
+    next_hour timestamptz NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
 
 -- Domain entries in access lists (#320): an allowed DNS name is stored as a placeholder
 -- row (directive 'deny', address 'all', hostname = the name). A version that does not

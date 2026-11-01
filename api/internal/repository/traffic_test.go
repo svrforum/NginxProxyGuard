@@ -18,6 +18,130 @@ func trafficTime(t *testing.T, s string) time.Time {
 	return parsed
 }
 
+// Removing raw rows for the complete hour proves that the 24h path actually
+// uses retained aggregates. Raw edge rows must still respect [start, end).
+func TestTraffic24HoursUsesRollupsAndExactEdges(t *testing.T) {
+	for _, tc := range []struct{ name, start, end string }{
+		{"partial", "2026-10-07T10:30:00Z", "2026-10-08T10:30:00Z"},
+		{"aligned", "2026-10-07T11:00:00Z", "2026-10-08T11:00:00Z"},
+		{"offset", "2026-10-07T19:30:00+09:00", "2026-10-08T19:30:00+09:00"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := openRollupTestDB(t)
+			const host = "11111111-1111-4111-8111-111111111111"
+			start, end := trafficTime(t, tc.start), trafficTime(t, tc.end)
+			mustExec(t, db,
+				`INSERT INTO proxy_hosts VALUES ('`+host+`', ARRAY['a.example.com'])`,
+				`INSERT INTO logs_partitioned (log_type, host, proxy_host_id, body_bytes_sent, created_at) VALUES
+				('access', 'a.example.com', '`+host+`', 20, '2026-10-07 12:00:00+00'),
+				('access', 'unknown.example.com', NULL, 30, '2026-10-07 12:59:59.999999+00')`)
+			repo := NewDashboardRepository(db)
+			if _, err := repo.RecomputeHourlyRollup(context.Background(), start, end.Truncate(time.Hour)); err != nil {
+				t.Fatal(err)
+			}
+			mustExec(t, db, `DELETE FROM logs_partitioned`)
+			// Only partial hours read raw logs. Exact UTC boundaries use the
+			// aggregate instead, so these rows must not be read in that case.
+			for _, edge := range []struct {
+				at    time.Time
+				bytes int
+			}{
+				{start.Add(-time.Microsecond), 999}, {start, 10},
+				{end.Add(-time.Microsecond), 40}, {end, 999},
+			} {
+				if _, err := db.Exec(`INSERT INTO logs_partitioned (log_type, host, proxy_host_id, body_bytes_sent, created_at)
+				VALUES ('access', 'a.example.com', $1, $2, $3)`, host, edge.bytes, edge.at); err != nil {
+					t.Fatal(err)
+				}
+			}
+			wantBytes, wantRequests, hostBytes := int64(100), int64(4), int64(70)
+			if tc.name == "aligned" {
+				wantBytes, wantRequests, hostBytes = 50, 2, 20
+			}
+			summary, err := repo.GetTrafficSummary(context.Background(), start, end)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if summary.Source != "hourly_and_access_logs" || summary.Bytes != wantBytes || summary.Requests != wantRequests {
+				t.Fatalf("summary=%+v, want %d bytes/%d requests from rollups plus edges", summary, wantBytes, wantRequests)
+			}
+			var sumBytes, sumRequests int64
+			for _, h := range summary.Hosts {
+				sumBytes += h.Bytes
+				sumRequests += h.Requests
+			}
+			if sumBytes != summary.Bytes || sumRequests != summary.Requests {
+				t.Fatal("host totals plus unclassified differ from global")
+			}
+			for id, want := range map[string]int64{"": wantBytes, host: hostBytes, "unclassified": 30} {
+				points, err := repo.GetTrafficSeries(context.Background(), start, end, id, false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var bytes int64
+				for _, p := range points {
+					bytes += p.Bytes
+					if p.Timestamp.Before(start.Truncate(time.Hour)) || !p.Timestamp.Before(end) {
+						t.Errorf("out-of-range bucket %s", p.Timestamp)
+					}
+				}
+				if bytes != want {
+					t.Errorf("series %s = %d bytes, want %d", id, bytes, want)
+				}
+			}
+		})
+	}
+}
+
+func TestTrafficCompletedBackfillDoesNotReadLogs(t *testing.T) {
+	db := openRollupTestDB(t)
+	mustExec(t, db, `INSERT INTO traffic_hourly_backfill (id, next_hour) VALUES (1, '2026-10-30 11:00:00+00')`,
+		`DROP TABLE logs_partitioned`)
+	_, _, complete, err := NewDashboardRepository(db).BackfillTrafficHourly(context.Background(), trafficTime(t, "2026-10-31T12:30:00Z"))
+	if err != nil || !complete {
+		t.Fatalf("completed checkpoint must not access raw logs: complete=%v err=%v", complete, err)
+	}
+}
+
+func TestTrafficBackfillExistingCursorRollsBackAggregateWrites(t *testing.T) {
+	db := openRollupTestDB(t)
+	const host = "11111111-1111-4111-8111-111111111111"
+	mustExec(t, db,
+		`INSERT INTO proxy_hosts VALUES ('`+host+`', ARRAY['a.example.com'])`,
+		`INSERT INTO traffic_hourly_backfill (id, next_hour) VALUES (1, '2026-10-30 03:00:00+00')`,
+		`INSERT INTO logs_partitioned (log_type, host, proxy_host_id, body_bytes_sent, created_at)
+		VALUES ('access', 'a.example.com', '`+host+`', 42, '2026-10-30 03:10:00+00')`,
+		`CREATE FUNCTION reject_checkpoint() RETURNS trigger LANGUAGE plpgsql AS $$
+		BEGIN RAISE EXCEPTION 'simulated checkpoint failure'; END $$`,
+		`CREATE TRIGGER reject_checkpoint BEFORE UPDATE ON traffic_hourly_backfill
+		FOR EACH ROW EXECUTE FUNCTION reject_checkpoint()`)
+	repo := NewDashboardRepository(db)
+	now := trafficTime(t, "2026-10-31T12:30:00Z")
+	if _, _, _, err := repo.BackfillTrafficHourly(context.Background(), now); err == nil {
+		t.Fatal("expected checkpoint save to fail")
+	}
+	var cursor time.Time
+	var rows int
+	if err := db.QueryRow(`SELECT next_hour FROM traffic_hourly_backfill WHERE id=1`).Scan(&cursor); err != nil {
+		t.Fatal(err)
+	}
+	if !cursor.Equal(trafficTime(t, "2026-10-30T03:00:00Z")) {
+		t.Fatalf("cursor advanced despite failure: %s", cursor)
+	}
+	if err := db.QueryRow(`SELECT count(*) FROM dashboard_stats_hourly`).Scan(&rows); err != nil || rows != 0 {
+		t.Fatalf("failed batch persisted %d aggregates, err=%v", rows, err)
+	}
+	mustExec(t, db, `DROP TRIGGER reject_checkpoint ON traffic_hourly_backfill`)
+	from, to, complete, err := NewDashboardRepository(db).BackfillTrafficHourly(context.Background(), now)
+	if err != nil || complete || !from.Equal(cursor) || !to.Equal(trafficTime(t, "2026-10-30T09:00:00Z")) {
+		t.Fatalf("retry from=%s to=%s complete=%v err=%v", from, to, complete, err)
+	}
+	var bytes int64
+	if err := db.QueryRow(`SELECT sum(bytes_sent) FROM dashboard_stats_hourly`).Scan(&bytes); err != nil || bytes != 42 {
+		t.Fatalf("retry aggregate=%d bytes err=%v, want 42", bytes, err)
+	}
+}
+
 func TestTrafficQueriesAcrossPartialAndFullHours(t *testing.T) {
 	db := openRollupTestDB(t)
 	const a = "11111111-1111-4111-8111-111111111111"
