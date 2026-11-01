@@ -144,17 +144,26 @@ ON CONFLICT (proxy_host_id, hour_bucket) DO UPDATE SET
     rate_limited = EXCLUDED.rate_limited,
     bot_blocked = EXCLUDED.bot_blocked`
 
-// Separate DELETE ensures PostgreSQL always executes stale-row cleanup,
-// including when a replay window contains no surviving host traffic.
-const hourlyHostRollupCleanupSQL = `DELETE FROM dashboard_stats_hourly d
+// Materialize the active host/hour pairs once within the rebuild window.
+// A correlated raw-log probe per hourly row repeatedly builds index bitmaps
+// on busy installations, even when there are no stale rows to delete.
+// A separate DELETE still runs when no host traffic survives a replay.
+const hourlyHostRollupCleanupSQL = `WITH active AS MATERIALIZED (
+    SELECT proxy_host_id, date_trunc('hour', created_at, 'UTC') AS hour_bucket
+    FROM logs_partitioned
+    WHERE created_at >= date_trunc('hour', $1::timestamptz, 'UTC')
+      AND created_at < $2::timestamptz
+      AND proxy_host_id IS NOT NULL
+      AND ` + trafficAccessFilter + `
+    GROUP BY proxy_host_id, date_trunc('hour', created_at, 'UTC')
+)
+DELETE FROM dashboard_stats_hourly d
 WHERE d.proxy_host_id IS NOT NULL
   AND d.hour_bucket >= date_trunc('hour', $1::timestamptz, 'UTC')
   AND d.hour_bucket < $2::timestamptz
   AND NOT EXISTS (
-    SELECT 1 FROM logs_partitioned l
-    WHERE l.proxy_host_id = d.proxy_host_id
-      AND l.created_at >= d.hour_bucket AND l.created_at < d.hour_bucket + interval '1 hour'
-      AND ` + trafficAccessFilter + `
+    SELECT 1 FROM active a
+    WHERE a.proxy_host_id = d.proxy_host_id AND a.hour_bucket = d.hour_bucket
   )`
 
 // RecomputeHourlyRollup rewrites the dashboard's global hourly totals for the

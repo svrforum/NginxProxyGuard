@@ -1,0 +1,618 @@
+EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON), median-execution sample of each group.
+All node trees retained; zero buffer counters and planner estimates omitted.
+All three timings per group are in results.csv.
+
+1h-run3-cleanup: planning=0.421ms execution=29.189ms
+ModifyTable Operation=Delete Relation Name=dashboard_stats_hourly (actual=29.112..29.115ms rows=0 loops=1)
+  Shared Hit Blocks: 1820
+  Aggregate Strategy=Hashed Subplan Name=CTE active (actual=28.746..28.943ms rows=190 loops=1)
+    Group Key: ['logs_partitioned.proxy_host_id', "date_trunc('hour'::text, logs_partitioned.created_at, 'UTC'::text)"]
+    Peak Memory Usage: 1569
+    Shared Hit Blocks: 1809
+    Index Scan Relation Name=logs_day_30 Index Name=logs_day_30_created_at_idx (actual=0.011..24.876ms rows=39583 loops=1)
+      Index Cond: ((created_at >= '2026-10-30 23:00:00+00'::timestamp with time zone) AND (created_at < '2026-10-31 00:00:00+00'::timestamp with time zone))
+      Filter: ((proxy_host_id IS NOT NULL) AND (host IS NOT NULL) AND (host !~~ 'localhost:%'::text) AND ((request_uri <> ALL ('{/health,/nginx_status}'::text[])) OR (request_uri IS NULL)) AND ((request_uri !~~ '/.well-known/%'::text) OR (request_uri IS NULL)) AND ((request_uri !~~ '/__npg_canary%'::text) OR (request_uri IS NULL)) AND (log_type = 'access'::log_type) AND (host <> ALL ('{localhost,nginx,127.0.0.1,"",_,0.0.0.0}'::text[])))
+      Rows Removed by Filter: 2083
+      Shared Hit Blocks: 1809
+  Hash Join Join Type=Right Anti (actual=29.111..29.112ms rows=0 loops=1)
+    Hash Cond: ((a.proxy_host_id = d.proxy_host_id) AND (a.hour_bucket = d.hour_bucket))
+    Shared Hit Blocks: 1820
+    CTE Scan CTE Name=active (actual=28.755..29.004ms rows=190 loops=1)
+      Shared Hit Blocks: 1809
+    Hash (actual=0.07..0.071ms rows=190 loops=1)
+      Hash Batches: 1
+      Peak Memory Usage: 20
+      Shared Hit Blocks: 11
+      Bitmap Heap Scan Relation Name=dashboard_stats_hourly (actual=0.02..0.049ms rows=190 loops=1)
+        Recheck Cond: ((hour_bucket >= '2026-10-30 23:00:00+00'::timestamp with time zone) AND (hour_bucket < '2026-10-31 00:00:00+00'::timestamp with time zone))
+        Filter: (proxy_host_id IS NOT NULL)
+        Rows Removed by Filter: 1
+        Shared Hit Blocks: 11
+        Bitmap Index Scan Index Name=dashboard_stats_hourly_hour_bucket_idx (actual=0.013..0.013ms rows=380 loops=1)
+          Index Cond: ((hour_bucket >= '2026-10-30 23:00:00+00'::timestamp with time zone) AND (hour_bucket < '2026-10-31 00:00:00+00'::timestamp with time zone))
+          Shared Hit Blocks: 1
+
+1h-run1-global: planning=1.032ms execution=38.997ms
+ModifyTable Operation=Insert Relation Name=dashboard_stats_hourly (actual=38.868..38.871ms rows=0 loops=1)
+  Shared Hit Blocks: 1820
+  Hash Join Join Type=Left (actual=38.691..38.696ms rows=1 loops=1)
+    Hash Cond: ((generate_series('2026-10-30 23:00:00+00'::timestamp with time zone, ('2026-10-31 00:00:00+00'::timestamp with time zone - '01:00:00'::interval), '01:00:00'::interval)) = a.hour_bucket)
+    Filter: ((a.total IS NOT NULL) OR (ANY ((generate_series('2026-10-30 23:00:00+00'::timestamp with time zone, ('2026-10-31 00:00:00+00'::timestamp with time zone - '01:00:00'::interval), '01:00:00'::interval)) = (hashed SubPlan 2).col1)))
+    Shared Hit Blocks: 1809
+    ProjectSet (actual=0.004..0.007ms rows=1 loops=1)
+      Result (actual=0.0..0.001ms rows=1 loops=1)
+    Hash (actual=38.623..38.624ms rows=1 loops=1)
+      Hash Batches: 1
+      Peak Memory Usage: 513
+      Shared Hit Blocks: 1809
+      Subquery Scan (actual=38.618..38.619ms rows=1 loops=1)
+        Shared Hit Blocks: 1809
+        Aggregate Strategy=Sorted (actual=38.617..38.617ms rows=1 loops=1)
+          Group Key: ["(date_trunc('hour'::text, logs_partitioned.created_at, 'UTC'::text))"]
+          Shared Hit Blocks: 1809
+          Sort (actual=30.547..32.447ms rows=41250 loops=1)
+            Sort Key: ["(date_trunc('hour'::text, logs_partitioned.created_at, 'UTC'::text))"]
+            Sort Method: quicksort
+            Shared Hit Blocks: 1809
+            Index Scan Relation Name=logs_day_30 Index Name=logs_day_30_created_at_idx (actual=0.012..26.347ms rows=41250 loops=1)
+              Index Cond: ((created_at >= '2026-10-30 23:00:00+00'::timestamp with time zone) AND (created_at < '2026-10-31 00:00:00+00'::timestamp with time zone))
+              Filter: ((host IS NOT NULL) AND (host !~~ 'localhost:%'::text) AND ((request_uri <> ALL ('{/health,/nginx_status}'::text[])) OR (request_uri IS NULL)) AND ((request_uri !~~ '/.well-known/%'::text) OR (request_uri IS NULL)) AND ((request_uri !~~ '/__npg_canary%'::text) OR (request_uri IS NULL)) AND (log_type = 'access'::log_type) AND (host <> ALL ('{localhost,nginx,127.0.0.1,"",_,0.0.0.0}'::text[])))
+              Rows Removed by Filter: 416
+              Shared Hit Blocks: 1809
+    Bitmap Heap Scan Relation Name=dashboard_stats_hourly Subplan Name=SubPlan 2 (actual=0.0..0.0ms rows=0 loops=0)
+      Recheck Cond: (proxy_host_id IS NULL)
+      Bitmap Index Scan Index Name=idx_dashboard_stats_hourly_null_host_bucket (actual=0.0..0.0ms rows=0 loops=0)
+
+1h-run3-host: planning=0.463ms execution=47.988ms
+ModifyTable Operation=Insert Relation Name=dashboard_stats_hourly (actual=47.945..47.946ms rows=0 loops=1)
+  Shared Hit Blocks: 4722
+  Subquery Scan (actual=37.372..46.149ms rows=190 loops=1)
+    Shared Hit Blocks: 1812
+    Aggregate Strategy=Sorted (actual=37.35..45.909ms rows=190 loops=1)
+      Group Key: ['l.proxy_host_id', "(date_trunc('hour'::text, l.created_at, 'UTC'::text))"]
+      Shared Hit Blocks: 1812
+      Sort (actual=37.3..39.45ms rows=39583 loops=1)
+        Sort Key: ['l.proxy_host_id', "(date_trunc('hour'::text, l.created_at, 'UTC'::text))"]
+        Sort Method: quicksort
+        Shared Hit Blocks: 1812
+        Hash Join Join Type=Inner (actual=0.051..31.051ms rows=39583 loops=1)
+          Hash Cond: (l.proxy_host_id = p.id)
+          Shared Hit Blocks: 1812
+          Index Scan Relation Name=logs_day_30 Index Name=logs_day_30_created_at_idx (actual=0.01..15.144ms rows=41250 loops=1)
+            Index Cond: ((created_at >= '2026-10-30 23:00:00+00'::timestamp with time zone) AND (created_at < '2026-10-31 00:00:00+00'::timestamp with time zone))
+            Filter: ((host IS NOT NULL) AND (host !~~ 'localhost:%'::text) AND ((request_uri <> ALL ('{/health,/nginx_status}'::text[])) OR (request_uri IS NULL)) AND ((request_uri !~~ '/.well-known/%'::text) OR (request_uri IS NULL)) AND ((request_uri !~~ '/__npg_canary%'::text) OR (request_uri IS NULL)) AND (log_type = 'access'::log_type) AND (host <> ALL ('{localhost,nginx,127.0.0.1,"",_,0.0.0.0}'::text[])))
+            Rows Removed by Filter: 416
+            Shared Hit Blocks: 1809
+          Hash (actual=0.038..0.038ms rows=200 loops=1)
+            Hash Batches: 1
+            Peak Memory Usage: 18
+            Shared Hit Blocks: 3
+            Seq Scan Relation Name=proxy_hosts (actual=0.005..0.02ms rows=200 loops=1)
+              Shared Hit Blocks: 3
+
+1h-run3-legacy-cleanup: planning=0.502ms execution=319.61ms
+ModifyTable Operation=Delete Relation Name=dashboard_stats_hourly (actual=319.558..319.56ms rows=0 loops=1)
+  Shared Hit Blocks: 48205
+  Nested Loop Join Type=Anti (actual=319.556..319.558ms rows=0 loops=1)
+    Shared Hit Blocks: 48205
+    Bitmap Heap Scan Relation Name=dashboard_stats_hourly (actual=0.079..0.226ms rows=190 loops=1)
+      Recheck Cond: ((hour_bucket >= '2026-10-30 23:00:00+00'::timestamp with time zone) AND (hour_bucket < '2026-10-31 00:00:00+00'::timestamp with time zone))
+      Filter: (proxy_host_id IS NOT NULL)
+      Rows Removed by Filter: 1
+      Shared Hit Blocks: 11
+      Bitmap Index Scan Index Name=dashboard_stats_hourly_hour_bucket_idx (actual=0.038..0.038ms rows=380 loops=1)
+        Index Cond: ((hour_bucket >= '2026-10-30 23:00:00+00'::timestamp with time zone) AND (hour_bucket < '2026-10-31 00:00:00+00'::timestamp with time zone))
+        Shared Hit Blocks: 1
+    Append (actual=1.68..1.68ms rows=1 loops=190)
+      Shared Hit Blocks: 48194
+      Bitmap Heap Scan Relation Name=logs_day_28 (actual=0.0..0.0ms rows=0 loops=0)
+        Recheck Cond: ((proxy_host_id = d.proxy_host_id) AND (created_at >= d.hour_bucket) AND (created_at < (d.hour_bucket + '01:00:00'::interval)))
+        Filter: ((host IS NOT NULL) AND (host !~~ 'localhost:%'::text) AND ((request_uri <> ALL ('{/health,/nginx_status}'::text[])) OR (request_uri IS NULL)) AND ((request_uri !~~ '/.well-known/%'::text) OR (request_uri IS NULL)) AND ((request_uri !~~ '/__npg_canary%'::text) OR (request_uri IS NULL)) AND (log_type = 'access'::log_type) AND (host <> ALL ('{localhost,nginx,127.0.0.1,"",_,0.0.0.0}'::text[])))
+        BitmapAnd (actual=0.0..0.0ms rows=0 loops=0)
+          Bitmap Index Scan Index Name=logs_day_28_proxy_host_id_timestamp_idx (actual=0.0..0.0ms rows=0 loops=0)
+            Index Cond: (proxy_host_id = d.proxy_host_id)
+          Bitmap Index Scan Index Name=logs_day_28_created_at_idx (actual=0.0..0.0ms rows=0 loops=0)
+            Index Cond: ((created_at >= d.hour_bucket) AND (created_at < (d.hour_bucket + '01:00:00'::interval)))
+      Bitmap Heap Scan Relation Name=logs_day_29 (actual=0.0..0.0ms rows=0 loops=0)
+        Recheck Cond: ((proxy_host_id = d.proxy_host_id) AND (created_at >= d.hour_bucket) AND (created_at < (d.hour_bucket + '01:00:00'::interval)))
+        Filter: ((host IS NOT NULL) AND (host !~~ 'localhost:%'::text) AND ((request_uri <> ALL ('{/health,/nginx_status}'::text[])) OR (request_uri IS NULL)) AND ((request_uri !~~ '/.well-known/%'::text) OR (request_uri IS NULL)) AND ((request_uri !~~ '/__npg_canary%'::text) OR (request_uri IS NULL)) AND (log_type = 'access'::log_type) AND (host <> ALL ('{localhost,nginx,127.0.0.1,"",_,0.0.0.0}'::text[])))
+        BitmapAnd (actual=0.0..0.0ms rows=0 loops=0)
+          Bitmap Index Scan Index Name=logs_day_29_proxy_host_id_timestamp_idx (actual=0.0..0.0ms rows=0 loops=0)
+            Index Cond: (proxy_host_id = d.proxy_host_id)
+          Bitmap Index Scan Index Name=logs_day_29_created_at_idx (actual=0.0..0.0ms rows=0 loops=0)
+            Index Cond: ((created_at >= d.hour_bucket) AND (created_at < (d.hour_bucket + '01:00:00'::interval)))
+      Bitmap Heap Scan Relation Name=logs_day_30 (actual=1.676..1.676ms rows=1 loops=190)
+        Recheck Cond: ((proxy_host_id = d.proxy_host_id) AND (created_at >= d.hour_bucket) AND (created_at < (d.hour_bucket + '01:00:00'::interval)))
+        Filter: ((host IS NOT NULL) AND (host !~~ 'localhost:%'::text) AND ((request_uri <> ALL ('{/health,/nginx_status}'::text[])) OR (request_uri IS NULL)) AND ((request_uri !~~ '/.well-known/%'::text) OR (request_uri IS NULL)) AND ((request_uri !~~ '/__npg_canary%'::text) OR (request_uri IS NULL)) AND (log_type = 'access'::log_type) AND (host <> ALL ('{localhost,nginx,127.0.0.1,"",_,0.0.0.0}'::text[])))
+        Shared Hit Blocks: 48194
+        BitmapAnd (actual=1.652..1.652ms rows=0 loops=190)
+          Shared Hit Blocks: 48004
+          Bitmap Index Scan Index Name=logs_day_30_proxy_host_id_timestamp_idx (actual=0.452..0.452ms rows=5000 loops=190)
+            Index Cond: (proxy_host_id = d.proxy_host_id)
+            Shared Hit Blocks: 8864
+          Bitmap Index Scan Index Name=logs_day_30_created_at_idx (actual=1.041..1.041ms rows=41666 loops=190)
+            Index Cond: ((created_at >= d.hour_bucket) AND (created_at < (d.hour_bucket + '01:00:00'::interval)))
+            Shared Hit Blocks: 39140
+
+24h-run2-hybrid-chart: planning=0.427ms execution=51.709ms
+Limit (actual=51.549..51.65ms rows=25 loops=1)
+  Shared Hit Blocks: 2151
+  Aggregate Strategy=Sorted (actual=51.547..51.646ms rows=25 loops=1)
+    Group Key: ['"*SELECT* 1".bucket']
+    Shared Hit Blocks: 2151
+    Gather Merge (actual=51.541..51.63ms rows=25 loops=1)
+      Shared Hit Blocks: 2151
+      Sort (actual=17.084..17.086ms rows=8 loops=3)
+        Sort Key: ['"*SELECT* 1".bucket']
+        Sort Method: quicksort
+        Shared Hit Blocks: 2151
+        Aggregate Strategy=Hashed (actual=17.067..17.07ms rows=8 loops=3)
+          Group Key: ['"*SELECT* 1".bucket']
+          Peak Memory Usage: 40
+          Shared Hit Blocks: 2135
+          Append (actual=0.003..16.902ms rows=1592 loops=3)
+            Shared Hit Blocks: 2135
+            Subquery Scan (actual=44.159..49.205ms rows=384 loops=1)
+              Shared Hit Blocks: 1819
+              Aggregate Strategy=Sorted (actual=44.158..49.173ms rows=384 loops=1)
+                Shared Hit Blocks: 1819
+                Sort (actual=44.138..46.087ms rows=41250 loops=1)
+                  Sort Key: ["(date_trunc('hour'::text, logs_partitioned.created_at, 'UTC'::text))", 'logs_partitioned.proxy_host_id']
+                  Sort Method: quicksort
+                  Shared Hit Blocks: 1819
+                  Append (actual=0.764..33.708ms rows=41250 loops=1)
+                    Shared Hit Blocks: 1819
+                    Bitmap Heap Scan Relation Name=logs_day_29 (actual=0.764..17.112ms rows=20625 loops=1)
+                      Recheck Cond: (((created_at >= '2026-10-29 23:30:00+00'::timestamp with time zone) AND (created_at < '2026-10-30 00:00:00+00'::timestamp with time zone)) OR ((created_at >= '2026-10-30 23:00:00+00'::timestamp with time zone) AND (created_at < '2026-10-30 23:30:00+00'::timestamp with time zone)))
+                      Filter: ((host IS NOT NULL) AND (host !~~ 'localhost:%'::text) AND ((request_uri <> ALL ('{/health,/nginx_status}'::text[])) OR (request_uri IS NULL)) AND ((request_uri !~~ '/.well-known/%'::text) OR (request_uri IS NULL)) AND ((request_uri !~~ '/__npg_canary%'::text) OR (request_uri IS NULL)) AND (log_type = 'access'::log_type) AND (host <> ALL ('{localhost,nginx,127.0.0.1,"",_,0.0.0.0}'::text[])))
+                      Rows Removed by Filter: 208
+                      Shared Hit Blocks: 909
+                      BitmapOr (actual=0.688..0.689ms rows=0 loops=1)
+                        Shared Hit Blocks: 107
+                        Bitmap Index Scan Index Name=logs_day_29_created_at_idx (actual=0.685..0.685ms rows=20833 loops=1)
+                          Index Cond: ((created_at >= '2026-10-29 23:30:00+00'::timestamp with time zone) AND (created_at < '2026-10-30 00:00:00+00'::timestamp with time zone))
+                          Shared Hit Blocks: 104
+                        Bitmap Index Scan Index Name=logs_day_29_created_at_idx (actual=0.002..0.002ms rows=0 loops=1)
+                          Index Cond: ((created_at >= '2026-10-30 23:00:00+00'::timestamp with time zone) AND (created_at < '2026-10-30 23:30:00+00'::timestamp with time zone))
+                          Shared Hit Blocks: 3
+                    Bitmap Heap Scan Relation Name=logs_day_30 (actual=0.749..13.379ms rows=20625 loops=1)
+                      Recheck Cond: (((created_at >= '2026-10-29 23:30:00+00'::timestamp with time zone) AND (created_at < '2026-10-30 00:00:00+00'::timestamp with time zone)) OR ((created_at >= '2026-10-30 23:00:00+00'::timestamp with time zone) AND (created_at < '2026-10-30 23:30:00+00'::timestamp with time zone)))
+                      Filter: ((host IS NOT NULL) AND (host !~~ 'localhost:%'::text) AND ((request_uri <> ALL ('{/health,/nginx_status}'::text[])) OR (request_uri IS NULL)) AND ((request_uri !~~ '/.well-known/%'::text) OR (request_uri IS NULL)) AND ((request_uri !~~ '/__npg_canary%'::text) OR (request_uri IS NULL)) AND (log_type = 'access'::log_type) AND (host <> ALL ('{localhost,nginx,127.0.0.1,"",_,0.0.0.0}'::text[])))
+                      Rows Removed by Filter: 208
+                      Shared Hit Blocks: 910
+                      BitmapOr (actual=0.678..0.679ms rows=0 loops=1)
+                        Shared Hit Blocks: 108
+                        Bitmap Index Scan Index Name=logs_day_30_created_at_idx (actual=0.009..0.01ms rows=0 loops=1)
+                          Index Cond: ((created_at >= '2026-10-29 23:30:00+00'::timestamp with time zone) AND (created_at < '2026-10-30 00:00:00+00'::timestamp with time zone))
+                          Shared Hit Blocks: 3
+                        Bitmap Index Scan Index Name=logs_day_30_created_at_idx (actual=0.668..0.668ms rows=20833 loops=1)
+                          Index Cond: ((created_at >= '2026-10-30 23:00:00+00'::timestamp with time zone) AND (created_at < '2026-10-30 23:30:00+00'::timestamp with time zone))
+                          Shared Hit Blocks: 105
+            Subquery Scan (actual=0.007..1.139ms rows=4393 loops=1)
+              Shared Hit Blocks: 316
+              Seq Scan Relation Name=dashboard_stats_hourly (actual=0.007..0.766ms rows=4393 loops=1)
+                Filter: ((hour_bucket >= '2026-10-30 00:00:00+00'::timestamp with time zone) AND (hour_bucket < '2026-10-30 23:00:00+00'::timestamp with time zone))
+                Rows Removed by Filter: 573
+                Shared Hit Blocks: 316
+
+24h-run1-hybrid-summary: planning=0.589ms execution=26.456ms
+Aggregate Strategy=Sorted (actual=25.82..26.397ms rows=191 loops=1)
+  Group Key: ['"*SELECT* 1".proxy_host_id', '"*SELECT* 1".is_total']
+  Shared Hit Blocks: 2120
+  Shared Read Blocks: 15
+  Sort (actual=25.813..26.02ms rows=4584 loops=1)
+    Sort Key: ['"*SELECT* 1".proxy_host_id', '"*SELECT* 1".is_total']
+    Sort Method: quicksort
+    Shared Hit Blocks: 2120
+    Shared Read Blocks: 15
+    Result (actual=23.517..25.204ms rows=4584 loops=1)
+      Shared Hit Blocks: 2120
+      Shared Read Blocks: 15
+      Append (actual=23.516..24.833ms rows=4584 loops=1)
+        Shared Hit Blocks: 2120
+        Shared Read Blocks: 15
+        Subquery Scan (actual=23.515..23.566ms rows=191 loops=1)
+          Filter: ("*SELECT* 1".is_total OR ("*SELECT* 1".proxy_host_id IS NOT NULL))
+          Rows Removed by Filter: 1
+          Shared Hit Blocks: 1804
+          Shared Read Blocks: 15
+          Aggregate Strategy=Mixed (actual=23.515..23.547ms rows=192 loops=1)
+            Peak Memory Usage: 64
+            Shared Hit Blocks: 1804
+            Shared Read Blocks: 15
+            Append (actual=0.754..18.606ms rows=41250 loops=1)
+              Shared Hit Blocks: 1804
+              Shared Read Blocks: 15
+              Bitmap Heap Scan Relation Name=logs_day_29 (actual=0.753..7.707ms rows=20625 loops=1)
+                Recheck Cond: (((created_at >= '2026-10-29 23:30:00+00'::timestamp with time zone) AND (created_at < '2026-10-30 00:00:00+00'::timestamp with time zone)) OR ((created_at >= '2026-10-30 23:00:00+00'::timestamp with time zone) AND (created_at < '2026-10-30 23:30:00+00'::timestamp with time zone)))
+                Filter: ((host IS NOT NULL) AND (host !~~ 'localhost:%'::text) AND ((request_uri <> ALL ('{/health,/nginx_status}'::text[])) OR (request_uri IS NULL)) AND ((request_uri !~~ '/.well-known/%'::text) OR (request_uri IS NULL)) AND ((request_uri !~~ '/__npg_canary%'::text) OR (request_uri IS NULL)) AND (log_type = 'access'::log_type) AND (host <> ALL ('{localhost,nginx,127.0.0.1,"",_,0.0.0.0}'::text[])))
+                Rows Removed by Filter: 208
+                Shared Hit Blocks: 909
+                BitmapOr (actual=0.683..0.685ms rows=0 loops=1)
+                  Shared Hit Blocks: 107
+                  Bitmap Index Scan Index Name=logs_day_29_created_at_idx (actual=0.682..0.682ms rows=20833 loops=1)
+                    Index Cond: ((created_at >= '2026-10-29 23:30:00+00'::timestamp with time zone) AND (created_at < '2026-10-30 00:00:00+00'::timestamp with time zone))
+                    Shared Hit Blocks: 104
+                  Bitmap Index Scan Index Name=logs_day_29_created_at_idx (actual=0.001..0.002ms rows=0 loops=1)
+                    Index Cond: ((created_at >= '2026-10-30 23:00:00+00'::timestamp with time zone) AND (created_at < '2026-10-30 23:30:00+00'::timestamp with time zone))
+                    Shared Hit Blocks: 3
+              Bitmap Heap Scan Relation Name=logs_day_30 (actual=0.762..7.8ms rows=20625 loops=1)
+                Recheck Cond: (((created_at >= '2026-10-29 23:30:00+00'::timestamp with time zone) AND (created_at < '2026-10-30 00:00:00+00'::timestamp with time zone)) OR ((created_at >= '2026-10-30 23:00:00+00'::timestamp with time zone) AND (created_at < '2026-10-30 23:30:00+00'::timestamp with time zone)))
+                Filter: ((host IS NOT NULL) AND (host !~~ 'localhost:%'::text) AND ((request_uri <> ALL ('{/health,/nginx_status}'::text[])) OR (request_uri IS NULL)) AND ((request_uri !~~ '/.well-known/%'::text) OR (request_uri IS NULL)) AND ((request_uri !~~ '/__npg_canary%'::text) OR (request_uri IS NULL)) AND (log_type = 'access'::log_type) AND (host <> ALL ('{localhost,nginx,127.0.0.1,"",_,0.0.0.0}'::text[])))
+                Rows Removed by Filter: 208
+                Shared Hit Blocks: 895
+                Shared Read Blocks: 15
+                BitmapOr (actual=0.698..0.699ms rows=0 loops=1)
+                  Shared Hit Blocks: 93
+                  Shared Read Blocks: 15
+                  Bitmap Index Scan Index Name=logs_day_30_created_at_idx (actual=0.009..0.009ms rows=0 loops=1)
+                    Index Cond: ((created_at >= '2026-10-29 23:30:00+00'::timestamp with time zone) AND (created_at < '2026-10-30 00:00:00+00'::timestamp with time zone))
+                    Shared Hit Blocks: 3
+                  Bitmap Index Scan Index Name=logs_day_30_created_at_idx (actual=0.689..0.689ms rows=20833 loops=1)
+                    Index Cond: ((created_at >= '2026-10-30 23:00:00+00'::timestamp with time zone) AND (created_at < '2026-10-30 23:30:00+00'::timestamp with time zone))
+                    Shared Hit Blocks: 90
+                    Shared Read Blocks: 15
+        Subquery Scan (actual=0.009..0.958ms rows=4393 loops=1)
+          Shared Hit Blocks: 316
+          Seq Scan Relation Name=dashboard_stats_hourly (actual=0.009..0.616ms rows=4393 loops=1)
+            Filter: (((proxy_host_id IS NULL) OR (proxy_host_id IS NOT NULL)) AND (hour_bucket >= '2026-10-30 00:00:00+00'::timestamp with time zone) AND (hour_bucket < '2026-10-30 23:00:00+00'::timestamp with time zone))
+            Rows Removed by Filter: 573
+            Shared Hit Blocks: 316
+
+24h-run2-raw-chart: planning=0.43ms execution=1076.274ms
+Aggregate Strategy=Sorted (actual=908.121..1074.311ms rows=288 loops=1)
+  Group Key: ["(to_timestamp(((floor((EXTRACT(epoch FROM logs_partitioned.created_at) / '300'::numeric)) * '300'::numeric))::double precision))"]
+  Shared Hit Blocks: 5204
+  Shared Read Blocks: 34164
+  Temp Read Blocks: 3150
+  Temp Written Blocks: 3163
+  Sort (actual=907.496..977.765ms rows=990000 loops=1)
+    Sort Key: ["(to_timestamp(((floor((EXTRACT(epoch FROM logs_partitioned.created_at) / '300'::numeric)) * '300'::numeric))::double precision))"]
+    Sort Method: external merge
+    Shared Hit Blocks: 5204
+    Shared Read Blocks: 34164
+    Temp Read Blocks: 3150
+    Temp Written Blocks: 3163
+    Append (actual=8.64..815.235ms rows=990000 loops=1)
+      Shared Hit Blocks: 5204
+      Shared Read Blocks: 34164
+      Index Scan Relation Name=logs_day_29 Index Name=logs_day_29_created_at_idx (actual=8.639..23.915ms rows=20625 loops=1)
+        Index Cond: ((created_at >= '2026-10-29 23:30:00+00'::timestamp with time zone) AND (created_at < '2026-10-30 23:30:00+00'::timestamp with time zone))
+        Filter: ((host IS NOT NULL) AND (host !~~ 'localhost:%'::text) AND ((request_uri <> ALL ('{/health,/nginx_status}'::text[])) OR (request_uri IS NULL)) AND ((request_uri !~~ '/.well-known/%'::text) OR (request_uri IS NULL)) AND ((request_uri !~~ '/__npg_canary%'::text) OR (request_uri IS NULL)) AND (log_type = 'access'::log_type) AND (host <> ALL ('{localhost,nginx,127.0.0.1,"",_,0.0.0.0}'::text[])))
+        Rows Removed by Filter: 208
+        Shared Hit Blocks: 906
+      Seq Scan Relation Name=logs_day_30 (actual=0.048..720.568ms rows=969375 loops=1)
+        Filter: ((host IS NOT NULL) AND (created_at >= '2026-10-29 23:30:00+00'::timestamp with time zone) AND (created_at < '2026-10-30 23:30:00+00'::timestamp with time zone) AND (host !~~ 'localhost:%'::text) AND ((request_uri <> ALL ('{/health,/nginx_status}'::text[])) OR (request_uri IS NULL)) AND ((request_uri !~~ '/.well-known/%'::text) OR (request_uri IS NULL)) AND ((request_uri !~~ '/__npg_canary%'::text) OR (request_uri IS NULL)) AND (log_type = 'access'::log_type) AND (host <> ALL ('{localhost,nginx,127.0.0.1,"",_,0.0.0.0}'::text[])))
+        Rows Removed by Filter: 30625
+        Shared Hit Blocks: 4298
+        Shared Read Blocks: 34164
+
+24h-run1-raw-summary: planning=0.386ms execution=512.292ms
+Aggregate Strategy=Sorted (actual=512.153..512.239ms rows=191 loops=1)
+  Group Key: ['samples.proxy_host_id', 'samples.is_total']
+  Shared Hit Blocks: 5113
+  Shared Read Blocks: 34260
+  Sort (actual=512.148..512.158ms rows=191 loops=1)
+    Sort Key: ['samples.proxy_host_id', 'samples.is_total']
+    Sort Method: quicksort
+    Shared Hit Blocks: 5113
+    Shared Read Blocks: 34260
+    Subquery Scan (actual=512.028..512.088ms rows=191 loops=1)
+      Filter: (samples.is_total OR (samples.proxy_host_id IS NOT NULL))
+      Rows Removed by Filter: 1
+      Shared Hit Blocks: 5108
+      Shared Read Blocks: 34260
+      Aggregate Strategy=Mixed (actual=512.027..512.065ms rows=192 loops=1)
+        Peak Memory Usage: 64
+        Shared Hit Blocks: 5108
+        Shared Read Blocks: 34260
+        Append (actual=0.011..392.118ms rows=990000 loops=1)
+          Shared Hit Blocks: 5108
+          Shared Read Blocks: 34260
+          Index Scan Relation Name=logs_day_29 Index Name=logs_day_29_created_at_idx (actual=0.011..7.327ms rows=20625 loops=1)
+            Index Cond: ((created_at >= '2026-10-29 23:30:00+00'::timestamp with time zone) AND (created_at < '2026-10-30 23:30:00+00'::timestamp with time zone))
+            Filter: ((host IS NOT NULL) AND (host !~~ 'localhost:%'::text) AND ((request_uri <> ALL ('{/health,/nginx_status}'::text[])) OR (request_uri IS NULL)) AND ((request_uri !~~ '/.well-known/%'::text) OR (request_uri IS NULL)) AND ((request_uri !~~ '/__npg_canary%'::text) OR (request_uri IS NULL)) AND (log_type = 'access'::log_type) AND (host <> ALL ('{localhost,nginx,127.0.0.1,"",_,0.0.0.0}'::text[])))
+            Rows Removed by Filter: 208
+            Shared Hit Blocks: 906
+          Seq Scan Relation Name=logs_day_30 (actual=0.019..315.91ms rows=969375 loops=1)
+            Filter: ((host IS NOT NULL) AND (created_at >= '2026-10-29 23:30:00+00'::timestamp with time zone) AND (created_at < '2026-10-30 23:30:00+00'::timestamp with time zone) AND (host !~~ 'localhost:%'::text) AND ((request_uri <> ALL ('{/health,/nginx_status}'::text[])) OR (request_uri IS NULL)) AND ((request_uri !~~ '/.well-known/%'::text) OR (request_uri IS NULL)) AND ((request_uri !~~ '/__npg_canary%'::text) OR (request_uri IS NULL)) AND (log_type = 'access'::log_type) AND (host <> ALL ('{localhost,nginx,127.0.0.1,"",_,0.0.0.0}'::text[])))
+            Rows Removed by Filter: 30625
+            Shared Hit Blocks: 4202
+            Shared Read Blocks: 34260
+
+26h-run2-cleanup: planning=0.792ms execution=900.814ms
+ModifyTable Operation=Delete Relation Name=dashboard_stats_hourly (actual=899.545..899.548ms rows=0 loops=1)
+  Shared Hit Blocks: 7870
+  Shared Read Blocks: 34420
+  Aggregate Strategy=Hashed Subplan Name=CTE active (actual=884.703..885.28ms rows=4940 loops=1)
+    Group Key: ['logs_partitioned.proxy_host_id', "(date_trunc('hour'::text, logs_partitioned.created_at, 'UTC'::text))"]
+    Peak Memory Usage: 2065
+    Shared Hit Blocks: 7658
+    Shared Read Blocks: 34420
+    Append (actual=0.035..752.425ms rows=1029167 loops=1)
+      Shared Hit Blocks: 7658
+      Shared Read Blocks: 34420
+      Index Scan Relation Name=logs_day_29 Index Name=logs_day_29_created_at_idx (actual=0.034..53.974ms rows=79167 loops=1)
+        Index Cond: ((created_at >= '2026-10-29 22:00:00+00'::timestamp with time zone) AND (created_at < '2026-10-31 00:00:00+00'::timestamp with time zone))
+        Filter: ((proxy_host_id IS NOT NULL) AND (host IS NOT NULL) AND (host !~~ 'localhost:%'::text) AND ((request_uri <> ALL ('{/health,/nginx_status}'::text[])) OR (request_uri IS NULL)) AND ((request_uri !~~ '/.well-known/%'::text) OR (request_uri IS NULL)) AND ((request_uri !~~ '/__npg_canary%'::text) OR (request_uri IS NULL)) AND (log_type = 'access'::log_type) AND (host <> ALL ('{localhost,nginx,127.0.0.1,"",_,0.0.0.0}'::text[])))
+        Rows Removed by Filter: 4166
+        Shared Hit Blocks: 3616
+      Seq Scan Relation Name=logs_day_30 (actual=0.045..626.74ms rows=950000 loops=1)
+        Filter: ((proxy_host_id IS NOT NULL) AND (host IS NOT NULL) AND (created_at >= '2026-10-29 22:00:00+00'::timestamp with time zone) AND (created_at < '2026-10-31 00:00:00+00'::timestamp with time zone) AND (host !~~ 'localhost:%'::text) AND ((request_uri <> ALL ('{/health,/nginx_status}'::text[])) OR (request_uri IS NULL)) AND ((request_uri !~~ '/.well-known/%'::text) OR (request_uri IS NULL)) AND ((request_uri !~~ '/__npg_canary%'::text) OR (request_uri IS NULL)) AND (log_type = 'access'::log_type) AND (host <> ALL ('{localhost,nginx,127.0.0.1,"",_,0.0.0.0}'::text[])))
+        Rows Removed by Filter: 50000
+        Shared Hit Blocks: 4042
+        Shared Read Blocks: 34420
+  Hash Join Join Type=Right Anti (actual=899.544..899.545ms rows=0 loops=1)
+    Hash Cond: ((a.proxy_host_id = d.proxy_host_id) AND (a.hour_bucket = d.hour_bucket))
+    Shared Hit Blocks: 7870
+    Shared Read Blocks: 34420
+    CTE Scan CTE Name=active (actual=884.714..886.351ms rows=4940 loops=1)
+      Shared Hit Blocks: 7658
+      Shared Read Blocks: 34420
+    Hash (actual=12.576..12.576ms rows=4940 loops=1)
+      Hash Batches: 1
+      Peak Memory Usage: 373
+      Shared Hit Blocks: 212
+      Seq Scan Relation Name=dashboard_stats_hourly (actual=11.316..12.011ms rows=4940 loops=1)
+        Filter: ((proxy_host_id IS NOT NULL) AND (hour_bucket >= '2026-10-29 22:00:00+00'::timestamp with time zone) AND (hour_bucket < '2026-10-31 00:00:00+00'::timestamp with time zone))
+        Rows Removed by Filter: 26
+        Shared Hit Blocks: 212
+
+26h-run2-global: planning=0.609ms execution=1122.351ms
+ModifyTable Operation=Insert Relation Name=dashboard_stats_hourly (actual=1120.928..1120.931ms rows=0 loops=1)
+  Shared Hit Blocks: 7728
+  Shared Read Blocks: 34516
+  Temp Read Blocks: 32
+  Temp Written Blocks: 32
+  Hash Join Join Type=Left (actual=1120.382..1120.727ms rows=26 loops=1)
+    Hash Cond: ((generate_series('2026-10-29 22:00:00+00'::timestamp with time zone, ('2026-10-31 00:00:00+00'::timestamp with time zone - '01:00:00'::interval), '01:00:00'::interval)) = a.hour_bucket)
+    Filter: ((a.total IS NOT NULL) OR (ANY ((generate_series('2026-10-29 22:00:00+00'::timestamp with time zone, ('2026-10-31 00:00:00+00'::timestamp with time zone - '01:00:00'::interval), '01:00:00'::interval)) = (hashed SubPlan 2).col1)))
+    Shared Hit Blocks: 7562
+    Shared Read Blocks: 34516
+    Temp Read Blocks: 32
+    Temp Written Blocks: 32
+    ProjectSet (actual=16.972..16.978ms rows=26 loops=1)
+      Result (actual=16.958..16.959ms rows=1 loops=1)
+    Hash (actual=1103.321..1103.323ms rows=26 loops=1)
+      Hash Batches: 32
+      Peak Memory Usage: 513
+      Shared Hit Blocks: 7562
+      Shared Read Blocks: 34516
+      Subquery Scan (actual=1103.113..1103.213ms rows=26 loops=1)
+        Shared Hit Blocks: 7562
+        Shared Read Blocks: 34516
+        Aggregate Strategy=Hashed (actual=1103.11..1103.206ms rows=26 loops=1)
+          Group Key: ["(date_trunc('hour'::text, logs_partitioned.created_at, 'UTC'::text))"]
+          Peak Memory Usage: 801
+          Shared Hit Blocks: 7562
+          Shared Read Blocks: 34516
+          Append (actual=0.036..825.978ms rows=1072500 loops=1)
+            Shared Hit Blocks: 7562
+            Shared Read Blocks: 34516
+            Index Scan Relation Name=logs_day_29 Index Name=logs_day_29_created_at_idx (actual=0.035..58.721ms rows=82500 loops=1)
+              Index Cond: ((created_at >= '2026-10-29 22:00:00+00'::timestamp with time zone) AND (created_at < '2026-10-31 00:00:00+00'::timestamp with time zone))
+              Filter: ((host IS NOT NULL) AND (host !~~ 'localhost:%'::text) AND ((request_uri <> ALL ('{/health,/nginx_status}'::text[])) OR (request_uri IS NULL)) AND ((request_uri !~~ '/.well-known/%'::text) OR (request_uri IS NULL)) AND ((request_uri !~~ '/__npg_canary%'::text) OR (request_uri IS NULL)) AND (log_type = 'access'::log_type) AND (host <> ALL ('{localhost,nginx,127.0.0.1,"",_,0.0.0.0}'::text[])))
+              Rows Removed by Filter: 833
+              Shared Hit Blocks: 3616
+            Seq Scan Relation Name=logs_day_30 (actual=0.042..692.183ms rows=990000 loops=1)
+              Filter: ((host IS NOT NULL) AND (created_at >= '2026-10-29 22:00:00+00'::timestamp with time zone) AND (created_at < '2026-10-31 00:00:00+00'::timestamp with time zone) AND (host !~~ 'localhost:%'::text) AND ((request_uri <> ALL ('{/health,/nginx_status}'::text[])) OR (request_uri IS NULL)) AND ((request_uri !~~ '/.well-known/%'::text) OR (request_uri IS NULL)) AND ((request_uri !~~ '/__npg_canary%'::text) OR (request_uri IS NULL)) AND (log_type = 'access'::log_type) AND (host <> ALL ('{localhost,nginx,127.0.0.1,"",_,0.0.0.0}'::text[])))
+              Rows Removed by Filter: 10000
+              Shared Hit Blocks: 3946
+              Shared Read Blocks: 34516
+    Index Only Scan Relation Name=dashboard_stats_hourly Index Name=dashboard_stats_hourly_proxy_host_id_hour_bucket_key Subplan Name=SubPlan 2 (actual=0.0..0.0ms rows=0 loops=0)
+      Index Cond: (proxy_host_id IS NULL)
+
+26h-run3-host: planning=0.591ms execution=1331.486ms
+ModifyTable Operation=Insert Relation Name=dashboard_stats_hourly (actual=1330.136..1330.139ms rows=0 loops=1)
+  Shared Hit Blocks: 91296
+  Shared Read Blocks: 34356
+  Subquery Scan (actual=1272.747..1280.156ms rows=4940 loops=1)
+    Shared Hit Blocks: 7725
+    Shared Read Blocks: 34356
+    Aggregate Strategy=Hashed (actual=1272.719..1275.314ms rows=4940 loops=1)
+      Group Key: ['l.proxy_host_id', "date_trunc('hour'::text, l.created_at, 'UTC'::text)"]
+      Peak Memory Usage: 3345
+      Shared Hit Blocks: 7725
+      Shared Read Blocks: 34356
+      Hash Join Join Type=Inner (actual=12.71..967.253ms rows=1029167 loops=1)
+        Hash Cond: (l.proxy_host_id = p.id)
+        Shared Hit Blocks: 7725
+        Shared Read Blocks: 34356
+        Append (actual=12.649..510.796ms rows=1072500 loops=1)
+          Shared Hit Blocks: 7722
+          Shared Read Blocks: 34356
+          Index Scan Relation Name=logs_day_29 Index Name=logs_day_29_created_at_idx (actual=12.648..47.597ms rows=82500 loops=1)
+            Index Cond: ((created_at >= '2026-10-29 22:00:00+00'::timestamp with time zone) AND (created_at < '2026-10-31 00:00:00+00'::timestamp with time zone))
+            Filter: ((host IS NOT NULL) AND (host !~~ 'localhost:%'::text) AND ((request_uri <> ALL ('{/health,/nginx_status}'::text[])) OR (request_uri IS NULL)) AND ((request_uri !~~ '/.well-known/%'::text) OR (request_uri IS NULL)) AND ((request_uri !~~ '/__npg_canary%'::text) OR (request_uri IS NULL)) AND (log_type = 'access'::log_type) AND (host <> ALL ('{localhost,nginx,127.0.0.1,"",_,0.0.0.0}'::text[])))
+            Rows Removed by Filter: 833
+            Shared Hit Blocks: 3616
+          Seq Scan Relation Name=logs_day_30 (actual=0.04..387.839ms rows=990000 loops=1)
+            Filter: ((host IS NOT NULL) AND (created_at >= '2026-10-29 22:00:00+00'::timestamp with time zone) AND (created_at < '2026-10-31 00:00:00+00'::timestamp with time zone) AND (host !~~ 'localhost:%'::text) AND ((request_uri <> ALL ('{/health,/nginx_status}'::text[])) OR (request_uri IS NULL)) AND ((request_uri !~~ '/.well-known/%'::text) OR (request_uri IS NULL)) AND ((request_uri !~~ '/__npg_canary%'::text) OR (request_uri IS NULL)) AND (log_type = 'access'::log_type) AND (host <> ALL ('{localhost,nginx,127.0.0.1,"",_,0.0.0.0}'::text[])))
+            Rows Removed by Filter: 10000
+            Shared Hit Blocks: 4106
+            Shared Read Blocks: 34356
+        Hash (actual=0.045..0.046ms rows=200 loops=1)
+          Hash Batches: 1
+          Peak Memory Usage: 18
+          Shared Hit Blocks: 3
+          Seq Scan Relation Name=proxy_hosts (actual=0.01..0.025ms rows=200 loops=1)
+            Shared Hit Blocks: 3
+
+26h-run3-legacy-cleanup: planning=0.665ms execution=4054.389ms
+ModifyTable Operation=Delete Relation Name=dashboard_stats_hourly (actual=4053.304..4053.318ms rows=0 loops=1)
+  Shared Hit Blocks: 8021
+  Shared Read Blocks: 107681
+  Temp Read Blocks: 32242
+  Temp Written Blocks: 32242
+  Hash Join Join Type=Anti (actual=4053.302..4053.316ms rows=0 loops=1)
+    Hash Cond: (d.proxy_host_id = l.proxy_host_id)
+    Join Filter: ((l.created_at >= d.hour_bucket) AND (l.created_at < (d.hour_bucket + '01:00:00'::interval)))
+    Rows Removed by Join Filter: 26574105
+    Shared Hit Blocks: 8021
+    Shared Read Blocks: 107681
+    Temp Read Blocks: 32242
+    Temp Written Blocks: 32242
+    Seq Scan Relation Name=dashboard_stats_hourly (actual=12.093..13.3ms rows=4940 loops=1)
+      Filter: ((proxy_host_id IS NOT NULL) AND (hour_bucket >= '2026-10-29 22:00:00+00'::timestamp with time zone) AND (hour_bucket < '2026-10-31 00:00:00+00'::timestamp with time zone))
+      Rows Removed by Filter: 26
+      Shared Hit Blocks: 316
+    Hash (actual=1793.415..1793.424ms rows=2850000 loops=1)
+      Hash Batches: 128
+      Peak Memory Usage: 7169
+      Shared Hit Blocks: 7705
+      Shared Read Blocks: 107681
+      Temp Written Blocks: 19120
+      Append (actual=0.033..1294.377ms rows=2970000 loops=1)
+        Shared Hit Blocks: 7705
+        Shared Read Blocks: 107681
+        Seq Scan Relation Name=logs_day_28 (actual=0.032..354.16ms rows=990000 loops=1)
+          Filter: ((host IS NOT NULL) AND (host !~~ 'localhost:%'::text) AND ((request_uri <> ALL ('{/health,/nginx_status}'::text[])) OR (request_uri IS NULL)) AND ((request_uri !~~ '/.well-known/%'::text) OR (request_uri IS NULL)) AND ((request_uri !~~ '/__npg_canary%'::text) OR (request_uri IS NULL)) AND (log_type = 'access'::log_type) AND (host <> ALL ('{localhost,nginx,127.0.0.1,"",_,0.0.0.0}'::text[])))
+          Rows Removed by Filter: 10000
+          Shared Hit Blocks: 329
+          Shared Read Blocks: 38133
+        Seq Scan Relation Name=logs_day_29 (actual=0.073..347.853ms rows=990000 loops=1)
+          Filter: ((host IS NOT NULL) AND (host !~~ 'localhost:%'::text) AND ((request_uri <> ALL ('{/health,/nginx_status}'::text[])) OR (request_uri IS NULL)) AND ((request_uri !~~ '/.well-known/%'::text) OR (request_uri IS NULL)) AND ((request_uri !~~ '/__npg_canary%'::text) OR (request_uri IS NULL)) AND (log_type = 'access'::log_type) AND (host <> ALL ('{localhost,nginx,127.0.0.1,"",_,0.0.0.0}'::text[])))
+          Rows Removed by Filter: 10000
+          Shared Hit Blocks: 3238
+          Shared Read Blocks: 35224
+        Seq Scan Relation Name=logs_day_30 (actual=0.061..378.227ms rows=990000 loops=1)
+          Filter: ((host IS NOT NULL) AND (host !~~ 'localhost:%'::text) AND ((request_uri <> ALL ('{/health,/nginx_status}'::text[])) OR (request_uri IS NULL)) AND ((request_uri !~~ '/.well-known/%'::text) OR (request_uri IS NULL)) AND ((request_uri !~~ '/__npg_canary%'::text) OR (request_uri IS NULL)) AND (log_type = 'access'::log_type) AND (host <> ALL ('{localhost,nginx,127.0.0.1,"",_,0.0.0.0}'::text[])))
+          Rows Removed by Filter: 10000
+          Shared Hit Blocks: 4138
+          Shared Read Blocks: 34324
+
+2h-run2-cleanup: planning=0.243ms execution=58.344ms
+ModifyTable Operation=Delete Relation Name=dashboard_stats_hourly (actual=58.269..58.27ms rows=0 loops=1)
+  Shared Hit Blocks: 3642
+  Aggregate Strategy=Hashed Subplan Name=CTE active (actual=57.786..57.983ms rows=380 loops=1)
+    Group Key: ['logs_partitioned.proxy_host_id', "date_trunc('hour'::text, logs_partitioned.created_at, 'UTC'::text)"]
+    Peak Memory Usage: 1585
+    Shared Hit Blocks: 3616
+    Index Scan Relation Name=logs_day_30 Index Name=logs_day_30_created_at_idx (actual=0.01..50.033ms rows=79167 loops=1)
+      Index Cond: ((created_at >= '2026-10-30 22:00:00+00'::timestamp with time zone) AND (created_at < '2026-10-31 00:00:00+00'::timestamp with time zone))
+      Filter: ((proxy_host_id IS NOT NULL) AND (host IS NOT NULL) AND (host !~~ 'localhost:%'::text) AND ((request_uri <> ALL ('{/health,/nginx_status}'::text[])) OR (request_uri IS NULL)) AND ((request_uri !~~ '/.well-known/%'::text) OR (request_uri IS NULL)) AND ((request_uri !~~ '/__npg_canary%'::text) OR (request_uri IS NULL)) AND (log_type = 'access'::log_type) AND (host <> ALL ('{localhost,nginx,127.0.0.1,"",_,0.0.0.0}'::text[])))
+      Rows Removed by Filter: 4166
+      Shared Hit Blocks: 3616
+  Hash Join Join Type=Right Anti (actual=58.267..58.268ms rows=0 loops=1)
+    Hash Cond: ((a.proxy_host_id = d.proxy_host_id) AND (a.hour_bucket = d.hour_bucket))
+    Shared Hit Blocks: 3642
+    CTE Scan CTE Name=active (actual=57.794..58.103ms rows=380 loops=1)
+      Shared Hit Blocks: 3616
+    Hash (actual=0.121..0.122ms rows=380 loops=1)
+      Hash Batches: 1
+      Peak Memory Usage: 32
+      Shared Hit Blocks: 26
+      Bitmap Heap Scan Relation Name=dashboard_stats_hourly (actual=0.024..0.084ms rows=380 loops=1)
+        Recheck Cond: ((hour_bucket >= '2026-10-30 22:00:00+00'::timestamp with time zone) AND (hour_bucket < '2026-10-31 00:00:00+00'::timestamp with time zone))
+        Filter: (proxy_host_id IS NOT NULL)
+        Rows Removed by Filter: 2
+        Shared Hit Blocks: 26
+        Bitmap Index Scan Index Name=dashboard_stats_hourly_hour_bucket_idx (actual=0.015..0.015ms rows=1120 loops=1)
+          Index Cond: ((hour_bucket >= '2026-10-30 22:00:00+00'::timestamp with time zone) AND (hour_bucket < '2026-10-31 00:00:00+00'::timestamp with time zone))
+          Shared Hit Blocks: 1
+
+2h-run1-global: planning=0.474ms execution=74.354ms
+ModifyTable Operation=Insert Relation Name=dashboard_stats_hourly (actual=74.27..74.273ms rows=0 loops=1)
+  Shared Hit Blocks: 3425
+  Shared Read Blocks: 204
+  Temp Read Blocks: 2
+  Temp Written Blocks: 2
+  Hash Join Join Type=Left (actual=74.09..74.176ms rows=2 loops=1)
+    Hash Cond: ((generate_series('2026-10-30 22:00:00+00'::timestamp with time zone, ('2026-10-31 00:00:00+00'::timestamp with time zone - '01:00:00'::interval), '01:00:00'::interval)) = a.hour_bucket)
+    Filter: ((a.total IS NOT NULL) OR (ANY ((generate_series('2026-10-30 22:00:00+00'::timestamp with time zone, ('2026-10-31 00:00:00+00'::timestamp with time zone - '01:00:00'::interval), '01:00:00'::interval)) = (hashed SubPlan 2).col1)))
+    Shared Hit Blocks: 3412
+    Shared Read Blocks: 204
+    Temp Read Blocks: 2
+    Temp Written Blocks: 2
+    ProjectSet (actual=0.003..0.006ms rows=2 loops=1)
+      Result (actual=0.0..0.001ms rows=1 loops=1)
+    Hash (actual=74.017..74.018ms rows=2 loops=1)
+      Hash Batches: 2
+      Peak Memory Usage: 513
+      Shared Hit Blocks: 3412
+      Shared Read Blocks: 204
+      Subquery Scan (actual=73.733..73.79ms rows=2 loops=1)
+        Shared Hit Blocks: 3412
+        Shared Read Blocks: 204
+        Aggregate Strategy=Hashed (actual=73.732..73.788ms rows=2 loops=1)
+          Group Key: ["date_trunc('hour'::text, logs_partitioned.created_at, 'UTC'::text)"]
+          Peak Memory Usage: 793
+          Shared Hit Blocks: 3412
+          Shared Read Blocks: 204
+          Index Scan Relation Name=logs_day_30 Index Name=logs_day_30_created_at_idx (actual=0.016..58.019ms rows=82500 loops=1)
+            Index Cond: ((created_at >= '2026-10-30 22:00:00+00'::timestamp with time zone) AND (created_at < '2026-10-31 00:00:00+00'::timestamp with time zone))
+            Filter: ((host IS NOT NULL) AND (host !~~ 'localhost:%'::text) AND ((request_uri <> ALL ('{/health,/nginx_status}'::text[])) OR (request_uri IS NULL)) AND ((request_uri !~~ '/.well-known/%'::text) OR (request_uri IS NULL)) AND ((request_uri !~~ '/__npg_canary%'::text) OR (request_uri IS NULL)) AND (log_type = 'access'::log_type) AND (host <> ALL ('{localhost,nginx,127.0.0.1,"",_,0.0.0.0}'::text[])))
+            Rows Removed by Filter: 833
+            Shared Hit Blocks: 3412
+            Shared Read Blocks: 204
+    Bitmap Heap Scan Relation Name=dashboard_stats_hourly Subplan Name=SubPlan 2 (actual=0.0..0.0ms rows=0 loops=0)
+      Recheck Cond: (proxy_host_id IS NULL)
+      Bitmap Index Scan Index Name=idx_dashboard_stats_hourly_null_host_bucket (actual=0.0..0.0ms rows=0 loops=0)
+
+2h-run1-host: planning=0.892ms execution=85.187ms
+ModifyTable Operation=Insert Relation Name=dashboard_stats_hourly (actual=85.122..85.124ms rows=0 loops=1)
+  Shared Hit Blocks: 7984
+  Subquery Scan (actual=82.39..82.941ms rows=380 loops=1)
+    Shared Hit Blocks: 3619
+    Aggregate Strategy=Hashed (actual=82.363..82.582ms rows=380 loops=1)
+      Group Key: ['l.proxy_host_id', "date_trunc('hour'::text, l.created_at, 'UTC'::text)"]
+      Peak Memory Usage: 1041
+      Shared Hit Blocks: 3619
+      Hash Join Join Type=Inner (actual=0.063..65.699ms rows=79167 loops=1)
+        Hash Cond: (l.proxy_host_id = p.id)
+        Shared Hit Blocks: 3619
+        Index Scan Relation Name=logs_day_30 Index Name=logs_day_30_created_at_idx (actual=0.011..30.798ms rows=82500 loops=1)
+          Index Cond: ((created_at >= '2026-10-30 22:00:00+00'::timestamp with time zone) AND (created_at < '2026-10-31 00:00:00+00'::timestamp with time zone))
+          Filter: ((host IS NOT NULL) AND (host !~~ 'localhost:%'::text) AND ((request_uri <> ALL ('{/health,/nginx_status}'::text[])) OR (request_uri IS NULL)) AND ((request_uri !~~ '/.well-known/%'::text) OR (request_uri IS NULL)) AND ((request_uri !~~ '/__npg_canary%'::text) OR (request_uri IS NULL)) AND (log_type = 'access'::log_type) AND (host <> ALL ('{localhost,nginx,127.0.0.1,"",_,0.0.0.0}'::text[])))
+          Rows Removed by Filter: 833
+          Shared Hit Blocks: 3616
+        Hash (actual=0.046..0.047ms rows=200 loops=1)
+          Hash Batches: 1
+          Peak Memory Usage: 18
+          Shared Hit Blocks: 3
+          Seq Scan Relation Name=proxy_hosts (actual=0.007..0.028ms rows=200 loops=1)
+            Shared Hit Blocks: 3
+
+2h-run3-legacy-cleanup: planning=0.58ms execution=703.4ms
+ModifyTable Operation=Delete Relation Name=dashboard_stats_hourly (actual=702.301..702.304ms rows=0 loops=1)
+  Shared Hit Blocks: 96609
+  Nested Loop Join Type=Anti (actual=702.3..702.302ms rows=0 loops=1)
+    Shared Hit Blocks: 96609
+    Bitmap Heap Scan Relation Name=dashboard_stats_hourly (actual=15.16..15.507ms rows=380 loops=1)
+      Recheck Cond: ((hour_bucket >= '2026-10-30 22:00:00+00'::timestamp with time zone) AND (hour_bucket < '2026-10-31 00:00:00+00'::timestamp with time zone))
+      Filter: (proxy_host_id IS NOT NULL)
+      Rows Removed by Filter: 2
+      Shared Hit Blocks: 31
+      Bitmap Index Scan Index Name=dashboard_stats_hourly_hour_bucket_idx (actual=0.022..0.022ms rows=1303 loops=1)
+        Index Cond: ((hour_bucket >= '2026-10-30 22:00:00+00'::timestamp with time zone) AND (hour_bucket < '2026-10-31 00:00:00+00'::timestamp with time zone))
+        Shared Hit Blocks: 1
+    Append (actual=1.806..1.806ms rows=1 loops=380)
+      Shared Hit Blocks: 96578
+      Bitmap Heap Scan Relation Name=logs_day_28 (actual=0.0..0.0ms rows=0 loops=0)
+        Recheck Cond: ((proxy_host_id = d.proxy_host_id) AND (created_at >= d.hour_bucket) AND (created_at < (d.hour_bucket + '01:00:00'::interval)))
+        Filter: ((host IS NOT NULL) AND (host !~~ 'localhost:%'::text) AND ((request_uri <> ALL ('{/health,/nginx_status}'::text[])) OR (request_uri IS NULL)) AND ((request_uri !~~ '/.well-known/%'::text) OR (request_uri IS NULL)) AND ((request_uri !~~ '/__npg_canary%'::text) OR (request_uri IS NULL)) AND (log_type = 'access'::log_type) AND (host <> ALL ('{localhost,nginx,127.0.0.1,"",_,0.0.0.0}'::text[])))
+        BitmapAnd (actual=0.0..0.0ms rows=0 loops=0)
+          Bitmap Index Scan Index Name=logs_day_28_proxy_host_id_timestamp_idx (actual=0.0..0.0ms rows=0 loops=0)
+            Index Cond: (proxy_host_id = d.proxy_host_id)
+          Bitmap Index Scan Index Name=logs_day_28_created_at_idx (actual=0.0..0.0ms rows=0 loops=0)
+            Index Cond: ((created_at >= d.hour_bucket) AND (created_at < (d.hour_bucket + '01:00:00'::interval)))
+      Bitmap Heap Scan Relation Name=logs_day_29 (actual=0.0..0.0ms rows=0 loops=0)
+        Recheck Cond: ((proxy_host_id = d.proxy_host_id) AND (created_at >= d.hour_bucket) AND (created_at < (d.hour_bucket + '01:00:00'::interval)))
+        Filter: ((host IS NOT NULL) AND (host !~~ 'localhost:%'::text) AND ((request_uri <> ALL ('{/health,/nginx_status}'::text[])) OR (request_uri IS NULL)) AND ((request_uri !~~ '/.well-known/%'::text) OR (request_uri IS NULL)) AND ((request_uri !~~ '/__npg_canary%'::text) OR (request_uri IS NULL)) AND (log_type = 'access'::log_type) AND (host <> ALL ('{localhost,nginx,127.0.0.1,"",_,0.0.0.0}'::text[])))
+        BitmapAnd (actual=0.0..0.0ms rows=0 loops=0)
+          Bitmap Index Scan Index Name=logs_day_29_proxy_host_id_timestamp_idx (actual=0.0..0.0ms rows=0 loops=0)
+            Index Cond: (proxy_host_id = d.proxy_host_id)
+          Bitmap Index Scan Index Name=logs_day_29_created_at_idx (actual=0.0..0.0ms rows=0 loops=0)
+            Index Cond: ((created_at >= d.hour_bucket) AND (created_at < (d.hour_bucket + '01:00:00'::interval)))
+      Bitmap Heap Scan Relation Name=logs_day_30 (actual=1.802..1.802ms rows=1 loops=380)
+        Recheck Cond: ((proxy_host_id = d.proxy_host_id) AND (created_at >= d.hour_bucket) AND (created_at < (d.hour_bucket + '01:00:00'::interval)))
+        Filter: ((host IS NOT NULL) AND (host !~~ 'localhost:%'::text) AND ((request_uri <> ALL ('{/health,/nginx_status}'::text[])) OR (request_uri IS NULL)) AND ((request_uri !~~ '/.well-known/%'::text) OR (request_uri IS NULL)) AND ((request_uri !~~ '/__npg_canary%'::text) OR (request_uri IS NULL)) AND (log_type = 'access'::log_type) AND (host <> ALL ('{localhost,nginx,127.0.0.1,"",_,0.0.0.0}'::text[])))
+        Shared Hit Blocks: 96578
+        BitmapAnd (actual=1.776..1.776ms rows=0 loops=380)
+          Shared Hit Blocks: 96198
+          Bitmap Index Scan Index Name=logs_day_30_proxy_host_id_timestamp_idx (actual=0.468..0.468ms rows=5000 loops=380)
+            Index Cond: (proxy_host_id = d.proxy_host_id)
+            Shared Hit Blocks: 17728
+          Bitmap Index Scan Index Name=logs_day_30_created_at_idx (actual=1.129..1.129ms rows=41666 loops=380)
+            Index Cond: ((created_at >= d.hour_bucket) AND (created_at < (d.hour_bucket + '01:00:00'::interval)))
+            Shared Hit Blocks: 78470

@@ -82,6 +82,42 @@ func openRollupTestDB(t *testing.T) *sql.DB {
 	return db
 }
 
+func TestHourlyHostCleanupMatchesHostHourPairsAndFilters(t *testing.T) {
+	db := openRollupTestDB(t)
+	const a = "11111111-1111-4111-8111-111111111111"
+	const b = "22222222-2222-4222-8222-222222222222"
+	mustExec(t, db,
+		`INSERT INTO logs_partitioned (log_type, host, proxy_host_id, request_uri, created_at) VALUES
+		('access', 'a.example.com', '`+a+`', '/', '2026-10-08 10:00:00+00'),
+		('access', 'b.example.com', '`+b+`', '/', '2026-10-08 11:00:00+00'),
+		('access', 'a.example.com', '`+a+`', '/health', '2026-10-08 11:15:00+00'),
+		('access', 'b.example.com', '`+b+`', '/__npg_canary?x=1', '2026-10-08 10:15:00+00')`,
+		`INSERT INTO dashboard_stats_hourly (proxy_host_id, hour_bucket, total_requests) VALUES
+		('`+a+`', '2026-10-08 10:00:00+00', 1), ('`+a+`', '2026-10-08 11:00:00+00', 99),
+		('`+b+`', '2026-10-08 10:00:00+00', 99), ('`+b+`', '2026-10-08 11:00:00+00', 1),
+		('`+a+`', '2026-10-08 12:00:00+00', 42), (NULL, '2026-10-08 10:00:00+00', 2)`)
+	from, to := time.Date(2026, 10, 8, 10, 30, 0, 0, time.UTC), time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)
+	result, err := db.Exec(hourlyHostRollupCleanupSQL, from, to)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := result.RowsAffected(); n != 2 {
+		t.Fatalf("removed %d rows, want only two filtered/stale host-hour pairs", n)
+	}
+	var total int64
+	if err := db.QueryRow(`SELECT sum(total_requests) FROM dashboard_stats_hourly`).Scan(&total); err != nil || total != 46 {
+		t.Fatalf("remaining total=%d err=%v, want 46 including global and outside window", total, err)
+	}
+	// Empty replays still clean every host row, preserving global history.
+	mustExec(t, db, `DELETE FROM logs_partitioned`)
+	if _, err := db.Exec(hourlyHostRollupCleanupSQL, from, to); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT sum(total_requests) FROM dashboard_stats_hourly`).Scan(&total); err != nil || total != 44 {
+		t.Fatalf("empty replay total=%d err=%v, want 44", total, err)
+	}
+}
+
 // One recompute over a fixed window: the counts match what the logs hold,
 // NULL fields count, NPG's own and internal requests do not, the latency
 // average leaves out WebSocket upgrades and requests without a time, a wrong
@@ -170,10 +206,10 @@ func TestRecomputeHourlyRollup(t *testing.T) {
 		// 9 requests: 2xx /ok /fast and the NULL URI, 3xx /moved, 4xx three,
 		// 5xx one; the 101 counts as a request but in no class. Latency
 		// averages 0.1, 0.3, 0.2, 0.4 and 0.2 s: not the 101, not the NULLs.
-		"10:00":      {total: 9, s2: 3, s3: 1, s4: 3, s5: 1, avgMs: 240, timed: 5, bytes: 23246, waf: 1, rl: 1, bot: 1},
-		"11:00":      {total: 2, s2: 1, s4: 1, avgMs: 100, timed: 2, bytes: 40},
-		"12:00":      {},
-		"13:00":      {total: 777, s2: 777},
+		"10:00": {total: 9, s2: 3, s3: 1, s4: 3, s5: 1, avgMs: 240, timed: 5, bytes: 23246, waf: 1, rl: 1, bot: 1},
+		"11:00": {total: 2, s2: 1, s4: 1, avgMs: 100, timed: 2, bytes: 40},
+		"12:00": {},
+		"13:00": {total: 777, s2: 777},
 	}
 	got := read()
 	if len(got) != len(want) {
