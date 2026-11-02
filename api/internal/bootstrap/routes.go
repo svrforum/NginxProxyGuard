@@ -669,11 +669,11 @@ func registerExploitRuleRoutes(v1 *echo.Group, h *handler.ExploitBlockRuleHandle
 	g.PUT("/:id", echo.WrapHandler(http.HandlerFunc(h.UpdateRule)), wafWrite)
 	g.DELETE("/:id", echo.WrapHandler(http.HandlerFunc(h.DeleteRule)), wafWrite)
 	g.POST("/:id/toggle", echo.WrapHandler(http.HandlerFunc(h.ToggleRule)), wafWrite)
-	g.POST("/:id/global-exclude", echo.WrapHandler(http.HandlerFunc(h.AddGlobalExclusion)), wafWrite)
+	g.POST("/:id/global-exclude", handler.WithUsername(h.AddGlobalExclusion), wafWrite)
 	g.DELETE("/:id/global-exclude", echo.WrapHandler(http.HandlerFunc(h.RemoveGlobalExclusion)), wafWrite)
 	g.GET("/hosts", echo.WrapHandler(http.HandlerFunc(h.ListHostsWithExploitBlocking)), wafRead)
 	g.GET("/hosts/:hostId/rules", echo.WrapHandler(http.HandlerFunc(h.GetHostRules)), wafRead)
-	g.POST("/hosts/:hostId/rules/:ruleId/exclude", echo.WrapHandler(http.HandlerFunc(h.AddHostExclusion)), wafWrite)
+	g.POST("/hosts/:hostId/rules/:ruleId/exclude", handler.WithUsername(h.AddHostExclusion), wafWrite)
 	g.DELETE("/hosts/:hostId/rules/:ruleId/exclude", echo.WrapHandler(http.HandlerFunc(h.RemoveHostExclusion)), wafWrite)
 }
 
