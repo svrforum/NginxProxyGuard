@@ -21,6 +21,8 @@ type RedirectHostConfigData struct {
 	HTTPPort   string
 	HTTPSPort  string
 	EnableIPv6 bool
+	// The certificate names no OCSP responder: stapling is switched off (#359).
+	CertWithoutOCSP bool
 }
 
 // InvalidRedirectHostConfigError distinguishes an unsafe legacy/restored row
@@ -113,7 +115,9 @@ server {
     ssl_certificate /etc/nginx/certs/{{certPath .Host}}/fullchain.pem;
     ssl_certificate_key /etc/nginx/certs/{{certPath .Host}}/privkey.pem;
     ssl_early_data on;
-
+{{if .CertWithoutOCSP}}    # No OCSP responder in this certificate: stapling would only warn (#359)
+    ssl_stapling off;
+{{end}}
     # HTTP/3 Alt-Svc header (1 hour cache for faster fallback on connection issues)
     add_header Alt-Svc 'h3=":{{.HTTPSPort}}"; ma=3600' always;
 
@@ -164,6 +168,9 @@ func (m *Manager) GenerateRedirectConfig(ctx context.Context, host *model.Redire
 		HTTPPort:   m.httpPort,
 		HTTPSPort:  m.httpsPort,
 		EnableIPv6: m.enableIPv6,
+	}
+	if host.SSLEnabled && host.CertificateID != nil {
+		data.CertWithoutOCSP = certLacksOCSPResponder(filepath.Join(m.certsPath, *host.CertificateID, "fullchain.pem"))
 	}
 
 	var buf bytes.Buffer

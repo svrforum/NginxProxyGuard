@@ -224,6 +224,8 @@ server {
 
     ssl_certificate     /etc/nginx/certs/default-selfsigned.crt;
     ssl_certificate_key /etc/nginx/certs/default-selfsigned.key;
+    # Self-signed, so no OCSP responder: stapling would only warn (#359).
+    ssl_stapling        off;
 
     # This block answers 444 unconditionally, so it takes the same 497 rescue
     # unconditionally — cleartext sent to the HTTPS port with a loopback or

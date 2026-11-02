@@ -92,6 +92,7 @@ type ProxyHostConfigData struct {
 	HTTPPort                      string                // HTTP listen port (default: 80)
 	HTTPSPort                     string                // HTTPS listen port (default: 443)
 	EnableIPv6                    bool                  // Enable IPv6 listen directives
+	CertWithoutOCSP               bool                  // The certificate names no OCSP responder: the server block switches stapling off (#359)
 }
 
 // CloudChallenge reports whether cloud provider blocking challenges visitors

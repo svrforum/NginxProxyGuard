@@ -756,6 +756,12 @@ func (m *Manager) GenerateConfigFull(ctx context.Context, data ProxyHostConfigDa
 		}
 	}
 	_ = sslTemporarilyDisabled // Will be used for adding comments to config in future
+	// A ssl_stapling of the host's own in Advanced Config lands in the same
+	// server block, where a second one fails nginx -t.
+	if data.Host.SSLEnabled && data.Host.CertificateID != nil &&
+		!advancedConfigHasTopLevel(data.Host.AdvancedConfig, "ssl_stapling") {
+		data.CertWithoutOCSP = certLacksOCSPResponder(filepath.Join(m.certsPath, *data.Host.CertificateID, "fullchain.pem"))
+	}
 
 	// Generate cloud IPs include file if there are blocked cloud providers
 	// This significantly reduces the main config file size
