@@ -7,6 +7,7 @@
 #   1.26.6        — crypto/tls, encoding/asn1, encoding/xml, html/template, net,
 #                   net/http, net/url, and CVE-2026-56865 (sumdb tile forgery →
 #                   GOSUMDB bypass and module-cache poisoning)
+#   1.27.3        — crypto/x509 (#355)
 # Release candidates are refused on purpose: their tags are frozen rather than
 # patched, so an RC that outranks the stable line silently drops these fixes.
 # .github/dependabot.yml carries the matching ignore rule. (#245)
