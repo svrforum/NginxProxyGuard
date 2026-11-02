@@ -658,6 +658,7 @@ CREATE TABLE IF NOT EXISTS public.global_settings (
     worker_processes integer DEFAULT 0 NOT NULL,
     worker_connections integer DEFAULT 8192 NOT NULL,
     worker_rlimit_nofile integer,
+    worker_shutdown_timeout integer,
     multi_accept boolean DEFAULT true NOT NULL,
     use_epoll boolean DEFAULT true NOT NULL,
     sendfile boolean DEFAULT true NOT NULL,
@@ -4836,3 +4837,7 @@ ALTER TABLE public.global_geo_restrictions ADD COLUMN IF NOT EXISTS allowed_host
 ALTER TABLE public.rate_limits ADD COLUMN IF NOT EXISTS whitelist_hostnames text[] DEFAULT '{}'::text[] NOT NULL;
 ALTER TABLE public.global_rate_limits ADD COLUMN IF NOT EXISTS whitelist_hostnames text[] DEFAULT '{}'::text[] NOT NULL;
 ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS global_trusted_hostnames text[] DEFAULT '{}'::text[] NOT NULL;
+
+-- Seconds an old nginx worker keeps its connections after a reload (#358).
+-- NULL takes the built-in default, 0 waits for every connection.
+ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS worker_shutdown_timeout integer;

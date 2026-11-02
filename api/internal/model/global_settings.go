@@ -10,6 +10,9 @@ type GlobalSettings struct {
 	WorkerProcesses    int  `json:"worker_processes" db:"worker_processes"`
 	WorkerConnections  int  `json:"worker_connections" db:"worker_connections"`
 	WorkerRlimitNofile *int `json:"worker_rlimit_nofile,omitempty" db:"worker_rlimit_nofile"`
+	// Seconds an old worker keeps its connections after a reload: nil takes
+	// DefaultWorkerShutdownTimeout, 0 waits for every connection (#358).
+	WorkerShutdownTimeout *int `json:"worker_shutdown_timeout,omitempty" db:"worker_shutdown_timeout"`
 
 	// Event settings
 	MultiAccept bool `json:"multi_accept" db:"multi_accept"`
@@ -126,12 +129,24 @@ type GlobalSettings struct {
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 }
 
+// DefaultWorkerShutdownTimeout is how long, in seconds, an old nginx worker may
+// keep serving its connections after a reload when the setting is unset.
+// Without a limit, a worker held open by a WebSocket or a long download never
+// exits, and with frequent reloads they pile up (#358). ingress-nginx ships
+// the same value.
+const DefaultWorkerShutdownTimeout = 240
+
+// MaxWorkerShutdownTimeout caps the setting at a day.
+const MaxWorkerShutdownTimeout = 86400
+
 // UpdateGlobalSettingsRequest is the request to update global settings
 type UpdateGlobalSettingsRequest struct {
 	// Worker settings
 	WorkerProcesses    *int `json:"worker_processes,omitempty"`
 	WorkerConnections  *int `json:"worker_connections,omitempty"`
 	WorkerRlimitNofile *int `json:"worker_rlimit_nofile,omitempty"`
+	// 0 to MaxWorkerShutdownTimeout seconds; 0 waits for every connection.
+	WorkerShutdownTimeout *int `json:"worker_shutdown_timeout,omitempty"`
 
 	// Event settings
 	MultiAccept *bool `json:"multi_accept,omitempty"`

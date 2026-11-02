@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -76,6 +77,9 @@ func (h *SettingsHandler) UpdateGlobalSettings(c echo.Context) error {
 	var req model.UpdateGlobalSettingsRequest
 	if err := c.Bind(&req); err != nil {
 		return badRequestError(c, err.Error())
+	}
+	if v := req.WorkerShutdownTimeout; v != nil && (*v < 0 || *v > model.MaxWorkerShutdownTimeout) {
+		return badRequestError(c, fmt.Sprintf("invalid worker_shutdown_timeout: 0 to %d seconds, 0 waits for every connection", model.MaxWorkerShutdownTimeout))
 	}
 
 	settings, err := h.settingsService.UpdateGlobalSettings(c.Request().Context(), &req)

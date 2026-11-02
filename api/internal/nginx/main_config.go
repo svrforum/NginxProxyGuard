@@ -39,6 +39,7 @@ user nginx;
 worker_processes {{.WorkerProcessesStr}};
 {{if .WorkerRlimitNofileSet}}worker_rlimit_nofile {{.WorkerRlimitNofile}};
 {{else}}worker_rlimit_nofile 65535;
+{{end}}{{if .WorkerShutdownTimeout}}worker_shutdown_timeout {{.WorkerShutdownTimeout}}s;
 {{end}}error_log /var/log/nginx/error.log {{.ErrorLogLevel}};
 pid /var/run/nginx.pid;
 
@@ -368,6 +369,8 @@ type MainConfigData struct {
 	WorkerProcessesStr    string // "auto" when 0, else the number
 	WorkerRlimitNofileSet bool
 	WorkerRlimitNofile    int
+	// Seconds; 0 leaves the directive out, so old workers wait for every connection.
+	WorkerShutdownTimeout int
 	WorkerConnections     int
 	MultiAccept           bool
 	UseEpoll              bool
@@ -662,6 +665,12 @@ func buildMainConfigData(s *model.GlobalSettings, trusted TrustedIPConfig, proxi
 	if s.WorkerRlimitNofile != nil && *s.WorkerRlimitNofile > 0 {
 		d.WorkerRlimitNofileSet = true
 		d.WorkerRlimitNofile = *s.WorkerRlimitNofile
+	}
+	// Without it, a reload leaves every worker held open by a WebSocket or a
+	// long download running for good, and they pile up (#358).
+	d.WorkerShutdownTimeout = model.DefaultWorkerShutdownTimeout
+	if s.WorkerShutdownTimeout != nil {
+		d.WorkerShutdownTimeout = min(max(*s.WorkerShutdownTimeout, 0), model.MaxWorkerShutdownTimeout)
 	}
 	if !validErrorLogLevels[d.ErrorLogLevel] {
 		d.ErrorLogLevel = "warn"

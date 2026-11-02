@@ -26,13 +26,14 @@ func (r *BackupRepository) exportGlobalSettings(ctx context.Context) (*model.Glo
 		       COALESCE(ssl_ecdh_curve, 'X25519MLKEM768:X25519:secp256r1:secp384r1') as ssl_ecdh_curve,
 		       access_log_enabled, COALESCE(access_log_strip_query, false) as access_log_strip_query, error_log_level, resolver, resolver_timeout,
 		       custom_http_config, custom_stream_config,
-		       COALESCE(enable_ipv6, true) as enable_ipv6
+		       COALESCE(enable_ipv6, true) as enable_ipv6,
+		       worker_shutdown_timeout
 		FROM global_settings LIMIT 1
 	`
 
 	var gs model.GlobalSettingsExport
 	var resolver, resolverTimeout, customHttp, customStream sql.NullString
-	var customInt sql.NullInt64
+	var customInt, shutdownTimeout sql.NullInt64
 	var enableIPv6 bool
 
 	err := r.db.QueryRowContext(ctx, query).Scan(
@@ -50,6 +51,7 @@ func (r *BackupRepository) exportGlobalSettings(ctx context.Context) (*model.Glo
 		&gs.AccessLogEnabled, &gs.AccessLogStripQuery, &gs.ErrorLogLevel, &resolver, &resolverTimeout,
 		&customHttp, &customStream,
 		&enableIPv6,
+		&shutdownTimeout,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -61,6 +63,10 @@ func (r *BackupRepository) exportGlobalSettings(ctx context.Context) (*model.Glo
 	if customInt.Valid {
 		v := int(customInt.Int64)
 		gs.WorkerRlimitNofile = &v
+	}
+	if shutdownTimeout.Valid {
+		v := int(shutdownTimeout.Int64)
+		gs.WorkerShutdownTimeout = &v
 	}
 	gs.Resolver = resolver.String
 	gs.ResolverTimeout = resolverTimeout.String

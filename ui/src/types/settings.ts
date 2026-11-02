@@ -9,6 +9,7 @@ export interface GlobalSettings {
   worker_processes: number;
   worker_connections: number;
   worker_rlimit_nofile?: number;
+  worker_shutdown_timeout?: number;
 
   // Event settings
   multi_accept: boolean;
@@ -128,6 +129,7 @@ export interface GlobalSettings {
 export interface UpdateSettingsRequest {
   worker_processes?: number;
   worker_connections?: number;
+  worker_shutdown_timeout?: number;
   keepalive_timeout?: number;
   client_max_body_size?: string;
   gzip_enabled?: boolean;

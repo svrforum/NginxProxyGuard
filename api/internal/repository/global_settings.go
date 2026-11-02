@@ -76,13 +76,14 @@ func (r *GlobalSettingsRepository) getFromDB(ctx context.Context) (*model.Global
 		       COALESCE(open_file_cache_valid, '30s') as open_file_cache_valid,
 		       COALESCE(open_file_cache_min_uses, 2) as open_file_cache_min_uses,
 		       COALESCE(open_file_cache_errors, true) as open_file_cache_errors,
+		       worker_shutdown_timeout,
 		       created_at, updated_at
 		FROM global_settings
 		LIMIT 1
 	`
 
 	var s model.GlobalSettings
-	var workerRlimitNofile sql.NullInt64
+	var workerRlimitNofile, workerShutdownTimeout sql.NullInt64
 	var resolver, resolverTimeout sql.NullString
 	var customHTTP, customStream sql.NullString
 
@@ -111,6 +112,7 @@ func (r *GlobalSettingsRepository) getFromDB(ctx context.Context) (*model.Global
 		&s.ProxyBuffering, &s.ProxyRequestBuffering,
 		&s.OpenFileCacheEnabled, &s.OpenFileCacheMax, &s.OpenFileCacheInactive,
 		&s.OpenFileCacheValid, &s.OpenFileCacheMinUses, &s.OpenFileCacheErrors,
+		&workerShutdownTimeout,
 		&s.CreatedAt, &s.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
@@ -197,6 +199,10 @@ func (r *GlobalSettingsRepository) getFromDB(ctx context.Context) (*model.Global
 	if workerRlimitNofile.Valid {
 		v := int(workerRlimitNofile.Int64)
 		s.WorkerRlimitNofile = &v
+	}
+	if workerShutdownTimeout.Valid {
+		v := int(workerShutdownTimeout.Int64)
+		s.WorkerShutdownTimeout = &v
 	}
 	s.Resolver = resolver.String
 	s.ResolverTimeout = resolverTimeout.String
@@ -295,6 +301,7 @@ func (r *GlobalSettingsRepository) Update(ctx context.Context, req *model.Update
 			ssl_ecdh_curve = CASE WHEN $67 != '' THEN $67 ELSE ssl_ecdh_curve END,
 			enable_ipv6 = COALESCE($68, enable_ipv6),
 			access_log_strip_query = COALESCE($69, access_log_strip_query),
+			worker_shutdown_timeout = COALESCE($70, worker_shutdown_timeout),
 			updated_at = NOW()
 	`
 
@@ -339,6 +346,7 @@ func (r *GlobalSettingsRepository) Update(ctx context.Context, req *model.Update
 		req.SSLECDHCurve,
 		req.EnableIPv6,
 		req.AccessLogStripQuery,
+		req.WorkerShutdownTimeout,
 	)
 	if err != nil {
 		return nil, err

@@ -300,6 +300,8 @@ type GlobalSettingsExport struct {
 	WorkerProcesses    int  `json:"worker_processes"`
 	WorkerConnections  int  `json:"worker_connections"`
 	WorkerRlimitNofile *int `json:"worker_rlimit_nofile,omitempty"`
+	// Absent from a backup taken before v2.66.0: the restored row keeps it unset.
+	WorkerShutdownTimeout *int `json:"worker_shutdown_timeout,omitempty"`
 
 	// Event settings
 	MultiAccept bool `json:"multi_accept"`

@@ -21,6 +21,16 @@ export default function WorkerTab({ getNumberValue, getBoolValue, handleChange }
             className={inputClass}
           />
         </SettingField>
+        <SettingField settingKey="worker_shutdown_timeout">
+          <input
+            type="number"
+            min={0}
+            max={86400}
+            value={getNumberValue('worker_shutdown_timeout', 240)}
+            onChange={(e) => handleChange('worker_shutdown_timeout', parseInt(e.target.value))}
+            className={inputClass}
+          />
+        </SettingField>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 border-t border-slate-200 dark:border-slate-700 pt-6">
         <CheckboxField

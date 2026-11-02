@@ -757,6 +757,10 @@
         "label": "Worker Connections",
         "description": "Maximum number of simultaneous connections per worker process. Higher values allow more concurrent connections."
       },
+      "worker_shutdown_timeout": {
+        "label": "Worker Shutdown Timeout (s)",
+        "description": "After a reload, an old worker keeps serving its open connections (WebSockets, long downloads) for at most this many seconds, then closes them. 0 = wait until every connection ends."
+      },
       "multi_accept": {
         "label": "Multi Accept",
         "description": "If enabled, a worker will accept all new connections at once. Improves performance under high traffic."
@@ -1341,6 +1345,7 @@
     "global": {
       "worker_processes": "Number of Nginx worker processes. Set to 'auto' to match CPU cores. Matching core count is recommended for high traffic.",
       "worker_connections": "Max simultaneous connections per worker. Too low values can cause connection errors. (Default: 1024)",
+      "worker_shutdown_timeout": "Bounds how long old workers stay after each configuration change. Without a limit, long-lived connections keep them running and they pile up. Lower it if nginx reloads often; raise it if long downloads get cut off. (Default: 240)",
       "multi_accept": "If enabled, workers accept multiple connections at once. Can improve performance under very high traffic.",
       "use_epoll": "Uses epoll, a high-performance event processing method on Linux. Essential for handling many concurrent connections.",
       "keepalive_timeout": "Time to keep connection alive. Too long wastes memory, too short causes reconnection overhead.",

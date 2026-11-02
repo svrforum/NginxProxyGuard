@@ -1853,6 +1853,11 @@ END $$;`,
 			desc: "system_settings.global_trusted_hostnames (#320)",
 			sql:  `ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS global_trusted_hostnames text[] DEFAULT '{}'::text[] NOT NULL`,
 		},
+		{
+			// NULL takes model.DefaultWorkerShutdownTimeout; 0 waits for every connection.
+			desc: "global_settings.worker_shutdown_timeout (#358)",
+			sql:  `ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS worker_shutdown_timeout integer`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

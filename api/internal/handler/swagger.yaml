@@ -12852,6 +12852,14 @@ components:
           type: string
         worker_connections:
           type: integer
+        worker_shutdown_timeout:
+          type: integer
+          minimum: 0
+          maximum: 86400
+          description: >-
+            Seconds an old worker keeps serving its open connections after a
+            reload. Omitted means the default, 240; 0 waits for every
+            connection. Outside 0-86400 is 400.
         keepalive_timeout:
           type: integer
         client_max_body_size:
