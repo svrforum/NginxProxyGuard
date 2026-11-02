@@ -447,3 +447,11 @@ func (r *ChallengeRepository) GetChallengeStats(ctx context.Context, proxyHostID
 
 	return &stats, nil
 }
+
+// ProxyHostExists reports whether a proxy host with this ID exists. An ID
+// that is not a UUID comes back as the driver's 22P02 error.
+func (r *ChallengeRepository) ProxyHostExists(ctx context.Context, id string) (bool, error) {
+	var exists bool
+	err := r.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM proxy_hosts WHERE id = $1)`, id).Scan(&exists)
+	return exists, err
+}

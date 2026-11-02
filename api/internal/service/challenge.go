@@ -22,6 +22,7 @@ var (
 	ErrInvalidToken      = errors.New("invalid or expired token")
 	ErrChallengeDisabled = errors.New("challenge is not enabled")
 	ErrMissingConfig     = errors.New("CAPTCHA configuration is missing")
+	ErrChallengeHostGone = errors.New("proxy host not found")
 )
 
 type ChallengeService struct {
@@ -69,6 +70,20 @@ func (s *ChallengeService) DeleteConfig(ctx context.Context, proxyHostID *string
 // VerifyCaptcha verifies CAPTCHA response and issues a bypass token
 func (s *ChallengeService) VerifyCaptcha(ctx context.Context, req *model.VerifyCaptchaRequest, clientIP, userAgent string) (*model.VerifyCaptchaResponse, error) {
 	startTime := time.Now()
+
+	// The token is stored against its proxy host. An ID naming no host passed
+	// the CAPTCHA on the global config and then failed on the foreign key, a
+	// 500 (#356); refuse it before asking the provider. A malformed ID comes
+	// back as the driver's 22P02, which the handlers answer 400.
+	if req.ProxyHostID != "" {
+		exists, err := s.repo.ProxyHostExists(ctx, req.ProxyHostID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to look up proxy host: %w", err)
+		}
+		if !exists {
+			return nil, ErrChallengeHostGone
+		}
+	}
 
 	// Get config (try proxy host first, then global)
 	var config *model.ChallengeConfig

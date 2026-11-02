@@ -185,6 +185,9 @@ func (h *ChallengeHandler) VerifyCaptcha(c echo.Context) error {
 		if err == service.ErrMissingConfig {
 			return c.JSON(http.StatusServiceUnavailable, map[string]string{"error": "CAPTCHA is not configured"})
 		}
+		if err == service.ErrChallengeHostGone {
+			return c.JSON(http.StatusNotFound, map[string]string{"error": "Proxy host not found"})
+		}
 		return directInternalError(c, err)
 	}
 
@@ -225,6 +228,12 @@ func (h *ChallengeHandler) VerifyAndRedirect(c echo.Context) error {
 
 	resp, err := h.svc.VerifyCaptcha(c.Request().Context(), req, clientIP, userAgent)
 	if err != nil {
+		// A page naming a host that is gone, or an ID that is not one, sends
+		// the visitor back as a failed CAPTCHA does. The 503 page below
+		// refreshes itself and would repeat forever (#356).
+		if _, _, badID := ClientStatusForDBError(err); badID || err == service.ErrChallengeHostGone {
+			return c.Redirect(http.StatusFound, referer)
+		}
 		// Service-level error (CAPTCHA provider unreachable, config missing, etc.)
 		// Return a 503 error page instead of silently redirecting back to challenge
 		// page, which would cause an infinite loop.

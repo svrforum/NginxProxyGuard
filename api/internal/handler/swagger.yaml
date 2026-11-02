@@ -3220,6 +3220,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '404':
+          description: "`proxy_host_id` names no proxy host"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '503':
           description: Challenge not enabled, or no CAPTCHA configured, in the selected config
           content:
