@@ -46,21 +46,34 @@ jobs:
           fi
           echo "✓ No non-allowlisted email addresses in tracked files."
 
-      - name: Check commit author identity (must be GitHub noreply)
+      - name: Check our commit identity (must be GitHub noreply)
         env:
           # GitHub-controlled SHAs / event name passed via env (never interpolated
           # straight into the script) per Actions injection-safety guidance.
           EVENT_NAME: ${{ github.event_name }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPO: ${{ github.repository }}
           PUSH_BEFORE: ${{ github.event.before }}
           PUSH_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          # The new commits in this push/PR must be authored with a *.noreply.github.com
-          # address — a personal email in commit metadata is also a leak. Range is
-          # computed from the event; falls back to the last commit for new branches.
+          # Our own new commits must carry a *.noreply.github.com address — a
+          # personal email in commit metadata is also a leak. A contributor's address
+          # is theirs to publish, so only our identity is checked, and that is the
+          # committer: a commit made here has us as author and committer, while a
+          # pull request merged on github.com keeps the contributor as author and
+          # has the merging account's noreply (or GitHub's own) as committer.
+          # Commits a merge commit brings in under its second parent are skipped
+          # with --first-parent, and a pull request from a fork is not checked.
+          # Range is computed from the event; falls back to the last commit for
+          # new branches.
           if [ "$EVENT_NAME" = "pull_request" ]; then
+            if [ "$PR_HEAD_REPO" != "$REPO" ]; then
+              echo "✓ Pull request from a fork: its commit authors are the contributor's own."
+              exit 0
+            fi
             RANGE="${PR_BASE_SHA}..${PR_HEAD_SHA}"
           else
             if [ -z "$PUSH_BEFORE" ] || echo "$PUSH_BEFORE" | grep -qE '^0+$'; then
@@ -69,15 +82,16 @@ jobs:
               RANGE="${PUSH_BEFORE}..${PUSH_SHA}"
             fi
           fi
-          bad="$(git log --format='%H %ae' "$RANGE" 2>/dev/null | grep -ivE 'noreply\.github\.com' || true)"
+          bad="$(git log --first-parent --format='%H %ae %ce' "$RANGE" 2>/dev/null \
+            | awk 'tolower($3) !~ /noreply[.@]github\.com$/ { print $1 }' || true)"
           if [ -n "$bad" ]; then
             # Commit SHAs only, for the same reason: the address must not be
             # reprinted into a log anyone can read.
-            echo "::error::Commit author(s) not using a GitHub noreply address."
+            echo "::error::Commit(s) made with an identity that is not a GitHub noreply address."
             echo "Offending commits (address withheld — this log is public):"
             echo "$bad" | cut -d' ' -f1
             echo ""
-            echo "Check locally with: git log --format='%an <%ae>' -1 <sha>"
+            echo "Check locally with: git log --format='%an <%ae> / %cn <%ce>' -1 <sha>"
             exit 1
           fi
-          echo "✓ All new commit authors use a GitHub noreply address."
+          echo "✓ All new commits of ours use a GitHub noreply address."
