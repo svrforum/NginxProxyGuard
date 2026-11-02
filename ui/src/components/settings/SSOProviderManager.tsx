@@ -511,7 +511,7 @@ export function SSOProviderManager() {
 
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label={tr('sso.fields.groupClaim')}>
-                <input aria-label="sso-group-claim" value={form.group_claim} onChange={(e) => setForm({ ...form, group_claim: e.target.value })} className={inputCls} />
+                <input aria-label="sso-group-claim" maxLength={64} value={form.group_claim} onChange={(e) => setForm({ ...form, group_claim: e.target.value })} className={inputCls} />
               </Field>
               <Field label={tr('sso.fields.requiredGroup')} hint={tr('sso.fields.requiredGroupHint')}>
                 <input aria-label="sso-required-group" value={form.required_group} onChange={(e) => setForm({ ...form, required_group: e.target.value })} className={inputCls} />

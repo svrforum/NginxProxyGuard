@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/lib/pq"
 )
@@ -144,6 +145,11 @@ func (r *CreateSSOProviderRequest) Validate(isCreate bool) error {
 	}
 	if r.GroupClaim == "" {
 		r.GroupClaim = "groups"
+	}
+	// The column is varchar(64): a longer claim reached the INSERT and came
+	// back as a 500 (#353).
+	if utf8.RuneCountInString(r.GroupClaim) > 64 {
+		return fmt.Errorf("invalid group_claim: at most 64 characters")
 	}
 
 	r.AllowedEmails = normaliseList(r.AllowedEmails, strings.ToLower)

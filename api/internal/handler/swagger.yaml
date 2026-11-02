@@ -15067,6 +15067,7 @@ components:
             type: string
         group_claim:
           type: string
+          maxLength: 64
           description: Which ID-token claim carries group membership. Defaults to `groups`.
         required_group:
           type: string
@@ -15159,7 +15160,8 @@ components:
             type: string
         group_claim:
           type: string
-          description: Empty becomes `groups`.
+          maxLength: 64
+          description: Empty becomes `groups`. Longer than 64 characters is 400.
         required_group:
           type: string
         default_role_id:

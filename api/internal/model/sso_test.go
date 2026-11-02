@@ -1,6 +1,9 @@
 package model
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func provider(mut func(*SSOProvider)) *SSOProvider {
 	p := &SSOProvider{GroupClaim: "groups"}
@@ -209,6 +212,29 @@ func TestValidateURLScheme(t *testing.T) {
 		}
 		if !tt.ok && err == nil {
 			t.Errorf("%s: expected rejection", tt.issuer)
+		}
+	}
+}
+
+// group_claim is varchar(64). A longer one used to reach the INSERT and come
+// back as a 500 (#353); the "invalid" prefix is what the handler answers 400.
+func TestValidateGroupClaimLength(t *testing.T) {
+	role := "r"
+	for _, tt := range []struct {
+		claim string
+		ok    bool
+	}{
+		{strings.Repeat("g", 64), true},
+		{strings.Repeat("g", 65), false},
+		{strings.Repeat("그", 64), true}, // characters, as varchar counts them
+	} {
+		r := &CreateSSOProviderRequest{
+			Slug: "p", Name: "P", IssuerURL: "https://id.example.com",
+			ClientID: "cid", ClientSecret: "s", DefaultRoleID: &role, GroupClaim: tt.claim,
+		}
+		err := r.Validate(false)
+		if tt.ok != (err == nil) || (err != nil && !strings.HasPrefix(err.Error(), "invalid group_claim")) {
+			t.Errorf("%d chars: err = %v", len([]rune(tt.claim)), err)
 		}
 	}
 }
