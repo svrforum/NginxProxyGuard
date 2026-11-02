@@ -230,6 +230,8 @@
     "method": "Method",
     "status": "Status",
     "requestURI": "Request URI",
+    "showAll": "Show all",
+    "showLess": "Show less",
     "protocol": "Protocol",
     "responseSize": "Response Size",
     "requestTime": "Request Time",

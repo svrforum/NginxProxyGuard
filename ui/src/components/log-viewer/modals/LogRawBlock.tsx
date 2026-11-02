@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import type { Log } from '../../../types/log';
+import { CopyButton } from './CopyButton';
 
 export function LogRawBlock({ rawLog }: { rawLog?: string }) {
   const { t } = useTranslation('logs');
@@ -62,18 +63,21 @@ export function URIRow({ log, onToggleBlockForm }: URIRowProps) {
       <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">{t('detail.requestURI')}</label>
       <div className="bg-slate-50 dark:bg-slate-800 p-2 rounded-lg">
         {log.request_uri ? (
-          <button
-            onClick={onToggleBlockForm}
-            className="group text-sm text-slate-900 dark:text-slate-200 font-mono break-all text-left hover:text-purple-700 dark:hover:text-purple-400 transition-colors"
-            title={t('blockURI.clickToBlock')}
-          >
-            <span className="flex items-center gap-2">
-              <span className="break-all">{log.request_uri}</span>
-              <svg className="w-4 h-4 flex-shrink-0 text-purple-500 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-              </svg>
-            </span>
-          </button>
+          <div className="flex items-start gap-2">
+            <button
+              onClick={onToggleBlockForm}
+              className="group flex-1 min-w-0 text-sm text-slate-900 dark:text-slate-200 font-mono break-all text-left hover:text-purple-700 dark:hover:text-purple-400 transition-colors"
+              title={t('blockURI.clickToBlock')}
+            >
+              <span className="flex items-center gap-2">
+                <span className="break-all">{log.request_uri}</span>
+                <svg className="w-4 h-4 flex-shrink-0 text-purple-500 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                </svg>
+              </span>
+            </button>
+            <CopyButton value={log.request_uri} />
+          </div>
         ) : (
           <span className="text-sm text-slate-900 dark:text-slate-200 font-mono">-</span>
         )}

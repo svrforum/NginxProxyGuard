@@ -230,6 +230,8 @@
     "method": "메서드",
     "status": "상태",
     "requestURI": "요청 URI",
+    "showAll": "전체 보기",
+    "showLess": "접기",
     "protocol": "프로토콜",
     "responseSize": "응답 크기",
     "requestTime": "요청 시간",

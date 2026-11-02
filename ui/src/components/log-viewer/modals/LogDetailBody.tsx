@@ -1,5 +1,6 @@
 import { useTranslation, Trans } from 'react-i18next';
 import { ContributingRules } from './ContributingRules';
+import { RequestURIBlock } from './RequestURIBlock';
 import type { Log } from '../../../types/log';
 import type { URIMatchType } from '../../../types/security';
 import { formatBytes } from '../utils';
@@ -547,6 +548,7 @@ export function ModsecLogBody({ log }: { log: Log }) {
           </p>
         </div>
       </div>
+      <RequestURIBlock uri={log.request_uri} />
       <div className="grid grid-cols-2 gap-4 mb-4">
         <div>
           <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">{t('detail.ruleId')}</label>
