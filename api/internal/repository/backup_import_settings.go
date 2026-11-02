@@ -26,6 +26,17 @@ func (r *BackupRepository) importGlobalSettings(ctx context.Context, tx *sql.Tx,
 		enableIPv6 = *gs.EnableIPv6
 	}
 
+	// A fresh install has no global_settings row until settings are first
+	// saved, and the UPDATE below changes nothing without one: a backup
+	// restored onto a new server reported success and dropped every global
+	// setting. Create the row the way GlobalSettingsRepository.Update does.
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO global_settings (id)
+		SELECT gen_random_uuid()
+		WHERE NOT EXISTS (SELECT 1 FROM global_settings LIMIT 1)`); err != nil {
+		return err
+	}
+
 	query := `
 		UPDATE global_settings SET
 			worker_processes = $1, worker_connections = $2, worker_rlimit_nofile = $3,
