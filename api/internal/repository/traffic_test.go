@@ -95,7 +95,7 @@ func TestTraffic24HoursUsesRollupsAndExactEdges(t *testing.T) {
 
 func TestTrafficCompletedBackfillDoesNotReadLogs(t *testing.T) {
 	db := openRollupTestDB(t)
-	mustExec(t, db, `INSERT INTO traffic_hourly_backfill (id, next_hour) VALUES (1, '2026-10-30 11:00:00+00')`,
+	mustExec(t, db, `INSERT INTO traffic_hourly_backfill (id, next_hour) VALUES (1, '2026-08-02 12:00:00+00')`,
 		`DROP TABLE logs_partitioned`)
 	_, _, complete, err := NewDashboardRepository(db).BackfillTrafficHourly(context.Background(), trafficTime(t, "2026-10-31T12:30:00Z"))
 	if err != nil || !complete {
@@ -108,7 +108,7 @@ func TestTrafficBackfillExistingCursorRollsBackAggregateWrites(t *testing.T) {
 	const host = "11111111-1111-4111-8111-111111111111"
 	mustExec(t, db,
 		`INSERT INTO proxy_hosts VALUES ('`+host+`', ARRAY['a.example.com'])`,
-		`INSERT INTO traffic_hourly_backfill (id, next_hour) VALUES (1, '2026-10-30 03:00:00+00')`,
+		`INSERT INTO traffic_hourly_backfill (id, next_hour) VALUES (1, '2026-10-30 09:00:00+00')`,
 		`INSERT INTO logs_partitioned (log_type, host, proxy_host_id, body_bytes_sent, created_at)
 		VALUES ('access', 'a.example.com', '`+host+`', 42, '2026-10-30 03:10:00+00')`,
 		`CREATE FUNCTION reject_checkpoint() RETURNS trigger LANGUAGE plpgsql AS $$
@@ -125,15 +125,15 @@ func TestTrafficBackfillExistingCursorRollsBackAggregateWrites(t *testing.T) {
 	if err := db.QueryRow(`SELECT next_hour FROM traffic_hourly_backfill WHERE id=1`).Scan(&cursor); err != nil {
 		t.Fatal(err)
 	}
-	if !cursor.Equal(trafficTime(t, "2026-10-30T03:00:00Z")) {
-		t.Fatalf("cursor advanced despite failure: %s", cursor)
+	if !cursor.Equal(trafficTime(t, "2026-10-30T09:00:00Z")) {
+		t.Fatalf("cursor moved despite failure: %s", cursor)
 	}
 	if err := db.QueryRow(`SELECT count(*) FROM dashboard_stats_hourly`).Scan(&rows); err != nil || rows != 0 {
 		t.Fatalf("failed batch persisted %d aggregates, err=%v", rows, err)
 	}
 	mustExec(t, db, `DROP TRIGGER reject_checkpoint ON traffic_hourly_backfill`)
 	from, to, complete, err := NewDashboardRepository(db).BackfillTrafficHourly(context.Background(), now)
-	if err != nil || complete || !from.Equal(cursor) || !to.Equal(trafficTime(t, "2026-10-30T09:00:00Z")) {
+	if err != nil || complete || !to.Equal(cursor) || !from.Equal(trafficTime(t, "2026-10-30T03:00:00Z")) {
 		t.Fatalf("retry from=%s to=%s complete=%v err=%v", from, to, complete, err)
 	}
 	var bytes int64
@@ -236,15 +236,15 @@ func TestTrafficHourlyBackfillResumesAfterRestartAndKeepsGlobalHistory(t *testin
 	ctx := context.Background()
 	repo := NewDashboardRepository(db)
 	from, to, complete, err := repo.BackfillTrafficHourly(ctx, now)
-	if err != nil || complete || !from.Equal(trafficTime(t, "2026-10-30T03:00:00Z")) ||
-		!to.Equal(trafficTime(t, "2026-10-30T09:00:00Z")) {
+	if err != nil || complete || !from.Equal(trafficTime(t, "2026-10-30T05:00:00Z")) ||
+		!to.Equal(trafficTime(t, "2026-10-30T11:00:00Z")) {
 		t.Fatalf("first backfill: from=%s to=%s complete=%v err=%v", from, to, complete, err)
 	}
 	// A fresh repository uses the persisted checkpoint, without double-counting.
 	repo = NewDashboardRepository(db)
 	from, to, complete, err = repo.BackfillTrafficHourly(ctx, now)
-	if err != nil || complete || !from.Equal(trafficTime(t, "2026-10-30T09:00:00Z")) ||
-		!to.Equal(trafficTime(t, "2026-10-30T11:00:00Z")) {
+	if err != nil || complete || !from.Equal(trafficTime(t, "2026-10-30T03:00:00Z")) ||
+		!to.Equal(trafficTime(t, "2026-10-30T05:00:00Z")) {
 		t.Fatalf("resumed backfill: from=%s to=%s complete=%v err=%v", from, to, complete, err)
 	}
 	_, _, complete, err = repo.BackfillTrafficHourly(ctx, now)
@@ -297,7 +297,7 @@ func TestTrafficHourlyBackfillRetriesFailedBatch(t *testing.T) {
 	}
 	mustExec(t, db, `ALTER TABLE logs_partitioned RENAME COLUMN missing_body_bytes_sent TO body_bytes_sent`)
 	from, _, _, err := NewDashboardRepository(db).BackfillTrafficHourly(context.Background(), now)
-	if err != nil || !from.Equal(trafficTime(t, "2026-10-30T03:00:00Z")) {
+	if err != nil || !from.Equal(trafficTime(t, "2026-10-30T05:00:00Z")) {
 		t.Fatalf("retry: from=%s err=%v", from, err)
 	}
 }
@@ -432,7 +432,7 @@ func TestTrafficHourlyBackfillConcurrentWorkers(t *testing.T) {
 		}
 		seen[key] = true
 	}
-	if len(seen) != 2 || !seen["2026-10-30T03:00:00Z"] || !seen["2026-10-30T09:00:00Z"] {
+	if len(seen) != 2 || !seen["2026-10-30T03:00:00Z"] || !seen["2026-10-30T05:00:00Z"] {
 		t.Errorf("claimed ranges: %+v", seen)
 	}
 	var requests, bytes int64

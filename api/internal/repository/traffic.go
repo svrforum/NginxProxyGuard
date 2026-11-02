@@ -261,7 +261,7 @@ const (
 	trafficBackfillLookback = 90 * 24 * time.Hour
 	trafficBackfillBatch    = 6 * time.Hour
 	// The regular collector rebuilds the current and previous 25 UTC hours.
-	// Historical backfill stops before that window to avoid overlapping writes.
+	// Historical backfill starts below that window to avoid overlapping writes.
 	trafficBackfillRecent = 25 * time.Hour
 )
 
@@ -269,10 +269,13 @@ const (
 // access logs. It never changes the global rollup: global rows may predate the
 // retained raw logs and must not be erased by a history rebuild. A persisted
 // cursor and one transaction per 6-hour batch make it safe to interrupt, retry
-// and restart. The checkpoint begins at the earliest available log within the
-// UI's 90-day search horizon, so retention gaps are not scanned unnecessarily.
-// A completed batch returns its [from, to) and complete=false; once there is
-// nothing left to process it returns complete=true.
+// and restart. Batches run newest first, down from the regular collector's
+// window: an hour the backfill has not reached reads as unclassified, and
+// starting from the oldest log left the 7- and 30-day views mostly
+// unclassified for hours after an upgrade. It stops at the earliest available
+// log within the UI's 90-day search horizon, so retention gaps are not
+// scanned. A completed batch returns its [from, to) and complete=false; once
+// there is nothing left to process it returns complete=true.
 func (r *DashboardRepository) BackfillTrafficHourly(ctx context.Context, now time.Time) (from, to time.Time, complete bool, err error) {
 	hour := now.UTC().Truncate(time.Hour)
 	oldest := hour.Add(-trafficBackfillLookback)
@@ -283,39 +286,51 @@ func (r *DashboardRepository) BackfillTrafficHourly(ctx context.Context, now tim
 	}
 	defer tx.Rollback()
 
-	// Lock an existing checkpoint before considering initialization. Resumed
-	// batches never run the MIN scan. If two workers initialize together, the
-	// unique key serializes the insert and the subsequent FOR UPDATE reads
-	// the winning worker's committed cursor under READ COMMITTED.
-	err = tx.QueryRowContext(ctx, `SELECT next_hour FROM traffic_hourly_backfill WHERE id = 1 FOR UPDATE`).Scan(&from)
+	// The cursor is the oldest hour already filled; the next batch ends there.
+	// Lock an existing checkpoint before considering initialization. If two
+	// workers initialize together, the unique key serializes the insert and
+	// the subsequent FOR UPDATE reads the winning worker's committed cursor
+	// under READ COMMITTED.
+	err = tx.QueryRowContext(ctx, `SELECT next_hour FROM traffic_hourly_backfill WHERE id = 1 FOR UPDATE`).Scan(&to)
 	if err == sql.ErrNoRows {
 		_, err = tx.ExecContext(ctx, `
-		INSERT INTO traffic_hourly_backfill (id, next_hour)
-		SELECT 1, GREATEST(
-		    COALESCE(date_trunc('hour', MIN(created_at), 'UTC'), $2::timestamptz),
-		    $1::timestamptz)
-		FROM logs_partitioned
-		WHERE log_type = 'access' AND created_at >= $1 AND created_at < $2
-		ON CONFLICT (id) DO NOTHING`, oldest, cutoff)
+		INSERT INTO traffic_hourly_backfill (id, next_hour) VALUES (1, $1)
+		ON CONFLICT (id) DO NOTHING`, cutoff)
 		if err != nil {
 			return from, to, false, fmt.Errorf("initialize traffic backfill: %w", err)
 		}
-		err = tx.QueryRowContext(ctx, `SELECT next_hour FROM traffic_hourly_backfill WHERE id = 1 FOR UPDATE`).Scan(&from)
+		err = tx.QueryRowContext(ctx, `SELECT next_hour FROM traffic_hourly_backfill WHERE id = 1 FOR UPDATE`).Scan(&to)
 	}
 	if err != nil {
 		return from, to, false, fmt.Errorf("read traffic backfill cursor: %w", err)
 	}
-	if !from.Before(cutoff) {
-		return from, from, true, tx.Commit()
+	// Finishing moves the cursor to the horizon, so a completed backfill
+	// never reads the logs again.
+	if !to.After(oldest) {
+		return to, to, true, tx.Commit()
 	}
-	to = from.Add(trafficBackfillBatch)
 	if to.After(cutoff) {
 		to = cutoff
+	}
+	var earliest sql.NullTime
+	if err = tx.QueryRowContext(ctx, `SELECT MIN(created_at) FROM logs_partitioned
+		WHERE log_type = 'access' AND created_at >= $1 AND created_at < $2`, oldest, to).Scan(&earliest); err != nil {
+		return from, to, false, fmt.Errorf("find oldest access log: %w", err)
+	}
+	if !earliest.Valid {
+		if _, err = tx.ExecContext(ctx, `UPDATE traffic_hourly_backfill SET next_hour = $1, updated_at = now() WHERE id = 1`, oldest); err != nil {
+			return to, to, false, fmt.Errorf("save traffic backfill cursor: %w", err)
+		}
+		return to, to, true, tx.Commit()
+	}
+	from = to.Add(-trafficBackfillBatch)
+	if first := earliest.Time.UTC().Truncate(time.Hour); from.Before(first) {
+		from = first
 	}
 	if _, err = tx.ExecContext(ctx, hourlyHostRollupSQL, from, to); err != nil {
 		return from, to, false, fmt.Errorf("backfill hourly proxy hosts: %w", err)
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE traffic_hourly_backfill SET next_hour = $1, updated_at = now() WHERE id = 1`, to); err != nil {
+	if _, err = tx.ExecContext(ctx, `UPDATE traffic_hourly_backfill SET next_hour = $1, updated_at = now() WHERE id = 1`, from); err != nil {
 		return from, to, false, fmt.Errorf("save traffic backfill cursor: %w", err)
 	}
 	if err = tx.Commit(); err != nil {
