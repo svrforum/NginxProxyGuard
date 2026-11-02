@@ -24,8 +24,7 @@ FROM nginx:alpine
 # nginx binary CAP_NET_BIND_SERVICE so the non-root user below can still bind
 # the privileged port 443.
 # Apply available security fixes to the runtime packages.
-RUN apk upgrade --no-cache \
-    && apk add --no-cache openssl libcap
+RUN apk upgrade --no-cache curl libcurl brotli-libs && apk add --no-cache openssl libcap
 
 # Copy built files
 COPY --from=builder /app/dist /usr/share/nginx/html
