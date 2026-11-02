@@ -29,6 +29,9 @@ type DNSProvider struct {
 
 	// For API responses - masked credentials
 	HasCredentials bool `json:"has_credentials"`
+	// Route 53 only: the row authenticates with the host's AWS credentials,
+	// so the edit form can open with that choice (#357).
+	UseDefaultCredentials bool `json:"use_default_credentials,omitempty"`
 }
 
 // CloudflareCredentials represents Cloudflare API credentials
@@ -39,31 +42,42 @@ type CloudflareCredentials struct {
 	ZoneID   string `json:"zone_id,omitempty"`   // Optional: Cloudflare Zone ID (bypasses SOA-based zone detection)
 }
 
-// Route53Credentials represents AWS Route53 credentials. The access key pair
-// is optional: with neither key, lego builds its AWS client without static
-// credentials and the SDK's default credential chain supplies them — the
-// environment, the shared config and credentials files, an ECS task role or
-// an EC2 instance role read from the instance metadata service. That is how
-// AWS recommends a host authenticate, without a permanent key. One key
-// without the other is refused.
+// Route53Credentials represents AWS Route53 credentials: an access key pair,
+// or UseDefaultCredentials and no keys. With the flag, lego builds its AWS
+// client without static credentials and the SDK's default credential chain
+// supplies them — the environment, the shared config and credentials files,
+// an ECS task role or an EC2 instance role read from the instance metadata
+// service. That is how AWS recommends a host authenticate, without a
+// permanent key. Missing keys alone do not mean that: the edit form sends
+// blank key fields, and a row without keys would otherwise authenticate as
+// whatever role the host has (#357).
 type Route53Credentials struct {
 	AccessKeyID     string `json:"access_key_id"`
 	SecretAccessKey string `json:"secret_access_key"`
 	Region          string `json:"region,omitempty"`
 	HostedZoneID    string `json:"hosted_zone_id,omitempty"`
+	// Authenticate with the AWS default credential chain; no keys allowed.
+	UseDefaultCredentials bool `json:"use_default_credentials,omitempty"`
 }
 
 // UsesDefaultCredentialChain reports whether the row leaves authentication
-// to the AWS SDK: neither key is set.
+// to the AWS SDK's default credential chain.
 func (c Route53Credentials) UsesDefaultCredentialChain() bool {
-	return c.AccessKeyID == "" && c.SecretAccessKey == ""
+	return c.UseDefaultCredentials
 }
 
-// Validate refuses one key without the other. lego refuses the pair too, but
-// only when a certificate is issued; here it is a 400 on create and update.
+// Validate requires the access key pair, or use_default_credentials and no
+// keys. lego refuses half a pair too, but only when a certificate is issued;
+// here it is a 400 on create and update.
 func (c Route53Credentials) Validate() error {
-	if (c.AccessKeyID == "") != (c.SecretAccessKey == "") {
-		return fmt.Errorf("%w: route53 needs both access_key_id and secret_access_key, or neither to use the AWS default credential chain", ErrInvalidCredentials)
+	if c.UseDefaultCredentials {
+		if c.AccessKeyID != "" || c.SecretAccessKey != "" {
+			return fmt.Errorf("%w: route53 takes no access key with use_default_credentials", ErrInvalidCredentials)
+		}
+		return nil
+	}
+	if c.AccessKeyID == "" || c.SecretAccessKey == "" {
+		return fmt.Errorf("%w: route53 needs access_key_id and secret_access_key, or use_default_credentials for the AWS default credential chain", ErrInvalidCredentials)
 	}
 	return nil
 }
@@ -131,6 +145,12 @@ func (p *DNSProvider) MaskCredentials() DNSProvider {
 	masked := *p
 	masked.Credentials = nil
 	masked.HasCredentials = len(p.Credentials) > 0 && string(p.Credentials) != "{}"
+	if p.ProviderType == DNSProviderRoute53 {
+		var creds Route53Credentials
+		if json.Unmarshal(p.Credentials, &creds) == nil {
+			masked.UseDefaultCredentials = creds.UseDefaultCredentials
+		}
+	}
 	return masked
 }
 

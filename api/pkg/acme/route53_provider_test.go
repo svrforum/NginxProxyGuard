@@ -60,7 +60,7 @@ func TestRoute53ProviderSignsWithStoredKeysOrTheDefaultChain(t *testing.T) {
 		keyID string
 	}{
 		"stored keys":   {model.Route53Credentials{AccessKeyID: route53StaticKeyID, SecretAccessKey: route53StaticSecret, Region: "us-east-1", HostedZoneID: "Z0123456789EXAMPLE"}, route53StaticKeyID},
-		"default chain": {model.Route53Credentials{Region: "us-east-1", HostedZoneID: "Z0123456789EXAMPLE"}, route53EnvKeyID},
+		"default chain": {model.Route53Credentials{UseDefaultCredentials: true, Region: "us-east-1", HostedZoneID: "Z0123456789EXAMPLE"}, route53EnvKeyID},
 	} {
 		t.Run(name, func(t *testing.T) {
 			auths := fakeRoute53(t)
@@ -99,15 +99,18 @@ func TestRoute53ProviderSignsWithStoredKeysOrTheDefaultChain(t *testing.T) {
 	}
 }
 
-// lego refuses one key without the other when the provider is built, before
-// any request. The API refuses the pair on create and update, but a row
-// restored from a backup was never checked; the refusal must not quote the
-// secret, since the certificate service stores the error where the viewer
-// role can read it.
-func TestRoute53ProviderRefusesOneKeyAlone(t *testing.T) {
+// An incomplete row is refused when the provider is built, before any
+// request. The API refuses it on create and update, but a row restored from a
+// backup or edited by hand was never checked, and lego would take a row
+// without keys to the default chain, here the environment's key pair (#357).
+// The refusal must not quote the secret, since the certificate service
+// stores the error where the viewer role can read it.
+func TestRoute53ProviderRefusesAnIncompleteRow(t *testing.T) {
 	for name, creds := range map[string]model.Route53Credentials{
-		"no secret": {AccessKeyID: route53StaticKeyID, Region: "us-east-1"},
-		"no key id": {SecretAccessKey: route53StaticSecret, Region: "us-east-1"},
+		"no secret":     {AccessKeyID: route53StaticKeyID, Region: "us-east-1"},
+		"no key id":     {SecretAccessKey: route53StaticSecret, Region: "us-east-1"},
+		"no keys":       {Region: "us-east-1", HostedZoneID: "Z0123456789EXAMPLE"},
+		"flag and keys": {UseDefaultCredentials: true, AccessKeyID: route53StaticKeyID, SecretAccessKey: route53StaticSecret},
 	} {
 		auths := fakeRoute53(t)
 		_, err := (&Service{}).newDNS01Provider(dnsProviderOf(t, model.DNSProviderRoute53, creds))

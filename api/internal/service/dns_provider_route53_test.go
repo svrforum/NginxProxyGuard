@@ -10,15 +10,17 @@ import (
 	"nginx-proxy-guard/internal/model"
 )
 
-// A Route 53 row is accepted with an access key pair or with none, and stored
-// as given: with no keys, lego leaves authentication to the AWS SDK's default
-// credential chain (environment, shared config files, ECS task role, EC2
-// instance role), so a host needs no permanent key. One key without the other
-// is refused on create and on update (ErrInvalidCredentials, a 400) instead
-// of failing at issuance. The check goes through the real repository check,
+// A Route 53 row is accepted with an access key pair, or with
+// use_default_credentials and no keys, and stored as given: with the flag,
+// lego leaves authentication to the AWS SDK's default credential chain
+// (environment, shared config files, ECS task role, EC2 instance role), so a
+// host needs no permanent key. Anything else is refused on create and on
+// update (ErrInvalidCredentials, a 400) instead of failing at issuance; in
+// particular a region-only edit, sent with blank key fields, leaves the
+// stored keys alone (#357). The check goes through the real repository check,
 // which touches no database for Route 53; ionosProvRepo wraps it and keeps
 // what would be stored.
-func TestRoute53CredentialsAcceptBothKeysOrNeither(t *testing.T) {
+func TestRoute53CredentialsNeedKeysOrTheFlag(t *testing.T) {
 	const secret = "aws/secret+key0123456789"
 	existing := &model.DNSProvider{ID: "p1", ProviderType: model.DNSProviderRoute53,
 		Credentials: json.RawMessage(`{"access_key_id":"AKIAEXAMPLEKEYID","secret_access_key":"aws/secret+key0123456789"}`)}
@@ -28,8 +30,9 @@ func TestRoute53CredentialsAcceptBothKeysOrNeither(t *testing.T) {
 		accepted bool
 	}{
 		{`{"access_key_id":"AKIAEXAMPLEKEYID","secret_access_key":"aws/secret+key0123456789","region":"eu-west-1"}`, true},
-		{`{"region":"eu-west-1","hosted_zone_id":"Z0123456789EXAMPLE"}`, true},
-		{`{}`, true},
+		{`{"use_default_credentials":true,"region":"eu-west-1","hosted_zone_id":"Z0123456789EXAMPLE"}`, true},
+		{`{"region":"eu-west-2","hosted_zone_id":"Z0123456789EXAMPLE"}`, false},
+		{`{}`, false},
 		{`{"access_key_id":"AKIAEXAMPLEKEYID"}`, false},
 		{`{"secret_access_key":"aws/secret+key0123456789"}`, false},
 	} {

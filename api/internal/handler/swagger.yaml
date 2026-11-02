@@ -13415,6 +13415,11 @@ components:
           description: >-
             Credentials are never returned. This flag reports only whether any are
             stored.
+        use_default_credentials:
+          type: boolean
+          description: >-
+            Route 53 only: the provider authenticates with the AWS default
+            credential chain instead of an access key pair. Omitted otherwise.
         created_at:
           type: string
           format: date-time
@@ -13434,10 +13439,10 @@ components:
           type: object
           description: >-
             Provider-specific object. cloudflare: api_token (or api_key + email), plus
-            optional zone_id. route53: access_key_id and secret_access_key, both or
-            neither (neither: the AWS SDK's default credential chain — environment,
-            shared config files, ECS task role, EC2 instance role), optional region
-            and hosted_zone_id. duckdns: token. dynu: api_key. ionos: api_key_prefix and
+            optional zone_id. route53: access_key_id and secret_access_key, or
+            use_default_credentials: true and no keys (the AWS SDK's default
+            credential chain — environment, shared config files, ECS task role, EC2
+            instance role), optional region and hosted_zone_id. duckdns: token. dynu: api_key. ionos: api_key_prefix and
             api_key (IONOS public prefix and secret; sent to IONOS as prefix.secret).
             manual: none required.
         is_default:

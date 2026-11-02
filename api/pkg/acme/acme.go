@@ -731,12 +731,17 @@ func (s *Service) createDNSProvider(provider *model.DNSProvider) (challenge.Prov
 		cfg := route53.NewDefaultConfig()
 		cfg.PropagationTimeout = 180 * time.Second
 		cfg.PollingInterval = 5 * time.Second
-		// Static keys only when the row has them. Without any, lego builds
-		// its AWS client with no credentials of its own and the SDK's default
-		// credential chain supplies them: the environment, the shared config
-		// and credentials files, an ECS task role or an EC2 instance role
-		// read from the instance metadata service. lego itself refuses one
-		// key without the other.
+		// The key pair, or the flag and no keys: lego takes a row without keys
+		// to the AWS default credential chain, so a row that lost its keys (a
+		// restore, a manual edit) would authenticate as the host's role
+		// instead of failing (#357).
+		if err := creds.Validate(); err != nil {
+			return nil, err
+		}
+		// With the flag, lego builds its AWS client with no credentials of its
+		// own and the SDK's default credential chain supplies them: the
+		// environment, the shared config and credentials files, an ECS task
+		// role or an EC2 instance role read from the instance metadata service.
 		if !creds.UsesDefaultCredentialChain() {
 			cfg.AccessKeyID = creds.AccessKeyID
 			cfg.SecretAccessKey = creds.SecretAccessKey

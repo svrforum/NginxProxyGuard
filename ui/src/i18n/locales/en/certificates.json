@@ -213,8 +213,8 @@
         "title": "AWS Credentials",
         "accessKeyId": "Access Key ID",
         "secretAccessKey": "Secret Access Key",
-        "optional": "Optional",
-        "keysHelp": "Leave both keys empty to use the AWS default credential chain: an EC2 instance role, an ECS task role, or the AWS_* environment variables of the API container. Enter both to use a static access key pair.",
+        "useDefaultCredentials": "Use AWS default credentials (no access key)",
+        "useDefaultCredentialsHelp": "The AWS default credential chain signs in instead: an EC2 instance role, an ECS task role, or the AWS_* environment variables of the API container. On EC2, set the instance metadata hop limit to 2.",
         "region": "Region",
         "hostedZoneId": "Hosted Zone ID (Optional)"
       },
