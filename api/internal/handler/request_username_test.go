@@ -46,3 +46,22 @@ func TestExclusionRecordsWhoDisabledTheRule(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+// The WAF global rule disable is a wrapped net/http handler too; without
+// WithUsername every global exclusion was recorded as "admin".
+func TestGlobalWAFExclusionRecordsTheCaller(t *testing.T) {
+	var got string
+	h := WithUsername(func(w http.ResponseWriter, r *http.Request) { got = getUsernameFromContext(r.Context()) })
+	for name, want := range map[string]string{"alice": "alice", "": "admin"} {
+		c := echo.New().NewContext(httptest.NewRequest(http.MethodPost, "/", nil), httptest.NewRecorder())
+		if name != "" {
+			c.Set("username", name)
+		}
+		if err := h(c); err != nil {
+			t.Fatal(err)
+		}
+		if got != want {
+			t.Errorf("username %q: recorded %q, want %q", name, got, want)
+		}
+	}
+}

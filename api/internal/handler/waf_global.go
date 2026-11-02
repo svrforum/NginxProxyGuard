@@ -11,10 +11,11 @@ import (
 	"nginx-proxy-guard/internal/model"
 )
 
-// getUsernameFromContext extracts username from request context.
-// When using echo.WrapHandler, username may be stored in context by auth middleware.
+// getUsernameFromContext returns the caller WithUsername put on the request.
+// The route must be wrapped with it: echo.WrapHandler alone carries nothing,
+// and every global exclusion was recorded as "admin".
 func getUsernameFromContext(ctx context.Context) string {
-	if username, ok := ctx.Value("username").(string); ok && username != "" {
+	if username := requestUsername(ctx); username != "" {
 		return username
 	}
 	return "admin" // Fallback for system actions

@@ -653,7 +653,7 @@ func registerWAFRoutes(v1 *echo.Group, h *handler.WAFHandler) {
 	g.GET("/global/rules", echo.WrapHandler(http.HandlerFunc(h.GetGlobalRules)), wafRead)
 	g.GET("/global/exclusions", echo.WrapHandler(http.HandlerFunc(h.GetGlobalExclusions)), wafRead)
 	g.GET("/global/history", echo.WrapHandler(http.HandlerFunc(h.GetGlobalPolicyHistory)), wafRead)
-	g.POST("/global/rules/:ruleId/disable", echo.WrapHandler(http.HandlerFunc(h.DisableGlobalRule)), wafWrite)
+	g.POST("/global/rules/:ruleId/disable", handler.WithUsername(h.DisableGlobalRule), wafWrite)
 	g.DELETE("/global/rules/:ruleId/disable", echo.WrapHandler(http.HandlerFunc(h.EnableGlobalRule)), wafWrite)
 }
 
