@@ -199,11 +199,21 @@ func (s *ProxyHostService) Clone(ctx context.Context, sourceID string, req *mode
 			provider = model.CertProviderSelfSigned
 		}
 
+		// The clone's certificate takes the key type of the source's Let's
+		// Encrypt certificate (#364): a clone of an ECDSA host stays ECDSA.
+		keyType := ""
+		if provider == model.CertProviderLetsEncrypt && source.CertificateID != nil && s.certRepo != nil {
+			if srcCert, err := s.certRepo.GetByID(ctx, *source.CertificateID); err == nil && srcCert != nil && srcCert.Provider == model.CertProviderLetsEncrypt {
+				keyType = srcCert.KeyType
+			}
+		}
+
 		certReq := &model.CreateCertificateRequest{
 			DomainNames:   validDomains,
 			Provider:      provider,
 			AutoRenew:     provider == model.CertProviderLetsEncrypt,
 			DNSProviderID: req.DNSProviderID,
+			KeyType:       keyType,
 		}
 		cert, certErr := s.certService.Create(ctx, certReq)
 		if certErr != nil {
