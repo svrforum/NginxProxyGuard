@@ -59,7 +59,9 @@ export class CertificateFormPage {
     this.domainInput = modal.locator('textarea').first();
     this.domainChips = modal.locator('[class*="chip"], [class*="tag"]');
     this.emailInput = modal.locator('input[type="email"]').first();
-    this.dnsProviderSelect = modal.locator('select').first();
+    // The DNS provider select is the one with an empty placeholder option; the
+    // key type select (Let's Encrypt, #364) has none.
+    this.dnsProviderSelect = modal.locator('select:has(option[value=""])').first();
     this.wildcardToggle = modal.locator('input[type="checkbox"]').first();
 
     // Custom certificate fields - textareas with BEGIN CERTIFICATE / BEGIN PRIVATE KEY placeholders
