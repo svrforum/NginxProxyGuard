@@ -36,8 +36,9 @@ func resolveCloneContainerBinding(srcName, srcNetwork, reqName, reqNetwork *stri
 
 // ErrCloneNotApplied is Clone's answer when nginx refused the clone's config
 // once its copied settings were in it. The clone is deleted again, so nothing
-// is left behind that the running config does not carry (#362).
-var ErrCloneNotApplied = errors.New("the cloned proxy host's config was not applied, so the clone was removed")
+// is left behind that the running config does not carry (#362); the error
+// says whether that delete failed.
+var ErrCloneNotApplied = errors.New("the cloned proxy host's config was not applied")
 
 // Clone creates a copy of an existing proxy host with new domain names
 // It copies all related configurations including:
@@ -247,8 +248,9 @@ func (s *ProxyHostService) Clone(ctx context.Context, sourceID string, req *mode
 				log.Printf("[WARN] Failed to apply the cloned host's config, rolling back: %v", err)
 				if delErr := s.Delete(ctx, newHost.ID); delErr != nil {
 					log.Printf("[ERROR] Rollback failed: could not delete cloned host %s: %v", newHost.ID, delErr)
+					return nil, fmt.Errorf("%w, and removing clone %s failed too (%v): %w", ErrCloneNotApplied, newHost.ID, delErr, err)
 				}
-				return nil, fmt.Errorf("%w: %w", ErrCloneNotApplied, err)
+				return nil, fmt.Errorf("%w, so the clone was removed: %w", ErrCloneNotApplied, err)
 			}
 			if rejected == nil {
 				rejected = err

@@ -1860,17 +1860,23 @@ END $$;`,
 		},
 		{
 			// A clone copied its source's upstream name, and nginx refuses two
-			// upstream blocks with one name for every host at once (#362). The
-			// oldest holder keeps the name; the others take the one derived
-			// from their whole host id, and startup's SyncAllConfigs rewrites
-			// their files. A no-op once no two rows share a name.
+			// upstream blocks with one name for every host at once (#362). It
+			// compares the names case-insensitively. An enabled host keeps the
+			// name over a disabled one, then the oldest; the others take the
+			// name derived from their whole host id, and startup's
+			// SyncAllConfigs rewrites their files. A no-op once no two rows
+			// share a name.
 			desc: "upstreams: rename duplicate upstream names (#362)",
 			sql: `UPDATE public.upstreams u
    SET name = 'upstream_' || replace(u.proxy_host_id::text, '-', ''), updated_at = now()
- WHERE EXISTS (
+  FROM public.proxy_hosts uh
+ WHERE uh.id = u.proxy_host_id
+   AND EXISTS (
        SELECT 1 FROM public.upstreams o
-        WHERE o.name = u.name
-          AND (COALESCE(o.created_at, '-infinity'), o.id) < (COALESCE(u.created_at, '-infinity'), u.id))`,
+         JOIN public.proxy_hosts oh ON oh.id = o.proxy_host_id
+        WHERE lower(o.name) = lower(u.name)
+          AND (NOT oh.enabled, COALESCE(o.created_at, '-infinity'), o.id)
+            < (NOT uh.enabled, COALESCE(u.created_at, '-infinity'), u.id))`,
 		},
 		{
 			// What a subscription's list itself had, so the list can show that

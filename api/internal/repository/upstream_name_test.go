@@ -55,6 +55,11 @@ func TestUpsertKeepsAnUpstreamNameToOneProxyHost(t *testing.T) {
 		t.Fatalf("another host taking the source's name: err = %v, want ErrUpstreamNameTaken", err)
 	}
 
+	// nginx compares upstream names case-insensitively.
+	if _, err := repo.Upsert(ctx, other, &model.CreateUpstreamRequest{Name: "UPSTREAM_AAAAAAAA", Servers: servers}); !errors.Is(err, model.ErrUpstreamNameTaken) {
+		t.Fatalf("the source's name in capitals: err = %v, want ErrUpstreamNameTaken", err)
+	}
+
 	// The derived name repeats the source's: the whole id stands in.
 	twinUp, err := repo.Upsert(ctx, twin, &model.CreateUpstreamRequest{Servers: servers})
 	if err != nil {

@@ -12,7 +12,9 @@ import (
 // A clone copied its source's upstream name (#362), so an install that cloned
 // such a host carries two upstream blocks with one name into the upgrade, and
 // nginx refuses every config. The repair in `upgrades` renames every holder
-// of a name but the oldest, and changes nothing on the next boot.
+// of a name but one, an enabled host before a disabled one and then the
+// oldest, compares names as nginx does (case-insensitively), and changes
+// nothing on the next boot.
 func TestUpgradeRenamesDuplicateUpstreamNames(t *testing.T) {
 	entries := upgradeEntriesContaining(t, "replace(u.proxy_host_id::text, '-', '')")
 	if len(entries) != 1 {
@@ -40,6 +42,16 @@ func TestUpgradeRenamesDuplicateUpstreamNames(t *testing.T) {
 	repair := strings.ReplaceAll(entries[0], "public.", schema+".")
 
 	for _, stmt := range []string{
+		`CREATE TABLE ` + schema + `.proxy_hosts (
+			id uuid PRIMARY KEY,
+			enabled boolean DEFAULT true NOT NULL
+		)`,
+		`INSERT INTO ` + schema + `.proxy_hosts (id, enabled) VALUES
+			('aaaaaaaa-0000-4000-8000-000000000001', true),
+			('cccccccc-0000-4000-8000-000000000002', true),
+			('dddddddd-0000-4000-8000-000000000003', false),
+			('eeeeeeee-0000-4000-8000-000000000004', true),
+			('ffffffff-0000-4000-8000-000000000005', true)`,
 		`CREATE TABLE ` + schema + `.upstreams (
 			id uuid PRIMARY KEY,
 			proxy_host_id uuid NOT NULL UNIQUE,
@@ -50,7 +62,7 @@ func TestUpgradeRenamesDuplicateUpstreamNames(t *testing.T) {
 		`INSERT INTO ` + schema + `.upstreams (id, proxy_host_id, name, created_at) VALUES
 			('00000000-0000-4000-8000-0000000000a1', 'aaaaaaaa-0000-4000-8000-000000000001', 'upstream_aaaaaaaa', '2026-01-01'),
 			('00000000-0000-4000-8000-0000000000a2', 'cccccccc-0000-4000-8000-000000000002', 'upstream_aaaaaaaa', '2026-02-01'),
-			('00000000-0000-4000-8000-0000000000a3', 'dddddddd-0000-4000-8000-000000000003', 'pool', '2026-01-01'),
+			('00000000-0000-4000-8000-0000000000a3', 'dddddddd-0000-4000-8000-000000000003', 'Pool', '2026-01-01'),
 			('00000000-0000-4000-8000-0000000000a4', 'eeeeeeee-0000-4000-8000-000000000004', 'pool', NULL),
 			('00000000-0000-4000-8000-0000000000a5', 'ffffffff-0000-4000-8000-000000000005', 'upstream_ffffffff', '2026-01-01')`,
 	} {
@@ -65,8 +77,8 @@ func TestUpgradeRenamesDuplicateUpstreamNames(t *testing.T) {
 	want := map[string]string{
 		"aaaaaaaa-0000-4000-8000-000000000001": "upstream_aaaaaaaa", // the source keeps its name
 		"cccccccc-0000-4000-8000-000000000002": "upstream_cccccccc000040008000000000000002",
-		"dddddddd-0000-4000-8000-000000000003": "upstream_dddddddd000040008000000000000003",
-		"eeeeeeee-0000-4000-8000-000000000004": "pool", // no created_at counts as the oldest
+		"dddddddd-0000-4000-8000-000000000003": "upstream_dddddddd000040008000000000000003", // disabled: gives way, and Pool is pool to nginx
+		"eeeeeeee-0000-4000-8000-000000000004": "pool",                                      // enabled keeps the name
 		"ffffffff-0000-4000-8000-000000000005": "upstream_ffffffff",
 	}
 	rows, err := db.Query(`SELECT proxy_host_id, name FROM ` + schema + `.upstreams`)

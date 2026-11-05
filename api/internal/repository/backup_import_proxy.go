@@ -381,6 +381,22 @@ func (r *BackupRepository) importUpstream(ctx context.Context, tx *sql.Tx, proxy
 	// Older backups (pre-2.9.0) have no scheme field — default to "http" to preserve behavior.
 	scheme := model.NormalizeUpstreamScheme(u.Scheme)
 
+	// A backup from before 2.67.0 can hold two upstreams with one name (a
+	// clone copied it, #362), and nginx refuses that for every host. The first
+	// one restored keeps the name; a later one takes the name derived from its
+	// new host's whole id. nginx compares upstream names case-insensitively.
+	name := u.Name
+	var taken bool
+	if err := tx.QueryRowContext(ctx,
+		`SELECT EXISTS (SELECT 1 FROM upstreams WHERE lower(name) = lower($1) AND proxy_host_id <> $2::uuid)`,
+		name, proxyHostID,
+	).Scan(&taken); err != nil {
+		return fmt.Errorf("check upstream name: %w", err)
+	}
+	if taken || name == "" {
+		name = "upstream_" + strings.ReplaceAll(proxyHostID, "-", "")
+	}
+
 	query := `
 		INSERT INTO upstreams (proxy_host_id, name, scheme, servers, load_balance, health_check_enabled,
 		                       health_check_interval, health_check_timeout, health_check_path,
@@ -399,7 +415,7 @@ func (r *BackupRepository) importUpstream(ctx context.Context, tx *sql.Tx, proxy
 			keepalive = EXCLUDED.keepalive,
 			updated_at = NOW()
 	`
-	_, err := tx.ExecContext(ctx, query, proxyHostID, u.Name, scheme, servers, u.LoadBalance,
+	_, err := tx.ExecContext(ctx, query, proxyHostID, name, scheme, servers, u.LoadBalance,
 		u.HealthCheckEnabled, u.HealthCheckInterval, u.HealthCheckTimeout, u.HealthCheckPath,
 		u.HealthCheckExpectedStatus, u.Keepalive)
 	return err
