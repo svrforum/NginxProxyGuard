@@ -459,6 +459,7 @@ func (s *ProxyHostService) cloneRelatedConfigs(ctx context.Context, sourceID, ta
 			// name would declare its upstream block twice, and nginx then
 			// refuses every config at once (#362).
 			upReq := &model.CreateUpstreamRequest{
+				Scheme:                    up.Scheme,
 				Servers:                   servers,
 				LoadBalance:               up.LoadBalance,
 				HealthCheckEnabled:        &up.HealthCheckEnabled,
