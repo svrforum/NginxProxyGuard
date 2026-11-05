@@ -12,16 +12,25 @@ import (
 	"nginx-proxy-guard/internal/database"
 )
 
-// Postgres SQLSTATE codes. Only invalid_text_representation is mapped onto a
-// client-facing status: a malformed identifier reaching a uuid/inet column is
-// unambiguously the caller's mistake. Every other code deliberately stays a
-// 500 — mislabelling one of our own bugs as the caller's fault is worse than a
-// vague 500. Extending the map later is a one-line change. (#298)
-const sqlStateInvalidTextRepresentation = database.SQLStateInvalidTextRepresentation
+// Postgres SQLSTATE codes. Two are mapped onto a client-facing status, both
+// the caller's mistake: invalid_text_representation is a malformed identifier
+// reaching a uuid/inet column (#298), string_data_right_truncation a value
+// longer than its varchar column, which a field without its own length check
+// let through (#353). Every other code deliberately stays a 500 —
+// mislabelling one of our own bugs as the caller's fault is worse than a
+// vague 500.
+const (
+	sqlStateInvalidTextRepresentation = database.SQLStateInvalidTextRepresentation
+	sqlStateStringDataRightTruncation = database.SQLStateStringDataRightTruncation
+)
 
 // ErrMsgInvalidIdentifier is returned when a path/body identifier could not be
 // parsed by Postgres (e.g. "not-a-uuid" reaching a uuid column).
 const ErrMsgInvalidIdentifier = database.MsgInvalidIdentifier
+
+// ErrMsgValueTooLong is returned when Postgres refused a value longer than its
+// column allows.
+const ErrMsgValueTooLong = database.MsgValueTooLong
 
 // driverTextPrefix is what lib/pq puts in front of every server error it
 // renders: Error() returns "pq: <message>", or "pq: <message> (<SQLSTATE>)"
@@ -114,8 +123,14 @@ func scrubbedClientText(message string) string {
 // so a status is never changed on the strength of a substring match.
 func ClientStatusForDBError(err error) (int, string, bool) {
 	var pqErr *pq.Error
-	if errors.As(err, &pqErr) && string(pqErr.Code) == sqlStateInvalidTextRepresentation {
+	if !errors.As(err, &pqErr) {
+		return 0, "", false
+	}
+	switch string(pqErr.Code) {
+	case sqlStateInvalidTextRepresentation:
 		return http.StatusBadRequest, ErrMsgInvalidIdentifier, true
+	case sqlStateStringDataRightTruncation:
+		return http.StatusBadRequest, ErrMsgValueTooLong, true
 	}
 	return 0, "", false
 }

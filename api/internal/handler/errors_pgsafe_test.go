@@ -20,7 +20,7 @@ import (
 // strings was copied verbatim into the response body, so any authenticated
 // caller could read our query geometry off a 500. These are the fragments that
 // must never cross the wire again.
-var driverTextMarkers = []string{"pq: ", "22P02", "invalid input syntax", "at position"}
+var driverTextMarkers = []string{"pq: ", "22P02", "22001", "invalid input syntax", "value too long", "at position"}
 
 func newUUIDCastError() *pq.Error {
 	return &pq.Error{
@@ -64,6 +64,28 @@ func TestMalformedIdentifierBecomesClientErrorWithoutDriverText(t *testing.T) {
 	assertNoDriverText(t, "SafeErrorMessage", SafeErrorMessage(err))
 }
 
+// A value longer than its column, with no field check in front of it (#353):
+// Postgres answers 22001, which is the caller's value, so a 400 with a fixed
+// message instead of a 500.
+func TestOverLongValueBecomesClientErrorWithoutDriverText(t *testing.T) {
+	err := fmt.Errorf("failed to update SSO provider: %w", &pq.Error{
+		Code:    "22001",
+		Message: "value too long for type character varying(64)",
+	})
+
+	status, msg, ok := ClientStatusForDBError(err)
+	if !ok {
+		t.Fatalf("ClientStatusForDBError did not classify a 22001 wrapped with %%w")
+	}
+	if status != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", status, http.StatusBadRequest)
+	}
+	if msg != ErrMsgValueTooLong {
+		t.Errorf("message = %q, want %q", msg, ErrMsgValueTooLong)
+	}
+	assertNoDriverText(t, "ClientStatusForDBError message", msg)
+}
+
 func TestOtherSQLStatesKeepTheirStatusButStillGetScrubbed(t *testing.T) {
 	// 23505 is our own problem to classify (repositories already map it to
 	// model.ErrDuplicateEntry), so it must stay a 500 — but the driver text
@@ -74,7 +96,7 @@ func TestOtherSQLStatesKeepTheirStatusButStillGetScrubbed(t *testing.T) {
 	})
 
 	if _, _, ok := ClientStatusForDBError(err); ok {
-		t.Error("ClientStatusForDBError classified 23505; only 22P02 is mapped")
+		t.Error("ClientStatusForDBError classified 23505; it must stay a 500")
 	}
 	if detail := SafeErrorDetail(err); detail != "" {
 		t.Errorf("SafeErrorDetail = %q, want \"\"", detail)

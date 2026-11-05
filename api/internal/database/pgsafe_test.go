@@ -18,6 +18,11 @@ func TestScrubDriverText(t *testing.T) {
 			want: "failed to validate certificate_id: failed to get certificate: Invalid identifier format",
 		},
 		{
+			name: "an over-long value keeps our wrapper and names the cause",
+			in:   `failed to update provider: pq: value too long for type character varying(64) (22001)`,
+			want: "failed to update provider: A value is longer than its field allows",
+		},
+		{
 			name: "any other SQLSTATE falls back to the generic wording",
 			in:   `failed to render config: pq: relation "proxy_hosts" does not exist (42P01)`,
 			want: "failed to render config: A database error occurred",

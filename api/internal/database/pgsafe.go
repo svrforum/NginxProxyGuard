@@ -28,17 +28,23 @@ const (
 	// the text the driver wrote.
 	DriverTextPrefix = "pq: "
 
-	// MsgDatabaseError and MsgInvalidIdentifier are the two replacements. The
-	// second is used when the SQLSTATE lib/pq rendered into its own text proves
-	// the value was malformed, so a bad identifier says so instead of being
-	// flattened into a generic database failure.
+	// MsgDatabaseError, MsgInvalidIdentifier and MsgValueTooLong are the
+	// replacements. The last two are used when the SQLSTATE lib/pq rendered into
+	// its own text proves the value was at fault, so a bad identifier or an
+	// over-long value says so instead of being flattened into a generic database
+	// failure.
 	MsgDatabaseError     = "A database error occurred"
 	MsgInvalidIdentifier = "Invalid identifier format"
+	MsgValueTooLong      = "A value is longer than its field allows"
 
 	// SQLStateInvalidTextRepresentation (22P02) is raised when a value cannot be
 	// parsed into its column's type — "not-a-uuid" reaching a uuid column, or a
 	// malformed address reaching inet.
 	SQLStateInvalidTextRepresentation = "22P02"
+
+	// SQLStateStringDataRightTruncation (22001) is raised when a value is longer
+	// than its varchar column allows — a length nothing checked first (#353).
+	SQLStateStringDataRightTruncation = "22001"
 )
 
 // ScrubDriverText cuts a message at the driver boundary and replaces the
@@ -61,6 +67,8 @@ func ScrubDriverText(message string) string {
 	reason := MsgDatabaseError
 	if strings.Contains(message[i:], "("+SQLStateInvalidTextRepresentation+")") {
 		reason = MsgInvalidIdentifier
+	} else if strings.Contains(message[i:], "("+SQLStateStringDataRightTruncation+")") {
+		reason = MsgValueTooLong
 	}
 
 	prefix := strings.TrimRight(message[:i], " \t:,-")
