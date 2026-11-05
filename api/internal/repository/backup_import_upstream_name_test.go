@@ -9,11 +9,15 @@ import (
 
 // A backup taken before the #362 fix can hold two upstreams with one name;
 // restored as they are, nginx refuses every host's config until the next
-// restart. The first one restored keeps the name, and nginx's case-blind
-// comparison counts.
+// restart. As in the upgrade repair, an enabled host keeps the name over a
+// disabled one and otherwise the one restored first keeps it, and nginx's
+// case-blind comparison counts.
 func TestRestoreKeepsUpstreamNamesApart(t *testing.T) {
 	db, _ := openSchemaTestDB(t)
-	mustExec(t, db, `CREATE TABLE upstreams (
+	mustExec(t, db, `CREATE TABLE proxy_hosts (
+		id uuid PRIMARY KEY,
+		enabled boolean DEFAULT true NOT NULL
+	)`, `CREATE TABLE upstreams (
 		id uuid DEFAULT gen_random_uuid() NOT NULL,
 		proxy_host_id uuid NOT NULL UNIQUE,
 		name character varying(255) NOT NULL,
@@ -46,13 +50,24 @@ func TestRestoreKeepsUpstreamNamesApart(t *testing.T) {
 			LoadBalance: "round_robin",
 		}
 	}
-	restored := []struct{ host, name, want string }{
-		{"aaaaaaaa-0000-4000-8000-000000000001", "upstream_aaaaaaaa", "upstream_aaaaaaaa"},
-		{"bbbbbbbb-0000-4000-8000-000000000002", "upstream_aaaaaaaa", "upstream_bbbbbbbb000040008000000000000002"}, // the clone's copy
-		{"cccccccc-0000-4000-8000-000000000003", "UPSTREAM_AAAAAAAA", "upstream_cccccccc000040008000000000000003"},
-		{"dddddddd-0000-4000-8000-000000000004", "pool_d", "pool_d"},
+	restored := []struct {
+		host    string
+		enabled bool
+		name    string
+		want    string
+	}{
+		{"aaaaaaaa-0000-4000-8000-000000000001", true, "upstream_aaaaaaaa", "upstream_aaaaaaaa"},
+		{"bbbbbbbb-0000-4000-8000-000000000002", true, "upstream_aaaaaaaa", "upstream_bbbbbbbb000040008000000000000002"}, // the clone's copy
+		{"cccccccc-0000-4000-8000-000000000003", true, "UPSTREAM_AAAAAAAA", "upstream_cccccccc000040008000000000000003"},
+		{"dddddddd-0000-4000-8000-000000000004", true, "pool_d", "pool_d"},
+		{"eeeeeeee-0000-4000-8000-000000000005", false, "pool_x", "upstream_eeeeeeee000040008000000000000005"}, // disabled: gives way
+		{"ffffffff-0000-4000-8000-000000000006", true, "pool_x", "pool_x"},
 	}
 	for _, r := range restored {
+		// The restore writes each host before its upstream.
+		if _, err := tx.ExecContext(ctx, `INSERT INTO proxy_hosts (id, enabled) VALUES ($1, $2)`, r.host, r.enabled); err != nil {
+			t.Fatal(err)
+		}
 		if err := repo.importUpstream(ctx, tx, r.host, up(r.name)); err != nil {
 			t.Fatalf("restore %s: %v", r.host, err)
 		}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -382,19 +383,41 @@ func (r *BackupRepository) importUpstream(ctx context.Context, tx *sql.Tx, proxy
 	scheme := model.NormalizeUpstreamScheme(u.Scheme)
 
 	// A backup from before 2.67.0 can hold two upstreams with one name (a
-	// clone copied it, #362), and nginx refuses that for every host. The first
-	// one restored keeps the name; a later one takes the name derived from its
-	// new host's whole id. nginx compares upstream names case-insensitively.
+	// clone copied it, #362), and nginx refuses that for every host. nginx
+	// compares upstream names case-insensitively. As in the upgrade repair, an
+	// enabled host keeps the name over a disabled one, and otherwise the one
+	// restored first keeps it; the other takes the name derived from its
+	// host's whole id.
+	derived := func(hostID string) string { return "upstream_" + strings.ReplaceAll(hostID, "-", "") }
 	name := u.Name
-	var taken bool
-	if err := tx.QueryRowContext(ctx,
-		`SELECT EXISTS (SELECT 1 FROM upstreams WHERE lower(name) = lower($1) AND proxy_host_id <> $2::uuid)`,
-		name, proxyHostID,
-	).Scan(&taken); err != nil {
-		return fmt.Errorf("check upstream name: %w", err)
-	}
-	if taken || name == "" {
-		name = "upstream_" + strings.ReplaceAll(proxyHostID, "-", "")
+	if name == "" {
+		name = derived(proxyHostID)
+	} else {
+		var holder string
+		var holderEnabled, enabled bool
+		err := tx.QueryRowContext(ctx, `
+			SELECT u.proxy_host_id, h.enabled, me.enabled
+			  FROM upstreams u
+			  JOIN proxy_hosts h ON h.id = u.proxy_host_id
+			  JOIN proxy_hosts me ON me.id = $2::uuid
+			 WHERE lower(u.name) = lower($1) AND u.proxy_host_id <> $2::uuid
+			 LIMIT 1`,
+			name, proxyHostID,
+		).Scan(&holder, &holderEnabled, &enabled)
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+		case err != nil:
+			return fmt.Errorf("check upstream name: %w", err)
+		case enabled && !holderEnabled:
+			if _, err := tx.ExecContext(ctx,
+				`UPDATE upstreams SET name = $1, updated_at = NOW() WHERE proxy_host_id = $2::uuid`,
+				derived(holder), holder,
+			); err != nil {
+				return fmt.Errorf("rename the disabled host's upstream: %w", err)
+			}
+		default:
+			name = derived(proxyHostID)
+		}
 	}
 
 	query := `
