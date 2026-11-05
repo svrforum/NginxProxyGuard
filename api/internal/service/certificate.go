@@ -141,10 +141,21 @@ func (s *CertificateService) Create(ctx context.Context, req *model.CreateCertif
 		return nil, fmt.Errorf("%w: wildcard domains require the DNS-01 challenge — select a DNS provider for this certificate (HTTP-01 cannot issue wildcard certificates)", model.ErrInvalidInput)
 	}
 
+	// The key type is chosen at issuance and kept by every renewal (#364). It
+	// only reaches Let's Encrypt; other certificates keep the default.
+	keyType, err := model.NormalizeCertKeyType(req.KeyType)
+	if err != nil {
+		return nil, err
+	}
+	if req.Provider != model.CertProviderLetsEncrypt {
+		keyType = model.CertKeyTypeRSA2048
+	}
+
 	cert := &model.Certificate{
 		DomainNames: pq.StringArray(req.DomainNames),
 		Provider:    req.Provider,
 		AutoRenew:   req.AutoRenew,
+		KeyType:     keyType,
 		Status:      model.CertStatusPending,
 	}
 
@@ -153,7 +164,7 @@ func (s *CertificateService) Create(ctx context.Context, req *model.CreateCertif
 	}
 
 	// Create certificate record in DB first
-	cert, err := s.repo.Create(ctx, cert)
+	cert, err = s.repo.Create(ctx, cert)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create certificate record: %w", err)
 	}
@@ -209,7 +220,7 @@ func (s *CertificateService) obtainLetsEncryptCert(certID string, domains []stri
 		s.addCertLog(certID, "info", fmt.Sprintf("DNS provider: %s (%s)", dnsProvider.Name, dnsProvider.ProviderType), "challenge")
 		s.addCertLog(certID, "info", "Requesting certificate from Let's Encrypt...", "acme")
 
-		result, user, err = acmeService.ObtainCertificate(acmeEmail, domains, dnsProvider, nil)
+		result, user, err = acmeService.ObtainCertificate(acmeEmail, domains, dnsProvider, nil, cert.KeyType)
 		if err != nil {
 			s.updateCertError(ctx, certID, diagnoseDNS01Error(err, dnsProvider.ProviderType))
 			return
@@ -220,7 +231,7 @@ func (s *CertificateService) obtainLetsEncryptCert(certID string, domains []stri
 		s.addCertLog(certID, "info", "Requesting certificate from Let's Encrypt...", "acme")
 		s.addCertLog(certID, "warn", "Make sure the domain points to this server and port 80 is accessible", "validation")
 
-		result, user, err = acmeService.ObtainCertificateHTTP(acmeEmail, domains, nil)
+		result, user, err = acmeService.ObtainCertificateHTTP(acmeEmail, domains, nil, cert.KeyType)
 		if err != nil {
 			s.updateCertError(ctx, certID, fmt.Sprintf("failed to obtain certificate via HTTP-01: %v", err))
 			return

@@ -1,3 +1,6 @@
+// Key types a Let's Encrypt certificate is issued with (#364).
+export type CertificateKeyType = 'rsa2048' | 'ec256' | 'ec384';
+
 export interface Certificate {
   id: string;
   domain_names: string[];
@@ -5,6 +8,7 @@ export interface Certificate {
   status: 'pending' | 'issued' | 'expired' | 'error' | 'renewing';
   provider: 'letsencrypt' | 'selfsigned' | 'custom';
   auto_renew: boolean;
+  key_type?: CertificateKeyType;
   expires_at?: string;
   issued_at?: string;
   renewal_attempted_at?: string;
@@ -42,6 +46,7 @@ export interface CreateCertificateRequest {
   dns_provider_id?: string;
   provider: 'letsencrypt' | 'selfsigned' | 'custom';
   auto_renew?: boolean;
+  key_type?: CertificateKeyType; // Let's Encrypt only; rsa2048 when omitted
   validity_days?: number; // For self-signed
 }
 

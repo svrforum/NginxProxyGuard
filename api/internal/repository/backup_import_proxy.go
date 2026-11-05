@@ -74,8 +74,8 @@ func (r *BackupRepository) importCertificate(ctx context.Context, tx *sql.Tx, ce
 	query := `
 		INSERT INTO certificates (domain_names, expires_at, certificate_path, private_key_path, provider,
 		                          dns_provider_id, status, auto_renew, certificate_pem, private_key_pem,
-		                          issuer_certificate_pem)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		                          issuer_certificate_pem, key_type)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		RETURNING id
 	`
 
@@ -83,12 +83,18 @@ func (r *BackupRepository) importCertificate(ctx context.Context, tx *sql.Tx, ce
 	if cert.DNSProviderID != "" {
 		dnsProviderID = cert.DNSProviderID
 	}
+	// A backup from before 2.67.0 has no key type: those were RSA 2048, and so
+	// is a value this version does not know.
+	keyType, err := model.NormalizeCertKeyType(cert.KeyType)
+	if err != nil {
+		keyType = model.CertKeyTypeRSA2048
+	}
 
 	var newID string
-	err := tx.QueryRowContext(ctx, query,
+	err = tx.QueryRowContext(ctx, query,
 		pq.Array(cert.DomainNames), cert.ExpiresAt, cert.CertificatePath, cert.PrivateKeyPath, cert.Provider,
 		dnsProviderID, cert.Status, cert.AutoRenew, cert.CertificatePEM, cert.PrivateKeyPEM,
-		cert.IssuerCertificatePEM,
+		cert.IssuerCertificatePEM, keyType,
 	).Scan(&newID)
 	return newID, err
 }

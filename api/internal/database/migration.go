@@ -1878,6 +1878,12 @@ END $$;`,
 			desc: "filter_subscriptions.source_entry_count (#361)",
 			sql:  `ALTER TABLE public.filter_subscriptions ADD COLUMN IF NOT EXISTS source_entry_count integer DEFAULT 0 NOT NULL`,
 		},
+		{
+			// The key type new ACME certificates are issued with (#364).
+			// Every certificate before had an RSA 2048 key.
+			desc: "certificates.key_type (#364)",
+			sql:  `ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS key_type character varying(10) DEFAULT 'rsa2048'::character varying NOT NULL`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

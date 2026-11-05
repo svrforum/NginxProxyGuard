@@ -176,7 +176,7 @@ func (s *CertificateService) renewLetsEncrypt(ctx context.Context, cert *model.C
 		if hasValidUser {
 			// Try renewal with existing account
 			s.addCertLog(cert.ID, "info", "Attempting certificate renewal...", "acme")
-			result, renewErr = acmeService.RenewCertificate(cert.CertificatePEM, cert.PrivateKeyPEM, dnsProvider, &user)
+			result, renewErr = acmeService.RenewCertificate(cert.CertificatePEM, cert.PrivateKeyPEM, dnsProvider, &user, cert.KeyType)
 		}
 
 		// If renewal failed or no valid user, obtain new certificate.
@@ -194,7 +194,7 @@ func (s *CertificateService) renewLetsEncrypt(ctx context.Context, cert *model.C
 			} else {
 				s.addCertLog(cert.ID, "info", "No valid ACME account, obtaining new certificate", "acme")
 			}
-			result, newUser, renewErr = acmeService.ObtainCertificate(acmeEmail, []string(cert.DomainNames), dnsProvider, existingUser)
+			result, newUser, renewErr = acmeService.ObtainCertificate(acmeEmail, []string(cert.DomainNames), dnsProvider, existingUser, cert.KeyType)
 		}
 
 		if renewErr != nil {
@@ -208,7 +208,7 @@ func (s *CertificateService) renewLetsEncrypt(ctx context.Context, cert *model.C
 		if hasValidUser {
 			// Try renewal with existing account
 			s.addCertLog(cert.ID, "info", "Attempting certificate renewal...", "acme")
-			result, renewErr = acmeService.RenewCertificateHTTP(cert.CertificatePEM, cert.PrivateKeyPEM, &user)
+			result, renewErr = acmeService.RenewCertificateHTTP(cert.CertificatePEM, cert.PrivateKeyPEM, &user, cert.KeyType)
 		}
 
 		// If renewal failed or no valid user, obtain new certificate.
@@ -226,7 +226,7 @@ func (s *CertificateService) renewLetsEncrypt(ctx context.Context, cert *model.C
 			} else {
 				s.addCertLog(cert.ID, "info", "No valid ACME account, obtaining new certificate", "acme")
 			}
-			result, newUser, renewErr = acmeService.ObtainCertificateHTTP(acmeEmail, []string(cert.DomainNames), existingUser)
+			result, newUser, renewErr = acmeService.ObtainCertificateHTTP(acmeEmail, []string(cert.DomainNames), existingUser, cert.KeyType)
 		}
 
 		if renewErr != nil {

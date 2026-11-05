@@ -32,12 +32,12 @@ func NewCertificateRepository(db *database.DB) *CertificateRepository {
 func (r *CertificateRepository) Create(ctx context.Context, cert *model.Certificate) (*model.Certificate, error) {
 	query := `
 		INSERT INTO certificates (
-			domain_names, dns_provider_id, status, provider, auto_renew,
+			domain_names, dns_provider_id, status, provider, auto_renew, key_type,
 			expires_at, issued_at, certificate_path, private_key_path,
 			certificate_pem, private_key_pem, issuer_certificate_pem, acme_account
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-		RETURNING id, domain_names, dns_provider_id, status, provider, auto_renew,
+		VALUES ($1, $2, $3, $4, $5, COALESCE(NULLIF($6, ''), 'rsa2048'), $7, $8, $9, $10, $11, $12, $13, $14)
+		RETURNING id, domain_names, dns_provider_id, status, provider, auto_renew, key_type,
 			expires_at, issued_at, renewal_attempted_at, error_message,
 			certificate_path, private_key_path,
 			certificate_pem, private_key_pem, issuer_certificate_pem, acme_account,
@@ -66,6 +66,7 @@ func (r *CertificateRepository) Create(ctx context.Context, cert *model.Certific
 		cert.Status,
 		cert.Provider,
 		cert.AutoRenew,
+		cert.KeyType,
 		toNullTime(cert.ExpiresAt),
 		toNullTime(cert.IssuedAt),
 		toNullString(cert.CertificatePath),
@@ -81,6 +82,7 @@ func (r *CertificateRepository) Create(ctx context.Context, cert *model.Certific
 		&result.Status,
 		&result.Provider,
 		&result.AutoRenew,
+		&result.KeyType,
 		&expiresAt,
 		&issuedAt,
 		&renewalAttemptedAt,
@@ -121,7 +123,7 @@ func (r *CertificateRepository) Create(ctx context.Context, cert *model.Certific
 // hours) and let the follow-up write blank the stored one (#253).
 func (r *CertificateRepository) GetByID(ctx context.Context, id string) (*model.Certificate, error) {
 	query := `
-		SELECT c.id, c.domain_names, c.dns_provider_id, c.status, c.provider, c.auto_renew,
+		SELECT c.id, c.domain_names, c.dns_provider_id, c.status, c.provider, c.auto_renew, c.key_type,
 			c.expires_at, c.issued_at, c.renewal_attempted_at, c.error_message,
 			c.certificate_path, c.private_key_path,
 			c.certificate_pem, c.private_key_pem, c.issuer_certificate_pem, c.acme_account,
@@ -151,6 +153,7 @@ func (r *CertificateRepository) GetByID(ctx context.Context, id string) (*model.
 		&cert.Status,
 		&cert.Provider,
 		&cert.AutoRenew,
+		&cert.KeyType,
 		&expiresAt,
 		&issuedAt,
 		&renewalAttemptedAt,
@@ -271,7 +274,7 @@ func (r *CertificateRepository) List(ctx context.Context, page, perPage int, sea
 	}
 
 	query := fmt.Sprintf(`
-		SELECT c.id, c.domain_names, c.dns_provider_id, c.status, c.provider, c.auto_renew,
+		SELECT c.id, c.domain_names, c.dns_provider_id, c.status, c.provider, c.auto_renew, c.key_type,
 			c.expires_at, c.issued_at, c.renewal_attempted_at, c.error_message,
 			c.certificate_path, c.private_key_path, c.created_at, c.updated_at,
 			d.id, d.name, d.provider_type
@@ -304,6 +307,7 @@ func (r *CertificateRepository) List(ctx context.Context, page, perPage int, sea
 			&cert.Status,
 			&cert.Provider,
 			&cert.AutoRenew,
+			&cert.KeyType,
 			&expiresAt,
 			&issuedAt,
 			&renewalAttemptedAt,
@@ -353,7 +357,7 @@ func (r *CertificateRepository) DeleteByErrorStatus(ctx context.Context) (int64,
 
 func (r *CertificateRepository) ListByStatus(ctx context.Context, status string) ([]model.Certificate, error) {
 	query := `
-		SELECT id, domain_names, dns_provider_id, status, provider, auto_renew,
+		SELECT id, domain_names, dns_provider_id, status, provider, auto_renew, key_type,
 			expires_at, issued_at, certificate_path, private_key_path,
 			created_at, updated_at
 		FROM certificates
@@ -380,6 +384,7 @@ func (r *CertificateRepository) ListByStatus(ctx context.Context, status string)
 			&cert.Status,
 			&cert.Provider,
 			&cert.AutoRenew,
+			&cert.KeyType,
 			&expiresAt,
 			&issuedAt,
 			&certPath,
@@ -560,7 +565,7 @@ func (r *CertificateRepository) Delete(ctx context.Context, id string) error {
 func (r *CertificateRepository) GetByDomains(ctx context.Context, domains []string) (*model.Certificate, error) {
 	// Find certificate that matches any of the domains
 	query := `
-		SELECT id, domain_names, dns_provider_id, status, provider, auto_renew,
+		SELECT id, domain_names, dns_provider_id, status, provider, auto_renew, key_type,
 			expires_at, issued_at, certificate_path, private_key_path,
 			created_at, updated_at
 		FROM certificates
@@ -581,6 +586,7 @@ func (r *CertificateRepository) GetByDomains(ctx context.Context, domains []stri
 		&cert.Status,
 		&cert.Provider,
 		&cert.AutoRenew,
+		&cert.KeyType,
 		&expiresAt,
 		&issuedAt,
 		&certPath,
@@ -607,7 +613,7 @@ func (r *CertificateRepository) GetByDomains(ctx context.Context, domains []stri
 
 func (r *CertificateRepository) GetExpiringSoon(ctx context.Context, days int) ([]model.Certificate, error) {
 	query := `
-		SELECT id, domain_names, dns_provider_id, status, provider, auto_renew,
+		SELECT id, domain_names, dns_provider_id, status, provider, auto_renew, key_type,
 			expires_at, issued_at, certificate_path, private_key_path,
 			error_message, renewal_attempted_at,
 			created_at, updated_at
@@ -638,6 +644,7 @@ func (r *CertificateRepository) GetExpiringSoon(ctx context.Context, days int) (
 			&cert.Status,
 			&cert.Provider,
 			&cert.AutoRenew,
+			&cert.KeyType,
 			&expiresAt,
 			&issuedAt,
 			&certPath,

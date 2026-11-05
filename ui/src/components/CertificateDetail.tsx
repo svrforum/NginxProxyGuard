@@ -103,6 +103,11 @@ export function CertificateDetail({ certificateId, onClose }: CertificateDetailP
                   🔄 {t('detail.autoRenew')}
                 </span>
               )}
+              {cert.provider === 'letsencrypt' && (
+                <span className="px-3 py-1.5 text-sm font-medium rounded-full bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                  🔑 {t(`keyTypes.${cert.key_type ?? 'rsa2048'}`)}
+                </span>
+              )}
             </div>
 
             {/* Domains */}

@@ -187,8 +187,22 @@ type CertificateResult struct {
 	ExpiresAt            time.Time
 }
 
+// legoKeyType maps a certificate's key type (model.CertKeyType*) onto lego's
+// (#364). Anything else is RSA 2048, the type every certificate had before. A
+// renewal keeps the certificate's key, so this is the type of a key lego has
+// to make: a first issuance, or the new order a failed renewal falls back to.
+func legoKeyType(keyType string) certcrypto.KeyType {
+	switch keyType {
+	case model.CertKeyTypeEC256:
+		return certcrypto.EC256
+	case model.CertKeyTypeEC384:
+		return certcrypto.EC384
+	}
+	return certcrypto.RSA2048
+}
+
 // ObtainCertificateHTTP requests a new certificate using HTTP-01 challenge (no DNS API needed)
-func (s *Service) ObtainCertificateHTTP(email string, domains []string, existingUser *ACMEUser) (*CertificateResult, *ACMEUser, error) {
+func (s *Service) ObtainCertificateHTTP(email string, domains []string, existingUser *ACMEUser, keyType string) (*CertificateResult, *ACMEUser, error) {
 	var user *ACMEUser
 	var err error
 
@@ -205,7 +219,7 @@ func (s *Service) ObtainCertificateHTTP(email string, domains []string, existing
 	// Configure lego client
 	config := lego.NewConfig(user)
 	config.CADirURL = s.caURL
-	config.Certificate.KeyType = certcrypto.RSA2048
+	config.Certificate.KeyType = legoKeyType(keyType)
 
 	client, err := lego.NewClient(config)
 	if err != nil {
@@ -281,7 +295,7 @@ func (w *webrootProvider) CleanUp(domain, token, keyAuth string) error {
 }
 
 // ObtainCertificate requests a new certificate from Let's Encrypt using DNS-01
-func (s *Service) ObtainCertificate(email string, domains []string, provider *model.DNSProvider, existingUser *ACMEUser) (*CertificateResult, *ACMEUser, error) {
+func (s *Service) ObtainCertificate(email string, domains []string, provider *model.DNSProvider, existingUser *ACMEUser, keyType string) (*CertificateResult, *ACMEUser, error) {
 	var user *ACMEUser
 	var err error
 
@@ -298,7 +312,7 @@ func (s *Service) ObtainCertificate(email string, domains []string, provider *mo
 	// Configure lego client
 	config := lego.NewConfig(user)
 	config.CADirURL = s.caURL
-	config.Certificate.KeyType = certcrypto.RSA2048
+	config.Certificate.KeyType = legoKeyType(keyType)
 
 	client, err := lego.NewClient(config)
 	if err != nil {
@@ -353,10 +367,10 @@ func (s *Service) ObtainCertificate(email string, domains []string, provider *mo
 }
 
 // RenewCertificate renews an existing certificate using DNS-01 challenge
-func (s *Service) RenewCertificate(certPEM, keyPEM string, provider *model.DNSProvider, user *ACMEUser) (*CertificateResult, error) {
+func (s *Service) RenewCertificate(certPEM, keyPEM string, provider *model.DNSProvider, user *ACMEUser, keyType string) (*CertificateResult, error) {
 	config := lego.NewConfig(user)
 	config.CADirURL = s.caURL
-	config.Certificate.KeyType = certcrypto.RSA2048
+	config.Certificate.KeyType = legoKeyType(keyType)
 
 	client, err := lego.NewClient(config)
 	if err != nil {
@@ -416,10 +430,10 @@ func (s *Service) RenewCertificate(certPEM, keyPEM string, provider *model.DNSPr
 }
 
 // RenewCertificateHTTP renews an existing certificate using HTTP-01 challenge
-func (s *Service) RenewCertificateHTTP(certPEM, keyPEM string, user *ACMEUser) (*CertificateResult, error) {
+func (s *Service) RenewCertificateHTTP(certPEM, keyPEM string, user *ACMEUser, keyType string) (*CertificateResult, error) {
 	config := lego.NewConfig(user)
 	config.CADirURL = s.caURL
-	config.Certificate.KeyType = certcrypto.RSA2048
+	config.Certificate.KeyType = legoKeyType(keyType)
 
 	client, err := lego.NewClient(config)
 	if err != nil {

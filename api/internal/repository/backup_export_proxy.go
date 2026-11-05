@@ -408,7 +408,8 @@ func (r *BackupRepository) exportDDNSRecords(ctx context.Context) ([]model.DDNSR
 func (r *BackupRepository) exportCertificates(ctx context.Context) ([]model.CertificateExport, error) {
 	query := `
 		SELECT id, domain_names, expires_at, certificate_path, private_key_path, provider,
-		       dns_provider_id, status, auto_renew, certificate_pem, private_key_pem, issuer_certificate_pem
+		       dns_provider_id, status, auto_renew, certificate_pem, private_key_pem, issuer_certificate_pem,
+		       key_type
 		FROM certificates ORDER BY created_at
 	`
 
@@ -428,6 +429,7 @@ func (r *BackupRepository) exportCertificates(ctx context.Context) ([]model.Cert
 		err := rows.Scan(
 			&cert.ID, pq.Array(&cert.DomainNames), &expiresAt, &certPath, &keyPath, &provider,
 			&dnsProviderID, &cert.Status, &cert.AutoRenew, &certPEM, &keyPEM, &issuerPEM,
+			&cert.KeyType,
 		)
 		if err != nil {
 			return nil, err

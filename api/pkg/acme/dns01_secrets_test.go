@@ -176,7 +176,7 @@ func TestDNS01FailureKeepsTheDuckDNSTokenOutOfErrorsAndLogs(t *testing.T) {
 		attempt func(*Service, *model.DNSProvider) error
 	}{
 		{"issuance", func(svc *Service, provider *model.DNSProvider) error {
-			_, _, err := svc.ObtainCertificate("admin@example.com", []string{duckTestDomain}, provider, nil)
+			_, _, err := svc.ObtainCertificate("admin@example.com", []string{duckTestDomain}, provider, nil, model.CertKeyTypeRSA2048)
 			return err
 		}},
 		{"renewal", func(svc *Service, provider *model.DNSProvider) error {
@@ -184,7 +184,7 @@ func TestDNS01FailureKeepsTheDuckDNSTokenOutOfErrorsAndLogs(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			_, err = svc.RenewCertificate(certPEM, keyPEM, provider, user)
+			_, err = svc.RenewCertificate(certPEM, keyPEM, provider, user, model.CertKeyTypeRSA2048)
 			return err
 		}},
 	}

@@ -367,7 +367,8 @@ CREATE TABLE IF NOT EXISTS public.certificates (
     error_message text,
     certificate_pem text,
     private_key_pem text,
-    issuer_certificate_pem text
+    issuer_certificate_pem text,
+    key_type character varying(10) DEFAULT 'rsa2048'::character varying NOT NULL
 );
 COMMENT ON COLUMN public.certificates.status IS 'Certificate status: pending, issued, expired, error, renewing';
 COMMENT ON COLUMN public.certificates.acme_account IS 'ACME account registration data';
@@ -4844,3 +4845,6 @@ ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS global_trusted_hostn
 -- Seconds an old nginx worker keeps its connections after a reload (#358).
 -- NULL takes the built-in default, 0 waits for every connection.
 ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS worker_shutdown_timeout integer;
+
+-- Key type for new ACME certificates (#364): rsa2048, ec256 or ec384.
+ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS key_type character varying(10) DEFAULT 'rsa2048'::character varying NOT NULL;

@@ -12497,6 +12497,10 @@ components:
           enum: [letsencrypt, selfsigned, custom]
         auto_renew:
           type: boolean
+        key_type:
+          type: string
+          enum: [rsa2048, ec256, ec384]
+          description: The key type Let's Encrypt issues and renews this certificate with. rsa2048 for every other certificate and for those issued before 2.67.0.
         expires_at:
           type: string
           format: date-time
@@ -16531,6 +16535,11 @@ components:
           enum: [letsencrypt, selfsigned, custom]
         auto_renew:
           type: boolean
+        key_type:
+          type: string
+          enum: [rsa2048, ec256, ec384]
+          default: rsa2048
+          description: Let's Encrypt only. The certificate's key type, kept by every renewal. ec256 and ec384 are ECDSA P-256 and P-384. Any other value is 400.
         validity_days:
           type: integer
           description: Self-signed only; defaults to 365

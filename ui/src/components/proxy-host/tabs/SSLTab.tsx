@@ -3,6 +3,7 @@ import type { CreateCertificateRequest } from '../../../types/certificate'
 import type { CertificateState } from '../types'
 import { useTranslation } from 'react-i18next'
 import { HelpTip } from '../../common/HelpTip'
+import { KeyTypeSelect } from '../../certificate/KeyTypeSelect'
 
 interface DNSProvider {
   id: string
@@ -252,6 +253,12 @@ export function SSLTabContent({
                         </p>
                       </div>
                     )}
+
+                    <KeyTypeSelect
+                      compact
+                      value={newCertData.key_type}
+                      onChange={(keyType) => setNewCertData((prev) => ({ ...prev, key_type: keyType }))}
+                    />
 
                     {/* Auto-renew */}
                     <label className="flex items-center gap-2 cursor-pointer">

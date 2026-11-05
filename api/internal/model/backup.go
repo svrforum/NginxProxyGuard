@@ -794,6 +794,7 @@ type CertificateExport struct {
 	DNSProviderID        string     `json:"dns_provider_id,omitempty"`
 	Status               string     `json:"status"`
 	AutoRenew            bool       `json:"auto_renew"`
+	KeyType              string     `json:"key_type,omitempty"` // absent before 2.67.0: RSA 2048
 	CertificatePEM       string     `json:"certificate_pem,omitempty"`
 	PrivateKeyPEM        string     `json:"private_key_pem,omitempty"`
 	IssuerCertificatePEM string     `json:"issuer_certificate_pem,omitempty"`

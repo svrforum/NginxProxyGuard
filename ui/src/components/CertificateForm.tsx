@@ -3,10 +3,11 @@ import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { createCertificate, uploadCertificate } from '../api/certificates'
 import { listDNSProviders } from '../api/dns-providers'
-import type { CreateCertificateRequest, UploadCertificateRequest } from '../types/certificate'
+import type { CertificateKeyType, CreateCertificateRequest, UploadCertificateRequest } from '../types/certificate'
 import { HelpTip } from './common/HelpTip'
 import { ModalShell } from './common/ModalShell'
 import { CertificateLogModal } from './CertificateLogModal'
+import { KeyTypeSelect } from './certificate/KeyTypeSelect'
 
 interface CertificateFormProps {
   onClose: () => void
@@ -23,6 +24,7 @@ export default function CertificateForm({ onClose, onSuccess }: CertificateFormP
   const [domainNames, setDomainNames] = useState('')
   const [dnsProviderId, setDnsProviderId] = useState('')
   const [autoRenew, setAutoRenew] = useState(true)
+  const [keyType, setKeyType] = useState<CertificateKeyType>('rsa2048')
   const [validityDays, setValidityDays] = useState(365)
   const [certificatePem, setCertificatePem] = useState('')
   const [privateKeyPem, setPrivateKeyPem] = useState('')
@@ -111,6 +113,10 @@ export default function CertificateForm({ onClose, onSuccess }: CertificateFormP
 
       if (provider === 'letsencrypt' && challengeType === 'dns' && dnsProviderId) {
         createData.dns_provider_id = dnsProviderId
+      }
+
+      if (provider === 'letsencrypt') {
+        createData.key_type = keyType
       }
 
       if (provider === 'selfsigned') {
@@ -331,6 +337,8 @@ export default function CertificateForm({ onClose, onSuccess }: CertificateFormP
                   </p>
                 </div>
               )}
+
+              <KeyTypeSelect value={keyType} onChange={setKeyType} />
 
               <label className="flex items-center gap-3 cursor-pointer">
                 <input

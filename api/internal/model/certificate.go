@@ -2,6 +2,8 @@ package model
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/lib/pq"
@@ -23,6 +25,26 @@ const (
 	CertProviderCustom      = "custom"
 )
 
+// Key types an ACME certificate can be issued with (#364). Every certificate
+// issued before had an RSA 2048 key, and that stays the default.
+const (
+	CertKeyTypeRSA2048 = "rsa2048"
+	CertKeyTypeEC256   = "ec256"
+	CertKeyTypeEC384   = "ec384"
+)
+
+// NormalizeCertKeyType returns the key type a request or a backup names, ""
+// meaning RSA 2048, or ErrInvalidInput for any other value.
+func NormalizeCertKeyType(keyType string) (string, error) {
+	switch k := strings.ToLower(strings.TrimSpace(keyType)); k {
+	case "":
+		return CertKeyTypeRSA2048, nil
+	case CertKeyTypeRSA2048, CertKeyTypeEC256, CertKeyTypeEC384:
+		return k, nil
+	}
+	return "", fmt.Errorf("%w: key_type must be rsa2048, ec256 or ec384", ErrInvalidInput)
+}
+
 // Certificate represents an SSL certificate.
 //
 // CertificatePEM, PrivateKeyPEM, IssuerCertificatePEM and AcmeAccount are key
@@ -40,6 +62,7 @@ type Certificate struct {
 	Status               string         `json:"status"`
 	Provider             string         `json:"provider"` // letsencrypt, custom, etc.
 	AutoRenew            bool           `json:"auto_renew"`
+	KeyType              string         `json:"key_type"` // ACME key type; see CertKeyTypeRSA2048
 	ExpiresAt            *time.Time     `json:"expires_at,omitempty"`
 	IssuedAt             *time.Time     `json:"issued_at,omitempty"`
 	RenewalAttemptedAt   *time.Time     `json:"renewal_attempted_at,omitempty"`
@@ -76,6 +99,7 @@ type CreateCertificateRequest struct {
 	DNSProviderID *string  `json:"dns_provider_id,omitempty"` // Required for letsencrypt
 	Provider      string   `json:"provider"`                   // letsencrypt, selfsigned, custom
 	AutoRenew     bool     `json:"auto_renew"`
+	KeyType       string   `json:"key_type,omitempty"`         // letsencrypt: rsa2048 (default), ec256, ec384
 	// For self-signed certificates
 	ValidityDays int `json:"validity_days,omitempty"` // Default 365 for self-signed
 }
