@@ -19071,7 +19071,10 @@ components:
           description: Error text of the last failed fetch. Omitted (cleared) after a success.
         entry_count:
           type: integer
-          description: Entries stored for this subscription. Capped at 25000 per list.
+          description: Entries stored for this subscription. All subscriptions together keep at most 100000, so a list can be cut short.
+        source_entry_count:
+          type: integer
+          description: Entries the list itself had at the last fetch. Above `entry_count` when the entry limit left the rest out; 0 before the first fetch since 2.66.1.
         exclude_private_ips:
           type: boolean
           description: |

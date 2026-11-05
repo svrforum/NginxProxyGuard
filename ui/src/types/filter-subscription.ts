@@ -12,6 +12,8 @@ export interface FilterSubscription {
   last_success_at?: string;
   last_error?: string;
   entry_count: number;
+  // What the list itself had; above entry_count when the entry limit cut it (#361).
+  source_entry_count?: number;
   exclude_private_ips: boolean;
   created_at: string;
   updated_at: string;

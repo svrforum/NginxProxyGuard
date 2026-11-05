@@ -152,13 +152,16 @@ const (
 	LogBufferMultiplier    = 10
 )
 
-// Filter subscription constants
+// Filter subscription constants. One list may use the whole entry total
+// (#361): every IP entry goes into one shared nginx geo tree, so the total is
+// what costs memory, about 100 MB of nginx memory per 100,000 entries and
+// twice that while a reload runs.
 const (
 	FilterFetchTimeout         = 30 * time.Second
 	FilterFetchConnectTimeout  = 5 * time.Second
 	FilterMaxResponseSize      = 10 * 1024 * 1024 // 10MB
 	FilterMaxTotalEntries      = 100000
-	FilterMaxEntriesPerFile    = 25000
+	FilterMaxEntriesPerFile    = 100000
 	FilterMaxRedirects         = 3
 	FilterRefreshCheckInterval = 10 * time.Minute
 	FilterCatalogBaseURL       = "https://raw.githubusercontent.com/svrforum/npg-filters/main/"

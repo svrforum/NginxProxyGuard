@@ -123,6 +123,13 @@ func (s *FilterSubscriptionService) GetDetail(ctx context.Context, id string) (*
 	}, nil
 }
 
+// entryBudget is how many entries a subscription may keep while the other
+// subscriptions hold otherEntries: what the total limit leaves, and no more
+// than the per-list limit. Zero or less means no room.
+func entryBudget(otherEntries int) int {
+	return min(config.FilterMaxEntriesPerFile, config.FilterMaxTotalEntries-otherEntries)
+}
+
 // Create creates a new filter subscription
 func (s *FilterSubscriptionService) Create(ctx context.Context, req *model.CreateFilterSubscriptionRequest) (*model.FilterSubscription, error) {
 	// Validate URL
@@ -159,9 +166,12 @@ func (s *FilterSubscriptionService) Create(ctx context.Context, req *model.Creat
 		return nil, fmt.Errorf("failed to fetch filter list: %w", err)
 	}
 
-	// Apply per-file limit
-	if len(entries) > config.FilterMaxEntriesPerFile {
-		entries = entries[:config.FilterMaxEntriesPerFile]
+	// Keep what the limits leave next to the other subscriptions' entries.
+	// The list's own size is kept too, so the list can show the rest was
+	// left out (#361).
+	listed := len(entries)
+	if budget := entryBudget(totalCount); len(entries) > budget {
+		entries = entries[:budget]
 	}
 
 	// Determine name
@@ -228,6 +238,8 @@ func (s *FilterSubscriptionService) Create(ctx context.Context, req *model.Creat
 		RefreshType:  refreshType,
 		RefreshValue: refreshValue,
 		EntryCount:   len(entries),
+
+		SourceEntryCount: listed,
 	}
 
 	created, err := s.repo.Create(ctx, sub)
@@ -245,7 +257,7 @@ func (s *FilterSubscriptionService) Create(ctx context.Context, req *model.Creat
 	}
 
 	// Update fetch status
-	if err := s.repo.UpdateFetchStatus(ctx, created.ID, true, len(entries), ""); err != nil {
+	if err := s.repo.UpdateFetchStatus(ctx, created.ID, true, len(entries), listed, ""); err != nil {
 		log.Printf("[FilterSubscription] Failed to update fetch status: %v", err)
 	}
 
@@ -293,7 +305,7 @@ func (s *FilterSubscriptionService) Refresh(ctx context.Context, id string) (*mo
 	entries, _, _, _, _, fetchErr := s.fetchAndParse(ctx, sub.URL)
 	if fetchErr != nil {
 		// Record failure but don't remove existing entries
-		if err := s.repo.UpdateFetchStatus(ctx, id, false, sub.EntryCount, fetchErr.Error()); err != nil {
+		if err := s.repo.UpdateFetchStatus(ctx, id, false, sub.EntryCount, sub.SourceEntryCount, fetchErr.Error()); err != nil {
 			log.Printf("[FilterSubscription] Failed to update fetch status: %v", err)
 		}
 		return nil, fmt.Errorf("failed to fetch filter list: %w", fetchErr)
@@ -302,30 +314,29 @@ func (s *FilterSubscriptionService) Refresh(ctx context.Context, id string) (*mo
 	// Empty response protection: if 0 entries fetched, keep existing
 	if len(entries) == 0 {
 		log.Printf("[FilterSubscription] Empty response for subscription %s, keeping existing %d entries", id, sub.EntryCount)
-		if err := s.repo.UpdateFetchStatus(ctx, id, true, sub.EntryCount, ""); err != nil {
+		if err := s.repo.UpdateFetchStatus(ctx, id, true, sub.EntryCount, sub.SourceEntryCount, ""); err != nil {
 			log.Printf("[FilterSubscription] Failed to update fetch status: %v", err)
 		}
 		sub, _ = s.repo.GetByID(ctx, id)
 		return sub, nil
 	}
 
-	// Check total entry limit (exclude current subscription's existing count)
-	totalCount, err := s.repo.GetTotalEntryCount(ctx)
-	if err == nil {
-		otherEntries := totalCount - sub.EntryCount
-		if otherEntries+len(entries) > config.FilterMaxTotalEntries {
-			entries = entries[:config.FilterMaxTotalEntries-otherEntries]
-			if len(entries) <= 0 {
-				log.Printf("[FilterSubscription] Total entry limit reached during refresh for %s", sub.Name)
-				s.repo.UpdateFetchStatus(ctx, id, true, sub.EntryCount, "")
-				return s.repo.GetByID(ctx, id)
-			}
-		}
+	// Keep what the limits leave next to the other subscriptions' entries.
+	// The others can already hold more than the total allows (creating a
+	// subscription did not count them before #361), so the room left can be
+	// below zero.
+	listed := len(entries)
+	budget := config.FilterMaxEntriesPerFile
+	if totalCount, err := s.repo.GetTotalEntryCount(ctx); err == nil {
+		budget = entryBudget(totalCount - sub.EntryCount)
 	}
-
-	// Apply per-file limit
-	if len(entries) > config.FilterMaxEntriesPerFile {
-		entries = entries[:config.FilterMaxEntriesPerFile]
+	if budget <= 0 {
+		log.Printf("[FilterSubscription] Total entry limit reached during refresh for %s", sub.Name)
+		s.repo.UpdateFetchStatus(ctx, id, true, sub.EntryCount, listed, "")
+		return s.repo.GetByID(ctx, id)
+	}
+	if len(entries) > budget {
+		entries = entries[:budget]
 	}
 
 	// Replace entries in transaction
@@ -334,7 +345,7 @@ func (s *FilterSubscriptionService) Refresh(ctx context.Context, id string) (*mo
 	}
 
 	// Update fetch status
-	if err := s.repo.UpdateFetchStatus(ctx, id, true, len(entries), ""); err != nil {
+	if err := s.repo.UpdateFetchStatus(ctx, id, true, len(entries), listed, ""); err != nil {
 		log.Printf("[FilterSubscription] Failed to update fetch status: %v", err)
 	}
 

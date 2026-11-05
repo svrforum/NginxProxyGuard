@@ -1872,6 +1872,12 @@ END $$;`,
         WHERE o.name = u.name
           AND (COALESCE(o.created_at, '-infinity'), o.id) < (COALESCE(u.created_at, '-infinity'), u.id))`,
 		},
+		{
+			// What a subscription's list itself had, so the list can show that
+			// an entry limit left the rest out (#361).
+			desc: "filter_subscriptions.source_entry_count (#361)",
+			sql:  `ALTER TABLE public.filter_subscriptions ADD COLUMN IF NOT EXISTS source_entry_count integer DEFAULT 0 NOT NULL`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

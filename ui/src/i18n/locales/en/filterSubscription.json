@@ -38,7 +38,9 @@
       "ok": "OK",
       "error": "Error",
       "never": "Never"
-    }
+    },
+    "limited": "{{applied}} of {{listed}} entries applied (limit)",
+    "limitedHint": "All subscriptions together apply up to 100,000 entries, so the rest of this list is left out."
   },
   "form": {
     "url": "Filter List URL",

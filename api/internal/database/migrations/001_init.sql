@@ -3700,7 +3700,8 @@ CREATE TABLE IF NOT EXISTS public.filter_subscriptions (
     entry_count integer DEFAULT 0,
     exclude_private_ips boolean DEFAULT false,
     created_at timestamp with time zone DEFAULT now(),
-    updated_at timestamp with time zone DEFAULT now()
+    updated_at timestamp with time zone DEFAULT now(),
+    source_entry_count integer DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.filter_subscription_entries (
@@ -3900,7 +3901,8 @@ CREATE TABLE IF NOT EXISTS public.filter_subscriptions (
     entry_count integer DEFAULT 0,
     exclude_private_ips boolean DEFAULT false,
     created_at timestamp with time zone DEFAULT now(),
-    updated_at timestamp with time zone DEFAULT now()
+    updated_at timestamp with time zone DEFAULT now(),
+    source_entry_count integer DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.filter_subscription_entries (
@@ -3937,6 +3939,7 @@ CREATE TABLE IF NOT EXISTS public.filter_subscription_entry_exclusions (
 CREATE INDEX IF NOT EXISTS idx_fsee_subscription ON public.filter_subscription_entry_exclusions(subscription_id);
 
 ALTER TABLE public.filter_subscriptions ADD COLUMN IF NOT EXISTS exclude_private_ips boolean DEFAULT false;
+ALTER TABLE public.filter_subscriptions ADD COLUMN IF NOT EXISTS source_entry_count integer DEFAULT 0 NOT NULL;
 
 -- ============================================================================
 -- BUG FIXES (v1.3.9+)

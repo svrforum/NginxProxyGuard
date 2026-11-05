@@ -16,6 +16,7 @@ type FilterSubscription struct {
 	LastSuccessAt *time.Time `json:"last_success_at,omitempty"`
 	LastError     *string    `json:"last_error,omitempty"`
 	EntryCount        int        `json:"entry_count"`
+	SourceEntryCount  int        `json:"source_entry_count"` // what the list had; above EntryCount when a limit cut it (#361)
 	ExcludePrivateIPs bool       `json:"exclude_private_ips"`
 	CreatedAt         time.Time  `json:"created_at"`
 	UpdatedAt         time.Time  `json:"updated_at"`
