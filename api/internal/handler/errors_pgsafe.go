@@ -138,8 +138,9 @@ func ClientStatusForDBError(err error) (int, string, bool) {
 // directInternalError is the gate for the handlers that build their own 500
 // body instead of calling internalError/databaseError. It keeps their existing
 // bare {"error": ...} shape — so no client contract changes — while adding the
-// same two properties the shared helpers now have: a malformed identifier is
-// answered with 400, and driver text never reaches the body. A reload nginx
+// same two properties the shared helpers now have: a malformed identifier or
+// an over-long value is answered with 400, and driver text never reaches the
+// body. A reload nginx
 // refused is answered as the shared helpers answer it: 409 with the
 // ErrorResponse body (error, details, code).
 func directInternalError(c echo.Context, err error) error {

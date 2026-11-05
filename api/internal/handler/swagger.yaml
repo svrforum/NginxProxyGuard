@@ -9431,8 +9431,9 @@ paths:
           (`cidr` when more than half the entries contain `/`, else `ip`).
         - The subscription is created with `enabled: false` — nothing is applied to nginx
           until you `PUT` it with `enabled: true`.
-        - Caps: at most 25000 entries are kept per list, and creation is refused once the
-          total across all subscriptions reaches 100000 (400, "total entry limit reached").
+        - Caps: all subscriptions together keep at most 100000 entries. A new list keeps what
+          that total leaves (`source_entry_count` says how many it had), and creation is
+          refused once the total is reached (400, "total entry limit reached").
         - The returned object is the in-memory struct built before the fetch-status row is
           written, so `last_fetched_at`/`last_success_at` are null here even though the fetch
           succeeded. Re-read with `GET /filter-subscriptions/{id}` for the persisted values.
@@ -9626,7 +9627,7 @@ paths:
       tags: [Filter Subscriptions]
       summary: Get a filter subscription with its entries and exclusions
       description: |
-        Returns the subscription plus **all** of its stored entries (up to 25000), its host
+        Returns the subscription plus **all** of its stored entries (up to 100000), its host
         exclusions and its entry exclusions. Note that `entries` is the raw fetched list — it
         is not filtered by `entry_exclusions`; the exclusions are applied when the shared
         nginx config is generated.
@@ -9757,7 +9758,8 @@ paths:
           as a success (200).
         - Global cap: entries are truncated so the 100000 total is not exceeded; if no room is
           left the existing entries are kept unchanged.
-        - Per-list cap: at most 25000 entries.
+        - Per-list cap: at most 100000 entries, the whole total.
+        - `source_entry_count` records how many entries the list had, so a cut list shows.
 
         On success entries are replaced in a transaction and a shared-config regeneration +
         debounced nginx reload is triggered asynchronously.
