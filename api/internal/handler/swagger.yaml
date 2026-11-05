@@ -16541,7 +16541,7 @@ components:
           type: string
           enum: [rsa2048, ec256, ec384]
           default: rsa2048
-          description: Let's Encrypt only. The certificate's key type, kept by every renewal. ec256 and ec384 are ECDSA P-256 and P-384. Any other value is 400.
+          description: The key type a Let's Encrypt certificate is issued with, kept by every renewal; other providers keep rsa2048. ec256 and ec384 are ECDSA P-256 and P-384. Case-insensitive; an unknown value is 400 whatever the provider.
         validity_days:
           type: integer
           description: Self-signed only; defaults to 365
