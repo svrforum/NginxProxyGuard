@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -457,6 +458,10 @@ func (h *ProxyHostHandler) Clone(c echo.Context) error {
 			// both): record it, and name it in the 409.
 			h.auditClone(c, sourceHost, host, &req)
 			return reloadRejectedWithID(c, "clone proxy host", err, host.ID)
+		}
+		// nginx's message may say "not found" or "invalid": still a 500.
+		if errors.Is(err, service.ErrCloneNotApplied) {
+			return internalError(c, "clone proxy host", err)
 		}
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "already exist") || strings.Contains(errMsg, "listener conflict") || strings.Contains(errMsg, "conflict:") {

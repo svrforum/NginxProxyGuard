@@ -1858,6 +1858,20 @@ END $$;`,
 			desc: "global_settings.worker_shutdown_timeout (#358)",
 			sql:  `ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS worker_shutdown_timeout integer`,
 		},
+		{
+			// A clone copied its source's upstream name, and nginx refuses two
+			// upstream blocks with one name for every host at once (#362). The
+			// oldest holder keeps the name; the others take the one derived
+			// from their whole host id, and startup's SyncAllConfigs rewrites
+			// their files. A no-op once no two rows share a name.
+			desc: "upstreams: rename duplicate upstream names (#362)",
+			sql: `UPDATE public.upstreams u
+   SET name = 'upstream_' || replace(u.proxy_host_id::text, '-', ''), updated_at = now()
+ WHERE EXISTS (
+       SELECT 1 FROM public.upstreams o
+        WHERE o.name = u.name
+          AND (COALESCE(o.created_at, '-infinity'), o.id) < (COALESCE(u.created_at, '-infinity'), u.id))`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

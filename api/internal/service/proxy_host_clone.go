@@ -34,6 +34,11 @@ func resolveCloneContainerBinding(srcName, srcNetwork, reqName, reqNetwork *stri
 	return srcName, srcNetwork
 }
 
+// ErrCloneNotApplied is Clone's answer when nginx refused the clone's config
+// once its copied settings were in it. The clone is deleted again, so nothing
+// is left behind that the running config does not carry (#362).
+var ErrCloneNotApplied = errors.New("the cloned proxy host's config was not applied, so the clone was removed")
+
 // Clone creates a copy of an existing proxy host with new domain names
 // It copies all related configurations including:
 // - GeoRestriction, RateLimit, SecurityHeaders, BotFilter
@@ -235,7 +240,19 @@ func (s *ProxyHostService) Clone(ctx context.Context, sourceID string, req *mode
 	// Regenerate nginx config to include cloned settings
 	if newHost.Enabled {
 		if _, err := s.Update(ctx, newHost.ID, nil); err != nil {
-			log.Printf("[WARN] Failed to regenerate nginx config for cloned host: %v", err)
+			if !errors.Is(err, nginx.ErrReloadRejected) {
+				// nginx -t refused the clone with its copied settings. Take
+				// it back out instead of answering 201 for a host whose
+				// config never applied (#362).
+				log.Printf("[WARN] Failed to apply the cloned host's config, rolling back: %v", err)
+				if delErr := s.Delete(ctx, newHost.ID); delErr != nil {
+					log.Printf("[ERROR] Rollback failed: could not delete cloned host %s: %v", newHost.ID, delErr)
+				}
+				return nil, fmt.Errorf("%w: %w", ErrCloneNotApplied, err)
+			}
+			if rejected == nil {
+				rejected = err
+			}
 		}
 	}
 
@@ -436,8 +453,10 @@ func (s *ProxyHostService) cloneRelatedConfigs(ctx context.Context, sourceID, ta
 					IsDown:      srv.IsDown,
 				}
 			}
+			// No name: Upsert derives one from the clone's id. The source's
+			// name would declare its upstream block twice, and nginx then
+			// refuses every config at once (#362).
 			upReq := &model.CreateUpstreamRequest{
-				Name:                      up.Name,
 				Servers:                   servers,
 				LoadBalance:               up.LoadBalance,
 				HealthCheckEnabled:        &up.HealthCheckEnabled,

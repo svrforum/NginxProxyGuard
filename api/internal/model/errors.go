@@ -14,4 +14,6 @@ var (
 	ErrDNSChallengeFailed = errors.New("DNS challenge failed")
 	ErrACMEError          = errors.New("ACME error")
 	ErrCustomCertOnly     = errors.New("only custom certificates can be updated")
+	// nginx refuses two upstream blocks with one name, for every host (#362).
+	ErrUpstreamNameTaken = errors.New("upstream name is already used by another proxy host")
 )

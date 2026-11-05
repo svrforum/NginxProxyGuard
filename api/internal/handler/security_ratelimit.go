@@ -192,6 +192,9 @@ func (h *SecurityHandler) UpsertUpstream(c echo.Context) error {
 
 	upstream, err := h.securityService.UpsertUpstream(c.Request().Context(), proxyHostID, &req)
 	if err != nil {
+		if errors.Is(err, model.ErrUpstreamNameTaken) {
+			return conflictError(c, err.Error())
+		}
 		// Service-level validation errors (invalid scheme, load_balance, server address, port) → 400
 		msg := err.Error()
 		if strings.Contains(msg, "invalid") || strings.Contains(msg, "is required") {

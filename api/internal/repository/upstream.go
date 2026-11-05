@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"nginx-proxy-guard/internal/model"
@@ -103,6 +104,19 @@ func (r *UpstreamRepository) GetByID(ctx context.Context, id string) (*model.Ups
 	return &u, nil
 }
 
+// nameTaken reports whether another proxy host's upstream uses name.
+func (r *UpstreamRepository) nameTaken(ctx context.Context, name, proxyHostID string) (bool, error) {
+	var taken bool
+	err := r.db.QueryRowContext(ctx,
+		`SELECT EXISTS (SELECT 1 FROM upstreams WHERE name = $1 AND proxy_host_id <> $2::UUID)`,
+		name, proxyHostID,
+	).Scan(&taken)
+	if err != nil {
+		return false, fmt.Errorf("check upstream name: %w", err)
+	}
+	return taken, nil
+}
+
 func (r *UpstreamRepository) Upsert(ctx context.Context, proxyHostID string, req *model.CreateUpstreamRequest) (*model.Upstream, error) {
 	serversJSON := []byte("[]")
 	if req.Servers != nil && len(req.Servers) > 0 {
@@ -152,6 +166,24 @@ func (r *UpstreamRepository) Upsert(ctx context.Context, proxyHostID string, req
 		return nil, fmt.Errorf("invalid upstream name: only alphanumeric and underscore allowed")
 	}
 
+	// nginx refuses two upstream blocks with one name, and then every config
+	// at once (#362), so a name belongs to one proxy host. The derived name
+	// repeats another host's only when the two ids share their first 8
+	// characters; that one takes the whole id instead.
+	taken, err := r.nameTaken(ctx, name, proxyHostID)
+	if err != nil {
+		return nil, err
+	}
+	if taken && req.Name == "" {
+		name = "upstream_" + strings.ReplaceAll(proxyHostID, "-", "")
+		if taken, err = r.nameTaken(ctx, name, proxyHostID); err != nil {
+			return nil, err
+		}
+	}
+	if taken {
+		return nil, fmt.Errorf("%w: %s", model.ErrUpstreamNameTaken, name)
+	}
+
 	scheme := model.NormalizeUpstreamScheme(req.Scheme)
 
 	query := `
@@ -181,7 +213,7 @@ func (r *UpstreamRepository) Upsert(ctx context.Context, proxyHostID string, req
 	var returnedServersJSON []byte
 	var lastCheckAt sql.NullTime
 
-	err := r.db.QueryRowContext(ctx, query,
+	err = r.db.QueryRowContext(ctx, query,
 		proxyHostID, name, scheme, serversJSON, req.LoadBalance, req.HealthCheckEnabled,
 		req.HealthCheckInterval, req.HealthCheckTimeout, req.HealthCheckPath,
 		req.HealthCheckExpectedStatus, req.Keepalive,

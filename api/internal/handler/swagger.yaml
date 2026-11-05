@@ -895,6 +895,14 @@ paths:
                 $ref: '#/components/schemas/Upstream'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '409':
+          description: |
+            Another proxy host's upstream already uses this name. nginx refuses
+            two upstream blocks with one name, for every host at once.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
     delete:
       tags: [Security]
@@ -8618,8 +8626,11 @@ paths:
       summary: Clone a proxy host
       description: |
         Creates a new host from an existing one under new domain names. Fields
-        omitted from the body are copied from the source host. Requires the
-        `proxy:write` scope when called with an API token.
+        omitted from the body are copied from the source host. A copied
+        upstream gets its own name, derived from the clone's id. If nginx
+        refuses the clone's config with its copied settings, the clone is
+        removed again and the request fails. Requires the `proxy:write` scope
+        when called with an API token.
       security:
         - BearerAuth: []
       parameters:
@@ -18470,7 +18481,7 @@ components:
       properties:
         name:
           type: string
-          description: nginx upstream block name. Defaults to `upstream_` + the first 8 characters of the proxy host id when empty, and must match ^[a-zA-Z0-9_]+$ or the request is rejected with 400.
+          description: nginx upstream block name. Defaults to `upstream_` + the first 8 characters of the proxy host id when empty (the whole id, without dashes, when another host's upstream already has that name), and must match ^[a-zA-Z0-9_]+$ or the request is rejected with 400. A name another proxy host's upstream uses is 409.
         scheme:
           type: string
           enum: [http, https]
