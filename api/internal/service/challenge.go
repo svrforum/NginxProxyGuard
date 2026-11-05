@@ -163,6 +163,10 @@ func (s *ChallengeService) VerifyCaptcha(ctx context.Context, req *model.VerifyC
 
 	tokenRecord, err := s.repo.CreateToken(ctx, proxyHostPtr, token, clientIP, userAgent, req.ChallengeReason, config.TokenValidity)
 	if err != nil {
+		// The host can be deleted between the lookup above and this insert.
+		if errors.Is(err, repository.ErrTokenHostGone) {
+			return nil, ErrChallengeHostGone
+		}
 		return nil, fmt.Errorf("failed to create token: %w", err)
 	}
 

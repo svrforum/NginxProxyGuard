@@ -5,8 +5,11 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"time"
+
+	"github.com/lib/pq"
 
 	"nginx-proxy-guard/internal/model"
 )
@@ -217,6 +220,11 @@ func (r *ChallengeRepository) DeleteConfig(ctx context.Context, proxyHostID *str
 
 // === Challenge Tokens ===
 
+// ErrTokenHostGone is CreateToken's answer when the token's proxy host no
+// longer exists: the host was deleted after the caller looked it up, and the
+// foreign key refused the token (#356).
+var ErrTokenHostGone = errors.New("the challenge token's proxy host no longer exists")
+
 // CreateToken creates a new challenge token
 func (r *ChallengeRepository) CreateToken(ctx context.Context, proxyHostID *string, token, clientIP, userAgent, reason string, validitySeconds int) (*model.ChallengeToken, error) {
 	tokenHash := HashToken(token)
@@ -240,6 +248,10 @@ func (r *ChallengeRepository) CreateToken(ctx context.Context, proxyHostID *stri
 		&ct.IssuedAt, &ct.ExpiresAt, &ct.UseCount, &lastUsed, &ct.Revoked, &revokedAt, &revokedReason,
 	)
 	if err != nil {
+		var pqErr *pq.Error
+		if proxyHostID != nil && errors.As(err, &pqErr) && pqErr.Code == "23503" { // foreign_key_violation
+			return nil, ErrTokenHostGone
+		}
 		return nil, fmt.Errorf("failed to create challenge token: %w", err)
 	}
 
