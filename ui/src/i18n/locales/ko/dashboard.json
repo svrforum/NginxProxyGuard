@@ -73,7 +73,9 @@
     "subtitle": "지역별 트래픽",
     "topCountries": "상위 국가 (24시간)",
     "total": "총: {{count}} 요청",
-    "totalRequests": "총: {{count}} 요청"
+    "totalRequests": "총: {{count}} 요청",
+    "unknownTraffic": "LAN / 미확인",
+    "showLogs": "{{country}} 접근 로그 보기"
   },
   "storage": {
     "banner": {

@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
+import { usePermissions } from '../hooks/usePermissions';
 import { getDashboard, runSelfCheck, getContainerStats, getGeoIPStats } from '../api/settings';
 import WorldMapVisualization from './WorldMapVisualization';
 import HostResourcesSection from './dashboard/HostResourcesSection';
@@ -15,6 +17,8 @@ function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
+const isCountryCode = (code: string | undefined) => !!code && /^[A-Z]{2}$/i.test(code);
+
 function formatNumber(num: number): string {
   if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
   if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
@@ -23,6 +27,9 @@ function formatNumber(num: number): string {
 
 export default function Dashboard() {
   const { t } = useTranslation('dashboard');
+  const navigate = useNavigate();
+  // A country opens the access logs filtered to it (#367), for those who may read them.
+  const canReadLogs = usePermissions().can('logs:read');
   const { data: dashboard, isLoading, error, refetch } = useQuery({
     queryKey: ['dashboard'],
     queryFn: getDashboard,
@@ -47,12 +54,19 @@ export default function Dashboard() {
     refetchInterval: 120000,
   });
 
-  const countryCodePattern = /^[A-Z]{2}$/i;
-  const filteredCountries = useMemo(() => {
-    if (!geoIPStats?.data) return [];
-    return geoIPStats.data
-      .filter((country) => country.country_code && country.country_code !== '--' && countryCodePattern.test(country.country_code))
-      .slice(0, 10);
+  // Requests without a country (private and LAN addresses, which GeoIP leaves
+  // as "--") stay out of the country rows but count in their percentages, so
+  // they get a row of their own (#367).
+  const { filteredCountries, unknownTraffic } = useMemo(() => {
+    const countries = geoIPStats?.data ?? [];
+    const unknown = countries.filter((country) => !isCountryCode(country.country_code));
+    return {
+      filteredCountries: countries.filter((country) => isCountryCode(country.country_code)).slice(0, 10),
+      unknownTraffic: {
+        count: unknown.reduce((sum, country) => sum + country.count, 0),
+        percentage: unknown.reduce((sum, country) => sum + country.percentage, 0),
+      },
+    };
   }, [geoIPStats?.data]);
 
   if (isLoading) {
@@ -332,10 +346,11 @@ export default function Dashboard() {
             )}
           </div>
           <div className="p-4">
-            {filteredCountries.length > 0 ? (
+            {filteredCountries.length > 0 || unknownTraffic.count > 0 ? (
               <div className="space-y-2">
-                {filteredCountries.map((country, i) => (
-                    <div key={i} className="flex items-center justify-between">
+                {filteredCountries.map((country) => {
+                  const row = (
+                    <>
                       <div className="flex items-center gap-2">
                         <span className="text-lg">
                           {country.country_code
@@ -350,8 +365,34 @@ export default function Dashboard() {
                         <span className="font-mono text-sm dark:text-gray-400">{formatNumber(country.count)}</span>
                         <span className="text-gray-400 text-xs ml-2">({country.percentage.toFixed(1)}%)</span>
                       </div>
+                    </>
+                  );
+                  return canReadLogs ? (
+                    <button
+                      key={country.country_code}
+                      type="button"
+                      onClick={() => navigate(`/logs/access?geo_country_code=${encodeURIComponent(country.country_code)}`)}
+                      title={t('geo.showLogs', { country: country.country })}
+                      className="-mx-1 flex w-[calc(100%+0.5rem)] items-center justify-between rounded px-1 text-left hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                    >
+                      {row}
+                    </button>
+                  ) : (
+                    <div key={country.country_code} className="flex items-center justify-between">{row}</div>
+                  );
+                })}
+                {unknownTraffic.count > 0 && (
+                  <div className="flex items-center justify-between border-t border-slate-100 pt-2 dark:border-slate-700">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg" aria-hidden="true">🌐</span>
+                      <span className="text-gray-500 dark:text-gray-400">{t('geo.unknownTraffic')}</span>
                     </div>
-                  ))}
+                    <div className="text-right">
+                      <span className="font-mono text-sm dark:text-gray-400">{formatNumber(unknownTraffic.count)}</span>
+                      <span className="text-gray-400 text-xs ml-2">({unknownTraffic.percentage.toFixed(1)}%)</span>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : dashboard?.top_countries && dashboard.top_countries.length > 0 ? (
               <div className="space-y-2">

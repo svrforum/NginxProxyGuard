@@ -32,6 +32,8 @@ export function useLogQuery({ logType, defaultBlockReason }: UseLogQueryArgs) {
     if (searchParams.get('client_ip')) initialFilter.client_ip = searchParams.get('client_ip') || undefined;
     if (searchParams.get('host')) initialFilter.host = searchParams.get('host') || undefined;
     if (searchParams.get('uri')) initialFilter.uri = searchParams.get('uri') || undefined;
+    // The dashboard's country list links here (#367).
+    if (searchParams.get('geo_country_code')) initialFilter.geo_country_code = searchParams.get('geo_country_code') || undefined;
 
     return initialFilter;
   });

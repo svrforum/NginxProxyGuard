@@ -73,7 +73,9 @@
     "subtitle": "Traffic by region",
     "topCountries": "Top Countries (24h)",
     "total": "Total: {{count}} requests",
-    "totalRequests": "Total: {{count}} requests"
+    "totalRequests": "Total: {{count}} requests",
+    "unknownTraffic": "LAN / Unknown",
+    "showLogs": "Show access logs from {{country}}"
   },
   "storage": {
     "banner": {

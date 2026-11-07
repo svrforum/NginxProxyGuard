@@ -1,4 +1,5 @@
 import { useMemo, memo, useState, type ComponentProps } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ComposableMap,
   Geographies,
@@ -75,6 +76,38 @@ function getRegionColor(percentage: number, maxPercentage: number): string {
   return "#93c5fd";
 }
 
+interface RegionRowProps {
+  label: string;
+  color: string;
+  percentage: number;
+  count: number;
+}
+
+function RegionRow({ label, color, percentage, count }: RegionRowProps) {
+  return (
+    <div className="group">
+      <div className="flex items-center justify-between text-xs mb-1">
+        <div className="flex items-center gap-2">
+          <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: color }} />
+          <span className="text-slate-300 font-medium">{label}</span>
+        </div>
+        <span className="text-slate-400">{percentage.toFixed(0)}%</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="flex-1 h-1 bg-slate-700 rounded-full overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all duration-500"
+            style={{ width: `${percentage}%`, backgroundColor: color }}
+          />
+        </div>
+        <span className="text-white text-xs font-semibold min-w-[40px] text-right">
+          {count >= 1000 ? `${(count / 1000).toFixed(1)}K` : count}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 type CursorPosition = Pick<MouseEvent, "clientX" | "clientY">;
 
 interface CountryDotsProps {
@@ -120,6 +153,7 @@ function WorldMapVisualization({
   data,
   isLoading,
 }: WorldMapVisualizationProps) {
+  const { t } = useTranslation("dashboard");
   const [tooltipContent, setTooltipContent] = useState("");
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
 
@@ -160,6 +194,18 @@ function WorldMapVisualization({
       }
     });
     return result;
+  }, [data]);
+
+  // What no region holds: private and LAN addresses, which GeoIP leaves as
+  // "--", and codes such as EU. The regions alone did not add up to 100% (#367).
+  const unknownTraffic = useMemo(() => {
+    const unknown = data.filter(
+      (d) => !COUNTRY_REGIONS[d.country_code?.toUpperCase()],
+    );
+    return {
+      count: unknown.reduce((sum, d) => sum + d.count, 0),
+      percentage: unknown.reduce((sum, d) => sum + d.percentage, 0),
+    };
   }, [data]);
 
   const maxRegionPercentage = useMemo(() => {
@@ -272,49 +318,26 @@ function WorldMapVisualization({
         </div>
 
         <div className="flex-1 space-y-2 overflow-auto pr-3 custom-scrollbar">
-          {sortedRegions.length > 0 ? (
-            sortedRegions.map(([regionId, region]) => (
-              <div key={regionId} className="group">
-                <div className="flex items-center justify-between text-xs mb-1">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-2.5 h-2.5 rounded-sm"
-                      style={{
-                        backgroundColor: getRegionColor(
-                          region.percentage,
-                          maxRegionPercentage
-                        ),
-                      }}
-                    />
-                    <span className="text-slate-300 font-medium">
-                      {REGION_NAMES[regionId]}
-                    </span>
-                  </div>
-                  <span className="text-slate-400">
-                    {region.percentage.toFixed(0)}%
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 h-1 bg-slate-700 rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all duration-500"
-                      style={{
-                        width: `${region.percentage}%`,
-                        backgroundColor: getRegionColor(
-                          region.percentage,
-                          maxRegionPercentage
-                        ),
-                      }}
-                    />
-                  </div>
-                  <span className="text-white text-xs font-semibold min-w-[40px] text-right">
-                    {region.count >= 1000
-                      ? `${(region.count / 1000).toFixed(1)}K`
-                      : region.count}
-                  </span>
-                </div>
-              </div>
-            ))
+          {sortedRegions.length > 0 || unknownTraffic.count > 0 ? (
+            <>
+              {sortedRegions.map(([regionId, region]) => (
+                <RegionRow
+                  key={regionId}
+                  label={REGION_NAMES[regionId]}
+                  color={getRegionColor(region.percentage, maxRegionPercentage)}
+                  percentage={region.percentage}
+                  count={region.count}
+                />
+              ))}
+              {unknownTraffic.count > 0 && (
+                <RegionRow
+                  label={t("geo.unknownTraffic")}
+                  color="#64748b"
+                  percentage={unknownTraffic.percentage}
+                  count={unknownTraffic.count}
+                />
+              )}
+            </>
           ) : (
             <div className="text-slate-500 text-xs text-center py-4">
               No traffic data
