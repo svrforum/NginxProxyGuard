@@ -25,8 +25,17 @@ import (
 // HOST as the method. That produced request_method = `_"` (161 rows a week on
 // one install) and, worse, mis-attributed the host, which is what fail2ban
 // counts against a proxy host.
+//
+// $remote_user is the one field nginx writes without quotes, and it is what
+// the client sent: the user name of any Authorization: Basic header, auth_basic
+// or not, spaces included. Read as one token, a name like "a b" made every
+// line of that client unparseable, so none was stored and fail2ban counted
+// none. It is matched up to the time field instead: nginx escapes a double
+// quote in the name, so the quoted fields after the time cannot start inside
+// it. A name holding " [" can still take the time field's place, and such a
+// line gets the time it is read, as any line whose time cannot be read does.
 var accessLogRegex = regexp.MustCompile(
-	`^(\S+)\s+-\s+(\S+)\s+\[([^\]]+)\]\s+"([^"]*)"\s+"([^"]*)"\s+(\d+)\s+(\d+)\s+"([^"]*)"\s+"([^"]*)"\s+"([^"]*)"`,
+	`^(\S+)\s+-\s+(.*?)\s+\[([^\]]+)\]\s+"([^"]*)"\s+"([^"]*)"\s+(\d+)\s+(\d+)\s+"([^"]*)"\s+"([^"]*)"\s+"([^"]*)"`,
 )
 
 // splitRequestLine breaks nginx's $request into method / URI / protocol without
@@ -66,7 +75,7 @@ var (
 
 // Old access log format (without host) - fallback
 var accessLogRegexOld = regexp.MustCompile(
-	`^(\S+)\s+-\s+(\S+)\s+\[([^\]]+)\]\s+"(\S+)\s+(\S+)\s+(\S+)"\s+(\d+)\s+(\d+)\s+"([^"]*)"\s+"([^"]*)"\s+"([^"]*)"`,
+	`^(\S+)\s+-\s+(.*?)\s+\[([^\]]+)\]\s+"(\S+)\s+(\S+)\s+(\S+)"\s+(\d+)\s+(\d+)\s+"([^"]*)"\s+"([^"]*)"\s+"([^"]*)"`,
 )
 
 // parseAccessLog and parseErrorLog leave RawLog empty. Nothing reads the
@@ -80,6 +89,16 @@ func (c *LogCollector) parseAccessLog(line string) (*model.CreateLogRequest, err
 	matches := accessLogRegex.FindStringSubmatch(line)
 	if matches != nil && len(matches) >= 11 {
 		// New format: client - user [time] "host" "request" status bytes "referer" "ua" "xff"
+		//
+		// The fields after these (rt=, ua=, block=, ...) are read from what
+		// follows the X-Forwarded-For field, which nginx writes itself. The
+		// client chooses the Referer, User-Agent and X-Forwarded-For values,
+		// and one ending in `block=` or `ua=` read as the first match of the
+		// whole line would set the block reason or the upstream address: it
+		// could erase the reason of a request NPG blocked, or make it look
+		// answered by the backend, and a host's log rules (#347) would then
+		// leave it out of the database.
+		tail := line[len(matches[0]):]
 		timestamp, err := time.Parse("02/Jan/2006:15:04:05 -0700", matches[3])
 		if err != nil {
 			timestamp = time.Now()
@@ -112,7 +131,7 @@ func (c *LogCollector) parseAccessLog(line string) (*model.CreateLogRequest, err
 		// BlockReasonNone ("none"), which makes that fallback condition false.
 		// Issue #130 surfaced this for global rate-limit blocks; the same gap also
 		// silently disabled the bot-filter user-agent fallback.
-		if brMatches := blockReasonRegex.FindStringSubmatch(line); brMatches != nil && brMatches[1] != "-" && brMatches[1] != "" {
+		if brMatches := blockReasonRegex.FindStringSubmatch(tail); brMatches != nil && brMatches[1] != "-" && brMatches[1] != "" {
 			reason := model.ParseBlockReason(brMatches[1])
 			// Only set access_denied if the request was actually denied (403)
 			// This prevents false positives when Access List is configured but request is allowed
@@ -122,22 +141,22 @@ func (c *LogCollector) parseAccessLog(line string) (*model.CreateLogRequest, err
 				blockReason = reason
 			}
 		}
-		if bcMatches := botCategoryRegex.FindStringSubmatch(line); bcMatches != nil && bcMatches[1] != "-" {
+		if bcMatches := botCategoryRegex.FindStringSubmatch(tail); bcMatches != nil && bcMatches[1] != "-" {
 			botCategory = bcMatches[1]
 		}
-		if erMatches := exploitRuleRegex.FindStringSubmatch(line); erMatches != nil && erMatches[1] != "-" {
+		if erMatches := exploitRuleRegex.FindStringSubmatch(tail); erMatches != nil && erMatches[1] != "-" {
 			exploitRule = erMatches[1]
 		}
 
 		// Extract geo country code from log line
 		var geoCountryCode string
-		if geoMatches := geoCountryRegex.FindStringSubmatch(line); geoMatches != nil && geoMatches[1] != "-" && geoMatches[1] != "" {
+		if geoMatches := geoCountryRegex.FindStringSubmatch(tail); geoMatches != nil && geoMatches[1] != "-" && geoMatches[1] != "" {
 			geoCountryCode = geoMatches[1]
 		}
 
 		// Extract request_time from log line (rt=0.001)
 		var requestTime float64
-		if rtMatches := requestTimeRegex.FindStringSubmatch(line); rtMatches != nil {
+		if rtMatches := requestTimeRegex.FindStringSubmatch(tail); rtMatches != nil {
 			rawValue := rtMatches[1]
 			if parsed, err := strconv.ParseFloat(rawValue, 64); err == nil {
 				requestTime = validateRequestTime(parsed, rawValue)
@@ -146,7 +165,7 @@ func (c *LogCollector) parseAccessLog(line string) (*model.CreateLogRequest, err
 
 		// Extract upstream_response_time from log line (urt="0.001", urt="-", urt="0.001, 0.002")
 		var upstreamResponseTime float64
-		if urtMatches := upstreamResponseTimeRegex.FindStringSubmatch(line); urtMatches != nil {
+		if urtMatches := upstreamResponseTimeRegex.FindStringSubmatch(tail); urtMatches != nil {
 			urtValue := urtMatches[1]
 			if urtValue != "-" && urtValue != "" {
 				parts := strings.Split(urtValue, ",")
@@ -162,8 +181,8 @@ func (c *LogCollector) parseAccessLog(line string) (*model.CreateLogRequest, err
 		// Preserve raw $upstream_addr / $upstream_status strings (may be "-" when no upstream
 		// was reached, or a comma-separated list on retries). Normalize "-" to empty so the
 		// DB stores NULL and the UI can render "direct" cleanly.
-		upstreamAddr := extractUpstreamField(line, upstreamAddrRegex)
-		upstreamStatus := extractUpstreamField(line, upstreamStatusRegex)
+		upstreamAddr := extractUpstreamField(tail, upstreamAddrRegex)
+		upstreamStatus := extractUpstreamField(tail, upstreamStatusRegex)
 
 		return &model.CreateLogRequest{
 			LogType:              model.LogTypeAccess,
