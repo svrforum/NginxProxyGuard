@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { listCertificates } from '../../../api/certificates'
 import { listDNSProviders } from '../../../api/dns-providers'
-import { getAccessLists, getCountryCodes, getGeoRestriction } from '../../../api/access'
+import { getAllAccessLists, getCountryCodes, getGeoRestriction } from '../../../api/access'
 import { getAuthProviders } from '../../../api/auth-provider'
 import { getBotFilter } from '../../../api/security'
 import { getGeoIPStatus } from '../../../api/settings'
@@ -130,7 +130,7 @@ export function useProxyHostFormState(host: ProxyHost | null | undefined) {
 
   const { data: accessListsData } = useQuery({
     queryKey: ['accessLists'],
-    queryFn: () => getAccessLists(1, 100),
+    queryFn: getAllAccessLists,
   })
 
   const { data: authProvidersData } = useQuery({
@@ -198,7 +198,7 @@ export function useProxyHostFormState(host: ProxyHost | null | undefined) {
   // ───── Derived data ──────────────────────────────────────────────────
   const availableCerts = certificatesData?.data?.filter((c) => c.status === 'issued') || []
   const pendingCerts = certificatesData?.data?.filter((c) => c.status === 'pending') || []
-  const availableAccessLists = accessListsData?.data || []
+  const availableAccessLists = accessListsData || []
   const availableAuthProviders = authProvidersData?.data || []
   const dnsProviders = dnsProvidersData?.data || []
 

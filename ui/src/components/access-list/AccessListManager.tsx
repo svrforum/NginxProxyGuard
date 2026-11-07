@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { confirmAccessListDNS, deleteAccessList, getAccessLists } from '../../api/access';
+import { confirmAccessListDNS, deleteAccessList, getAllAccessLists } from '../../api/access';
 import { ApiError, isNginxReloadRefusal } from '../../api/client';
 import type { AccessList } from '../../types/access';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -43,12 +43,12 @@ export default function AccessListManager() {
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['access-lists'],
-    queryFn: () => getAccessLists(),
+    queryFn: getAllAccessLists,
     // Poll only while a domain waits for its first answer, an addition waits
     // for nginx, or a removal has not reached nginx — and only on a visible tab.
     refetchInterval: (query) => {
       if (!isVisible) return false;
-      const lists = query.state.data?.data ?? [];
+      const lists = query.state.data ?? [];
       return dnsNeedsPolling(lists.flatMap((list) => (list.items ?? []).map((item) => item.dns))) ? POLL_MS : false;
     },
   });
@@ -112,7 +112,7 @@ export default function AccessListManager() {
     );
   }
 
-  const lists = data?.data ?? [];
+  const lists = data ?? [];
   const target = confirming;
   const confirmStatus = target
     ? lists

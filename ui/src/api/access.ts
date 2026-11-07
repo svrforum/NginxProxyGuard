@@ -11,6 +11,20 @@ export async function getAccessLists(page = 1, perPage = 20): Promise<{ data: Ac
   return apiGet<{ data: AccessList[]; total: number }>(`${API_BASE}/access-lists?page=${page}&per_page=${perPage}`);
 }
 
+// The API gives at most 100 lists a page. The access list page and the host
+// form's picker both show every list; they stopped at the first 20 and the
+// first 100 (#369). A list that moves between pages while they are read is
+// kept once.
+export async function getAllAccessLists(): Promise<AccessList[]> {
+  const perPage = 100;
+  const lists = new Map<string, AccessList>();
+  for (let page = 1; ; page++) {
+    const { data, total } = await getAccessLists(page, perPage);
+    for (const list of data) lists.set(list.id, list);
+    if (data.length < perPage || page * perPage >= total) return [...lists.values()];
+  }
+}
+
 export async function getAccessList(id: string): Promise<AccessList> {
   return apiGet<AccessList>(`${API_BASE}/access-lists/${id}`);
 }
