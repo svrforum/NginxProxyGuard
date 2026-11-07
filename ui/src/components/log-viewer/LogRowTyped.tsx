@@ -149,7 +149,7 @@ export const LogRowTyped = memo(function LogRowTyped({ log, logType, onClick, on
         <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
           {formatTime(log.timestamp)}
         </td>
-        <td className="px-4 py-3 text-sm text-orange-600 dark:text-orange-400 font-medium whitespace-nowrap">
+        <td className="px-4 py-3 text-sm text-orange-600 dark:text-orange-400 font-medium truncate" title={log.host}>
           {log.host || '-'}
         </td>
         <td className="px-4 py-3 overflow-hidden">
