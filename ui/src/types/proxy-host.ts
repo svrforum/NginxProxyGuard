@@ -46,6 +46,8 @@ export interface ProxyHost {
   waf_paranoia_level: number
   waf_anomaly_threshold: number
   waf_use_global: boolean
+  // The WAF as it runs on the host, inheritance applied. The list fills it in.
+  waf_effective?: { enabled: boolean; mode: string }
   access_list_id?: string
   auth_provider_id?: string
   auth_bypass_paths?: string[]

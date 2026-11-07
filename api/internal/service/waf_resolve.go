@@ -13,3 +13,12 @@ import "nginx-proxy-guard/internal/model"
 func resolveWAF(global *model.GlobalWAF, host *model.ProxyHost) *model.ProxyHost {
 	return model.ResolveWAF(global, host)
 }
+
+// setEffectiveWAF fills in each host's WAFEffective for the host list (#369).
+// The stored columns stay as they are: the edit form reads and saves those.
+func setEffectiveWAF(global *model.GlobalWAF, hosts []model.ProxyHost) {
+	for i := range hosts {
+		r := resolveWAF(global, &hosts[i])
+		hosts[i].WAFEffective = &model.HostWAFState{Enabled: r.WAFEnabled, Mode: r.WAFMode}
+	}
+}

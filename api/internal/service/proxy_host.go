@@ -855,6 +855,13 @@ func (s *ProxyHostService) List(ctx context.Context, page, perPage int, search, 
 	if err != nil {
 		return nil, err
 	}
+	if s.globalWAFRepo != nil {
+		if global, err := s.globalWAFRepo.GetGlobal(ctx); err == nil {
+			setEffectiveWAF(global, hosts)
+		} else {
+			log.Printf("[ProxyHost] list: global WAF default unavailable, WAF badges show each host's own setting: %v", err)
+		}
+	}
 
 	totalPages := (total + perPage - 1) / perPage
 

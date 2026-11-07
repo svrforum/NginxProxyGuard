@@ -90,6 +90,9 @@ function ProxyHostRowImpl({
   const canWrite = can('proxy:write');
   const canDelete = can('proxy:delete');
   const isStream = isStreamHost(host);
+  // The WAF badge shows what runs: an inheriting host runs the global
+  // default, whatever its own columns still say (#369).
+  const waf = host.waf_effective ?? { enabled: host.waf_enabled, mode: host.waf_mode };
   const [domainsExpanded, setDomainsExpanded] = useState(false);
 
   const visibleDomains = domainsExpanded
@@ -270,12 +273,12 @@ function ProxyHostRowImpl({
               QUIC
             </button>
           )}
-          {!isStream && host.waf_enabled && (
+          {!isStream && waf.enabled && (
             <button
               onClick={() => onEdit(host, 'security')}
-              className={`px-1.5 py-0.5 text-[10px] font-medium rounded hover:opacity-80 transition-opacity cursor-pointer ${host.waf_mode === 'blocking' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-900/50' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/50'
+              className={`px-1.5 py-0.5 text-[10px] font-medium rounded hover:opacity-80 transition-opacity cursor-pointer ${waf.mode === 'blocking' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-900/50' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/50'
                   }`}
-              title={`Click to edit WAF settings (${host.waf_mode})`}
+              title={`Click to edit WAF settings (${waf.mode})`}
             >
               WAF
             </button>

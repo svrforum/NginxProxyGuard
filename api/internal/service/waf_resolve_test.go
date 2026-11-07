@@ -54,3 +54,38 @@ func TestResolveWAF_NilHost_ReturnsNil(t *testing.T) {
 		t.Fatalf("nil host should return nil, got %+v", got)
 	}
 }
+
+// The host list's WAF badge reads WAFEffective (#369). A host created to
+// follow the global default has its own columns off, and one switched to its
+// own WAF and back keeps them on; both run what the global default says.
+func TestSetEffectiveWAF_ShowsWhatEachHostRuns(t *testing.T) {
+	hosts := func() []model.ProxyHost {
+		return []model.ProxyHost{
+			{ID: "created-inheriting", WAFUseGlobal: true, WAFEnabled: false, WAFMode: "detection"},
+			{ID: "back-to-inheriting", WAFUseGlobal: true, WAFEnabled: true, WAFMode: "detection"},
+			{ID: "own-on", WAFUseGlobal: false, WAFEnabled: true, WAFMode: "detection"},
+			{ID: "own-off", WAFUseGlobal: false, WAFEnabled: false, WAFMode: "blocking"},
+		}
+	}
+	cases := map[string]struct {
+		global *model.GlobalWAF
+		want   []model.HostWAFState
+	}{
+		"global on": {&model.GlobalWAF{Enabled: true, Mode: "blocking"},
+			[]model.HostWAFState{{Enabled: true, Mode: "blocking"}, {Enabled: true, Mode: "blocking"}, {Enabled: true, Mode: "detection"}, {Enabled: false, Mode: "blocking"}}},
+		"global off": {&model.GlobalWAF{Enabled: false, Mode: "blocking"},
+			[]model.HostWAFState{{Enabled: false, Mode: "blocking"}, {Enabled: false, Mode: "blocking"}, {Enabled: true, Mode: "detection"}, {Enabled: false, Mode: "blocking"}}},
+	}
+	for name, tc := range cases {
+		list := hosts()
+		setEffectiveWAF(tc.global, list)
+		for i, h := range list {
+			if h.WAFEffective == nil || *h.WAFEffective != tc.want[i] {
+				t.Errorf("%s: %s shows %+v, want %+v", name, h.ID, h.WAFEffective, tc.want[i])
+			}
+		}
+		if list[0].WAFEnabled || list[0].WAFMode != "detection" || !list[1].WAFEnabled {
+			t.Errorf("%s: the stored columns changed: %+v", name, list[:2])
+		}
+	}
+}

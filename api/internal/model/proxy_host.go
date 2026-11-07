@@ -467,6 +467,11 @@ type ProxyHost struct {
 	// WAFUseGlobal makes this host inherit the global WAF default (enabled +
 	// mode/paranoia/threshold) instead of its own WAF columns (#198 slice 6).
 	WAFUseGlobal bool `json:"waf_use_global"`
+	// WAFEffective is the WAF as it runs on this host (ResolveWAF): the global
+	// default for an inheriting host, its own columns otherwise. Read only;
+	// the host list fills it in for its WAF badge, which read the own columns
+	// and so showed an inheriting host's stale ones (#369).
+	WAFEffective *HostWAFState `json:"waf_effective,omitempty"`
 
 	// Access list
 	AccessListID *string `json:"access_list_id,omitempty"`
@@ -614,6 +619,12 @@ type CloneProxyHostRequest struct {
 	StreamListenHost        string   `json:"stream_listen_host"`        // Optional: stream listen host (default: copy from source)
 	StreamListenPort        int      `json:"stream_listen_port"`        // Optional: stream listen port (default: copy from source)
 	StreamProtocol          string   `json:"stream_protocol"`           // Optional: tcp or udp (default: copy from source)
+}
+
+// HostWAFState is a host's WAF as it runs (ProxyHost.WAFEffective).
+type HostWAFState struct {
+	Enabled bool   `json:"enabled"`
+	Mode    string `json:"mode"`
 }
 
 type ProxyHostListResponse struct {

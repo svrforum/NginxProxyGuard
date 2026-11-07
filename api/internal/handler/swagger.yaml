@@ -12095,6 +12095,20 @@ components:
             row is never mutated, so this endpoint keeps returning the host's own
             stored WAF columns, not the effective ones. If no global WAF row
             exists, the host's own columns are used.
+        waf_effective:
+          type: object
+          readOnly: true
+          description: |
+            The WAF as it runs on this host, after waf_use_global is applied: the
+            global default for an inheriting host, its own columns otherwise.
+            Returned by GET /proxy-hosts only, and left out when the global WAF
+            default could not be read.
+          properties:
+            enabled:
+              type: boolean
+            mode:
+              type: string
+              enum: [detection, blocking]
         access_list_id:
           type: string
           format: uuid
