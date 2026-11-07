@@ -65,6 +65,9 @@ type Manager struct {
 	// reloadHooks hear of every reload signal (reload_hooks.go). Set once
 	// at bootstrap (SetReloadHooks); the zero value calls nothing.
 	reloadHooks ReloadHooks
+
+	// version keeps what `nginx -v` last said (version.go).
+	version nginxVersionCache
 }
 
 func NewManager(configPath, certsPath string) *Manager {

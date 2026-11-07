@@ -118,6 +118,9 @@ type SystemSettings struct {
 	UIFontFamily        string `json:"ui_font_family" db:"ui_font_family"`                 // Global font family: system, gowun-batang, noto-sans-kr, pretendard, inter
 	UIErrorPageLanguage string `json:"ui_error_page_language" db:"ui_error_page_language"` // Default language for error pages (403, etc.): auto, ko, en
 
+	// InstanceName is shown in the header to tell NPG instances apart (#369).
+	InstanceName string `json:"instance_name" db:"instance_name"`
+
 	// System Log Settings
 	SystemLogsEnabled         bool            `json:"system_logs_enabled" db:"system_logs_enabled"`
 	SystemLogsLevels          json.RawMessage `json:"system_logs_levels" db:"system_logs_levels"`                     // JSONB: container -> level
@@ -237,6 +240,9 @@ type SystemSettingsResponse struct {
 	UIFontFamily        string `json:"ui_font_family"`
 	UIErrorPageLanguage string `json:"ui_error_page_language"`
 
+	// Shown in the header to tell NPG instances apart (#369)
+	InstanceName string `json:"instance_name"`
+
 	// System Log Settings
 	SystemLogsEnabled         bool            `json:"system_logs_enabled"`
 	SystemLogsLevels          json.RawMessage `json:"system_logs_levels"`
@@ -332,6 +338,7 @@ func (s *SystemSettings) ToResponse() *SystemSettingsResponse {
 		DirectIPAccessAction:      s.DirectIPAccessAction,
 		UIFontFamily:              s.UIFontFamily,
 		UIErrorPageLanguage:       s.UIErrorPageLanguage,
+		InstanceName:              s.InstanceName,
 		SystemLogsEnabled:         s.SystemLogsEnabled,
 		SystemLogsLevels:          s.SystemLogsLevels,
 		SystemLogsExcludePatterns: s.SystemLogsExcludePatterns,
@@ -466,6 +473,9 @@ type UpdateSystemSettingsRequest struct {
 	// UI Settings (global)
 	UIFontFamily        *string `json:"ui_font_family,omitempty"`
 	UIErrorPageLanguage *string `json:"ui_error_page_language,omitempty"`
+
+	// Shown in the header (#369); ValidateInstanceName checks it
+	InstanceName *string `json:"instance_name,omitempty"`
 
 	// System Log Settings
 	SystemLogsEnabled         *bool            `json:"system_logs_enabled,omitempty"`

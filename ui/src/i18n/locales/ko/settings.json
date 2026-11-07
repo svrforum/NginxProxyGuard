@@ -1019,6 +1019,13 @@
         "enabledDescription": "nginx 설정에 listen [::]: 지시자 포함",
         "warning": "이 설정을 변경하면 모든 nginx 설정이 재생성되고 nginx가 리로드됩니다."
       },
+      "instanceName": {
+        "title": "인스턴스 이름",
+        "description": "모든 화면 위쪽과 브라우저 탭에 표시되는 이름입니다. NPG를 여러 대 운영할 때 지금 어느 곳에 접속했는지 바로 알 수 있습니다.",
+        "label": "이름",
+        "placeholder": "예: home-lab",
+        "help": "{{max}}자까지 쓸 수 있습니다. 비워 두면 표시하지 않습니다."
+      },
       "errorPageLanguage": {
         "title": "공개 에러 페이지 언어",
         "description": "403(접근 차단) 등 공개 에러 페이지와, per-host GeoIP Challenge Mode가 트리거되었을 때 노출되는 CAPTCHA 챌린지 페이지의 기본 표시 언어입니다.",

@@ -2500,6 +2500,7 @@ geckodriver'::text,
     system_logs_stdout_excluded text[] DEFAULT ARRAY['npg-proxy'::text],
     ui_font_family character varying(50) DEFAULT 'system'::character varying,
     ui_error_page_language character varying(10) DEFAULT 'auto'::character varying,
+    instance_name character varying(32) DEFAULT ''::character varying NOT NULL,
     global_block_exploits_exceptions text DEFAULT '^/wp-json/
 ^/api/v1/challenge/
 ^/wp-admin/admin-ajax.php
@@ -4848,3 +4849,6 @@ ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS worker_shutdown_time
 
 -- Key type for new ACME certificates (#364): rsa2048, ec256 or ec384.
 ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS key_type character varying(10) DEFAULT 'rsa2048'::character varying NOT NULL;
+
+-- A name the header shows to tell NPG instances apart (#369). Empty shows none.
+ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS instance_name character varying(32) DEFAULT ''::character varying NOT NULL;

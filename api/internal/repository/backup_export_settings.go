@@ -116,7 +116,8 @@ func (r *BackupRepository) exportSystemSettings(ctx context.Context) (*model.Sys
 		       COALESCE(system_logs_exclude_patterns, ARRAY['/health', '/nginx_status', '/.well-known/', 'HEAD /']) as system_logs_exclude_patterns,
 		       COALESCE(system_logs_stdout_excluded, ARRAY['npg-proxy']) as system_logs_stdout_excluded,
 		       COALESCE(dns_entry_settings, '{}'::jsonb) as dns_entry_settings,
-		       global_trusted_hostnames
+		       global_trusted_hostnames,
+		       COALESCE(instance_name, '') as instance_name
 		FROM system_settings LIMIT 1
 	`
 
@@ -127,6 +128,7 @@ func (r *BackupRepository) exportSystemSettings(ctx context.Context) (*model.Sys
 	var botFilterDefaultCustomBlockedAgents sql.NullString
 	var botListBadBots, botListAIBots, botListSearchEngines, botListSuspiciousClients sql.NullString
 	var globalTrustedIPs, globalBlockExploitsExceptions, uiFontFamily, uiErrorPageLanguage string
+	var instanceName string
 	var globalTrustedIPsBypassWAF bool
 	var trustedProxyCIDRs, trustedProxyPreset, realIPHeader string
 	var systemLogsLevels, dnsEntrySettings []byte
@@ -163,6 +165,7 @@ func (r *BackupRepository) exportSystemSettings(ctx context.Context) (*model.Sys
 		&systemLogsLevels, &systemLogsExcludePatterns, &systemLogsStdoutExcluded,
 		&dnsEntrySettings,
 		pq.Array(&globalTrustedHostnames),
+		&instanceName,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -191,6 +194,7 @@ func (r *BackupRepository) exportSystemSettings(ctx context.Context) (*model.Sys
 	ss.GlobalBlockExploitsExceptions = &globalBlockExploitsExceptions
 	ss.UIFontFamily = &uiFontFamily
 	ss.UIErrorPageLanguage = &uiErrorPageLanguage
+	ss.InstanceName = &instanceName
 	ss.SystemLogsLevels = json.RawMessage(systemLogsLevels)
 	ss.SystemLogsExcludePatterns = []string(systemLogsExcludePatterns)
 	ss.SystemLogsStdoutExcluded = []string(systemLogsStdoutExcluded)

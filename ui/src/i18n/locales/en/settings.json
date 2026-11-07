@@ -1019,6 +1019,13 @@
         "enabledDescription": "Include listen [::]: directives in nginx configs",
         "warning": "Changing this setting will regenerate all nginx configurations and reload nginx."
       },
+      "instanceName": {
+        "title": "Instance Name",
+        "description": "A name shown at the top of every page and in the browser tab, to tell several NPG installs apart.",
+        "label": "Name",
+        "placeholder": "e.g. home-lab",
+        "help": "Up to {{max}} characters. Leave it empty to show none."
+      },
       "errorPageLanguage": {
         "title": "Public Error Page Language",
         "description": "Default language shown on public error pages (403 access blocked, etc.) and on the CAPTCHA challenge page when a per-host GeoIP Challenge Mode is triggered.",

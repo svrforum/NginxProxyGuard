@@ -116,6 +116,7 @@ func (r *BackupRepository) importSystemSettings(ctx context.Context, tx *sql.Tx,
 			raw_log_archive_retention_days = COALESCE($61, raw_log_archive_retention_days),
 			dns_entry_settings = COALESCE($62::jsonb, dns_entry_settings),
 			global_trusted_hostnames = $63,
+			instance_name = COALESCE($64, instance_name),
 			updated_at = NOW()
 	`
 
@@ -205,6 +206,9 @@ func (r *BackupRepository) importSystemSettings(ctx context.Context, tx *sql.Tx,
 		ss.RawLogArchiveEnabled, ss.RawLogArchiveRetentionDays,
 		dnsEntrySettings,
 		pq.Array(trustedHostnames),
+		// The instance name (#369): nil (an older backup) or a value the API
+		// would refuse keeps the live name.
+		coerceBackupString(ss.InstanceName, model.NormalizeInstanceName),
 	)
 	if err != nil {
 		return nil, err

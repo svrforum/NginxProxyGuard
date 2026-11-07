@@ -261,7 +261,7 @@ func globalRateLimitRow(names ...string) *sqlmock.Rows {
 }
 
 // settingsRow is the system_settings row SystemSettingsRepository.Get scans
-// (70 columns, in order), with the global trusted list.
+// (71 columns, in order), with the global trusted list.
 // TestExceptionSaveSettingsFixtureReadsBack keeps it in line.
 func settingsRow(trustedIPs string, trustedNames ...string) *sqlmock.Rows {
 	return rowOf(
@@ -277,6 +277,7 @@ func settingsRow(trustedIPs string, trustedNames ...string) *sqlmock.Rows {
 		false, int64(10), int64(300), int64(3600), // WAF auto-ban
 		trustedIPs, false, pqText(trustedNames...), // global trusted IPs, their WAF bypass, global trusted domains
 		"", "none", "X-Forwarded-For", "", "allow", "system", "auto", // trusted proxies .. error page language
+		"",                                           // instance name
 		true, []byte(`{}`), "{}", "{}", []byte(`{}`), // system logs; DNS entry settings
 		exTime, exTime, // created_at, updated_at
 	)

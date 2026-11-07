@@ -1890,6 +1890,11 @@ END $$;`,
 			desc: "certificates.key_type (#364)",
 			sql:  `ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS key_type character varying(10) DEFAULT 'rsa2048'::character varying NOT NULL`,
 		},
+		{
+			// A name the header shows to tell NPG instances apart (#369).
+			desc: "system_settings.instance_name (#369)",
+			sql:  `ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS instance_name character varying(32) DEFAULT ''::character varying NOT NULL`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

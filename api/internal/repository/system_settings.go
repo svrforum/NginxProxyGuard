@@ -102,6 +102,7 @@ func (r *SystemSettingsRepository) getFromDB(ctx context.Context) (*model.System
 		       COALESCE(direct_ip_access_action, 'allow') as direct_ip_access_action,
 		       COALESCE(ui_font_family, 'system') as ui_font_family,
 		       COALESCE(ui_error_page_language, 'auto') as ui_error_page_language,
+		       COALESCE(instance_name, '') as instance_name,
 		       COALESCE(system_logs_enabled, true) as system_logs_enabled,
 		       COALESCE(system_logs_levels, '{"npg-proxy": "info", "npg-api": "info", "npg-db": "warn", "npg-ui": "warn"}'::jsonb) as system_logs_levels,
 		       COALESCE(system_logs_exclude_patterns, ARRAY['/health', '/nginx_status', '/.well-known/', 'HEAD /']) as system_logs_exclude_patterns,
@@ -182,6 +183,7 @@ func (r *SystemSettingsRepository) getFromDB(ctx context.Context) (*model.System
 		&settings.DirectIPAccessAction,
 		&settings.UIFontFamily,
 		&settings.UIErrorPageLanguage,
+		&settings.InstanceName,
 		&settings.SystemLogsEnabled,
 		&settings.SystemLogsLevels,
 		pq.Array(&settings.SystemLogsExcludePatterns),
@@ -657,6 +659,11 @@ func (r *SystemSettingsRepository) Update(ctx context.Context, req *model.Update
 	if req.UIErrorPageLanguage != nil {
 		setClauses = append(setClauses, fmt.Sprintf("ui_error_page_language = $%d", argIndex))
 		args = append(args, *req.UIErrorPageLanguage)
+		argIndex++
+	}
+	if req.InstanceName != nil {
+		setClauses = append(setClauses, fmt.Sprintf("instance_name = $%d", argIndex))
+		args = append(args, *req.InstanceName)
 		argIndex++
 	}
 

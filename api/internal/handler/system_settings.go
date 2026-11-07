@@ -117,6 +117,13 @@ func (h *SystemSettingsHandler) UpdateSystemSettings(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return badRequestError(c, err.Error())
 	}
+	if req.InstanceName != nil {
+		name, err := model.NormalizeInstanceName(*req.InstanceName)
+		if err != nil {
+			return badRequestError(c, err.Error())
+		}
+		req.InstanceName = &name
+	}
 
 	// Raw log storage is mandatory since v2.17.1 — LogCollector depends on it
 	// for access log ingestion (issue #145 silent failure). Operators can still

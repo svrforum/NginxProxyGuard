@@ -1040,6 +1040,9 @@ type SystemSettingsExport struct {
 	UIFontFamily        *string `json:"ui_font_family,omitempty"`
 	UIErrorPageLanguage *string `json:"ui_error_page_language,omitempty"`
 
+	// The header's instance name (#369); nil in older backups
+	InstanceName *string `json:"instance_name,omitempty"`
+
 	// System Log Filters (no omitempty on the arrays: an explicitly empty
 	// list is meaningful and must survive the round-trip; nil = old backup)
 	SystemLogsLevels          json.RawMessage `json:"system_logs_levels,omitempty"`

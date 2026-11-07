@@ -62,6 +62,8 @@ var PublicRoutes = map[string]bool{
 	"GET /api/v1/health/detailed":    true,
 	"POST /api/v1/health/canary":     true,
 	"GET /api/v1/public/ui-settings": true,
+	// The header's versions and instance name (#369): a session, any role.
+	"GET /api/v1/instance": true,
 
 	// Swagger UI. D7 wanted these behind settings:read, but the UI links to
 	// /api/docs with a plain <a target="_blank"> (APITokenManager.tsx) and the

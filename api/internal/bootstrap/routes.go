@@ -362,6 +362,10 @@ func registerTokenProtectedRoutes(v1 *echo.Group, c *Container) {
 	// password, whatever their role.
 	v1.Use(authMiddleware.RequireRoutePermission(c.Services.Authz))
 
+	// What the header shows: versions and the instance name (#369). Every
+	// role needs it, so it asks for no permission (PublicRoutes).
+	v1.GET("/instance", c.Handlers.Instance.Get)
+
 	registerAPITokenRoutes(v1, c.Handlers.APIToken)
 	registerProxyHostRoutes(v1, c.Handlers.ProxyHost)
 	registerDNSProviderRoutes(v1, c.Handlers.DNSProvider)

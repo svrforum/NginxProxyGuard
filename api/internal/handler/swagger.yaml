@@ -6868,6 +6868,27 @@ paths:
               schema:
                 $ref: '#/components/schemas/PublicUISettings'
 
+  /instance:
+    get:
+      tags: [System]
+      summary: What the header shows about this NPG
+      description: |
+        NPG's version, the version of the nginx it runs, and the instance name set
+        in the system settings. Needs a session or an API token but no permission,
+        since every role sees the header. A part that cannot be read is empty
+        (nginx_version is left out).
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Versions and instance name
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstanceInfo'
+        '401':
+          description: No session or token
+
   # ============================================================================
   # Diagnostics (/test/*) — administrative self-checks, settings:read
   # ============================================================================
@@ -12914,6 +12935,13 @@ components:
     SystemSettings:
       type: object
       properties:
+        instance_name:
+          type: string
+          maxLength: 32
+          description: >-
+            A name the header shows to tell NPG instances apart; empty shows none.
+            Saved trimmed; more than 32 characters or a control character is
+            rejected with 400.
         trusted_proxy_cidrs:
           type: string
           description: >-
@@ -16002,6 +16030,19 @@ components:
         hypertable_size_bytes:
           type: integer
           format: int64
+    InstanceInfo:
+      type: object
+      properties:
+        version:
+          type: string
+          description: NPG's version
+        nginx_version:
+          type: string
+          description: The version of the nginx in the nginx container, such as 1.30.4. Absent when it cannot be read.
+        instance_name:
+          type: string
+          maxLength: 32
+          description: The name set in the system settings; empty for none.
     PublicUISettings:
       type: object
       properties:

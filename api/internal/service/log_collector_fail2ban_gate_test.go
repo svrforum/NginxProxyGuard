@@ -266,6 +266,7 @@ func f2bGateSettingsRow(trustedIPs, trustedNames string) []driver.Value {
 		false, int64(10), int64(300), int64(3600), // WAF auto-ban
 		trustedIPs, false, trustedNames, // global trusted IPs, their WAF bypass, global trusted domains
 		"", "none", "X-Forwarded-For", "", "allow", "system", "auto", // trusted proxies, preset, real IP header, exploit exceptions, direct IP access, font, error page language
+		"",                                           // instance name
 		true, []byte(`{}`), "{}", "{}", []byte(`{}`), // system logs: enabled, levels, exclude patterns, stdout excluded; DNS entry settings
 		at, at, // created_at, updated_at
 	}

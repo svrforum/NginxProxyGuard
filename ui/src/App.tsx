@@ -9,6 +9,7 @@ import { ForcePasswordChange } from './components/ForcePasswordChange'
 import { SSOComplete } from './components/SSOComplete'
 import { getAuthStatus, logout, getToken, User } from './api/auth'
 import { apiPost } from './api/client'
+import { getInstanceInfo } from './api/instance'
 import type { ProxyHost } from './types/proxy-host'
 import type { TabType as ProxyHostTabType } from './components/proxy-host/types'
 import { useDarkMode } from './hooks/useDarkMode'
@@ -100,6 +101,13 @@ function AppContent({ user, onLogout }: AppContentProps) {
   const [syncResult, setSyncResult] = useState<SyncAllResult | null>(null)
 
   const health = useQuery({ queryKey: ['health'], queryFn: fetchHealth, refetchInterval: 30000 })
+  // The instance name and nginx's version for the header (#369).
+  const instance = useQuery({ queryKey: ['instance'], queryFn: getInstanceInfo, staleTime: 5 * 60 * 1000 })
+  const instanceName = instance.data?.instance_name
+  // The browser tab carries the name too, to tell several installs apart.
+  useEffect(() => {
+    document.title = instanceName ? `${instanceName} · Nginx Proxy Guard` : 'Nginx Proxy Guard'
+  }, [instanceName])
 
   const handleSyncAll = async () => {
     if (isSyncing) return
@@ -226,6 +234,15 @@ function AppContent({ user, onLogout }: AppContentProps) {
               <h1 className="text-lg lg:text-xl font-bold text-slate-900 dark:text-gray-100">{t('header.nginxProxyGuard')}</h1>
               <p className="text-xs text-slate-500 dark:text-slate-400 hidden lg:block">{t('header.subtitle')}</p>
             </div>
+            {instanceName && (
+              <span
+                data-testid="instance-name"
+                title={instanceName}
+                className="max-w-[9rem] sm:max-w-[14rem] truncate rounded-md bg-primary-50 px-2 py-0.5 text-xs font-semibold text-primary-700 ring-1 ring-primary-200 dark:bg-primary-900/30 dark:text-primary-300 dark:ring-primary-800"
+              >
+                {instanceName}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2 lg:gap-4">
             <div className="flex items-center gap-2">
@@ -260,7 +277,10 @@ function AppContent({ user, onLogout }: AppContentProps) {
               </button>
             </div>
 
-            <span className="text-xs text-slate-400">v{health.data?.version || '...'}</span>
+            <div className="text-right text-xs leading-tight text-slate-400">
+              <div>v{health.data?.version || '...'}</div>
+              {instance.data?.nginx_version && <div data-testid="nginx-version">nginx {instance.data.nginx_version}</div>}
+            </div>
             {/* User Menu */}
             <div className="flex items-center gap-2 lg:gap-3 pl-2 lg:pl-4 border-l border-slate-200 dark:border-slate-700">
               <button

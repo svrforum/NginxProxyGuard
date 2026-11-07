@@ -30,6 +30,7 @@ type Handlers struct {
 	SSO                *handler.SSOHandler
 	Notification       *handler.NotificationHandler
 	SystemSettings     *handler.SystemSettingsHandler
+	Instance           *handler.InstanceHandler
 	APIToken           *handler.APITokenHandler
 	AuditLog           *handler.AuditLogHandler
 	Challenge          *handler.ChallengeHandler
@@ -88,6 +89,7 @@ func InitHandlers(
 	h.SSO = handler.NewSSOHandler(svcs.SSO, svcs.Audit)
 	h.Notification = handler.NewNotificationHandler(repos.Notification, svcs.NotifyDispatcher, svcs.Audit)
 	h.Auth.SetAuthzService(svcs.Authz)
+	h.Instance = handler.NewInstanceHandler(repos.SystemSettings, nginxManager)
 	h.SystemSettings = handler.NewSystemSettingsHandler(
 		repos.SystemSettings,
 		repos.GlobalSettings,

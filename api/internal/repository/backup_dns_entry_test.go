@@ -391,7 +391,7 @@ func TestImportSystemSettingsRestoresDNSEntrySettings(t *testing.T) {
 	} {
 		repo, tx, mock := beginMockTx(t)
 		var got string
-		args := make([]driver.Value, 63)
+		args := make([]driver.Value, 64)
 		for i := range args {
 			args[i] = sqlmock.AnyArg()
 		}
@@ -539,7 +539,8 @@ func TestImportDropsExceptionNamesTheRulesRefuse(t *testing.T) {
 		{"system_settings", func(mock sqlmock.Sqlmock) {
 			mock.ExpectQuery(`SELECT created_at FROM system_settings`).
 				WillReturnRows(sqlmock.NewRows([]string{"created_at"}).AddRow(time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)))
-			mock.ExpectExec(`global_trusted_hostnames = \$63,`).WithArgs(withNames(63)...).WillReturnResult(done)
+			// $64, after the names, is the instance name (#369).
+			mock.ExpectExec(`global_trusted_hostnames = \$63,`).WithArgs(append(withNames(63), sqlmock.AnyArg())...).WillReturnResult(done)
 		}, func(repo *BackupRepository, tx *sql.Tx) ([]string, error) {
 			return repo.importSystemSettings(ctx, tx, &model.SystemSettingsExport{GlobalTrustedHostnames: &in})
 		}},
