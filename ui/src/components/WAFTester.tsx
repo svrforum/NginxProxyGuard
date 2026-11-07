@@ -91,8 +91,9 @@ export function WAFTester() {
     queryFn: () => fetchProxyHosts(1, 100),
   });
 
-  // Filter to only show WAF-enabled hosts
-  const wafEnabledHosts: ProxyHost[] = proxyHostsQuery.data?.data?.filter((h: ProxyHost) => h.waf_enabled && h.enabled) || [];
+  // Filter to only show WAF-enabled hosts: the WAF as it runs, so a host
+  // that inherits the global WAF counts (#369)
+  const wafEnabledHosts: ProxyHost[] = proxyHostsQuery.data?.data?.filter((h: ProxyHost) => (h.waf_effective?.enabled ?? h.waf_enabled) && h.enabled) || [];
   const allHosts: ProxyHost[] = proxyHostsQuery.data?.data?.filter((h: ProxyHost) => h.enabled) || [];
 
   // Update host header when a proxy host is selected
