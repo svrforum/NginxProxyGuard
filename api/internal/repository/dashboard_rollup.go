@@ -39,6 +39,12 @@ const averagedRequestFilter = `status_code IS DISTINCT FROM 101 AND request_time
 // average covers: an average over several hours weights each hour by it, not
 // by total_requests, or an hour of instant answers (blocked scanners, say)
 // would multiply the time of its few measured requests.
+//
+// waf_blocked counts the modsec rows marked 'waf', under the same host and URI
+// filters: a WAF block's own access row says 'none' (see
+// dashboardBlocked24hSQL), so counting WAF blocks among access rows always
+// gave 0 (#369). An hour with WAF blocks and no access rows (access logging
+// off) still gets its row.
 const hourlyRollupRecomputeSQL = `
 WITH hours AS (
     SELECT generate_series(date_trunc('hour', $1::timestamptz, 'UTC'),
@@ -53,11 +59,22 @@ WITH hours AS (
            avg(request_time) FILTER (WHERE ` + averagedRequestFilter + `) * 1000 AS avg_ms,
            count(request_time) FILTER (WHERE ` + averagedRequestFilter + `) AS timed,
            COALESCE(sum(body_bytes_sent), 0)                       AS bytes,
-           count(*) FILTER (WHERE block_reason = 'waf')            AS waf,
            count(*) FILTER (WHERE block_reason = 'rate_limit')     AS rl,
            count(*) FILTER (WHERE block_reason = 'bot_filter')     AS bot
     FROM logs_partitioned
     WHERE log_type = 'access'
+      AND created_at >= date_trunc('hour', $1::timestamptz, 'UTC') AND created_at < $2::timestamptz
+      AND host IS NOT NULL
+      AND host NOT IN ('localhost', 'nginx', '127.0.0.1', '', '_', '0.0.0.0')
+      AND host NOT LIKE 'localhost:%'
+      AND (request_uri NOT IN ('/health', '/nginx_status') OR request_uri IS NULL)
+      AND (request_uri NOT LIKE '/.well-known/%' OR request_uri IS NULL)
+      AND ` + canaryURIExclusion + `
+    GROUP BY 1
+), waf AS (
+    SELECT date_trunc('hour', created_at, 'UTC') AS hour_bucket, count(*) AS waf
+    FROM logs_partitioned
+    WHERE log_type = 'modsec' AND block_reason = 'waf'
       AND created_at >= date_trunc('hour', $1::timestamptz, 'UTC') AND created_at < $2::timestamptz
       AND host IS NOT NULL
       AND host NOT IN ('localhost', 'nginx', '127.0.0.1', '', '_', '0.0.0.0')
@@ -76,10 +93,12 @@ INSERT INTO dashboard_stats_hourly (
 SELECT NULL, h.hour_bucket, COALESCE(a.total, 0),
        COALESCE(a.s2, 0), COALESCE(a.s3, 0), COALESCE(a.s4, 0), COALESCE(a.s5, 0),
        COALESCE(a.avg_ms, 0), COALESCE(a.timed, 0), COALESCE(a.bytes, 0),
-       COALESCE(a.waf, 0), COALESCE(a.rl, 0), COALESCE(a.bot, 0)
+       COALESCE(w.waf, 0), COALESCE(a.rl, 0), COALESCE(a.bot, 0)
 FROM hours h
 LEFT JOIN agg a USING (hour_bucket)
+LEFT JOIN waf w USING (hour_bucket)
 WHERE a.total IS NOT NULL
+   OR w.waf IS NOT NULL
    OR EXISTS (SELECT 1 FROM dashboard_stats_hourly d
               WHERE d.proxy_host_id IS NULL AND d.hour_bucket = h.hour_bucket)
 ON CONFLICT (hour_bucket) WHERE proxy_host_id IS NULL DO UPDATE SET
@@ -98,6 +117,8 @@ ON CONFLICT (hour_bucket) WHERE proxy_host_id IS NULL DO UPDATE SET
 // Host totals reuse the global rollup's access-log filters and time buckets.
 // A NULL host ID is reserved for the dashboard's global totals. Stale host
 // rows are removed when a replay finds that their source requests disappeared.
+// Host rows count no WAF blocks: those are modsec rows, which carry no
+// proxy_host_id, and nothing reads waf_blocked from a host row.
 const hourlyHostRollupSQL = `
 WITH agg AS (
     SELECT l.proxy_host_id, date_trunc('hour', l.created_at, 'UTC') AS hour_bucket,
@@ -109,7 +130,7 @@ WITH agg AS (
            COALESCE(avg(request_time) FILTER (WHERE ` + averagedRequestFilter + `) * 1000, 0) AS avg_ms,
            count(request_time) FILTER (WHERE ` + averagedRequestFilter + `) AS timed,
            COALESCE(sum(body_bytes_sent), 0) AS bytes,
-           count(*) FILTER (WHERE block_reason = 'waf') AS waf,
+           0 AS waf,
            count(*) FILTER (WHERE block_reason = 'rate_limit') AS rl,
            count(*) FILTER (WHERE block_reason = 'bot_filter') AS bot
     FROM logs_partitioned l

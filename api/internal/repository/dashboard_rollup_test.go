@@ -120,9 +120,10 @@ func TestHourlyHostCleanupMatchesHostHourPairsAndFilters(t *testing.T) {
 
 // One recompute over a fixed window: the counts match what the logs hold,
 // NULL fields count, NPG's own and internal requests do not, the latency
-// average leaves out WebSocket upgrades and requests without a time, a wrong
-// row is overwritten, an hour without requests is zeroed, and hours outside
-// the window are left alone. An orphan host row is removed on replay.
+// average leaves out WebSocket upgrades and requests without a time, a WAF
+// block counts from its modsec row, a wrong row is overwritten, an hour
+// without requests is zeroed, and hours outside the window are left alone.
+// An orphan host row is removed on replay.
 func TestRecomputeHourlyRollup(t *testing.T) {
 	db := openRollupTestDB(t)
 	mustExec(t, db,
@@ -133,11 +134,18 @@ func TestRecomputeHourlyRollup(t *testing.T) {
 			('access', 'a.example.com', '/fast',   200, NULL,  500,   'none',       '2026-10-08 10:02:00+00'),
 			('access', 'a.example.com', '/moved',  302, 0.300, NULL,  'none',       '2026-10-08 10:03:00+00'),
 			('access', 'a.example.com', '/ws',     101, 1178.9, 21606, 'none',      '2026-10-08 10:04:00+00'),
-			('access', 'a.example.com', '/attack', 403, NULL,  0,     'waf',        '2026-10-08 10:05:00+00'),
+			('access', 'a.example.com', '/attack', 403, NULL,  0,     'none',       '2026-10-08 10:05:00+00'),
 			('access', 'a.example.com', '/burst',  429, 0.200, 10,    'rate_limit', '2026-10-08 10:06:00+00'),
 			('access', 'a.example.com', '/bot',    403, NULL,  10,    'bot_filter', '2026-10-08 10:07:00+00'),
 			('access', 'a.example.com', '/broken', 502, 0.400, 20,    'none',       '2026-10-08 10:08:00+00'),
 			('access', 'a.example.com', NULL,      200, 0.200, 100,   'none',       '2026-10-08 10:59:59.999+00')`,
+		// The WAF block of /attack: nginx logs the 403 with no reason, the
+		// audit log gives the modsec row its 'waf'. It adds to waf_blocked
+		// only, not to the requests.
+		`INSERT INTO logs_partitioned (log_type, host, request_uri, status_code, block_reason, created_at) VALUES
+			('modsec', 'a.example.com', '/attack', 403, 'waf',  '2026-10-08 10:05:00+00'),
+			('modsec', 'localhost',     '/attack', 403, 'waf',  '2026-10-08 10:05:00+00'),
+			('modsec', 'a.example.com', '/__npg_canary?n=1', 403, 'waf', '2026-10-08 10:05:00+00')`,
 		// 10:00 UTC: rows that do not count.
 		`INSERT INTO logs_partitioned (log_type, host, request_uri, status_code, request_time, body_bytes_sent, created_at) VALUES
 			('access', 'a.example.com', '/__npg_canary?n=1', 200, 0.1, 1, '2026-10-08 10:10:00+00'),
@@ -229,6 +237,30 @@ func TestRecomputeHourlyRollup(t *testing.T) {
 		if again[k] != w {
 			t.Errorf("a second run changed hour %s from %+v to %+v", k, w, again[k])
 		}
+	}
+}
+
+// With access logging off a WAF block leaves only its modsec row. The hour
+// still gets a row for it, with no requests (#369).
+func TestHourlyRollupKeepsAnHourOfOnlyWAFBlocks(t *testing.T) {
+	db := openRollupTestDB(t)
+	mustExec(t, db,
+		`INSERT INTO logs_partitioned (log_type, host, request_uri, status_code, block_reason, created_at) VALUES
+			('modsec', 'a.example.com', '/attack', 403, 'waf',  '2026-10-08 10:15:00+00'),
+			('modsec', 'a.example.com', '/attack', 403, 'waf',  '2026-10-08 10:45:00+00'),
+			('modsec', 'a.example.com', '/probe',  200, 'none', '2026-10-08 10:50:00+00')`)
+	repo := NewDashboardRepository(db)
+	from, to := time.Date(2026, 10, 8, 10, 0, 0, 0, time.UTC), time.Date(2026, 10, 8, 11, 0, 0, 0, time.UTC)
+	if _, err := repo.RecomputeHourlyRollup(context.Background(), from, to); err != nil {
+		t.Fatal(err)
+	}
+	var total, waf int64
+	if err := db.QueryRow(`SELECT total_requests, waf_blocked FROM dashboard_stats_hourly
+		WHERE proxy_host_id IS NULL AND hour_bucket = '2026-10-08 10:00:00+00'`).Scan(&total, &waf); err != nil {
+		t.Fatalf("no row for the hour: %v", err)
+	}
+	if total != 0 || waf != 2 {
+		t.Errorf("total=%d waf=%d, want 0 requests and 2 WAF blocks", total, waf)
 	}
 }
 

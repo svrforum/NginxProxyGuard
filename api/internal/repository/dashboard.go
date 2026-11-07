@@ -44,6 +44,35 @@ const dashboardSummary24hSQL = `
 		WHERE hour_bucket >= $1 AND proxy_host_id IS NULL
 	`
 
+// dashboardBlocked24hSQL is the dashboard's blocked requests since $1: all of
+// them, their distinct client IPs, and the WAF, rate limit and bot filter
+// counts. It reads the logs, not the hourly rollup, which keeps only those
+// three of the block reasons (geo_block, uri_block, banned_ip and the rest
+// would be missing from the total).
+//
+// nginx names the reason on the access row for every block but the WAF's:
+// ModSecurity answers before any server-block code can set it, so a WAF block
+// is the modsec row marked 'waf' while its access row says 'none'. Reading
+// only access rows kept the WAF count at 0 (#369). Each half has its own
+// index: idx_logs_part_block_reason_created for the access rows,
+// idx_logs_part_type_created for the modsec ones.
+const dashboardBlocked24hSQL = `
+		WITH blocked AS (
+			SELECT client_ip, block_reason FROM logs_partitioned
+			WHERE created_at >= $1 AND log_type = 'access' AND block_reason != 'none'
+			UNION ALL
+			SELECT client_ip, block_reason FROM logs_partitioned
+			WHERE created_at >= $1 AND log_type = 'modsec' AND block_reason = 'waf'
+		)
+		SELECT
+			COUNT(*),
+			COUNT(DISTINCT client_ip),
+			COUNT(*) FILTER (WHERE block_reason = 'waf'),
+			COUNT(*) FILTER (WHERE block_reason = 'rate_limit'),
+			COUNT(*) FILTER (WHERE block_reason = 'bot_filter')
+		FROM blocked
+	`
+
 // GetSummary returns the main dashboard summary
 func (r *DashboardRepository) GetSummary(ctx context.Context) (*model.DashboardSummary, error) {
 	summary := &model.DashboardSummary{}
@@ -71,25 +100,8 @@ func (r *DashboardRepository) GetSummary(ctx context.Context) (*model.DashboardS
 		summary.ErrorRate24h = float64(totalErrors) / float64(totalForRate) * 100
 	}
 
-	// Security stats in last 24h - query logs_partitioned directly for accuracy.
-	// The dashboard_stats_hourly table only tracks waf/rate/bot counts,
-	// but block_reason includes many more types (geo_block, uri_block, banned_ip,
-	// exploit_block, access_denied, cloud_provider_*, filter_subscription).
-	// log_type = 'access' is the only type that carries block_reason in practice;
-	// adding it lets the planner use idx_logs_part_block_reason_created which is
-	// partitioned by created_at (matches the partition key for partition pruning).
-	row = r.db.QueryRowContext(ctx, `
-		SELECT
-			COUNT(*),
-			COUNT(DISTINCT client_ip),
-			COUNT(*) FILTER (WHERE block_reason = 'waf'),
-			COUNT(*) FILTER (WHERE block_reason = 'rate_limit'),
-			COUNT(*) FILTER (WHERE block_reason = 'bot_filter')
-		FROM logs_partitioned
-		WHERE created_at >= $1
-		  AND log_type = 'access'
-		  AND block_reason != 'none'
-	`, last24h)
+	// Security stats in last 24h, from the logs (see dashboardBlocked24hSQL).
+	row = r.db.QueryRowContext(ctx, dashboardBlocked24hSQL, last24h)
 	if err := row.Scan(&summary.BlockedRequests24h, &summary.BlockedUniqueIPs24h,
 		&summary.WAFBlocked24h, &summary.RateLimited24h, &summary.BotBlocked24h); err != nil {
 		log.Printf("[DashboardRepository] Warning: failed to scan security stats from logs_partitioned: %v", err)
