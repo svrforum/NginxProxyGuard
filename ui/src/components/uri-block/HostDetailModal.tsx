@@ -14,6 +14,7 @@ import { isNginxReloadRefusal, type ApiError } from '../../api/client'
 import type { URIBlockRule, URIMatchType, AddURIBlockRuleRequest } from '../../types/security'
 import { usePermissions } from '../../hooks/usePermissions'
 import { ModalShell } from '../common/ModalShell'
+import { RuleExceptionIPs } from './RuleExceptionIPs'
 import { DnsHostnamesField } from '../common/dns/DnsHostnamesField'
 import { dnsNamesErrorsOf, type DnsNamesError } from '../common/dns/dnsListField'
 
@@ -60,7 +61,8 @@ export function HostDetailModal({ block: editingBlock, proxyHostsCount, onClose 
 
   const updateMutation = useMutation({
     mutationFn: async ({ proxyHostId, data }: { proxyHostId: string; data: { enabled: boolean; rules: URIBlockRule[]; exception_ips: string[]; allow_private_ips: boolean } }) => updateURIBlock(proxyHostId, data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['uri-blocks'] }) },
+    // Settled after the refetch, so a rule's allowed IPs saved next (#343) start from the saved block.
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['uri-blocks'] }),
   })
 
   // Exception domains (#320). Each change saves at once, like the IPs. The
@@ -148,6 +150,10 @@ export function HostDetailModal({ block: editingBlock, proxyHostsCount, onClose 
     setNewExceptionIP('')
   }
 
+  // A rule's own exception IPs (#343) save at once, like the block's.
+  const saveRuleExceptionIPs = (ruleId: string, ips: string[]) =>
+    updateMutation.mutateAsync({ proxyHostId: editingBlock.proxy_host_id, data: { enabled: editingBlock.enabled, rules: editingBlock.rules.map((r) => (r.id === ruleId ? { ...r, exception_ips: ips } : r)), exception_ips: editingBlock.exception_ips, allow_private_ips: editingBlock.allow_private_ips } })
+
   const handleRemoveExceptionIP = (ip: string) => {
     const newIPs = editingBlock.exception_ips.filter(i => i !== ip)
     updateMutation.mutate({ proxyHostId: editingBlock.proxy_host_id, data: { enabled: editingBlock.enabled, rules: editingBlock.rules, exception_ips: newIPs, allow_private_ips: editingBlock.allow_private_ips } })
@@ -230,12 +236,13 @@ export function HostDetailModal({ block: editingBlock, proxyHostsCount, onClose 
                 <p className="text-sm text-slate-500 dark:text-slate-400 italic py-4 text-center">{t('uriBlock.noRules')}</p>
               ) : (
                 editingBlock.rules.map((rule: URIBlockRule) => (
-                  <div key={rule.id} className={`flex items-center justify-between p-3 rounded-lg border ${rule.enabled ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-800' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 opacity-60'}`}>
+                  <div key={rule.id} className={`flex flex-wrap items-center justify-between gap-2 p-3 rounded-lg border ${rule.enabled ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-800' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 opacity-60'}`}>
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       <span className={`px-2 py-0.5 text-xs font-medium rounded shrink-0 ${getMatchTypeColor(rule.match_type)}`}>{getMatchTypeLabel(rule.match_type, t)}</span>
                       <code className="font-mono text-sm text-slate-900 dark:text-white truncate">{rule.pattern}</code>
                       {rule.description && (<span className="text-sm text-slate-500 dark:text-slate-400 truncate">- {rule.description}</span>)}
                     </div>
+                    <RuleExceptionIPs ips={rule.exception_ips} onSave={(ips) => saveRuleExceptionIPs(rule.id, ips)} />
                     <button onClick={() => { if (confirm(t('uriBlock.confirmDelete'))) { removeRuleMutation.mutate({ proxyHostId: editingBlock.proxy_host_id, ruleId: rule.id }) } }} className="p-1.5 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 rounded shrink-0" disabled={removeRuleMutation.isPending}>
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                     </button>

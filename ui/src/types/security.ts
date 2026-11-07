@@ -324,6 +324,8 @@ export interface URIBlockRule {
   match_type: URIMatchType;
   description?: string;
   enabled: boolean;
+  // Addresses only this rule lets through (#343); left out when none.
+  exception_ips?: string[];
 }
 
 export interface URIBlock {

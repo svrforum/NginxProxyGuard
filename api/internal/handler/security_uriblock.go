@@ -45,6 +45,9 @@ func (h *SecurityHandler) UpsertURIBlock(c echo.Context) error {
 	if err := validateChangedURIBlockRules(req.Rules, stored); err != nil {
 		return badRequestError(c, err.Error())
 	}
+	if err := normalizeRuleExceptionIPs(req.Rules); err != nil {
+		return badRequestError(c, err.Error())
+	}
 
 	uriBlock, err := h.securityService.UpsertURIBlock(c.Request().Context(), proxyHostID, &req, skipReload)
 	if err != nil {
@@ -246,6 +249,9 @@ func (h *SecurityHandler) UpdateGlobalURIBlock(c echo.Context) error {
 	if err := validateChangedURIBlockRules(req.Rules, stored); err != nil {
 		return badRequestError(c, err.Error())
 	}
+	if err := normalizeRuleExceptionIPs(req.Rules); err != nil {
+		return badRequestError(c, err.Error())
+	}
 
 	block, err := h.securityService.UpdateGlobalURIBlock(c.Request().Context(), &req)
 	if err != nil {
@@ -377,6 +383,19 @@ func validateChangedURIBlockRules(rules, stored []model.URIBlockRule) error {
 		}
 		if err := validateURIBlockRule(rule); err != nil {
 			return fmt.Errorf("rules[%d]: %w", i, err)
+		}
+	}
+	return nil
+}
+
+// normalizeRuleExceptionIPs checks the rules' own exception IPs (#343) and
+// writes them normalized (model.NormalizeURIBlockRuleExceptionIPs). Unlike
+// the rest of a rule it checks every rule, stored ones too: no older version
+// saved such an address, so none can be refused now that was accepted before.
+func normalizeRuleExceptionIPs(rules []model.URIBlockRule) error {
+	for i := range rules {
+		if err := model.NormalizeURIBlockRuleExceptionIPs(&rules[i]); err != nil {
+			return fmt.Errorf("rules[%d]: %s", i, trimInvalidInputPrefix(err))
 		}
 	}
 	return nil

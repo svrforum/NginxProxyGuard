@@ -154,6 +154,43 @@ test.describe('IP list matching (v2.62.0)', () => {
     expect(await probe(domain, '/admin', '2001:db8:2::7'), 'outside the IPv6 range').toBe(403);
   });
 
+  test("a rule's own exception IPs let it through for that rule only (#343)", async ({ request }) => {
+    const { id, domain } = await createHost('r1-uri');
+    const url = `${API}/api/v1/proxy-hosts/${id}/uri-block`;
+    const res = await request.put(url, {
+      headers,
+      data: {
+        enabled: true,
+        exception_ips: [],
+        rules: [
+          { pattern: '/user/login', match_type: 'prefix', description: 'e2e login', enabled: true,
+            exception_ips: [' 203.0.113.5 ', '2001:DB8:1::/48', '203.0.113.5'] },
+          { pattern: '/admin', match_type: 'prefix', description: 'e2e admin', enabled: true },
+        ],
+      },
+    });
+    expect(res.ok()).toBeTruthy();
+    const saved = await res.json();
+    expect(saved.rules[0].exception_ips, 'saved normalized, each once').toEqual(['203.0.113.5', '2001:db8:1::/48']);
+    expect(saved.rules[1].exception_ips ?? []).toEqual([]);
+    await eventually(async () => (await probe(domain, '/admin', OUTSIDER)) === 403, 'the URI block is live');
+
+    expect(await probe(domain, '/user/login', '203.0.113.5')).toBe(PASSED);
+    expect(await probe(domain, '/user/login', '2001:db8:1::7'), 'inside the IPv6 range').toBe(PASSED);
+    expect(await probe(domain, '/user/login', OUTSIDER)).toBe(403);
+    expect(await probe(domain, '/admin', '203.0.113.5'), 'the other rule keeps blocking it').toBe(403);
+
+    const refused = await request.put(url, {
+      headers,
+      data: {
+        enabled: true,
+        rules: [{ pattern: '/user/login', match_type: 'prefix', enabled: true, exception_ips: ['office.example.com'] }],
+      },
+    });
+    expect(refused.status(), 'an entry that is no address').toBe(400);
+    expect(await probe(domain, '/user/login', '203.0.113.5'), 'the refused save changed nothing').toBe(PASSED);
+  });
+
   test('a priority allow /32 bypasses the bot filter for that address only', async ({ request }) => {
     const { id, domain } = await createHost('r1-prio');
     const ua = 'User-Agent: R1BadBot/1.0\r\n';

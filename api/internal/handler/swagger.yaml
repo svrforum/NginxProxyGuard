@@ -18336,6 +18336,16 @@ components:
           type: string
         enabled:
           type: boolean
+        exception_ips:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+          description: |
+            IP addresses or CIDR ranges that only this rule lets through, on
+            top of the block's `exception_ips`, which every rule lets through.
+            Saved normalized (a range as its network, IPv6 in short form), each
+            once. An entry that is no address answers 400. Omitted when empty.
     CreateURIBlock:
       type: object
       description: |

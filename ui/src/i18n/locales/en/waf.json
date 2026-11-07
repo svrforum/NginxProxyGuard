@@ -564,6 +564,13 @@
       "wpLogin": "Block WP Login",
       "php": "Block PHP",
       "env": "Block .env"
+    },
+    "ruleExceptions": {
+      "add": "+ Allowed IPs",
+      "count": "Allowed IPs: {{count}}",
+      "title": "Addresses that only this rule lets through",
+      "label": "Allowed IPs for this rule",
+      "help": "One IP address or CIDR range per line. Only this rule lets them through; the exception IPs below apply to every rule."
     }
   },
   "global": {

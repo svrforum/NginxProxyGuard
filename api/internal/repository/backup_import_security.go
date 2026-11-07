@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"log"
+	"slices"
 	"sort"
 	"strings"
 
@@ -323,9 +324,34 @@ func writableURIBlockRules(rules []interface{}) []model.URIBlockRule {
 		}
 		rule.Pattern = pattern
 		rule.Description = model.SingleLine(rule.Description)
+		rule.ExceptionIPs = usableRuleExceptionIPs(rule)
 		out = append(out, rule)
 	}
 	return out
+}
+
+// usableRuleExceptionIPs returns a backup rule's own exception IPs (#343) as
+// the API saves them (model.NormalizeURIBlockRuleExceptionIPs): normalized,
+// each once and at most model.MaxURIBlockRuleExceptionIPs. An entry that is
+// not an IP address or a CIDR range is left out and logged, as are the
+// entries past the limit, which only a hand-edited file holds.
+func usableRuleExceptionIPs(rule model.URIBlockRule) []string {
+	var ips []string
+	for _, entry := range rule.ExceptionIPs {
+		ip, ok := model.NormalizeIPOrCIDR(strings.TrimSpace(entry))
+		if !ok {
+			log.Printf("[Backup] Skipped exception IP %.60q of URI block rule %.200q: it is not an IP address or CIDR range. Add it again if it is still needed.", entry, rule.Pattern)
+			continue
+		}
+		if !slices.Contains(ips, ip) {
+			ips = append(ips, ip)
+		}
+	}
+	if len(ips) > model.MaxURIBlockRuleExceptionIPs {
+		log.Printf("[Backup] Kept the first %d of the %d exception IPs of URI block rule %.200q, the most a rule takes.", model.MaxURIBlockRuleExceptionIPs, len(ips), rule.Pattern)
+		ips = ips[:model.MaxURIBlockRuleExceptionIPs]
+	}
+	return ips
 }
 
 // usableExceptionIPs returns the exception IPs of a backup's URI block that

@@ -409,6 +409,7 @@ export interface GlobalURIBlock {
     match_type: URIMatchType;
     description?: string;
     enabled: boolean;
+    exception_ips?: string[];
   }>;
   exception_ips: string[];
   allow_private_ips: boolean;

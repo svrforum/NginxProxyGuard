@@ -283,40 +283,71 @@ func renderableBans(bans []model.BannedIP) []model.BannedIP {
 
 // renderableURIBlock returns ub with only the exception IPs that, without the
 // whitespace around them, are an IP address or a CIDR range, and ub itself
-// when its list needs no change. ub holds the exception IPs of the host's URI
+// when its lists need no change. ub holds the exception IPs of the host's URI
 // block and of the global one, and each is written into the host's geo block
 // of exception addresses ($npg_uri_exc_<id>), normalized
 // (model.NormalizeIPOrCIDR) and once for each network (networkOf). Any other
 // entry is left out and logged. It named no client's address, and nginx cannot read it as a
 // network in the geo block. An entry with spaces around it, which the API
-// accepts, never matched; written without them now, it does.
+// accepts, never matched; written without them now, it does. A rule's own
+// exception IPs (#343), which go into the rule's geo block
+// (URIBlockLocations), are kept the same way.
 func renderableURIBlock(hostID string, ub *model.URIBlock) *model.URIBlock {
 	if ub == nil {
 		return nil
 	}
-	ips := ub.ExceptionIPs[:0:0]
-	seen := make(map[string]bool, len(ub.ExceptionIPs))
-	for _, ip := range ub.ExceptionIPs {
-		normalized, ok := model.NormalizeIPOrCIDR(strings.TrimSpace(ip))
-		if !ok {
-			warnSkippedOnce("uri block exception ip "+hostID+" "+ip,
-				"[WARN] Host %s: URI block exception IP %.60q is not an IP address or CIDR range, so it is left out of the nginx config. Edit the exception IPs of the host's URI block, or of the global URI block, to correct or remove it.",
-				hostID, ip)
+	ips, skipped := exceptionNetworks(ub.ExceptionIPs)
+	for _, ip := range skipped {
+		warnSkippedOnce("uri block exception ip "+hostID+" "+ip,
+			"[WARN] Host %s: URI block exception IP %.60q is not an IP address or CIDR range, so it is left out of the nginx config. Edit the exception IPs of the host's URI block, or of the global URI block, to correct or remove it.",
+			hostID, ip)
+	}
+	var rules []model.URIBlockRule // a copy, made at the first rule that changes
+	for i, rule := range ub.Rules {
+		ruleIPs, skipped := exceptionNetworks(rule.ExceptionIPs)
+		for _, ip := range skipped {
+			warnSkippedOnce("uri block rule exception ip "+hostID+" "+rule.ID+" "+ip,
+				"[WARN] Host %s: exception IP %.60q of the URI block rule %.200q is not an IP address or CIDR range, so it is left out of the nginx config. Edit the rule to correct or remove it.",
+				hostID, ip, rule.Pattern)
+		}
+		if slices.Equal(ruleIPs, rule.ExceptionIPs) {
 			continue
 		}
-		if key := networkOf(normalized); seen[key] {
-			continue // a geo block warns about a network listed twice
-		} else {
-			seen[key] = true
+		if rules == nil {
+			rules = slices.Clone(ub.Rules)
 		}
-		ips = append(ips, normalized)
+		rules[i].ExceptionIPs = ruleIPs
 	}
-	if slices.Equal(ips, ub.ExceptionIPs) {
+	if slices.Equal(ips, ub.ExceptionIPs) && rules == nil {
 		return ub
 	}
 	block := *ub
 	block.ExceptionIPs = ips
+	if rules != nil {
+		block.Rules = rules
+	}
 	return &block
+}
+
+// exceptionNetworks returns the entries that, without the whitespace around
+// them, are an IP address or a CIDR range, normalized
+// (model.NormalizeIPOrCIDR) and once for each network (networkOf: a geo block
+// warns about a network listed twice), and the entries that are not.
+func exceptionNetworks(entries []string) (ips, skipped []string) {
+	ips = entries[:0:0]
+	seen := make(map[string]bool, len(entries))
+	for _, entry := range entries {
+		normalized, ok := model.NormalizeIPOrCIDR(strings.TrimSpace(entry))
+		if !ok {
+			skipped = append(skipped, entry)
+			continue
+		}
+		if key := networkOf(normalized); !seen[key] {
+			seen[key] = true
+			ips = append(ips, normalized)
+		}
+	}
+	return ips, skipped
 }
 
 // skippedWarned holds the values already named in a warning above, so each is

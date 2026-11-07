@@ -22,6 +22,42 @@ type URIBlockRule struct {
 	MatchType   URIMatchType `json:"match_type"`
 	Description string       `json:"description,omitempty"`
 	Enabled     bool         `json:"enabled"`
+
+	// ExceptionIPs are addresses only this rule lets through (#343), on top
+	// of the block's exception list, which every rule lets through. They are
+	// saved as NormalizeURIBlockRuleExceptionIPs writes them.
+	ExceptionIPs []string `json:"exception_ips,omitempty"`
+}
+
+// MaxURIBlockRuleExceptionIPs is how many exception addresses one rule takes.
+const MaxURIBlockRuleExceptionIPs = 100
+
+// NormalizeURIBlockRuleExceptionIPs writes the rule's own exception addresses
+// as NormalizeIPOrCIDR gives them, each once, in the order given. An entry
+// that is not an IP address or a CIDR range is refused, and so is a list
+// longer than MaxURIBlockRuleExceptionIPs.
+func NormalizeURIBlockRuleExceptionIPs(rule *URIBlockRule) error {
+	if len(rule.ExceptionIPs) == 0 {
+		rule.ExceptionIPs = nil
+		return nil
+	}
+	ips := make([]string, 0, len(rule.ExceptionIPs))
+	seen := make(map[string]bool, len(rule.ExceptionIPs))
+	for _, entry := range rule.ExceptionIPs {
+		ip, ok := NormalizeIPOrCIDR(strings.TrimSpace(entry))
+		if !ok {
+			return fmt.Errorf("%w: exception IP %.60q of the rule %.200q is not an IP address or CIDR range", ErrInvalidInput, entry, rule.Pattern)
+		}
+		if !seen[ip] {
+			seen[ip] = true
+			ips = append(ips, ip)
+		}
+	}
+	if len(ips) > MaxURIBlockRuleExceptionIPs {
+		return fmt.Errorf("%w: the rule %.200q has %d exception IPs, more than the %d a rule takes", ErrInvalidInput, rule.Pattern, len(ips), MaxURIBlockRuleExceptionIPs)
+	}
+	rule.ExceptionIPs = ips
+	return nil
 }
 
 // URIBlock represents URI blocking settings for a proxy host

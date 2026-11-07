@@ -43,3 +43,29 @@ func TestMergeURIBlocksMergesDomainsHostScopeWins(t *testing.T) {
 		})
 	}
 }
+
+// A host rule for a path the global block also blocks is one location, so its
+// own exception IPs (#343) join the global rule's there, and the global
+// block's rule keeps its list.
+func TestMergeURIBlocksJoinsTheExceptionsOfOnePath(t *testing.T) {
+	global := &model.GlobalURIBlock{Enabled: true, Rules: []model.URIBlockRule{
+		{ID: "g1", Pattern: "/admin", MatchType: model.URIMatchPrefix, Enabled: true, ExceptionIPs: []string{"203.0.113.5"}},
+	}}
+	host := &model.URIBlock{ProxyHostID: dnsTestHostID, Enabled: true, Rules: []model.URIBlockRule{
+		{ID: "h1", Pattern: "/admin", MatchType: model.URIMatchPrefix, Enabled: true, ExceptionIPs: []string{"198.51.100.7", "203.0.113.5"}},
+		{ID: "h2", Pattern: "/user/login", MatchType: model.URIMatchPrefix, Enabled: true, ExceptionIPs: []string{"192.0.2.9"}},
+	}}
+	got := mergeURIBlocks(global, host)
+	if got == nil || len(got.Rules) != 2 {
+		t.Fatalf("merged rules = %+v, want /admin and /user/login", got)
+	}
+	if want := []string{"203.0.113.5", "198.51.100.7"}; !reflect.DeepEqual(got.Rules[0].ExceptionIPs, want) {
+		t.Errorf("/admin exceptions = %q, want %q", got.Rules[0].ExceptionIPs, want)
+	}
+	if want := []string{"192.0.2.9"}; !reflect.DeepEqual(got.Rules[1].ExceptionIPs, want) {
+		t.Errorf("/user/login exceptions = %q, want %q", got.Rules[1].ExceptionIPs, want)
+	}
+	if want := []string{"203.0.113.5"}; !reflect.DeepEqual(global.Rules[0].ExceptionIPs, want) {
+		t.Errorf("the global rule's own list became %q, want %q", global.Rules[0].ExceptionIPs, want)
+	}
+}

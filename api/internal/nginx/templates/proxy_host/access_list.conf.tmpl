@@ -77,5 +77,13 @@ geo $npg_uri_exc_{{sanitizeID .Host.ID}} {
     include {{.Path}};
 {{- end}}
 }
-{{end}}
+{{end}}{{range .URIBlockLocations}}{{if .ExceptionVar}}
+# Exception IPs/CIDRs of one URI block rule, for its location only (#343)
+geo ${{.ExceptionVar}} {
+    default 0;
+{{- range .ExceptionIPs}}
+    {{.}} 1;
+{{- end}}
+}
+{{end}}{{end}}
 

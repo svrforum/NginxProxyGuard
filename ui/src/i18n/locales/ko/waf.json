@@ -564,6 +564,13 @@
       "wpLogin": "WP 로그인 차단",
       "php": "PHP 차단",
       "env": ".env 차단"
+    },
+    "ruleExceptions": {
+      "add": "+ 허용 IP",
+      "count": "허용 IP {{count}}개",
+      "title": "이 규칙에서만 통과시킬 주소",
+      "label": "이 규칙의 허용 IP",
+      "help": "한 줄에 IP 주소나 CIDR 범위를 하나씩 적습니다. 이 규칙에서만 통과하며, 아래 예외 IP는 모든 규칙에 적용됩니다."
     }
   },
   "global": {

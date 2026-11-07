@@ -620,10 +620,10 @@
 
 {{if .URIBlock}}{{if .URIBlock.Enabled}}
     # URI Path Blocking
-{{range uriBlockRules .URIBlock.Rules}}{{if .Enabled}}
+{{range $.URIBlockLocations}}{{if .Enabled}}
     # Block: {{commentText .Description}}
     {{uriLocationDirective .MatchType .Pattern}} {
-{{if or $.URIExceptionsConfigured $.URIBlock.AllowPrivateIPs}}
+{{if or $.URIExceptionsConfigured $.URIBlock.AllowPrivateIPs .ExceptionVar}}
         # Check exception IPs
         set $uri_block_exception 0;
 {{if $.URIBlock.AllowPrivateIPs}}
@@ -634,6 +634,11 @@
 {{end}}
 {{if $.URIExceptionsConfigured}}
         if ($npg_uri_exc_{{sanitizeID $.Host.ID}} = 1) {
+            set $uri_block_exception 1;
+        }
+{{end}}{{if .ExceptionVar}}
+        # This rule's own exception IPs/CIDRs
+        if (${{.ExceptionVar}} = 1) {
             set $uri_block_exception 1;
         }
 {{end}}

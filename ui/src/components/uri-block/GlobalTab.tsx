@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import type { URIMatchType } from '../../types/security';
 import type { GlobalURIBlock } from '../../api/security';
 import { DnsHostnamesField, type DnsListDomains } from '../common/dns/DnsHostnamesField';
+import { RuleExceptionIPs } from './RuleExceptionIPs';
 
 function getMatchTypeColor(matchType: URIMatchType): string {
   switch (matchType) {
@@ -273,7 +274,7 @@ export function GlobalTab({
               effectiveGlobalRules.map((rule) => (
                 <div
                   key={rule.id}
-                  className={`flex items-center justify-between p-3 rounded-lg border ${
+                  className={`flex flex-wrap items-center justify-between gap-2 p-3 rounded-lg border ${
                     rule.enabled
                       ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-800'
                       : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 opacity-60'
@@ -297,6 +298,13 @@ export function GlobalTab({
                       </span>
                     )}
                   </div>
+                  {/* A rule's own exception IPs (#343) join the pending rules, saved with the rest. */}
+                  <RuleExceptionIPs
+                    ips={rule.exception_ips}
+                    onSave={(ips) =>
+                      setPendingGlobalRules(effectiveGlobalRules.map((r) => (r.id === rule.id ? { ...r, exception_ips: ips } : r)))
+                    }
+                  />
                   <button
                     onClick={() => {
                       if (confirm(t('uriBlock.confirmDelete'))) {

@@ -260,9 +260,11 @@ export function URIBlockManager() {
     } catch (err) {
       // A refused domain is marked on its chip (#320).
       setGlobalNameErrors(dnsNamesErrorsOf(err, 'exception_hostnames', sentNames))
+      // The server's reason names the refused entry, such as a rule's allowed IP (#343).
+      const reason = err instanceof Error && err.message ? `: ${err.message}` : ''
       setGlobalSaveMessage({
         type: 'error',
-        message: t('uriBlock.global.saveFailed') || 'Failed to save settings',
+        message: (t('uriBlock.global.saveFailed') || 'Failed to save settings') + reason,
       })
       setTimeout(() => setGlobalSaveMessage(null), 5000)
     }

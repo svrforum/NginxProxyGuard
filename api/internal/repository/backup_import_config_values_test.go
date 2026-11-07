@@ -277,3 +277,20 @@ func TestImportWAFExclusions_KeepTextOnOneLine(t *testing.T) {
 		t.Fatalf("import global exclusion: %v", err)
 	}
 }
+
+// A restored rule keeps its own exception IPs (#343) as the API saves them:
+// normalized and each once, without an entry that is no address.
+func TestWritableURIBlockRulesKeepRuleExceptionIPs(t *testing.T) {
+	var entries []interface{}
+	if err := json.Unmarshal([]byte(`[{"id":"r1","pattern":"/user/login","match_type":"prefix","enabled":true,
+		"exception_ips":["203.0.113.5"," 2001:DB8::1 ","office.example.com","203.0.113.5"]}]`), &entries); err != nil {
+		t.Fatal(err)
+	}
+	rules := writableURIBlockRules(entries)
+	if len(rules) != 1 {
+		t.Fatalf("rules = %+v, want the one rule", rules)
+	}
+	if got, want := strings.Join(rules[0].ExceptionIPs, ","), "203.0.113.5,2001:db8::1"; got != want {
+		t.Errorf("exception IPs = %q, want %q", got, want)
+	}
+}

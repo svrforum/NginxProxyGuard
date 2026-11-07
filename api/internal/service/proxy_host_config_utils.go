@@ -95,8 +95,11 @@ func mergeURIBlocks(global *model.GlobalURIBlock, host *model.URIBlock) *model.U
 			if rule.Enabled {
 				// Check if rule already exists (by pattern and match type) to avoid duplicates
 				exists := false
-				for _, existing := range result.Rules {
+				for i, existing := range result.Rules {
 					if existing.Pattern == rule.Pattern && existing.MatchType == rule.MatchType {
+						// One location blocks the path, so the host's
+						// exceptions for it join the ones it has (#343).
+						result.Rules[i].ExceptionIPs = unionStrings(existing.ExceptionIPs, rule.ExceptionIPs)
 						exists = true
 						break
 					}

@@ -1272,6 +1272,29 @@ func goldenCases() []goldenCase {
 		})
 	}
 
+	// 35) a URI block rule's own exception IPs (#343): a geo block for the
+	// rule, tested in its location only, next to the block's exception list
+	// that every rule tests. Entries are normalized and each network written
+	// once; an entry that is no address, and a rule that is off, are left out.
+	{
+		hostRule := goldenBaseHost("00000000-0000-0000-0000-000000000a23", "uri-rule-exceptions.example.com")
+		cases = append(cases, goldenCase{
+			name: "uri_block_rule_exceptions",
+			data: ProxyHostConfigData{Host: hostRule, GlobalSettings: baseGlobalSettings(),
+				URIBlock: &model.URIBlock{ID: "00000000-0000-0000-0000-0000000000d7", ProxyHostID: hostRule.ID, Enabled: true,
+					ExceptionIPs: []string{"192.0.2.20"}, CreatedAt: fixtureNow, UpdatedAt: fixtureNow,
+					Rules: []model.URIBlockRule{
+						{ID: "00000000-0000-0000-0000-0000000000d8", Pattern: "/user/login", MatchType: model.URIMatchPrefix,
+							Description: "login from the office only", Enabled: true,
+							ExceptionIPs: []string{"203.0.113.5", " 2001:DB8::1 ", "203.0.113.5/32", "not-an-ip"}},
+						{ID: "00000000-0000-0000-0000-0000000000d9", Pattern: "/admin", MatchType: model.URIMatchPrefix,
+							Description: "block admin", Enabled: true},
+						{ID: "00000000-0000-0000-0000-0000000000da", Pattern: "/old", MatchType: model.URIMatchExact,
+							Description: "rule that is off", Enabled: false, ExceptionIPs: []string{"203.0.113.9"}},
+					}}},
+		})
+	}
+
 	return cases
 }
 
