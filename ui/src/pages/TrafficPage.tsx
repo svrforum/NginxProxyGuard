@@ -26,6 +26,16 @@ function formatCount(value: number): string {
 
 const panel = 'rounded-xl border border-slate-200 bg-white p-4 sm:p-5 dark:border-slate-700 dark:bg-slate-800'
 const field = 'rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100'
+// Recharts draws its tooltip box white, and in dark mode the label took the
+// page's light text, so the date and the host name on it vanished (#370). A
+// dark box reads in both themes, as on the dashboard. Axis labels get a grey
+// per theme: recharts' default is too dark on the dark background.
+const tooltipStyle = {
+  contentStyle: { backgroundColor: 'rgba(15, 23, 42, 0.95)', border: 'none', borderRadius: 8 },
+  labelStyle: { color: '#cbd5e1', fontSize: 12 },
+  itemStyle: { color: '#f1f5f9', fontSize: 12 },
+}
+const axisTick = { fontSize: 11, className: 'fill-slate-500 dark:fill-slate-400' }
 
 export default function TrafficPage() {
   const { t, i18n } = useTranslation('traffic')
@@ -133,9 +143,9 @@ export default function TrafficPage() {
           </linearGradient>
         </defs>
         <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-        <XAxis dataKey="time" type="number" scale="time" domain={['dataMin', 'dataMax']} tickFormatter={v => timeLabel(Number(v), dates)} tick={{ fontSize: 11 }} minTickGap={30} />
-        <YAxis width={64} tick={{ fontSize: 11 }} tickFormatter={v => key === 'bytes' ? formatBytes(v) : formatCount(v)} />
-        <Tooltip labelFormatter={v => timeLabel(Number(v), true)} formatter={value => [key === 'bytes' ? formatBytes(Number(value)) : formatCount(Number(value)), t(key)]} />
+        <XAxis dataKey="time" type="number" scale="time" domain={['dataMin', 'dataMax']} tickFormatter={v => timeLabel(Number(v), dates)} tick={axisTick} minTickGap={30} />
+        <YAxis width={64} tick={axisTick} tickFormatter={v => key === 'bytes' ? formatBytes(v) : formatCount(v)} />
+        <Tooltip {...tooltipStyle} labelFormatter={v => timeLabel(Number(v), true)} formatter={value => [key === 'bytes' ? formatBytes(Number(value)) : formatCount(Number(value)), t(key)]} />
         <Area type="monotone" dataKey={key} name={t(key)} stroke={key === 'bytes' ? '#0ea5e9' : '#8b5cf6'} fill={`url(#traffic-gradient-${scope}-${key})`} strokeWidth={2} isAnimationActive={false} />
       </AreaChart>
     </ResponsiveContainer>
@@ -221,9 +231,9 @@ export default function TrafficPage() {
           <ResponsiveContainer width="100%" height={Math.max(180, Math.min(12, hostOptions.length) * 35)}>
             <BarChart data={hostOptions.slice(0, 12).map(h => ({ ...h, label: labelFor(h.domain) }))} layout="vertical" margin={{ left: 4, right: 12 }}>
               <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-              <XAxis type="number" tickFormatter={v => formatBytes(Number(v))} tick={{ fontSize: 11 }} />
-              <YAxis dataKey="label" type="category" width={150} tick={{ fontSize: 11 }} />
-              <Tooltip formatter={value => [formatBytes(Number(value)), t('bytes')]} />
+              <XAxis type="number" tickFormatter={v => formatBytes(Number(v))} tick={axisTick} />
+              <YAxis dataKey="label" type="category" width={150} tick={axisTick} />
+              <Tooltip {...tooltipStyle} formatter={value => [formatBytes(Number(value)), t('bytes')]} />
               <Bar dataKey="bytes" fill="#0ea5e9" radius={[0, 4, 4, 0]} onClick={data => { if (data?.id) setSelectedHost(String(data.id)) }} />
             </BarChart>
           </ResponsiveContainer>
