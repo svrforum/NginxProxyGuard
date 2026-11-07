@@ -17030,6 +17030,14 @@ components:
         created_at:
           type: string
           format: date-time
+        country_code:
+          type: string
+          readOnly: true
+          description: ISO 3166-1 alpha-2 code of the address's country, from GeoIP. Absent for a range, a private address, or when no GeoIP database is installed.
+        country:
+          type: string
+          readOnly: true
+          description: The country's English name, from GeoIP. Absent when country_code is.
     BannedIPListResponse:
       type: object
       properties:

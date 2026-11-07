@@ -119,6 +119,12 @@ function BanCard({ ban, hostName, selected, isUnbanning, locale, t, onToggleSele
             >
               {ban.ip_address}
             </button>
+            {ban.country_code && (
+              <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300" title={ban.country}>
+                <span aria-hidden="true">{[...ban.country_code.toUpperCase()].map((c) => String.fromCodePoint(127397 + c.charCodeAt(0))).join('')}</span>
+                {ban.country_code}
+              </span>
+            )}
             <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium ${hostName ? 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300' : 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'}`}>
               {hostName || t('bannedIp.global', { defaultValue: '전역' })}
             </span>

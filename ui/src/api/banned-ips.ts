@@ -11,6 +11,9 @@ interface BannedIP {
   is_permanent: boolean
   is_auto_banned?: boolean
   created_at: string
+  // From GeoIP, when it is installed (#369).
+  country_code?: string
+  country?: string
 }
 
 interface BannedIPListResponse {

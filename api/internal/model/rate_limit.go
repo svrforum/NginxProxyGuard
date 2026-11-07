@@ -301,6 +301,10 @@ type BannedIP struct {
 	IsPermanent  bool       `json:"is_permanent"`
 	IsAutoBanned bool       `json:"is_auto_banned"`
 	CreatedAt    time.Time  `json:"created_at"`
+	// CountryCode and Country say where the address is, from GeoIP. Read
+	// only: the list fills them in when a GeoIP database is installed (#369).
+	CountryCode string `json:"country_code,omitempty"`
+	Country     string `json:"country,omitempty"`
 }
 
 // BannedIPListResponse is the response for listing banned IPs

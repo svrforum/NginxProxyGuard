@@ -259,6 +259,8 @@ func wireServiceCallbacks(svcs *Services, repos *Repositories) {
 	svcs.Security.SetGlobalWAFRepo(repos.GlobalWAF)
 	// Security: per-banned-IP statistics for the ban detail view (#242).
 	svcs.Security.SetBannedIPStatsRepo(repos.BannedIPStats)
+	// Security: the banned IP list shows each address's country (#369).
+	svcs.Security.SetGeoIP(svcs.GeoIP)
 	// The global jail refuses to be enabled while trusted proxies are
 	// unconfigured; that check needs the settings row (#275).
 	svcs.Security.SetSystemSettingsRepo(repos.SystemSettings)

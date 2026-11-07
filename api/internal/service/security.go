@@ -37,6 +37,7 @@ type SecurityService struct {
 	globalWAFRepo        *repository.GlobalWAFRepository             // global WAF default (#198 slice 6)
 
 	bannedIPStatsRepo *repository.BannedIPStatsRepository // per-IP summary behind a banned address (#242)
+	geo               countryLooker                       // where a banned address is, for the list (#369)
 
 	// systemSettingsRepo backs the global jail's enable-time precondition:
 	// behind a CDN with no trusted proxy configured, the address the jail sees
@@ -453,6 +454,7 @@ func (s *SecurityService) ListBannedIPs(ctx context.Context, proxyHostID string,
 	if err != nil {
 		return nil, fmt.Errorf("failed to list banned IPs: %w", err)
 	}
+	s.setBannedCountries(ctx, result.Data)
 	return result, nil
 }
 
