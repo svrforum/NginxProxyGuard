@@ -11,20 +11,24 @@ import (
 
 const (
 	// nginxVersionTTL is how long a version read is kept. It changes only
-	// when the nginx container is replaced, which usually restarts the API
-	// as well.
-	nginxVersionTTL = time.Hour
+	// when the nginx container is replaced; an update of nginx alone shows
+	// within this long.
+	nginxVersionTTL = 10 * time.Minute
+	// nginxVersionRetry is how long a failed read is kept, so that callers
+	// do not queue up behind a docker exec each while nginx is down.
+	nginxVersionRetry = time.Minute
 	// nginxVersionTimeout bounds one `docker exec ... nginx -v`.
 	nginxVersionTimeout = 5 * time.Second
 )
 
 var nginxVersionPattern = regexp.MustCompile(`nginx/([0-9][0-9A-Za-z.\-]*)`)
 
-// nginxVersionCache keeps the last version nginx reported. A failed read is
-// not kept, so the next caller tries again.
+// nginxVersionCache keeps the last version nginx reported, or the last
+// failure for a minute.
 type nginxVersionCache struct {
 	mu     sync.Mutex
 	value  string
+	err    error
 	readAt time.Time
 }
 
@@ -40,19 +44,25 @@ func (m *Manager) Version(ctx context.Context) (string, error) {
 	if c.value != "" && time.Since(c.readAt) < nginxVersionTTL {
 		return c.value, nil
 	}
-	ctx, cancel := context.WithTimeout(ctx, nginxVersionTimeout)
+	if c.err != nil && time.Since(c.readAt) < nginxVersionRetry {
+		return "", c.err
+	}
+	v, err := m.readNginxVersion(ctx)
+	c.value, c.err, c.readAt = v, err, time.Now()
+	return v, err
+}
+
+func (m *Manager) readNginxVersion(ctx context.Context) (string, error) {
+	// A caller that goes away does not end the read: its failure would be
+	// kept for the next callers.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), nginxVersionTimeout)
 	defer cancel()
 	// nginx -v writes to stderr.
 	out, err := exec.CommandContext(ctx, "docker", "exec", m.nginxContainer, "nginx", "-v").CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("nginx -v: %w", err)
 	}
-	v, err := parseNginxVersion(string(out))
-	if err != nil {
-		return "", err
-	}
-	c.value, c.readAt = v, time.Now()
-	return v, nil
+	return parseNginxVersion(string(out))
 }
 
 // parseNginxVersion takes the version out of `nginx -v` output:

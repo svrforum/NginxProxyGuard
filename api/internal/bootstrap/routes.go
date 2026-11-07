@@ -355,16 +355,18 @@ func registerTokenProtectedRoutes(v1 *echo.Group, c *Container) {
 	v1.Use(authMiddleware.InitialSetupRequired)
 	// Admin-created accounts must set their own password first (#222).
 	v1.Use(authMiddleware.MustChangePasswordRequired)
+	// What the header shows: versions and the instance name (#369). Every role
+	// needs it, so it is registered before the permission check below: Echo
+	// snapshots group middleware at Add time, and RequireRoutePermission lets
+	// only superusers reach a route it has no mapping for (PublicRoutes says
+	// "no permission needed" for the coverage test; it is not consulted here).
+	v1.GET("/instance", c.Handlers.Instance.Get)
 	// Role permissions (#222). Attached HERE and not earlier on purpose: Echo
 	// snapshots group middleware at Add time, so this covers exactly the resource
 	// routes registered below and leaves the self-service /auth/* routes
 	// registered above untouched. A user must always be able to change their own
 	// password, whatever their role.
 	v1.Use(authMiddleware.RequireRoutePermission(c.Services.Authz))
-
-	// What the header shows: versions and the instance name (#369). Every
-	// role needs it, so it asks for no permission (PublicRoutes).
-	v1.GET("/instance", c.Handlers.Instance.Get)
 
 	registerAPITokenRoutes(v1, c.Handlers.APIToken)
 	registerProxyHostRoutes(v1, c.Handlers.ProxyHost)

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getSystemSettings, updateSystemSettings } from '../../api/settings';
+import { usePermissions } from '../../hooks/usePermissions';
 
 const MAX_LENGTH = 32;
 
@@ -12,6 +13,8 @@ const MAX_LENGTH = 32;
  */
 export default function InstanceNameSection() {
   const { t } = useTranslation('settings');
+  // Hiding is a convenience; the API refuses the save without settings:write.
+  const canWrite = usePermissions().can('settings:write');
   const queryClient = useQueryClient();
   const [editedValue, setEditedValue] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -61,17 +64,17 @@ export default function InstanceNameSection() {
               maxLength={MAX_LENGTH}
               placeholder={t('global.advanced.instanceName.placeholder')}
               onChange={(e) => setEditedValue(e.target.value)}
-              disabled={saveMutation.isPending}
+              disabled={!canWrite || saveMutation.isPending}
               className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-sm text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
             />
           </div>
-          <button
+          {canWrite && <button
             onClick={() => editedValue !== null && saveMutation.mutate(editedValue.trim())}
             disabled={!isModified || saveMutation.isPending}
             className="px-4 py-2 text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {saveMutation.isPending ? t('global.buttons.saving') : t('global.buttons.save')}
-          </button>
+          </button>}
         </div>
         <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
           {t('global.advanced.instanceName.help', { max: MAX_LENGTH })}
