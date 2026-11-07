@@ -44,17 +44,25 @@ const dashboardSummary24hSQL = `
 		WHERE hour_bucket >= $1 AND proxy_host_id IS NULL
 	`
 
-// dashboardBlocked24hSQL is the dashboard's blocked requests since $1: all of
-// them, their distinct client IPs, and the WAF, rate limit and bot filter
-// counts. It reads the logs, not the hourly rollup, which keeps only those
-// three of the block reasons (geo_block, uri_block, banned_ip and the rest
-// would be missing from the total).
+// dashboardBlocked24hSQL is the dashboard's blocked requests since $1: how
+// many, from how many client IPs, and the WAF, rate limit and bot filter
+// counts. It reads the logs, not the hourly rollup, which keeps only three of
+// the block reasons (geo_block, uri_block, banned_ip and the rest would be
+// missing from the total).
 //
-// nginx names the reason on the access row for every block but the WAF's:
-// ModSecurity answers before any server-block code can set it, so a WAF block
-// is the modsec row marked 'waf' while its access row says 'none'. Reading
-// only access rows kept the WAF count at 0 (#369). Each half has its own
-// index: idx_logs_part_block_reason_created for the access rows,
+// The total and the IPs count each request once, from its access row: a row
+// nginx gave a block reason, or a 403 nginx answered itself (no upstream)
+// with none. The second kind is mostly the WAF's: ModSecurity answers before
+// any server-block code can name a reason, so a WAF block's access row says
+// 'none' unless a label set for every request of the host (an access list's)
+// or the bot user agent fallback put another on it. Counting the modsec row
+// too would count those requests twice.
+//
+// The WAF count is the modsec rows marked 'waf', the blocks the WAF events
+// page lists; reading only access rows kept it at 0 (#369). It includes a
+// request another feature blocked first when CRS rules matched it as well,
+// as that page does. Each half has an index: idx_logs_part_block_reason_created
+// and idx_logs_part_status_created for the access rows,
 // idx_logs_part_type_created for the modsec ones.
 const dashboardBlocked24hSQL = `
 		WITH blocked AS (
@@ -62,12 +70,14 @@ const dashboardBlocked24hSQL = `
 			WHERE created_at >= $1 AND log_type = 'access' AND block_reason != 'none'
 			UNION ALL
 			SELECT client_ip, block_reason FROM logs_partitioned
-			WHERE created_at >= $1 AND log_type = 'modsec' AND block_reason = 'waf'
+			WHERE created_at >= $1 AND log_type = 'access' AND block_reason = 'none'
+			  AND status_code = 403 AND (upstream_addr IS NULL OR upstream_addr IN ('', '-'))
 		)
 		SELECT
 			COUNT(*),
 			COUNT(DISTINCT client_ip),
-			COUNT(*) FILTER (WHERE block_reason = 'waf'),
+			(SELECT COUNT(*) FROM logs_partitioned
+			 WHERE created_at >= $1 AND log_type = 'modsec' AND block_reason = 'waf'),
 			COUNT(*) FILTER (WHERE block_reason = 'rate_limit'),
 			COUNT(*) FILTER (WHERE block_reason = 'bot_filter')
 		FROM blocked

@@ -41,10 +41,10 @@ const averagedRequestFilter = `status_code IS DISTINCT FROM 101 AND request_time
 // would multiply the time of its few measured requests.
 //
 // waf_blocked counts the modsec rows marked 'waf', under the same host and URI
-// filters: a WAF block's own access row says 'none' (see
-// dashboardBlocked24hSQL), so counting WAF blocks among access rows always
-// gave 0 (#369). An hour with WAF blocks and no access rows (access logging
-// off) still gets its row.
+// filters, as the dashboard's 24h WAF count does (dashboardBlocked24hSQL):
+// a WAF block's own access row seldom says 'waf', so counting WAF blocks
+// among access rows always gave 0 (#369). An hour with WAF blocks and no
+// access rows (access logging off) still gets its row.
 const hourlyRollupRecomputeSQL = `
 WITH hours AS (
     SELECT generate_series(date_trunc('hour', $1::timestamptz, 'UTC'),
@@ -118,7 +118,8 @@ ON CONFLICT (hour_bucket) WHERE proxy_host_id IS NULL DO UPDATE SET
 // A NULL host ID is reserved for the dashboard's global totals. Stale host
 // rows are removed when a replay finds that their source requests disappeared.
 // Host rows count no WAF blocks: those are modsec rows, which carry no
-// proxy_host_id, and nothing reads waf_blocked from a host row.
+// proxy_host_id. GET /dashboard/stats/hourly with a proxy_host_id reads host
+// rows, so its waf_blocked stays 0, as it always was.
 const hourlyHostRollupSQL = `
 WITH agg AS (
     SELECT l.proxy_host_id, date_trunc('hour', l.created_at, 'UTC') AS hour_bucket,
