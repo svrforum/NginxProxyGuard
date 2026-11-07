@@ -1966,6 +1966,15 @@ UNION ALL
     logs_partitioned.upstream_addr,
     logs_partitioned.upstream_status
    FROM public.logs_partitioned;
+CREATE TABLE IF NOT EXISTS public.proxy_host_log_rules (
+    proxy_host_id uuid NOT NULL,
+    skip_all boolean DEFAULT false NOT NULL,
+    skip_statuses text[] DEFAULT '{}'::text[] NOT NULL,
+    skip_methods text[] DEFAULT '{}'::text[] NOT NULL,
+    skip_paths text[] DEFAULT '{}'::text[] NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
 CREATE TABLE IF NOT EXISTS public.proxy_hosts (
     id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
     proxy_type character varying(20) DEFAULT 'http'::character varying NOT NULL,
@@ -2944,6 +2953,8 @@ ALTER TABLE ONLY public.logs_p_default
     ADD CONSTRAINT logs_p_default_pkey PRIMARY KEY (id, created_at);
 ALTER TABLE ONLY public.logs
     ADD CONSTRAINT logs_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.proxy_host_log_rules
+    ADD CONSTRAINT proxy_host_log_rules_pkey PRIMARY KEY (proxy_host_id);
 ALTER TABLE ONLY public.proxy_hosts
     ADD CONSTRAINT proxy_hosts_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.rate_limits
@@ -3573,6 +3584,8 @@ ALTER TABLE ONLY public.proxy_hosts
     ADD CONSTRAINT proxy_hosts_ddns_provider_id_fkey FOREIGN KEY (ddns_provider_id) REFERENCES public.dns_providers(id) ON DELETE SET NULL;
 ALTER TABLE ONLY public.proxy_hosts
     ADD CONSTRAINT proxy_hosts_auth_provider_id_fkey FOREIGN KEY (auth_provider_id) REFERENCES public.auth_providers(id) ON DELETE SET NULL;
+ALTER TABLE ONLY public.proxy_host_log_rules
+    ADD CONSTRAINT proxy_host_log_rules_proxy_host_id_fkey FOREIGN KEY (proxy_host_id) REFERENCES public.proxy_hosts(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.rate_limits
     ADD CONSTRAINT rate_limits_proxy_host_id_fkey FOREIGN KEY (proxy_host_id) REFERENCES public.proxy_hosts(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.redirect_hosts
@@ -4852,3 +4865,18 @@ ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS key_type character vary
 
 -- A name the header shows to tell NPG instances apart (#369). Empty shows none.
 ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS instance_name character varying(32) DEFAULT ''::character varying NOT NULL;
+
+-- Access log lines of a proxy host that are not stored (#347): every line, or the lines
+-- with one of the listed status codes or methods or under one of the path prefixes. One
+-- row for each host with rules; a host without one stores every line.
+CREATE TABLE IF NOT EXISTS public.proxy_host_log_rules (
+    proxy_host_id uuid NOT NULL,
+    skip_all boolean DEFAULT false NOT NULL,
+    skip_statuses text[] DEFAULT '{}'::text[] NOT NULL,
+    skip_methods text[] DEFAULT '{}'::text[] NOT NULL,
+    skip_paths text[] DEFAULT '{}'::text[] NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT proxy_host_log_rules_pkey PRIMARY KEY (proxy_host_id),
+    CONSTRAINT proxy_host_log_rules_proxy_host_id_fkey FOREIGN KEY (proxy_host_id) REFERENCES public.proxy_hosts(id) ON DELETE CASCADE
+);

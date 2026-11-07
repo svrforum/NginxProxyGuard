@@ -191,6 +191,14 @@ type LogCollector struct {
 	// where the file-tail source has no content (issue #141/#145 pattern).
 	startedAt        time.Time
 	bootProbeWarned  atomic.Bool
+
+	// The hosts' log rules (#347): lines they skip are not stored
+	// (log_collector_host_rules.go).
+	logRulesRepo       hostLogRulesSource
+	globalSettingsRepo globalSettingsSource
+	hostLogRules       atomic.Pointer[hostLogRuleSet]
+	logRulesLoadMu     sync.Mutex
+	logRulesLoadFailed atomic.Bool
 }
 
 func NewLogCollector(logRepo *repository.LogRepository, nginxContainer string, accessLogPath string, geoIP *GeoIPService, redisCache *cache.RedisClient) *LogCollector {
@@ -520,6 +528,7 @@ func (c *LogCollector) loadRedirectDomains(ctx context.Context) (map[string]stru
 func (c *LogCollector) domainCacheLoop(ctx context.Context) {
 	// Prime once so the very first log lines after boot resolve.
 	c.refreshDomainCache(ctx)
+	c.loadHostLogRules(ctx)
 
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -531,6 +540,9 @@ func (c *LogCollector) domainCacheLoop(ctx context.Context) {
 			return
 		case <-ticker.C:
 			c.refreshDomainCache(ctx)
+			// Rules saved through the API apply at once (ReloadHostLogRules);
+			// this picks up a restored backup.
+			c.loadHostLogRules(ctx)
 		}
 	}
 }
@@ -1006,6 +1018,11 @@ func (c *LogCollector) handleAccessLine(ctx context.Context, line string) {
 		}
 	}
 
+	// The host's log rules (#347) leave the line out of the database, after
+	// fail2ban has counted it. They never skip a line NPG blocked.
+	if c.skipsStorage(logReq) {
+		return
+	}
 	c.addLog(*logReq)
 }
 

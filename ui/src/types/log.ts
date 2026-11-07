@@ -165,6 +165,21 @@ export interface LogStats {
   top_countries?: CountryStat[];
 }
 
+// A proxy host's log rules (#347): the access log lines it does not store.
+export interface HostLogRules {
+  skip_all: boolean;
+  skip_statuses: string[];
+  skip_methods: string[];
+  skip_paths: string[];
+}
+
+export interface HostLogRulesEntry extends HostLogRules {
+  proxy_host_id: string;
+  domain_names: string[];
+  enabled: boolean;
+  updated_at?: string;
+}
+
 export interface LogSettings {
   id: string;
   retention_days: number;

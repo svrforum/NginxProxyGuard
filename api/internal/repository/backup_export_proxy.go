@@ -454,3 +454,25 @@ func (r *BackupRepository) exportCertificates(ctx context.Context) ([]model.Cert
 
 	return exports, nil
 }
+
+// exportHostLogRules exports the log rules of the hosts that have some (#347).
+func (r *BackupRepository) exportHostLogRules(ctx context.Context) ([]model.HostLogRulesExport, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT proxy_host_id, skip_all, skip_statuses, skip_methods, skip_paths
+		FROM proxy_host_log_rules
+		ORDER BY proxy_host_id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var exports []model.HostLogRulesExport
+	for rows.Next() {
+		var e model.HostLogRulesExport
+		if err := rows.Scan(&e.ProxyHostID, &e.SkipAll, pq.Array(&e.SkipStatuses), pq.Array(&e.SkipMethods), pq.Array(&e.SkipPaths)); err != nil {
+			return nil, err
+		}
+		exports = append(exports, e)
+	}
+	return exports, rows.Err()
+}

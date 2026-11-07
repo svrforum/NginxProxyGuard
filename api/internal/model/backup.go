@@ -202,6 +202,10 @@ type ExportData struct {
 	// Proxy hosts with all related data
 	ProxyHosts []ProxyHostExport `json:"proxy_hosts,omitempty"`
 
+	// Log rules of the proxy hosts that have some (#347). nil in backups
+	// made before they existed; then every restored host stores every line.
+	HostLogRules []HostLogRulesExport `json:"host_log_rules,omitempty"`
+
 	// DNS Providers
 	DNSProviders []DNSProviderExport `json:"dns_providers,omitempty"`
 
@@ -274,6 +278,16 @@ type ExportData struct {
 	// it travels: review flag and reason, pinned CNAME target, last published
 	// addresses. nil in backups made before domain entries existed.
 	DNSEntryStates []DNSEntryStateExport `json:"dns_entry_states,omitempty"`
+}
+
+// HostLogRulesExport is a proxy host's log rules (#347): the access log lines
+// it does not store.
+type HostLogRulesExport struct {
+	ProxyHostID  string   `json:"proxy_host_id"`
+	SkipAll      bool     `json:"skip_all"`
+	SkipStatuses []string `json:"skip_statuses,omitempty"`
+	SkipMethods  []string `json:"skip_methods,omitempty"`
+	SkipPaths    []string `json:"skip_paths,omitempty"`
 }
 
 // DDNSRecordExport represents a DDNS record for export (#154)

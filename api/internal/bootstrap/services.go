@@ -371,6 +371,8 @@ func wireServiceCallbacks(svcs *Services, repos *Repositories) {
 		svcs.LogCollector.SetRedirectHostRepo(repos.RedirectHost)
 		svcs.Fail2ban.SetConfiguredHostResolver(svcs.LogCollector.IsConfiguredHost)
 		svcs.LogCollector.SetSystemSettingsRepo(repos.SystemSettings)
+		// The hosts' log rules (#347): lines they skip are not stored.
+		svcs.LogCollector.SetLogRulesRepo(repos.LogRules, repos.GlobalSettings)
 		// A host whose access list holds domain entries does not count the
 		// list's own 403s for clients outside it (#320). The nil check keeps a
 		// nil service from becoming a non-nil interface.

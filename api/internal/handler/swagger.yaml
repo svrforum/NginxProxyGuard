@@ -7988,6 +7988,90 @@ paths:
           description: Preset deleted
         '404':
           description: Preset not found
+  /log-rules:
+    get:
+      tags: [Logs]
+      summary: List the proxy hosts with their log rules
+      description: |
+        Every proxy host except stream hosts, which have no access log lines,
+        with the access log lines it does not store (#347). A host without
+        rules has empty lists and no `updated_at`.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Hosts with their rules, in the order of their first domain
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/HostLogRulesEntry'
+  /log-rules/{proxyHostId}:
+    get:
+      tags: [Logs]
+      summary: Get a proxy host's log rules
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: proxyHostId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The host with its rules
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HostLogRulesEntry'
+        '404':
+          description: No such proxy host
+    put:
+      tags: [Logs]
+      summary: Replace a proxy host's log rules
+      description: |
+        The access log lines of the host that are not stored: every line
+        (`skip_all`), or the lines with one of the status codes or methods, or
+        under one of the path prefixes. A line NPG blocked is always stored: one
+        with a block reason, or one NPG answered without asking the backend
+        with an error status or a 302 (a ForwardAuth sign-in redirect). fail2ban
+        sees every line before the rules apply. A path prefix applies only to a
+        request path nginx's request path guard gives path-scoped exemptions
+        (no dot segment in any spelling a backend may resolve, no `//` or
+        backslash), and not at all while `access_log_strip_query` is on, since
+        the log then holds nginx's normalized path. Lines that are not stored
+        are missing from the logs and the statistics. Rules that skip nothing
+        remove the host's rules. Needs `logs:write`; an API token needs full
+        access (`*`).
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: proxyHostId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateHostLogRules'
+      responses:
+        '200':
+          description: The host with its saved rules, as stored (normalized)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HostLogRulesEntry'
+        '400':
+          description: An entry that is not a status code or class, a method or a path prefix, or a list over 50 entries
+        '404':
+          description: No such proxy host
 
   # ============================================================================
   # System logs (container/internal events)
@@ -17580,6 +17664,69 @@ components:
           format: int64
         auto_cleanup_enabled:
           type: boolean
+    HostLogRulesEntry:
+      type: object
+      description: A proxy host with the access log lines it does not store (#347).
+      properties:
+        proxy_host_id:
+          type: string
+          format: uuid
+        domain_names:
+          type: array
+          items:
+            type: string
+        enabled:
+          type: boolean
+          description: Whether the proxy host is enabled
+        skip_all:
+          type: boolean
+          description: No line of the host is stored, except the ones NPG blocked
+        skip_statuses:
+          type: array
+          items:
+            type: string
+          description: Status codes ("207") or classes ("3xx")
+        skip_methods:
+          type: array
+          items:
+            type: string
+          description: Request methods, in upper case
+        skip_paths:
+          type: array
+          items:
+            type: string
+          description: Path prefixes, compared with the decoded request path
+        updated_at:
+          type: string
+          format: date-time
+          description: When the rules were last saved; absent for a host without rules
+    UpdateHostLogRules:
+      type: object
+      description: |
+        Replaces the host's rules. Entries are trimmed and stored once each, a
+        status class in lower case and a method in upper case; a path prefix
+        is stored decoded and must start with "/" and have no query, dot
+        segment, "//" or backslash (at most 256 bytes). Each list takes at
+        most 50 entries.
+      properties:
+        skip_all:
+          type: boolean
+        skip_statuses:
+          type: array
+          maxItems: 50
+          items:
+            type: string
+            pattern: '^[1-5]([0-9]{2}|[xX]{2})$'
+        skip_methods:
+          type: array
+          maxItems: 50
+          items:
+            type: string
+        skip_paths:
+          type: array
+          maxItems: 50
+          items:
+            type: string
     LogFilterPreset:
       type: object
       properties:

@@ -1,6 +1,6 @@
-import type { LogListResponse, LogStats, LogSettings, LogFilter, CountryStat } from '../types/log';
+import type { LogListResponse, LogStats, LogSettings, LogFilter, CountryStat, HostLogRules, HostLogRulesEntry } from '../types/log';
 import { getAuthHeaders } from './auth';
-import { handleSessionExpired } from './client';
+import { apiGet, apiPut, handleSessionExpired } from './client';
 
 const API_BASE = '/api/v1';
 
@@ -213,4 +213,14 @@ export async function fetchDistinctMethods(): Promise<string[]> {
     headers: getAuthHeaders(),
   });
   return handleResponse<string[]>(res);
+}
+
+// The hosts' log rules (#347). Every proxy host but a stream host, with the
+// access log lines it does not store; an ApiError carries the server's reason.
+export async function fetchLogRules(): Promise<HostLogRulesEntry[]> {
+  return apiGet<HostLogRulesEntry[]>(`${API_BASE}/log-rules`);
+}
+
+export async function updateLogRules(proxyHostId: string, rules: HostLogRules): Promise<HostLogRulesEntry> {
+  return apiPut<HostLogRulesEntry>(`${API_BASE}/log-rules/${encodeURIComponent(proxyHostId)}`, rules);
 }

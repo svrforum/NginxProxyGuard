@@ -734,5 +734,28 @@
     "failed": "Could not check the filter lists.",
     "none": "No enabled subscription matches now. The list may have been refreshed, or the entry excluded, since this request was refused.",
     "alsoDisabled": "Also present in disabled subscriptions: {{names}}"
+  },
+  "collectionRules": {
+    "button": "Collection rules",
+    "title": "Log collection rules",
+    "intro": "Access log lines that match a host's rules are not stored, so they are missing from the logs and the statistics. Requests NPG blocks and WAF events are always stored, and fail2ban is not affected.",
+    "caution": "A client chooses its method and path, and often the status it gets. A request made to match a rule is not stored unless NPG blocks it.",
+    "search": "Search hosts",
+    "storeAll": "All stored",
+    "skipAll": "Nothing stored",
+    "disabledHost": "Disabled",
+    "edit": "Edit",
+    "skipAllLabel": "Don't store this host's access logs",
+    "statuses": "Status codes",
+    "statusesHelp": "Codes or classes, comma-separated: 207, 3xx",
+    "methods": "Methods",
+    "methodsHelp": "Comma-separated: PROPFIND, OPTIONS",
+    "paths": "Paths starting with",
+    "pathsHelp": "One per line, e.g. /remote.php/dav/. Path rules don't apply while \"Strip query string from access log\" is on.",
+    "save": "Save",
+    "cancel": "Cancel",
+    "empty": "No proxy hosts",
+    "noMatch": "No host matches the search",
+    "readOnly": "Changing the rules needs the permission to change logs."
   }
 }

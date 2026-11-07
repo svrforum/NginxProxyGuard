@@ -376,6 +376,7 @@ func registerTokenProtectedRoutes(v1 *echo.Group, c *Container) {
 	registerCertificateRoutes(v1, c.Handlers.Certificate)
 	registerLogRoutes(v1, c.Handlers.Log)
 	registerLogFilterPresetRoutes(v1, c.Handlers.LogFilterPreset)
+	registerLogRulesRoutes(v1, c.Handlers.LogRules)
 	registerWAFTestRoutes(v1, c.Handlers.WAFTest)
 	registerWAFRoutes(v1, c.Handlers.WAF)
 	registerExploitRuleRoutes(v1, c.Handlers.ExploitBlockRule)
@@ -630,6 +631,20 @@ func registerLogFilterPresetRoutes(v1 *echo.Group, h *handler.LogFilterPresetHan
 	g.POST("", h.Create, logsWrite)
 	g.PUT("/:id", h.Update, logsWrite)
 	g.DELETE("/:id", h.Delete, logsWrite)
+}
+
+func registerLogRulesRoutes(v1 *echo.Group, h *handler.LogRulesHandler) {
+	logsRead := authMiddleware.RequireAPIPermission(model.PermissionLogsRead)
+	// Leaving a host's lines out of the logs is a log mutation, like the
+	// retention settings: logs:write (permissions.go). An API token holds only
+	// legacy scopes or "*", and the route check matches logs:write literally,
+	// so only a "*" token gets through, as for PUT /logs/settings.
+	logsWrite := authMiddleware.RequireAPIPermission(model.PermissionSettingsWrite)
+
+	g := v1.Group("/log-rules")
+	g.GET("", h.List, logsRead)
+	g.GET("/:proxyHostId", h.Get, logsRead)
+	g.PUT("/:proxyHostId", h.Update, logsWrite)
 }
 
 func registerWAFTestRoutes(v1 *echo.Group, h *handler.WAFTestHandler) {

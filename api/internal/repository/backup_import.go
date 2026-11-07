@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 
 	"nginx-proxy-guard/internal/model"
 )
@@ -135,6 +136,20 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 		}
 		proxyHostIDMap[ph.ProxyHost.ID] = newID
 		dnsNames = append(dnsNames, names...)
+	}
+
+	// Import the hosts' log rules (#347). Rules of a host the backup does not
+	// hold are left out: there is no host for them.
+	for _, lr := range data.HostLogRules {
+		newID, ok := proxyHostIDMap[lr.ProxyHostID]
+		if !ok {
+			log.Printf("[Backup] Skipped the log rules of proxy host %s: the backup does not hold the host.", lr.ProxyHostID)
+			continue
+		}
+		lr.ProxyHostID = newID
+		if err := r.importHostLogRules(ctx, tx, &lr); err != nil {
+			return nil, fmt.Errorf("failed to import log rules for proxy host %s: %w", lr.ProxyHostID, err)
+		}
 	}
 
 	// Import Redirect Hosts
@@ -421,6 +436,7 @@ func (r *BackupRepository) clearExistingData(ctx context.Context, tx *sql.Tx) er
 		"banned_ips",        // references proxy_hosts
 		"redirect_hosts",    // references certificates
 		"ddns_records",      // references dns_providers (#154) + proxy_hosts (#157) — clear before proxy_hosts
+		"proxy_host_log_rules", // references proxy_hosts (#347)
 		"proxy_hosts",       // references certificates and access_lists; ddns_provider_id -> dns_providers
 		"access_list_items", // references access_lists
 		"access_lists",

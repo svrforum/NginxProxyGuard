@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"slices"
 	"strings"
 
 	"github.com/lib/pq"
@@ -503,4 +504,56 @@ func (r *BackupRepository) importChallengeConfig(ctx context.Context, tx *sql.Tx
 	_, err := tx.ExecContext(ctx, query, proxyHostID, cc.Enabled, cc.ChallengeType, cc.SiteKey, cc.SecretKey,
 		cc.TokenValidity, cc.MinScore, cc.ApplyTo, cc.PageTitle, cc.PageMessage, cc.Theme)
 	return err
+}
+
+// importHostLogRules restores a host's log rules (#347) as the API saves them
+// (restorableHostLogRules). Rules that skip nothing are not written.
+func (r *BackupRepository) importHostLogRules(ctx context.Context, tx *sql.Tx, e *model.HostLogRulesExport) error {
+	rules := restorableHostLogRules(e)
+	if rules.IsEmpty() {
+		return nil
+	}
+	_, err := tx.ExecContext(ctx, `
+		INSERT INTO proxy_host_log_rules (proxy_host_id, skip_all, skip_statuses, skip_methods, skip_paths)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (proxy_host_id) DO UPDATE SET
+			skip_all = EXCLUDED.skip_all,
+			skip_statuses = EXCLUDED.skip_statuses,
+			skip_methods = EXCLUDED.skip_methods,
+			skip_paths = EXCLUDED.skip_paths,
+			updated_at = NOW()`,
+		e.ProxyHostID, rules.SkipAll, pq.Array(rules.SkipStatuses), pq.Array(rules.SkipMethods), pq.Array(rules.SkipPaths))
+	return err
+}
+
+// restorableHostLogRules returns a backup's log rules with each entry as the
+// API saves it (model.NormalizeHostLogRules), each once and at most
+// model.MaxHostLogRuleEntries of each kind. An entry the API refuses, which
+// only a hand-edited file holds, is left out and logged.
+func restorableHostLogRules(e *model.HostLogRulesExport) model.HostLogRules {
+	keep := func(field string, entries []string, normalize func(string) (string, bool)) []string {
+		out := []string{}
+		for _, entry := range entries {
+			value, ok := normalize(strings.TrimSpace(entry))
+			if !ok {
+				log.Printf("[Backup] Skipped %s entry %.80q of the log rules of proxy host %s: it is not valid. Add it again if it is still needed.", field, entry, e.ProxyHostID)
+				continue
+			}
+			if !slices.Contains(out, value) {
+				out = append(out, value)
+			}
+		}
+		if len(out) > model.MaxHostLogRuleEntries {
+			log.Printf("[Backup] Kept the first %d %s entries of the log rules of proxy host %s, the most a list takes.", model.MaxHostLogRuleEntries, field, e.ProxyHostID)
+			out = out[:model.MaxHostLogRuleEntries]
+		}
+		return out
+	}
+	return model.HostLogRules{
+		ProxyHostID:  e.ProxyHostID,
+		SkipAll:      e.SkipAll,
+		SkipStatuses: keep("skip_statuses", e.SkipStatuses, model.NormalizeLogRuleStatus),
+		SkipMethods:  keep("skip_methods", e.SkipMethods, model.NormalizeLogRuleMethod),
+		SkipPaths:    keep("skip_paths", e.SkipPaths, model.NormalizeLogRulePath),
+	}
 }

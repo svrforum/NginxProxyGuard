@@ -6,6 +6,7 @@ import {
   AdvancedFilterPanel,
   LogDetailModal,
   SettingsModal,
+  CollectionRulesModal,
   ActiveFilterTags,
   useAccessColumnVisibility,
 } from "./log-viewer";
@@ -22,6 +23,7 @@ export function LogViewer({ logType, defaultBlockReason }: LogViewerProps) {
   const { i18n } = useTranslation("logs");
   const [selectedLog, setSelectedLog] = useState<Log | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [showCollectionRules, setShowCollectionRules] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showVisualization, setShowVisualization] = useState(false);
   const { visible: visibleColumns, toggle: toggleColumn, reset: resetColumns } = useAccessColumnVisibility();
@@ -75,6 +77,7 @@ export function LogViewer({ logType, defaultBlockReason }: LogViewerProps) {
         toggleColumn={toggleColumn}
         resetColumns={resetColumns}
         setShowSettings={setShowSettings}
+        setShowCollectionRules={setShowCollectionRules}
       />
 
       {/* Advanced Filters Panel */}
@@ -124,6 +127,10 @@ export function LogViewer({ logType, defaultBlockReason }: LogViewerProps) {
           settings={settingsQuery.data}
           onClose={() => setShowSettings(false)}
         />
+      )}
+
+      {showCollectionRules && (
+        <CollectionRulesModal onClose={() => setShowCollectionRules(false)} />
       )}
     </div>
   );

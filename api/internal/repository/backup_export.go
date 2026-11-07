@@ -43,6 +43,13 @@ func (r *BackupRepository) ExportAllData(ctx context.Context) (*model.ExportData
 	}
 	export.ProxyHosts = proxyHosts
 
+	// Export the hosts' log rules (#347)
+	hostLogRules, err := r.exportHostLogRules(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to export host log rules: %w", err)
+	}
+	export.HostLogRules = hostLogRules
+
 	// Export Redirect Hosts
 	redirectHosts, err := r.exportRedirectHosts(ctx)
 	if err != nil {

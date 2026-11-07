@@ -1895,6 +1895,21 @@ END $$;`,
 			desc: "system_settings.instance_name (#369)",
 			sql:  `ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS instance_name character varying(32) DEFAULT ''::character varying NOT NULL`,
 		},
+		{
+			// Access log lines of a proxy host that are not stored (#347).
+			desc: "proxy_host_log_rules (#347)",
+			sql: `CREATE TABLE IF NOT EXISTS public.proxy_host_log_rules (
+    proxy_host_id uuid NOT NULL,
+    skip_all boolean DEFAULT false NOT NULL,
+    skip_statuses text[] DEFAULT '{}'::text[] NOT NULL,
+    skip_methods text[] DEFAULT '{}'::text[] NOT NULL,
+    skip_paths text[] DEFAULT '{}'::text[] NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT proxy_host_log_rules_pkey PRIMARY KEY (proxy_host_id),
+    CONSTRAINT proxy_host_log_rules_proxy_host_id_fkey FOREIGN KEY (proxy_host_id) REFERENCES public.proxy_hosts(id) ON DELETE CASCADE
+)`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

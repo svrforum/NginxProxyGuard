@@ -25,6 +25,7 @@ type Handlers struct {
 	Traffic            *handler.TrafficHandler
 	SystemLog          *handler.SystemLogHandler
 	LogFilterPreset    *handler.LogFilterPresetHandler
+	LogRules           *handler.LogRulesHandler
 	Auth               *handler.AuthHandler
 	UserAdmin          *handler.UserAdminHandler
 	SSO                *handler.SSOHandler
@@ -84,6 +85,13 @@ func InitHandlers(
 	h.Settings.SetDNSEntries(svcs.DNSEntries)
 	h.SystemLog = handler.NewSystemLogHandler(repos.SystemLog)
 	h.LogFilterPreset = handler.NewLogFilterPresetHandler(repos.LogFilterPreset)
+	// Without log collection there is no collector to apply the rules to;
+	// the nil check keeps a nil one from becoming a non-nil interface.
+	var logRulesReloader handler.LogRulesReloader
+	if svcs.LogCollector != nil {
+		logRulesReloader = svcs.LogCollector
+	}
+	h.LogRules = handler.NewLogRulesHandler(repos.LogRules, svcs.Audit, logRulesReloader)
 	h.Auth = handler.NewAuthHandler(svcs.Auth, svcs.Audit)
 	h.UserAdmin = handler.NewUserAdminHandler(svcs.UserAdmin, svcs.Audit, svcs.Authz)
 	h.SSO = handler.NewSSOHandler(svcs.SSO, svcs.Audit)
