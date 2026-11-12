@@ -3655,11 +3655,20 @@ paths:
           in: query
           description: |
             Opaque keyset token from a previous response's `next_cursor`. Honoured only
-            for the default sort, created_at descending (`sort_by=timestamp` descending
-            uses it too); any other explicit sort falls back to offset pagination and
-            the cursor is ignored.
+            for the default sort, created_at descending; any other explicit sort,
+            `timestamp` included, pages by offset and ignores the cursor.
           schema:
             type: string
+        - name: as_of
+          in: query
+          description: |
+            For `sort_by=timestamp`: the `as_of` page 1 returned (RFC 3339). Pages are
+            read from the logs stored by then, so the logs stored meanwhile do not
+            shift them. Without it the request is pinned to the current time and
+            returns that in `as_of`.
+          schema:
+            type: string
+            format: date-time
         - name: log_type
           in: query
           schema:
@@ -3934,11 +3943,10 @@ paths:
         - name: sort_by
           in: query
           description: |
-            Unrecognised values fall back to created_at DESC. `timestamp` is served by
-            the created_at order: created_at is when the row was stored, seconds after
-            the request's timestamp, so only requests from the same moment can change
-            places. Only created_at and timestamp support cursor pagination (descending);
-            the others switch the query to offset pagination.
+            Unrecognised values fall back to created_at DESC. created_at is when the
+            row was stored, which trails the request by seconds, so it is not request
+            order; `timestamp` is. Only created_at supports cursor pagination
+            (descending); the others page by offset, `timestamp` pinned by `as_of`.
           schema:
             type: string
             enum: [created_at, timestamp, body_bytes_sent, request_time, status_code, client_ip, host]
@@ -17476,6 +17484,12 @@ components:
           description: >-
             Opaque keyset token for the next page. Present only for the default
             created_at sort; pass it back as the `cursor` query parameter.
+        as_of:
+          type: string
+          format: date-time
+          description: >-
+            Present for `sort_by=timestamp`: the moment the pages are pinned to.
+            Pass it back as the `as_of` query parameter for the next pages.
     CreateLog:
       type: object
       description: >-

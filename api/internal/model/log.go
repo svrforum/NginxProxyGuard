@@ -302,6 +302,11 @@ type LogFilter struct {
 	// LogListResponse.NextCursor. Only honoured for the default
 	// (created_at DESC) sort — custom sort orders fall back to OFFSET.
 	Cursor *string `json:"cursor,omitempty"`
+
+	// AsOf pins the time sort (sort_by=timestamp) to the rows stored by then.
+	// Page 1 returns it in LogListResponse.AsOf; later pages send it back so
+	// the logs stored meanwhile do not shift them.
+	AsOf *time.Time `json:"as_of,omitempty"`
 }
 
 type LogListResponse struct {
@@ -312,6 +317,8 @@ type LogListResponse struct {
 	TotalPages int     `json:"total_pages"`
 	HasMore    bool    `json:"has_more"`
 	NextCursor *string `json:"next_cursor,omitempty"`
+	// AsOf is the moment the time sort's pages are pinned to (LogFilter.AsOf).
+	AsOf *time.Time `json:"as_of,omitempty"`
 }
 
 type LogStats struct {

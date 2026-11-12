@@ -359,10 +359,14 @@ func (r *LogRepository) CreateBatch(ctx context.Context, logs []model.CreateLogR
 // NextCursor is empty when there are no further rows or when the request used
 // a custom (non-default) sort order (the encoded cursor only carries
 // created_at+id; switching sort key would silently return the wrong rows).
+//
+// AsOf is set for the time sort: the moment its pages are pinned to
+// (model.LogFilter.AsOf).
 type ListResult struct {
 	Logs       []model.Log
 	Total      int
 	NextCursor string
+	AsOf       *time.Time
 }
 
 // requestTimeOrder returns the ORDER BY of the time sort (sort_by=timestamp)
@@ -798,7 +802,24 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 		whereClause = "WHERE " + strings.Join(conditions, " AND ")
 	}
 
+	var asOf *time.Time
 	if requestTimeSort {
+		// OFFSET pages shift as logs are stored, so the pages are pinned to
+		// the rows stored by the time page 1 was read: it returns that moment
+		// and later pages send it back. A batch whose insert began before it
+		// and committed after can still slip into a later page.
+		pinned := time.Time{}
+		if filter.AsOf != nil {
+			pinned = *filter.AsOf
+		} else if err := r.db.QueryRowContext(ctx, "SELECT now()").Scan(&pinned); err != nil {
+			return nil, fmt.Errorf("failed to list logs: %w", err)
+		}
+		asOf = &pinned
+		conditions = append(conditions, fmt.Sprintf("created_at <= $%d", argIndex))
+		args = append(args, pinned)
+		argIndex++
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+
 		var window string
 		window, orderBy = requestTimeOrder(whereClause, requestTimeAsc, argIndex)
 		args = append(args, offset+perPage+1)
@@ -979,5 +1000,5 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 		}
 	}
 
-	return &ListResult{Logs: logs, Total: total, NextCursor: nextCursor}, nil
+	return &ListResult{Logs: logs, Total: total, NextCursor: nextCursor, AsOf: asOf}, nil
 }

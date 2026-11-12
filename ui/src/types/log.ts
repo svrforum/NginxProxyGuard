@@ -150,6 +150,8 @@ export interface LogListResponse {
   total_pages: number;
   has_more?: boolean;
   next_cursor?: string;
+  // The moment the time sort's pages are pinned to; send it back for the next pages.
+  as_of?: string;
 }
 
 export interface LogStats {

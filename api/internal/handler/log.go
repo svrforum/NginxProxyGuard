@@ -246,6 +246,14 @@ func (h *LogHandler) List(w http.ResponseWriter, r *http.Request) {
 	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
 		filter.Cursor = &cursor
 	}
+	if v := r.URL.Query().Get("as_of"); v != "" {
+		asOf, err := time.Parse(time.RFC3339Nano, v)
+		if err != nil {
+			httpJSONError(w, "invalid as_of: want an RFC 3339 time", http.StatusBadRequest)
+			return
+		}
+		filter.AsOf = &asOf
+	}
 
 	result, err := h.logRepo.List(ctx, filter, page, perPage)
 	if err != nil {
@@ -302,6 +310,7 @@ func (h *LogHandler) List(w http.ResponseWriter, r *http.Request) {
 	if result.NextCursor != "" {
 		response.NextCursor = &result.NextCursor
 	}
+	response.AsOf = result.AsOf
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)

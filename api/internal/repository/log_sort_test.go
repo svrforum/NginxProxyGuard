@@ -31,17 +31,20 @@ func TestListTimeSortShape(t *testing.T) {
 		keyset            bool   // the page is read with (created_at, id) < cursor
 		nextCursor        bool   // a cursor for the next page is minted
 		window            string // the created_at window the page is read from
+		asOf              bool   // the request sends back page 1's as_of
 	}{
 		{"timestamp", "desc", cursor, "ORDER BY LEAST(timestamp, created_at) DESC, created_at DESC, id DESC", false, false,
-			"created_at >= (SELECT min(LEAST(timestamp, created_at)) FROM (SELECT timestamp, created_at FROM logs_partitioned WHERE "},
+			"created_at >= (SELECT min(LEAST(timestamp, created_at)) FROM (SELECT timestamp, created_at FROM logs_partitioned WHERE ", false},
 		{"timestamp", "desc", "", "ORDER BY LEAST(timestamp, created_at) DESC, created_at DESC, id DESC", false, false,
-			"created_at >= (SELECT min(LEAST(timestamp, created_at)) FROM (SELECT timestamp, created_at FROM logs_partitioned WHERE "},
+			"created_at >= (SELECT min(LEAST(timestamp, created_at)) FROM (SELECT timestamp, created_at FROM logs_partitioned WHERE ", false},
+		{"timestamp", "desc", "", "ORDER BY LEAST(timestamp, created_at) DESC, created_at DESC, id DESC", false, false,
+			"created_at >= (SELECT min(LEAST(timestamp, created_at)) FROM (SELECT timestamp, created_at FROM logs_partitioned WHERE ", true},
 		{"timestamp", "asc", cursor, "ORDER BY GREATEST(timestamp, created_at - interval '1 minute') ASC, created_at ASC, id ASC", false, false,
-			"created_at <= (SELECT max(GREATEST(timestamp, created_at - interval '1 minute')) FROM (SELECT timestamp, created_at FROM logs_partitioned WHERE "},
-		{"created_at", "desc", cursor, "ORDER BY created_at DESC, id DESC", true, true, ""},
-		{"status_code", "desc", cursor, "ORDER BY status_code DESC", false, false, ""},
+			"created_at <= (SELECT max(GREATEST(timestamp, created_at - interval '1 minute')) FROM (SELECT timestamp, created_at FROM logs_partitioned WHERE ", false},
+		{"created_at", "desc", cursor, "ORDER BY created_at DESC, id DESC", true, true, "", false},
+		{"status_code", "desc", cursor, "ORDER BY status_code DESC", false, false, "", false},
 	} {
-		name := fmt.Sprintf("%s %s cursor=%v", tc.sortBy, tc.sortOrder, tc.cursor != "")
+		name := fmt.Sprintf("%s %s cursor=%v as_of=%v", tc.sortBy, tc.sortOrder, tc.cursor != "", tc.asOf)
 		t.Run(name, func(t *testing.T) {
 			sqlDB, mock, err := sqlmock.New()
 			if err != nil {
@@ -55,6 +58,10 @@ func TestListTimeSortShape(t *testing.T) {
 			if tc.cursor != "" {
 				c := tc.cursor
 				filter.Cursor = &c
+			}
+			pinned := time.Date(2026, 10, 9, 12, 0, 5, 0, time.UTC)
+			if tc.asOf {
+				filter.AsOf = &pinned
 			}
 
 			cols := []string{"id", "log_type", "timestamp", "host", "client_ip", "geo_country", "geo_country_code", "geo_org",
@@ -80,7 +87,12 @@ func TestListTimeSortShape(t *testing.T) {
 				pattern = `FROM logs_partitioned WHERE .*` + keyset + order + `\s+LIMIT`
 			}
 			if tc.window != "" {
-				pattern = `FROM logs_partitioned WHERE .* AND ` + regexp.QuoteMeta(tc.window) + `.*\) w\)[^(]*` + order + `\s+LIMIT`
+				// Pinned to as_of, inside the window as well as outside it.
+				pinnedTo := `created_at <= \$\d+ AND `
+				pattern = `FROM logs_partitioned WHERE .* ` + pinnedTo + regexp.QuoteMeta(tc.window) + `.* created_at <= \$\d+ ORDER BY created_at .*\) w\)[^(]*` + order + `\s+LIMIT`
+				if !tc.asOf {
+					mock.ExpectQuery(`^SELECT now\(\)$`).WillReturnRows(sqlmock.NewRows([]string{"now"}).AddRow(pinned))
+				}
 			}
 			mock.ExpectQuery(pattern).WillReturnRows(rows)
 
@@ -93,6 +105,9 @@ func TestListTimeSortShape(t *testing.T) {
 			}
 			if got := res.NextCursor != ""; got != tc.nextCursor {
 				t.Errorf("next cursor minted = %v, want %v", got, tc.nextCursor)
+			}
+			if got := res.AsOf != nil && res.AsOf.Equal(pinned); got != (tc.window != "") {
+				t.Errorf("as_of returned = %v (%v), want %v", got, res.AsOf, tc.window != "")
 			}
 			if *filter.SortBy != tc.sortBy {
 				t.Errorf("List rewrote the caller's sort_by to %q", *filter.SortBy)

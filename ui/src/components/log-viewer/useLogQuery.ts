@@ -47,6 +47,10 @@ export function useLogQuery({ logType, defaultBlockReason }: UseLogQueryArgs) {
   // Cleared on filter/sort/perPage change and on "Previous"/"First" so the
   // user always sees consistent rows.
   const [cursor, setCursor] = useState<string | undefined>(undefined);
+  // The time sort pages by OFFSET, so the pages after the first are pinned
+  // to the moment page 1 was read (as_of); otherwise the logs stored
+  // meanwhile shift them (#373). Page 1 stays live.
+  const [asOf, setAsOf] = useState<string | undefined>(undefined);
   const countdownRef = useRef(AUTO_REFRESH_INTERVAL / 1000);
   const countdownElRef = useRef<HTMLSpanElement>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
@@ -113,9 +117,11 @@ export function useLogQuery({ logType, defaultBlockReason }: UseLogQueryArgs) {
 
   const filterKey = useMemo(() => JSON.stringify(effectiveFilter), [effectiveFilter]);
 
+  const pageAsOf = page > 1 ? asOf : undefined;
+
   const logsQuery = useQuery({
-    queryKey: ['logs', page, perPage, filterKey, cursor],
-    queryFn: () => fetchLogs(page, perPage, effectiveFilter, cursor),
+    queryKey: ['logs', page, perPage, filterKey, cursor, pageAsOf],
+    queryFn: () => fetchLogs(page, perPage, effectiveFilter, cursor, pageAsOf),
     refetchInterval: shouldPoll ? AUTO_REFRESH_INTERVAL : false,
   });
 
@@ -203,9 +209,15 @@ export function useLogQuery({ logType, defaultBlockReason }: UseLogQueryArgs) {
   // (sort_by=created_at); the time sort pages by OFFSET (#373).
   const goToNextPage = useCallback(() => {
     const next = logsQuery.data?.next_cursor;
+    const pin = logsQuery.data?.as_of;
     setPage((p) => p + 1);
     setCursor(next);
-  }, [logsQuery.data?.next_cursor]);
+    setAsOf((a) => a ?? pin);
+  }, [logsQuery.data?.next_cursor, logsQuery.data?.as_of]);
+
+  useEffect(() => {
+    if (page === 1) setAsOf(undefined);
+  }, [page]);
 
   // Backwards navigation. Cursor pagination is forward-only without a
   // history stack, so step back to OFFSET. Acceptable cost — Previous on

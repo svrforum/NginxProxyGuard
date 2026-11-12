@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 
 	"nginx-proxy-guard/internal/database"
 	"nginx-proxy-guard/internal/model"
@@ -70,6 +70,8 @@ func TestListTimeSortReadsEveryRowInRequestOrder(t *testing.T) {
 	}
 
 	repo := &LogRepository{db: &database.DB{DB: sqlDB}}
+	// Stored while the pages are read: a new request, and an old one stored late.
+	laterIDs := []string{"10000000-0000-4000-8000-00000000000a", "10000000-0000-4000-8000-00000000000b"}
 	for _, order := range []string{"desc", "asc"} {
 		t.Run(order, func(t *testing.T) {
 			key := func(r row) time.Time { // as requestTimeOrder defines it
@@ -98,14 +100,27 @@ func TestListTimeSortReadsEveryRowInRequestOrder(t *testing.T) {
 
 			for _, perPage := range []int{1, 7, 50, 100} {
 				var got []string
+				var asOf *time.Time
 				for page := 1; ; page++ {
 					sortBy, sortOrder := "timestamp", order
-					res, err := repo.List(ctx, &model.LogFilter{SortBy: &sortBy, SortOrder: &sortOrder}, page, perPage)
+					res, err := repo.List(ctx, &model.LogFilter{SortBy: &sortBy, SortOrder: &sortOrder, AsOf: asOf}, page, perPage)
 					if err != nil {
 						t.Fatalf("List page %d: %v", page, err)
 					}
 					if res.NextCursor != "" {
 						t.Fatalf("page %d minted a created_at cursor for the time sort", page)
+					}
+					if res.AsOf == nil || (asOf != nil && !res.AsOf.Equal(*asOf)) {
+						t.Fatalf("page %d as_of = %v, want page 1's %v", page, res.AsOf, asOf)
+					}
+					if page == 1 {
+						// Logs stored after page 1 must not shift the pages after it.
+						asOf = res.AsOf
+						if _, err := sqlDB.ExecContext(ctx, `INSERT INTO logs_partitioned (id, log_type, timestamp, request_uri, created_at) VALUES
+							($1, 'access', clock_timestamp(), '/', clock_timestamp()),
+							($2, 'access', $3, '/', clock_timestamp())`, laterIDs[0], laterIDs[1], base.Add(10*time.Second)); err != nil {
+							t.Fatalf("insert later rows: %v", err)
+						}
 					}
 					for _, l := range res.Logs {
 						got = append(got, l.ID)
@@ -113,6 +128,9 @@ func TestListTimeSortReadsEveryRowInRequestOrder(t *testing.T) {
 					if res.Total <= page*perPage {
 						break
 					}
+				}
+				if _, err := sqlDB.ExecContext(ctx, `DELETE FROM logs_partitioned WHERE id = ANY($1)`, pq.Array(laterIDs)); err != nil {
+					t.Fatalf("delete later rows: %v", err)
 				}
 				if len(got) != len(want) {
 					t.Fatalf("perPage %d: read %d rows, want %d", perPage, len(got), len(want))

@@ -97,6 +97,7 @@ export async function fetchLogs(
   perPage = 50,
   filter?: LogFilter,
   cursor?: string,
+  asOf?: string,
 ): Promise<LogListResponse> {
   const params = new URLSearchParams({
     page: page.toString(),
@@ -113,6 +114,9 @@ export async function fetchLogs(
   }
   if (cursor) {
     params.set('cursor', cursor);
+  }
+  if (asOf) {
+    params.set('as_of', asOf);
   }
 
   const res = await fetch(`${API_BASE}/logs?${params}`, {
