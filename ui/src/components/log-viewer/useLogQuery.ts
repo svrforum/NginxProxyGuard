@@ -198,9 +198,9 @@ export function useLogQuery({ logType, defaultBlockReason }: UseLogQueryArgs) {
     setCursor(undefined);
   }, []);
 
-  // Sequential "Next" navigation — uses the cursor returned with the current
-  // page so the DB skips OFFSET work entirely. Deep pages (1000+) drop from
-  // multiple seconds to under 100ms.
+  // Sequential "Next" navigation — follows the cursor returned with the
+  // current page, if any. The server returns one only for insert order
+  // (sort_by=created_at); the time sort pages by OFFSET (#373).
   const goToNextPage = useCallback(() => {
     const next = logsQuery.data?.next_cursor;
     setPage((p) => p + 1);

@@ -365,6 +365,36 @@ type ListResult struct {
 	NextCursor string
 }
 
+// requestTimeOrder returns the ORDER BY of the time sort (sort_by=timestamp)
+// and a created_at window to read it from, given the list's WHERE clause and
+// the placeholder of how many rows the page reaches (offset + rows fetched).
+//
+// Rows are stored in insert order, and a row can trail its request by
+// seconds: nginx holds each worker's lines for up to 5 s (flush=5s), the
+// collector stores a batch a second, and rows of one batch share created_at,
+// ordered among themselves by a random id (#373). timestamp has no index, so
+// ordering by it outright sorts the whole time window. Instead the window is
+// bounded by the first rows in created_at order, which the created_at index
+// reads cheaply.
+//
+// Newest first, the key is the request time, or the insert time when that is
+// earlier (a skewed clock), so no row's key is later than its created_at. A
+// row created before the least key of the first rows ranks after all of them
+// and cannot be on the page. Oldest first, a row's key is at least its
+// created_at less a minute, so a row created over a minute after the greatest
+// key of the first rows ranks after them. A row stored more than a minute after
+// its request is placed, oldest first, a minute before it was stored.
+func requestTimeOrder(where string, asc bool, reachArg int) (window, orderBy string) {
+	if asc {
+		key := "GREATEST(timestamp, created_at - interval '1 minute')"
+		return fmt.Sprintf(`created_at <= (SELECT max(%s) FROM (SELECT timestamp, created_at FROM logs_partitioned %s ORDER BY created_at ASC, id ASC LIMIT $%d) w) + interval '1 minute'`, key, where, reachArg),
+			key + " ASC, created_at ASC, id ASC"
+	}
+	key := "LEAST(timestamp, created_at)"
+	return fmt.Sprintf(`created_at >= (SELECT min(%s) FROM (SELECT timestamp, created_at FROM logs_partitioned %s ORDER BY created_at DESC, id DESC LIMIT $%d) w)`, key, where, reachArg),
+		key + " DESC, created_at DESC, id DESC"
+}
+
 func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page, perPage int) (*ListResult, error) {
 	if page < 1 {
 		page = 1
@@ -377,18 +407,11 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 	}
 	offset := (page - 1) * perPage
 
-	// The time sort (sort_by=timestamp) is served by the created_at ordering.
-	// created_at is the insert time, seconds after the request's timestamp, so
-	// only rows from the same moment can change places; ordering by timestamp
-	// itself sorted the whole window (7 s on a 3M-row day) and needed an index
-	// of its own on every chunk, which is no longer built. Mapped on a copy:
-	// the caller's filter is left as it came.
+	// The time sort (sort_by=timestamp) orders by request time, read through a
+	// window of created_at (requestTimeOrder); the default order is created_at.
 	sortBy := ""
 	if filter != nil && filter.SortBy != nil {
 		sortBy = *filter.SortBy
-	}
-	if sortBy == "timestamp" {
-		sortBy = "created_at"
 	}
 
 	// Cursor mode is only safe for the default sort. Custom SortBy still
@@ -719,10 +742,11 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 	// ChunkAppend walk chunks newest-first and stop at LIMIT, instead of scanning
 	// and sorting the entire time window (which ORDER BY timestamp forces, since
 	// timestamp is not the partition key and has no covering index). On a large
-	// table this is the difference between ~2.6s and ~100ms. created_at ≈
-	// timestamp for ingested logs, so the visible order is unchanged.
+	// table this is the difference between ~2.6s and ~100ms. It is insert
+	// order, not request order: rows can trail their requests by seconds.
 	orderBy := "created_at DESC, id DESC"
 	customSort := false
+	requestTimeSort, requestTimeAsc := false, false
 	if sortBy != "" {
 		allowedSortFields := map[string]bool{
 			"created_at":      true,
@@ -747,6 +771,10 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 				if sortOrder == "ASC" {
 					customSort = true
 				}
+			} else if sortBy == "timestamp" {
+				// Ordered after the WHERE clause is final (requestTimeOrder).
+				requestTimeSort, requestTimeAsc = true, sortOrder == "ASC"
+				customSort = true
 			} else {
 				// Any other explicit sort can't keyset on (created_at, id), so
 				// it falls back to OFFSET pagination.
@@ -767,6 +795,15 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 		conditions = append(conditions, fmt.Sprintf("(created_at, id) < ($%d, $%d::uuid)", argIndex, argIndex+1))
 		args = append(args, cursor.CreatedAt, cursor.ID)
 		argIndex += 2
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	if requestTimeSort {
+		var window string
+		window, orderBy = requestTimeOrder(whereClause, requestTimeAsc, argIndex)
+		args = append(args, offset+perPage+1)
+		argIndex++
+		conditions = append(conditions, window)
 		whereClause = "WHERE " + strings.Join(conditions, " AND ")
 	}
 

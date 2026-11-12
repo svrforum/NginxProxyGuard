@@ -106,6 +106,11 @@ export async function fetchLogs(
   if (filter) {
     buildFilterParams(filter, params);
   }
+  // Without sort_by the server lists in insert order, which trails the
+  // requests by seconds; the time sort is request order (#373).
+  if (!params.has('sort_by')) {
+    params.set('sort_by', 'timestamp');
+  }
   if (cursor) {
     params.set('cursor', cursor);
   }

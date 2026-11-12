@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql/driver"
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -14,11 +15,11 @@ import (
 	"nginx-proxy-guard/internal/model"
 )
 
-// The log list's time sort (sort_by=timestamp) is served by the created_at
-// ordering: idx_logs_part_timestamp is retired, and ordering by timestamp
-// sorted the whole window. It keeps cursor paging like the default sort, and
-// the caller's filter is not rewritten. Other sorts are unchanged.
-func TestListServesTheTimeSortFromCreatedAt(t *testing.T) {
+// The log list's time sort (sort_by=timestamp) orders by request time inside a
+// created_at window (requestTimeOrder), and pages by OFFSET: a created_at
+// cursor does not fit it (#373). The default sort keeps created_at and its
+// cursor, the caller's filter is not rewritten, and other sorts are unchanged.
+func TestListTimeSortShape(t *testing.T) {
 	cursor, err := encodeLogCursor(logCursor{CreatedAt: time.Now().Add(-time.Hour), ID: "11111111-2222-4333-8444-555555555555"})
 	if err != nil {
 		t.Fatalf("encode cursor: %v", err)
@@ -27,14 +28,18 @@ func TestListServesTheTimeSortFromCreatedAt(t *testing.T) {
 		sortBy, sortOrder string
 		cursor            string
 		orderBy           string
-		keyset            bool // the page is read with (created_at, id) < cursor
-		nextCursor        bool // a cursor for the next page is minted
+		keyset            bool   // the page is read with (created_at, id) < cursor
+		nextCursor        bool   // a cursor for the next page is minted
+		window            string // the created_at window the page is read from
 	}{
-		{"timestamp", "desc", cursor, "ORDER BY created_at DESC, id DESC", true, true},
-		{"timestamp", "desc", "", "ORDER BY created_at DESC, id DESC", false, true},
-		{"timestamp", "asc", cursor, "ORDER BY created_at ASC, id ASC", false, false},
-		{"created_at", "desc", cursor, "ORDER BY created_at DESC, id DESC", true, true},
-		{"status_code", "desc", cursor, "ORDER BY status_code DESC", false, false},
+		{"timestamp", "desc", cursor, "ORDER BY LEAST(timestamp, created_at) DESC, created_at DESC, id DESC", false, false,
+			"created_at >= (SELECT min(LEAST(timestamp, created_at)) FROM (SELECT timestamp, created_at FROM logs_partitioned WHERE "},
+		{"timestamp", "desc", "", "ORDER BY LEAST(timestamp, created_at) DESC, created_at DESC, id DESC", false, false,
+			"created_at >= (SELECT min(LEAST(timestamp, created_at)) FROM (SELECT timestamp, created_at FROM logs_partitioned WHERE "},
+		{"timestamp", "asc", cursor, "ORDER BY GREATEST(timestamp, created_at - interval '1 minute') ASC, created_at ASC, id ASC", false, false,
+			"created_at <= (SELECT max(GREATEST(timestamp, created_at - interval '1 minute')) FROM (SELECT timestamp, created_at FROM logs_partitioned WHERE "},
+		{"created_at", "desc", cursor, "ORDER BY created_at DESC, id DESC", true, true, ""},
+		{"status_code", "desc", cursor, "ORDER BY status_code DESC", false, false, ""},
 	} {
 		name := fmt.Sprintf("%s %s cursor=%v", tc.sortBy, tc.sortOrder, tc.cursor != "")
 		t.Run(name, func(t *testing.T) {
@@ -69,9 +74,13 @@ func TestListServesTheTimeSortFromCreatedAt(t *testing.T) {
 			}
 
 			keyset := `\(created_at, id\) < \(\$\d+, \$\d+::uuid\) `
-			pattern := `FROM logs_partitioned WHERE .*` + strings.ReplaceAll(tc.orderBy, " ", `\s+`) + `\s+LIMIT`
+			order := strings.ReplaceAll(regexp.QuoteMeta(tc.orderBy), " ", `\s+`)
+			pattern := `FROM logs_partitioned WHERE .*` + order + `\s+LIMIT`
 			if tc.keyset {
-				pattern = `FROM logs_partitioned WHERE .*` + keyset + strings.ReplaceAll(tc.orderBy, " ", `\s+`) + `\s+LIMIT`
+				pattern = `FROM logs_partitioned WHERE .*` + keyset + order + `\s+LIMIT`
+			}
+			if tc.window != "" {
+				pattern = `FROM logs_partitioned WHERE .* AND ` + regexp.QuoteMeta(tc.window) + `.*\) w\)[^(]*` + order + `\s+LIMIT`
 			}
 			mock.ExpectQuery(pattern).WillReturnRows(rows)
 
