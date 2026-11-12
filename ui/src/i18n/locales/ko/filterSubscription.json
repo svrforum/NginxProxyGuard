@@ -119,6 +119,10 @@
     "emergingthreats": {
       "description": "Emerging Threats — 종합 위협 차단 리스트",
       "detail": "Proofpoint(구 Emerging Threats)에서 운영. Spamhaus, DShield, Abuse.ch 등의 데이터를 종합. 방화벽 차단 규칙용으로 설계됨."
+    },
+    "netapi": {
+      "description": "NetAPI — 최근 48시간 동안 NetAPI 허니팟을 공격한 IP",
+      "detail": "NetAPI가 직접 운영하는 허니팟 센서에서만 수집: SSH/RDP brute-force, 취약점 공격 시도, 웹 공격. 알려진 연구용 스캐너는 제외. 매시간 갱신. 대부분의 IP가 다른 목록에는 없음."
     }
   },
   "badge": {

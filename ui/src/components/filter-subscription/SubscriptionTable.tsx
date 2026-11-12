@@ -44,6 +44,14 @@ export const PRESET_LISTS = [
     detail: 'presets.emergingthreats.detail',
     site: 'https://rules.emergingthreats.net/',
   },
+  {
+    name: 'NetAPI',
+    url: 'https://netapi.com/zf-api/f/compromised/ip/live/',
+    type: 'ip',
+    description: 'presets.netapi.description',
+    detail: 'presets.netapi.detail',
+    site: 'https://netapi.com/compromised-ips/',
+  },
 ] as const;
 
 export function getRelativeTime(dateStr: string): string {

@@ -119,6 +119,10 @@
     "emergingthreats": {
       "description": "Emerging Threats — compiled threat block list",
       "detail": "Operated by Proofpoint (formerly Emerging Threats). Aggregates Spamhaus, DShield, Abuse.ch data. Designed for firewall block rules."
+    },
+    "netapi": {
+      "description": "NetAPI — IPs that attacked NetAPI honeypots in the last 48 hours",
+      "detail": "Collected only from NetAPI's own honeypot sensors: SSH/RDP brute force, exploit attempts and web attacks. Known research scanners are excluded. Rebuilt every hour. Most of its IPs are not on the other lists here."
     }
   },
   "badge": {
