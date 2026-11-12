@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import type { Log } from '../../../types/log';
 import { LogTypeBadge } from '../badges';
+import { formatLogTime } from '../../../utils/logTime';
 import { IconButton, XIcon } from '../../common/listui';
 
 interface LogDetailHeaderProps {
@@ -27,7 +28,7 @@ export function LogDetailHeader({ log, onClose, onBanClick }: LogDetailHeaderPro
       <div className="grid grid-cols-2 gap-4 mb-4 px-4 pt-4">
         <div>
           <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">{t('detail.timestamp')}</label>
-          <p className="text-sm text-slate-900 dark:text-white">{new Date(log.timestamp).toLocaleString(i18n.language)}</p>
+          <p className="text-sm text-slate-900 dark:text-white">{formatLogTime(log.timestamp, i18n.language)}</p>
         </div>
         <div>
           <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">{t('detail.clientIP')}</label>

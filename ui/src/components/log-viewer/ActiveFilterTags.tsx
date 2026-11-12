@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import type { LogFilter } from '../../types/log';
 import { formatBytes } from './utils';
+import { formatLogTime } from '../../utils/logTime';
 
 interface ActiveFilterTagsProps {
   filter: LogFilter;
@@ -11,8 +12,8 @@ export function ActiveFilterTags({ filter, onRemove }: ActiveFilterTagsProps) {
   const { t, i18n } = useTranslation('logs');
   const tags: { key: keyof LogFilter; label: string; value: string; isExclude?: boolean }[] = [];
 
-  if (filter.start_time) tags.push({ key: 'start_time', label: t('filters.startDate'), value: new Date(filter.start_time).toLocaleString(i18n.language) });
-  if (filter.end_time) tags.push({ key: 'end_time', label: t('filters.endDate'), value: new Date(filter.end_time).toLocaleString(i18n.language) });
+  if (filter.start_time) tags.push({ key: 'start_time', label: t('filters.startDate'), value: formatLogTime(filter.start_time, i18n.language) });
+  if (filter.end_time) tags.push({ key: 'end_time', label: t('filters.endDate'), value: formatLogTime(filter.end_time, i18n.language) });
   // Array filters (new multi-select)
   if (filter.hosts?.length) tags.push({ key: 'hosts', label: t('filters.host'), value: filter.hosts.join(', ') });
   if (filter.client_ips?.length) tags.push({ key: 'client_ips', label: t('filters.clientIp'), value: filter.client_ips.join(', ') });

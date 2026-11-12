@@ -2,6 +2,7 @@ import { memo, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Log } from '../../types/log';
 import { formatBytes } from './utils';
+import { formatLogTime } from '../../utils/logTime';
 import { StatusCodeBadge, BlockReasonBadge, MethodBadge, GeoIPBadge, BannedIPBadge } from './badges';
 import type { AccessColumnKey } from './hooks/useColumnVisibility';
 
@@ -27,7 +28,7 @@ function splitUpstream(value?: string): string[] {
 export const LogRowTyped = memo(function LogRowTyped({ log, logType, onClick, onClientIPClick, visibleColumns }: LogRowTypedProps) {
   const { t, i18n } = useTranslation('logs');
 
-  const formatTime = (time: string) => new Date(time).toLocaleString(i18n.language);
+  const formatTime = (time: string) => formatLogTime(time, i18n.language);
 
   const handleIPClick = (e: MouseEvent) => {
     if (!onClientIPClick || !log.client_ip) return;
