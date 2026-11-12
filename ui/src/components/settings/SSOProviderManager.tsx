@@ -87,6 +87,10 @@ export function SSOProviderManager() {
   // Whether the operator has typed a slug themselves. Until they do, the slug
   // follows the display name — nobody should have to invent a URL segment.
   const [slugTouched, setSlugTouched] = useState(false)
+  // Likewise the display name follows the provider picked until the operator
+  // types one, so picking another provider does not keep the first one's name
+  // and slug (#372).
+  const [nameTouched, setNameTouched] = useState(false)
   const [probe, setProbe] = useState<{ state: 'idle' | 'busy' | 'ok' | 'error'; result?: SSODiscoveryResult; message?: string }>({ state: 'idle' })
 
   const { data, isLoading } = useQuery({ queryKey: ['sso-providers'], queryFn: listSSOProviders })
@@ -113,11 +117,11 @@ export function SSOProviderManager() {
 
   const openCreate = () => {
     setForm(emptyForm()); setCreating(true); setEditing(null); setFormError('')
-    setPreset('generic'); setSlugTouched(false); setProbe({ state: 'idle' })
+    setPreset('generic'); setSlugTouched(false); setNameTouched(false); setProbe({ state: 'idle' })
   }
   const openEdit = (p: SSOProvider) => {
     setForm(toForm(p)); setEditing(p); setCreating(false); setFormError('')
-    setPreset('generic'); setSlugTouched(true); setProbe({ state: 'idle' })
+    setPreset('generic'); setSlugTouched(true); setNameTouched(true); setProbe({ state: 'idle' })
   }
 
   const applyPreset = (key: string) => {
@@ -125,18 +129,23 @@ export function SSOProviderManager() {
     if (!found) return
     setPreset(key)
     setProbe({ state: 'idle' })
-    setForm((f) => ({
-      ...f,
-      name: f.name || (key === 'generic' ? '' : found.label),
-      slug: slugTouched ? f.slug : slugify(f.name || (key === 'generic' ? '' : found.label)),
-      issuer_url: found.issuerTemplate,
-      scopes: found.scopes,
-      group_claim: found.groupClaim,
-    }))
+    setForm((f) => {
+      const name = nameTouched && f.name ? f.name : key === 'generic' ? '' : found.label
+      return {
+        ...f,
+        name,
+        slug: slugTouched ? f.slug : slugify(name),
+        issuer_url: found.issuerTemplate,
+        scopes: found.scopes,
+        group_claim: found.groupClaim,
+      }
+    })
   }
 
-  const setName = (name: string) =>
+  const setName = (name: string) => {
+    setNameTouched(true)
     setForm((f) => ({ ...f, name, slug: slugTouched ? f.slug : slugify(name) }))
+  }
 
   // The callback URL the server will derive, computed the same way it does, so
   // it can be registered at the provider BEFORE the provider is saved here —
