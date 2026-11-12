@@ -8,6 +8,7 @@ import type { Log, LogFilter, BotCategory } from '../types/log';
 import { HelpTip } from './common/HelpTip';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useDebounce } from './log-viewer/utils';
+import { formatLogTime } from '../utils/logTime';
 
 // Bot category display config (keys for translation)
 const BOT_CATEGORY_CONFIG: Record<string, { labelKey: string; color: string; icon: string }> = {
@@ -18,7 +19,7 @@ const BOT_CATEGORY_CONFIG: Record<string, { labelKey: string; color: string; ico
 };
 
 function formatTime(timestamp: string, language: string = 'ko'): string {
-  return new Date(timestamp).toLocaleString(language);
+  return formatLogTime(timestamp, language);
 }
 
 
@@ -71,7 +72,7 @@ function LogDetailModal({ log, onClose }: LogDetailModalProps) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-xs text-slate-500 dark:text-slate-400 font-medium">{t('botFilter.modal.timestamp')}</label>
-              <p className="text-sm text-slate-900 dark:text-white">{new Date(log.timestamp).toLocaleString(i18n.language)}</p>
+              <p className="text-sm text-slate-900 dark:text-white">{formatLogTime(log.timestamp, i18n.language)}</p>
             </div>
             <div>
               <label className="text-xs text-slate-500 dark:text-slate-400 font-medium">{t('botFilter.modal.botCategory')}</label>

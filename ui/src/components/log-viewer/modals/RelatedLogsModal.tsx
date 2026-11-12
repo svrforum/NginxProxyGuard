@@ -6,6 +6,7 @@ import { fetchLogs } from '../../../api/logs';
 import type { LogFilter } from '../../../types/log';
 import { StatusCodeBadge, MethodBadge } from '../badges';
 import { IconButton, EmptyState, XIcon } from '../../common/listui';
+import { formatLogTime } from '../../../utils/logTime';
 
 interface RelatedLogsModalProps {
   clientIp?: string;
@@ -17,7 +18,7 @@ interface RelatedLogsModalProps {
 }
 
 export function RelatedLogsModal({ clientIp, requestUri, timestamp, host, userAgent, onClose }: RelatedLogsModalProps) {
-  const { t } = useTranslation('logs');
+  const { t, i18n } = useTranslation('logs');
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
 
   useEscapeKey(onClose);
@@ -77,11 +78,11 @@ export function RelatedLogsModal({ clientIp, requestUri, timestamp, host, userAg
             </div>
             <div className="flex flex-col">
               <span className="text-xs text-slate-500 dark:text-slate-400 uppercase font-semibold mb-1">{t('filters.startDate')}</span>
-              <span className="text-slate-700 dark:text-slate-200">{new Date(timeRange.start_time).toLocaleString()}</span>
+              <span className="text-slate-700 dark:text-slate-200">{formatLogTime(timeRange.start_time, i18n.language)}</span>
             </div>
             <div className="flex flex-col">
               <span className="text-xs text-slate-500 dark:text-slate-400 uppercase font-semibold mb-1">{t('filters.endDate')}</span>
-              <span className="text-slate-700 dark:text-slate-200">{new Date(timeRange.end_time).toLocaleString()}</span>
+              <span className="text-slate-700 dark:text-slate-200">{formatLogTime(timeRange.end_time, i18n.language)}</span>
             </div>
             <div className="flex flex-col">
               <span className="text-xs text-slate-500 dark:text-slate-400 uppercase font-semibold mb-1">{t('detail.userAgent')}</span>
@@ -130,7 +131,7 @@ export function RelatedLogsModal({ clientIp, requestUri, timestamp, host, userAg
                         onClick={() => setExpandedLogId(expandedLogId === log.id ? null : log.id)}
                       >
                         <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                          {new Date(log.timestamp).toLocaleString()}
+                          {formatLogTime(log.timestamp, i18n.language)}
                         </td>
                         <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{log.host}</td>
                         <td className="px-4 py-3">
