@@ -16,6 +16,8 @@ func TestSkipErrorLogLine(t *testing.T) {
 		}
 	}
 	kept := []string{
+		// The anomaly scores, which the audit record leaves out.
+		`2026/11/13 10:00:00 [info] 22#22: *9 ModSecurity: Warning. Matched "Operator ` + "`Ge' with parameter `5' against variable `TX:BLOCKING_INBOUND_ANOMALY_SCORE' (Value: `5' )" + `" [id "980170"] [msg "Anomaly Scores: (Inbound Scores: blocking=5)"]`,
 		`2026/11/13 10:00:00 [error] 22#22: *3 connect() failed (111: Connection refused) while connecting to upstream, client: 192.0.2.10, server: app.example.com`,
 		`2026/11/13 10:00:00 [error] 22#22: *4 [client 192.0.2.10] ModSecurity: Access denied with code 403 (phase 2). Matched "Operator ` + "`Ge' with parameter `5' against variable `TX:BLOCKING_INBOUND_ANOMALY_SCORE' (Value: `5' )" + `" [id "949110"]`,
 	}

@@ -1205,12 +1205,18 @@ func (c *LogCollector) streamErrorLogs(ctx context.Context) {
 }
 
 // skipErrorLogLine reports an error log line that is not stored: startup
-// messages and notices, and ModSecurity's per-rule warnings, written when
-// error_log_level is info or debug. Each warning repeats what the WAF event's
-// audit record already holds, the matched request value included.
+// messages and notices, and ModSecurity's per-rule warnings.
 func skipErrorLogLine(line string) bool {
-	return strings.Contains(line, "[notice]") || strings.Contains(line, "[warn]") ||
-		strings.Contains(line, "ModSecurity: Warning.")
+	return strings.Contains(line, "[notice]") || strings.Contains(line, "[warn]") || modSecRuleWarning(line)
+}
+
+// modSecRuleWarning reports one of the lines ModSecurity writes per matched
+// rule when error_log_level is info or debug. Each repeats what the WAF
+// event's audit record already holds, the matched request value included, so
+// neither the error log nor the system log keeps them. 980170 is kept: it
+// holds only the anomaly scores, which it leaves out of the audit record.
+func modSecRuleWarning(line string) bool {
+	return strings.Contains(line, "ModSecurity: Warning.") && !strings.Contains(line, `[id "980170"]`)
 }
 
 // Manual log ingestion for API uploads

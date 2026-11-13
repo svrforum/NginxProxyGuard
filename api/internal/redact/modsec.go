@@ -151,7 +151,9 @@ var notSecretWords = map[string]bool{
 
 func secretName(name string) bool {
 	lower := strings.ToLower(name)
-	for _, s := range []string{"password", "passwd", "pwd", "token", "secret", "session", "sessid", "cookie", "credential", "authoriz", "oauth", "apikey", "api_key", "api-key", "jwt", "saml", "logged_in"} {
+	for _, s := range []string{"password", "passwd", "passcode", "passphrase", "pwd", "token", "secret", "session", "sessid", "sesskey",
+		"cookie", "credential", "signature", "authoriz", "oauth", "apikey", "api_key", "api-key", "accesskey", "privatekey", "signingkey",
+		"clientkey", "jwt", "saml", "logged_in"} {
 		if strings.Contains(lower, s) && !notSecretWords[lower] {
 			return true
 		}
@@ -160,7 +162,7 @@ func secretName(name string) bool {
 		if notSecretWords[w] {
 			continue
 		}
-		if secretWords[w] || strings.HasPrefix(w, "pass") || strings.HasSuffix(w, "pass") ||
+		if secretWords[w] || strings.HasPrefix(w, "pass") || strings.HasSuffix(w, "pass") || strings.HasSuffix(w, "pw") ||
 			(strings.HasPrefix(w, "auth") && !strings.HasPrefix(w, "author")) {
 			return true
 		}
@@ -168,9 +170,9 @@ func secretName(name string) bool {
 	return false
 }
 
-// nameWords splits a name such as json.secondaryToken or X-Auth-Token into
-// lower-case words: at anything not a letter or digit, and before an upper
-// case letter that follows a lower case one.
+// nameWords splits a name such as json.secondaryToken, X-Auth-Token or pw2
+// into lower-case words: at anything not a letter or digit, before an upper
+// case letter that follows a lower case one, and between letters and digits.
 func nameWords(name string) []string {
 	var words []string
 	var b strings.Builder
@@ -185,7 +187,7 @@ func nameWords(name string) []string {
 		switch {
 		case !unicode.IsLetter(r) && !unicode.IsDigit(r):
 			flush()
-		case unicode.IsUpper(r) && unicode.IsLower(prev):
+		case unicode.IsUpper(r) && unicode.IsLower(prev), unicode.IsDigit(r) != unicode.IsDigit(prev) && prev != 0:
 			flush()
 			b.WriteRune(r)
 		default:

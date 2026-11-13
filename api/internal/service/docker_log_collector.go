@@ -476,6 +476,9 @@ func (c *DockerLogCollector) processLogStream(ctx context.Context, container Con
 				strings.Contains(line, "DETAIL:  Parameters:") {
 				continue
 			}
+			if modSecRuleWarning(line) {
+				continue
+			}
 
 			// Skip the docker CLI's own error output (not container logs). This
 			// happens when a container is removed while we're attached, or in the

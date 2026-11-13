@@ -75,13 +75,14 @@ func TestModSecMessage(t *testing.T) {
 func TestSecretName(t *testing.T) {
 	for _, n := range []string{"password", "Password", "newPassword", "user_pwd", "pw", "passwd", "newpass", "json.secondaryToken",
 		"X-Auth-Token", "auth", "authSig", "authkey", "api_key", "apiKey", "key", "jwt", "otp", "pin", "SAMLResponse", "PHPSESSID",
-		"client_secret", "Authorization", "Cookie", "wordpress_logged_in_abc", "_csrf", "access_token"} {
+		"client_secret", "Authorization", "Cookie", "wordpress_logged_in_abc", "_csrf", "access_token",
+		"accesskey", "privatekey", "signingkey", "clientkey", "sesskey", "newpasscode", "hmacsignature", "pw2", "new_pw2", "userpw", "loginpw"} {
 		if !secretName(n) {
 			t.Errorf("secretName(%q) = false", n)
 		}
 	}
 	for _, n := range []string{"search_keyword", "url", "content", "author", "authority", "compass", "bypass", "passage", "secretary",
-		"s", "q", "User-Agent", "referer", "content-length", "json.parameters.viewFile", "keyword", "ping", "code"} {
+		"s", "q", "User-Agent", "referer", "content-length", "json.parameters.viewFile", "keyword", "ping", "code", "monkey", "bypassCache", "page2", "h264"} {
 		if secretName(n) {
 			t.Errorf("secretName(%q) = true", n)
 		}
