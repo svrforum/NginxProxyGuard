@@ -1910,44 +1910,6 @@ END $$;`,
     CONSTRAINT proxy_host_log_rules_proxy_host_id_fkey FOREIGN KEY (proxy_host_id) REFERENCES public.proxy_hosts(id) ON DELETE CASCADE
 )`,
 		},
-		{
-			// WAF events stored the request value a rule matched as it came, so
-			// a rule firing on a login form kept the password, and a token or
-			// session cookie the same way, in rule_data and in the raw record
-			// for as long as WAF logs are kept. New events are redacted when
-			// they are parsed (redact.ModSec); this scrubs the stored ones
-			// once, recorded as 'modsec_secret_scrub_v1'. secret_var is
-			// redact.ModSecSecretVariable (a test holds them equal). raw_log is
-			// JSON text, so its patterns stop at the end of a JSON string and
-			// never cut an escape; the replacement holds no quote or
-			// backslash, so the record stays valid JSON. Only modsec rows are
-			// read, which a compressed chunk segments by. A TimescaleDB that
-			// refuses the update leaves the rows and the marker for the next
-			// start rather than stopping this one.
-			desc: "redact credentials WAF events stored from matched request values",
-			sql: `DO $$
-DECLARE
-    secret_var CONSTANT text := '(?:REQUEST_COOKIES|REQUEST_BODY|XML)(?::[^:\x27\x60"\s\\]*)?|(?:ARGS|ARGS_GET|ARGS_POST|REQUEST_HEADERS):[^:\x27\x60"\s\\]*(?:pass|pwd|secret|token|sess|cookie|credential|signature|logged_in|authoriz|oauth|auth[_-]|[_-]auth|(?:api|access|private|signing|client)[_-]?key|wordpress_sec)[^:\x27\x60"\s\\]*';
-    data_line text := '(Matched Data: ).*( found within (?:' || secret_var || '): ).*';
-    data_json text := '(Matched Data: )(?:[^"\\]|\\.)*( found within (?:' || secret_var || '): )(?:[^"\\]|\\.)*';
-    match_json text := '(against variable \x60(?:' || secret_var || ')\x27 \(Value: \x60)(?:[^"\\]|\\.)*(\x27 \))';
-BEGIN
-    IF EXISTS (SELECT 1 FROM schema_migrations WHERE version = 'modsec_secret_scrub_v1') THEN
-        RETURN;
-    END IF;
-    BEGIN
-        UPDATE public.logs_partitioned
-           SET rule_data = regexp_replace(rule_data, data_line, '\1[redacted]\2[redacted]', 'gi'),
-               raw_log = regexp_replace(regexp_replace(raw_log, data_json, '\1[redacted]\2[redacted]', 'gi'), match_json, '\1[redacted]\2', 'gi')
-         WHERE log_type = 'modsec'
-           AND (rule_data ~* data_line OR raw_log ~* data_json OR raw_log ~* match_json);
-    EXCEPTION WHEN OTHERS THEN
-        RAISE WARNING 'WAF log secret scrub skipped, retried on the next start: %', SQLERRM;
-        RETURN;
-    END;
-    INSERT INTO schema_migrations (version) VALUES ('modsec_secret_scrub_v1') ON CONFLICT DO NOTHING;
-END $$`,
-		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

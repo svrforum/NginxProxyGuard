@@ -110,3 +110,21 @@ func TestGetEventRules_ReadsFullAndTrimmedRowsAlike(t *testing.T) {
 		t.Fatalf("only %d events compared", checked)
 	}
 }
+
+// A row stored before WAF events were redacted still holds the request value a
+// rule matched; the panel must not show it for a credential.
+func TestGetEventRules_HidesStoredCredentials(t *testing.T) {
+	raw := `{"transaction":{"messages":[` +
+		`{"message":"SQL Injection Attack Detected via libinjection","details":{"ruleId":"942100","data":"Matched Data: s&1c found within ARGS:password: hunter2' or 1=1"}},` +
+		`{"message":"Remote Command Execution","details":{"ruleId":"932260","data":"Matched Data: docker found within ARGS:search_keyword: docker-compose"}}]}}`
+	resp := eventRules(t, raw)
+	if len(resp.Rules) != 2 {
+		t.Fatalf("rules = %+v", resp.Rules)
+	}
+	if got, want := resp.Rules[0].Data, "Matched Data: [redacted] found within ARGS:password: [redacted]"; got != want {
+		t.Errorf("credential data = %q, want %q", got, want)
+	}
+	if got, want := resp.Rules[1].Data, "Matched Data: docker found within ARGS:search_keyword: docker-compose"; got != want {
+		t.Errorf("other data = %q, want %q", got, want)
+	}
+}

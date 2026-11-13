@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
+	"nginx-proxy-guard/internal/redact"
 	"nginx-proxy-guard/internal/service"
 )
 
@@ -144,7 +145,8 @@ func (h *WAFHandler) GetEventRules(c echo.Context) error {
 			RuleID:   id,
 			Message:  msg.Message,
 			Severity: msg.Details.Severity,
-			Data:     msg.Details.Data,
+			// Rows stored before v2.69.2 still hold the matched value.
+			Data:     redact.ModSec(msg.Details.Data),
 			Category: category,
 			Excluded: scopes,
 		})
