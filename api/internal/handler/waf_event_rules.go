@@ -141,12 +141,13 @@ func (h *WAFHandler) GetEventRules(c echo.Context) error {
 		if scopes == nil {
 			scopes = []wafEventRuleScope{}
 		}
+		// Rows stored before v2.69.2 still hold the matched value.
+		data, _ := redact.ModSecMessage(msg.Details.Data, msg.Details.Match)
 		resp.Rules = append(resp.Rules, wafEventRule{
 			RuleID:   id,
 			Message:  msg.Message,
 			Severity: msg.Details.Severity,
-			// Rows stored before v2.69.2 still hold the matched value.
-			Data:     redact.ModSec(msg.Details.Data),
+			Data:     data,
 			Category: category,
 			Excluded: scopes,
 		})

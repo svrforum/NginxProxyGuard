@@ -1195,14 +1195,22 @@ func (c *LogCollector) streamFileAccessLogs(ctx context.Context) {
 // follower as the ModSec stream; see container_log_follower.go.
 func (c *LogCollector) streamErrorLogs(ctx context.Context) {
 	newContainerLogFollower("error", c.nginxContainer, "stderr", func(line string, _ time.Time) {
-		// Skip startup messages and notices
-		if strings.Contains(line, "[notice]") || strings.Contains(line, "[warn]") {
+		if skipErrorLogLine(line) {
 			return
 		}
 		if logReq, err := c.parseErrorLog(line); err == nil {
 			c.addLog(*logReq)
 		}
 	}).run(ctx, c.stopCh)
+}
+
+// skipErrorLogLine reports an error log line that is not stored: startup
+// messages and notices, and ModSecurity's per-rule warnings, written when
+// error_log_level is info or debug. Each warning repeats what the WAF event's
+// audit record already holds, the matched request value included.
+func skipErrorLogLine(line string) bool {
+	return strings.Contains(line, "[notice]") || strings.Contains(line, "[warn]") ||
+		strings.Contains(line, "ModSecurity: Warning.")
 }
 
 // Manual log ingestion for API uploads

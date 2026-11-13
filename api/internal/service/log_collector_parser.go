@@ -419,8 +419,9 @@ func storedModSecRecord(tx ModSecTransaction) string {
 	msgs := make([]ModSecMessage, len(tx.Messages))
 	for i, m := range tx.Messages {
 		// Redacted before the cap, which could cut the end a match line is found by.
-		m.Details.Data = capRunes(redact.ModSec(m.Details.Data), storedModSecFieldCap)
-		m.Details.Match = capRunes(redact.ModSec(m.Details.Match), storedModSecFieldCap)
+		data, match := redact.ModSecMessage(m.Details.Data, m.Details.Match)
+		m.Details.Data = capRunes(data, storedModSecFieldCap)
+		m.Details.Match = capRunes(match, storedModSecFieldCap)
 		msgs[i] = m
 	}
 	tx.Messages = msgs
@@ -486,7 +487,7 @@ func (c *LogCollector) parseModSecLog(line string) (*model.CreateLogRequest, err
 		}
 		ruleMessage = msg.Message
 		ruleSeverity = msg.Details.Severity
-		ruleData = redact.ModSec(msg.Details.Data)
+		ruleData, _ = redact.ModSecMessage(msg.Details.Data, msg.Details.Match)
 		if id, err := strconv.ParseInt(msg.Details.RuleID, 10, 64); err == nil {
 			ruleID = id
 		}
