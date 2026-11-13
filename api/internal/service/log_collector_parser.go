@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"nginx-proxy-guard/internal/model"
+	"nginx-proxy-guard/internal/redact"
 )
 
 // Access log format (with host and timing):
@@ -417,8 +418,9 @@ func storedModSecRecord(tx ModSecTransaction) string {
 	tx.Response.Headers = nil
 	msgs := make([]ModSecMessage, len(tx.Messages))
 	for i, m := range tx.Messages {
-		m.Details.Data = capRunes(m.Details.Data, storedModSecFieldCap)
-		m.Details.Match = capRunes(m.Details.Match, storedModSecFieldCap)
+		// Redacted before the cap, which could cut the end a match line is found by.
+		m.Details.Data = capRunes(redact.ModSec(m.Details.Data), storedModSecFieldCap)
+		m.Details.Match = capRunes(redact.ModSec(m.Details.Match), storedModSecFieldCap)
 		msgs[i] = m
 	}
 	tx.Messages = msgs
@@ -484,7 +486,7 @@ func (c *LogCollector) parseModSecLog(line string) (*model.CreateLogRequest, err
 		}
 		ruleMessage = msg.Message
 		ruleSeverity = msg.Details.Severity
-		ruleData = msg.Details.Data
+		ruleData = redact.ModSec(msg.Details.Data)
 		if id, err := strconv.ParseInt(msg.Details.RuleID, 10, 64); err == nil {
 			ruleID = id
 		}

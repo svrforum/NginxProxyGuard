@@ -4880,3 +4880,35 @@ CREATE TABLE IF NOT EXISTS public.proxy_host_log_rules (
     CONSTRAINT proxy_host_log_rules_pkey PRIMARY KEY (proxy_host_id),
     CONSTRAINT proxy_host_log_rules_proxy_host_id_fkey FOREIGN KEY (proxy_host_id) REFERENCES public.proxy_hosts(id) ON DELETE CASCADE
 );
+
+-- Credentials stored in WAF events — DOCUMENTATION ONLY.
+-- ModSecurity writes the request value a rule matched into its data and match lines, and
+-- WAF events stored both (rule_data, and the raw record in raw_log), so a rule that fired
+-- on a login form kept the password, and a token or session cookie the same way, for as
+-- long as WAF logs are kept. New events are redacted when they are parsed; existing
+-- installs get a one-time scrub of modsec rows, recorded in schema_migrations as
+-- 'modsec_secret_scrub_v1'. secret_var is redact.ModSecSecretVariable. A fresh install has
+-- no such rows and only records the marker.
+-- Executable copy lives in database/migration.go `upgrades`.
+--   DO $$
+--   DECLARE
+--       secret_var CONSTANT text := '(?:REQUEST_COOKIES|REQUEST_BODY|XML)(?::[^:\x27\x60"\s\\]*)?|(?:ARGS|ARGS_GET|ARGS_POST|REQUEST_HEADERS):[^:\x27\x60"\s\\]*(?:pass|pwd|secret|token|sess|cookie|credential|signature|logged_in|authoriz|oauth|auth[_-]|[_-]auth|(?:api|access|private|signing|client)[_-]?key|wordpress_sec)[^:\x27\x60"\s\\]*';
+--       data_line text := '(Matched Data: ).*( found within (?:' || secret_var || '): ).*';
+--       data_json text := '(Matched Data: )(?:[^"\\]|\\.)*( found within (?:' || secret_var || '): )(?:[^"\\]|\\.)*';
+--       match_json text := '(against variable \x60(?:' || secret_var || ')\x27 \(Value: \x60)(?:[^"\\]|\\.)*(\x27 \))';
+--   BEGIN
+--       IF EXISTS (SELECT 1 FROM schema_migrations WHERE version = 'modsec_secret_scrub_v1') THEN
+--           RETURN;
+--       END IF;
+--       BEGIN
+--           UPDATE public.logs_partitioned
+--              SET rule_data = regexp_replace(rule_data, data_line, '\1[redacted]\2[redacted]', 'gi'),
+--                  raw_log = regexp_replace(regexp_replace(raw_log, data_json, '\1[redacted]\2[redacted]', 'gi'), match_json, '\1[redacted]\2', 'gi')
+--            WHERE log_type = 'modsec'
+--              AND (rule_data ~* data_line OR raw_log ~* data_json OR raw_log ~* match_json);
+--       EXCEPTION WHEN OTHERS THEN
+--           RAISE WARNING 'WAF log secret scrub skipped, retried on the next start: %', SQLERRM;
+--           RETURN;
+--       END;
+--       INSERT INTO schema_migrations (version) VALUES ('modsec_secret_scrub_v1') ON CONFLICT DO NOTHING;
+--   END $$;

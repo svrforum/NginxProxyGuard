@@ -259,3 +259,40 @@ func TestCapRunes(t *testing.T) {
 		}
 	}
 }
+
+// A rule that fires on a login form matched the password: neither rule_data
+// nor the stored record may keep it, while a value matched in an ordinary
+// argument stays readable for tuning a false positive.
+func TestStoredModSecRecord_RedactsMatchedSecrets(t *testing.T) {
+	const password = "example-Passw0rd-0000"
+	tx := decodeAudit(t, auditFixture(t, "modsec_audit_v3.0.15.json")[0])
+	if len(tx.Transaction.Messages) < 2 {
+		t.Fatal("fixture has fewer than two rule messages")
+	}
+	msgs := tx.Transaction.Messages
+	msgs[0].Details.Data = "Matched Data: Passw0rd found within ARGS:password: " + password
+	msgs[0].Details.Match = "detected SQLi using libinjection against variable `ARGS:password' (Value: `" + password + "' )"
+	msgs[1].Details.Data = "Matched Data: docker- found within ARGS:search_keyword: docker-compose"
+	line, err := json.Marshal(tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req, err := (&LogCollector{}).parseModSecLog(string(line))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(req.RuleData, password) || strings.Contains(req.RawLog, password) {
+		t.Fatalf("the password was stored:\nrule_data %q\nraw_log %.400s", req.RuleData, req.RawLog)
+	}
+	if req.RuleData != "Matched Data: [redacted] found within ARGS:password: [redacted]" {
+		t.Errorf("rule_data = %q", req.RuleData)
+	}
+	got := decodeAudit(t, req.RawLog).Transaction.Messages
+	if got[0].Details.Match != "detected SQLi using libinjection against variable `ARGS:password' (Value: `[redacted]' )" {
+		t.Errorf("stored match = %q", got[0].Details.Match)
+	}
+	if got[1].Details.Data != msgs[1].Details.Data {
+		t.Errorf("an ordinary argument was redacted: %q", got[1].Details.Data)
+	}
+}
