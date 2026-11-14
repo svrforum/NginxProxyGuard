@@ -26,7 +26,7 @@ export default function UserManager() {
   const { t } = useTranslation(['settings', 'common'])
   // Narrow wrapper: roleLabel only needs (key, options) -> string, and i18next's
   // TFunction generic does not structurally match that signature.
-  const tr = (k: string, o?: Record<string, unknown>) => String(t(k, o))
+  const tr = (k: string, o?: Record<string, unknown>) => String(t(k, o ?? {}))
   const queryClient = useQueryClient()
   const { user: me } = usePermissions()
 

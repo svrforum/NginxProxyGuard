@@ -9,6 +9,8 @@
  *   python-requests @ /webhook /hooks    exempt under either path
  */
 
+import type { TFunction } from 'i18next'
+
 export const MAX_SCOPED_ALLOWED_AGENTS = 20
 export const MAX_ALLOWED_AGENT_PATHS = 10
 const MAX_PATH_LENGTH = 255
@@ -89,7 +91,7 @@ export function parseAllowedAgents(raw: string): AllowedAgentLine[] {
   return out
 }
 
-type Translate = (key: string, options?: Record<string, unknown>) => string
+type Translate = TFunction<'proxyHost'>
 
 /**
  * The reason for an invalid line. `t` must be the `proxyHost` namespace, so

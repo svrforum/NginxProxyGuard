@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fetchBannedIPs, fetchProxyHostsForBan, unbanIP, unbanIPsBulk, banIP } from '../api/banned-ips'
@@ -15,7 +16,7 @@ function formatDate(dateStr: string, locale?: string): string {
   return new Date(dateStr).toLocaleString(locale || 'ko-KR')
 }
 
-function formatRelativeTime(dateStr: string, t: (key: string, options?: { count?: number }) => string): string {
+function formatRelativeTime(dateStr: string, t: TFn): string {
   const date = new Date(dateStr)
   const now = new Date()
   const diffMs = now.getTime() - date.getTime()
@@ -43,7 +44,7 @@ function formatRelativeTime(dateStr: string, t: (key: string, options?: { count?
   return t('bannedIp.time.daysAgo', { count: diffDay })
 }
 
-function getTimeRemaining(expiresAt: string | undefined, t: (key: string, options?: { count?: number }) => string): { text: string; color: string } | null {
+function getTimeRemaining(expiresAt: string | undefined, t: TFn): { text: string; color: string } | null {
   if (!expiresAt) return null
 
   const expires = new Date(expiresAt)
@@ -77,7 +78,7 @@ function getReasonCategory(reason?: string): string {
   return 'manual'
 }
 
-type TFn = (key: string, options?: Record<string, unknown>) => string
+type TFn = TFunction<'waf'>
 
 interface BanCardProps {
   ban: BannedIP
