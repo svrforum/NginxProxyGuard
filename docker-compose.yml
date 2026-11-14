@@ -111,6 +111,15 @@ services:
       # client IP from X-Forwarded-For (comma-separated CIDRs). Unset = trust
       # loopback/link-local/private ranges, which any stock install needs.
       TRUSTED_PROXY_CIDR: ${TRUSTED_PROXY_CIDR:-}
+      # Optional password pepper: a secret mixed into every password hash, so
+      # a copy of the database alone cannot be cracked offline. Unset = plain
+      # bcrypt, as before. Once set, keep it forever (losing it locks every
+      # account out); _FILE reads it from a mounted secret instead. To rotate,
+      # put the old value in NPG_PASSWORD_PEPPER_PREVIOUS. See the README.
+      NPG_PASSWORD_PEPPER: ${NPG_PASSWORD_PEPPER:-}
+      NPG_PASSWORD_PEPPER_FILE: ${NPG_PASSWORD_PEPPER_FILE:-}
+      NPG_PASSWORD_PEPPER_PREVIOUS: ${NPG_PASSWORD_PEPPER_PREVIOUS:-}
+      NPG_PASSWORD_PEPPER_PREVIOUS_FILE: ${NPG_PASSWORD_PEPPER_PREVIOUS_FILE:-}
       # Domain entries in access lists. NPG_DNS_ENTRIES_DISABLED=1 is the
       # emergency switch: every domain entry stays closed, whatever the
       # settings say. NPG_DNS_ENTRIES_INTERVAL (a duration such as 60s, kept

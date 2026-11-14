@@ -236,7 +236,7 @@ docker compose exec api ./server reset-password
 # Pick a specific user
 docker compose exec api ./server reset-password --username alice
 
-# Set a known password instead of the auto-generated one (≥ 8 chars, ≤ 72 bytes)
+# Set a known password instead of the auto-generated one (≥ 8 chars; ≤ 72 bytes unless a pepper is set)
 docker compose exec api ./server reset-password --username alice --password 'S3cure-Pwd!'
 
 # Also wipe the user's TOTP secret and disable 2FA
@@ -244,12 +244,29 @@ docker compose exec api ./server reset-password --clear-2fa
 ```
 
 Each successful reset:
-- writes a fresh bcrypt `password_hash`
+- writes a fresh bcrypt `password_hash` (peppered when `NPG_PASSWORD_PEPPER` is set — run it with the same pepper as the server)
 - clears the user's failed `login_attempts` (lifts any stale per-IP lockout)
 - invalidates every active `auth_session` for that user — they (and any holder of a stolen token) must sign in again
 - records a `Password reset via CLI` entry in `system_logs` (`source=audit`)
 
 Sign in with the printed password and change it immediately from **Account Settings** in the UI.
+
+### Password Pepper (optional)
+
+Passwords are stored as bcrypt hashes, which are salted per hash. Setting `NPG_PASSWORD_PEPPER` adds a pepper: a secret kept in the api container's environment, never in the database, that is mixed into every hash (HMAC-SHA256 of the password under the pepper, then bcrypt; stored with a `$npgp1$` prefix). With it set, a leaked database, dump or disk snapshot is not enough to guess a single password offline — the attacker also needs the pepper.
+
+```bash
+# Append a random pepper to .env (≥ 32 characters). Run this in a shell:
+# .env itself does not run $(...), so do not paste the command into it.
+echo "NPG_PASSWORD_PEPPER=$(openssl rand -hex 32)" >> .env
+```
+
+- **Turning it on** needs no migration. Existing hashes keep working and are re-encoded with the pepper the next time each account signs in; new and changed passwords are peppered right away. Passwords are no longer limited to bcrypt's 72 bytes once a pepper is set.
+- **Keep it safe and keep it forever.** Losing or changing the pepper locks every account whose hash uses it out of the panel, and the API logs one error saying so. Recover with `docker compose exec api ./server reset-password`, run with the pepper you now want set. Removing the variable does not turn peppering off for accounts already moved to it.
+- **Secret files:** `NPG_PASSWORD_PEPPER_FILE=/run/secrets/...` reads the value from a mounted file instead (a trailing newline is ignored). Setting both forms is an error.
+- **Rotation:** set the new value in `NPG_PASSWORD_PEPPER` and the old one in `NPG_PASSWORD_PEPPER_PREVIOUS` (or `_PREVIOUS_FILE`). Each account moves to the new pepper at its next sign-in; remove the previous value once everyone has signed in.
+- **Backups** do not contain user accounts, so restoring one is unaffected by the pepper.
+- A pepper shorter than 32 characters, or a previous pepper without a current one, stops the API at startup with a message naming the variable.
 
 ### Upgrading
 
@@ -309,6 +326,8 @@ The raw OpenAPI 3.0 spec is at `https://localhost:81/api/docs/swagger.yaml`.
 | `API_RATE_LIMIT_PER_MINUTE` | Per-IP API request budget per minute; `0` = off; needs Valkey | `600` |
 | `AUTH_RATE_LIMIT_PER_MINUTE` | Separate per-IP budget for the login endpoints; `0` = off; needs Valkey | `100` |
 | `TRUSTED_PROXY_CIDR` | Comma-separated CIDRs the API trusts as `X-Forwarded-For` hops; unset = trust loopback/link-local/private ranges | (unset) |
+| `NPG_PASSWORD_PEPPER` / `NPG_PASSWORD_PEPPER_FILE` | Optional secret (≥ 32 chars) mixed into every password hash; see [Password Pepper](#password-pepper-optional). Never lose it once set | (unset = plain bcrypt) |
+| `NPG_PASSWORD_PEPPER_PREVIOUS` / `NPG_PASSWORD_PEPPER_PREVIOUS_FILE` | The pepper being rotated out; accounts move to the current one at their next sign-in | (unset) |
 
 ---
 
