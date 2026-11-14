@@ -80,3 +80,15 @@ jobs:
       - name: Traffic chart regression tests
         working-directory: ui
         run: node --test test/traffic.test.mjs
+
+  npm-migrator:
+    name: NPM migration script
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Run offline regression tests
+        working-directory: scripts/npm-to-npg
+        run: python3 -m unittest -v test_npm_to_npg.py
