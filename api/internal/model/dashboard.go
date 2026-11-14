@@ -196,6 +196,7 @@ type DashboardSummary struct {
 	TopCountries  []CountryStat   `json:"top_countries"`
 	TopPaths      []PathStat      `json:"top_paths"`
 	TopIPs        []IPStat        `json:"top_ips"`
+	TopPrivateIPs []IPStat        `json:"top_private_ips"` // loopback and private ranges, kept out of TopIPs (#380)
 	TopUserAgents []UserAgentStat `json:"top_user_agents"`
 
 	// Storage is attached live per request (never cached with the summary).

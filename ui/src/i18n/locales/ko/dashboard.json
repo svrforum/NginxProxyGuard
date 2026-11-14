@@ -65,6 +65,8 @@
   "topLists": {
     "hostsTitle": "상위 호스트 (24시간)",
     "ipsTitle": "상위 IP (24시간)",
+    "showLocalIPs": "내부 IP 포함",
+    "localBadge": "내부",
     "userAgentsTitle": "상위 사용자 에이전트 (24시간)",
     "noData": "트래픽 데이터 없음"
   },

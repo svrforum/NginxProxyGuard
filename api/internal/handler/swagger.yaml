@@ -13449,6 +13449,11 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/IPStat'
+        top_private_ips:
+          type: array
+          description: Loopback and private addresses, which top_ips leaves out.
+          items:
+            $ref: '#/components/schemas/IPStat'
         top_user_agents:
           type: array
           items:

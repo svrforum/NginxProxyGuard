@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -18,6 +18,16 @@ function formatBytes(bytes: number): string {
 }
 
 const isCountryCode = (code: string | undefined) => !!code && /^[A-Z]{2}$/i.test(code);
+
+const SHOW_LOCAL_IPS_KEY = 'npg_dashboard_local_ips';
+
+function readShowLocalIPs(): boolean {
+  try {
+    return localStorage.getItem(SHOW_LOCAL_IPS_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 function formatNumber(num: number): string {
   if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
@@ -68,6 +78,24 @@ export default function Dashboard() {
       },
     };
   }, [geoIPStats?.data]);
+
+  // Local addresses come as a list of their own; adding them to Top IPs is a
+  // per-browser choice (#380).
+  const [showLocalIPs, setShowLocalIPs] = useState(readShowLocalIPs);
+  const toggleLocalIPs = (on: boolean) => {
+    setShowLocalIPs(on);
+    try {
+      localStorage.setItem(SHOW_LOCAL_IPS_KEY, on ? '1' : '0');
+    } catch {
+      // Storage blocked: the choice lasts until the page reloads.
+    }
+  };
+  const topIPs = useMemo(() => {
+    const ips = (dashboard?.top_ips ?? []).map((ip) => ({ ...ip, local: false }));
+    if (!showLocalIPs) return ips;
+    const local = (dashboard?.top_private_ips ?? []).map((ip) => ({ ...ip, local: true }));
+    return [...ips, ...local].sort((a, b) => b.count - a.count);
+  }, [dashboard?.top_ips, dashboard?.top_private_ips, showLocalIPs]);
 
   if (isLoading) {
     return (
@@ -263,15 +291,31 @@ export default function Dashboard() {
 
         {/* Top IPs */}
         <div className="bg-white dark:bg-slate-800 rounded-lg shadow">
-          <div className="p-4 border-b dark:border-slate-700">
+          <div className="p-4 border-b dark:border-slate-700 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-semibold dark:text-white">{t('topLists.ipsTitle')}</h2>
+            <label className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                className="rounded"
+                checked={showLocalIPs}
+                onChange={(e) => toggleLocalIPs(e.target.checked)}
+              />
+              {t('topLists.showLocalIPs')}
+            </label>
           </div>
           <div className="p-4">
-            {dashboard?.top_ips && dashboard.top_ips.length > 0 ? (
+            {topIPs.length > 0 ? (
               <div className="space-y-2">
-                {dashboard.top_ips.slice(0, 5).map((ip, i) => (
+                {topIPs.slice(0, 5).map((ip, i) => (
                   <div key={i} className="flex justify-between items-center">
-                    <span className="text-gray-600 dark:text-gray-300 font-mono text-sm">{ip.ip}</span>
+                    <span className="text-gray-600 dark:text-gray-300 font-mono text-sm">
+                      {ip.ip}
+                      {ip.local && (
+                        <span className="ml-1.5 px-1.5 py-0.5 rounded font-sans text-[10px] bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-gray-400">
+                          {t('topLists.localBadge')}
+                        </span>
+                      )}
+                    </span>
                     <span className="font-mono text-sm dark:text-gray-400">{formatNumber(ip.count)}</span>
                   </div>
                 ))}

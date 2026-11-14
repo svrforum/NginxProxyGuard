@@ -65,6 +65,8 @@
   "topLists": {
     "hostsTitle": "Top Hosts (24h)",
     "ipsTitle": "Top IPs (24h)",
+    "showLocalIPs": "Show local",
+    "localBadge": "local",
     "userAgentsTitle": "Top User Agents (24h)",
     "noData": "No traffic data yet"
   },

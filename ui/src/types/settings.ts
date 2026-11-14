@@ -261,6 +261,7 @@ export interface DashboardSummary {
   top_hosts: HostStat[];
   top_countries: CountryStat[];
   top_ips: IPStat[];
+  top_private_ips?: IPStat[]; // local addresses, kept out of top_ips (#380)
   top_user_agents: UserAgentStat[];
   /** Live disk picture from DiskGuard (D1-D4). Absent until its first
    *  measurement, when it is disabled, and from APIs older than this field. */

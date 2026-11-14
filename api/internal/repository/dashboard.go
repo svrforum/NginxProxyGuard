@@ -170,9 +170,10 @@ func (r *DashboardRepository) GetSummary(ctx context.Context) (*model.DashboardS
 		return nil
 	})
 	g.Go(func() error {
-		result := r.getTopIPs(gctx, last24h)
+		public, private := r.getTopIPs(gctx, last24h)
 		mu.Lock()
-		summary.TopIPs = result
+		summary.TopIPs = public
+		summary.TopPrivateIPs = private
 		mu.Unlock()
 		return nil
 	})
@@ -275,37 +276,51 @@ func (r *DashboardRepository) getTopHosts(ctx context.Context, since time.Time) 
 	return stats
 }
 
-func (r *DashboardRepository) getTopIPs(ctx context.Context, since time.Time) []model.IPStat {
-	// Exclude local/internal IPs (127.x.x.x, ::1, 172.16-31.x.x, 10.x.x.x, 192.168.x.x)
+// getTopIPs ranks client addresses in two lists: public ones, and local ones
+// (127.x.x.x, ::1, 10.x.x.x, 172.16-31.x.x, 192.168.x.x), which on most
+// installs are the router, Docker networks or health checks and would push
+// real visitors off the first list. The dashboard adds the second on request
+// (#380). One aggregation feeds both.
+func (r *DashboardRepository) getTopIPs(ctx context.Context, since time.Time) (public, private []model.IPStat) {
+	public, private = []model.IPStat{}, []model.IPStat{}
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT HOST(client_ip), COUNT(*) as total
-		FROM logs_partitioned
-		WHERE created_at >= $1
-		  AND log_type = 'access'
-		  AND client_ip IS NOT NULL
-		  AND NOT (
-		    client_ip <<= '127.0.0.0/8'::inet OR
-		    client_ip <<= '::1/128'::inet OR
-		    client_ip <<= '10.0.0.0/8'::inet OR
-		    client_ip <<= '172.16.0.0/12'::inet OR
-		    client_ip <<= '192.168.0.0/16'::inet
-		  )
-		GROUP BY client_ip
-		ORDER BY total DESC
-		LIMIT 10
+		WITH counts AS (
+			SELECT client_ip, COUNT(*) AS total,
+			       (client_ip <<= '127.0.0.0/8'::inet OR
+			        client_ip <<= '::1/128'::inet OR
+			        client_ip <<= '10.0.0.0/8'::inet OR
+			        client_ip <<= '172.16.0.0/12'::inet OR
+			        client_ip <<= '192.168.0.0/16'::inet) AS is_local
+			FROM logs_partitioned
+			WHERE created_at >= $1
+			  AND log_type = 'access'
+			  AND client_ip IS NOT NULL
+			  AND `+canaryURIExclusion+`
+			GROUP BY client_ip
+		)
+		(SELECT HOST(client_ip), total, is_local FROM counts WHERE NOT is_local ORDER BY total DESC LIMIT 10)
+		UNION ALL
+		(SELECT HOST(client_ip), total, is_local FROM counts WHERE is_local ORDER BY total DESC LIMIT 10)
+		ORDER BY 2 DESC
 	`, since)
 	if err != nil {
-		return []model.IPStat{}
+		return public, private
 	}
 	defer rows.Close()
 
-	var stats []model.IPStat
 	for rows.Next() {
 		var s model.IPStat
-		rows.Scan(&s.IP, &s.Count)
-		stats = append(stats, s)
+		var local bool
+		if err := rows.Scan(&s.IP, &s.Count, &local); err != nil {
+			continue
+		}
+		if local {
+			private = append(private, s)
+		} else {
+			public = append(public, s)
+		}
 	}
-	return stats
+	return public, private
 }
 
 // DigestOverview is the "how does the install look right now" block of the
