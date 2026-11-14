@@ -259,6 +259,16 @@ All versions are fully backward compatible. No manual migration needed — datab
 
 ---
 
+## Migrating from Nginx Proxy Manager
+
+An interactive [migration script](scripts/npm-to-npg/README.md) copies supported hosts and redirects from an existing NPM instance to NPG. It runs with Python 3.10+ and no extra packages, with English and [French](scripts/npm-to-npg/README.fr.md) prompts.
+
+```sh
+python3 scripts/npm-to-npg/npm_to_npg.py
+```
+
+Select the hosts to copy and choose how to handle certificates. Existing NPG hosts are not overwritten; unsupported configurations are reported and skipped. Optional Cloudflare DDNS imports stay disabled. NPM stays running; the script does not switch ports or DNS A/AAAA records. See the script README for scope and certificate renewal limitations.
+
 ## 📚 API Documentation
 
 Nginx Proxy Guard provides a comprehensive REST API for automation and integration.
