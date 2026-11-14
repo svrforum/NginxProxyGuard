@@ -282,6 +282,13 @@ func (r *DNSProviderRepository) TestConnection(ctx context.Context, providerType
 		if creds.APIKey == "" {
 			return model.ErrInvalidCredentials
 		}
+	case model.DNSProviderInfomaniak:
+		// Format check only: the DynDNS endpoint would change a remote record.
+		var creds model.InfomaniakCredentials
+		if err := json.Unmarshal(credentials, &creds); err != nil {
+			return fmt.Errorf("%w: infomaniak credentials are not valid JSON", model.ErrInvalidCredentials)
+		}
+		return creds.Validate()
 	case model.DNSProviderIonos:
 		// A format check only, like Dynu's: nothing is sent to IONOS, so
 		// "credentials are valid" means both halves are filled in. (IONOS has
@@ -308,11 +315,11 @@ func (r *DNSProviderRepository) TestConnection(ctx context.Context, providerType
 		// with a value nothing can use — the failure only appeared later, at
 		// certificate issuance ("unsupported DNS provider type"). provider_type
 		// is immutable, so the row could only be deleted, never corrected.
-		return fmt.Errorf("%w: unsupported provider_type %q — supported: %s, %s, %s, %s, %s, %s",
+		return fmt.Errorf("%w: unsupported provider_type %q — supported: %s, %s, %s, %s, %s, %s, %s",
 			model.ErrInvalidInput, providerType,
 			model.DNSProviderCloudflare, model.DNSProviderRoute53,
 			model.DNSProviderDuckDNS, model.DNSProviderDynu,
-			model.DNSProviderManual, model.DNSProviderIonos)
+			model.DNSProviderManual, model.DNSProviderIonos, model.DNSProviderInfomaniak)
 	}
 	return nil
 }

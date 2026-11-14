@@ -127,7 +127,9 @@ UDP를 통한 더 빠르고 안정적인 연결을 위한 최신 프로토콜 �
 프록시 호스트 설정 실패에 대한 실행 가능한 에러 가이드. 클릭 가능한 에러 배지와 상세 트러블슈팅. Nginx 시작 시 깨진 설정 자동 비활성화.
 
 ### 🌐 다이나믹 DNS (v2.21.0, 통합 v2.23.0)
-공인 IP가 바뀌어도 도메인이 홈서버를 가리키도록 유지하는 내장 DDNS (Cloudflare / DuckDNS / Dynu). 프록시 호스트마다 토글 하나로 켜면 그 호스트의 도메인이 관리형 DDNS 레코드가 되어 도메인 변경 시 자동 동기화되고 호스트 삭제 시 함께 정리됩니다. 기존 호스트 일괄 등록과 갱신 주기 설정도 지원합니다.
+공인 IP가 바뀌어도 도메인이 홈서버를 가리키도록 유지하는 내장 DDNS (Cloudflare / DuckDNS / Dynu / Infomaniak). 프록시 호스트마다 토글 하나로 켜면 그 호스트의 도메인이 관리형 DDNS 레코드가 되어 도메인 변경 시 자동 동기화되고 호스트 삭제 시 함께 정리됩니다. 기존 호스트 일괄 등록과 갱신 주기 설정도 지원합니다.
+
+Infomaniak을 사용하려면 먼저 [Infomaniak Manager](https://www.infomaniak.com/en/support/faq/2357/manage-a-dynamic-ip-with-infomaniak-dyndns)의 **Dynamic DNS**에서 각 호스트를 생성하세요. **인증서 > DNS 프로바이더**에서 **Infomaniak (DynDNS)**을 추가하고 전용 DynDNS 사용자 이름과 비밀번호(Manager 로그인이나 API 토큰 아님)를 입력한 뒤 DDNS 레코드 또는 프록시 호스트에서 선택하세요. 기존 IPv4/A 레코드만 갱신하며 원격 레코드 생성·삭제, TTL 변경, DNS-01 인증서는 지원하지 않습니다. 연결 테스트는 자격 증명 형식만 확인하며, 실제 갱신은 DDNS 동기화로 확인하세요.
 
 ### 🔐 ForwardAuth (v2.27.0)
 프록시 호스트 앞에 **Authelia**, **Authentik** 또는 커스텀 `auth_request` 프로바이더를 두고, 호스트별 우회 경로를 지정할 수 있습니다. (한 호스트는 ForwardAuth와 지오/봇 챌린지 중 하나만 사용합니다.)

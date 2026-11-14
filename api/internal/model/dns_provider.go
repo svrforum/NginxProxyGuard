@@ -13,11 +13,12 @@ const (
 	DNSProviderRoute53    = "route53"
 	DNSProviderDuckDNS    = "duckdns"
 	DNSProviderDynu       = "dynu"
+	DNSProviderInfomaniak = "infomaniak"
 	DNSProviderManual     = "manual"
 	DNSProviderIonos      = "ionos"
 )
 
-// DNSProvider represents a DNS provider configuration for ACME DNS-01 challenges
+// DNSProvider represents a DNS provider configuration for ACME DNS-01 or DDNS
 type DNSProvider struct {
 	ID           string          `json:"id"`
 	Name         string          `json:"name"`
@@ -92,6 +93,20 @@ type DynuCredentials struct {
 	APIKey string `json:"api_key"` // Dynu API key
 }
 
+// InfomaniakCredentials holds dedicated DynDNS credentials, not Manager credentials.
+// These credentials only update existing dynamic DNS records; they cannot manage TXT records.
+type InfomaniakCredentials struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+func (c InfomaniakCredentials) Validate() error {
+	if strings.TrimSpace(c.Username) == "" || strings.TrimSpace(c.Password) == "" || strings.Contains(c.Username, ":") {
+		return fmt.Errorf("%w: infomaniak requires a DynDNS username (without colon) and password", ErrInvalidCredentials)
+	}
+	return nil
+}
+
 // IonosCredentials holds the credential pair IONOS hands out: an API
 // key prefix, the public identifier, and the secret key that goes with
 // it. lego carries them joined by a dot as one value in the X-Api-Key
@@ -119,7 +134,7 @@ func (c IonosCredentials) Normalized() IonosCredentials {
 // CreateDNSProviderRequest is the request body for creating a DNS provider
 type CreateDNSProviderRequest struct {
 	Name         string          `json:"name" validate:"required"`
-	ProviderType string          `json:"provider_type" validate:"required,oneof=cloudflare route53 duckdns dynu manual ionos"`
+	ProviderType string          `json:"provider_type" validate:"required,oneof=cloudflare route53 duckdns dynu infomaniak manual ionos"`
 	Credentials  json.RawMessage `json:"credentials" validate:"required"`
 	IsDefault    bool            `json:"is_default"`
 }
@@ -190,6 +205,12 @@ func (p *DNSProvider) ValidateCredentials() error {
 		if creds.APIKey == "" {
 			return ErrInvalidCredentials
 		}
+	case DNSProviderInfomaniak:
+		var creds InfomaniakCredentials
+		if err := json.Unmarshal(p.Credentials, &creds); err != nil {
+			return ErrInvalidCredentials
+		}
+		return creds.Validate()
 	case DNSProviderIonos:
 		// IONOS hands the credential over as a pair: prefix and secret key.
 		// A row that carries only one half cannot authenticate.

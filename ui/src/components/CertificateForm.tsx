@@ -34,8 +34,11 @@ export default function CertificateForm({ onClose, onSuccess }: CertificateFormP
   const [createdCertId, setCreatedCertId] = useState<string | null>(null)
 
   const { data: dnsProviders } = useQuery({
-    queryKey: ['dns-providers'],
-    queryFn: () => listDNSProviders(),
+    queryKey: ['dns-providers', 'acme'],
+    queryFn: async () => {
+      const result = await listDNSProviders()
+      return { ...result, data: result.data.filter((p) => p.provider_type !== 'infomaniak') }
+    },
     enabled: provider === 'letsencrypt' && challengeType === 'dns',
   })
 

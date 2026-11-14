@@ -10164,7 +10164,7 @@ paths:
         (Cloudflare's "auto").
 
         `dns_provider_id` must reference an existing DNS provider; only providers of type
-        `cloudflare`, `duckdns` or `dynu` have a DDNS updater. Creation does not verify the
+        `cloudflare`, `duckdns`, `dynu` or `infomaniak` have a DDNS updater. Creation does not verify the
         provider type — a record pointing at any other provider is accepted here and fails at
         sync time with `provider "<type>" not supported for DDNS` in `last_error`.
 
@@ -10279,7 +10279,7 @@ paths:
         '400':
           description: |
             `proxy_host_ids` empty, `dns_provider_id` missing, provider not found, or provider
-            type is not Cloudflare/DuckDNS/Dynu.
+            type is not Cloudflare/DuckDNS/Dynu/Infomaniak.
           content:
             application/json:
               schema:
@@ -12262,7 +12262,7 @@ components:
           type: string
           format: uuid
           nullable: true
-          description: Required when ddns_enabled is true; the provider's type must be cloudflare, duckdns or dynu, otherwise the write is rejected with 400.
+          description: Required when ddns_enabled is true; the provider's type must be cloudflare, duckdns, dynu or infomaniak, otherwise the write is rejected with 400.
         ddns_proxied:
           type: boolean
           description: Default Cloudflare "proxied" flag for the managed DDNS records of this host.
@@ -13558,7 +13558,7 @@ components:
           type: string
         provider_type:
           type: string
-          enum: [cloudflare, route53, duckdns, dynu, ionos, manual]
+          enum: [cloudflare, route53, duckdns, dynu, infomaniak, ionos, manual]
         is_default:
           type: boolean
         has_credentials:
@@ -13585,7 +13585,7 @@ components:
           type: string
         provider_type:
           type: string
-          enum: [cloudflare, route53, duckdns, dynu, ionos, manual]
+          enum: [cloudflare, route53, duckdns, dynu, infomaniak, ionos, manual]
         credentials:
           type: object
           description: >-
@@ -13595,6 +13595,8 @@ components:
             credential chain — environment, shared config files, ECS task role, EC2
             instance role), optional region and hosted_zone_id. duckdns: token. dynu: api_key. ionos: api_key_prefix and
             api_key (IONOS public prefix and secret; sent to IONOS as prefix.secret).
+            infomaniak: username and password for a preconfigured DynDNS hostname (DDNS IPv4 only; no DNS-01).
+            The Infomaniak connection test validates credential format only.
             manual: none required.
         is_default:
           type: boolean
@@ -19643,7 +19645,7 @@ components:
           type: string
           format: uuid
           description: |
-            Only providers of type `cloudflare`, `duckdns` or `dynu` have a DDNS updater; the
+            Only providers of type `cloudflare`, `duckdns`, `dynu` or `infomaniak` have a DDNS updater; the
             type is not checked here, a mismatch surfaces as a sync error on the record.
         proxied:
           type: boolean
@@ -19694,7 +19696,7 @@ components:
           format: uuid
           description: |
             Validated once before any host is touched — the provider must exist and be of type
-            `cloudflare`, `duckdns` or `dynu`.
+            `cloudflare`, `duckdns`, `dynu` or `infomaniak`.
     DDNSSyncResponse:
       type: object
       description: |

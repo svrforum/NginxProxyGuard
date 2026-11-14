@@ -24,6 +24,10 @@ const ACCENT: Record<DNSProvider['provider_type'], { icon: string; chip: string 
     icon: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300',
     chip: 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300',
   },
+  infomaniak: {
+    icon: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300',
+    chip: 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300',
+  },
   ionos: {
     icon: 'bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-300',
     chip: 'bg-violet-50 text-violet-700 dark:bg-violet-900/20 dark:text-violet-300',
