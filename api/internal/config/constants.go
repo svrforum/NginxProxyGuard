@@ -16,6 +16,9 @@ const (
 	StatusDegraded   = "degraded"
 	StatusConnecting = "connecting"
 	StatusUnknown    = "unknown"
+	// StatusLocal is the /health cache status when no REDIS_URL is set and the
+	// in-process cache serves instead.
+	StatusLocal = "local"
 )
 
 // File permission constants

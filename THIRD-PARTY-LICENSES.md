@@ -70,6 +70,7 @@ Nginx Proxy Guard uses the following third-party software:
 | golang.org/x/time | BSD-3-Clause | https://golang.org/x/time |
 | github.com/coreos/go-oidc/v3 | Apache-2.0 | https://github.com/coreos/go-oidc |
 | github.com/prometheus/client_golang | Apache-2.0 | https://github.com/prometheus/client_golang |
+| github.com/maypok86/otter/v2 | Apache-2.0 | https://github.com/maypok86/otter |
 | github.com/oschwald/maxminddb-golang | ISC | https://github.com/oschwald/maxminddb-golang |
 | github.com/robfig/cron/v3 | MIT | https://github.com/robfig/cron |
 | github.com/shirou/gopsutil/v3 | BSD-3-Clause | https://github.com/shirou/gopsutil |
@@ -117,6 +118,7 @@ The following components are licensed under the Apache License 2.0:
 - Swagger UI / swagger-ui-dist (SmartBear Software)
 - github.com/coreos/go-oidc (CoreOS and go-oidc contributors)
 - github.com/prometheus/client_golang (The Prometheus Authors)
+- github.com/maypok86/otter (Alexey Mayshev and contributors)
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use these files except in compliance with the License.

@@ -19,6 +19,9 @@ import (
 var (
 	ErrCacheMiss = errors.New("cache miss")
 	ErrNotReady  = errors.New("cache not ready")
+	// ErrTooLarge means the local cache declined a value bigger than it is
+	// allowed to hold; the caller simply reads the database next time.
+	ErrTooLarge = errors.New("value too large for the local cache")
 )
 
 // Global key prefix for all cache keys
@@ -58,14 +61,26 @@ type RedisClient struct {
 	// client is configured (empty REDIS_URL).
 	done      chan struct{}
 	closeOnce sync.Once
+
+	// local serves the key/value caches and the API rate limiter while Redis
+	// is not connected, which on an install without REDIS_URL is always. Nil
+	// when NPG_LOCAL_CACHE_MAX_MB=0.
+	local *LocalCache
 }
 
 // NewRedisClient creates a new Redis client from URL
 // URL format: redis://[:password@]host:port/db
-func NewRedisClient(redisURL string) (*RedisClient, error) {
+//
+// local, when not nil, takes over the key/value caches and the API rate
+// limiter until Redis connects. With an empty URL it is the only cache.
+func NewRedisClient(redisURL string, local *LocalCache) (*RedisClient, error) {
 	if redisURL == "" {
-		log.Println("[Cache] Redis URL not configured, caching disabled")
-		return &RedisClient{ready: false}, nil
+		if local == nil {
+			log.Println("[Cache] Redis URL not configured, caching disabled")
+		} else {
+			log.Println("[Cache] Redis URL not configured, using the in-process cache")
+		}
+		return &RedisClient{ready: false, local: local}, nil
 	}
 
 	opts, err := parseRedisURL(redisURL)
@@ -79,6 +94,7 @@ func NewRedisClient(redisURL string) (*RedisClient, error) {
 		client: client,
 		ready:  false,
 		done:   make(chan struct{}),
+		local:  local,
 	}
 
 	// Test connection in background
@@ -167,6 +183,11 @@ func (r *RedisClient) tryPing() error {
 	r.mu.Lock()
 	r.ready = true
 	r.mu.Unlock()
+	// From here on Redis serves every read. Whatever the local cache took in
+	// meanwhile is dropped so it cannot come back if Redis is ever bypassed.
+	if r.local != nil {
+		r.local.flush()
+	}
 	log.Println("[Cache] Redis connected successfully")
 	return nil
 }
@@ -178,11 +199,43 @@ func (r *RedisClient) IsReady() bool {
 	return r.ready && r.client != nil
 }
 
+// Available reports whether any cache can serve: Redis, or the in-process
+// cache standing in for it.
+func (r *RedisClient) Available() bool {
+	return r.IsReady() || r.local != nil
+}
+
+// RedisConfigured reports whether REDIS_URL was set.
+func (r *RedisClient) RedisConfigured() bool {
+	return r.client != nil
+}
+
+// Backend names what currently serves the key/value caches: "redis",
+// "local", or "none".
+func (r *RedisClient) Backend() string {
+	switch {
+	case r.IsReady():
+		return "redis"
+	case r.local != nil:
+		return "local"
+	default:
+		return "none"
+	}
+}
+
+// Local returns the in-process cache, or nil when it is turned off.
+func (r *RedisClient) Local() *LocalCache {
+	return r.local
+}
+
 // Close closes the Redis connection and stops the background reconnect loop
 func (r *RedisClient) Close() error {
 	r.closeOnce.Do(func() {
 		if r.done != nil {
 			close(r.done)
+		}
+		if r.local != nil {
+			r.local.close()
 		}
 	})
 	if r.client != nil {
@@ -490,46 +543,106 @@ func (r *RedisClient) RecordWAFEvent(ctx context.Context, ip string, hostID stri
 }
 
 // ========================================
-// Generic Cache Operations
+// Key/Value Primitives
 // ========================================
+//
+// Every JSON cache below goes through these four. While Redis is connected
+// they use it; until then the in-process cache answers. Deletes always reach
+// the in-process cache too, so an invalidation is never lost whichever side
+// is active.
 
-// Set stores a value with optional TTL
-func (r *RedisClient) Set(ctx context.Context, key string, value interface{}, ttl time.Duration) error {
-	if !r.IsReady() {
+func (r *RedisClient) setJSON(ctx context.Context, fullKey string, value interface{}, ttl time.Duration) error {
+	ready := r.IsReady()
+	if !ready && r.local == nil {
 		return ErrNotReady
 	}
-
 	data, err := json.Marshal(value)
 	if err != nil {
 		return err
 	}
-
-	return r.client.Set(ctx, PrefixConfig+key, data, ttl).Err()
+	if ready {
+		return r.client.Set(ctx, fullKey, data, ttl).Err()
+	}
+	if !r.local.set(fullKey, data, ttl) {
+		return ErrTooLarge
+	}
+	return nil
 }
 
-// Get retrieves a value
-func (r *RedisClient) Get(ctx context.Context, key string, dest interface{}) error {
-	if !r.IsReady() {
+func (r *RedisClient) getJSON(ctx context.Context, fullKey string, dest interface{}) error {
+	var data []byte
+	switch {
+	case r.IsReady():
+		b, err := r.client.Get(ctx, fullKey).Bytes()
+		if errors.Is(err, redis.Nil) {
+			return ErrCacheMiss
+		}
+		if err != nil {
+			return err
+		}
+		data = b
+	case r.local != nil:
+		b, ok := r.local.get(fullKey)
+		if !ok {
+			return ErrCacheMiss
+		}
+		data = b
+	default:
 		return ErrNotReady
 	}
-
-	data, err := r.client.Get(ctx, PrefixConfig+key).Bytes()
-	if errors.Is(err, redis.Nil) {
-		return ErrCacheMiss
-	}
-	if err != nil {
-		return err
-	}
-
 	return json.Unmarshal(data, dest)
 }
 
-// Delete removes a key
-func (r *RedisClient) Delete(ctx context.Context, key string) error {
+func (r *RedisClient) del(ctx context.Context, fullKeys ...string) error {
+	if r.local != nil {
+		r.local.del(fullKeys...)
+	}
 	if !r.IsReady() {
+		if r.local != nil {
+			return nil
+		}
 		return ErrNotReady
 	}
-	return r.client.Del(ctx, PrefixConfig+key).Err()
+	return r.client.Del(ctx, fullKeys...).Err()
+}
+
+func (r *RedisClient) delPrefix(ctx context.Context, prefix string) error {
+	if r.local != nil {
+		r.local.delPrefix(prefix)
+	}
+	if !r.IsReady() {
+		if r.local != nil {
+			return nil
+		}
+		return ErrNotReady
+	}
+	keys, err := r.client.Keys(ctx, prefix+"*").Result()
+	if err != nil {
+		return err
+	}
+	if len(keys) > 0 {
+		return r.client.Del(ctx, keys...).Err()
+	}
+	return nil
+}
+
+// ========================================
+// Generic Cache Operations
+// ========================================
+
+// Set stores a value with optional TTL.
+func (r *RedisClient) Set(ctx context.Context, key string, value interface{}, ttl time.Duration) error {
+	return r.setJSON(ctx, PrefixConfig+key, value, ttl)
+}
+
+// Get retrieves a value.
+func (r *RedisClient) Get(ctx context.Context, key string, dest interface{}) error {
+	return r.getJSON(ctx, PrefixConfig+key, dest)
+}
+
+// Delete removes a key.
+func (r *RedisClient) Delete(ctx context.Context, key string) error {
+	return r.del(ctx, PrefixConfig+key)
 }
 
 // ========================================
@@ -700,65 +813,28 @@ type URIBlockPattern struct {
 	Enabled   bool   `json:"enabled"`
 }
 
-// SetURIBlock caches URI block rules for a host
+// SetURIBlock caches URI block rules for a host.
 func (r *RedisClient) SetURIBlock(ctx context.Context, hostID string, entry *URIBlockEntry) error {
-	if !r.IsReady() {
-		return ErrNotReady
-	}
-
-	data, err := json.Marshal(entry)
-	if err != nil {
-		return err
-	}
-
-	return r.client.Set(ctx, PrefixURIBlock+hostID, data, 24*time.Hour).Err()
+	return r.setJSON(ctx, PrefixURIBlock+hostID, entry, 24*time.Hour)
 }
 
 // GetURIBlock retrieves cached URI block rules for a host
 func (r *RedisClient) GetURIBlock(ctx context.Context, hostID string) (*URIBlockEntry, error) {
-	if !r.IsReady() {
-		return nil, ErrNotReady
-	}
-
-	data, err := r.client.Get(ctx, PrefixURIBlock+hostID).Bytes()
-	if errors.Is(err, redis.Nil) {
-		return nil, ErrCacheMiss
-	}
-	if err != nil {
-		return nil, err
-	}
-
 	var entry URIBlockEntry
-	if err := json.Unmarshal(data, &entry); err != nil {
+	if err := r.getJSON(ctx, PrefixURIBlock+hostID, &entry); err != nil {
 		return nil, err
 	}
-
 	return &entry, nil
 }
 
-// DeleteURIBlock removes cached URI block rules for a host
+// DeleteURIBlock removes cached URI block rules for a host.
 func (r *RedisClient) DeleteURIBlock(ctx context.Context, hostID string) error {
-	if !r.IsReady() {
-		return ErrNotReady
-	}
-	return r.client.Del(ctx, PrefixURIBlock+hostID).Err()
+	return r.del(ctx, PrefixURIBlock+hostID)
 }
 
-// InvalidateAllURIBlocks removes all cached URI block rules
+// InvalidateAllURIBlocks removes all cached URI block rules.
 func (r *RedisClient) InvalidateAllURIBlocks(ctx context.Context) error {
-	if !r.IsReady() {
-		return ErrNotReady
-	}
-
-	keys, err := r.client.Keys(ctx, PrefixURIBlock+"*").Result()
-	if err != nil {
-		return err
-	}
-
-	if len(keys) > 0 {
-		return r.client.Del(ctx, keys...).Err()
-	}
-	return nil
+	return r.delPrefix(ctx, PrefixURIBlock)
 }
 
 // ========================================
@@ -780,134 +856,48 @@ const (
 // DashboardCacheTTL is the default TTL for dashboard cache
 const DashboardCacheTTL = 30 * time.Second
 
-// SetDashboardSummary caches dashboard summary
+// SetDashboardSummary caches dashboard summary.
 func (r *RedisClient) SetDashboardSummary(ctx context.Context, summary interface{}) error {
-	if !r.IsReady() {
-		return ErrNotReady
-	}
-
-	data, err := json.Marshal(summary)
-	if err != nil {
-		return err
-	}
-
-	return r.client.Set(ctx, PrefixDashboard+"summary", data, DashboardCacheTTL).Err()
+	return r.setJSON(ctx, PrefixDashboard+"summary", summary, DashboardCacheTTL)
 }
 
-// GetDashboardSummary retrieves cached dashboard summary
+// GetDashboardSummary retrieves cached dashboard summary.
 func (r *RedisClient) GetDashboardSummary(ctx context.Context, dest interface{}) error {
-	if !r.IsReady() {
-		return ErrNotReady
-	}
-
-	data, err := r.client.Get(ctx, PrefixDashboard+"summary").Bytes()
-	if errors.Is(err, redis.Nil) {
-		return ErrCacheMiss
-	}
-	if err != nil {
-		return err
-	}
-
-	return json.Unmarshal(data, dest)
+	return r.getJSON(ctx, PrefixDashboard+"summary", dest)
 }
 
-// SetGeoIPStats caches GeoIP statistics
+// SetGeoIPStats caches GeoIP statistics.
 func (r *RedisClient) SetGeoIPStats(ctx context.Context, hours int, stats interface{}) error {
-	if !r.IsReady() {
-		return ErrNotReady
-	}
-
-	data, err := json.Marshal(stats)
-	if err != nil {
-		return err
-	}
-
-	key := fmt.Sprintf("%sstats:%d", PrefixGeoIP, hours)
-	return r.client.Set(ctx, key, data, time.Minute).Err()
+	return r.setJSON(ctx, fmt.Sprintf("%sstats:%d", PrefixGeoIP, hours), stats, time.Minute)
 }
 
-// GetGeoIPStats retrieves cached GeoIP statistics
+// GetGeoIPStats retrieves cached GeoIP statistics.
 func (r *RedisClient) GetGeoIPStats(ctx context.Context, hours int, dest interface{}) error {
-	if !r.IsReady() {
-		return ErrNotReady
-	}
-
-	key := fmt.Sprintf("%sstats:%d", PrefixGeoIP, hours)
-	data, err := r.client.Get(ctx, key).Bytes()
-	if errors.Is(err, redis.Nil) {
-		return ErrCacheMiss
-	}
-	if err != nil {
-		return err
-	}
-
-	return json.Unmarshal(data, dest)
+	return r.getJSON(ctx, fmt.Sprintf("%sstats:%d", PrefixGeoIP, hours), dest)
 }
 
 // ========================================
 // Proxy Host Config Cache Operations
 // ========================================
 
-// SetProxyHostConfig caches proxy host configuration
+// SetProxyHostConfig caches proxy host configuration for 5 minutes.
 func (r *RedisClient) SetProxyHostConfig(ctx context.Context, hostID string, config interface{}) error {
-	if !r.IsReady() {
-		return ErrNotReady
-	}
-
-	data, err := json.Marshal(config)
-	if err != nil {
-		return err
-	}
-
-	// Cache for 5 minutes
-	return r.client.Set(ctx, PrefixProxyHost+"config:"+hostID, data, 5*time.Minute).Err()
+	return r.setJSON(ctx, PrefixProxyHost+"config:"+hostID, config, 5*time.Minute)
 }
 
-// GetProxyHostConfig retrieves cached proxy host configuration
+// GetProxyHostConfig retrieves cached proxy host configuration.
 func (r *RedisClient) GetProxyHostConfig(ctx context.Context, hostID string, dest interface{}) error {
-	if !r.IsReady() {
-		return ErrNotReady
-	}
-
-	data, err := r.client.Get(ctx, PrefixProxyHost+"config:"+hostID).Bytes()
-	if errors.Is(err, redis.Nil) {
-		return ErrCacheMiss
-	}
-	if err != nil {
-		return err
-	}
-
-	return json.Unmarshal(data, dest)
+	return r.getJSON(ctx, PrefixProxyHost+"config:"+hostID, dest)
 }
 
-// InvalidateProxyHostConfig removes cached proxy host configuration
+// InvalidateProxyHostConfig removes cached proxy host configuration.
 func (r *RedisClient) InvalidateProxyHostConfig(ctx context.Context, hostID string) error {
-	if !r.IsReady() {
-		return ErrNotReady
-	}
-
-	keys := []string{
-		PrefixProxyHost + "config:" + hostID,
-		PrefixProxyHost + "security:" + hostID,
-	}
-	return r.client.Del(ctx, keys...).Err()
+	return r.del(ctx, PrefixProxyHost+"config:"+hostID, PrefixProxyHost+"security:"+hostID)
 }
 
-// InvalidateAllProxyHostConfigs removes all cached proxy host configurations
+// InvalidateAllProxyHostConfigs removes all cached proxy host configurations.
 func (r *RedisClient) InvalidateAllProxyHostConfigs(ctx context.Context) error {
-	if !r.IsReady() {
-		return ErrNotReady
-	}
-
-	keys, err := r.client.Keys(ctx, PrefixProxyHost+"*").Result()
-	if err != nil {
-		return err
-	}
-
-	if len(keys) > 0 {
-		return r.client.Del(ctx, keys...).Err()
-	}
-	return nil
+	return r.delPrefix(ctx, PrefixProxyHost)
 }
 
 // ========================================
@@ -959,8 +949,12 @@ type APIRateLimitResult struct {
 }
 
 // CheckAPIRateLimit checks API rate limit for a key (user ID, API token, or IP)
+//
+// It is a fixed window, counted in Redis or, while Redis is not connected, in
+// the in-process cache. With neither, every request is allowed.
 func (r *RedisClient) CheckAPIRateLimit(ctx context.Context, key string, limit int64, window time.Duration) (*APIRateLimitResult, error) {
-	if !r.IsReady() {
+	ready := r.IsReady()
+	if !ready && r.local == nil {
 		// If cache is not ready, allow the request
 		return &APIRateLimitResult{Allowed: true, Limit: limit, Remaining: limit}, nil
 	}
@@ -968,16 +962,19 @@ func (r *RedisClient) CheckAPIRateLimit(ctx context.Context, key string, limit i
 	now := time.Now()
 	windowKey := fmt.Sprintf("%s%s:%d", PrefixAPIRateLimit, key, now.Unix()/int64(window.Seconds()))
 
-	pipe := r.client.Pipeline()
-	incrCmd := pipe.Incr(ctx, windowKey)
-	pipe.Expire(ctx, windowKey, window+time.Second)
+	var current int64
+	if ready {
+		pipe := r.client.Pipeline()
+		incrCmd := pipe.Incr(ctx, windowKey)
+		pipe.Expire(ctx, windowKey, window+time.Second)
 
-	_, err := pipe.Exec(ctx)
-	if err != nil {
-		return nil, err
+		if _, err := pipe.Exec(ctx); err != nil {
+			return nil, err
+		}
+		current = incrCmd.Val()
+	} else {
+		current = r.local.incr(windowKey, window+time.Second)
 	}
-
-	current := incrCmd.Val()
 	allowed := current <= limit
 	remaining := limit - current
 	if remaining < 0 {
@@ -1161,43 +1158,19 @@ func (r *RedisClient) ExtendLock(ctx context.Context, lockKey string, lockValue 
 // SystemSettingsCacheTTL is the default TTL for system settings cache
 const SystemSettingsCacheTTL = 5 * time.Minute
 
-// SetSystemSettings caches system settings
+// SetSystemSettings caches system settings.
 func (r *RedisClient) SetSystemSettings(ctx context.Context, settings interface{}) error {
-	if !r.IsReady() {
-		return ErrNotReady
-	}
-
-	data, err := json.Marshal(settings)
-	if err != nil {
-		return err
-	}
-
-	return r.client.Set(ctx, PrefixSystemSettings+"main", data, SystemSettingsCacheTTL).Err()
+	return r.setJSON(ctx, PrefixSystemSettings+"main", settings, SystemSettingsCacheTTL)
 }
 
-// GetSystemSettings retrieves cached system settings
+// GetSystemSettings retrieves cached system settings.
 func (r *RedisClient) GetSystemSettings(ctx context.Context, dest interface{}) error {
-	if !r.IsReady() {
-		return ErrNotReady
-	}
-
-	data, err := r.client.Get(ctx, PrefixSystemSettings+"main").Bytes()
-	if errors.Is(err, redis.Nil) {
-		return ErrCacheMiss
-	}
-	if err != nil {
-		return err
-	}
-
-	return json.Unmarshal(data, dest)
+	return r.getJSON(ctx, PrefixSystemSettings+"main", dest)
 }
 
-// InvalidateSystemSettings removes cached system settings
+// InvalidateSystemSettings removes cached system settings.
 func (r *RedisClient) InvalidateSystemSettings(ctx context.Context) error {
-	if !r.IsReady() {
-		return ErrNotReady
-	}
-	return r.client.Del(ctx, PrefixSystemSettings+"main").Err()
+	return r.del(ctx, PrefixSystemSettings+"main")
 }
 
 // ========================================
@@ -1207,43 +1180,19 @@ func (r *RedisClient) InvalidateSystemSettings(ctx context.Context) error {
 // GlobalSettingsCacheTTL is the default TTL for global settings cache
 const GlobalSettingsCacheTTL = 5 * time.Minute
 
-// SetGlobalSettings caches global nginx settings
+// SetGlobalSettings caches global nginx settings.
 func (r *RedisClient) SetGlobalSettings(ctx context.Context, settings interface{}) error {
-	if !r.IsReady() {
-		return ErrNotReady
-	}
-
-	data, err := json.Marshal(settings)
-	if err != nil {
-		return err
-	}
-
-	return r.client.Set(ctx, PrefixGlobalSettings+"main", data, GlobalSettingsCacheTTL).Err()
+	return r.setJSON(ctx, PrefixGlobalSettings+"main", settings, GlobalSettingsCacheTTL)
 }
 
-// GetGlobalSettings retrieves cached global nginx settings
+// GetGlobalSettings retrieves cached global nginx settings.
 func (r *RedisClient) GetGlobalSettings(ctx context.Context, dest interface{}) error {
-	if !r.IsReady() {
-		return ErrNotReady
-	}
-
-	data, err := r.client.Get(ctx, PrefixGlobalSettings+"main").Bytes()
-	if errors.Is(err, redis.Nil) {
-		return ErrCacheMiss
-	}
-	if err != nil {
-		return err
-	}
-
-	return json.Unmarshal(data, dest)
+	return r.getJSON(ctx, PrefixGlobalSettings+"main", dest)
 }
 
-// InvalidateGlobalSettings removes cached global nginx settings
+// InvalidateGlobalSettings removes cached global nginx settings.
 func (r *RedisClient) InvalidateGlobalSettings(ctx context.Context) error {
-	if !r.IsReady() {
-		return ErrNotReady
-	}
-	return r.client.Del(ctx, PrefixGlobalSettings+"main").Err()
+	return r.del(ctx, PrefixGlobalSettings+"main")
 }
 
 // ========================================
@@ -1253,79 +1202,29 @@ func (r *RedisClient) InvalidateGlobalSettings(ctx context.Context) error {
 // ExploitRulesCacheTTL is the default TTL for exploit rules cache
 const ExploitRulesCacheTTL = 10 * time.Minute
 
-// SetExploitRules caches all exploit blocking rules
+// SetExploitRules caches all exploit blocking rules.
 func (r *RedisClient) SetExploitRules(ctx context.Context, rules interface{}) error {
-	if !r.IsReady() {
-		return ErrNotReady
-	}
-
-	data, err := json.Marshal(rules)
-	if err != nil {
-		return err
-	}
-
-	return r.client.Set(ctx, PrefixExploitRules+"all", data, ExploitRulesCacheTTL).Err()
+	return r.setJSON(ctx, PrefixExploitRules+"all", rules, ExploitRulesCacheTTL)
 }
 
-// GetExploitRules retrieves cached exploit blocking rules
+// GetExploitRules retrieves cached exploit blocking rules.
 func (r *RedisClient) GetExploitRules(ctx context.Context, dest interface{}) error {
-	if !r.IsReady() {
-		return ErrNotReady
-	}
-
-	data, err := r.client.Get(ctx, PrefixExploitRules+"all").Bytes()
-	if errors.Is(err, redis.Nil) {
-		return ErrCacheMiss
-	}
-	if err != nil {
-		return err
-	}
-
-	return json.Unmarshal(data, dest)
+	return r.getJSON(ctx, PrefixExploitRules+"all", dest)
 }
 
-// SetEnabledExploitRules caches only enabled exploit rules (for nginx config generation)
+// SetEnabledExploitRules caches only enabled exploit rules (for nginx config generation).
 func (r *RedisClient) SetEnabledExploitRules(ctx context.Context, rules interface{}) error {
-	if !r.IsReady() {
-		return ErrNotReady
-	}
-
-	data, err := json.Marshal(rules)
-	if err != nil {
-		return err
-	}
-
-	return r.client.Set(ctx, PrefixExploitRules+"enabled", data, ExploitRulesCacheTTL).Err()
+	return r.setJSON(ctx, PrefixExploitRules+"enabled", rules, ExploitRulesCacheTTL)
 }
 
-// GetEnabledExploitRules retrieves cached enabled exploit rules
+// GetEnabledExploitRules retrieves cached enabled exploit rules.
 func (r *RedisClient) GetEnabledExploitRules(ctx context.Context, dest interface{}) error {
-	if !r.IsReady() {
-		return ErrNotReady
-	}
-
-	data, err := r.client.Get(ctx, PrefixExploitRules+"enabled").Bytes()
-	if errors.Is(err, redis.Nil) {
-		return ErrCacheMiss
-	}
-	if err != nil {
-		return err
-	}
-
-	return json.Unmarshal(data, dest)
+	return r.getJSON(ctx, PrefixExploitRules+"enabled", dest)
 }
 
-// InvalidateExploitRules removes all cached exploit rules
+// InvalidateExploitRules removes all cached exploit rules.
 func (r *RedisClient) InvalidateExploitRules(ctx context.Context) error {
-	if !r.IsReady() {
-		return ErrNotReady
-	}
-
-	keys := []string{
-		PrefixExploitRules + "all",
-		PrefixExploitRules + "enabled",
-	}
-	return r.client.Del(ctx, keys...).Err()
+	return r.del(ctx, PrefixExploitRules+"all", PrefixExploitRules+"enabled")
 }
 
 // ========================================
@@ -1335,89 +1234,32 @@ func (r *RedisClient) InvalidateExploitRules(ctx context.Context) error {
 // WAFExclusionsCacheTTL is the default TTL for WAF exclusions cache
 const WAFExclusionsCacheTTL = 10 * time.Minute
 
-// SetGlobalExploitExclusions caches global exploit rule exclusions
+// SetGlobalExploitExclusions caches global exploit rule exclusions.
 func (r *RedisClient) SetGlobalExploitExclusions(ctx context.Context, exclusions interface{}) error {
-	if !r.IsReady() {
-		return ErrNotReady
-	}
-
-	data, err := json.Marshal(exclusions)
-	if err != nil {
-		return err
-	}
-
-	return r.client.Set(ctx, PrefixWAFExclusions+"global", data, WAFExclusionsCacheTTL).Err()
+	return r.setJSON(ctx, PrefixWAFExclusions+"global", exclusions, WAFExclusionsCacheTTL)
 }
 
-// GetGlobalExploitExclusions retrieves cached global exploit rule exclusions
+// GetGlobalExploitExclusions retrieves cached global exploit rule exclusions.
 func (r *RedisClient) GetGlobalExploitExclusions(ctx context.Context, dest interface{}) error {
-	if !r.IsReady() {
-		return ErrNotReady
-	}
-
-	data, err := r.client.Get(ctx, PrefixWAFExclusions+"global").Bytes()
-	if errors.Is(err, redis.Nil) {
-		return ErrCacheMiss
-	}
-	if err != nil {
-		return err
-	}
-
-	return json.Unmarshal(data, dest)
+	return r.getJSON(ctx, PrefixWAFExclusions+"global", dest)
 }
 
-// SetHostExploitExclusions caches per-host exploit rule exclusions
+// SetHostExploitExclusions caches per-host exploit rule exclusions.
 func (r *RedisClient) SetHostExploitExclusions(ctx context.Context, hostID string, exclusions interface{}) error {
-	if !r.IsReady() {
-		return ErrNotReady
-	}
-
-	data, err := json.Marshal(exclusions)
-	if err != nil {
-		return err
-	}
-
-	return r.client.Set(ctx, PrefixWAFExclusions+"host:"+hostID, data, WAFExclusionsCacheTTL).Err()
+	return r.setJSON(ctx, PrefixWAFExclusions+"host:"+hostID, exclusions, WAFExclusionsCacheTTL)
 }
 
-// GetHostExploitExclusions retrieves cached per-host exploit rule exclusions
+// GetHostExploitExclusions retrieves cached per-host exploit rule exclusions.
 func (r *RedisClient) GetHostExploitExclusions(ctx context.Context, hostID string, dest interface{}) error {
-	if !r.IsReady() {
-		return ErrNotReady
-	}
-
-	data, err := r.client.Get(ctx, PrefixWAFExclusions+"host:"+hostID).Bytes()
-	if errors.Is(err, redis.Nil) {
-		return ErrCacheMiss
-	}
-	if err != nil {
-		return err
-	}
-
-	return json.Unmarshal(data, dest)
+	return r.getJSON(ctx, PrefixWAFExclusions+"host:"+hostID, dest)
 }
 
-// InvalidateHostExploitExclusions removes cached per-host exploit exclusions
+// InvalidateHostExploitExclusions removes cached per-host exploit exclusions.
 func (r *RedisClient) InvalidateHostExploitExclusions(ctx context.Context, hostID string) error {
-	if !r.IsReady() {
-		return ErrNotReady
-	}
-	return r.client.Del(ctx, PrefixWAFExclusions+"host:"+hostID).Err()
+	return r.del(ctx, PrefixWAFExclusions+"host:"+hostID)
 }
 
-// InvalidateAllExploitExclusions removes all cached exploit exclusions
+// InvalidateAllExploitExclusions removes all cached exploit exclusions.
 func (r *RedisClient) InvalidateAllExploitExclusions(ctx context.Context) error {
-	if !r.IsReady() {
-		return ErrNotReady
-	}
-
-	keys, err := r.client.Keys(ctx, PrefixWAFExclusions+"*").Result()
-	if err != nil {
-		return err
-	}
-
-	if len(keys) > 0 {
-		return r.client.Del(ctx, keys...).Err()
-	}
-	return nil
+	return r.delPrefix(ctx, PrefixWAFExclusions)
 }

@@ -165,7 +165,7 @@ Cloudflare나 다른 프록시 뒤에서 운영한다면 설정 → 신뢰 프�
 |------|------|
 | **Nginx 1.30.4** | HTTP/3 & QUIC을 지원하는 고성능 HTTP 및 stream 리버스 프록시 코어 |
 | **TimescaleDB (PostgreSQL 17)** | 로그 자동 압축을 위한 시계열 최적화 데이터베이스 |
-| **Valkey 9** | Redis 호환 고속 캐싱 및 세션 관리 (선택) |
+| **Valkey 9** | Redis 호환 고속 캐싱 및 세션 관리 (선택 — 없으면 API가 크기 제한이 있는 자체 메모리에 캐시) |
 | **Go 1.26 (Echo v4)** | 효율적인 리소스 관리와 동시성 처리 백엔드 API |
 | **React 19 & TypeScript 6** | 타입 안전성과 컴포넌트 기반의 모던 UI (Vite 8 + Tailwind 4) |
 | **ModSecurity v3.0.15** | OWASP Core Rule Set v4.26.0 기반 웹 애플리케이션 방화벽 |
@@ -306,8 +306,10 @@ https://localhost:81/api/docs
 | `UI_PORT` | 관리 패널 호스트 포트 | `81` |
 | `NGINX_HTTP_PORT` / `NGINX_HTTPS_PORT` | nginx 리슨 포트 (host 네트워크 모드; 80/443이 이미 사용 중일 때 변경, 예: Synology DSM) | `80` / `443` |
 | `API_HOST_PORT` | nginx가 API에 접근하는 루프백 호스트 포트 (다른 서비스와 충돌 금지) | `9080` |
-| `API_RATE_LIMIT_PER_MINUTE` | IP당 분당 API 요청 한도; `0` = 끔; Valkey 필요 | `600` |
-| `AUTH_RATE_LIMIT_PER_MINUTE` | 로그인 엔드포인트 전용 IP당 분당 한도; `0` = 끔; Valkey 필요 | `100` |
+| `API_RATE_LIMIT_PER_MINUTE` | IP당 분당 API 요청 한도; `0` = 끔; Valkey에서 세며, Valkey가 없으면 API 메모리에서 셈 | `600` |
+| `AUTH_RATE_LIMIT_PER_MINUTE` | 로그인 엔드포인트 전용 IP당 분당 한도; `0` = 끔; 세는 방식은 위와 같음 | `100` |
+| `REDIS_URL` | API가 캐시로 쓰는 Valkey/Redis. 비워 두면 Valkey 없이 동작하며, 캐시와 rate limit 카운터를 API 프로세스 메모리에 둠 (NPG처럼 API 컨테이너가 하나일 때) | `redis://valkey:6379/0` |
+| `NPG_LOCAL_CACHE_MAX_MB` | Valkey가 연결되지 않은 동안 쓰는 자체 메모리 캐시의 상한; 미설정 = API 메모리 한도(cgroup, `GOMEMLIMIT`, RAM 중 가장 작은 값)의 1/32을 4–64 MiB 범위로; `0` = 끔 | 자동 |
 | `TRUSTED_PROXY_CIDR` | API가 `X-Forwarded-For` 홉으로 신뢰할 CIDR(쉼표 구분); 미설정 = 루프백/링크로컬/사설망 전부 신뢰 | (미설정) |
 
 ---

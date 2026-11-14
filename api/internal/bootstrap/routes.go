@@ -205,12 +205,18 @@ func registerHealth(e *echo.Echo, c *Container) {
 			dbStatus = config.StatusError
 			isHealthy = false
 		}
+		// "local" means the in-process cache is serving because REDIS_URL is
+		// not set; a configured Redis that has not connected yet stays
+		// "connecting" even though the in-process cache covers for it.
 		cacheStatus := config.StatusDisabled
 		if c.Cache != nil {
-			if c.Cache.IsReady() {
+			switch {
+			case c.Cache.IsReady():
 				cacheStatus = config.StatusOK
-			} else {
+			case c.Cache.RedisConfigured():
 				cacheStatus = config.StatusConnecting
+			case c.Cache.Local() != nil:
+				cacheStatus = config.StatusLocal
 			}
 		}
 
