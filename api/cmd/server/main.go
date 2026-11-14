@@ -13,6 +13,7 @@ import (
 
 	"nginx-proxy-guard/internal/bootstrap"
 	"nginx-proxy-guard/internal/config"
+	"nginx-proxy-guard/internal/password"
 )
 
 func main() {
@@ -21,6 +22,13 @@ func main() {
 		case "reset-password":
 			os.Exit(runResetPasswordCommand(os.Args[2:]))
 		}
+	}
+
+	// Before anything can hash or check a password. A pepper that is set but
+	// unusable stops the server: running without it would let accounts whose
+	// hashes need it fail to sign in, and new hashes be written unpeppered.
+	if err := password.ConfigureFromEnv(); err != nil {
+		log.Fatalf("Password pepper: %v", err)
 	}
 
 	cfg := config.Load()

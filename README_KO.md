@@ -236,7 +236,7 @@ docker compose exec api ./server reset-password
 # 특정 사용자 지정
 docker compose exec api ./server reset-password --username alice
 
-# 임의 생성 대신 직접 비밀번호 지정 (8자 이상, 72바이트 이하)
+# 임의 생성 대신 직접 비밀번호 지정 (8자 이상; pepper 미설정 시 72바이트 이하)
 docker compose exec api ./server reset-password --username alice --password 'S3cure-Pwd!'
 
 # TOTP secret까지 같이 초기화하고 2FA 비활성화
@@ -244,12 +244,29 @@ docker compose exec api ./server reset-password --clear-2fa
 ```
 
 성공 시 적용되는 사항:
-- 새 bcrypt `password_hash` 기록
+- 새 bcrypt `password_hash` 기록 (`NPG_PASSWORD_PEPPER` 설정 시 pepper 적용 — 서버와 같은 pepper로 실행하세요)
 - 해당 사용자의 실패 `login_attempts` 정리 (IP 락아웃 회피)
 - 해당 사용자의 모든 활성 `auth_session` 무효화 — 정상 사용자도, 토큰을 탈취한 누군가도 새 비밀번호로 다시 로그인해야 함
 - `system_logs`에 `Password reset via CLI` 감사 항목 기록 (`source=audit`)
 
 출력된 비밀번호로 로그인한 뒤, **계정 설정**에서 즉시 본인이 원하는 비밀번호로 다시 변경하세요.
+
+### 비밀번호 pepper (선택)
+
+비밀번호는 해시마다 salt가 들어가는 bcrypt로 저장됩니다. `NPG_PASSWORD_PEPPER`를 설정하면 pepper가 추가됩니다. pepper는 DB가 아닌 api 컨테이너 환경에만 있는 비밀 값으로, 모든 해시에 섞입니다(비밀번호를 pepper로 HMAC-SHA256한 뒤 bcrypt, `$npgp1$` 접두사로 저장). 설정해 두면 DB·덤프·디스크 스냅샷이 유출되어도 pepper 없이는 비밀번호 하나도 오프라인으로 추측해 볼 수 없습니다.
+
+```bash
+# 무작위 pepper(32자 이상)를 .env에 추가합니다. 쉘에서 실행하세요.
+# .env 파일은 $(...)를 실행하지 않으므로 명령을 그대로 붙여 넣으면 안 됩니다.
+echo "NPG_PASSWORD_PEPPER=$(openssl rand -hex 32)" >> .env
+```
+
+- **켜기:** 마이그레이션이 필요 없습니다. 기존 해시는 그대로 동작하고, 각 계정이 다음에 로그인할 때 pepper 해시로 다시 저장됩니다. 새로 만들거나 바꾼 비밀번호는 바로 pepper가 적용됩니다. pepper를 쓰면 bcrypt의 72바이트 길이 제한도 없어집니다.
+- **안전하게, 계속 보관하세요.** pepper를 잃어버리거나 바꾸면 그 pepper로 저장된 계정은 모두 로그인할 수 없고, API가 이를 알리는 에러를 한 번 기록합니다. 복구는 원하는 pepper를 설정한 상태에서 `docker compose exec api ./server reset-password`를 실행하면 됩니다. 변수를 지워도 이미 pepper로 옮겨진 계정의 pepper가 꺼지지는 않습니다.
+- **secret 파일:** `NPG_PASSWORD_PEPPER_FILE=/run/secrets/...`로 마운트한 파일에서 값을 읽을 수 있습니다(끝의 줄바꿈은 무시). 두 방식을 동시에 설정하면 에러입니다.
+- **교체:** 새 값을 `NPG_PASSWORD_PEPPER`에, 기존 값을 `NPG_PASSWORD_PEPPER_PREVIOUS`(또는 `_PREVIOUS_FILE`)에 넣으세요. 각 계정이 다음 로그인 때 새 pepper로 옮겨지며, 모두 로그인한 뒤 이전 값을 지우면 됩니다.
+- **백업**에는 사용자 계정이 들어 있지 않아서 pepper와 상관없이 복원됩니다.
+- 32자보다 짧은 pepper나, 현재 값 없이 이전 값만 설정한 경우 API가 해당 변수를 알려 주며 시작을 멈춥니다.
 
 ### 업그레이드 안내
 
@@ -309,6 +326,8 @@ https://localhost:81/api/docs
 | `API_RATE_LIMIT_PER_MINUTE` | IP당 분당 API 요청 한도; `0` = 끔; Valkey 필요 | `600` |
 | `AUTH_RATE_LIMIT_PER_MINUTE` | 로그인 엔드포인트 전용 IP당 분당 한도; `0` = 끔; Valkey 필요 | `100` |
 | `TRUSTED_PROXY_CIDR` | API가 `X-Forwarded-For` 홉으로 신뢰할 CIDR(쉼표 구분); 미설정 = 루프백/링크로컬/사설망 전부 신뢰 | (미설정) |
+| `NPG_PASSWORD_PEPPER` / `NPG_PASSWORD_PEPPER_FILE` | 모든 비밀번호 해시에 섞는 선택적 비밀 값(32자 이상). [비밀번호 pepper](#비밀번호-pepper-선택) 참조. 한 번 설정하면 잃어버리면 안 됨 | (미설정 = 일반 bcrypt) |
+| `NPG_PASSWORD_PEPPER_PREVIOUS` / `NPG_PASSWORD_PEPPER_PREVIOUS_FILE` | 교체 중인 이전 pepper. 각 계정이 다음 로그인 때 현재 pepper로 옮겨짐 | (미설정) |
 
 ---
 
