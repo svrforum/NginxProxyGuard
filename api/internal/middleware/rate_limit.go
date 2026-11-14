@@ -172,8 +172,8 @@ func APIRateLimit(redisCache *cache.RedisClient, config APIRateLimitConfig) echo
 				return next(c)
 			}
 
-			// Skip if cache is not available
-			if redisCache == nil || !redisCache.IsReady() {
+			// Skip if neither Redis nor the in-process cache can count
+			if redisCache == nil || !redisCache.Available() {
 				return next(c)
 			}
 

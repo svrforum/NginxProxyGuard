@@ -99,7 +99,11 @@ services:
       TZ: ${TZ:-UTC}
       PORT: "8080"
       DATABASE_URL: postgres://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@db:5432/${DB_NAME:-nginx_proxy_guard}?sslmode=disable
-      REDIS_URL: redis://valkey:6379/0
+      # Set REDIS_URL= (empty) in .env to run without Valkey; the API then
+      # caches in its own memory, capped by NPG_LOCAL_CACHE_MAX_MB (unset =
+      # sized from the container's memory limit, 0 = off).
+      REDIS_URL: ${REDIS_URL-redis://valkey:6379/0}
+      NPG_LOCAL_CACHE_MAX_MB: ${NPG_LOCAL_CACHE_MAX_MB:-}
       JWT_SECRET: ${JWT_SECRET:-change-this-in-production-use-openssl-rand-hex-32}
       ENVIRONMENT: ${ENVIRONMENT:-production}
       # API rate limiting (per client IP per minute; needs Valkey). 0 = off.

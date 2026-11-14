@@ -165,7 +165,7 @@ Also since June: saved log filter presets (v2.33.0), a per-IP activity view for 
 |------------|---------|
 | **Nginx 1.30.4** | High-performance HTTP and stream reverse proxy core with HTTP/3 & QUIC support |
 | **TimescaleDB (PostgreSQL 17)** | Time-series-optimized database with automatic log compression |
-| **Valkey 9** | Redis-compatible high-speed caching and session management (optional) |
+| **Valkey 9** | Redis-compatible high-speed caching and session management (optional — without it the API caches in its own bounded memory) |
 | **Go 1.26 (Echo v4)** | Backend API with efficient resource management and concurrency |
 | **React 19 & TypeScript 6** | Type-safe, component-based modern UI (Vite 8 + Tailwind 4) |
 | **ModSecurity v3.0.15** | Web Application Firewall with OWASP Core Rule Set v4.26.0 |
@@ -306,8 +306,10 @@ The raw OpenAPI 3.0 spec is at `https://localhost:81/api/docs/swagger.yaml`.
 | `UI_PORT` | Admin panel host port | `81` |
 | `NGINX_HTTP_PORT` / `NGINX_HTTPS_PORT` | nginx listen ports (host network mode; change when 80/443 are already taken, e.g. Synology DSM) | `80` / `443` |
 | `API_HOST_PORT` | Loopback host port nginx uses to reach the API (must not collide with another service) | `9080` |
-| `API_RATE_LIMIT_PER_MINUTE` | Per-IP API request budget per minute; `0` = off; needs Valkey | `600` |
-| `AUTH_RATE_LIMIT_PER_MINUTE` | Separate per-IP budget for the login endpoints; `0` = off; needs Valkey | `100` |
+| `API_RATE_LIMIT_PER_MINUTE` | Per-IP API request budget per minute; `0` = off; counted in Valkey, or in the API's memory without it | `600` |
+| `AUTH_RATE_LIMIT_PER_MINUTE` | Separate per-IP budget for the login endpoints; `0` = off; counted like the one above | `100` |
+| `REDIS_URL` | Valkey/Redis the API caches in. Set it empty to run without Valkey: caches and rate-limit counters then live in the API process (one API container, as NPG runs) | `redis://valkey:6379/0` |
+| `NPG_LOCAL_CACHE_MAX_MB` | Ceiling of that in-process cache, used whenever Valkey is not connected; unset = 1/32 of the API's memory limit (cgroup, `GOMEMLIMIT` or RAM, whichever is smallest) kept within 4–64 MiB; `0` = off | auto |
 | `TRUSTED_PROXY_CIDR` | Comma-separated CIDRs the API trusts as `X-Forwarded-For` hops; unset = trust loopback/link-local/private ranges | (unset) |
 
 ---

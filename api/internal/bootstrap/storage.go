@@ -28,10 +28,19 @@ func InitDB(cfg *config.Config) (*database.DB, error) {
 	return db, nil
 }
 
-// InitCache attempts to initialize the Valkey/Redis cache client.
-// Returns nil on failure — callers must tolerate a nil cache (graceful degradation).
+// InitCache attempts to initialize the Valkey/Redis cache client, backed by an
+// in-process cache that serves until Redis connects (always, without
+// REDIS_URL). Returns nil on failure — callers must tolerate a nil cache
+// (graceful degradation).
 func InitCache(cfg *config.Config) *cache.RedisClient {
-	redisCache, err := cache.NewRedisClient(cfg.RedisURL)
+	budget, why := cache.LocalCacheBudget(cfg.LocalCacheMaxMB)
+	local := cache.NewLocalCache(budget)
+	if local != nil {
+		log.Printf("[Cache] In-process cache: up to %d MiB (%s)", budget>>20, why)
+	} else {
+		log.Printf("[Cache] In-process cache off (%s)", why)
+	}
+	redisCache, err := cache.NewRedisClient(cfg.RedisURL, local)
 	if err != nil {
 		log.Printf("Warning: Failed to initialize Redis cache: %v", err)
 		return nil

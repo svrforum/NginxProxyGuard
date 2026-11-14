@@ -25,6 +25,11 @@ type Config struct {
 	DBMaxOpenConns  int
 	DBMaxIdleConns  int
 
+	// LocalCacheMaxMB is NPG_LOCAL_CACHE_MAX_MB, the in-process cache size
+	// used while Valkey/Redis is absent: -1 (unset) sizes it from the memory
+	// limit, 0 turns it off.
+	LocalCacheMaxMB int
+
 	// Raw log archive (service.RawLogArchiver). The directory is fixed by the
 	// operator's mount, never by the database: it is where the archive share
 	// is bound inside the API container, and NPG never creates it — a missing
@@ -53,6 +58,7 @@ func Load() *Config {
 		BackupPath:      getEnv("BACKUP_PATH", "/data/backups"),
 		DBMaxOpenConns:  getEnvInt("NPG_DB_MAX_OPEN", 80),
 		DBMaxIdleConns:  getEnvInt("NPG_DB_MAX_IDLE", 20),
+		LocalCacheMaxMB: getEnvNonNegativeInt("NPG_LOCAL_CACHE_MAX_MB", -1),
 
 		RawLogArchiveDir:    getEnv("NPG_RAW_LOG_ARCHIVE_DIR", "/archive"),
 		RawLogArchiveSettle: getEnvDuration("NPG_RAW_LOG_ARCHIVE_SETTLE", 10*time.Minute),
@@ -89,6 +95,16 @@ func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
 		return defaultValue
 	}
 	return d
+}
+
+// getEnvNonNegativeInt is getEnvInt for settings where 0 is meaningful.
+func getEnvNonNegativeInt(key string, defaultValue int) int {
+	if value := os.Getenv(key); value != "" {
+		if n, err := strconv.Atoi(value); err == nil && n >= 0 {
+			return n
+		}
+	}
+	return defaultValue
 }
 
 func getEnvInt(key string, defaultValue int) int {
