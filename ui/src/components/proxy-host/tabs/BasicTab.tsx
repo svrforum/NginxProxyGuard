@@ -33,7 +33,7 @@ interface BasicTabFullProps {
 }
 
 // DDNS only supports providers whose A record can be updated programmatically.
-const DDNS_SUPPORTED_PROVIDER_TYPES = ['cloudflare', 'duckdns', 'dynu']
+const DDNS_SUPPORTED_PROVIDER_TYPES = ['cloudflare', 'duckdns', 'dynu', 'infomaniak']
 
 export function BasicTabContent({
   formData,

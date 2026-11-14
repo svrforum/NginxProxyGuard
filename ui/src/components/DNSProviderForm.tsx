@@ -12,7 +12,7 @@ interface DNSProviderFormProps {
   onSuccess: () => void
 }
 
-type ProviderType = 'cloudflare' | 'route53' | 'duckdns' | 'dynu' | 'ionos' | 'manual'
+type ProviderType = 'cloudflare' | 'route53' | 'duckdns' | 'dynu' | 'infomaniak' | 'ionos' | 'manual'
 
 export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSProviderFormProps) {
   const { t } = useTranslation(['certificates', 'common'])
@@ -46,6 +46,9 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
 
   // Dynu credentials
   const [dynuApiKey, setDynuApiKey] = useState('')
+
+  const [infomaniakUsername, setInfomaniakUsername] = useState('')
+  const [infomaniakPassword, setInfomaniakPassword] = useState('')
 
   // IONOS credentials
   const [ionosKeyPrefix, setIonosKeyPrefix] = useState('')
@@ -87,6 +90,9 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
       const creds: Record<string, string> = {}
       if (dynuApiKey) creds.api_key = dynuApiKey
       return creds
+    }
+    if (providerType === 'infomaniak') {
+      return { username: infomaniakUsername, password: infomaniakPassword }
     }
     if (providerType === 'ionos') {
       const creds: Record<string, string> = {}
@@ -134,7 +140,7 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
       name,
       provider_type: providerType,
       credentials: buildCredentials(),
-      is_default: isDefault,
+      is_default: providerType === 'infomaniak' ? false : isDefault,
     }
 
     try {
@@ -165,7 +171,7 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
       // Only include credentials if they were modified
       const data: Partial<CreateDNSProviderRequest> = {
         name: name.trim(),
-        is_default: isDefault,
+        is_default: providerType === 'infomaniak' ? false : isDefault,
       }
       if (credentialsModified) {
         data.credentials = buildCredentials()
@@ -176,7 +182,7 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
         name: name.trim(),
         provider_type: providerType,
         credentials: buildCredentials(),
-        is_default: isDefault,
+        is_default: providerType === 'infomaniak' ? false : isDefault,
       }
       createMutation.mutate(data)
     }
@@ -269,6 +275,7 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
               <option value="route53">AWS Route 53</option>
               <option value="duckdns">DuckDNS</option>
               <option value="dynu">Dynu</option>
+              <option value="infomaniak">Infomaniak (DynDNS)</option>
               <option value="ionos">IONOS</option>
               <option value="manual">{t('dnsProviders.types.manual')}</option>
             </select>
@@ -519,6 +526,32 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
             </div>
           )}
 
+          {providerType === 'infomaniak' && (
+            <div className="space-y-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/40 p-4">
+              <h3 className="text-sm font-semibold">{t('dnsProviders.form.infomaniak.title')}</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{t('dnsProviders.form.infomaniak.help')}</p>
+              {hasExistingCredentials && !credentialsModified && (
+                <p className="text-xs text-blue-600 dark:text-blue-400">{t('dnsProviders.form.credentialsConfigured')}</p>
+              )}
+              <label className="block text-sm">
+                {t('dnsProviders.form.infomaniak.username')}
+                <input type="text" autoComplete="off" value={infomaniakUsername}
+                  onChange={(e) => { setInfomaniakUsername(e.target.value); setCredentialsModified(true) }}
+                  required={!hasExistingCredentials || credentialsModified}
+                  placeholder={hasExistingCredentials ? '••••••••' : ''}
+                  className="mt-2 w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 bg-white dark:bg-slate-700 dark:text-white" />
+              </label>
+              <label className="block text-sm">
+                {t('dnsProviders.form.infomaniak.password')}
+                <input type="password" autoComplete="new-password" value={infomaniakPassword}
+                  onChange={(e) => { setInfomaniakPassword(e.target.value); setCredentialsModified(true) }}
+                  required={!hasExistingCredentials || credentialsModified}
+                  placeholder={hasExistingCredentials ? '••••••••' : ''}
+                  className="mt-2 w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 bg-white dark:bg-slate-700 dark:text-white" />
+              </label>
+            </div>
+          )}
+
           {/* IONOS Credentials */}
           {providerType === 'ionos' && (
             <div className="space-y-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/40 p-4">
@@ -592,7 +625,7 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
           )}
 
           {/* Is Default Toggle */}
-          <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-700/50 rounded-xl border border-transparent dark:border-slate-700">
+          {providerType !== 'infomaniak' && <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-700/50 rounded-xl border border-transparent dark:border-slate-700">
             <div>
               <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('dnsProviders.form.setDefault')}</h4>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('dnsProviders.form.setDefaultDesc')}</p>
@@ -608,7 +641,7 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
                   }`}
               />
             </button>
-          </div>
+          </div>}
 
           {/* Actions */}
           <div className="flex justify-between pt-4 border-t border-slate-200 dark:border-slate-700">

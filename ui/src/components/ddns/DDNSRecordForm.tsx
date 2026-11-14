@@ -15,7 +15,7 @@ interface DDNSRecordFormProps {
 }
 
 // DDNS only supports providers whose A record can be updated programmatically.
-const SUPPORTED_PROVIDER_TYPES: DNSProvider['provider_type'][] = ['cloudflare', 'duckdns']
+const SUPPORTED_PROVIDER_TYPES: DNSProvider['provider_type'][] = ['cloudflare', 'duckdns', 'dynu', 'infomaniak']
 
 export default function DDNSRecordForm({ record, onClose, onSuccess }: DDNSRecordFormProps) {
   const { t } = useTranslation(['ddns', 'common'])
