@@ -13563,7 +13563,7 @@ components:
           type: string
         provider_type:
           type: string
-          enum: [cloudflare, route53, duckdns, dynu, ionos, manual]
+          enum: [cloudflare, route53, duckdns, dynu, ionos, ovh, manual]
         is_default:
           type: boolean
         has_credentials:
@@ -13590,7 +13590,7 @@ components:
           type: string
         provider_type:
           type: string
-          enum: [cloudflare, route53, duckdns, dynu, ionos, manual]
+          enum: [cloudflare, route53, duckdns, dynu, ionos, ovh, manual]
         credentials:
           type: object
           description: >-
@@ -13600,6 +13600,8 @@ components:
             credential chain — environment, shared config files, ECS task role, EC2
             instance role), optional region and hosted_zone_id. duckdns: token. dynu: api_key. ionos: api_key_prefix and
             api_key (IONOS public prefix and secret; sent to IONOS as prefix.secret).
+            ovh: application_key, application_secret and consumer_key, optional endpoint
+            (ovh-eu, ovh-ca or ovh-us; default ovh-eu).
             manual: none required.
         is_default:
           type: boolean

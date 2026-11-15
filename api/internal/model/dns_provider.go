@@ -3,6 +3,7 @@ package model
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 )
@@ -15,6 +16,7 @@ const (
 	DNSProviderDynu       = "dynu"
 	DNSProviderManual     = "manual"
 	DNSProviderIonos      = "ionos"
+	DNSProviderOVH        = "ovh"
 )
 
 // DNSProvider represents a DNS provider configuration for ACME DNS-01 challenges
@@ -92,6 +94,41 @@ type DynuCredentials struct {
 	APIKey string `json:"api_key"` // Dynu API key
 }
 
+// OVHCredentials holds an OVHcloud API application key, its secret and the
+// consumer key, as created on <endpoint>/createToken (certbot's
+// dns_ovh_application_key, dns_ovh_application_secret, dns_ovh_consumer_key).
+// Endpoint is the go-ovh name of the API region; empty means ovh-eu.
+type OVHCredentials struct {
+	Endpoint          string `json:"endpoint,omitempty"`
+	ApplicationKey    string `json:"application_key"`
+	ApplicationSecret string `json:"application_secret"`
+	ConsumerKey       string `json:"consumer_key"`
+}
+
+// OVHEndpoints are the API regions accepted for endpoint.
+var OVHEndpoints = []string{"ovh-eu", "ovh-ca", "ovh-us"}
+
+// APIEndpoint returns the endpoint sent to lego, ovh-eu when none is set.
+func (c OVHCredentials) APIEndpoint() string {
+	if e := strings.TrimSpace(c.Endpoint); e != "" {
+		return e
+	}
+	return "ovh-eu"
+}
+
+// Validate requires the three keys and a known endpoint. lego refuses a
+// missing key only when a certificate is issued; here it is a 400 on create
+// and update.
+func (c OVHCredentials) Validate() error {
+	if strings.TrimSpace(c.ApplicationKey) == "" || strings.TrimSpace(c.ApplicationSecret) == "" || strings.TrimSpace(c.ConsumerKey) == "" {
+		return fmt.Errorf("%w: ovh credentials need application_key, application_secret and consumer_key", ErrInvalidCredentials)
+	}
+	if !slices.Contains(OVHEndpoints, c.APIEndpoint()) {
+		return fmt.Errorf("%w: ovh endpoint %q is not one of %s", ErrInvalidCredentials, c.Endpoint, strings.Join(OVHEndpoints, ", "))
+	}
+	return nil
+}
+
 // IonosCredentials holds the credential pair IONOS hands out: an API
 // key prefix, the public identifier, and the secret key that goes with
 // it. lego carries them joined by a dot as one value in the X-Api-Key
@@ -119,7 +156,7 @@ func (c IonosCredentials) Normalized() IonosCredentials {
 // CreateDNSProviderRequest is the request body for creating a DNS provider
 type CreateDNSProviderRequest struct {
 	Name         string          `json:"name" validate:"required"`
-	ProviderType string          `json:"provider_type" validate:"required,oneof=cloudflare route53 duckdns dynu manual ionos"`
+	ProviderType string          `json:"provider_type" validate:"required,oneof=cloudflare route53 duckdns dynu manual ionos ovh"`
 	Credentials  json.RawMessage `json:"credentials" validate:"required"`
 	IsDefault    bool            `json:"is_default"`
 }
@@ -199,6 +236,14 @@ func (p *DNSProvider) ValidateCredentials() error {
 		}
 		if creds.APIKeyPrefix == "" || creds.APIKey == "" {
 			return ErrInvalidCredentials
+		}
+	case DNSProviderOVH:
+		var creds OVHCredentials
+		if err := json.Unmarshal(p.Credentials, &creds); err != nil {
+			return err
+		}
+		if err := creds.Validate(); err != nil {
+			return err
 		}
 	case DNSProviderManual:
 		// No credentials needed for manual DNS

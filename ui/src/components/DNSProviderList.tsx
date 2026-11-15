@@ -28,6 +28,10 @@ const ACCENT: Record<DNSProvider['provider_type'], { icon: string; chip: string 
     icon: 'bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-300',
     chip: 'bg-violet-50 text-violet-700 dark:bg-violet-900/20 dark:text-violet-300',
   },
+  ovh: {
+    icon: 'bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-300',
+    chip: 'bg-sky-50 text-sky-700 dark:bg-sky-900/20 dark:text-sky-300',
+  },
   manual: {
     icon: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
     chip: 'bg-slate-100 text-slate-600 dark:bg-slate-700/50 dark:text-slate-300',

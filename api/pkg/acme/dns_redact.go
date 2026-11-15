@@ -33,15 +33,18 @@ import (
 
 // dnsProviderSecrets lists the credential values of a DNS provider: the
 // Cloudflare token and global API key, the DuckDNS token, the Route53 secret
-// key, the Dynu API key and the IONOS secret key (api_key). Identifiers that
-// are not credentials — an e-mail address, a zone ID, a region, an access key
-// ID, an IONOS key prefix — stay readable.
+// key, the Dynu API key, the IONOS secret key (api_key) and the OVHcloud
+// application secret and consumer key. Identifiers that are not credentials —
+// an e-mail address, a zone ID, a region, an access key ID, an IONOS key
+// prefix, an OVHcloud application key — stay readable.
 func dnsProviderSecrets(provider *model.DNSProvider) *redact.Secrets {
 	var creds struct {
 		APIToken        string `json:"api_token"`
 		APIKey          string `json:"api_key"`
 		Token           string `json:"token"`
 		SecretAccessKey string `json:"secret_access_key"`
+		AppSecret       string `json:"application_secret"`
+		ConsumerKey     string `json:"consumer_key"`
 	}
 	if provider != nil {
 		// Credentials that do not parse are refused by createDNSProvider, with
@@ -49,7 +52,7 @@ func dnsProviderSecrets(provider *model.DNSProvider) *redact.Secrets {
 		_ = json.Unmarshal(provider.Credentials, &creds)
 	}
 	secrets := &redact.Secrets{}
-	secrets.Add(creds.APIToken, creds.APIKey, creds.Token, creds.SecretAccessKey)
+	secrets.Add(creds.APIToken, creds.APIKey, creds.Token, creds.SecretAccessKey, creds.AppSecret, creds.ConsumerKey)
 	return secrets
 }
 
