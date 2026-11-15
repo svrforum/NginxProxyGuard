@@ -276,7 +276,10 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
             <select
               value={providerType}
               onChange={(e) => setProviderType(e.target.value as ProviderType)}
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white"
+              // provider_type cannot be changed by an update; the API keeps the
+              // stored type and saves the new type's credentials under it.
+              disabled={isEditing}
+              className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <option value="cloudflare">Cloudflare</option>
               <option value="route53">AWS Route 53</option>
