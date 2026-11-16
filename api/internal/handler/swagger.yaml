@@ -7764,6 +7764,41 @@ paths:
                     format: int64
                   message:
                     type: string
+  /logs/{id}:
+    get:
+      tags: [Logs]
+      summary: Columns of one log row that the list leaves out
+      description: |
+        The log list returns a trimmed set of columns. The log detail view
+        fetches the rest for the row it shows. `created_at` is the row's
+        `created_at` as `GET /logs` returned it; the lookup needs it to find the
+        row's chunk.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: created_at
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: The row's remaining columns
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /logs/autocomplete/hosts:
     get:
       tags: [Logs]
@@ -17428,6 +17463,9 @@ components:
           type: string
         http_x_forwarded_for:
           type: string
+        server_port:
+          type: integer
+          description: Port the request arrived on (nginx $server_port). Absent on rows logged before it was recorded.
         severity:
           type: string
           enum: [debug, info, notice, warn, error, crit, alert, emerg]
@@ -17511,6 +17549,26 @@ components:
           description: >-
             Present for `sort_by=timestamp`: the moment the pages are pinned to.
             Pass it back as the `as_of` query parameter for the next pages.
+    LogDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        request_protocol:
+          type: string
+        http_referer:
+          type: string
+        geo_city:
+          type: string
+        geo_asn:
+          type: string
+        rule_severity:
+          type: string
+        attack_type:
+          type: string
+        server_port:
+          type: integer
     CreateLog:
       type: object
       description: >-
@@ -17577,6 +17635,10 @@ components:
           type: string
         http_x_forwarded_for:
           type: string
+        server_port:
+          type: integer
+          minimum: 1
+          maximum: 65535
         severity:
           type: string
           enum: [debug, info, notice, warn, error, crit, alert, emerg]

@@ -624,6 +624,8 @@ func registerLogRoutes(v1 *echo.Group, h *handler.LogHandler) {
 	g.GET("/autocomplete/countries", echo.WrapHandler(http.HandlerFunc(h.GetDistinctCountries)), logsRead)
 	g.GET("/autocomplete/uris", echo.WrapHandler(http.HandlerFunc(h.GetDistinctURIs)), logsRead)
 	g.GET("/autocomplete/methods", echo.WrapHandler(http.HandlerFunc(h.GetDistinctMethods)), logsRead)
+	// After the static paths above; Echo matches those first either way.
+	g.GET("/:id", h.GetDetail, logsRead)
 }
 
 func registerLogFilterPresetRoutes(v1 *echo.Group, h *handler.LogFilterPresetHandler) {

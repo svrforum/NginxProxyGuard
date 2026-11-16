@@ -49,6 +49,18 @@ export function LogDetailHeader({ log, onClose, onBanClick }: LogDetailHeaderPro
             )}
           </div>
         </div>
+        {log.host && (
+          <div>
+            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">{t('detail.host')}</label>
+            <p className="text-sm text-slate-900 dark:text-white break-all">{log.host}</p>
+          </div>
+        )}
+        {log.log_type === 'access' && (
+          <div>
+            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">{t('detail.port')}</label>
+            <p className="text-sm text-slate-900 dark:text-white font-mono">{log.server_port ?? '-'}</p>
+          </div>
+        )}
       </div>
     </>
   );
@@ -57,7 +69,11 @@ export function LogDetailHeader({ log, onClose, onBanClick }: LogDetailHeaderPro
 // GeoIP section - shared presentation
 export function LogDetailGeoIP({ log }: { log: Log }) {
   const { t } = useTranslation('logs');
-  if (!log.geo_country_code) return null;
+  // nginx writes "--" when GeoIP has no answer, as for a private address. That
+  // is no country, and its characters make no flag.
+  const code = log.geo_country_code;
+  const known = !!code && /^[A-Za-z]{2}$/.test(code);
+  if (!known && !log.geo_city && !log.geo_asn && !log.geo_org) return null;
   return (
     <div className="mb-4 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg">
       <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase mb-2 block">{t('detail.geoLocation')}</label>
@@ -65,14 +81,16 @@ export function LogDetailGeoIP({ log }: { log: Log }) {
         <div>
           <span className="text-xs text-slate-500 dark:text-slate-400">{t('detail.country')}</span>
           <p className="text-sm text-slate-900 dark:text-white flex items-center gap-1">
-            <span className="text-base">
-              {log.geo_country_code
-                .toUpperCase()
-                .split('')
-                .map(char => String.fromCodePoint(127397 + char.charCodeAt(0)))
-                .join('')}
-            </span>
-            {log.geo_country || log.geo_country_code}
+            {known && (
+              <span className="text-base">
+                {code
+                  .toUpperCase()
+                  .split('')
+                  .map(char => String.fromCodePoint(127397 + char.charCodeAt(0)))
+                  .join('')}
+              </span>
+            )}
+            {log.geo_country || (known ? code : '-')}
           </p>
         </div>
         {log.geo_city && (

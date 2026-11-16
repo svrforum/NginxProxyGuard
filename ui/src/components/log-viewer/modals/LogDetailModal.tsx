@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEscapeKey } from '../../../hooks/useEscapeKey';
 import { disableWAFRuleByHost, disableGlobalWAFRule, RuleAlreadyDisabledError } from '../../../api/waf';
 import { banIP, addURIBlockRule } from '../../../api/security';
 import { api } from '../../../api/client';
+import { fetchLogDetail } from '../../../api/logs';
 import type { Log } from '../../../types/log';
 import type { URIMatchType } from '../../../types/security';
 import { RelatedLogsModal } from './RelatedLogsModal';
@@ -30,9 +31,17 @@ interface LogDetailModalProps {
   onRuleDisabled?: () => void;
 }
 
-export function LogDetailModal({ log, onClose, onRuleDisabled }: LogDetailModalProps) {
+export function LogDetailModal({ log: row, onClose, onRuleDisabled }: LogDetailModalProps) {
   const { t } = useTranslation('logs');
   const queryClient = useQueryClient();
+  // The list leaves some columns out (protocol, referer, port, ...); fetch them
+  // for this row and show the row as it is until they arrive (#389).
+  const { data: detail } = useQuery({
+    queryKey: ['logDetail', row.id, row.created_at],
+    queryFn: () => fetchLogDetail(row.id, row.created_at),
+    staleTime: Infinity,
+  });
+  const log = useMemo(() => (detail ? { ...row, ...detail } : row), [row, detail]);
   const [showRelatedLogs, setShowRelatedLogs] = useState(false);
   const [disableReason, setDisableReason] = useState('');
   // Scope of a per-host rule exclusion (#231). Defaults to host so the

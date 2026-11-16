@@ -110,7 +110,7 @@ func (r *LogRepository) Create(ctx context.Context, req *model.CreateLogRequest)
 			severity, error_message,
 			rule_id, rule_message, rule_severity, rule_data, attack_type, action_taken,
 			block_reason, bot_category, exploit_rule,
-			proxy_host_id, raw_log
+			proxy_host_id, raw_log, server_port
 		) VALUES (
 			$1, $2, NULLIF($3, ''), NULLIF($4, '')::inet,
 			NULLIF($5, ''), NULLIF($6, ''), NULLIF($7, ''), NULLIF($8, ''), NULLIF($9, ''),
@@ -121,7 +121,7 @@ func (r *LogRepository) Create(ctx context.Context, req *model.CreateLogRequest)
 			NULLIF($22, '')::log_severity, NULLIF($23, ''),
 			NULLIF($24::bigint, 0), NULLIF($25, ''), NULLIF($26, ''), NULLIF($27, ''), NULLIF($28, ''), NULLIF($29, ''),
 			COALESCE(NULLIF($30, '')::block_reason, 'none'), NULLIF($31, ''), NULLIF($32, ''),
-			NULLIF($33, '')::uuid, NULLIF($34, '')
+			NULLIF($33, '')::uuid, NULLIF($34, ''), NULLIF($35, 0)
 		)
 		RETURNING id, log_type, timestamp, host, client_ip,
 			geo_country, geo_country_code, geo_city, geo_asn, geo_org,
@@ -132,7 +132,7 @@ func (r *LogRepository) Create(ctx context.Context, req *model.CreateLogRequest)
 			severity, error_message,
 			rule_id, rule_message, rule_severity, rule_data, attack_type, action_taken,
 			block_reason, bot_category, exploit_rule,
-			proxy_host_id, raw_log, created_at
+			proxy_host_id, raw_log, created_at, server_port
 	`
 
 	timestamp := req.Timestamp
@@ -156,6 +156,7 @@ func (r *LogRepository) Create(ctx context.Context, req *model.CreateLogRequest)
 	var ruleMessage, ruleSeverity, ruleData, attackType, actionTaken sql.NullString
 	var blockReason, botCategory, exploitRule sql.NullString
 	var proxyHostID, rawLog sql.NullString
+	var serverPort sql.NullInt32
 
 	err := r.db.QueryRowContext(ctx, query,
 		req.LogType, timestamp, req.Host, req.ClientIP,
@@ -168,6 +169,7 @@ func (r *LogRepository) Create(ctx context.Context, req *model.CreateLogRequest)
 		req.RuleID, req.RuleMessage, req.RuleSeverity, req.RuleData, req.AttackType, req.ActionTaken,
 		req.BlockReason, req.BotCategory, req.ExploitRule,
 		req.ProxyHostID, req.RawLog,
+		req.ServerPort,
 	).Scan(
 		&log.ID, &log.LogType, &log.Timestamp, &host, &clientIP,
 		&geoCountry, &geoCountryCode, &geoCity, &geoASN, &geoOrg,
@@ -178,7 +180,7 @@ func (r *LogRepository) Create(ctx context.Context, req *model.CreateLogRequest)
 		&severity, &errorMessage,
 		&ruleID, &ruleMessage, &ruleSeverity, &ruleData, &attackType, &actionTaken,
 		&blockReason, &botCategory, &exploitRule,
-		&proxyHostID, &rawLog, &log.CreatedAt,
+		&proxyHostID, &rawLog, &log.CreatedAt, &serverPort,
 	)
 
 	if err != nil {
@@ -287,6 +289,10 @@ func (r *LogRepository) Create(ctx context.Context, req *model.CreateLogRequest)
 	}
 	if rawLog.Valid {
 		log.RawLog = &rawLog.String
+	}
+	if serverPort.Valid {
+		port := int(serverPort.Int32)
+		log.ServerPort = &port
 	}
 
 	return &log, nil

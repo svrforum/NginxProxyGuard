@@ -56,6 +56,8 @@ export interface Log {
   http_referer?: string;
   http_user_agent?: string;
   http_x_forwarded_for?: string;
+  // Port the request arrived on. Only GET /logs/:id returns it (#389).
+  server_port?: number;
 
   // Error log fields
   severity?: LogSeverity;
@@ -83,6 +85,12 @@ export interface Log {
   // Ban status (runtime computed by backend)
   is_banned?: boolean;
 }
+
+// The columns GET /logs leaves out, fetched for the row the log detail shows (#389).
+export type LogDetail = Pick<
+  Log,
+  'id' | 'request_protocol' | 'http_referer' | 'geo_city' | 'geo_asn' | 'rule_severity' | 'attack_type' | 'server_port'
+>;
 
 export interface LogFilter {
   log_type?: LogType;

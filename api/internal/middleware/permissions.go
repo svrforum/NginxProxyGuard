@@ -259,6 +259,7 @@ var routePermissions = map[string]string{
 	"GET /api/v1/logs/autocomplete/methods": "logs:read",
 	"GET /api/v1/logs/autocomplete/uris": "logs:read",
 	"GET /api/v1/logs/autocomplete/user-agents": "logs:read",
+	"GET /api/v1/logs/:id": "logs:read",
 	"POST /api/v1/logs/cleanup": "logs:write",
 	"GET /api/v1/logs/settings": "logs:read",
 	"PUT /api/v1/logs/settings": "logs:write",

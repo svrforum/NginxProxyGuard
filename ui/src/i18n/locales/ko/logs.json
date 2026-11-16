@@ -222,6 +222,8 @@
     "title": "로그 상세",
     "timestamp": "타임스탬프",
     "clientIP": "클라이언트 IP",
+    "host": "호스트",
+    "port": "포트",
     "geoLocation": "GeoIP 위치",
     "country": "국가",
     "city": "도시",

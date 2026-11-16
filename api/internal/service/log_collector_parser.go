@@ -72,6 +72,9 @@ var (
 	upstreamAddrRegex     = regexp.MustCompile(`ua="([^"]*)"`)
 	upstreamStatusRegex   = regexp.MustCompile(`us="([^"]*)"`)
 	errorLogClientIPRegex = regexp.MustCompile(`client:\s+([0-9a-fA-F:.]+)`)
+
+	// $server_port, last on the line (#389). Lines written before it was added have none.
+	serverPortRegex = regexp.MustCompile(`(?:^|\s)sp=(\d{1,5})(?:\s|$)`)
 )
 
 // Old access log format (without host) - fallback
@@ -185,6 +188,13 @@ func (c *LogCollector) parseAccessLog(line string) (*model.CreateLogRequest, err
 		upstreamAddr := extractUpstreamField(tail, upstreamAddrRegex)
 		upstreamStatus := extractUpstreamField(tail, upstreamStatusRegex)
 
+		var serverPort int
+		if spMatches := serverPortRegex.FindStringSubmatch(tail); spMatches != nil {
+			if p, err := strconv.Atoi(spMatches[1]); err == nil && p <= 65535 {
+				serverPort = p
+			}
+		}
+
 		return &model.CreateLogRequest{
 			LogType:              model.LogTypeAccess,
 			Timestamp:            timestamp,
@@ -206,6 +216,7 @@ func (c *LogCollector) parseAccessLog(line string) (*model.CreateLogRequest, err
 			UpstreamResponseTime: upstreamResponseTime,
 			UpstreamAddr:         upstreamAddr,
 			UpstreamStatus:       upstreamStatus,
+			ServerPort:           serverPort,
 		}, nil
 	}
 

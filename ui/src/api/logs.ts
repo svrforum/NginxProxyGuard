@@ -1,4 +1,4 @@
-import type { LogListResponse, LogStats, LogSettings, LogFilter, CountryStat, HostLogRules, HostLogRulesEntry } from '../types/log';
+import type { LogListResponse, LogDetail, LogStats, LogSettings, LogFilter, CountryStat, HostLogRules, HostLogRulesEntry } from '../types/log';
 import { getAuthHeaders } from './auth';
 import { apiGet, apiPut, handleSessionExpired } from './client';
 
@@ -123,6 +123,16 @@ export async function fetchLogs(
     headers: getAuthHeaders(),
   });
   return handleResponse<LogListResponse>(res);
+}
+
+// The columns the list leaves out, for one row (#389). createdAt is the row's
+// created_at as the list returned it; the server needs it to find the row.
+export async function fetchLogDetail(id: string, createdAt: string): Promise<LogDetail> {
+  const params = new URLSearchParams({ created_at: createdAt });
+  const res = await fetch(`${API_BASE}/logs/${encodeURIComponent(id)}?${params}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse<LogDetail>(res);
 }
 
 export async function fetchLogStats(filter?: LogFilter): Promise<LogStats> {

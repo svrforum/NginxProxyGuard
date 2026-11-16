@@ -109,7 +109,7 @@ func insertedRow(logType string, set map[string]driver.Value) *sqlmock.Rows {
 		"severity", "error_message",
 		"rule_id", "rule_message", "rule_severity", "rule_data", "attack_type", "action_taken",
 		"block_reason", "bot_category", "exploit_rule",
-		"proxy_host_id", "raw_log", "created_at",
+		"proxy_host_id", "raw_log", "created_at", "server_port",
 	}
 	now := time.Date(2026, 10, 11, 0, 0, 0, 0, time.UTC)
 	vals := make([]driver.Value, len(cols))
@@ -131,10 +131,10 @@ func insertedRow(logType string, set map[string]driver.Value) *sqlmock.Rows {
 	return sqlmock.NewRows(cols).AddRow(vals...)
 }
 
-// insertArgs matches any value for each of the INSERT's 34 parameters; a test
+// insertArgs matches any value for each of the INSERT's 35 parameters; a test
 // pins the ones it is about.
 func insertArgs() []driver.Value {
-	args := make([]driver.Value, 34)
+	args := make([]driver.Value, 35)
 	for i := range args {
 		args[i] = sqlmock.AnyArg()
 	}

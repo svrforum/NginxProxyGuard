@@ -675,6 +675,7 @@ type LogEntry struct {
 	UpstreamResponseTime float64           `json:"upstream_response_time,omitempty"`
 	UpstreamAddr         string            `json:"upstream_addr,omitempty"`
 	UpstreamStatus       string            `json:"upstream_status,omitempty"`
+	ServerPort           int               `json:"server_port,omitempty"`
 	Severity             string            `json:"severity,omitempty"`
 	ErrorMessage         string            `json:"error_message,omitempty"`
 	ProxyHostID          string            `json:"proxy_host_id,omitempty"`

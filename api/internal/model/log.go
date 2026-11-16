@@ -149,6 +149,8 @@ type Log struct {
 	HTTPReferer       *string `json:"http_referer,omitempty"`
 	HTTPUserAgent     *string `json:"http_user_agent,omitempty"`
 	HTTPXForwardedFor *string `json:"http_x_forwarded_for,omitempty"`
+	// ServerPort is the port the request arrived on ($server_port, #389).
+	ServerPort *int `json:"server_port,omitempty"`
 
 	// Error log fields
 	Severity     *LogSeverity `json:"severity,omitempty"`
@@ -217,6 +219,7 @@ type CreateLogRequest struct {
 	HTTPReferer          string  `json:"http_referer,omitempty"`
 	HTTPUserAgent        string  `json:"http_user_agent,omitempty"`
 	HTTPXForwardedFor    string  `json:"http_x_forwarded_for,omitempty"`
+	ServerPort           int     `json:"server_port,omitempty"`
 
 	// Error log fields
 	Severity     LogSeverity `json:"severity,omitempty"`
@@ -370,4 +373,19 @@ type UpdateLogSettingsRequest struct {
 	RetentionDays      *int   `json:"retention_days,omitempty"`
 	MaxLogsPerType     *int64 `json:"max_logs_per_type,omitempty"`
 	AutoCleanupEnabled *bool  `json:"auto_cleanup_enabled,omitempty"`
+}
+
+// LogDetail holds the columns the log list leaves out to keep its scans of
+// compressed chunks light. The log detail fetches them for the one row it
+// shows (#389). rule_data and raw_log are not among them: they carry request
+// content the logs API does not serve.
+type LogDetail struct {
+	ID              string  `json:"id"`
+	RequestProtocol *string `json:"request_protocol,omitempty"`
+	HTTPReferer     *string `json:"http_referer,omitempty"`
+	GeoCity         *string `json:"geo_city,omitempty"`
+	GeoASN          *string `json:"geo_asn,omitempty"`
+	RuleSeverity    *string `json:"rule_severity,omitempty"`
+	AttackType      *string `json:"attack_type,omitempty"`
+	ServerPort      *int    `json:"server_port,omitempty"`
 }

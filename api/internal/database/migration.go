@@ -1915,6 +1915,12 @@ END $$;`,
 			desc: "global_fail2ban.ignore_private_ips (#384)",
 			sql:  `ALTER TABLE public.global_fail2ban ADD COLUMN IF NOT EXISTS ignore_private_ips boolean DEFAULT false NOT NULL`,
 		},
+		{
+			// The port a request arrived on, for the log detail (#389). Nullable with
+			// no default, so TimescaleDB adds it to compressed chunks as metadata only.
+			desc: "logs_partitioned.server_port (#389)",
+			sql:  `ALTER TABLE public.logs_partitioned ADD COLUMN IF NOT EXISTS server_port integer`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {
@@ -2259,7 +2265,8 @@ func (db *DB) migrateToTimescaleDB() {
 			geo_org text,
 			block_reason block_reason DEFAULT 'none',
 			bot_category text,
-			exploit_rule varchar(50)
+			exploit_rule varchar(50),
+			server_port integer
 		)
 	`)
 	if err != nil {
@@ -2317,7 +2324,7 @@ func (db *DB) migrateToTimescaleDB() {
 				severity, error_message, rule_id, rule_message, rule_severity, rule_data,
 				attack_type, action_taken, proxy_host_id, raw_log, created_at,
 				geo_country, geo_country_code, geo_city, geo_asn, geo_org,
-				block_reason, bot_category, exploit_rule
+				block_reason, bot_category, exploit_rule, server_port
 			)
 			SELECT
 				lp.id, lp.log_type, lp.timestamp, lp.host, lp.client_ip, lp.request_method, lp.request_uri,
@@ -2327,7 +2334,7 @@ func (db *DB) migrateToTimescaleDB() {
 				lp.severity, lp.error_message, lp.rule_id, lp.rule_message, lp.rule_severity, lp.rule_data,
 				lp.attack_type, lp.action_taken, lp.proxy_host_id, lp.raw_log, lp.created_at,
 				lp.geo_country, lp.geo_country_code, lp.geo_city, lp.geo_asn, lp.geo_org,
-				lp.block_reason, lp.bot_category, lp.exploit_rule
+				lp.block_reason, lp.bot_category, lp.exploit_rule, lp.server_port
 			FROM logs_partitioned lp
 			WHERE NOT EXISTS (
 				SELECT 1 FROM logs_hypertable lh WHERE lh.id = lp.id

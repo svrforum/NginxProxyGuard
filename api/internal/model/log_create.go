@@ -93,6 +93,10 @@ func ValidateCreateLogRequest(req *CreateLogRequest) error {
 	if req.StatusCode != 0 && (req.StatusCode < statusCodeMin || req.StatusCode > statusCodeMax) {
 		return fmt.Errorf("%w: invalid status_code %d: must be between %d and %d", ErrInvalidInput, req.StatusCode, statusCodeMin, statusCodeMax)
 	}
+	// 0 means unknown and is stored as NULL.
+	if req.ServerPort < 0 || req.ServerPort > 65535 {
+		return fmt.Errorf("%w: invalid server_port %d: must be between 1 and 65535", ErrInvalidInput, req.ServerPort)
+	}
 	// varchar(n) counts characters, not bytes.
 	if utf8.RuneCountInString(req.GeoCountryCode) > logGeoCountryCodeMaxLen {
 		return fmt.Errorf("%w: invalid geo_country_code %q: must be at most %d characters", ErrInvalidInput, req.GeoCountryCode, logGeoCountryCodeMaxLen)

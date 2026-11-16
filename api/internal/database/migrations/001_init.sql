@@ -900,7 +900,8 @@ CREATE TABLE IF NOT EXISTS public.logs_partitioned (
     geo_org text,
     block_reason public.block_reason DEFAULT 'none'::public.block_reason,
     bot_category text,
-    exploit_rule character varying(50)
+    exploit_rule character varying(50),
+    server_port integer
 )
 PARTITION BY RANGE (created_at);
 COMMENT ON COLUMN public.logs_partitioned.exploit_rule IS 'Specific exploit block rule ID (e.g., SQLI-001, RFI-001, VCS-001)';
@@ -940,7 +941,8 @@ CREATE TABLE IF NOT EXISTS public.logs_p2025_12 (
     geo_org text,
     block_reason public.block_reason DEFAULT 'none'::public.block_reason,
     bot_category text,
-    exploit_rule character varying(50)
+    exploit_rule character varying(50),
+    server_port integer
 );
 CREATE TABLE IF NOT EXISTS public.logs_p2026_01 (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -978,7 +980,8 @@ CREATE TABLE IF NOT EXISTS public.logs_p2026_01 (
     geo_org text,
     block_reason public.block_reason DEFAULT 'none'::public.block_reason,
     bot_category text,
-    exploit_rule character varying(50)
+    exploit_rule character varying(50),
+    server_port integer
 );
 CREATE TABLE IF NOT EXISTS public.logs_p2026_02 (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -1016,7 +1019,8 @@ CREATE TABLE IF NOT EXISTS public.logs_p2026_02 (
     geo_org text,
     block_reason public.block_reason DEFAULT 'none'::public.block_reason,
     bot_category text,
-    exploit_rule character varying(50)
+    exploit_rule character varying(50),
+    server_port integer
 );
 CREATE TABLE IF NOT EXISTS public.logs_p2026_03 (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -1054,7 +1058,8 @@ CREATE TABLE IF NOT EXISTS public.logs_p2026_03 (
     geo_org text,
     block_reason public.block_reason DEFAULT 'none'::public.block_reason,
     bot_category text,
-    exploit_rule character varying(50)
+    exploit_rule character varying(50),
+    server_port integer
 );
 CREATE TABLE IF NOT EXISTS public.logs_p2026_04 (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -1092,7 +1097,8 @@ CREATE TABLE IF NOT EXISTS public.logs_p2026_04 (
     geo_org text,
     block_reason public.block_reason DEFAULT 'none'::public.block_reason,
     bot_category text,
-    exploit_rule character varying(50)
+    exploit_rule character varying(50),
+    server_port integer
 );
 CREATE TABLE IF NOT EXISTS public.logs_p2026_05 (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -1130,7 +1136,8 @@ CREATE TABLE IF NOT EXISTS public.logs_p2026_05 (
     geo_org text,
     block_reason public.block_reason DEFAULT 'none'::public.block_reason,
     bot_category text,
-    exploit_rule character varying(50)
+    exploit_rule character varying(50),
+    server_port integer
 );
 CREATE TABLE IF NOT EXISTS public.logs_p2026_06 (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -1168,7 +1175,8 @@ CREATE TABLE IF NOT EXISTS public.logs_p2026_06 (
     geo_org text,
     block_reason public.block_reason DEFAULT 'none'::public.block_reason,
     bot_category text,
-    exploit_rule character varying(50)
+    exploit_rule character varying(50),
+    server_port integer
 );
 CREATE TABLE IF NOT EXISTS public.logs_p2026_07 (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -1206,7 +1214,8 @@ CREATE TABLE IF NOT EXISTS public.logs_p2026_07 (
     geo_org text,
     block_reason public.block_reason DEFAULT 'none'::public.block_reason,
     bot_category text,
-    exploit_rule character varying(50)
+    exploit_rule character varying(50),
+    server_port integer
 );
 CREATE TABLE IF NOT EXISTS public.logs_p2026_08 (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -1244,7 +1253,8 @@ CREATE TABLE IF NOT EXISTS public.logs_p2026_08 (
     geo_org text,
     block_reason public.block_reason DEFAULT 'none'::public.block_reason,
     bot_category text,
-    exploit_rule character varying(50)
+    exploit_rule character varying(50),
+    server_port integer
 );
 CREATE TABLE IF NOT EXISTS public.logs_p2026_09 (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -1282,7 +1292,8 @@ CREATE TABLE IF NOT EXISTS public.logs_p2026_09 (
     geo_org text,
     block_reason public.block_reason DEFAULT 'none'::public.block_reason,
     bot_category text,
-    exploit_rule character varying(50)
+    exploit_rule character varying(50),
+    server_port integer
 );
 CREATE TABLE IF NOT EXISTS public.logs_p2026_10 (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -1320,7 +1331,8 @@ CREATE TABLE IF NOT EXISTS public.logs_p2026_10 (
     geo_org text,
     block_reason public.block_reason DEFAULT 'none'::public.block_reason,
     bot_category text,
-    exploit_rule character varying(50)
+    exploit_rule character varying(50),
+    server_port integer
 );
 CREATE TABLE IF NOT EXISTS public.logs_p2026_11 (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -1358,7 +1370,8 @@ CREATE TABLE IF NOT EXISTS public.logs_p2026_11 (
     geo_org text,
     block_reason public.block_reason DEFAULT 'none'::public.block_reason,
     bot_category text,
-    exploit_rule character varying(50)
+    exploit_rule character varying(50),
+    server_port integer
 );
 CREATE TABLE IF NOT EXISTS public.logs_p2026_12 (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -1396,7 +1409,8 @@ CREATE TABLE IF NOT EXISTS public.logs_p2026_12 (
     geo_org text,
     block_reason public.block_reason DEFAULT 'none'::public.block_reason,
     bot_category text,
-    exploit_rule character varying(50)
+    exploit_rule character varying(50),
+    server_port integer
 );
 CREATE TABLE IF NOT EXISTS public.logs_p2027_01 (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -1434,7 +1448,8 @@ CREATE TABLE IF NOT EXISTS public.logs_p2027_01 (
     geo_org text,
     block_reason public.block_reason DEFAULT 'none'::public.block_reason,
     bot_category text,
-    exploit_rule character varying(50)
+    exploit_rule character varying(50),
+    server_port integer
 );
 CREATE TABLE IF NOT EXISTS public.logs_p2027_02 (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -1472,7 +1487,8 @@ CREATE TABLE IF NOT EXISTS public.logs_p2027_02 (
     geo_org text,
     block_reason public.block_reason DEFAULT 'none'::public.block_reason,
     bot_category text,
-    exploit_rule character varying(50)
+    exploit_rule character varying(50),
+    server_port integer
 );
 CREATE TABLE IF NOT EXISTS public.logs_p2027_03 (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -1510,7 +1526,8 @@ CREATE TABLE IF NOT EXISTS public.logs_p2027_03 (
     geo_org text,
     block_reason public.block_reason DEFAULT 'none'::public.block_reason,
     bot_category text,
-    exploit_rule character varying(50)
+    exploit_rule character varying(50),
+    server_port integer
 );
 CREATE TABLE IF NOT EXISTS public.logs_p2027_04 (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -1548,7 +1565,8 @@ CREATE TABLE IF NOT EXISTS public.logs_p2027_04 (
     geo_org text,
     block_reason public.block_reason DEFAULT 'none'::public.block_reason,
     bot_category text,
-    exploit_rule character varying(50)
+    exploit_rule character varying(50),
+    server_port integer
 );
 CREATE TABLE IF NOT EXISTS public.logs_p2027_05 (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -1586,7 +1604,8 @@ CREATE TABLE IF NOT EXISTS public.logs_p2027_05 (
     geo_org text,
     block_reason public.block_reason DEFAULT 'none'::public.block_reason,
     bot_category text,
-    exploit_rule character varying(50)
+    exploit_rule character varying(50),
+    server_port integer
 );
 CREATE TABLE IF NOT EXISTS public.logs_p2027_06 (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -1624,7 +1643,8 @@ CREATE TABLE IF NOT EXISTS public.logs_p2027_06 (
     geo_org text,
     block_reason public.block_reason DEFAULT 'none'::public.block_reason,
     bot_category text,
-    exploit_rule character varying(50)
+    exploit_rule character varying(50),
+    server_port integer
 );
 CREATE TABLE IF NOT EXISTS public.logs_p2027_07 (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -1662,7 +1682,8 @@ CREATE TABLE IF NOT EXISTS public.logs_p2027_07 (
     geo_org text,
     block_reason public.block_reason DEFAULT 'none'::public.block_reason,
     bot_category text,
-    exploit_rule character varying(50)
+    exploit_rule character varying(50),
+    server_port integer
 );
 CREATE TABLE IF NOT EXISTS public.logs_p2027_08 (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -1700,7 +1721,8 @@ CREATE TABLE IF NOT EXISTS public.logs_p2027_08 (
     geo_org text,
     block_reason public.block_reason DEFAULT 'none'::public.block_reason,
     bot_category text,
-    exploit_rule character varying(50)
+    exploit_rule character varying(50),
+    server_port integer
 );
 CREATE TABLE IF NOT EXISTS public.logs_p2027_09 (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -1738,7 +1760,8 @@ CREATE TABLE IF NOT EXISTS public.logs_p2027_09 (
     geo_org text,
     block_reason public.block_reason DEFAULT 'none'::public.block_reason,
     bot_category text,
-    exploit_rule character varying(50)
+    exploit_rule character varying(50),
+    server_port integer
 );
 CREATE TABLE IF NOT EXISTS public.logs_p2027_10 (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -1776,7 +1799,8 @@ CREATE TABLE IF NOT EXISTS public.logs_p2027_10 (
     geo_org text,
     block_reason public.block_reason DEFAULT 'none'::public.block_reason,
     bot_category text,
-    exploit_rule character varying(50)
+    exploit_rule character varying(50),
+    server_port integer
 );
 CREATE TABLE IF NOT EXISTS public.logs_p2027_11 (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -1814,7 +1838,8 @@ CREATE TABLE IF NOT EXISTS public.logs_p2027_11 (
     geo_org text,
     block_reason public.block_reason DEFAULT 'none'::public.block_reason,
     bot_category text,
-    exploit_rule character varying(50)
+    exploit_rule character varying(50),
+    server_port integer
 );
 CREATE TABLE IF NOT EXISTS public.logs_p2027_12 (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -1852,7 +1877,8 @@ CREATE TABLE IF NOT EXISTS public.logs_p2027_12 (
     geo_org text,
     block_reason public.block_reason DEFAULT 'none'::public.block_reason,
     bot_category text,
-    exploit_rule character varying(50)
+    exploit_rule character varying(50),
+    server_port integer
 );
 CREATE TABLE IF NOT EXISTS public.logs_p_default (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -1890,7 +1916,8 @@ CREATE TABLE IF NOT EXISTS public.logs_p_default (
     geo_org text,
     block_reason public.block_reason DEFAULT 'none'::public.block_reason,
     bot_category text,
-    exploit_rule character varying(50)
+    exploit_rule character varying(50),
+    server_port integer
 );
 CREATE OR REPLACE VIEW public.logs_unified AS
  SELECT logs.id,
@@ -4885,3 +4912,6 @@ CREATE TABLE IF NOT EXISTS public.proxy_host_log_rules (
 -- Fail2ban leaves private and link-local addresses alone when this is on (#384).
 -- Read by every jail, the per-host ones included.
 ALTER TABLE public.global_fail2ban ADD COLUMN IF NOT EXISTS ignore_private_ips boolean DEFAULT false NOT NULL;
+
+-- The port a request arrived on ($server_port), shown in the log detail (#389).
+ALTER TABLE public.logs_partitioned ADD COLUMN IF NOT EXISTS server_port integer;

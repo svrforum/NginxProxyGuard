@@ -101,7 +101,8 @@ http {
                     'ua="$upstream_addr" us="$upstream_status" '
                     'geo="$geoip2_country_code" asn="$geoip2_asn" '
                     'block="$block_reason_var" bot="$bot_category_var" '
-                    'exploit_rule="$exploit_rule_var"';
+                    'exploit_rule="$exploit_rule_var" '
+                    'sp=$server_port';
 
     log_format json_combined escape=json '{'
         '"time":"$time_iso8601",'

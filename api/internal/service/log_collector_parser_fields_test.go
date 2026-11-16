@@ -56,3 +56,31 @@ func TestParseAccessLogUserWithSpaces(t *testing.T) {
 		t.Errorf("user \"a [b\": %+v, %v", r, err)
 	}
 }
+
+// sp= is $server_port, the port the request arrived on (#389). Lines from
+// before it was logged have none, and a client field cannot supply one.
+func TestParseAccessLogServerPort(t *testing.T) {
+	c := NewLogCollector(nil, "npg-proxy", "", nil, nil)
+	line := accessLine("-", "GET /home HTTP/2.0", 200, "https://x.example.com/ sp=1", "curl/8 sp=2", "-", "192.0.2.10:8080", "-")
+	cases := []struct {
+		name string
+		line string
+		want int
+	}{
+		{"logged", line + " sp=11443", 11443},
+		{"older line", line, 0},
+		{"out of range", line + " sp=99999", 0},
+	}
+	for _, tc := range cases {
+		r, err := c.parseAccessLog(tc.line)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		if r.ServerPort != tc.want {
+			t.Errorf("%s: server port %d, want %d", tc.name, r.ServerPort, tc.want)
+		}
+		if r.RequestProtocol != "HTTP/2.0" {
+			t.Errorf("%s: protocol %q, want HTTP/2.0", tc.name, r.RequestProtocol)
+		}
+	}
+}
