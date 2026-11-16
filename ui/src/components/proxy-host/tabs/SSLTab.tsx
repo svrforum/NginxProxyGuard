@@ -226,7 +226,7 @@ export function SSLTabContent({
                 {newCertData.provider === 'letsencrypt' && (
                   <>
                     {/* DNS Provider */}
-                    {dnsProviders.length > 0 && (
+                    {dnsProviders.some((p) => p.provider_type !== 'infomaniak') && (
                       <div>
                         <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
                           {t('form.ssl.dnsProvider')} ({t('form.ssl.dnsChallenge')})
@@ -242,7 +242,7 @@ export function SSLTabContent({
                           className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white"
                         >
                           <option value="">{t('form.ssl.httpChallenge')}</option>
-                          {dnsProviders.map((p) => (
+                          {dnsProviders.filter((p) => p.provider_type !== 'infomaniak').map((p) => (
                             <option key={p.id} value={p.id}>
                               {p.name} ({p.provider_type})
                             </option>

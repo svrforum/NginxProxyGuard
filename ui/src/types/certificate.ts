@@ -60,7 +60,7 @@ export interface UploadCertificateRequest {
 export interface DNSProvider {
   id: string;
   name: string;
-  provider_type: 'cloudflare' | 'route53' | 'duckdns' | 'dynu' | 'ionos' | 'manual';
+  provider_type: 'cloudflare' | 'route53' | 'duckdns' | 'dynu' | 'infomaniak' | 'ionos' | 'manual';
   is_default: boolean;
   has_credentials: boolean;
   use_default_credentials?: boolean;
@@ -77,7 +77,7 @@ export interface CloudflareCredentials {
 
 export interface CreateDNSProviderRequest {
   name: string;
-  provider_type: 'cloudflare' | 'route53' | 'duckdns' | 'dynu' | 'ionos' | 'manual';
+  provider_type: 'cloudflare' | 'route53' | 'duckdns' | 'dynu' | 'infomaniak' | 'ionos' | 'manual';
   credentials: CloudflareCredentials | Record<string, string | boolean>;
   is_default?: boolean;
 }

@@ -502,8 +502,9 @@ func (s *ProxyHostService) validateDDNSOptIn(ctx context.Context, enabled bool, 
 	}
 	if provider.ProviderType != model.DNSProviderCloudflare &&
 		provider.ProviderType != model.DNSProviderDuckDNS &&
-		provider.ProviderType != model.DNSProviderDynu {
-		return fmt.Errorf("invalid: DDNS requires a Cloudflare, DuckDNS, or Dynu provider")
+		provider.ProviderType != model.DNSProviderDynu &&
+		provider.ProviderType != model.DNSProviderInfomaniak {
+		return fmt.Errorf("invalid: DDNS requires a Cloudflare, DuckDNS, Dynu, or Infomaniak provider")
 	}
 	return nil
 }

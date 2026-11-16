@@ -67,6 +67,7 @@ func NewDDNSService(records ddnsRecordRepo, providers ddnsCredsRepo, detector pu
 			model.DNSProviderCloudflare: newCloudflareUpdater(),
 			model.DNSProviderDuckDNS:    newDuckDNSUpdater(),
 			model.DNSProviderDynu:       newDynuUpdater(),
+			model.DNSProviderInfomaniak: newInfomaniakUpdater(),
 		},
 		now: time.Now,
 	}

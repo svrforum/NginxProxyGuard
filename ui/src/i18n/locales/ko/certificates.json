@@ -162,7 +162,8 @@
       "duckdns": "DuckDNS",
       "dynu": "Dynu",
       "ionos": "IONOS",
-      "manual": "수동 설정"
+      "manual": "수동 설정",
+      "infomaniak": "Infomaniak (DynDNS)"
     },
     "default": "기본값",
     "configured": "설정됨",
@@ -185,7 +186,8 @@
         "duckdns": "예: 내 DuckDNS 계정",
         "dynu": "예: 내 Dynu 계정",
         "ionos": "예: 내 IONOS 계정",
-        "manual": "예: 내 수동 설정"
+        "manual": "예: 내 수동 설정",
+        "infomaniak": "내 Infomaniak DynDNS"
       },
       "providerType": "제공자 유형",
       "setDefault": "기본값으로 설정",
@@ -251,6 +253,12 @@
         "nameRequired": "이름은 필수입니다",
         "createFailed": "DNS 제공자 생성 실패",
         "updateFailed": "DNS 제공자 수정 실패"
+      },
+      "infomaniak": {
+        "title": "Infomaniak DynDNS",
+        "username": "DynDNS 사용자 이름",
+        "password": "DynDNS 비밀번호",
+        "help": "DDNS(IPv4) 전용이며 DNS-01 인증서는 지원하지 않습니다. 먼저 Infomaniak Manager에서 동적 DNS 호스트를 만들고 전용 DynDNS 사용자 이름과 비밀번호를 입력하세요. Manager 로그인이나 API 토큰을 사용하지 마세요. 연결 테스트는 자격 증명 형식만 확인합니다. 자격 증명을 수정할 때는 두 필드를 모두 다시 입력하세요."
       }
     }
   },

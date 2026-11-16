@@ -162,7 +162,8 @@
       "duckdns": "DuckDNS",
       "dynu": "Dynu",
       "ionos": "IONOS",
-      "manual": "Manual"
+      "manual": "Manual",
+      "infomaniak": "Infomaniak (DynDNS)"
     },
     "default": "Default",
     "configured": "Configured",
@@ -185,7 +186,8 @@
         "duckdns": "My DuckDNS Account",
         "dynu": "My Dynu Account",
         "ionos": "My IONOS Account",
-        "manual": "My Manual Setup"
+        "manual": "My Manual Setup",
+        "infomaniak": "My Infomaniak DynDNS"
       },
       "providerType": "Provider Type",
       "setDefault": "Set as Default",
@@ -251,6 +253,12 @@
         "nameRequired": "Name is required",
         "createFailed": "Failed to create DNS provider",
         "updateFailed": "Failed to update DNS provider"
+      },
+      "infomaniak": {
+        "title": "Infomaniak DynDNS",
+        "username": "DynDNS username",
+        "password": "DynDNS password",
+        "help": "DDNS only (IPv4), not DNS-01 certificates. Create the dynamic DNS hostname in Infomaniak Manager first, then use its dedicated DynDNS username and password, not your Manager login or API token. The connection test checks the credential format only. When editing credentials, enter both fields again."
       }
     }
   },
