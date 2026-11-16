@@ -259,6 +259,10 @@ All versions are fully backward compatible. No manual migration needed — datab
 
 > **Compose-level options** (port overrides, API/login rate limits, `TRUSTED_PROXY_CIDR`, container log caps, capability drops) only reach installs whose `docker-compose.yml` is refreshed — pulling images alone keeps your old compose file. Compare yours with the current [docker-compose.yml](./docker-compose.yml) after upgrading. See the [latest releases](https://github.com/svrforum/NginxProxyGuard/releases) and [Key Features](#-key-features) for what changed.
 
+### Coming from Nginx Proxy Manager
+
+[npm-to-npg](https://github.com/Aerya/npm-to-npg) is an interactive script that copies hosts from Nginx Proxy Manager into NPG through both APIs. It is a community tool, maintained in its own repository; its README lists what it copies and what it skips.
+
 ---
 
 ## 📚 API Documentation

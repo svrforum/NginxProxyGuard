@@ -259,6 +259,10 @@ docker compose exec api ./server reset-password --clear-2fa
 
 > **compose 수준의 새 옵션**(포트 재정의, API/로그인 속도 제한, `TRUSTED_PROXY_CIDR`, 컨테이너 로그 용량 제한, capability 제거)은 `docker-compose.yml`을 갱신한 설치에만 적용됩니다 — 이미지만 받으면 예전 compose 파일이 그대로 남습니다. 업그레이드 후 현재 [docker-compose.yml](./docker-compose.yml)과 비교하세요. 변경 내역은 [최신 릴리즈](https://github.com/svrforum/NginxProxyGuard/releases)와 [주요 기능](#-주요-기능)을 참조하세요.
 
+### Nginx Proxy Manager에서 옮겨 오기
+
+[npm-to-npg](https://github.com/Aerya/npm-to-npg)는 Nginx Proxy Manager의 호스트를 두 쪽 API로 NPG에 옮겨 주는 대화형 스크립트입니다. 별도 저장소에서 관리되는 커뮤니티 도구이며, 무엇을 옮기고 무엇을 건너뛰는지는 그 README에 정리돼 있습니다.
+
 ---
 
 ## 📚 API 문서
