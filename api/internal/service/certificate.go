@@ -141,6 +141,15 @@ func (s *CertificateService) Create(ctx context.Context, req *model.CreateCertif
 		return nil, fmt.Errorf("%w: wildcard domains require the DNS-01 challenge — select a DNS provider for this certificate (HTTP-01 cannot issue wildcard certificates)", model.ErrInvalidInput)
 	}
 
+	// An Infomaniak row holds DynDNS credentials, which update an A record but
+	// cannot write the TXT record DNS-01 needs (#382). The certificate screens
+	// leave it out; this also covers clone and direct API calls.
+	if req.Provider == model.CertProviderLetsEncrypt && req.DNSProviderID != nil && s.dnsRepo != nil {
+		if p, err := s.dnsRepo.GetByID(ctx, *req.DNSProviderID); err == nil && p != nil && p.ProviderType == model.DNSProviderInfomaniak {
+			return nil, fmt.Errorf("%w: DNS provider %q is DDNS only and cannot issue certificates — choose a DNS-01 provider", model.ErrInvalidInput, p.Name)
+		}
+	}
+
 	// The key type is chosen at issuance and kept by every renewal (#364). It
 	// only reaches Let's Encrypt; other certificates keep the default.
 	keyType, err := model.NormalizeCertKeyType(req.KeyType)
