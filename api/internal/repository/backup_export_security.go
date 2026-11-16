@@ -370,12 +370,12 @@ func (r *BackupRepository) exportGlobalRateLimit(ctx context.Context) (*model.Gl
 // when no row exists, which is the pre-feature state.
 func (r *BackupRepository) exportGlobalFail2ban(ctx context.Context) (*model.GlobalFail2banExport, error) {
 	query := `
-		SELECT enabled, max_retries, find_time, ban_time, fail_codes, action
+		SELECT enabled, max_retries, find_time, ban_time, fail_codes, action, ignore_private_ips
 		FROM global_fail2ban LIMIT 1
 	`
 	var g model.GlobalFail2banExport
 	err := r.db.QueryRowContext(ctx, query).Scan(
-		&g.Enabled, &g.MaxRetries, &g.FindTime, &g.BanTime, &g.FailCodes, &g.Action,
+		&g.Enabled, &g.MaxRetries, &g.FindTime, &g.BanTime, &g.FailCodes, &g.Action, &g.IgnorePrivateIPs,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil

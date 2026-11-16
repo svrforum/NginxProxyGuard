@@ -13943,6 +13943,12 @@ components:
           description: >-
             Ships as `log` so an operator can watch what would be banned before
             anything is.
+        ignore_private_ips:
+          type: boolean
+          default: false
+          description: >-
+            When true, no fail2ban jail, per-host or global, bans a private
+            (10/8, 172.16/12, 192.168/16, fc00::/7) or link-local address.
         created_at:
           type: string
           format: date-time
@@ -13970,6 +13976,8 @@ components:
         action:
           type: string
           enum: [block, log, notify]
+        ignore_private_ips:
+          type: boolean
 
     UpdateExploitRule:
       type: object

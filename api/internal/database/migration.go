@@ -1910,6 +1910,11 @@ END $$;`,
     CONSTRAINT proxy_host_log_rules_proxy_host_id_fkey FOREIGN KEY (proxy_host_id) REFERENCES public.proxy_hosts(id) ON DELETE CASCADE
 )`,
 		},
+		{
+			// Fail2ban leaves private and link-local addresses alone (#384).
+			desc: "global_fail2ban.ignore_private_ips (#384)",
+			sql:  `ALTER TABLE public.global_fail2ban ADD COLUMN IF NOT EXISTS ignore_private_ips boolean DEFAULT false NOT NULL`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

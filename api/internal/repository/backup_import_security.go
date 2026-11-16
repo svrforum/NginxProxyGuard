@@ -540,10 +540,10 @@ func (r *BackupRepository) importGlobalFail2ban(ctx context.Context, tx *sql.Tx,
 	}
 
 	query := `
-		INSERT INTO global_fail2ban (enabled, max_retries, find_time, ban_time, fail_codes, action)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO global_fail2ban (enabled, max_retries, find_time, ban_time, fail_codes, action, ignore_private_ips)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`
-	_, err := tx.ExecContext(ctx, query, enabled, maxRetries, findTime, banTime, failCodes, action)
+	_, err := tx.ExecContext(ctx, query, enabled, maxRetries, findTime, banTime, failCodes, action, g.IgnorePrivateIPs)
 	return err
 }
 

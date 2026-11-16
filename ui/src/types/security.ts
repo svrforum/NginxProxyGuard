@@ -374,6 +374,7 @@ export interface GlobalFail2ban {
   ban_time: number
   fail_codes: string
   action: string
+  ignore_private_ips: boolean
   created_at: string
   updated_at: string
 }
@@ -385,4 +386,5 @@ export interface UpdateGlobalFail2banRequest {
   ban_time?: number
   fail_codes?: string
   action?: string
+  ignore_private_ips?: boolean
 }

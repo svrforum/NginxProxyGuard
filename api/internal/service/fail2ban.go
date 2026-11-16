@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net"
 	"strconv"
 	"strings"
 	"sync"
@@ -157,8 +158,17 @@ func (s *Fail2banService) loadTrustedProxyCIDRs(ctx context.Context) []string {
 func (s *Fail2banService) unbannable(ip string) string {
 	s.configMu.RLock()
 	cidrs := s.trustedProxyCIDRs
+	ignorePrivate := s.globalConfig != nil && s.globalConfig.IgnorePrivateIPs
 	s.configMu.RUnlock()
-	return model.UnbannableReason(ip, cidrs)
+	if why := model.UnbannableReason(ip, cidrs); why != "" {
+		return why
+	}
+	if ignorePrivate {
+		if parsed := net.ParseIP(ip); parsed != nil && (parsed.IsPrivate() || parsed.IsLinkLocalUnicast()) {
+			return "private address (fail2ban is set to leave local addresses alone)"
+		}
+	}
+	return ""
 }
 
 // SetConfiguredHostResolver wires the domain snapshot the global jail needs to

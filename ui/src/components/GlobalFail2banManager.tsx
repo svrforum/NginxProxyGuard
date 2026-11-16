@@ -30,6 +30,7 @@ export function GlobalFail2banManager() {
   const [banTime, setBanTime] = useState(3600)
   const [failCodes, setFailCodes] = useState('400,444')
   const [action, setAction] = useState('log')
+  const [ignorePrivate, setIgnorePrivate] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
 
@@ -41,6 +42,7 @@ export function GlobalFail2banManager() {
     setBanTime(data.ban_time)
     setFailCodes(data.fail_codes)
     setAction(data.action)
+    setIgnorePrivate(data.ignore_private_ips ?? false)
   }, [data])
 
   const mutation = useMutation({
@@ -52,6 +54,7 @@ export function GlobalFail2banManager() {
         ban_time: banTime,
         fail_codes: failCodes,
         action,
+        ignore_private_ips: ignorePrivate,
       }),
     onSuccess: () => {
       setError(null)
@@ -101,6 +104,24 @@ export function GlobalFail2banManager() {
           >
             <span
               className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${enabled ? 'translate-x-6' : ''}`}
+            />
+          </button>
+        </div>
+
+        {/* Leave LAN addresses alone — every jail, per-host ones included (#384) */}
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('global.ignorePrivate')}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{t('global.ignorePrivateHelp')}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIgnorePrivate(!ignorePrivate)}
+            aria-pressed={ignorePrivate}
+            className={`relative w-12 h-6 rounded-full transition-colors shrink-0 ${ignorePrivate ? 'bg-primary-600' : 'bg-slate-300 dark:bg-slate-600'}`}
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${ignorePrivate ? 'translate-x-6' : ''}`}
             />
           </button>
         </div>

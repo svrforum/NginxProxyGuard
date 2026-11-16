@@ -206,11 +206,11 @@ func (r *RateLimitRepository) GetFail2banByProxyHostID(ctx context.Context, prox
 // defaults if the row does not exist yet. Pointer fields on the update request
 // mean an absent field keeps the stored value; the row is only ever one.
 func (r *RateLimitRepository) GetGlobalFail2ban(ctx context.Context) (*model.GlobalFail2banConfig, error) {
-	const sel = `SELECT id, enabled, max_retries, find_time, ban_time, fail_codes, action, created_at, updated_at
+	const sel = `SELECT id, enabled, max_retries, find_time, ban_time, fail_codes, action, ignore_private_ips, created_at, updated_at
 	             FROM global_fail2ban LIMIT 1`
 	var g model.GlobalFail2banConfig
 	err := r.db.QueryRowContext(ctx, sel).Scan(
-		&g.ID, &g.Enabled, &g.MaxRetries, &g.FindTime, &g.BanTime, &g.FailCodes, &g.Action, &g.CreatedAt, &g.UpdatedAt,
+		&g.ID, &g.Enabled, &g.MaxRetries, &g.FindTime, &g.BanTime, &g.FailCodes, &g.Action, &g.IgnorePrivateIPs, &g.CreatedAt, &g.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		// Insert the row and read it back so every DB default reaches the
@@ -219,7 +219,7 @@ func (r *RateLimitRepository) GetGlobalFail2ban(ctx context.Context) (*model.Glo
 			return nil, err
 		}
 		err = r.db.QueryRowContext(ctx, sel).Scan(
-			&g.ID, &g.Enabled, &g.MaxRetries, &g.FindTime, &g.BanTime, &g.FailCodes, &g.Action, &g.CreatedAt, &g.UpdatedAt,
+			&g.ID, &g.Enabled, &g.MaxRetries, &g.FindTime, &g.BanTime, &g.FailCodes, &g.Action, &g.IgnorePrivateIPs, &g.CreatedAt, &g.UpdatedAt,
 		)
 	}
 	if err != nil {
@@ -261,14 +261,17 @@ func (r *RateLimitRepository) UpdateGlobalFail2ban(ctx context.Context, req *mod
 	if req.Action != nil {
 		add("action", *req.Action)
 	}
+	if req.IgnorePrivateIPs != nil {
+		add("ignore_private_ips", *req.IgnorePrivateIPs)
+	}
 
 	query := fmt.Sprintf(`UPDATE global_fail2ban SET %s
-	    RETURNING id, enabled, max_retries, find_time, ban_time, fail_codes, action, created_at, updated_at`,
+	    RETURNING id, enabled, max_retries, find_time, ban_time, fail_codes, action, ignore_private_ips, created_at, updated_at`,
 		strings.Join(setClauses, ", "))
 
 	var g model.GlobalFail2banConfig
 	if err := r.db.QueryRowContext(ctx, query, args...).Scan(
-		&g.ID, &g.Enabled, &g.MaxRetries, &g.FindTime, &g.BanTime, &g.FailCodes, &g.Action, &g.CreatedAt, &g.UpdatedAt,
+		&g.ID, &g.Enabled, &g.MaxRetries, &g.FindTime, &g.BanTime, &g.FailCodes, &g.Action, &g.IgnorePrivateIPs, &g.CreatedAt, &g.UpdatedAt,
 	); err != nil {
 		return nil, err
 	}

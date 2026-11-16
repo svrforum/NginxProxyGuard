@@ -2098,6 +2098,7 @@ CREATE TABLE IF NOT EXISTS public.global_fail2ban (
     ban_time integer DEFAULT 3600 NOT NULL,
     fail_codes character varying(100) DEFAULT '400,444'::character varying NOT NULL,
     action character varying(20) DEFAULT 'log'::character varying NOT NULL,
+    ignore_private_ips boolean DEFAULT false NOT NULL,
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now()
 );
@@ -4880,3 +4881,7 @@ CREATE TABLE IF NOT EXISTS public.proxy_host_log_rules (
     CONSTRAINT proxy_host_log_rules_pkey PRIMARY KEY (proxy_host_id),
     CONSTRAINT proxy_host_log_rules_proxy_host_id_fkey FOREIGN KEY (proxy_host_id) REFERENCES public.proxy_hosts(id) ON DELETE CASCADE
 );
+
+-- Fail2ban leaves private and link-local addresses alone when this is on (#384).
+-- Read by every jail, the per-host ones included.
+ALTER TABLE public.global_fail2ban ADD COLUMN IF NOT EXISTS ignore_private_ips boolean DEFAULT false NOT NULL;

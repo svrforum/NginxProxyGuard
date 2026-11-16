@@ -577,6 +577,8 @@ type GlobalFail2banExport struct {
 	BanTime    int    `json:"ban_time"`
 	FailCodes  string `json:"fail_codes"`
 	Action     string `json:"action"`
+
+	IgnorePrivateIPs bool `json:"ignore_private_ips"` // absent in older backups: false, the default
 }
 
 // GlobalRateLimitExport represents the singleton global rate-limit default (#198 slice 5).

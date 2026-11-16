@@ -48,6 +48,8 @@
     "excluded": "Not counted: domains you configured as redirect hosts (those are your hosts, and their visitors are not scanners), requests too malformed for the hostname to be read, NPG's own self-checks, and loopback or trusted-proxy addresses.",
     "enable": "Enable global fail2ban",
     "enableHelp": "Settings → Trusted Proxies must be configured first. Without it every request appears to come from your CDN or upstream proxy, and banning that address blocks every visitor behind it on every host.",
+    "ignorePrivate": "Never ban local network addresses",
+    "ignorePrivateHelp": "Applies to every fail2ban jail, per-host ones included. Private ranges (10.x, 172.16–31.x, 192.168.x, fc00::/7) and link-local addresses are counted but never banned. Loopback and trusted proxies are never banned either way.",
     "maxRetriesHelp": "Failures before a ban. Because the ban applies everywhere, a more forgiving threshold than your per-host jails is the safer default.",
     "actionHelp": "Start with \"Log Only\" for a few days, then switch to \"Block IP\". \"Notify Only\" alerts without banning.",
     "failCodesHelp": "HTTP status codes that count as a failure. Only unmatched-host requests are considered, which is where 444 (direct-IP blocking) actually occurs.",

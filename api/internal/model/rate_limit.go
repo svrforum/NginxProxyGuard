@@ -252,6 +252,9 @@ type GlobalFail2banConfig struct {
 	Action     string    `json:"action"`      // block, log, notify
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
+	// IgnorePrivateIPs keeps every jail, the per-host ones too, from banning
+	// private and link-local addresses (#384).
+	IgnorePrivateIPs bool `json:"ignore_private_ips"`
 }
 
 // UpdateGlobalFail2banRequest is a partial update of the singleton.
@@ -262,6 +265,8 @@ type UpdateGlobalFail2banRequest struct {
 	BanTime    *int    `json:"ban_time,omitempty"`
 	FailCodes  *string `json:"fail_codes,omitempty"`
 	Action     *string `json:"action,omitempty"`
+
+	IgnorePrivateIPs *bool `json:"ignore_private_ips,omitempty"`
 }
 
 // ValidateGlobalFail2banRequest applies the same rules as the per-host jail,
