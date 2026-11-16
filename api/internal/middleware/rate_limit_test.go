@@ -4,8 +4,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/labstack/echo/v4"
+
+	"nginx-proxy-guard/pkg/cache"
 )
 
 // ctxForPath builds a context whose route pattern is path, which is what the
@@ -114,5 +117,37 @@ func TestRateLimitFromEnv(t *testing.T) {
 				t.Errorf("rateLimitFromEnv(%q) = %d, want %d", tc.value, got, tc.want)
 			}
 		})
+	}
+}
+
+// Without Valkey the in-process cache counts, so the limiter (and the login
+// brake built on it) still answers 429 instead of switching itself off.
+func TestAPIRateLimitWorksWithoutRedis(t *testing.T) {
+	rc, err := cache.NewRedisClient("", cache.NewLocalCache(4<<20))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rc.Close()
+
+	mw := APIRateLimit(rc, APIRateLimitConfig{
+		Limit:        2,
+		Window:       time.Minute,
+		KeyGenerator: func(c echo.Context) string { return "auth:" + c.RealIP() },
+	})
+	h := mw(func(c echo.Context) error { return c.NoContent(http.StatusOK) })
+	e := echo.New()
+
+	codes := make([]int, 0, 3)
+	for i := 0; i < 3; i++ {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", nil)
+		req.RemoteAddr = "198.51.100.7:40000"
+		rec := httptest.NewRecorder()
+		if err := h(e.NewContext(req, rec)); err != nil {
+			t.Fatal(err)
+		}
+		codes = append(codes, rec.Code)
+	}
+	if codes[0] != http.StatusOK || codes[1] != http.StatusOK || codes[2] != http.StatusTooManyRequests {
+		t.Fatalf("status codes = %v, want [200 200 429]", codes)
 	}
 }

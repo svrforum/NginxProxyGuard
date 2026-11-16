@@ -101,8 +101,12 @@ type detailedDatabaseInfo struct {
 }
 
 type detailedCacheInfo struct {
-	Ready          bool  `json:"ready"`
-	LogBufferSize  int64 `json:"log_buffer_size"`
+	Ready         bool  `json:"ready"`
+	LogBufferSize int64 `json:"log_buffer_size"`
+	// Backend is what serves the key/value caches: "redis", "local" (the
+	// in-process cache, while Redis is absent) or "none".
+	Backend string                 `json:"backend"`
+	Local   *cache.LocalCacheStats `json:"local,omitempty"`
 }
 
 type detailedLogCollectorInfo struct {
@@ -214,11 +218,16 @@ func (h *HealthDetailedHandler) dbInfo(ctx context.Context) *detailedDatabaseInf
 }
 
 func (h *HealthDetailedHandler) cacheInfo(ctx context.Context) *detailedCacheInfo {
-	info := &detailedCacheInfo{}
+	info := &detailedCacheInfo{Backend: "none"}
 	if h.redis == nil {
 		return info
 	}
 	info.Ready = h.redis.IsReady()
+	info.Backend = h.redis.Backend()
+	if lc := h.redis.Local(); lc != nil && !info.Ready {
+		st := lc.Stats()
+		info.Local = &st
+	}
 	if info.Ready {
 		if size, err := h.redis.GetLogBufferSize(ctx); err == nil {
 			info.LogBufferSize = size
