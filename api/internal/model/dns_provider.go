@@ -3,6 +3,7 @@ package model
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 )
@@ -16,6 +17,7 @@ const (
 	DNSProviderInfomaniak = "infomaniak"
 	DNSProviderManual     = "manual"
 	DNSProviderIonos      = "ionos"
+	DNSProviderOVH        = "ovh"
 )
 
 // DNSProvider represents a DNS provider configuration for ACME DNS-01 or DDNS
@@ -33,6 +35,9 @@ type DNSProvider struct {
 	// Route 53 only: the row authenticates with the host's AWS credentials,
 	// so the edit form can open with that choice (#357).
 	UseDefaultCredentials bool `json:"use_default_credentials,omitempty"`
+	// OVHcloud only: the API region, so the edit form opens on it instead of
+	// ovh-eu and re-entering the keys does not move the row to another region.
+	Endpoint string `json:"endpoint,omitempty"`
 }
 
 // CloudflareCredentials represents Cloudflare API credentials
@@ -93,6 +98,41 @@ type DynuCredentials struct {
 	APIKey string `json:"api_key"` // Dynu API key
 }
 
+// OVHCredentials holds an OVHcloud API application key, its secret and the
+// consumer key, as created on <endpoint>/createToken (certbot's
+// dns_ovh_application_key, dns_ovh_application_secret, dns_ovh_consumer_key).
+// Endpoint is the go-ovh name of the API region; empty means ovh-eu.
+type OVHCredentials struct {
+	Endpoint          string `json:"endpoint,omitempty"`
+	ApplicationKey    string `json:"application_key"`
+	ApplicationSecret string `json:"application_secret"`
+	ConsumerKey       string `json:"consumer_key"`
+}
+
+// OVHEndpoints are the API regions accepted for endpoint.
+var OVHEndpoints = []string{"ovh-eu", "ovh-ca", "ovh-us"}
+
+// APIEndpoint returns the endpoint sent to lego, ovh-eu when none is set.
+func (c OVHCredentials) APIEndpoint() string {
+	if e := strings.TrimSpace(c.Endpoint); e != "" {
+		return e
+	}
+	return "ovh-eu"
+}
+
+// Validate requires the three keys and a known endpoint. lego refuses a
+// missing key only when a certificate is issued; here it is a 400 on create
+// and update.
+func (c OVHCredentials) Validate() error {
+	if strings.TrimSpace(c.ApplicationKey) == "" || strings.TrimSpace(c.ApplicationSecret) == "" || strings.TrimSpace(c.ConsumerKey) == "" {
+		return fmt.Errorf("%w: ovh credentials need application_key, application_secret and consumer_key", ErrInvalidCredentials)
+	}
+	if !slices.Contains(OVHEndpoints, c.APIEndpoint()) {
+		return fmt.Errorf("%w: ovh endpoint %q is not one of %s", ErrInvalidCredentials, c.Endpoint, strings.Join(OVHEndpoints, ", "))
+	}
+	return nil
+}
+
 // InfomaniakCredentials holds dedicated DynDNS credentials, not Manager credentials.
 // These credentials only update existing dynamic DNS records; they cannot manage TXT records.
 type InfomaniakCredentials struct {
@@ -134,7 +174,7 @@ func (c IonosCredentials) Normalized() IonosCredentials {
 // CreateDNSProviderRequest is the request body for creating a DNS provider
 type CreateDNSProviderRequest struct {
 	Name         string          `json:"name" validate:"required"`
-	ProviderType string          `json:"provider_type" validate:"required,oneof=cloudflare route53 duckdns dynu infomaniak manual ionos"`
+	ProviderType string          `json:"provider_type" validate:"required,oneof=cloudflare route53 duckdns dynu infomaniak manual ionos ovh"`
 	Credentials  json.RawMessage `json:"credentials" validate:"required"`
 	IsDefault    bool            `json:"is_default"`
 }
@@ -164,6 +204,12 @@ func (p *DNSProvider) MaskCredentials() DNSProvider {
 		var creds Route53Credentials
 		if json.Unmarshal(p.Credentials, &creds) == nil {
 			masked.UseDefaultCredentials = creds.UseDefaultCredentials
+		}
+	}
+	if p.ProviderType == DNSProviderOVH {
+		var creds OVHCredentials
+		if json.Unmarshal(p.Credentials, &creds) == nil {
+			masked.Endpoint = creds.APIEndpoint()
 		}
 	}
 	return masked
@@ -220,6 +266,14 @@ func (p *DNSProvider) ValidateCredentials() error {
 		}
 		if creds.APIKeyPrefix == "" || creds.APIKey == "" {
 			return ErrInvalidCredentials
+		}
+	case DNSProviderOVH:
+		var creds OVHCredentials
+		if err := json.Unmarshal(p.Credentials, &creds); err != nil {
+			return err
+		}
+		if err := creds.Validate(); err != nil {
+			return err
 		}
 	case DNSProviderManual:
 		// No credentials needed for manual DNS

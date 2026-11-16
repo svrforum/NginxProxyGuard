@@ -162,6 +162,7 @@
       "duckdns": "DuckDNS",
       "dynu": "Dynu",
       "ionos": "IONOS",
+      "ovh": "OVHcloud",
       "manual": "Manual",
       "infomaniak": "Infomaniak (DynDNS)"
     },
@@ -186,6 +187,7 @@
         "duckdns": "My DuckDNS Account",
         "dynu": "My Dynu Account",
         "ionos": "My IONOS Account",
+        "ovh": "My OVHcloud Account",
         "manual": "My Manual Setup",
         "infomaniak": "My Infomaniak DynDNS"
       },
@@ -242,6 +244,25 @@
         "apiKeyPlaceholder": "Enter your IONOS API key secret",
         "apiKeyHelp": "The secret that goes with the prefix. Enter only the secret, without the prefix and the dot; it is certbot's dns_ionos_secret."
       },
+      "ovh": {
+        "title": "OVHcloud Credentials",
+        "endpoint": "API Endpoint",
+        "endpointHelp": "The OVHcloud API region of the account that holds the DNS zone.",
+        "endpoints": {
+          "eu": "OVHcloud Europe (ovh-eu)",
+          "ca": "OVHcloud Canada (ovh-ca)",
+          "us": "OVHcloud US (ovh-us)"
+        },
+        "applicationKey": "Application Key",
+        "applicationKeyPlaceholder": "Enter your OVHcloud application key",
+        "applicationKeyHelp": "Create the keys on https://eu.api.ovh.com/createToken/ (or the page of your region) with GET/PUT/POST/DELETE on /domain/zone/*. This is certbot's dns_ovh_application_key.",
+        "applicationSecret": "Application Secret",
+        "applicationSecretPlaceholder": "Enter your OVHcloud application secret",
+        "applicationSecretHelp": "Shown once when the keys are created. This is certbot's dns_ovh_application_secret.",
+        "consumerKey": "Consumer Key",
+        "consumerKeyPlaceholder": "Enter your OVHcloud consumer key",
+        "consumerKeyHelp": "The key that carries the rights granted on /domain/zone/*. This is certbot's dns_ovh_consumer_key."
+      },
       "test": {
         "button": "Test Connection",
         "testing": "Testing...",
@@ -269,7 +290,7 @@
     "digitalocean": "DigitalOcean",
     "namecheap": "Namecheap",
     "gandi": "Gandi",
-    "ovh": "OVH",
+    "ovh": "OVHcloud",
     "custom": "Custom"
   },
   "fields": {

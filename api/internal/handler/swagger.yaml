@@ -13563,7 +13563,7 @@ components:
           type: string
         provider_type:
           type: string
-          enum: [cloudflare, route53, duckdns, dynu, infomaniak, ionos, manual]
+          enum: [cloudflare, route53, duckdns, dynu, infomaniak, ionos, ovh, manual]
         is_default:
           type: boolean
         has_credentials:
@@ -13576,6 +13576,10 @@ components:
           description: >-
             Route 53 only: the provider authenticates with the AWS default
             credential chain instead of an access key pair. Omitted otherwise.
+        endpoint:
+          type: string
+          enum: [ovh-eu, ovh-ca, ovh-us]
+          description: OVHcloud only, the API region of the stored keys. Omitted otherwise.
         created_at:
           type: string
           format: date-time
@@ -13590,7 +13594,7 @@ components:
           type: string
         provider_type:
           type: string
-          enum: [cloudflare, route53, duckdns, dynu, infomaniak, ionos, manual]
+          enum: [cloudflare, route53, duckdns, dynu, infomaniak, ionos, ovh, manual]
         credentials:
           type: object
           description: >-
@@ -13602,6 +13606,8 @@ components:
             api_key (IONOS public prefix and secret; sent to IONOS as prefix.secret).
             infomaniak: username and password for a preconfigured DynDNS hostname (DDNS IPv4 only; no DNS-01).
             The Infomaniak connection test validates credential format only.
+            ovh: application_key, application_secret and consumer_key, optional endpoint
+            (ovh-eu, ovh-ca or ovh-us; default ovh-eu).
             manual: none required.
         is_default:
           type: boolean

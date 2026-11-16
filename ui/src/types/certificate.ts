@@ -60,10 +60,11 @@ export interface UploadCertificateRequest {
 export interface DNSProvider {
   id: string;
   name: string;
-  provider_type: 'cloudflare' | 'route53' | 'duckdns' | 'dynu' | 'infomaniak' | 'ionos' | 'manual';
+  provider_type: 'cloudflare' | 'route53' | 'duckdns' | 'dynu' | 'infomaniak' | 'ionos' | 'ovh' | 'manual';
   is_default: boolean;
   has_credentials: boolean;
   use_default_credentials?: boolean;
+  endpoint?: string; // OVHcloud API region
   created_at: string;
   updated_at: string;
 }
@@ -77,7 +78,7 @@ export interface CloudflareCredentials {
 
 export interface CreateDNSProviderRequest {
   name: string;
-  provider_type: 'cloudflare' | 'route53' | 'duckdns' | 'dynu' | 'infomaniak' | 'ionos' | 'manual';
+  provider_type: 'cloudflare' | 'route53' | 'duckdns' | 'dynu' | 'infomaniak' | 'ionos' | 'ovh' | 'manual';
   credentials: CloudflareCredentials | Record<string, string | boolean>;
   is_default?: boolean;
 }

@@ -30,6 +30,7 @@ import (
 	"github.com/go-acme/lego/v4/providers/dns/duckdns"
 	"github.com/go-acme/lego/v4/providers/dns/dynu"
 	"github.com/go-acme/lego/v4/providers/dns/ionos"
+	"github.com/go-acme/lego/v4/providers/dns/ovh"
 	"github.com/go-acme/lego/v4/providers/dns/route53"
 	"github.com/go-acme/lego/v4/registration"
 
@@ -694,6 +695,14 @@ const (
 	ionosPollingInterval    = 10 * time.Second
 )
 
+// ovhPropagationTimeout and ovhPollingInterval: OVHcloud nameservers take a
+// few minutes to serve a new record; the wait stays under the renewal lock
+// (certRenewalLockTTL in internal/service), like IONOS.
+const (
+	ovhPropagationTimeout = 10 * time.Minute
+	ovhPollingInterval    = 10 * time.Second
+)
+
 // createDNSProvider creates a DNS provider based on type and credentials
 func (s *Service) createDNSProvider(provider *model.DNSProvider) (challenge.Provider, error) {
 	if provider == nil {
@@ -805,6 +814,25 @@ func (s *Service) createDNSProvider(provider *model.DNSProvider) (challenge.Prov
 		// domains.
 		cfg.APIKey = creds.APIKeyPrefix + "." + creds.APIKey
 		return ionos.NewDNSProviderConfig(cfg)
+
+	case model.DNSProviderOVH:
+		var creds model.OVHCredentials
+		if err := json.Unmarshal(provider.Credentials, &creds); err != nil {
+			return nil, fmt.Errorf("invalid ovh credentials: %w", err)
+		}
+		// Checked again here: a row restored from a backup was never checked.
+		if err := creds.Validate(); err != nil {
+			return nil, fmt.Errorf("ovh: %w", err)
+		}
+
+		cfg := ovh.NewDefaultConfig()
+		cfg.PropagationTimeout = ovhPropagationTimeout
+		cfg.PollingInterval = ovhPollingInterval
+		cfg.APIEndpoint = creds.APIEndpoint()
+		cfg.ApplicationKey = strings.TrimSpace(creds.ApplicationKey)
+		cfg.ApplicationSecret = strings.TrimSpace(creds.ApplicationSecret)
+		cfg.ConsumerKey = strings.TrimSpace(creds.ConsumerKey)
+		return ovh.NewDNSProviderConfig(cfg)
 
 	default:
 		return nil, fmt.Errorf("unsupported DNS provider type: %s", provider.ProviderType)

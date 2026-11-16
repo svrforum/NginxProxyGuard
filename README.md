@@ -49,7 +49,7 @@
 **Robust Security, Easy Management** - Reduced Nginx complexity, maximized security
 
 ### 🔒 SSL Automation
-Let's Encrypt integration with automatic renewal. Supports wildcard certificates via DNS-01 challenge. Multiple DNS providers supported: **Cloudflare**, **AWS Route 53**, **DuckDNS**, **Dynu**, **IONOS**.
+Let's Encrypt integration with automatic renewal. Supports wildcard certificates via DNS-01 challenge. Multiple DNS providers supported: **Cloudflare**, **AWS Route 53**, **DuckDNS**, **Dynu**, **IONOS**, **OVHcloud**.
 
 Route 53 can work without an access key pair: turn on **Use AWS default credentials** in the DNS provider and the AWS default credential chain authenticates — an EC2 instance role, an ECS task role, or `AWS_*` environment variables on the `api` container. The API container runs on a bridge network, so on EC2 the instance metadata service must allow a second hop: IMDSv2 with `HttpPutResponseHopLimit` of 2 (`aws ec2 modify-instance-metadata-options --instance-id <id> --http-tokens required --http-put-response-hop-limit 2`).
 

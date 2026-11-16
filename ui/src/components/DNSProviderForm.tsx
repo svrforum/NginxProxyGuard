@@ -12,7 +12,7 @@ interface DNSProviderFormProps {
   onSuccess: () => void
 }
 
-type ProviderType = 'cloudflare' | 'route53' | 'duckdns' | 'dynu' | 'infomaniak' | 'ionos' | 'manual'
+type ProviderType = 'cloudflare' | 'route53' | 'duckdns' | 'dynu' | 'infomaniak' | 'ionos' | 'ovh' | 'manual'
 
 export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSProviderFormProps) {
   const { t } = useTranslation(['certificates', 'common'])
@@ -53,6 +53,12 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
   // IONOS credentials
   const [ionosKeyPrefix, setIonosKeyPrefix] = useState('')
   const [ionosApiKey, setIonosApiKey] = useState('')
+
+  // OVHcloud credentials
+  const [ovhEndpoint, setOvhEndpoint] = useState(provider?.endpoint || 'ovh-eu')
+  const [ovhAppKey, setOvhAppKey] = useState('')
+  const [ovhAppSecret, setOvhAppSecret] = useState('')
+  const [ovhConsumerKey, setOvhConsumerKey] = useState('')
 
   // Track whether credentials were modified during editing
   const [credentialsModified, setCredentialsModified] = useState(false)
@@ -98,6 +104,13 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
       const creds: Record<string, string> = {}
       if (ionosKeyPrefix) creds.api_key_prefix = ionosKeyPrefix
       if (ionosApiKey) creds.api_key = ionosApiKey
+      return creds
+    }
+    if (providerType === 'ovh') {
+      const creds: Record<string, string> = { endpoint: ovhEndpoint }
+      if (ovhAppKey) creds.application_key = ovhAppKey
+      if (ovhAppSecret) creds.application_secret = ovhAppSecret
+      if (ovhConsumerKey) creds.consumer_key = ovhConsumerKey
       return creds
     }
     return {}
@@ -269,7 +282,10 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
             <select
               value={providerType}
               onChange={(e) => setProviderType(e.target.value as ProviderType)}
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white"
+              // provider_type cannot be changed by an update; the API keeps the
+              // stored type and saves the new type's credentials under it.
+              disabled={isEditing}
+              className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <option value="cloudflare">Cloudflare</option>
               <option value="route53">AWS Route 53</option>
@@ -277,6 +293,7 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
               <option value="dynu">Dynu</option>
               <option value="infomaniak">Infomaniak (DynDNS)</option>
               <option value="ionos">IONOS</option>
+              <option value="ovh">OVHcloud</option>
               <option value="manual">{t('dnsProviders.types.manual')}</option>
             </select>
           </div>
@@ -602,6 +619,94 @@ export default function DNSProviderForm({ provider, onClose, onSuccess }: DNSPro
                 />
                 <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
                   {t('dnsProviders.form.ionos.apiKeyHelp')}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* OVHcloud Credentials */}
+          {providerType === 'ovh' && (
+            <div className="space-y-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/40 p-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                <svg className="w-5 h-5 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+                </svg>
+                {t('dnsProviders.form.ovh.title')}
+              </h3>
+
+              {hasExistingCredentials && !credentialsModified && (
+                <div className="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-lg p-3 text-sky-700 dark:text-sky-400 text-xs flex items-center gap-2">
+                  <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                  </svg>
+                  {t('dnsProviders.form.credentialsConfigured')}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-2">
+                  {t('dnsProviders.form.ovh.endpoint')}
+                  <HelpTip content={t('dnsProviders.form.ovh.endpointHelp')} />
+                </label>
+                <select
+                  value={ovhEndpoint}
+                  onChange={(e) => { setOvhEndpoint(e.target.value); setCredentialsModified(true) }}
+                  className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors placeholder:text-slate-400 bg-white dark:bg-slate-700 dark:text-white"
+                >
+                  <option value="ovh-eu">{t('dnsProviders.form.ovh.endpoints.eu')}</option>
+                  <option value="ovh-ca">{t('dnsProviders.form.ovh.endpoints.ca')}</option>
+                  <option value="ovh-us">{t('dnsProviders.form.ovh.endpoints.us')}</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-2">
+                  {t('dnsProviders.form.ovh.applicationKey')}
+                  <HelpTip content={t('dnsProviders.form.ovh.applicationKeyHelp')} />
+                </label>
+                <input
+                  type="text"
+                  value={ovhAppKey}
+                  onChange={(e) => { setOvhAppKey(e.target.value); setCredentialsModified(true) }}
+                  placeholder={hasExistingCredentials ? '••••••••' : t('dnsProviders.form.ovh.applicationKeyPlaceholder')}
+                  className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors placeholder:text-slate-400 bg-white dark:bg-slate-700 dark:text-white font-mono"
+                />
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                  {t('dnsProviders.form.ovh.applicationKeyHelp')}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-2">
+                  {t('dnsProviders.form.ovh.applicationSecret')}
+                  <HelpTip content={t('dnsProviders.form.ovh.applicationSecretHelp')} />
+                </label>
+                <input
+                  type="password"
+                  value={ovhAppSecret}
+                  onChange={(e) => { setOvhAppSecret(e.target.value); setCredentialsModified(true) }}
+                  placeholder={hasExistingCredentials ? '••••••••' : t('dnsProviders.form.ovh.applicationSecretPlaceholder')}
+                  className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors placeholder:text-slate-400 bg-white dark:bg-slate-700 dark:text-white"
+                />
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                  {t('dnsProviders.form.ovh.applicationSecretHelp')}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-2">
+                  {t('dnsProviders.form.ovh.consumerKey')}
+                  <HelpTip content={t('dnsProviders.form.ovh.consumerKeyHelp')} />
+                </label>
+                <input
+                  type="password"
+                  value={ovhConsumerKey}
+                  onChange={(e) => { setOvhConsumerKey(e.target.value); setCredentialsModified(true) }}
+                  placeholder={hasExistingCredentials ? '••••••••' : t('dnsProviders.form.ovh.consumerKeyPlaceholder')}
+                  className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors placeholder:text-slate-400 bg-white dark:bg-slate-700 dark:text-white"
+                />
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                  {t('dnsProviders.form.ovh.consumerKeyHelp')}
                 </p>
               </div>
             </div>

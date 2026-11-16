@@ -162,6 +162,7 @@
       "duckdns": "DuckDNS",
       "dynu": "Dynu",
       "ionos": "IONOS",
+      "ovh": "OVHcloud",
       "manual": "수동 설정",
       "infomaniak": "Infomaniak (DynDNS)"
     },
@@ -186,8 +187,9 @@
         "duckdns": "예: 내 DuckDNS 계정",
         "dynu": "예: 내 Dynu 계정",
         "ionos": "예: 내 IONOS 계정",
+        "ovh": "예: 내 OVHcloud 계정",
         "manual": "예: 내 수동 설정",
-        "infomaniak": "내 Infomaniak DynDNS"
+        "infomaniak": "예: 내 Infomaniak DynDNS"
       },
       "providerType": "제공자 유형",
       "setDefault": "기본값으로 설정",
@@ -242,6 +244,25 @@
         "apiKeyPlaceholder": "IONOS API 비밀 키 입력",
         "apiKeyHelp": "공개 접두사와 짝을 이루는 비밀 키입니다. 접두사와 점(.)은 빼고 비밀 키만 입력하세요. certbot의 dns_ionos_secret 값과 같습니다."
       },
+      "ovh": {
+        "title": "OVHcloud 자격 증명",
+        "endpoint": "API 엔드포인트",
+        "endpointHelp": "DNS 영역이 있는 계정의 OVHcloud API 리전입니다.",
+        "endpoints": {
+          "eu": "OVHcloud 유럽 (ovh-eu)",
+          "ca": "OVHcloud 캐나다 (ovh-ca)",
+          "us": "OVHcloud 미국 (ovh-us)"
+        },
+        "applicationKey": "애플리케이션 키",
+        "applicationKeyPlaceholder": "OVHcloud 애플리케이션 키를 입력하세요",
+        "applicationKeyHelp": "https://eu.api.ovh.com/createToken/ (또는 해당 리전 페이지)에서 /domain/zone/* 에 대한 GET/PUT/POST/DELETE 권한으로 키를 만드세요. certbot의 dns_ovh_application_key 입니다.",
+        "applicationSecret": "애플리케이션 시크릿",
+        "applicationSecretPlaceholder": "OVHcloud 애플리케이션 시크릿을 입력하세요",
+        "applicationSecretHelp": "키를 만들 때 한 번만 표시됩니다. certbot의 dns_ovh_application_secret 입니다.",
+        "consumerKey": "컨슈머 키",
+        "consumerKeyPlaceholder": "OVHcloud 컨슈머 키를 입력하세요",
+        "consumerKeyHelp": "/domain/zone/* 권한이 부여된 키입니다. certbot의 dns_ovh_consumer_key 입니다."
+      },
       "test": {
         "button": "연결 테스트",
         "testing": "테스트 중...",
@@ -269,7 +290,7 @@
     "digitalocean": "DigitalOcean",
     "namecheap": "Namecheap",
     "gandi": "Gandi",
-    "ovh": "OVH",
+    "ovh": "OVHcloud",
     "custom": "사용자 정의"
   },
   "fields": {
