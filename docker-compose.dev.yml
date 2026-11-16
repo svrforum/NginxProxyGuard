@@ -102,7 +102,8 @@ services:
       REDIS_URL: redis://npg-valkey:6379/0
       JWT_SECRET: ${JWT_SECRET:-change-this-in-production-use-openssl-rand-hex-32}
       ENVIRONMENT: ${ENVIRONMENT:-production}
-      # API rate limiting (per client IP per minute; needs Valkey). 0 = off.
+      # API rate limiting (per client IP per minute; counted in Valkey, or in the
+      # API's own memory without it). 0 = off.
       # The login endpoints have their own separate budget so panel traffic can
       # never lock the operator out of the sign-in screen (#258).
       API_RATE_LIMIT_PER_MINUTE: ${API_RATE_LIMIT_PER_MINUTE:-}
