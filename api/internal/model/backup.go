@@ -715,6 +715,16 @@ type AccessListData struct {
 	SatisfyAny  bool                 `json:"satisfy_any"`
 	PassAuth    bool                 `json:"pass_auth"`
 	Items       []AccessListItemData `json:"items,omitempty"`
+
+	// AuthUsers are the basic auth accounts with their SHA-512 crypt hashes
+	// (#387). A backup without them restores a list with none.
+	AuthUsers []AccessListAuthUserData `json:"auth_users,omitempty"`
+}
+
+// AccessListAuthUserData is a basic auth account of an access list for export.
+type AccessListAuthUserData struct {
+	Username     string `json:"username"`
+	PasswordHash string `json:"password_hash"`
 }
 
 // AccessListItemData represents access list item for export

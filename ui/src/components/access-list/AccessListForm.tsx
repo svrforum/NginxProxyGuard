@@ -4,6 +4,7 @@ import { HelpTip } from '../common/HelpTip';
 import { ModalShell } from '../common/ModalShell';
 import { DnsLoginBypassWarning } from '../common/dns/DnsLoginBypassWarning';
 import { AccessRuleRows } from './AccessRuleRows';
+import { AuthUserRows } from './AuthUserRows';
 import { LegacyRuleRows } from './LegacyRuleRows';
 import { useAccessListForm, type AccessListSaved } from './useAccessListForm';
 
@@ -110,6 +111,14 @@ export function AccessListForm({ accessList, onClose, onSaved }: AccessListFormP
             errors={form.rowErrors}
             onMove={form.moveToDomain}
             onRemove={form.removeRow}
+          />
+
+          <AuthUserRows
+            rows={form.users}
+            errors={form.userErrors}
+            onAdd={form.addUser}
+            onChange={form.changeUser}
+            onRemove={form.removeUser}
           />
 
           <div className="flex justify-end gap-2 pt-4 border-t border-slate-200 dark:border-slate-700">

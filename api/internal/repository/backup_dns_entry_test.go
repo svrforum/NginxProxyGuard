@@ -248,6 +248,8 @@ func TestExportAccessListsKeepsDomainRowsAsStored(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"directive", "address", "description", "sort_order", "hostname"}).
 			AddRow("allow", "192.0.2.10", "office", 0, nil).
 			AddRow("deny", "all", nil, 1, "partner.example.com"))
+	mock.ExpectQuery(`FROM access_list_auth_users`).WithArgs(listID).
+		WillReturnRows(sqlmock.NewRows([]string{"username", "password_hash"}))
 
 	lists, err := repo.exportAccessLists(context.Background())
 	if err != nil {

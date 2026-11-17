@@ -54,6 +54,7 @@ func TestAccessListStoresDomainRulesAsPlaceholders(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows(accessListItemColumns).
 			AddRow("00000000-0000-0000-0000-0000000000b1", id, "allow", "192.0.2.10", "office", 0, now, nil).
 			AddRow("00000000-0000-0000-0000-0000000000b2", id, "deny", "all", "", 1, now, "partner.example.com"))
+	mock.ExpectQuery(`FROM access_list_auth_users`).WithArgs(id).WillReturnRows(sqlmock.NewRows([]string{"id", "username", "password_hash"}))
 
 	list, err := repo.Create(context.Background(), &model.CreateAccessListRequest{Name: "partners", Items: []model.CreateAccessListItemRequest{
 		{Directive: "allow", Address: "192.0.2.10", Description: "office", SortOrder: 0},
@@ -91,6 +92,7 @@ func TestAccessListListReadsHostnames(t *testing.T) {
 	mock.ExpectQuery(accessListItemRead).WithArgs(id).
 		WillReturnRows(sqlmock.NewRows(accessListItemColumns).
 			AddRow("00000000-0000-0000-0000-0000000000b2", id, "deny", "all", "", 0, now, "partner.example.com"))
+	mock.ExpectQuery(`FROM access_list_auth_users`).WithArgs(id).WillReturnRows(sqlmock.NewRows([]string{"id", "username", "password_hash"}))
 
 	lists, total, err := repo.List(context.Background(), 1, 20)
 	if err != nil {

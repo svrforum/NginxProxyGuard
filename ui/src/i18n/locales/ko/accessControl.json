@@ -9,7 +9,9 @@
         "create": "생성",
         "save": "저장 중...",
         "addRule": "규칙 추가",
-        "removeRule": "규칙 제거"
+        "removeRule": "규칙 제거",
+        "addUser": "사용자 추가",
+        "removeUser": "삭제"
     },
     "form": {
         "newTitle": "새 접근 목록",
@@ -19,7 +21,7 @@
         "description": "설명",
         "descriptionPlaceholder": "설명 (선택 사항)",
         "satisfyAny": "조건 완화 (OR 로직)",
-        "passAuth": "인증 헤더 전달",
+        "passAuth": "아이디·비밀번호를 백엔드에도 전달",
         "accessRules": "접근 규칙",
         "ipPlaceholder": "IP, CIDR 또는 도메인 (예: 192.0.2.0/24, partner.example.com)",
         "ruleDescription": "설명 (선택)",
@@ -34,7 +36,19 @@
         "legacyIgnored": "적용 안 됨",
         "legacyDenyAll": "모두 차단으로 적용됨",
         "moveToDomain": "도메인으로 옮기기",
-        "removeLegacy": "항목 삭제"
+        "removeLegacy": "항목 삭제",
+        "authUsers": "아이디·비밀번호",
+        "authUsersEmpty": "등록된 사용자가 없습니다. 사용자를 추가하면 이 목록을 쓰는 호스트에서 아이디와 비밀번호를 묻습니다.",
+        "username": "아이디",
+        "password": "비밀번호",
+        "passwordKeep": "비워 두면 기존 비밀번호 유지",
+        "passwordNew": "비밀번호 (8자 이상)",
+        "userErrors": {
+            "usernameRequired": "아이디를 입력하세요.",
+            "usernameInvalid": "아이디에는 콜론(:)이나 공백을 쓸 수 없고, 64자까지입니다.",
+            "passwordRequired": "새 사용자는 비밀번호가 필요합니다.",
+            "passwordTooShort": "비밀번호는 8자 이상이어야 합니다."
+        }
     },
     "list": {
         "title": "접근 목록 (IP 허용/차단)",
@@ -49,7 +63,8 @@
         "satisfyAny": "조건 완화",
         "passAuth": "인증 전달",
         "domainsTitle": "도메인 허용 (IP 규칙 다음에 확인)",
-        "needsReview": "검토 필요"
+        "needsReview": "검토 필요",
+        "authUsers": "사용자 {{count}}명"
     },
     "messages": {
         "deleteConfirm": "이 접근 목록을 삭제하시겠습니까?",
@@ -59,7 +74,8 @@
         "fixRules": "표시된 규칙을 고친 뒤 다시 저장하세요.",
         "reloadRejectedSave": "접근 목록은 저장됐지만 nginx가 새 설정을 받아들이지 않았습니다. 아래 이유를 확인하세요.",
         "reloadRejectedDelete": "접근 목록은 삭제됐지만 nginx가 새 설정을 받아들이지 않았습니다. 아래 이유를 확인하세요.",
-        "reloadRejectedConfirm": "도메인은 다시 허용됐지만 nginx가 새 설정을 받아들이지 않았습니다. 아래 이유를 확인하세요."
+        "reloadRejectedConfirm": "도메인은 다시 허용됐지만 nginx가 새 설정을 받아들이지 않았습니다. 아래 이유를 확인하세요.",
+        "fixUsers": "표시된 사용자를 고친 뒤 다시 저장하세요."
     },
     "errors": {
         "hostname_needs_kind": "도메인은 도메인 항목으로 넣으세요.",
@@ -72,8 +88,9 @@
     "help": {
         "name": "접근 목록의 이름을 입력하세요.",
         "description": "이 접근 목록에 대한 설명을 입력하세요.",
-        "satisfyAny": "활성화시, 하위 규칙 중 하나라도 만족하면 접근이 허용됩니다 (OR 로직). 비활성화시 기본적으로 모든 규칙이 검사됩니다.",
-        "passAuth": "Basic 인증 헤더를 업스트림 서버로 전달합니다.",
-        "accessRules": "IP 주소와 대역을 허용·차단하거나, 도메인(DDNS 이름 등)을 허용합니다. 도메인은 IP 규칙 다음에 확인합니다."
+        "satisfyAny": "켜면 접근 규칙과 아이디·비밀번호 중 하나만 맞아도 들어옵니다. 끄면 둘 다 맞아야 합니다.",
+        "passAuth": "로그인한 아이디·비밀번호(Authorization 헤더)를 백엔드 서버에도 보냅니다. 끄면 NPG에서 확인한 뒤 지웁니다. 백엔드도 같은 방식으로 로그인을 받을 때만 켜세요.",
+        "accessRules": "IP 주소와 대역을 허용·차단하거나, 도메인(DDNS 이름 등)을 허용합니다. 도메인은 IP 규칙 다음에 확인합니다.",
+        "authUsers": "이 목록을 쓰는 호스트에 접속할 때 아이디와 비밀번호를 묻습니다. \"조건 완화\"를 켜면 위 규칙에서 허용한 IP는 비밀번호 없이 들어오고, 끄면 IP와 비밀번호가 둘 다 맞아야 합니다. ForwardAuth를 쓰는 호스트에는 붙일 수 없고, 이 목록을 쓰는 호스트의 국가·클라우드 챌린지는 차단으로 바뀝니다."
     }
 }

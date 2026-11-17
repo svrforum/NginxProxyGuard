@@ -209,6 +209,15 @@ CREATE TABLE IF NOT EXISTS public.access_list_items (
     CONSTRAINT access_list_items_directive_check CHECK (((directive)::text = ANY ((ARRAY['allow'::character varying, 'deny'::character varying])::text[]))),
     CONSTRAINT access_list_items_hostname_check CHECK (hostname IS NULL OR (directive = 'deny' AND address = 'all' AND hostname ~ '^[a-z0-9.-]{1,253}$'))
 );
+-- Basic auth accounts of an access list (#387). nginx reads the hashes from
+-- an htpasswd file the API writes; the hash is SHA-512 crypt.
+CREATE TABLE IF NOT EXISTS public.access_list_auth_users (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    access_list_id uuid NOT NULL,
+    username character varying(64) NOT NULL,
+    password_hash text NOT NULL,
+    created_at timestamp with time zone DEFAULT now()
+);
 CREATE TABLE IF NOT EXISTS public.access_lists (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     name character varying(255) NOT NULL,
@@ -2841,6 +2850,8 @@ DO $$ BEGIN ALTER TABLE ONLY public.dashboard_stats_hourly_partitioned ATTACH PA
 DO $$ BEGIN ALTER TABLE ONLY public.dashboard_stats_hourly_partitioned ATTACH PARTITION public.stats_hourly_p_default DEFAULT; EXCEPTION WHEN OTHERS THEN NULL; END $$;
 ALTER TABLE ONLY public.access_list_items
     ADD CONSTRAINT access_list_items_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.access_list_auth_users
+    ADD CONSTRAINT access_list_auth_users_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.access_lists
     ADD CONSTRAINT access_lists_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.auth_providers
@@ -3086,6 +3097,7 @@ ALTER TABLE ONLY public.waf_rule_snapshots
     ADD CONSTRAINT waf_rule_snapshots_pkey PRIMARY KEY (id);
 CREATE INDEX IF NOT EXISTS idx_access_list_items_hostname ON public.access_list_items USING btree (hostname) WHERE (hostname IS NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_access_list_items_list_id ON public.access_list_items USING btree (access_list_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_access_list_auth_users_list_username ON public.access_list_auth_users USING btree (access_list_id, username);
 CREATE INDEX IF NOT EXISTS idx_api_token_usage_created_at ON public.api_token_usage USING btree (created_at);
 CREATE INDEX IF NOT EXISTS idx_api_token_usage_token_id ON public.api_token_usage USING btree (token_id);
 CREATE INDEX IF NOT EXISTS idx_api_tokens_is_active ON public.api_tokens USING btree (is_active) WHERE (is_active = true);
@@ -3560,6 +3572,8 @@ CREATE TRIGGER update_proxy_hosts_updated_at BEFORE UPDATE ON public.proxy_hosts
 CREATE TRIGGER update_uri_blocks_updated_at BEFORE UPDATE ON public.uri_blocks FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 ALTER TABLE ONLY public.access_list_items
     ADD CONSTRAINT access_list_items_access_list_id_fkey FOREIGN KEY (access_list_id) REFERENCES public.access_lists(id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.access_list_auth_users
+    ADD CONSTRAINT access_list_auth_users_access_list_id_fkey FOREIGN KEY (access_list_id) REFERENCES public.access_lists(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.api_token_usage
     ADD CONSTRAINT api_token_usage_token_id_fkey FOREIGN KEY (token_id) REFERENCES public.api_tokens(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.api_tokens

@@ -13,10 +13,13 @@ type AccessList struct {
 	Name        string           `json:"name"`
 	Description string           `json:"description,omitempty"`
 	SatisfyAny  bool             `json:"satisfy_any"` // true = any rule match, false = all must match
-	PassAuth    bool             `json:"pass_auth"`   // Allow authenticated users to bypass
+	PassAuth    bool             `json:"pass_auth"`   // Pass the basic auth credentials on to the backend (#387)
 	Items       []AccessListItem `json:"items,omitempty"`
 	CreatedAt   time.Time        `json:"created_at"`
 	UpdatedAt   time.Time        `json:"updated_at"`
+
+	// AuthUsers are the basic auth accounts (#387).
+	AuthUsers []AccessListAuthUser `json:"auth_users,omitempty"`
 }
 
 // AccessListItem represents a single allow/deny rule
@@ -43,6 +46,8 @@ type CreateAccessListRequest struct {
 	SatisfyAny  *bool                        `json:"satisfy_any,omitempty"`
 	PassAuth    *bool                        `json:"pass_auth,omitempty"`
 	Items       []CreateAccessListItemRequest `json:"items,omitempty"`
+
+	AuthUsers []AccessListAuthUserRequest `json:"auth_users,omitempty"`
 }
 
 // CreateAccessListItemRequest is the request to create an access list item.
@@ -67,6 +72,9 @@ type UpdateAccessListRequest struct {
 	SatisfyAny  *bool                         `json:"satisfy_any,omitempty"`
 	PassAuth    *bool                         `json:"pass_auth,omitempty"`
 	Items       []CreateAccessListItemRequest `json:"items,omitempty"`
+
+	// AuthUsers replaces the accounts when sent; absent keeps them.
+	AuthUsers []AccessListAuthUserRequest `json:"auth_users,omitempty"`
 }
 
 // AccessListListResponse is the response for listing access lists
@@ -180,7 +188,7 @@ func ValidateCreateAccessListRequest(req *CreateAccessListRequest) error {
 		return err
 	}
 	req.Items = items
-	return nil
+	return ValidateAccessListAuthUsers(req.AuthUsers, nil)
 }
 
 // ValidateUpdateAccessListRequest checks the fields an update sends. stored
@@ -202,6 +210,9 @@ func ValidateUpdateAccessListRequest(req *UpdateAccessListRequest, stored []Acce
 		return err
 	}
 	req.Items = items
+	// The accounts are checked by the handler with the stored ones
+	// (ValidateAccessListAuthUsers): an account sent without a password keeps
+	// its stored hash.
 	return nil
 }
 

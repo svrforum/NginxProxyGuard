@@ -25,6 +25,8 @@ export interface AccessList {
   satisfy_any: boolean;
   pass_auth: boolean;
   items: AccessListItem[];
+  /** Basic auth accounts (#387); the password is never returned. */
+  auth_users?: { id: string; username: string }[];
   /** Hosts with a login that this list lets a domain's address skip; hosts is null without proxy:read. */
   login_bypass_hosts?: { count: number; hosts: DNSHostRef[] | null };
   created_at: string;
@@ -43,6 +45,8 @@ export interface CreateAccessListRequest {
     sort_order?: number;
     kind?: AccessListItemKind;
   }[];
+  /** Replaces the accounts; an account without a password keeps its stored one (#387). */
+  auth_users?: { username: string; password?: string }[];
 }
 
 export interface RedirectHost {

@@ -181,7 +181,7 @@
 {{end}}
 {{end}}{{end}}{{end}}
 
-{{if .AccessList}}{{if .AccessList.Items}}
+{{if .AccessList}}{{if or .AccessList.Items .BasicAuth}}
     # Access List: {{commentText .AccessList.Name}}
     # Note: Access list denials will have block_reason set to access_denied
     set $block_reason_var "access_denied";
@@ -198,9 +198,14 @@
 {{end}}{{end}}{{range accessListDNSIncludes .AccessList}}
     # dns: {{commentText .Name}}
     include {{.Path}};
-{{end}}
+{{end}}{{if .AccessList.Items}}
     deny all;
-{{end}}{{end}}
+{{end}}{{if .BasicAuth}}
+    # Username and password from the access list (#387). With satisfy any an
+    # address the list allows gets in without them.
+    auth_basic "Restricted";
+    auth_basic_user_file {{.HtpasswdPath}};
+{{end}}{{end}}{{end}}
 
 {{if .Host.BlockExploits}}
     # Block common exploits (database-managed rules)
@@ -672,7 +677,7 @@
         # Direct-forward upstream is an upstream group name, so `proxy_redirect
         # default` can't derive the backend URL — rewrite backend Location/Refresh explicitly.
         proxy_redirect {{$.Host.ForwardScheme}}://{{hostPort $.Host.ForwardHost $.Host.ForwardPort}}/ /;{{end}}
-        include /etc/nginx/includes/proxy_params.conf;
+        include /etc/nginx/includes/proxy_params.conf;{{template "_basic_auth_strip" $}}
 {{else}}
         set $block_reason_var "uri_block";
         return 403;
@@ -710,3 +715,6 @@
         add_header Permissions-Policy "{{headerValue .SecurityHeaders.PermissionsPolicy}}" always;
         {{end}}
         {{end}}{{end}}{{end -}}
+{{- define "_basic_auth_strip"}}{{if and .BasicAuth (not .AccessList.PassAuth)}}
+        # The access list's username and password are not passed on (#387).
+        proxy_set_header Authorization "";{{end}}{{end}}

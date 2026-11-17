@@ -13,6 +13,7 @@ import {
   type RowError,
   type RuleField,
 } from './accessListItems';
+import { authUserErrors, blankAuthUser, buildAuthUsersRequest, rowsFromAuthUsers, type AuthUserError, type AuthUserRow } from './authUsers';
 
 export interface AccessListSaved {
   /** Set when the list is saved but nginx refused to load it (409 nginx_reload_rejected). */
@@ -27,6 +28,8 @@ export function useAccessListForm(accessList: AccessList | null, onSaved: (resul
   const [satisfyAny, setSatisfyAny] = useState(accessList?.satisfy_any ?? true);
   const [passAuth, setPassAuth] = useState(accessList?.pass_auth ?? false);
   const [rows, setRows] = useState<AccessRuleRow[]>(() => rowsFromList(accessList));
+  const [users, setUsers] = useState<AuthUserRow[]>(() => rowsFromAuthUsers(accessList?.auth_users));
+  const [userErrors, setUserErrors] = useState<Record<string, AuthUserError>>({});
   const [formError, setFormError] = useState('');
   const [rowErrors, setRowErrors] = useState<Record<string, RowError>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -51,6 +54,18 @@ export function useAccessListForm(accessList: AccessList | null, onSaved: (resul
     clearRowError(key);
   };
 
+  const addUser = () => setUsers((prev) => [...prev, blankAuthUser()]);
+  const removeUser = (key: string) => setUsers((prev) => prev.filter((u) => u.key !== key));
+  const changeUser = (key: string, field: 'username' | 'password', value: string) => {
+    setUsers((prev) => prev.map((u) => (u.key === key ? { ...u, [field]: value } : u)));
+    setUserErrors((prev) => {
+      if (!(key in prev)) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
   // The operator's explicit promotion of a legacy allow: from now on the row is
   // an ordinary rule whose address is a domain, sent with kind "hostname".
   const moveToDomain = (key: string) => {
@@ -67,6 +82,12 @@ export function useAccessListForm(accessList: AccessList | null, onSaved: (resul
       setFormError(t('messages.fixRules'));
       return;
     }
+    const badUsers = authUserErrors(users);
+    setUserErrors(badUsers);
+    if (Object.keys(badUsers).length > 0) {
+      setFormError(t('messages.fixUsers'));
+      return;
+    }
 
     setIsSubmitting(true);
     const data: CreateAccessListRequest = {
@@ -75,6 +96,7 @@ export function useAccessListForm(accessList: AccessList | null, onSaved: (resul
       satisfy_any: satisfyAny,
       pass_auth: passAuth,
       items: built.items,
+      auth_users: buildAuthUsersRequest(users),
     };
     try {
       if (accessList) {
@@ -123,5 +145,10 @@ export function useAccessListForm(accessList: AccessList | null, onSaved: (resul
     changeRow,
     moveToDomain,
     submit,
+    users,
+    userErrors,
+    addUser,
+    removeUser,
+    changeUser,
   };
 }

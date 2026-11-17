@@ -48,6 +48,9 @@ func (r *AccessListRepository) Create(ctx context.Context, req *model.CreateAcce
 	if err := insertAccessListItems(ctx, tx, id, req.Items); err != nil {
 		return nil, err
 	}
+	if err := insertAccessListAuthUsers(ctx, tx, id, req.AuthUsers); err != nil {
+		return nil, err
+	}
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("failed to commit access list: %w", err)
 	}
@@ -114,6 +117,9 @@ func (r *AccessListRepository) GetByID(ctx context.Context, id string) (*model.A
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("failed to iterate access list items: %w", err)
 	}
+	if list.AuthUsers, err = r.accessListAuthUsers(ctx, id); err != nil {
+		return nil, err
+	}
 
 	return &list, nil
 }
@@ -174,6 +180,9 @@ func (r *AccessListRepository) List(ctx context.Context, page, perPage int) ([]m
 			return nil, 0, fmt.Errorf("failed to iterate access list items: %w", err)
 		}
 		itemRows.Close()
+		if lists[i].AuthUsers, err = r.accessListAuthUsers(ctx, lists[i].ID); err != nil {
+			return nil, 0, err
+		}
 	}
 
 	return lists, total, nil
@@ -234,6 +243,14 @@ func (r *AccessListRepository) Update(ctx context.Context, id string, req *model
 			return nil, err
 		}
 		if err := insertAccessListItems(ctx, tx, id, req.Items); err != nil {
+			return nil, err
+		}
+	}
+	if req.AuthUsers != nil {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM access_list_auth_users WHERE access_list_id = $1`, id); err != nil {
+			return nil, err
+		}
+		if err := insertAccessListAuthUsers(ctx, tx, id, req.AuthUsers); err != nil {
 			return nil, err
 		}
 	}

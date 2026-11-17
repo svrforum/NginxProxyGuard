@@ -73,6 +73,11 @@ export function AccessListCard({ list, isOpen, onToggle, onEdit, onDelete, delet
               {t('list.satisfyAny')}
             </span>
           )}
+          {(list.auth_users?.length ?? 0) > 0 && (
+            <span className="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
+              {t('list.authUsers', { count: list.auth_users?.length ?? 0 })}
+            </span>
+          )}
           {list.pass_auth && (
             <span className="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-300">
               {t('list.passAuth')}

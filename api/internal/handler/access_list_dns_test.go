@@ -597,3 +597,9 @@ func TestAccessListConfirmDNSRefusedReloadIsAuditedAnd409(t *testing.T) {
 		t.Errorf("calls = %v, want the confirm recorded", calls.calls)
 	}
 }
+
+func (f *fakeAccessListHosts) AccessListUsedWithAuthProvider(context.Context, string) (string, error) {
+	return "", nil
+}
+
+func (f *fakeAccessListHosts) RemoveAccessListHtpasswd(string) {}

@@ -8,6 +8,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/lib/pq"
 	"nginx-proxy-guard/internal/model"
@@ -79,6 +80,9 @@ func (r *BackupRepository) importAccessList(ctx context.Context, tx *sql.Tx, al 
 		if _, err := tx.ExecContext(ctx, itemQuery, newID, rule.directive, rule.address, rule.description, i, hostname); err != nil {
 			return "", nil, err
 		}
+	}
+	if err := importAccessListAuthUsers(ctx, tx, newID, al.AccessList); err != nil {
+		return "", nil, err
 	}
 
 	return newID, names, nil
@@ -685,4 +689,28 @@ func (r *BackupRepository) importGlobalChallengeConfig(ctx context.Context, tx *
 		cc.TokenValidity, cc.MinScore, cc.ApplyTo, cc.PageTitle, cc.PageMessage, cc.Theme,
 	)
 	return err
+}
+
+// importAccessListAuthUsers restores a list's basic auth accounts (#387). A
+// hash is kept as it is even when it is not one the API writes: the config
+// generator leaves such an account out of the htpasswd file, so the list
+// still asks for a password and nobody gets in with that account. Dropping it
+// here instead could leave the list with no accounts, and its hosts would no
+// longer ask for one. Only what the table cannot hold is skipped.
+func importAccessListAuthUsers(ctx context.Context, tx *sql.Tx, listID string, al model.AccessListData) error {
+	seen := map[string]bool{}
+	for _, u := range al.AuthUsers {
+		if u.Username == "" || utf8.RuneCountInString(u.Username) > 64 || seen[u.Username] || u.PasswordHash == "" {
+			log.Printf("[Backup] Access list %q: skipped account %q: the username is empty, too long or repeated, or it has no hash", model.SingleLine(al.Name), u.Username)
+			continue
+		}
+		seen[u.Username] = true
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO access_list_auth_users (access_list_id, username, password_hash)
+			VALUES ($1, $2, $3)
+		`, listID, u.Username, u.PasswordHash); err != nil {
+			return err
+		}
+	}
+	return nil
 }

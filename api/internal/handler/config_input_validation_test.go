@@ -122,6 +122,8 @@ func expectStoredAccessList(mock sqlmock.Sqlmock, id string) {
 			AddRow(id, "n", "", true, false, now, now))
 	mock.ExpectQuery(`FROM access_list_items`).WithArgs(id).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}))
+	mock.ExpectQuery(`FROM access_list_auth_users`).WithArgs(id).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "password_hash"}))
 }
 
 func TestAccessListCreate_SavesValidRulesTrimmed(t *testing.T) {

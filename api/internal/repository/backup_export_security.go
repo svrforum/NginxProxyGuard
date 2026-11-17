@@ -82,6 +82,11 @@ func (r *BackupRepository) exportAccessLists(ctx context.Context) ([]model.Acces
 			return nil, err
 		}
 		al.Items = items
+		// Accounts likewise: a list restored without them would no longer ask
+		// for a password (#387).
+		if al.AuthUsers, err = r.getAccessListAuthUsers(ctx, al.ID); err != nil {
+			return nil, err
+		}
 
 		exports = append(exports, model.AccessListExport{AccessList: al})
 	}
@@ -616,4 +621,24 @@ func (r *BackupRepository) exportGlobalChallengeConfig(ctx context.Context) (*mo
 	cc.SiteKey = siteKey.String
 	cc.SecretKey = secretKey.String
 	return &cc, nil
+}
+
+func (r *BackupRepository) getAccessListAuthUsers(ctx context.Context, accessListID string) ([]model.AccessListAuthUserData, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT username, password_hash FROM access_list_auth_users
+		WHERE access_list_id = $1 ORDER BY username
+	`, accessListID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var users []model.AccessListAuthUserData
+	for rows.Next() {
+		var u model.AccessListAuthUserData
+		if err := rows.Scan(&u.Username, &u.PasswordHash); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, rows.Err()
 }

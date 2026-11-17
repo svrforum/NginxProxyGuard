@@ -102,8 +102,9 @@ type ProxyHostConfigData struct {
 // (ForwardAuth) holds location /'s one auth_request, and one left at the top
 // level of a legacy Advanced Config covers the whole server or location /
 // itself - the gate would replace that login, or not load at all.
+// So does a host whose access list asks for a username and password (#387).
 func (d ProxyHostConfigData) CloudChallenge() bool {
-	return len(d.BlockedCloudIPRanges) > 0 && d.CloudProviderChallengeMode && d.AuthProvider == nil &&
+	return len(d.BlockedCloudIPRanges) > 0 && d.CloudProviderChallengeMode && d.AuthProvider == nil && !d.BasicAuth() &&
 		d.Host != nil && !advancedConfigHasTopLevel(d.Host.AdvancedConfig, "auth_request")
 }
 
@@ -124,7 +125,7 @@ func (d ProxyHostConfigData) RateLimitEnabled() bool {
 // the check here keeps callers that build the data themselves, such as the
 // DNS entry host index, in step with the config.
 func (d ProxyHostConfigData) ChallengeGate() bool {
-	geo := d.GeoRestriction != nil && d.GeoRestriction.ChallengeMode && d.AuthProvider == nil &&
+	geo := d.GeoRestriction != nil && d.GeoRestriction.ChallengeMode && d.AuthProvider == nil && !d.BasicAuth() &&
 		(d.Host == nil || !advancedConfigHasTopLevel(d.Host.AdvancedConfig, "auth_request"))
 	return geo || d.CloudChallenge()
 }
@@ -135,7 +136,7 @@ func (d ProxyHostConfigData) ChallengeGate() bool {
 // Advanced Config (AdvancedConfigHasAuth). It errs towards true: a mention in
 // any block counts.
 func (d ProxyHostConfigData) AccessPhaseAuth() bool {
-	return d.AuthProvider != nil || (d.Host != nil && AdvancedConfigHasAuth(d.Host.AdvancedConfig))
+	return d.AuthProvider != nil || d.BasicAuth() || (d.Host != nil && AdvancedConfigHasAuth(d.Host.AdvancedConfig))
 }
 
 // ListSkipsLogin reports whether the host's access list lets the addresses

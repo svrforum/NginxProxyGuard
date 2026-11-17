@@ -1921,6 +1921,23 @@ END $$;`,
 			desc: "logs_partitioned.server_port (#389)",
 			sql:  `ALTER TABLE public.logs_partitioned ADD COLUMN IF NOT EXISTS server_port integer`,
 		},
+		{
+			// Basic auth accounts of an access list (#387).
+			desc: "access_list_auth_users (#387)",
+			sql: `CREATE TABLE IF NOT EXISTS public.access_list_auth_users (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    access_list_id uuid NOT NULL,
+    username character varying(64) NOT NULL,
+    password_hash text NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT access_list_auth_users_pkey PRIMARY KEY (id),
+    CONSTRAINT access_list_auth_users_access_list_id_fkey FOREIGN KEY (access_list_id) REFERENCES public.access_lists(id) ON DELETE CASCADE
+)`,
+		},
+		{
+			desc: "idx_access_list_auth_users_list_username (#387)",
+			sql:  `CREATE UNIQUE INDEX IF NOT EXISTS idx_access_list_auth_users_list_username ON public.access_list_auth_users USING btree (access_list_id, username)`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

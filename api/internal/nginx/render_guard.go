@@ -183,14 +183,17 @@ func renderableGeo(hostID string, g *model.GeoRestriction) *model.GeoRestriction
 // refused it as well, or, with locations in the Advanced Config, the gate
 // replaced the login on location /. The cloud provider challenge blocks on
 // such a host the same way (CloudChallenge).
-func geoWithOwnAuthRequest(host *model.ProxyHost, g *model.GeoRestriction, authProvider bool) *model.GeoRestriction {
+//
+// ownLogin is also set for the access list's basic auth accounts (#387): the
+// gate's error_page 401 would turn the password prompt into the challenge.
+func geoWithOwnAuthRequest(host *model.ProxyHost, g *model.GeoRestriction, ownLogin bool) *model.GeoRestriction {
 	if g == nil || !g.ChallengeMode {
 		return g
 	}
 	switch {
-	case authProvider:
+	case ownLogin:
 		warnSkippedOnce("geo challenge "+host.ID,
-			"[WARN] Host %s: GeoIP challenge mode cannot run next to ForwardAuth (both need the auth_request of location /), so the visitors the geo restriction refuses get 403 instead of the challenge.",
+			"[WARN] Host %s: GeoIP challenge mode cannot run next to ForwardAuth (both need the auth_request of location /) or the access list's username and password (both answer a missing login with 401), so the visitors the geo restriction refuses get 403 instead of the challenge.",
 			host.ID)
 	case advancedConfigHasTopLevel(host.AdvancedConfig, "auth_request"):
 		warnSkippedOnce("geo challenge "+host.ID,

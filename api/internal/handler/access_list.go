@@ -32,6 +32,10 @@ type accessListHosts interface {
 	RegenerateConfigsForAccessList(ctx context.Context, accessListID string) error
 	GetHostIDsByAccessList(ctx context.Context, accessListID string) ([]string, error)
 	RegenerateConfigsForHostIDs(ctx context.Context, hostIDs []string) error
+	// Basic auth accounts (#387): a host with ForwardAuth refuses them, and a
+	// deleted list's htpasswd file is removed.
+	AccessListUsedWithAuthProvider(ctx context.Context, listID string) (string, error)
+	RemoveAccessListHtpasswd(listID string)
 }
 
 // accessListAuditor is what the handler records (service.AuditService).
@@ -121,6 +125,9 @@ func (h *AccessListHandler) Create(c echo.Context) error {
 	if err := model.ValidateCreateAccessListRequest(&req); err != nil {
 		return accessListRulesRefused(c, err)
 	}
+	if err := hashAccessListAuthUsers(req.AuthUsers); err != nil {
+		return internalError(c, "hash access list passwords", err)
+	}
 	// The list has no id yet: a scope no list owns stands for it.
 	names := requestDNSNames(req.Items)
 	if err := h.checkDNSLimits(ctx, model.AccessListDNSScope(uuid.NewString()), names); err != nil {
@@ -177,6 +184,25 @@ func (h *AccessListHandler) Update(c echo.Context) error {
 	}
 	if err := model.ValidateUpdateAccessListRequest(&req, before.Items); err != nil {
 		return accessListRulesRefused(c, err)
+	}
+	if req.AuthUsers != nil {
+		if err := model.ValidateAccessListAuthUsers(req.AuthUsers, before.AuthUsers); err != nil {
+			return accessListRulesRefused(c, err)
+		}
+		// ForwardAuth answers a missing login with 401 too and would take the
+		// password prompt over (#387).
+		if len(req.AuthUsers) > 0 {
+			host, err := h.proxyHosts.AccessListUsedWithAuthProvider(ctx, id)
+			if err != nil {
+				return databaseError(c, "list access list dependents", err)
+			}
+			if host != "" {
+				return conflictError(c, "proxy host "+host+" uses this access list with an auth provider (ForwardAuth), which cannot be combined with a username and password; remove one of them first")
+			}
+		}
+		if err := hashAccessListAuthUsers(req.AuthUsers); err != nil {
+			return internalError(c, "hash access list passwords", err)
+		}
 	}
 	beforeNames := accessListDNSNames(before.Items)
 	afterNames := beforeNames
@@ -237,6 +263,7 @@ func (h *AccessListHandler) Delete(c echo.Context) error {
 	post, cancel := afterAccessListCommit(ctx)
 	defer cancel()
 	h.audit.LogAccessListDeleted(service.ContextWithAudit(post, c), existing.Name)
+	h.proxyHosts.RemoveAccessListHtpasswd(id)
 	// The deleted list's domain files are emptied before the hosts are
 	// regenerated: the next reload stops allowing them even if this fails.
 	h.syncDNSNames(post, existing, accessListDNSNames(existing.Items), nil)
@@ -395,5 +422,6 @@ func accessListChanges(before, after *model.AccessList) map[string]interface{} {
 	if before.SatisfyAny != after.SatisfyAny {
 		details["satisfy_any"] = []bool{before.SatisfyAny, after.SatisfyAny}
 	}
+	accessListAuthChanges(details, before, after)
 	return details
 }

@@ -29,6 +29,9 @@ server {
     location /.well-known/acme-challenge/ {
         # Allow all access for certificate validation
         allow all;
+{{- if .BasicAuth}}
+        auth_basic off;
+{{- end}}
 {{- if .ChallengeGate}}
         auth_request off;
 {{- end}}

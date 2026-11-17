@@ -13747,20 +13747,36 @@ components:
         satisfy_any:
           type: boolean
           description: >-
-            True emits `satisfy any;` into the host config; false emits nothing and
-            nginx applies its default of `satisfy all`.
+            True emits `satisfy any;` into the host config: an address the rules allow
+            gets in without an account, and an account gets in from any address. False
+            emits nothing and nginx applies its default of `satisfy all`: both are needed.
         pass_auth:
           type: boolean
           description: >-
-            Stored and returned, but currently not read by nginx config generation — it
-            has no effect on the running proxy.
+            With `auth_users`, whether the `Authorization` header carrying the account
+            reaches the backend. Off removes it. No effect on a list without accounts.
         items:
           type: array
           description: >-
-            The rules. A list with no items is not rendered into the host config at all;
-            a list with items always ends in an implicit `deny all`.
+            The rules. A list with neither items nor accounts is not rendered into the
+            host config at all; a list with items always ends in an implicit `deny all`.
           items:
             $ref: '#/components/schemas/AccessListItem'
+        auth_users:
+          type: array
+          description: >-
+            Basic auth accounts (#387). Hosts using the list ask for one of them. The
+            password hash is never returned. A host with an auth provider (ForwardAuth)
+            cannot use a list with accounts, and the GeoIP or cloud provider challenge
+            of a host using one blocks instead of challenging.
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              username:
+                type: string
         login_bypass_hosts:
           type: object
           description: |
@@ -13800,6 +13816,11 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/CreateAccessListItem'
+        auth_users:
+          type: array
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/AccessListAuthUserInput'
     ChallengeConfig:
       type: object
       description: |
@@ -17002,7 +17023,9 @@ components:
       type: object
       description: >-
         Partial update. Supplying `items` replaces the entire rule set; omitting it
-        leaves the existing rules untouched.
+        leaves the existing rules untouched. `auth_users` works the same way; an
+        account sent without a password keeps its stored one. Adding accounts to a
+        list a host with an auth provider uses is refused with 409.
       properties:
         name:
           type: string
@@ -17016,6 +17039,28 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/CreateAccessListItem'
+        auth_users:
+          type: array
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/AccessListAuthUserInput'
+    AccessListAuthUserInput:
+      type: object
+      required: [username]
+      properties:
+        username:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: No colon, space or control character.
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+          writeOnly: true
+          description: >-
+            Required for a new account. Empty or absent on an update keeps the stored
+            password of the account with this username.
     AccessListDNSConfirm:
       type: object
       description: The body of every dns-confirm route, an access list's and the exception lists'.

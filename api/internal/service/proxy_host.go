@@ -575,6 +575,13 @@ func (s *ProxyHostService) prepareUpdateProxyHostRequest(ctx context.Context, id
 	if err := s.validateAuthProviderConflict(ctx, id, effAuthProviderID, effProxyType, effAdvancedConfig, effBypassPaths, effSSLEnabled); err != nil {
 		return "", nil, err
 	}
+	effAccessListID := existingHost.AccessListID
+	if req.AccessListID != nil {
+		effAccessListID = req.AccessListID
+	}
+	if err := s.validateBasicAuthConflict(ctx, effAuthProviderID, effAccessListID, effProxyType); err != nil {
+		return "", nil, err
+	}
 
 	candidate, err := normalizeUpdateProxyHostRequest(existingHost, req)
 	if err != nil {
@@ -767,6 +774,9 @@ func (s *ProxyHostService) Create(ctx context.Context, req *model.CreateProxyHos
 
 	// ForwardAuth conflict validation (custom location; geo challenge can't exist on a new host) (#179)
 	if err := s.validateAuthProviderConflict(ctx, "", req.AuthProviderID, req.ProxyType, req.AdvancedConfig, req.AuthBypassPaths, req.SSLEnabled); err != nil {
+		return nil, err
+	}
+	if err := s.validateBasicAuthConflict(ctx, req.AuthProviderID, req.AccessListID, req.ProxyType); err != nil {
 		return nil, err
 	}
 
