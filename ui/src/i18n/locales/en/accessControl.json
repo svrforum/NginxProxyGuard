@@ -89,8 +89,8 @@
         "name": "Enter a name for this access list.",
         "description": "Enter a description for this access list.",
         "satisfyAny": "When on, matching either the access rules or a username and password is enough. When off, both must match.",
-        "passAuth": "Sends the signed-in username and password (the Authorization header) on to the backend. When off, NPG removes it after checking it. Turn it on only if the backend takes the same kind of login.",
+        "passAuth": "Sends the signed-in username and password (the Authorization header) on to the backend. When off, NPG removes it after checking it. Turn it on only if the backend takes the same kind of login. A location written in the Advanced Config passes it on either way.",
         "accessRules": "Allow or deny IP addresses and ranges, or allow a domain (such as a DDNS name). Domains are checked after the IP rules.",
-        "authUsers": "The hosts using this list ask for a username and password. With \"Satisfy Any\" on, an IP the rules above allow gets in without one; with it off, both the IP and the password must match. A host with ForwardAuth cannot use the list, and the GeoIP and cloud provider challenges of the hosts using it block instead."
+        "authUsers": "The hosts using this list ask for a username and password. With \"Satisfy Any\" on, an IP the rules above allow, or a global trusted IP, gets in without one; with it off, both the IP and the password must match. A host with ForwardAuth cannot use the list, and the GeoIP and cloud provider challenges of the hosts using it block instead."
     }
 }

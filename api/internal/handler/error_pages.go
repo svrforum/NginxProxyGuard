@@ -97,8 +97,14 @@ func (h *ErrorPageHandler) apply(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// The default server is rendered again, so its direct IP access setting
+	// is needed: falling back to "allow" would quietly undo a block.
+	s, err := h.globalSettings.Get(ctx)
+	if err != nil {
+		return err
+	}
 	action := "allow"
-	if s, err := h.globalSettings.Get(ctx); err == nil && s != nil {
+	if s != nil {
 		action = s.DirectIPAccessAction
 	}
 	return h.nginx.ApplyCustomErrorPages(ctx, pages, action)

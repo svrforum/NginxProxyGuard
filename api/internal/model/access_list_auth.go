@@ -63,6 +63,10 @@ func ValidateAccessListAuthUsers(users []AccessListAuthUserRequest, stored []Acc
 		}) {
 			return accessListItemError(field+".username", "", "%s.username cannot contain a colon, a space or a control character", field)
 		}
+		// nginx reads an htpasswd line that starts with # as a comment.
+		if strings.HasPrefix(u.Username, "#") {
+			return accessListItemError(field+".username", "", "%s.username cannot start with #", field)
+		}
 		if seen[u.Username] {
 			return accessListItemError(field+".username", "", "%s.username: %s is already in this list", field, u.Username)
 		}

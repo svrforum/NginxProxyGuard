@@ -233,6 +233,11 @@ func (h *AccessListHandler) Update(c echo.Context) error {
 	if err := h.proxyHosts.RegenerateConfigsForAccessList(post, id); err != nil {
 		return internalError(c, "apply access list changes to nginx", err)
 	}
+	// A list left without accounts keeps no hashes on disk, whether or not a
+	// host uses it (#387).
+	if len(list.AuthUsers) == 0 && len(before.AuthUsers) > 0 {
+		h.proxyHosts.RemoveAccessListHtpasswd(id)
+	}
 
 	return c.JSON(http.StatusOK, h.viewOf(c, list))
 }
@@ -263,7 +268,6 @@ func (h *AccessListHandler) Delete(c echo.Context) error {
 	post, cancel := afterAccessListCommit(ctx)
 	defer cancel()
 	h.audit.LogAccessListDeleted(service.ContextWithAudit(post, c), existing.Name)
-	h.proxyHosts.RemoveAccessListHtpasswd(id)
 	// The deleted list's domain files are emptied before the hosts are
 	// regenerated: the next reload stops allowing them even if this fails.
 	h.syncDNSNames(post, existing, accessListDNSNames(existing.Items), nil)
@@ -275,6 +279,9 @@ func (h *AccessListHandler) Delete(c echo.Context) error {
 			return internalError(c, "apply access list deletion to nginx", err)
 		}
 	}
+	// Only once no config names it: a failed regeneration above keeps the
+	// running configs reading the file.
+	h.proxyHosts.RemoveAccessListHtpasswd(id)
 
 	return noContentResponse(c)
 }

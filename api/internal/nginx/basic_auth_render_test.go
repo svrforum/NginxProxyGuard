@@ -100,6 +100,7 @@ func TestHtpasswdContentLeavesOutUnusableAccounts(t *testing.T) {
 		{Username: "bad name", PasswordHash: basicAuthTestHash},
 		{Username: "eve:x", PasswordHash: basicAuthTestHash},
 		{Username: "bob", PasswordHash: "plain"},
+		{Username: "#hidden", PasswordHash: basicAuthTestHash},
 		{Username: "carol", PasswordHash: basicAuthTestHash + "\nmallory:" + basicAuthTestHash},
 	}}
 	if got, want := string(htpasswdContent(list)), "alice:"+basicAuthTestHash+"\n"; got != want {

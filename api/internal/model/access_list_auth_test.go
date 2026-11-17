@@ -30,6 +30,7 @@ func TestValidateAccessListAuthUsers(t *testing.T) {
 		{"empty", []AccessListAuthUserRequest{{Username: "", Password: "a long password"}}, "auth_users[0].username"},
 		{"too long", []AccessListAuthUserRequest{{Username: strings.Repeat("a", 65), Password: "a long password"}}, "auth_users[0].username"},
 		{"twice", []AccessListAuthUserRequest{{Username: "alice"}, {Username: "alice", Password: "a long password"}}, "auth_users[1].username"},
+		{"leading hash", []AccessListAuthUserRequest{{Username: "#admin", Password: "a long password"}}, "auth_users[0].username"},
 		{"NUL in password", []AccessListAuthUserRequest{{Username: "carol", Password: "a long\x00password"}}, "auth_users[0].password"},
 	} {
 		err := ValidateAccessListAuthUsers(tc.users, stored)

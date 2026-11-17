@@ -49,7 +49,7 @@ func (d ProxyHostConfigData) HtpasswdPath() string {
 func htpasswdContent(list *model.AccessList) []byte {
 	var b bytes.Buffer
 	for _, u := range list.AuthUsers {
-		if u.Username == "" || strings.ContainsAny(u.Username, ":\r\n\t ") || !htpasswd.IsHash(u.PasswordHash) {
+		if u.Username == "" || strings.HasPrefix(u.Username, "#") || strings.ContainsAny(u.Username, ":\r\n\t ") || !htpasswd.IsHash(u.PasswordHash) {
 			log.Printf("[WARN] Access list %s: account %q left out of the htpasswd file: its username or hash is not usable", list.ID, u.Username)
 			continue
 		}
@@ -67,7 +67,18 @@ func htpasswdContent(list *model.AccessList) []byte {
 // reload, so a missing file would answer 500 rather than fail nginx -t.
 func (m *Manager) ensureAccessListHtpasswd(data ProxyHostConfigData) error {
 	if !data.BasicAuth() {
+		// A list whose accounts were all removed leaves no hashes behind.
+		if data.AccessList != nil && len(data.AccessList.AuthUsers) == 0 {
+			if err := m.RemoveAccessListHtpasswd(data.AccessList.ID); err != nil {
+				log.Printf("[WARN] Access list %s: could not delete its htpasswd file: %v", data.AccessList.ID, err)
+			}
+		}
 		return nil
+	}
+	if !data.AccessList.PassAuth && data.Host != nil && HasCustomLocationRootInConfig(data.Host.AdvancedConfig) {
+		warnSkippedOnce("basic auth strip "+data.Host.ID,
+			"[WARN] Host %s: its Advanced Config has its own location /, which passes the access list's username and password on to the backend: removing them applies to NPG's own locations only.",
+			data.Host.ID)
 	}
 	path := filepath.Join(m.htpasswdDiskDir(), htpasswdFileName(data.AccessList.ID))
 	content := htpasswdContent(data.AccessList)
