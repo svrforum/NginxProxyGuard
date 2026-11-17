@@ -1919,5 +1919,30 @@
     "builtins": "Always trusted",
     "builtinsHelp": "Private and loopback networks. Docker's own traffic and LAN proxies depend on these, so they cannot be removed.",
     "savedApplying": "Saved. Applying to the nginx configuration."
+  },
+  "errorPages": {
+    "title": "Error Pages",
+    "description": "Replace the pages NPG shows itself, the block page (403) and the backend error pages (502, 503, 504), with your own HTML. They apply to every proxy host and to visits for domains NPG does not know.",
+    "noScripts": "For security, scripts do not run on these pages: they appear on each site's own address, where a script could read that site's cookies. Styles, images and fonts work.",
+    "loading": "Loading...",
+    "builtIn": "Built-in page",
+    "custom": "Custom page",
+    "status": {
+      "403": "Blocked",
+      "502": "Bad gateway",
+      "503": "Service unavailable",
+      "504": "Gateway timeout"
+    },
+    "htmlLabel": "HTML of the {{status}} page",
+    "placeholder": "Empty uses the built-in page. \"Start from a template\" gives you a starting point.",
+    "useTemplate": "Start from a template",
+    "preview": "Preview",
+    "hidePreview": "Hide preview",
+    "previewTitle": "Preview of the {{status}} page",
+    "save": "Save",
+    "reset": "Go back to the built-in page",
+    "saved": "Saved. It applies right away.",
+    "resetDone": "Back to the built-in page.",
+    "saveError": "Could not save."
   }
 }

@@ -1938,6 +1938,17 @@ END $$;`,
 			desc: "idx_access_list_auth_users_list_username (#387)",
 			sql:  `CREATE UNIQUE INDEX IF NOT EXISTS idx_access_list_auth_users_list_username ON public.access_list_auth_users USING btree (access_list_id, username)`,
 		},
+		{
+			// Custom HTML for NPG's own error pages (#335).
+			desc: "custom_error_pages (#335)",
+			sql: `CREATE TABLE IF NOT EXISTS public.custom_error_pages (
+    status_code integer NOT NULL,
+    html text NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT custom_error_pages_pkey PRIMARY KEY (status_code),
+    CONSTRAINT custom_error_pages_status_code_check CHECK (status_code = ANY (ARRAY[403, 502, 503, 504]))
+)`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

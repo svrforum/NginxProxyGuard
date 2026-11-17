@@ -241,6 +241,10 @@ type ExportData struct {
 	GlobalWAF             *GlobalWAFExport             `json:"global_waf,omitempty"`
 	CloudflareTunnel      *CloudflareTunnelExport      `json:"cloudflare_tunnel,omitempty"`
 
+	// Custom error pages (#335). Absent in older backups: a restore of one
+	// leaves the current pages alone. Present, it replaces them.
+	CustomErrorPages []CustomErrorPageExport `json:"custom_error_pages"`
+
 	// Roles (#222). Assignments are deliberately NOT exported — see RoleExport.
 	Roles []RoleExport `json:"roles,omitempty"`
 
@@ -1097,4 +1101,10 @@ type LogSettingsExport struct {
 	RetentionDays      int    `json:"retention_days"`
 	MaxLogsPerType     *int64 `json:"max_logs_per_type,omitempty"`
 	AutoCleanupEnabled bool   `json:"auto_cleanup_enabled"`
+}
+
+// CustomErrorPageExport is a custom error page for export (#335).
+type CustomErrorPageExport struct {
+	StatusCode int    `json:"status_code"`
+	HTML       string `json:"html"`
 }

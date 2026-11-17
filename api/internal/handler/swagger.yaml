@@ -4391,6 +4391,73 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '500':
           description: Update succeeded but regenerating the host configs failed
+  /settings/error-pages:
+    get:
+      tags: [Settings]
+      summary: Custom error pages
+      description: |
+        NPG's own error pages that can be replaced (`statuses`: the block page
+        403 and the backend error pages 502, 503, 504) and the custom ones set
+        (#335). A custom page replaces the built-in one on every proxy host and
+        on the default server. nginx serves it with
+        `Content-Security-Policy: default-src 'none'; ...; sandbox`: no script
+        runs, since the page appears on each proxied site's own origin.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: The pages
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomErrorPages'
+  /settings/error-pages/{status}:
+    parameters:
+      - name: status
+        in: path
+        required: true
+        schema:
+          type: integer
+          enum: [403, 502, 503, 504]
+    put:
+      tags: [Settings]
+      summary: Set a custom error page
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [html]
+              properties:
+                html:
+                  type: string
+                  description: UTF-8 HTML, at most 256 KB. Scripts in it do not run.
+      responses:
+        '200':
+          description: The pages after the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomErrorPages'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    delete:
+      tags: [Settings]
+      summary: Go back to the built-in error page
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: The pages after the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomErrorPages'
+        '400':
+          $ref: '#/components/responses/BadRequest'
   /settings/global-fail2ban:
     get:
       tags: [Settings]
@@ -17044,6 +17111,25 @@ components:
           maxItems: 200
           items:
             $ref: '#/components/schemas/AccessListAuthUserInput'
+    CustomErrorPages:
+      type: object
+      properties:
+        statuses:
+          type: array
+          items:
+            type: integer
+        pages:
+          type: array
+          items:
+            type: object
+            properties:
+              status_code:
+                type: integer
+              html:
+                type: string
+              updated_at:
+                type: string
+                format: date-time
     AccessListAuthUserInput:
       type: object
       required: [username]

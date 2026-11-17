@@ -396,6 +396,7 @@ func registerTokenProtectedRoutes(v1 *echo.Group, c *Container) {
 	registerTrafficRoutes(v1, c.Handlers.Traffic)
 	registerSystemLogRoutes(v1, c.Handlers.SystemLog)
 	registerSystemSettingsRoutes(v1, c.Handlers.SystemSettings)
+	registerErrorPageRoutes(v1, c.Handlers.ErrorPages)
 	registerRawLogReclaimRoutes(v1, c.Handlers.RawLogReclaim)
 	registerAuditLogRoutes(v1, c.Handlers.AuditLog)
 	registerChallengeConfigRoutes(v1, c.Handlers.Challenge)
@@ -1191,4 +1192,13 @@ func upstreamProbeURL(host *model.ProxyHost) string {
 func probeUpstreamFromNginx(forwardHost string) bool {
 	ip := net.ParseIP(model.NormalizeForwardHost(forwardHost))
 	return ip != nil && (ip.IsPrivate() || ip.To4() == nil)
+}
+
+// registerErrorPageRoutes: the operator's HTML for NPG's own error pages (#335).
+func registerErrorPageRoutes(v1 *echo.Group, h *handler.ErrorPageHandler) {
+	settingsRead := authMiddleware.RequireAPIPermission(model.PermissionSettingsRead)
+	settingsWrite := authMiddleware.RequireAPIPermission(model.PermissionSettingsWrite)
+	v1.GET("/settings/error-pages", h.List, settingsRead)
+	v1.PUT("/settings/error-pages/:status", h.Update, settingsWrite)
+	v1.DELETE("/settings/error-pages/:status", h.Reset, settingsWrite)
 }

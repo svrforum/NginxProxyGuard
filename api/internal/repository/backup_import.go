@@ -257,6 +257,13 @@ func (r *BackupRepository) ImportAllData(ctx context.Context, data *model.Export
 		}
 	}
 
+	// Import custom error pages (#335). nil: a backup from before them.
+	if data.CustomErrorPages != nil {
+		if err := r.importCustomErrorPages(ctx, tx, data.CustomErrorPages); err != nil {
+			return nil, fmt.Errorf("failed to import custom error pages: %w", err)
+		}
+	}
+
 	// Import Global Fail2ban jail (#275)
 	if data.GlobalFail2ban != nil {
 		if err := r.importGlobalFail2ban(ctx, tx, data.GlobalFail2ban); err != nil {

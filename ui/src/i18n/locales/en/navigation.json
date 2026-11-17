@@ -99,7 +99,8 @@
       "sso": "SSO",
       "notifications": "Notifications",
       "trustedProxies": "Trusted Proxies",
-      "dnsEntries": "Domain entries (DDNS)"
+      "dnsEntries": "Domain entries (DDNS)",
+      "errorPages": "Error Pages"
     }
   },
   "loading": "Loading...",

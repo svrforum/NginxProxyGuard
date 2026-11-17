@@ -117,6 +117,17 @@ func (h *SettingsHandler) performRestore(ctx context.Context, backup *model.Back
 
 	// Regenerate nginx configs from restored database
 	if h.nginxManager != nil {
+		// Custom error pages (#335) on disk before the host configs and the
+		// default server are rendered from them.
+		if pages, err := h.backupRepo.CustomErrorPages(ctx); err != nil {
+			log.Printf("[Backup] Warning: failed to read custom error pages: %v", err)
+		} else if err := h.nginxManager.SyncCustomErrorPages(pages); err != nil {
+			log.Printf("[Backup] Warning: failed to write custom error pages: %v", err)
+		} else if gs, err := h.settingsService.GetGlobalSettings(ctx); err == nil && gs != nil {
+			if err := h.nginxManager.GenerateDefaultServerConfig(ctx, gs.DirectIPAccessAction); err != nil {
+				log.Printf("[Backup] Warning: failed to regenerate the default server config: %v", err)
+			}
+		}
 		// Materialize certificate files from the PEMs carried in export.json.
 		// Database-only backups have no cert files in the archive, so without
 		// this every SSL host would silently fall back to HTTP-only on a

@@ -68,22 +68,10 @@ server {
     error_page 503 /503.html;
     error_page 504 /504.html;
 
-    location = /403.html {
-        root /etc/nginx/html;
-        internal;
-    }
-    location = /502.html {
-        root /etc/nginx/html;
-        internal;
-    }
-    location = /503.html {
-        root /etc/nginx/html;
-        internal;
-    }
-    location = /504.html {
-        root /etc/nginx/html;
-        internal;
-    }
+{{.ErrorPage403}}
+{{.ErrorPage502}}
+{{.ErrorPage503}}
+{{.ErrorPage504}}
 
     # Public API proxy (for font settings, etc.) - always available
     location /api/v1/public/ {
@@ -247,6 +235,9 @@ type DefaultServerConfigData struct {
 	HTTPSPort string // HTTPS listen port (default: 443)
 	APIURL     string // API URL for nginx to reach API (default: http://127.0.0.1:9080)
 	EnableIPv6 bool
+
+	// The error page locations, built-in or custom (#335).
+	ErrorPage403, ErrorPage502, ErrorPage503, ErrorPage504 string
 }
 
 // GenerateDefaultServerConfig generates the default server config based on settings
@@ -270,6 +261,11 @@ func (m *Manager) GenerateDefaultServerConfig(ctx context.Context, action string
 		APIURL:     m.apiURL,
 		EnableIPv6: m.enableIPv6,
 	}
+	custom := m.customErrorPages()
+	data.ErrorPage403 = custom.defaultServerErrorLocation(403)
+	data.ErrorPage502 = custom.defaultServerErrorLocation(502)
+	data.ErrorPage503 = custom.defaultServerErrorLocation(503)
+	data.ErrorPage504 = custom.defaultServerErrorLocation(504)
 
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {

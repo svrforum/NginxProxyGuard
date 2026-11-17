@@ -546,6 +546,15 @@ COMMENT ON COLUMN public.dns_providers.credentials IS 'Encrypted JSON containing
 -- ALTER (see the constraint section below), because this pg_dump-style file
 -- creates all tables first and only then adds PKs — dns_providers' PK does not
 -- exist yet at this point, so an inline FK would fail on a fresh install. (#154)
+-- Custom HTML for NPG's own error pages (#335). The API writes each to
+-- conf.d/includes/error_pages/<status>.html; nginx serves it in place of the
+-- built-in page, with scripts blocked.
+CREATE TABLE IF NOT EXISTS public.custom_error_pages (
+    status_code integer NOT NULL,
+    html text NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT custom_error_pages_status_code_check CHECK (status_code = ANY (ARRAY[403, 502, 503, 504]))
+);
 CREATE TABLE IF NOT EXISTS public.ddns_records (
     id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
     hostname character varying(253) NOT NULL,
@@ -2904,6 +2913,8 @@ ALTER TABLE ONLY public.dns_providers
     ADD CONSTRAINT dns_providers_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.ddns_records
     ADD CONSTRAINT ddns_records_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.custom_error_pages
+    ADD CONSTRAINT custom_error_pages_pkey PRIMARY KEY (status_code);
 ALTER TABLE ONLY public.exploit_block_rules
     ADD CONSTRAINT exploit_block_rules_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.fail2ban_configs

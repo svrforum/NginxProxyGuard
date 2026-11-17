@@ -332,6 +332,10 @@ var routePermissions = map[string]string{
 	"GET /api/v1/security-headers/presets": "proxy:read",
 	"GET /api/v1/settings": "settings:read",
 	"PUT /api/v1/settings": "settings:write",
+	// Custom error pages (#335).
+	"GET /api/v1/settings/error-pages": "settings:read",
+	"PUT /api/v1/settings/error-pages/:status": "settings:write",
+	"DELETE /api/v1/settings/error-pages/:status": "settings:write",
 	"GET /api/v1/sso-providers": "user:read",
 	"POST /api/v1/sso-providers": "user:write",
 	"PUT /api/v1/sso-providers/:id": "user:write",

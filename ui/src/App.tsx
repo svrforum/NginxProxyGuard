@@ -457,6 +457,7 @@ function AppContent({ user, onLogout }: AppContentProps) {
           <Route path="/settings/geoip" element={<SettingsPage subTab="geoip" />} />
           <Route path="/settings/ssl" element={<SettingsPage subTab="ssl" />} />
           <Route path="/settings/maintenance" element={<SettingsPage subTab="maintenance" />} />
+          <Route path="/settings/error-pages" element={<SettingsPage subTab="error-pages" />} />
           <Route path="/settings/backups" element={<SettingsPage subTab="backups" />} />
           <Route path="/settings/botfilter" element={<SettingsPage subTab="botfilter" />} />
           <Route path="/settings/waf-auto-ban" element={<SettingsPage subTab="waf-auto-ban" />} />

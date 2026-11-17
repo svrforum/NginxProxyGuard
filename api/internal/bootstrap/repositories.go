@@ -44,6 +44,7 @@ type Repositories struct {
 	SSO                *repository.SSORepository
 	Notification       *repository.NotificationRepository
 	SystemSettings     *repository.SystemSettingsRepository
+	CustomErrorPage    *repository.CustomErrorPageRepository
 	APIToken           *repository.APITokenRepository
 	AuditLog           *repository.AuditLogRepository
 	Challenge          *repository.ChallengeRepository
@@ -96,6 +97,7 @@ func InitRepositories(db *database.DB, redisCache *cache.RedisClient) *Repositor
 		SSO:                repository.NewSSORepository(db),
 		Notification:       repository.NewNotificationRepository(db),
 		SystemSettings:     repository.NewSystemSettingsRepository(db.DB),
+		CustomErrorPage:    repository.NewCustomErrorPageRepository(db),
 		APIToken:           repository.NewAPITokenRepository(db.DB),
 		AuditLog:           repository.NewAuditLogRepository(db.DB),
 		Challenge:          repository.NewChallengeRepository(db.DB),

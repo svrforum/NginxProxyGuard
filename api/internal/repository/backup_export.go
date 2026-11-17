@@ -148,6 +148,13 @@ func (r *BackupRepository) ExportAllData(ctx context.Context) (*model.ExportData
 	}
 	export.GlobalRateLimit = globalRateLimit
 
+	// Export custom error pages (#335)
+	customPages, err := r.exportCustomErrorPages(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to export custom error pages: %w", err)
+	}
+	export.CustomErrorPages = customPages
+
 	// Export Global Fail2ban jail (#275)
 	globalFail2ban, err := r.exportGlobalFail2ban(ctx)
 	if err != nil {

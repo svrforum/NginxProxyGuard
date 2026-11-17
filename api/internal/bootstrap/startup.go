@@ -106,6 +106,14 @@ func runStartup(ctx context.Context, c *Container) ([]nginx.DeferredStep, error)
 
 	directIPAction := loadGlobalSettingsForStartup(ctx, c)
 
+	// Custom error pages on disk before any config that names them is
+	// rendered (#335).
+	if pages, err := c.Repositories.CustomErrorPage.List(ctx); err != nil {
+		log.Printf("[Startup] Warning: failed to load custom error pages: %v", err)
+	} else if err := c.Nginx.SyncCustomErrorPages(pages); err != nil {
+		log.Printf("[Startup] Warning: failed to write custom error pages: %v", err)
+	}
+
 	var later nginx.DeferredSteps
 
 	// Main nginx.conf first, before syncing host configs, so the very first

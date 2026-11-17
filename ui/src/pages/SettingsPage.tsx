@@ -18,6 +18,7 @@ import RoleManager from '../components/settings/RoleManager'
 import SSOProviderManager from '../components/settings/SSOProviderManager'
 import NotificationChannelManager from '../components/settings/NotificationChannelManager'
 import UserManager from '../components/settings/UserManager'
+import ErrorPageSettings from '../components/settings/error-pages/ErrorPageSettings'
 import { usePermissions } from '../hooks/usePermissions'
 
 type SubTab =
@@ -38,6 +39,7 @@ type SubTab =
   | 'roles'
   | 'sso'
   | 'notifications'
+  | 'error-pages'
 
 export default function SettingsPage({ subTab }: { subTab: SubTab }) {
   const { t } = useTranslation('navigation')
@@ -56,6 +58,7 @@ export default function SettingsPage({ subTab }: { subTab: SubTab }) {
         ? [
           { key: 'global' as SubTab, label: t('subTabs.settings.global') },
           { key: 'ssl' as SubTab, label: t('subTabs.settings.ssl') },
+          { key: 'error-pages' as SubTab, label: t('subTabs.settings.errorPages') },
         ]
         : [],
     },
@@ -162,6 +165,7 @@ export default function SettingsPage({ subTab }: { subTab: SubTab }) {
       {subTab === 'roles' && <RoleManager />}
       {subTab === 'sso' && <SSOProviderManager />}
       {subTab === 'notifications' && <NotificationChannelManager />}
+      {subTab === 'error-pages' && <ErrorPageSettings />}
     </div>
   )
 }
