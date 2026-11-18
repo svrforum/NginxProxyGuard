@@ -81,7 +81,10 @@ test.describe('Custom error pages (#335)', () => {
     }
 
     // The access list's refusal gets NPG's block page, not nginx's bare one.
-    await eventually(async () => (await fetchRaw(denied)).status === 403, 'access list refuses');
+    await eventually(async () => {
+      const r = await fetchRaw(denied);
+      return r.status === 403 && !/Content-Security-Policy/i.test(r.head);
+    }, 'access list refuses with the built-in page');
     const builtIn = await fetchRaw(denied);
     expect(builtIn.body).not.toContain('<center>nginx</center>');
     expect(builtIn.head).not.toMatch(/Content-Security-Policy/i);
@@ -93,6 +96,10 @@ test.describe('Custom error pages (#335)', () => {
       });
       expect(res.status(), await res.text()).toBe(200);
     }
+    // Each save reloads nginx; under a full parallel run the reload can land a
+    // moment after the API answers.
+    await eventually(async () => (await fetchRaw(denied)).body.includes('CUSTOM-403'), 'custom 403 is live');
+    await eventually(async () => (await fetchRaw(down)).body.includes('CUSTOM-502'), 'custom 502 is live');
     const custom403 = await fetchRaw(denied);
     expect(custom403.status).toBe(403);
     expect(custom403.body).toContain('CUSTOM-403');
@@ -106,6 +113,7 @@ test.describe('Custom error pages (#335)', () => {
 
     const reset = await request.delete(`${API}/api/v1/settings/error-pages/403`, { headers });
     expect(reset.status()).toBe(200);
+    await eventually(async () => !(await fetchRaw(denied)).body.includes('CUSTOM-403'), 'built-in 403 is back');
     const after = await fetchRaw(denied);
     expect(after.body).not.toContain('CUSTOM-403');
     expect(after.head).not.toMatch(/Content-Security-Policy/i);
