@@ -2,9 +2,10 @@
 # Built from source for full control and latest features
 #
 # Versions (2026):
-# - nginx: 1.30.6 (stable with HTTP/3 QUIC support; fixes CVE-2026-15176 alias,
-#   CVE-2026-93479 script evaluation, CVE-2026-97205 AIO,
-#   CVE-2026-95101 HTTP/3, CVE-2026-97629 TLS session tickets)
+# - nginx: 1.30.7 (stable with HTTP/3 QUIC support; fixes CVE-2026-123007 and
+#   CVE-2026-123633 HTTP/2, CVE-2026-121810 HTTP/3, CVE-2026-118899 request
+#   body over SSL, CVE-2026-123634 resolver, CVE-2026-125283 alias/try_files,
+#   CVE-2026-123640 ssl_preread, CVE-2026-120967 stream SSL, CVE-2026-113425 mail)
 # - ModSecurity: 3.0.15
 # - ModSecurity-nginx: 1.0.4
 # - OWASP CRS: 4.26.0
@@ -15,7 +16,7 @@
 # - https://github.com/owasp-modsecurity/ModSecurity-nginx
 # - https://github.com/coreruleset/coreruleset
 
-ARG NGINX_VERSION=1.30.6
+ARG NGINX_VERSION=1.30.7
 ARG MODSECURITY_VERSION=3.0.15
 ARG MODSECURITY_NGINX_VERSION=1.0.4
 ARG OWASP_CRS_VERSION=4.26.0
