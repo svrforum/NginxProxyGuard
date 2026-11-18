@@ -1,9 +1,12 @@
 import { useTranslation, Trans } from 'react-i18next';
+import { useQuery } from '@tanstack/react-query';
 import { ContributingRules } from './ContributingRules';
 import { RequestURIBlock } from './RequestURIBlock';
 import type { Log } from '../../../types/log';
 import type { URIMatchType } from '../../../types/security';
 import { formatBytes } from '../utils';
+import { fetchExploitRules } from '../../../api/exploit-rules';
+import { usePermissions } from '../../../hooks/usePermissions';
 import { StatusCodeBadge, MethodBadge, BlockReasonBadge } from '../badges';
 
 // IP Ban Form
@@ -386,9 +389,20 @@ const BOT_CATEGORY_KEY: Record<string, string> = {
 
 function BlockReasonSummary({ log }: { log: Log }) {
   const { t } = useTranslation('logs');
+  const { can, isLoading: permissionsLoading } = usePermissions();
+  // The log stores the exploit rule's ID; its name lives in the rule list (#390).
+  // Roles without waf:read keep seeing the ID alone.
+  const { data: exploitRules } = useQuery({
+    queryKey: ['exploit-rules'],
+    queryFn: fetchExploitRules,
+    staleTime: 5 * 60 * 1000,
+    enabled: log.block_reason === 'exploit_block' && !permissionsLoading && can('waf:read'),
+  });
   if (!log.block_reason || log.block_reason === 'none') return null;
 
   const ruleId = log.rule_id ? String(log.rule_id) : null;
+  const exploitRule = log.block_reason === 'exploit_block' && log.exploit_rule && log.exploit_rule !== '-' ? log.exploit_rule : null;
+  const exploitRuleName = exploitRules?.categories?.flatMap((c) => c.rules ?? []).find((r) => r.id === exploitRule)?.name;
 
   return (
     <div className="mb-4 p-3 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-lg">
@@ -411,10 +425,11 @@ function BlockReasonSummary({ log }: { log: Log }) {
             <p className="text-slate-900 dark:text-white">{log.attack_type}</p>
           </div>
         )}
-        {log.block_reason === 'exploit_block' && log.exploit_rule && log.exploit_rule !== '-' && (
+        {exploitRule && (
           <div className="col-span-2">
             <span className="text-xs text-slate-500 dark:text-slate-400">{t('detail.exploitRule', { defaultValue: 'Exploit 규칙' })}</span>
-            <p className="text-slate-900 dark:text-white font-mono break-all">{log.exploit_rule}</p>
+            {exploitRuleName && <p className="text-slate-900 dark:text-white">{exploitRuleName}</p>}
+            <p className={exploitRuleName ? 'text-xs text-slate-500 dark:text-slate-400 font-mono break-all' : 'text-slate-900 dark:text-white font-mono break-all'}>{exploitRule}</p>
           </div>
         )}
         {log.block_reason === 'bot_filter' && log.bot_category && (
