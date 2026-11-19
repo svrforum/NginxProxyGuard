@@ -55,7 +55,7 @@ export function LogDetailHeader({ log, onClose, onBanClick }: LogDetailHeaderPro
             <p className="text-sm text-slate-900 dark:text-white break-all">{log.host}</p>
           </div>
         )}
-        {log.log_type === 'access' && (
+        {(log.log_type === 'access' || log.log_type === 'stream') && (
           <div>
             <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">{t('detail.port')}</label>
             <p className="text-sm text-slate-900 dark:text-white font-mono">{log.server_port ?? '-'}</p>

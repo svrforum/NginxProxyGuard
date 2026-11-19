@@ -63,8 +63,8 @@ export const VisualizationPanel = memo(function VisualizationPanel({
   return (
     <div className="bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {/* Status Codes Chart - Access logs only */}
-        {logType === 'access' && stats.top_status_codes && stats.top_status_codes.length > 0 && (
+        {/* Status Codes Chart - access and stream logs */}
+        {(logType === 'access' || logType === 'stream') && stats.top_status_codes && stats.top_status_codes.length > 0 && (
           <StatusCodeChart data={stats.top_status_codes} />
         )}
 
@@ -94,7 +94,7 @@ export const VisualizationPanel = memo(function VisualizationPanel({
         )}
 
         {/* Status Code Bar Chart */}
-        {logType === 'access' && statusCodeData.length > 0 && (
+        {(logType === 'access' || logType === 'stream') && statusCodeData.length > 0 && (
           <BarChart data={statusCodeData} title={t('stats.statusCodeDist')} maxItems={10} />
         )}
       </div>

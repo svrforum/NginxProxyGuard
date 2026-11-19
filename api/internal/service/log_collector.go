@@ -168,6 +168,9 @@ type LogCollector struct {
 	domainCacheMu   sync.RWMutex
 	domainCache     map[string]string // exact domain -> hostID
 	domainWildcards []wildcardHost    // "*.example.com" entries, longest suffix first
+
+	// Stream hosts by listener, "tcp:25565" (#392), refreshed with the map above.
+	streamHosts map[string]streamListener
 	// Redirect-host domains, refreshed together with the proxy host map. The
 	// hostID field is unused for these — only membership matters.
 	redirectDomains   map[string]struct{}
@@ -486,6 +489,7 @@ func (c *LogCollector) refreshDomainCache(ctx context.Context) {
 	c.domainCacheMu.Lock()
 	c.domainCache = newCache
 	c.domainWildcards = newWildcards
+	c.streamHosts = streamListeners(hosts)
 	if newRedirects != nil {
 		c.redirectDomains = newRedirects
 		c.redirectWildcards = newRedirectWildcards
@@ -573,6 +577,7 @@ func (c *LogCollector) Start(ctx context.Context) {
 	//   - ModSec JSON: docker logs --follow stdout (containerLogFollower)
 	//   - error logs: docker logs --follow stderr (containerLogFollower)
 	go c.streamFileAccessLogs(ctx)
+	go c.streamFileStreamLogs(ctx)
 	go c.streamModSecLogs(ctx)
 	go c.streamErrorLogs(ctx)
 

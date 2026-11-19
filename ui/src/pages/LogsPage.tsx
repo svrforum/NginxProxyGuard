@@ -7,7 +7,7 @@ import BotFilterLogs from '../components/BotFilterLogs'
 import ExploitBlockLogs from '../components/ExploitBlockLogs'
 import RawLogFiles from '../components/RawLogFiles'
 
-export default function LogsPage({ subTab }: { subTab: 'access' | 'waf-events' | 'bot-filter' | 'exploit-blocks' | 'system' | 'audit' | 'raw-files' }) {
+export default function LogsPage({ subTab }: { subTab: 'access' | 'waf-events' | 'bot-filter' | 'exploit-blocks' | 'stream' | 'system' | 'audit' | 'raw-files' }) {
   const { t } = useTranslation('navigation')
   const navigate = useNavigate()
 
@@ -53,6 +53,15 @@ export default function LogsPage({ subTab }: { subTab: 'access' | 'waf-events' |
             {t('subTabs.logs.exploitBlocks')}
           </button>
           <button
+            onClick={() => navigate('/logs/stream')}
+            className={`pb-2 px-1 text-xs lg:text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${subTab === 'stream'
+              ? 'border-teal-600 text-teal-600 dark:text-teal-400'
+              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+          >
+            {t('subTabs.logs.stream')}
+          </button>
+          <button
             onClick={() => navigate('/logs/system')}
             className={`pb-2 px-1 text-xs lg:text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap ${subTab === 'system'
               ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
@@ -92,6 +101,10 @@ export default function LogsPage({ subTab }: { subTab: 'access' | 'waf-events' |
         <BotFilterLogs />
       ) : subTab === 'exploit-blocks' ? (
         <ExploitBlockLogs />
+      ) : subTab === 'stream' ? (
+        // Its own key: the access filters (URI, user agent, method) would
+        // otherwise carry over into a list that has none of those fields.
+        <LogViewer key="stream" logType="stream" />
       ) : (
         <LogViewer logType={subTab === 'waf-events' ? 'modsec' : subTab} />
       )}

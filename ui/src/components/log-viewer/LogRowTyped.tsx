@@ -8,7 +8,7 @@ import type { AccessColumnKey } from './hooks/useColumnVisibility';
 
 interface LogRowTypedProps {
   log: Log;
-  logType?: 'access' | 'error' | 'modsec';
+  logType?: 'access' | 'error' | 'modsec' | 'stream';
   onClick: () => void;
   // Fired when the user clicks the client IP cell. The handler is expected to apply
   // a "filter by this IP" — clicking the IP never opens the detail modal.
@@ -232,6 +232,87 @@ export const LogRowTyped = memo(function LogRowTyped({ log, logType, onClick, on
         </td>
         <td className="px-4 py-3 text-sm text-red-700 dark:text-red-400 max-w-2xl truncate" title={log.error_message}>
           {log.error_message || '-'}
+        </td>
+      </tr>
+    );
+  }
+
+  // One TCP/UDP connection to a stream host (#392). request_method carries the
+  // transport, server_port the port it arrived on; there is no URI or user agent.
+  if (logType === 'stream') {
+    const upstreamParts = splitUpstream(log.upstream_addr);
+    const finalUpstream = upstreamParts[upstreamParts.length - 1];
+    const retryCount = upstreamParts.length > 1 ? upstreamParts.length - 1 : 0;
+    const port = log.server_port != null ? `:${log.server_port}` : '';
+    return (
+      <tr className="hover:bg-teal-50 dark:hover:bg-teal-900/10 cursor-pointer transition-colors" onClick={onClick}>
+        <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
+          {formatTime(log.timestamp)}
+        </td>
+        <td className="px-4 py-3 text-sm truncate" title={`${log.host || '-'}${port && ` ${port}`}`}>
+          <span className="text-primary-600 dark:text-primary-400 font-medium">{log.host || '-'}</span>
+          {port && <span className="ml-1 font-mono text-xs text-slate-400 dark:text-slate-500">{port}</span>}
+        </td>
+        <td className="px-4 py-3 whitespace-nowrap">
+          {log.request_method ? (
+            <span className="px-2 py-0.5 rounded text-xs font-medium font-mono bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300">
+              {log.request_method}
+            </span>
+          ) : (
+            <span className="text-slate-400">-</span>
+          )}
+        </td>
+        <td className="px-4 py-3 overflow-hidden">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="min-w-0 flex-1">
+              {log.client_ip && onClientIPClick ? (
+                <button
+                  type="button"
+                  onClick={handleIPClick}
+                  title={t('table.filterByIP', { ip: log.client_ip })}
+                  className="block w-full text-left hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded px-1 -mx-1 transition-colors"
+                >
+                  <BannedIPBadge ip={log.client_ip} isBanned={log.is_banned} />
+                </button>
+              ) : (
+                <BannedIPBadge ip={log.client_ip} isBanned={log.is_banned} />
+              )}
+            </div>
+            {log.geo_country_code && (
+              <span className="shrink-0">
+                <GeoIPBadge log={log} />
+              </span>
+            )}
+          </div>
+        </td>
+        <td className="px-4 py-3">
+          {log.status_code != null ? <StatusCodeBadge code={log.status_code} /> : <span className="text-slate-400">-</span>}
+        </td>
+        <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
+          {log.body_bytes_sent != null ? formatBytes(log.body_bytes_sent) : '-'}
+        </td>
+        <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
+          {log.request_time != null ? `${log.request_time.toFixed(2)}s` : '-'}
+        </td>
+        <td
+          className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap"
+          title={retryCount > 0 ? `${t('table.upstreamRetryPath')}: ${upstreamParts.join(' → ')}` : finalUpstream}
+        >
+          {finalUpstream ? (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="font-mono truncate max-w-[140px]">{finalUpstream}</span>
+              {retryCount > 0 && (
+                <span
+                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] font-medium"
+                  aria-label={t('table.upstreamRetry', { count: retryCount })}
+                >
+                  ↻{retryCount}
+                </span>
+              )}
+            </span>
+          ) : (
+            '-'
+          )}
         </td>
       </tr>
     );

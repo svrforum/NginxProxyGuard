@@ -15,7 +15,7 @@ import { LogToolbar } from "./log-viewer/LogToolbar";
 import { LogTable } from "./log-viewer/LogTable";
 
 interface LogViewerProps {
-  logType?: "access" | "error" | "modsec";
+  logType?: "access" | "error" | "modsec" | "stream";
   defaultBlockReason?: BlockReason;
 }
 

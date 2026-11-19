@@ -7,7 +7,7 @@ import { EmptyState } from '../common/listui';
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
 
 interface LogTableProps {
-  logType?: 'access' | 'error' | 'modsec';
+  logType?: 'access' | 'error' | 'modsec' | 'stream';
   logsQuery: UseQueryResult<LogListResponse>;
   filter: LogFilter;
   page: number;
@@ -158,6 +158,18 @@ export function LogTable({
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">{t('table.columns.error')}</th>
               </tr>
             )}
+            {logType === 'stream' && (
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[140px]">{t('table.columns.time')}</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">{t('table.columns.host')}</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[90px]">{t('table.columns.protocol')}</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[220px]">{t('table.columns.ip')}</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[70px]">{t('table.columns.status')}</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[95px]">{t('table.columns.sent')}</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[95px]">{t('table.columns.duration')}</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase w-[180px]">{t('table.columns.upstream')}</th>
+              </tr>
+            )}
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
             {(() => {
@@ -166,7 +178,7 @@ export function LogTable({
               // whose width is driven by the column-chooser state.
               const accessSpan = visibleColumns.size;
               const emptyColSpan =
-                logType === 'access' ? accessSpan : logType === 'modsec' ? 8 : 4;
+                logType === 'access' ? accessSpan : logType === 'modsec' || logType === 'stream' ? 8 : 4;
               if (logsQuery.isLoading) {
                 return (
                   <tr>
@@ -199,7 +211,9 @@ export function LogTable({
                           ? t('table.noWafEvents')
                           : logType === 'error'
                             ? t('table.noErrors')
-                            : t('table.noLogs')}
+                            : logType === 'stream'
+                              ? t('table.noStream')
+                              : t('table.noLogs')}
                       </EmptyState>
                     </td>
                   </tr>

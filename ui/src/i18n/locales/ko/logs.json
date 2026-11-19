@@ -94,6 +94,7 @@
     "excludeCountriesHelp": "특정 국가 코드 제외",
     "searchWaf": "규칙 ID, 규칙 메시지, URI 검색...",
     "searchError": "에러 로그 검색...",
+    "searchStream": "호스트, IP 검색...",
     "noLimit": "제한 없음",
     "placeholders": {
       "ipExample": "IP 입력 후 Enter 또는 Space",
@@ -185,7 +186,10 @@
       "ruleMessage": "규칙 메시지",
       "severity": "심각도",
       "block": "차단",
-      "error": "오류 메시지"
+      "error": "오류 메시지",
+      "protocol": "프로토콜",
+      "sent": "보낸 바이트",
+      "duration": "접속 시간"
     },
     "upstreamDirect": "직접 처리",
     "upstreamRetry": "재시도 {{count}}회",
@@ -200,6 +204,7 @@
     "noLogs": "로그가 없습니다",
     "noWafEvents": "WAF 이벤트가 없습니다",
     "noErrors": "오류 로그가 없습니다",
+    "noStream": "스트림 연결 기록이 없습니다",
     "loading": "로그를 불러오는 중...",
     "logType": {
       "pass": "통과 (예외)",
@@ -238,6 +243,16 @@
     "responseSize": "응답 크기",
     "requestTime": "요청 시간",
     "upstream": "백엔드 서버",
+    "sentBytes": "보낸 바이트",
+    "duration": "접속 시간",
+    "streamStatus": {
+      "200": "정상 종료",
+      "400": "클라이언트 데이터 오류 (PROXY 프로토콜 헤더 등)",
+      "403": "접근 규칙 또는 IP 차단으로 거부됨",
+      "500": "nginx 내부 오류",
+      "502": "백엔드 서버에 연결하지 못함",
+      "503": "서비스 불가 (연결 수 제한 등)"
+    },
     "upstreamFinal": "최종 응답 서버",
     "upstreamPath": "재시도 경로",
     "upstreamRetryCount": "재시도 {{count}}회 발생",

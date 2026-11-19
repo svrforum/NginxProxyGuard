@@ -25,18 +25,18 @@ const (
 	RawLogLocationArchive = "archive"
 )
 
-// rawLogNameRE is every name the local log directory may serve: the two
-// live files, rotated copies (-YYYYMMDD-HHMMSS, or -YYYYMMDD before #301, or
+// rawLogNameRE is every name the local log directory may serve: the three
+// live files (stream_raw.log since #392), rotated copies (-YYYYMMDD-HHMMSS, or -YYYYMMDD before #301, or
 // .N from a logrotate config without dateext), compressed or not. Nothing
 // else is listed, served or deleted, so no request can name another file.
-var rawLogNameRE = regexp.MustCompile(`^(access|error)_raw\.log(-[0-9]{8}(-[0-9]{6})?|\.[0-9]{1,4})?(\.gz|\.bz2)?$`)
+var rawLogNameRE = regexp.MustCompile(`^(access|error|stream)_raw\.log(-[0-9]{8}(-[0-9]{6})?|\.[0-9]{1,4})?(\.gz|\.bz2)?$`)
 
 // rotatedRawLogRE is a rotated copy as logrotate's dateext writes it, with
 // the rotation time: the only names the archive moves, holds and prunes.
-var rotatedRawLogRE = regexp.MustCompile(`^(access|error)_raw\.log-([0-9]{8})-([0-9]{6})(\.gz)?$`)
+var rotatedRawLogRE = regexp.MustCompile(`^(access|error|stream)_raw\.log-([0-9]{8})-([0-9]{6})(\.gz)?$`)
 
 // datedRawLogRE extracts the rotation time from any dated rotated name.
-var datedRawLogRE = regexp.MustCompile(`^(access|error)_raw\.log-([0-9]{8})(?:-([0-9]{6}))?(\.gz|\.bz2)?$`)
+var datedRawLogRE = regexp.MustCompile(`^(access|error|stream)_raw\.log-([0-9]{8})(?:-([0-9]{6}))?(\.gz|\.bz2)?$`)
 
 // IsRawLogFileName reports whether name is a raw log file the local log
 // directory lists and serves.
@@ -55,7 +55,9 @@ func IsArchivedRawLogName(name string) bool {
 }
 
 // IsActiveRawLog reports whether name is a file nginx is writing right now.
-func IsActiveRawLog(name string) bool { return name == "access_raw.log" || name == "error_raw.log" }
+func IsActiveRawLog(name string) bool {
+	return name == "access_raw.log" || name == "error_raw.log" || name == "stream_raw.log"
+}
 
 // ParseRotatedAt returns the rotation time a rotated name carries, in local
 // time (logrotate formats it with the nginx container's TZ, which compose
@@ -84,7 +86,7 @@ type RawLogFile struct {
 	ModifiedAt   time.Time  `json:"modified_at"`
 	RotatedAt    *time.Time `json:"rotated_at,omitempty"`
 	IsCompressed bool       `json:"is_compressed"`
-	LogType      string     `json:"log_type"` // access, error
+	LogType      string     `json:"log_type"` // access, error, stream
 	IsActive     bool       `json:"is_active"`
 	Location     string     `json:"location"` // local, archive
 

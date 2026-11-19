@@ -1972,6 +1972,13 @@ BEGIN
     INSERT INTO schema_migrations (version) VALUES ('crs_941310_default_off_v1') ON CONFLICT DO NOTHING;
 END $$`,
 		},
+		{
+			// One TCP/UDP connection of a stream host, read from
+			// stream_raw.log (#392). ADD VALUE runs in its own Exec, so the
+			// new value is committed before any insert uses it.
+			desc: "log_type stream (#392)",
+			sql:  `ALTER TYPE public.log_type ADD VALUE IF NOT EXISTS 'stream'`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {

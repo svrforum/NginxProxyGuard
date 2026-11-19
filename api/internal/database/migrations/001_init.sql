@@ -22,7 +22,7 @@ EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$ BEGIN
-    CREATE TYPE public.log_type AS ENUM ('access', 'error', 'modsec');
+    CREATE TYPE public.log_type AS ENUM ('access', 'error', 'modsec', 'stream');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
@@ -4960,3 +4960,6 @@ ALTER TABLE public.logs_partitioned ADD COLUMN IF NOT EXISTS server_port integer
 --       ON CONFLICT (rule_id) DO NOTHING;
 --       INSERT INTO schema_migrations (version) VALUES ('crs_941310_default_off_v1') ON CONFLICT DO NOTHING;
 --   END $$;
+
+-- One TCP/UDP connection of a stream host, read from stream_raw.log (#392).
+ALTER TYPE public.log_type ADD VALUE IF NOT EXISTS 'stream';

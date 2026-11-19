@@ -18,6 +18,7 @@ import {
   AccessLogBody,
   ModsecLogBody,
 } from './LogDetailBody';
+import { StreamLogBody } from './StreamLogBody';
 import {
   LogRawBlock,
   ErrorMessageBlock,
@@ -300,6 +301,8 @@ export function LogDetailModal({ log: row, onClose, onRuleDisabled }: LogDetailM
           )}
 
           {log.log_type === 'error' && <ErrorMessageBlock errorMessage={log.error_message} />}
+
+          {log.log_type === 'stream' && <StreamLogBody log={log} />}
 
           {log.log_type === 'modsec' && (
             <>

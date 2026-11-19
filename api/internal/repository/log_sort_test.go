@@ -67,7 +67,7 @@ func TestListTimeSortShape(t *testing.T) {
 			cols := []string{"id", "log_type", "timestamp", "host", "client_ip", "geo_country", "geo_country_code", "geo_org",
 				"request_method", "request_uri", "status_code", "body_bytes_sent", "request_time", "upstream_addr", "upstream_status",
 				"http_user_agent", "severity", "error_message", "rule_id", "rule_message", "action_taken",
-				"block_reason", "bot_category", "exploit_rule", "created_at"}
+				"block_reason", "bot_category", "exploit_rule", "created_at", "server_port"}
 			rows := sqlmock.NewRows(cols)
 			now := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
 			for i := 0; i < 3; i++ { // perPage 2 + 1: there is a next page

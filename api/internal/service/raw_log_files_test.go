@@ -144,7 +144,7 @@ func TestParseRotatedAt(t *testing.T) {
 }
 
 func TestRawLogNames(t *testing.T) {
-	for _, name := range []string{"access_raw.log", "error_raw.log", "access_raw.log-20260919", "access_raw.log-20261009-000004.gz", "error_raw.log-20261009-120000", "access_raw.log.1", "access_raw.log.2.gz", "error_raw.log-20260919.bz2"} {
+	for _, name := range []string{"access_raw.log", "error_raw.log", "access_raw.log-20260919", "access_raw.log-20261009-000004.gz", "error_raw.log-20261009-120000", "access_raw.log.1", "access_raw.log.2.gz", "error_raw.log-20260919.bz2", "stream_raw.log", "stream_raw.log-20261119-000000.gz"} {
 		if !IsRawLogFileName(name) {
 			t.Errorf("%q should be a raw log name", name)
 		}
@@ -157,6 +157,7 @@ func TestRawLogNames(t *testing.T) {
 	// The archive holds only timestamped rotated copies.
 	for name, want := range map[string]bool{
 		"access_raw.log-20261009-000004.gz": true, "error_raw.log-20261009-120000": true,
+		"stream_raw.log-20261119-010203.gz": true, "stream_raw.log": false,
 		"access_raw.log": false, "access_raw.log-20260919": false, "access_raw.log-20261009-000004.bz2": false,
 		"access_raw.log-20261009-000004.gz.part": false,
 	} {

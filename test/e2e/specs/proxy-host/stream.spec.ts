@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import * as net from 'net';
 import { APIHelper } from '../../utils/api-helper';
 import { ROUTES } from '../../fixtures/test-data';
 
@@ -237,5 +238,56 @@ test.describe('Stream proxy hosts', () => {
 
     const body = page.getByText(/ModSecurity \(WAF\)|ModSecurity\(WAF\)/);
     await expect(body).toBeVisible();
+  });
+  // #392: a stream host's sessions are logged as log_type "stream" rows tied
+  // to the host by the port they arrived on, and the list returns the port.
+  test('logs a TCP session as a stream row of its host', async ({ request }) => {
+    const port = 17000 + Math.floor(Math.random() * 1000);
+    const domain = `stream-log-${port}.example.com`;
+    const headers = { Authorization: `Bearer ${(api as unknown as { token: string }).token}` };
+    const created = await request.post('/api/v1/proxy-hosts', {
+      headers,
+      data: {
+        domain_names: [domain],
+        forward_host: '127.0.0.1',
+        forward_port: 19080,
+        forward_scheme: 'tcp',
+        proxy_type: 'stream',
+        stream_listen_port: port,
+        stream_protocol: 'tcp',
+        enabled: true,
+      },
+    });
+    expect(created.status(), await created.text()).toBe(201);
+    cleanup.push((await created.json()).id);
+
+    // One HTTP request to the API through the stream; the session ends when
+    // the API closes it.
+    const session = () =>
+      new Promise<boolean>((resolve) => {
+        const socket = net.createConnection({ host: '127.0.0.1', port });
+        socket.setTimeout(5000);
+        let got = false;
+        socket.on('connect', () => socket.write('GET /api/v1/none HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n'));
+        socket.on('data', () => (got = true));
+        socket.on('close', () => resolve(got));
+        socket.on('error', () => resolve(false));
+        socket.on('timeout', () => socket.destroy());
+      });
+    await expect.poll(session, { timeout: 20_000, intervals: [1_000] }).toBe(true);
+
+    type Row = { host?: string; server_port?: number; request_method?: string; status_code?: number; body_bytes_sent?: number };
+    await expect
+      .poll(
+        async () => {
+          const res = await request.get('/api/v1/logs?log_type=stream&per_page=100', { headers });
+          const body = await res.json();
+          const rows: Row[] = body.data ?? body.logs ?? [];
+          const row = rows.find((r) => r.server_port === port);
+          return row ? `${row.host} ${row.request_method} ${row.status_code} ${(row.body_bytes_sent ?? 0) > 0}` : 'none';
+        },
+        { timeout: 45_000, intervals: [2_000] },
+      )
+      .toBe(`${domain} TCP 200 true`);
   });
 });

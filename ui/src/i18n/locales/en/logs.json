@@ -99,6 +99,7 @@
     "allStatuses": "All Statuses",
     "searchWaf": "Search rule ID, message, URI...",
     "searchError": "Search Error logs...",
+    "searchStream": "Search host, IP...",
     "noLimit": "No limit",
     "placeholders": {
       "ipExample": "Type IP and press Enter or Space",
@@ -185,7 +186,10 @@
       "ruleMessage": "Rule Message",
       "severity": "Severity",
       "block": "Block",
-      "error": "Error Message"
+      "error": "Error Message",
+      "protocol": "Protocol",
+      "sent": "Sent",
+      "duration": "Duration"
     },
     "upstreamDirect": "direct",
     "upstreamRetry": "{{count}} retry",
@@ -200,6 +204,7 @@
     "noLogs": "No logs found",
     "noWafEvents": "No WAF events found",
     "noErrors": "No errors found",
+    "noStream": "No stream connections found",
     "loading": "Loading logs...",
     "logType": {
       "pass": "pass (excluded)",
@@ -238,6 +243,16 @@
     "responseSize": "Response Size",
     "requestTime": "Request Time",
     "upstream": "Upstream Server",
+    "sentBytes": "Bytes Sent",
+    "duration": "Duration",
+    "streamStatus": {
+      "200": "Session completed",
+      "400": "Bad client data (e.g. PROXY protocol header)",
+      "403": "Refused by access rules or an IP ban",
+      "500": "nginx internal error",
+      "502": "Could not reach the backend",
+      "503": "Unavailable (e.g. connection limit)"
+    },
     "upstreamFinal": "Final responder",
     "upstreamPath": "Retry path",
     "upstreamRetryCount": "{{count}} retry",

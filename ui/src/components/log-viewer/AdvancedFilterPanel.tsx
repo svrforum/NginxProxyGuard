@@ -16,7 +16,7 @@ import { getDefaultDateRange } from './utils';
 interface AdvancedFilterPanelProps {
   filter: LogFilter;
   onFilterChange: (filter: LogFilter) => void;
-  logType?: 'access' | 'error' | 'modsec';
+  logType?: 'access' | 'error' | 'modsec' | 'stream';
   onClose: () => void;
 }
 
@@ -79,7 +79,7 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
   // One-click chips for the codes operators reach for most. Anything else -
   // 499, 444, Cloudflare's 52x - is reachable by typing it, which the old
   // fixed list made impossible.
-  const quickStatusCodes = [200, 301, 302, 304, 400, 401, 403, 404, 429, 499, 500, 502, 503, 504];
+  const quickStatusCodes = logType === 'stream' ? [200, 400, 403, 500, 502, 503] : [200, 301, 302, 304, 400, 401, 403, 404, 429, 499, 500, 502, 503, 504];
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 p-4 mb-4 transition-colors">
@@ -172,7 +172,7 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
         </div>
 
         {/* URI with Multi-select */}
-        <div>
+        {logType !== 'stream' && <div>
           <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 flex items-center gap-1">
             {t('filters.uri')}
             <HelpTip content={t('filters.uriHelp')} />
@@ -185,10 +185,10 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
             className="border-slate-300"
             helpText={t('filters.tagInputHelp')}
           />
-        </div>
+        </div>}
 
         {/* User Agent with Multi-select */}
-        <div>
+        {logType !== 'stream' && <div>
           <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 flex items-center gap-1">
             {t('filters.userAgent')}
             <HelpTip content={t('filters.userAgentHelp')} />
@@ -201,7 +201,7 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
             className="border-slate-300"
             helpText={t('filters.tagInputHelp')}
           />
-        </div>
+        </div>}
 
         {/* HTTP Method */}
         {logType === 'access' && (
@@ -267,7 +267,7 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
         )}
 
         {/* Status Codes — classes, common codes, or anything typed */}
-        {logType === 'access' && (
+        {(logType === 'access' || logType === 'stream') && (
           <div className="md:col-span-2">
             <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 flex items-center gap-1">
               {t('filters.statusCodes')}
@@ -496,7 +496,7 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
             </div>
 
             {/* Exclude User Agents */}
-            <div>
+            {logType !== 'stream' && <div>
               <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 flex items-center gap-1">
                 {t('filters.excludeUserAgents')}
                 <HelpTip content={t('filters.excludeUserAgentsHelp')} />
@@ -509,10 +509,10 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
                 className="border-slate-300"
                 helpText={t('filters.containsMatch')}
               />
-            </div>
+            </div>}
 
             {/* Exclude URIs */}
-            <div>
+            {logType !== 'stream' && <div>
               <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 flex items-center gap-1">
                 {t('filters.excludeUris')}
                 <HelpTip content={t('filters.excludeUrisHelp')} />
@@ -525,7 +525,7 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
                 className="border-slate-300"
                 helpText={t('filters.containsMatch')}
               />
-            </div>
+            </div>}
 
             {/* Exclude Hosts */}
             <div>
@@ -560,7 +560,7 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
             </div>
 
             {/* Exclude Status Codes */}
-            {logType === 'access' && (
+            {(logType === 'access' || logType === 'stream') && (
               <div className="md:col-span-2 lg:col-span-3">
                 <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 flex items-center gap-1">
                   {t('filters.excludeStatusCodes')}

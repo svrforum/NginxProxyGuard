@@ -72,7 +72,7 @@ const (
 // without another docker exec.
 const rawLogDir = "/etc/nginx/logs"
 
-var rawLogNames = []string{"access_raw.log", "error_raw.log"}
+var rawLogNames = []string{"access_raw.log", "error_raw.log", "stream_raw.log"}
 
 // logrotateMutex serializes our own rotations. logrotate locks its state file
 // and refuses to run twice at once ("logrotate does not support parallel
@@ -85,7 +85,7 @@ var rawLogNames = []string{"access_raw.log", "error_raw.log"}
 var logrotateMutex sync.Mutex
 
 // rawLogsHaveContent reports whether there is anything for logrotate to cut.
-// Both files sit in one stanza but notifempty is evaluated per file, so a
+// The files sit in one stanza but notifempty is evaluated per file, so a
 // single non-empty log is enough for a rotation to happen.
 func rawLogsHaveContent() bool {
 	for _, name := range rawLogNames {

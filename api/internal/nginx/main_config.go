@@ -357,7 +357,7 @@ stream {
                            '$protocol $status $bytes_sent $bytes_received '
                            '$session_time "$upstream_addr" '
                            '"$upstream_bytes_sent" "$upstream_bytes_received" '
-                           '"$upstream_connect_time"';
+                           '"$upstream_connect_time" sp=$server_port';
 {{.CustomStreamConfig}}
     # Managed TCP/UDP stream proxy hosts
     include /etc/nginx/stream.d/*.conf;

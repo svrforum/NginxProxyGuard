@@ -11,6 +11,8 @@ const (
 	LogTypeAccess LogType = "access"
 	LogTypeError  LogType = "error"
 	LogTypeModSec LogType = "modsec"
+	// LogTypeStream is one TCP/UDP connection of a stream host (#392).
+	LogTypeStream LogType = "stream"
 )
 
 type BlockReason string
@@ -79,6 +81,7 @@ var validLogTypes = map[string]bool{
 	string(LogTypeAccess): true,
 	string(LogTypeError):  true,
 	string(LogTypeModSec): true,
+	string(LogTypeStream): true,
 }
 
 var validSeverities = map[string]bool{
@@ -105,7 +108,7 @@ func IsValidBlockReason(s string) bool { _, ok := validBlockReasons[s]; return o
 // accept, in the order the database enums declare them, so a rejection can
 // name the accepted set. log_create_test.go keeps each list equal to its map.
 var (
-	LogTypes      = []string{string(LogTypeAccess), string(LogTypeError), string(LogTypeModSec)}
+	LogTypes      = []string{string(LogTypeAccess), string(LogTypeError), string(LogTypeModSec), string(LogTypeStream)}
 	LogSeverities = []string{
 		string(LogSeverityDebug), string(LogSeverityInfo), string(LogSeverityNotice), string(LogSeverityWarn),
 		string(LogSeverityError), string(LogSeverityCrit), string(LogSeverityAlert), string(LogSeverityEmerg),

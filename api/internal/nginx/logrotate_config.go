@@ -45,8 +45,8 @@ func RotateSafetyCap(retentionDays int) int {
 	return c
 }
 
-// RenderLogrotateConfig renders the stanza for access_raw.log and
-// error_raw.log in dir. r should come from SystemSettings.EffectiveRawLogRotation.
+// RenderLogrotateConfig renders the stanza for access_raw.log, error_raw.log
+// and stream_raw.log (TCP/UDP stream hosts, #392) in dir. r should come from SystemSettings.EffectiveRawLogRotation.
 func RenderLogrotateConfig(dir string, r model.RawLogRotation) string {
 	compress := ""
 	if r.Compress {
@@ -57,7 +57,7 @@ func RenderLogrotateConfig(dir string, r model.RawLogRotation) string {
 # forced at 00:00, size/day check every hour. maxage is the retention;
 # rotate is only a safety cap so hourly size cuts never delete inside it.
 
-%[1]s/access_raw.log %[1]s/error_raw.log {
+%[1]s/access_raw.log %[1]s/error_raw.log %[1]s/stream_raw.log {
     daily
     maxsize %[2]dM
     maxage %[3]d

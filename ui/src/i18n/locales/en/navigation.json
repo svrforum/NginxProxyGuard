@@ -71,6 +71,7 @@
       "wafEvents": "WAF Events",
       "botFilter": "Bot Filter",
       "exploitBlocks": "Exploit Blocks",
+      "stream": "Stream",
       "error": "Error Logs",
       "system": "System Logs",
       "audit": "Admin Audit",

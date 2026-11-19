@@ -446,6 +446,7 @@ function AppContent({ user, onLogout }: AppContentProps) {
           <Route path="/logs/waf-events" element={<LogsPage subTab="waf-events" />} />
           <Route path="/logs/bot-filter" element={<LogsPage subTab="bot-filter" />} />
           <Route path="/logs/exploit-blocks" element={<LogsPage subTab="exploit-blocks" />} />
+          <Route path="/logs/stream" element={<LogsPage subTab="stream" />} />
           <Route path="/logs/system" element={<LogsPage subTab="system" />} />
           <Route path="/logs/audit" element={<LogsPage subTab="audit" />} />
           <Route path="/logs/raw-files" element={<LogsPage subTab="raw-files" />} />

@@ -1,4 +1,4 @@
-export type LogType = "access" | "error" | "modsec";
+export type LogType = "access" | "error" | "modsec" | "stream";
 
 export type LogSeverity =
   | "debug"
@@ -56,7 +56,8 @@ export interface Log {
   http_referer?: string;
   http_user_agent?: string;
   http_x_forwarded_for?: string;
-  // Port the request arrived on. Only GET /logs/:id returns it (#389).
+  // Port the request arrived on. GET /logs/:id returns it (#389); the list
+  // returns it as well, which the stream rows show next to the host (#392).
   server_port?: number;
 
   // Error log fields

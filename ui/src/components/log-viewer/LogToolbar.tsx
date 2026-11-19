@@ -6,7 +6,7 @@ import { VisualizationPanel, ColumnChooser, type AccessColumnKey } from './index
 import { IconButton, RenewIcon } from '../common/listui';
 
 interface LogToolbarProps {
-  logType?: 'access' | 'error' | 'modsec';
+  logType?: 'access' | 'error' | 'modsec' | 'stream';
   statsQuery: UseQueryResult<LogStats>;
   showVisualization: boolean;
   setShowVisualization: (v: boolean) => void;
@@ -210,7 +210,9 @@ export function LogToolbar({
                   ? t('filters.searchWaf')
                   : logType === 'error'
                     ? t('filters.searchError')
-                    : t('filters.uriPlaceholder')
+                    : logType === 'stream'
+                      ? t('filters.searchStream')
+                      : t('filters.uriPlaceholder')
               }
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}

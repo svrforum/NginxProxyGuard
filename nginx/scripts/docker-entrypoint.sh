@@ -186,9 +186,9 @@ setup_log_files() {
     if [ "$raw_log_enabled" = "true" ]; then
         # Create ADDITIONAL log files for raw storage in consolidated volume
         echo "[Entrypoint] Setting up additional raw log files in $LOG_DIR..."
-        touch "$LOG_DIR/access_raw.log" "$LOG_DIR/error_raw.log"
-        chown nginx:nginx "$LOG_DIR/access_raw.log" "$LOG_DIR/error_raw.log"
-        chmod 644 "$LOG_DIR/access_raw.log" "$LOG_DIR/error_raw.log"
+        touch "$LOG_DIR/access_raw.log" "$LOG_DIR/error_raw.log" "$LOG_DIR/stream_raw.log"
+        chown nginx:nginx "$LOG_DIR/access_raw.log" "$LOG_DIR/error_raw.log" "$LOG_DIR/stream_raw.log"
+        chmod 644 "$LOG_DIR/access_raw.log" "$LOG_DIR/error_raw.log" "$LOG_DIR/stream_raw.log"
 
         # Migrate old logs from legacy location if they exist
         if [ -f "$LEGACY_LOG_DIR/access_raw.log" ] && [ ! -L "$LEGACY_LOG_DIR/access_raw.log" ]; then

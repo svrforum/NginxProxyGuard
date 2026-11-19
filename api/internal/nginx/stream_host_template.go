@@ -39,7 +39,7 @@ server {
 {{end}}{{if .Host.StreamProxyConnectTimeout}}    proxy_connect_timeout {{.Host.StreamProxyConnectTimeout}}s;
 {{end}}{{if .Host.StreamProxyTimeout}}    proxy_timeout {{.Host.StreamProxyTimeout}}s;
 {{end}}{{if .Host.StreamSendProxyProtocol}}    proxy_protocol on;
-{{end}}{{if streamAccessLog}}    access_log /var/log/nginx/stream_access.log stream_main;
+{{end}}{{if streamAccessLog}}    access_log /etc/nginx/logs/stream_raw.log stream_main;
 {{end}}{{if streamErrorLog}}    error_log /var/log/nginx/stream_error.log warn;
 {{end}}{{if .Host.StreamSSLPreread}}    ssl_preread on;
 {{end}}{{if and .Upstream .Upstream.Servers}}    proxy_pass {{streamUpstreamName .Host}};

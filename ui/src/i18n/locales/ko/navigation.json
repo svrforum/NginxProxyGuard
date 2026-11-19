@@ -71,6 +71,7 @@
       "wafEvents": "WAF 이벤트",
       "botFilter": "봇 필터",
       "exploitBlocks": "Exploit 차단",
+      "stream": "스트림",
       "error": "에러 로그",
       "system": "시스템 로그",
       "audit": "관리자 감사",

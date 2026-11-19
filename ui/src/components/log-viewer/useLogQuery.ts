@@ -9,7 +9,7 @@ import { usePageVisibility } from '../../hooks/usePageVisibility';
 export const AUTO_REFRESH_INTERVAL = 15000;
 
 interface UseLogQueryArgs {
-  logType?: 'access' | 'error' | 'modsec';
+  logType?: 'access' | 'error' | 'modsec' | 'stream';
   defaultBlockReason?: BlockReason;
 }
 

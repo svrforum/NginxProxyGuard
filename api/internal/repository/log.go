@@ -853,7 +853,7 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 			severity, error_message,
 			rule_id, rule_message, action_taken,
 			block_reason, bot_category, exploit_rule,
-			created_at
+			created_at, server_port
 		FROM logs_partitioned
 		%s
 		ORDER BY %s
@@ -882,6 +882,9 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 		var severity, errorMessage sql.NullString
 		var ruleMessage, actionTaken sql.NullString
 		var blockReason, botCategory, exploitRule sql.NullString
+		// The Stream log tab shows the port (#392); it is an integer, so it
+		// costs the list nothing like the text columns the list leaves out.
+		var serverPort sql.NullInt32
 
 		err := rows.Scan(
 			&log.ID, &log.LogType, &log.Timestamp, &host, &clientIP,
@@ -893,10 +896,14 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 			&severity, &errorMessage,
 			&ruleID, &ruleMessage, &actionTaken,
 			&blockReason, &botCategory, &exploitRule,
-			&log.CreatedAt,
+			&log.CreatedAt, &serverPort,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan log: %w", err)
+		}
+		if serverPort.Valid {
+			p := int(serverPort.Int32)
+			log.ServerPort = &p
 		}
 
 		if host.Valid {

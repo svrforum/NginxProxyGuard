@@ -72,7 +72,7 @@ func TestGenerateConfigFull_StreamTCPHostWritesStreamConfig(t *testing.T) {
 		"set $stream_backend 10.0.0.20:5432;",
 		"proxy_pass $stream_backend;",
 		"ssl_preread on;",
-		"access_log /var/log/nginx/stream_access.log stream_main;",
+		"access_log /etc/nginx/logs/stream_raw.log stream_main;",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("expected %q in stream config; got:\n%s", want, out)
