@@ -163,3 +163,22 @@ func TestStreamListeners(t *testing.T) {
 		t.Errorf("udp:25565 = %+v", l)
 	}
 }
+
+// A cache loaded before a session began may lack its host and is refreshed;
+// one loaded after it began has it. Refreshes stay a second apart.
+func TestStreamCacheMayLackHost(t *testing.T) {
+	now := time.Date(2026, 11, 19, 10, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		cachedAgo, beganAgo time.Duration
+		want                bool
+	}{
+		{cachedAgo: 5 * time.Second, beganAgo: 3 * time.Second, want: true},
+		{cachedAgo: 3 * time.Second, beganAgo: 5 * time.Second, want: false},
+		{cachedAgo: 500 * time.Millisecond, beganAgo: 200 * time.Millisecond, want: false},
+		{cachedAgo: 2 * time.Minute, beganAgo: time.Second, want: true},
+	} {
+		if got := streamCacheMayLackHost(now.Add(-tc.cachedAgo), now.Add(-tc.beganAgo), now); got != tc.want {
+			t.Errorf("cached %v ago, began %v ago: %v, want %v", tc.cachedAgo, tc.beganAgo, got, tc.want)
+		}
+	}
+}

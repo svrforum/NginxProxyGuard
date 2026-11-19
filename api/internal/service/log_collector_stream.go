@@ -174,7 +174,10 @@ func (c *LogCollector) handleStreamLine(ctx context.Context, line string) {
 		return
 	}
 	if session.port > 0 {
-		if l, ok := c.streamListener(ctx, session); ok {
+		// $time_local is to the second, so the session may have begun up to
+		// a second later than this says.
+		began := logReq.Timestamp.Add(time.Second - time.Duration(logReq.RequestTime*float64(time.Second)))
+		if l, ok := c.streamListener(ctx, session, began); ok {
 			logReq.ProxyHostID = l.hostID
 			logReq.Host = l.name
 		}
@@ -186,20 +189,27 @@ func (c *LogCollector) handleStreamLine(ctx context.Context, line string) {
 	c.addLog(*logReq)
 }
 
-// streamListenerRefresh is how old the host cache may be before a listener it
-// does not know refreshes it. Shorter than the minute HTTP hosts wait: a
-// stream host sees few sessions, so the first ones after it is created would
-// otherwise all be stored without it.
-const streamListenerRefresh = 10 * time.Second
+// streamListenerMinRefresh spaces the refreshes a listener the cache does not
+// know can cause.
+const streamListenerMinRefresh = time.Second
 
-// streamListener finds the stream host behind a listener, refreshing the
-// host cache once when it misses and the cache is older than
-// streamListenerRefresh.
-func (c *LogCollector) streamListener(ctx context.Context, s streamSession) (streamListener, bool) {
+// streamCacheMayLackHost reports whether a host cache loaded at cachedAt can
+// be missing the host of a session that began at began. The host existed
+// before its first session, so a cache loaded after the session began has it;
+// one loaded before may not. A stream host sees few sessions, so waiting for
+// the minute HTTP hosts wait would store the first ones after it is created
+// without it.
+func streamCacheMayLackHost(cachedAt, began, now time.Time) bool {
+	return cachedAt.Before(began) && now.Sub(cachedAt) > streamListenerMinRefresh
+}
+
+// streamListener finds the stream host behind a listener, refreshing the host
+// cache once when it misses and may predate the host.
+func (c *LogCollector) streamListener(ctx context.Context, s streamSession, began time.Time) (streamListener, bool) {
 	key := streamListenerKey(s.protocol, s.port)
 	c.domainCacheMu.RLock()
 	cands := c.streamHosts[key]
-	stale := time.Since(c.domainCacheTime) > streamListenerRefresh
+	stale := streamCacheMayLackHost(c.domainCacheTime, began, time.Now())
 	c.domainCacheMu.RUnlock()
 	if len(cands) > 0 || !stale {
 		return pickStreamListener(cands, s)
