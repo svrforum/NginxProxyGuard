@@ -4940,3 +4940,23 @@ ALTER TABLE public.global_fail2ban ADD COLUMN IF NOT EXISTS ignore_private_ips b
 
 -- The port a request arrived on ($server_port), shown in the log detail (#389).
 ALTER TABLE public.logs_partitioned ADD COLUMN IF NOT EXISTS server_port integer;
+
+-- CRS 941310 off by default — DOCUMENTATION ONLY.
+-- The rule looks for the bytes 0xBC and 0xBE (a US-ASCII trick only old Internet Explorer
+-- fell for), which sit inside most non-English UTF-8 characters, so a post with an HTML
+-- closing tag and Korean, CJK, Cyrillic or German text trips it. It starts out as a global
+-- WAF rule exclusion the settings page lists and can re-enable, added once and recorded as
+-- 'crs_941310_default_off_v1' so a rule turned back on stays on. upgrades run on a fresh
+-- install too, so this file does not insert the row itself.
+-- Executable copy lives in database/migration.go `upgrades`.
+--   DO $$
+--   BEGIN
+--       IF EXISTS (SELECT 1 FROM schema_migrations WHERE version = 'crs_941310_default_off_v1') THEN
+--           RETURN;
+--       END IF;
+--       INSERT INTO public.global_waf_rule_exclusions (rule_id, rule_category, rule_description, reason, disabled_by)
+--       VALUES ('941310', 'XSS', 'US-ASCII Malformed Encoding XSS Filter',
+--               'Off by default: non-English UTF-8 text next to an HTML tag trips it. Turn it back on here if you need it.', 'system')
+--       ON CONFLICT (rule_id) DO NOTHING;
+--       INSERT INTO schema_migrations (version) VALUES ('crs_941310_default_off_v1') ON CONFLICT DO NOTHING;
+--   END $$;

@@ -1949,6 +1949,29 @@ END $$;`,
     CONSTRAINT custom_error_pages_status_code_check CHECK (status_code = ANY (ARRAY[403, 502, 503, 504]))
 )`,
 		},
+		{
+			// CRS 941310 looks for the bytes 0xBC and 0xBE, a US-ASCII
+			// encoding trick only old Internet Explorer fell for. Those bytes
+			// sit inside most UTF-8 characters outside English (Korean, CJK,
+			// Cyrillic, German ü), so any post with an HTML closing tag and
+			// such text trips it: on production every hit in 30 days was a
+			// blog or forum post, and one auto-banned its author. It starts
+			// out globally disabled, as a row the WAF settings page lists and
+			// can re-enable. The 'crs_941310_default_off_v1' marker makes this
+			// run once, so a rule an operator turned back on stays on.
+			desc: "disable CRS 941310 globally by default, once",
+			sql: `DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM schema_migrations WHERE version = 'crs_941310_default_off_v1') THEN
+        RETURN;
+    END IF;
+    INSERT INTO public.global_waf_rule_exclusions (rule_id, rule_category, rule_description, reason, disabled_by)
+    VALUES ('941310', 'XSS', 'US-ASCII Malformed Encoding XSS Filter',
+            'Off by default: non-English UTF-8 text next to an HTML tag trips it. Turn it back on here if you need it.', 'system')
+    ON CONFLICT (rule_id) DO NOTHING;
+    INSERT INTO schema_migrations (version) VALUES ('crs_941310_default_off_v1') ON CONFLICT DO NOTHING;
+END $$`,
+		},
 	}
 	for _, a := range upgrades {
 		if _, err := db.Exec(a.sql); err != nil {
