@@ -131,6 +131,11 @@ export function CollectionRulesModal({ onClose }: { onClose: () => void }) {
                       {h.domain_names[0]}
                       {h.domain_names.length > 1 && ` +${h.domain_names.length - 1}`}
                     </span>
+                    {h.proxy_type === 'stream' && (
+                      <span className="px-1.5 py-0.5 text-xs rounded bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300">
+                        {t('collectionRules.streamHost')}
+                      </span>
+                    )}
                     {!h.enabled && (
                       <span className="px-1.5 py-0.5 text-xs rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">
                         {t('collectionRules.disabledHost')}
@@ -154,6 +159,7 @@ export function CollectionRulesModal({ onClose }: { onClose: () => void }) {
                       error={error}
                       onSave={(rules) => save.mutate({ id: h.proxy_host_id, rules })}
                       onCancel={() => setEditing(null)}
+                      stream={h.proxy_type === 'stream'}
                     />
                   )}
                 </li>

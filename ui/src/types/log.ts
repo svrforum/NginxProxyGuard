@@ -188,6 +188,8 @@ export interface HostLogRulesEntry extends HostLogRules {
   proxy_host_id: string;
   domain_names: string[];
   enabled: boolean;
+  /** "stream" for a TCP/UDP stream host (#392): only skip_all and skip_statuses apply. */
+  proxy_type?: string;
   updated_at?: string;
 }
 

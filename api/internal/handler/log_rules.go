@@ -31,7 +31,7 @@ func NewLogRulesHandler(repo *repository.LogRulesRepository, audit *service.Audi
 	return &LogRulesHandler{repo: repo, audit: audit, reloader: reloader}
 }
 
-// List returns every proxy host other than a stream host, with its rules.
+// List returns every proxy host with its rules.
 func (h *LogRulesHandler) List(c echo.Context) error {
 	entries, err := h.repo.List(c.Request().Context())
 	if err != nil {

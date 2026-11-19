@@ -170,7 +170,7 @@ type LogCollector struct {
 	domainWildcards []wildcardHost    // "*.example.com" entries, longest suffix first
 
 	// Stream hosts by listener, "tcp:25565" (#392), refreshed with the map above.
-	streamHosts map[string]streamListener
+	streamHosts map[string][]streamListener
 	// Redirect-host domains, refreshed together with the proxy host map. The
 	// hostID field is unused for these — only membership matters.
 	redirectDomains   map[string]struct{}

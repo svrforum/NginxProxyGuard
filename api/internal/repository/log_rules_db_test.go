@@ -15,8 +15,9 @@ const (
 )
 
 // The hosts' log rules (#347) on a fresh install's schema: saved and read
-// back, listed with every host but a stream host, removed by rules that skip
-// nothing, and refused for a host that does not exist.
+// back, listed with every host (stream hosts too since #392, with their
+// type), removed by rules that skip nothing, and refused for a host that does
+// not exist.
 func TestLogRulesRepository(t *testing.T) {
 	db := openBackupTestDB(t)
 	ctx := context.Background()
@@ -40,8 +41,9 @@ func TestLogRulesRepository(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(list) != 2 || list[0].ProxyHostID != logRulesPlainHost || list[1].ProxyHostID != logRulesDavHost {
-		t.Fatalf("list = %+v, want app.example.com then dav.example.com, no stream host", list)
+	if len(list) != 3 || list[0].ProxyHostID != logRulesPlainHost || list[1].ProxyHostID != logRulesDavHost ||
+		list[2].ProxyHostID != logRulesStreamHost || list[2].ProxyType != "stream" || list[0].ProxyType != "http" {
+		t.Fatalf("list = %+v, want app, dav and the stream host, with their types", list)
 	}
 	if !list[0].IsEmpty() || list[0].UpdatedAt != nil || list[0].SkipPaths == nil {
 		t.Errorf("a host without rules = %+v, want empty, non-nil lists and no updated_at", list[0])
@@ -59,7 +61,7 @@ func TestLogRulesRepository(t *testing.T) {
 		t.Errorf("rules that skip nothing left a row: %+v", active)
 	}
 
-	for _, id := range []string{"00000000-0000-4000-8000-00000000ffff", "not-a-uuid", logRulesStreamHost} {
+	for _, id := range []string{"00000000-0000-4000-8000-00000000ffff", "not-a-uuid"} {
 		for _, r := range []model.HostLogRules{rules, {}} {
 			if got, err := repo.Set(ctx, id, r); got != nil || err != nil {
 				t.Errorf("set %+v on %s = %+v, %v; want no host and no error", r, id, got, err)
@@ -70,7 +72,13 @@ func TestLogRulesRepository(t *testing.T) {
 		}
 	}
 	if active, _ := repo.ListActive(ctx); len(active) != 0 {
-		t.Errorf("a save for no host or a stream host wrote a row: %+v", active)
+		t.Errorf("a save for no host wrote a row: %+v", active)
+	}
+	if got, err := repo.Set(ctx, logRulesStreamHost, model.HostLogRules{SkipAll: true}); err != nil || got == nil || !got.SkipAll || got.ProxyType != "stream" {
+		t.Errorf("set skip_all on the stream host = %+v, %v", got, err)
+	}
+	if _, err := repo.Set(ctx, logRulesStreamHost, model.HostLogRules{}); err != nil {
+		t.Fatal(err)
 	}
 
 	if _, err := db.Exec(`DELETE FROM proxy_hosts WHERE id = $1`, logRulesDavHost); err != nil {

@@ -86,29 +86,36 @@ func TestParseAccessLogServerPort(t *testing.T) {
 }
 
 // A stream_main line becomes a stream row (#392): transport in the method and
-// protocol, $bytes_sent and $session_time in the access columns, and the port
-// that picks the stream host. Lines from before the port was logged still
-// parse, without it.
+// protocol, $bytes_sent and $session_time in the access columns, and the
+// listener (port, local address, SNI) that picks the stream host. Lines from
+// before the port was logged still parse, without it.
 func TestParseStreamLog(t *testing.T) {
-	line := `198.51.100.7 [19/Nov/2026:10:15:02 +0900] UDP 200 5120 640 12.345 "192.0.2.10:25565" "640" "5120" "0.001" sp=25565`
-	got, port, err := parseStreamLog(line)
+	line := `198.51.100.7 [19/Nov/2026:10:15:02 +0900] UDP 200 5120 640 12.345 "192.0.2.10:25565" "640" "5120" "0.001" sp=25565 sa=192.0.2.1 sni=-`
+	got, s, err := parseStreamLog(line)
 	if err != nil {
 		t.Fatalf("parseStreamLog: %v", err)
 	}
 	if got.LogType != model.LogTypeStream || got.ClientIP != "198.51.100.7" || got.RequestMethod != "UDP" ||
 		got.RequestProtocol != "UDP" || got.StatusCode != 200 || got.BodyBytesSent != 5120 ||
-		got.RequestTime != 12.345 || got.UpstreamAddr != "192.0.2.10:25565" || got.ServerPort != 25565 || port != 25565 {
-		t.Errorf("parsed %+v (port %d)", got, port)
+		got.RequestTime != 12.345 || got.UpstreamAddr != "192.0.2.10:25565" || got.ServerPort != 25565 {
+		t.Errorf("parsed %+v", got)
+	}
+	if s != (streamSession{protocol: "UDP", port: 25565, addr: "192.0.2.1"}) {
+		t.Errorf("session %+v", s)
 	}
 	if want := time.Date(2026, 11, 19, 1, 15, 2, 0, time.UTC); !got.Timestamp.Equal(want) {
 		t.Errorf("timestamp %v, want %v", got.Timestamp, want)
 	}
 
-	old := `198.51.100.7 [19/Nov/2026:10:15:02 +0900] TCP 502 0 0 0.003 "192.0.2.10:22" "0" "0" "-"`
-	if got, port, err := parseStreamLog(old); err != nil || port != 0 || got.ServerPort != 0 || got.StatusCode != 502 {
-		t.Errorf("line without sp=: %+v port %d err %v", got, port, err)
+	sni := `198.51.100.7 [19/Nov/2026:10:15:02 +0900] TCP 200 10 20 1.000 "192.0.2.20:443" "20" "10" "0.002" sp=443 sa=192.0.2.1 sni=b.example.com`
+	if _, s, err := parseStreamLog(sni); err != nil || s.sni != "b.example.com" || s.port != 443 {
+		t.Errorf("sni line: %+v err %v", s, err)
 	}
-	noUpstream := `198.51.100.7 [19/Nov/2026:10:15:02 +0900] TCP 403 0 0 0.000 "-" "-" "-" "-" sp=2222`
+	old := `198.51.100.7 [19/Nov/2026:10:15:02 +0900] TCP 502 0 0 0.003 "192.0.2.10:22" "0" "0" "-"`
+	if got, s, err := parseStreamLog(old); err != nil || s.port != 0 || got.ServerPort != 0 || got.StatusCode != 502 {
+		t.Errorf("line without sp=: %+v %+v err %v", got, s, err)
+	}
+	noUpstream := `198.51.100.7 [19/Nov/2026:10:15:02 +0900] TCP 403 0 0 0.000 "-" "-" "-" "-" sp=2222 sa=192.0.2.1 sni=-`
 	if got, _, err := parseStreamLog(noUpstream); err != nil || got.UpstreamAddr != "" {
 		t.Errorf("refused connection: %+v err %v", got, err)
 	}
@@ -119,23 +126,40 @@ func TestParseStreamLog(t *testing.T) {
 	}
 }
 
-// Stream hosts are found by protocol and port; HTTP hosts and hosts without a
-// port are not listeners.
+// Stream hosts are found by protocol and port; when several share the port,
+// the SNI or the local address picks one, and a session neither tells apart
+// gets no host. HTTP hosts and hosts without a port are not listeners.
 func TestStreamListeners(t *testing.T) {
 	hosts := []model.ProxyHost{
-		{ID: "a", ProxyType: model.ProxyTypeStream, DomainNames: []string{"game.example.com"}, StreamProtocol: "udp", StreamListenPort: 25565},
-		{ID: "b", ProxyType: model.ProxyTypeStream, DomainNames: []string{"ssh.example.com"}, StreamListenPort: 2222},
-		{ID: "c", DomainNames: []string{"web.example.com"}},
-		{ID: "d", ProxyType: model.ProxyTypeStream, DomainNames: []string{"dup.example.com"}, StreamProtocol: "udp", StreamListenPort: 25565},
+		{ID: "game", ProxyType: model.ProxyTypeStream, DomainNames: []string{"game.example.com"}, StreamProtocol: "udp", StreamListenPort: 25565},
+		{ID: "ssh", ProxyType: model.ProxyTypeStream, DomainNames: []string{"ssh.example.com"}, StreamListenPort: 2222},
+		{ID: "web", DomainNames: []string{"web.example.com"}},
+		{ID: "a", ProxyType: model.ProxyTypeStream, DomainNames: []string{"a.example.com"}, StreamListenPort: 443, StreamSSLPreread: true},
+		{ID: "b", ProxyType: model.ProxyTypeStream, DomainNames: []string{"*.b.example.com"}, StreamListenPort: 443, StreamSSLPreread: true},
+		{ID: "lan", ProxyType: model.ProxyTypeStream, DomainNames: []string{"lan.example.com"}, StreamListenHost: "192.0.2.5", StreamListenPort: 5432},
+		{ID: "wan", ProxyType: model.ProxyTypeStream, DomainNames: []string{"wan.example.com"}, StreamListenHost: "192.0.2.6", StreamListenPort: 5432},
 	}
 	m := streamListeners(hosts)
-	if l := m["udp:25565"]; l.hostID != "a" || l.name != "game.example.com" {
+	for _, tc := range []struct {
+		s    streamSession
+		want string
+	}{
+		{streamSession{protocol: "UDP", port: 25565}, "game"},
+		{streamSession{protocol: "TCP", port: 2222}, "ssh"},
+		{streamSession{protocol: "TCP", port: 443, sni: "A.example.com"}, "a"},
+		{streamSession{protocol: "TCP", port: 443, sni: "x.b.example.com"}, "b"},
+		{streamSession{protocol: "TCP", port: 443, sni: "other.example.com"}, ""},
+		{streamSession{protocol: "TCP", port: 443}, ""},
+		{streamSession{protocol: "TCP", port: 5432, addr: "192.0.2.6"}, "wan"},
+		{streamSession{protocol: "TCP", port: 5432, addr: "192.0.2.9"}, ""},
+		{streamSession{protocol: "UDP", port: 2222}, ""},
+	} {
+		l, ok := pickStreamListener(m[streamListenerKey(tc.s.protocol, tc.s.port)], tc.s)
+		if got := l.hostID; got != tc.want || ok != (tc.want != "") {
+			t.Errorf("%+v -> %q (%v), want %q", tc.s, got, ok, tc.want)
+		}
+	}
+	if l := m["udp:25565"]; len(l) != 1 || l[0].name != "game.example.com" {
 		t.Errorf("udp:25565 = %+v", l)
-	}
-	if l := m["tcp:2222"]; l.hostID != "b" {
-		t.Errorf("tcp:2222 (protocol defaults to tcp) = %+v", l)
-	}
-	if len(m) != 2 {
-		t.Errorf("listeners %v, want 2", m)
 	}
 }

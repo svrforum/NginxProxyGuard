@@ -3673,7 +3673,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [access, error, modsec]
+            enum: [access, error, modsec, stream]
         - name: host
           in: query
           description: Exact match, or prefix wildcard when it starts with `*` (e.g. `*.example.com`).
@@ -4022,7 +4022,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [access, error, modsec]
+            enum: [access, error, modsec, stream]
         - name: host
           in: query
           schema:
@@ -8299,7 +8299,7 @@ paths:
       tags: [Logs]
       summary: List raw nginx log files on disk
       description: |
-        Only raw log files are listed (access_raw.log, error_raw.log and their rotated
+        Only raw log files are listed (access_raw.log, error_raw.log, stream_raw.log and their rotated
         copies); symlinks and other files are skipped. The live files come first, then
         the newest rotation first. `raw_log_enabled` reflects whether nginx is writing
         files at all; when the log directory is unreadable the endpoint still returns 200
@@ -8352,7 +8352,7 @@ paths:
           in: path
           required: true
           description: >-
-            A raw log file name (access_raw.log, error_raw.log or a rotated copy such as
+            A raw log file name (access_raw.log, error_raw.log, stream_raw.log or a rotated copy such as
             access_raw.log-20261009-000000.gz). Any other name is rejected with 400.
           schema:
             type: string
@@ -8392,7 +8392,7 @@ paths:
           in: path
           required: true
           description: >-
-            A raw log file name (access_raw.log, error_raw.log or a rotated copy such as
+            A raw log file name (access_raw.log, error_raw.log, stream_raw.log or a rotated copy such as
             access_raw.log-20261009-000000.gz). Any other name is rejected with 400.
           schema:
             type: string
@@ -8440,7 +8440,7 @@ paths:
       tags: [Logs]
       summary: Delete a rotated log file
       description: |
-        The live `access_raw.log` and `error_raw.log` cannot be deleted (nginx keeps
+        The live `access_raw.log`, `error_raw.log` and `stream_raw.log` cannot be deleted (nginx keeps
         writing to an unlinked file), nor can symlinks or files that are not raw logs.
       security:
         - BearerAuth: []
@@ -8449,7 +8449,7 @@ paths:
           in: path
           required: true
           description: >-
-            A raw log file name (access_raw.log, error_raw.log or a rotated copy such as
+            A raw log file name (access_raw.log, error_raw.log, stream_raw.log or a rotated copy such as
             access_raw.log-20261009-000000.gz). Any other name is rejected with 400.
           schema:
             type: string
@@ -17545,7 +17545,7 @@ components:
           format: uuid
         log_type:
           type: string
-          enum: [access, error, modsec]
+          enum: [access, error, modsec, stream]
         timestamp:
           type: string
           format: date-time
@@ -17710,7 +17710,7 @@ components:
       properties:
         log_type:
           type: string
-          enum: [access, error, modsec]
+          enum: [access, error, modsec, stream]
         timestamp:
           type: string
           format: date-time
@@ -17906,6 +17906,10 @@ components:
         enabled:
           type: boolean
           description: Whether the proxy host is enabled
+        proxy_type:
+          type: string
+          enum: [http, stream]
+          description: A stream host's sessions (#392) are matched by skip_all and skip_statuses only
         skip_all:
           type: boolean
           description: No line of the host is stored, except the ones NPG blocked
@@ -18081,7 +18085,7 @@ components:
           description: Derived from the filename prefix — access or error
         is_active:
           type: boolean
-          description: access_raw.log or error_raw.log, which nginx is writing; cannot be deleted
+          description: access_raw.log, error_raw.log or stream_raw.log, which nginx is writing; cannot be deleted
         location:
           type: string
           enum: [local, archive]
@@ -18137,7 +18141,7 @@ components:
         live_bytes:
           type: integer
           format: int64
-          description: access_raw.log and error_raw.log now
+          description: access_raw.log, error_raw.log and stream_raw.log now
         pending_bytes:
           type: integer
           format: int64

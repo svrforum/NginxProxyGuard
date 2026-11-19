@@ -38,6 +38,9 @@ type HostLogRulesEntry struct {
 	HostLogRules
 	DomainNames []string `json:"domain_names"`
 	Enabled     bool     `json:"enabled"`
+	// ProxyType is "stream" for a TCP/UDP stream host (#392), whose sessions
+	// only skip_all and skip_statuses can match.
+	ProxyType string `json:"proxy_type"`
 }
 
 // UpdateHostLogRulesRequest replaces a host's log rules. Empty rules remove

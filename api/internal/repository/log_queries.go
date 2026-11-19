@@ -324,7 +324,8 @@ func (r *LogRepository) GetDistinctURIs(ctx context.Context, search string, limi
 	return uris, nil
 }
 
-// GetDistinctMethods returns unique HTTP methods from logs
+// GetDistinctMethods returns unique HTTP methods from the access logs (a
+// stream row holds TCP or UDP there, #392).
 func (r *LogRepository) GetDistinctMethods(ctx context.Context) ([]string, error) {
 	if r.cache != nil {
 		var cached []string
@@ -336,7 +337,8 @@ func (r *LogRepository) GetDistinctMethods(ctx context.Context) ([]string, error
 	query := `
 		SELECT DISTINCT request_method
 		FROM logs_partitioned
-		WHERE request_method IS NOT NULL AND request_method != ''
+		WHERE log_type = 'access'
+		  AND request_method IS NOT NULL AND request_method != ''
 		  AND created_at >= NOW() - ` + autocompleteWindowSQL + `
 		ORDER BY request_method
 	`

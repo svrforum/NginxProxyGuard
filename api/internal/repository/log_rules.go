@@ -22,20 +22,20 @@ func NewLogRulesRepository(db *sql.DB) *LogRulesRepository {
 }
 
 // logRulesHostSelect reads proxy hosts with their rules, empty for a host
-// without a row. A stream host has no access log lines, so it is left out.
+// without a row. Stream hosts are listed too since their sessions are stored
+// (#392); of the rules only skip_all and skip_statuses can match a session.
 const logRulesHostSelect = `
-	SELECT h.id, h.domain_names, h.enabled,
+	SELECT h.id, h.domain_names, h.enabled, COALESCE(h.proxy_type, 'http'),
 		COALESCE(l.skip_all, false), COALESCE(l.skip_statuses, '{}'), COALESCE(l.skip_methods, '{}'),
 		COALESCE(l.skip_paths, '{}'), l.updated_at
 	FROM proxy_hosts h
-	LEFT JOIN proxy_host_log_rules l ON l.proxy_host_id = h.id
-	WHERE h.proxy_type IS DISTINCT FROM 'stream'`
+	LEFT JOIN proxy_host_log_rules l ON l.proxy_host_id = h.id`
 
 func scanLogRulesEntry(s interface{ Scan(dest ...any) error }) (model.HostLogRulesEntry, error) {
 	var e model.HostLogRulesEntry
 	var domains, statuses, methods, paths pq.StringArray
 	var updatedAt sql.NullTime
-	if err := s.Scan(&e.ProxyHostID, &domains, &e.Enabled, &e.SkipAll, &statuses, &methods, &paths, &updatedAt); err != nil {
+	if err := s.Scan(&e.ProxyHostID, &domains, &e.Enabled, &e.ProxyType, &e.SkipAll, &statuses, &methods, &paths, &updatedAt); err != nil {
 		return e, err
 	}
 	e.DomainNames = nonNil(domains)
@@ -54,8 +54,8 @@ func nonNil(a pq.StringArray) []string {
 	return a
 }
 
-// List returns every proxy host other than a stream host, with its rules,
-// in the order of the hosts' first domain.
+// List returns every proxy host with its rules, in the order of the hosts'
+// first domain.
 func (r *LogRulesRepository) List(ctx context.Context) ([]model.HostLogRulesEntry, error) {
 	rows, err := r.db.QueryContext(ctx, logRulesHostSelect+` ORDER BY h.domain_names[1], h.id`)
 	if err != nil {
@@ -75,7 +75,7 @@ func (r *LogRulesRepository) List(ctx context.Context) ([]model.HostLogRulesEntr
 
 // Get returns a proxy host with its rules, nil when there is no such host.
 func (r *LogRulesRepository) Get(ctx context.Context, proxyHostID string) (*model.HostLogRulesEntry, error) {
-	e, err := scanLogRulesEntry(r.db.QueryRowContext(ctx, logRulesHostSelect+` AND h.id = $1`, proxyHostID))
+	e, err := scanLogRulesEntry(r.db.QueryRowContext(ctx, logRulesHostSelect+` WHERE h.id = $1`, proxyHostID))
 	var pqErr *pq.Error
 	if errors.Is(err, sql.ErrNoRows) || errors.As(err, &pqErr) && pqErr.Code == "22P02" {
 		// No such host, or an id that is no uuid.
@@ -89,7 +89,7 @@ func (r *LogRulesRepository) Get(ctx context.Context, proxyHostID string) (*mode
 
 // Set replaces the host's rules, which model.NormalizeHostLogRules has
 // checked, and returns the host with them; nil, and nothing written, when
-// there is no such host or it is a stream host (Get). Rules that skip nothing
+// there is no such host (Get). Rules that skip nothing
 // remove the host's row.
 func (r *LogRulesRepository) Set(ctx context.Context, proxyHostID string, rules model.HostLogRules) (*model.HostLogRulesEntry, error) {
 	if host, err := r.Get(ctx, proxyHostID); host == nil || err != nil {
