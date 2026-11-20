@@ -11,7 +11,7 @@
 # Release candidates are refused on purpose: their tags are frozen rather than
 # patched, so an RC that outranks the stable line silently drops these fixes.
 # .github/dependabot.yml carries the matching ignore rule. (#245)
-FROM golang:1.27.3-alpine AS builder
+FROM golang:1.27.4-alpine AS builder
 
 WORKDIR /app
 
