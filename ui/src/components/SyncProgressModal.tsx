@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useEscapeKey } from '../hooks/useEscapeKey'
+import { useDialogFocus } from '../hooks/useDialogFocus'
 
 export interface SyncHostResult {
   host_id: string
@@ -32,6 +33,8 @@ export function SyncProgressModal({ isOpen, isLoading, result, onClose }: SyncPr
   const [expandedErrors, setExpandedErrors] = useState<Set<string>>(new Set())
 
   useEscapeKey(onClose, isOpen && !isLoading)
+  const titleId = useId()
+  const { panelRef, onKeyDown } = useDialogFocus(isOpen)
 
   if (!isOpen) return null
 
@@ -51,11 +54,11 @@ export function SyncProgressModal({ isOpen, isLoading, result, onClose }: SyncPr
   const isSuccess = result && !hasErrors
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden max-h-[90vh] flex flex-col">
+    <div role="dialog" aria-modal="true" aria-labelledby={titleId} className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
+      <div ref={panelRef} tabIndex={-1} onKeyDown={onKeyDown} className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden max-h-[90vh] flex flex-col outline-none">
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+          <h3 id={titleId} className="text-lg font-semibold text-slate-900 dark:text-white">
             {t('common:actions.syncAll')}
           </h3>
           {!isLoading && (

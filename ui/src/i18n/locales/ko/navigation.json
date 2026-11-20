@@ -24,7 +24,9 @@
     "testConfig": "설정 테스트",
     "syncAll": "모두 동기화",
     "notifications": "알림",
-    "noNotifications": "새 알림이 없습니다"
+    "noNotifications": "새 알림이 없습니다",
+    "lightMode": "라이트 모드로 전환",
+    "darkMode": "다크 모드로 전환"
   },
   "account": {
     "myAccount": "내 계정",

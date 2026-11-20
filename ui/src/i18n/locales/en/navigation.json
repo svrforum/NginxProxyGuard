@@ -24,7 +24,9 @@
     "testConfig": "Test Config",
     "syncAll": "Sync All",
     "notifications": "Notifications",
-    "noNotifications": "No new notifications"
+    "noNotifications": "No new notifications",
+    "lightMode": "Switch to light mode",
+    "darkMode": "Switch to dark mode"
   },
   "account": {
     "myAccount": "My Account",

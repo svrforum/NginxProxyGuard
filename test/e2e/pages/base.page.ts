@@ -44,7 +44,8 @@ export abstract class BasePage {
 
     // Header actions
     this.syncAllButton = page.locator('header button[title*="Sync"]').first();
-    this.darkModeToggle = page.locator('header button[title*="Mode"]').first();
+    // The tooltip follows the UI language: "Switch to dark mode" / "다크 모드로 전환".
+    this.darkModeToggle = page.locator('header button[title*="mode" i], header button[title*="모드"]').first();
     this.userMenuButton = page.locator('header button').filter({ hasText: TEST_CREDENTIALS_PATTERN });
     this.logoutButton = page.locator('header button, header a').filter({ hasText: /logout|sign.*out/i });
     this.versionText = page.locator('header').locator('text=/v\\d+\\.\\d+\\.\\d+/');

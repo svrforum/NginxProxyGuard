@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { useLanguage } from '../i18n/hooks/useLanguage'
 import type { SupportedLanguage } from '../i18n'
 
@@ -8,6 +9,7 @@ interface LanguageSwitcherProps {
 
 export function LanguageSwitcher({ variant = 'select', className = '' }: LanguageSwitcherProps) {
   const { currentLanguage, changeLanguage, isChanging, supportedLanguages, languageNames } = useLanguage()
+  const { t } = useTranslation('common')
 
   if (variant === 'buttons') {
     return (
@@ -37,7 +39,8 @@ export function LanguageSwitcher({ variant = 'select', className = '' }: Languag
           value={currentLanguage}
           onChange={(e) => changeLanguage(e.target.value as SupportedLanguage)}
           disabled={isChanging}
-          className="appearance-none bg-transparent text-sm font-medium text-slate-700 hover:text-slate-900 cursor-pointer pr-6 py-1 focus:outline-none disabled:opacity-50"
+          aria-label={t('labels.language')}
+          className="appearance-none bg-transparent text-sm font-medium text-slate-200 hover:text-white [&>option]:text-slate-900 cursor-pointer pr-6 py-1 disabled:opacity-50"
         >
           {supportedLanguages.map((lang) => (
             <option key={lang} value={lang}>

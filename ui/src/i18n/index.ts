@@ -120,4 +120,12 @@ i18n
     },
   })
 
+// Screen readers pick their voice from <html lang>, so it follows the UI
+// language instead of staying at whatever index.html shipped with.
+const syncDocumentLang = (lng: string | undefined) => {
+  if (lng && typeof document !== 'undefined') document.documentElement.lang = lng
+}
+syncDocumentLang(i18n.resolvedLanguage)
+i18n.on('languageChanged', syncDocumentLang)
+
 export default i18n

@@ -29,7 +29,7 @@ export function InstanceNameBadge() {
 export function HeaderVersion({ version }: { version?: string }) {
   const nginxVersion = useInstanceInfo().data?.nginx_version;
   return (
-    <div className="text-right text-xs leading-tight text-slate-400">
+    <div className="hidden sm:block text-right text-xs leading-tight text-slate-500 dark:text-slate-400">
       <div>v{version || '...'}</div>
       {nginxVersion && <div data-testid="nginx-version">nginx {nginxVersion}</div>}
     </div>

@@ -48,7 +48,7 @@ function SSOButtons({ onChoose }: { onChoose: (slug: string) => void }) {
       <div className="relative my-5">
         <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200 dark:border-slate-700" /></div>
         <div className="relative flex justify-center">
-          <span className="bg-white dark:bg-slate-800 px-3 text-xs text-slate-400">{t('login.ssoOr')}</span>
+          <span className="bg-white dark:bg-slate-800 px-3 text-xs text-slate-500 dark:text-slate-400">{t('login.ssoOr')}</span>
         </div>
       </div>
     </div>
@@ -117,7 +117,7 @@ export function Login({ onLogin }: LoginProps) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       <div className="w-full max-w-md">
         {/* Logo/Title */}
         <div className="text-center mb-8">
@@ -125,7 +125,7 @@ export function Login({ onLogin }: LoginProps) {
             <img src="/favicon.ico" alt="NPG Logo" className="w-20 h-20 rounded-2xl" />
           </div>
           <h1 className="text-3xl font-bold text-white">Nginx Proxy Guard</h1>
-          <p className="text-slate-400 mt-2">Secure Reverse Proxy Manager by Svrforum</p>
+          <p className="text-slate-400 mt-2">{t('navigation:header.subtitle')}</p>
         </div>
 
         {/* Login Form */}
@@ -283,10 +283,6 @@ export function Login({ onLogin }: LoginProps) {
 
         {/* Footer with Language Switcher */}
         <div className="flex items-center justify-center gap-4 mt-6">
-          <p className="text-slate-500 text-sm">
-            Protected by Nginx Proxy Guard Security
-          </p>
-          <span className="text-slate-600">|</span>
           <LanguageSwitcher variant="dropdown" className="text-slate-400" />
         </div>
       </div>

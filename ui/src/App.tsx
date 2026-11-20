@@ -248,7 +248,7 @@ function AppContent({ user, onLogout }: AppContentProps) {
               <button
                 onClick={toggle}
                 className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700 transition-colors"
-                title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
+                title={isDark ? t('header.lightMode') : t('header.darkMode')}
               >
                 {isDark ? (
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -270,7 +270,7 @@ function AppContent({ user, onLogout }: AppContentProps) {
                 className="text-right hover:bg-slate-50 dark:hover:bg-slate-700 px-2 py-1 rounded transition-colors"
               >
                 <div className="text-sm font-medium text-slate-700 dark:text-gray-200">{user.username}</div>
-                <div className="text-xs text-slate-400 hidden sm:block">{user.role}</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">{user.role}</div>
               </button>
               <button
                 onClick={handleLogout}
@@ -285,8 +285,8 @@ function AppContent({ user, onLogout }: AppContentProps) {
 
       {/* Navigation */}
       <nav className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
-        <div className="max-w-7xl mx-auto px-4 overflow-x-auto scrollbar-hide">
-          <div className="flex gap-1 sm:gap-2 lg:gap-4 min-w-max">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="flex flex-wrap gap-x-1 sm:gap-x-2 lg:gap-x-4">
             {canArea('dashboard') && (
               <button
                 onClick={() => handleTabClick('dashboard')}
@@ -518,7 +518,7 @@ function AppContent({ user, onLogout }: AppContentProps) {
             <div className="flex items-center gap-2">
               <img src="/favicon.ico" alt="NPG Logo" className="w-5 h-5 rounded" />
               <span className="font-semibold text-slate-700 dark:text-gray-300">Nginx Proxy Guard</span>
-              <span className="text-slate-400">v{health.data?.version || '0.0.0'}</span>
+              <span className="text-slate-500 dark:text-slate-400">v{health.data?.version || '0.0.0'}</span>
             </div>
             <div className="flex items-center gap-4">
               <a
@@ -554,7 +554,7 @@ function AppContent({ user, onLogout }: AppContentProps) {
                 {t('footer.documentation')}
               </a>
             </div>
-            <div className="text-slate-400 text-xs">
+            <div className="text-slate-500 dark:text-slate-400 text-xs">
               © {new Date().getFullYear()} Nginx Proxy Guard. {t('footer.allRightsReserved')}
             </div>
           </div>
