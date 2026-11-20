@@ -887,7 +887,7 @@ func (r *ProxyHostRepository) GetByDomain(ctx context.Context, domain string) (*
 	)
 
 	if err == sql.ErrNoRows {
-		return nil, nil
+		return r.getByServedDomain(ctx, domain)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to get proxy host by domain: %w", err)
@@ -915,6 +915,28 @@ func (r *ProxyHostRepository) GetByDomain(ctx context.Context, domain string) (*
 	host.Meta = json.RawMessage(meta)
 
 	return &host, nil
+}
+
+// getByServedDomain finds the host nginx serves domain from when no stored
+// name equals it exactly: server_name ignores case, and a leading wildcard
+// ("*.example.com") covers every subdomain, the longest suffix winning. Log
+// rows carry the request's Host, so without this the log viewer's per-host
+// actions answered "not found" on a wildcard or mixed-case host.
+func (r *ProxyHostRepository) getByServedDomain(ctx context.Context, domain string) (*model.ProxyHost, error) {
+	var id string
+	err := r.db.QueryRowContext(ctx, `
+		SELECT p.id FROM proxy_hosts p, unnest(p.domain_names) AS d(name)
+		WHERE lower(d.name) = lower($1)
+		   OR (d.name LIKE '*.%' AND right(lower($1), length(d.name) - 1) = lower(substr(d.name, 2)))
+		ORDER BY lower(d.name) = lower($1) DESC, length(d.name) DESC
+		LIMIT 1`, domain).Scan(&id)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to match proxy host by domain: %w", err)
+	}
+	return r.GetByID(ctx, id)
 }
 
 // ListLegacyZoneRefTexts returns the Advanced Config of the hosts that may use

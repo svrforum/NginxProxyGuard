@@ -8742,7 +8742,7 @@ paths:
     get:
       tags: [Proxy Hosts]
       summary: Get proxy host by domain name
-      description: Looks up a single proxy host by one of its domain names. Requires the `proxy:read` scope when called with an API token.
+      description: Looks up the proxy host that serves a domain name. An exact domain name wins; otherwise the match ignores case and a wildcard domain (`*.example.com`) covers its subdomains, the longest wildcard winning. Requires the `proxy:read` scope when called with an API token.
       security:
         - BearerAuth: []
       parameters:
