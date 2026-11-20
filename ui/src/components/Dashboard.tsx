@@ -107,8 +107,15 @@ export default function Dashboard() {
 
   if (error) {
     return (
-      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+      <div role="alert" className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 flex flex-wrap items-center justify-between gap-3">
         <p className="text-red-600 dark:text-red-400">{t('errors.loadFailed')}</p>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="px-3 py-1.5 text-sm font-medium rounded-lg bg-white dark:bg-slate-800 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/40"
+        >
+          {t('common:buttons.retry')}
+        </button>
       </div>
     );
   }
@@ -164,9 +171,9 @@ export default function Dashboard() {
         <div className="bg-gradient-to-br from-red-600 to-red-700 rounded-lg shadow p-6 text-white">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-red-100 text-sm font-medium">{t('stats.blockedRequests')}</p>
-              <p className="text-4xl font-bold mt-2">{formatNumber(dashboard?.blocked_requests_24h || 0)}</p>
-              <p className="text-red-200 text-xs mt-1">{t('stats.last24h')}</p>
+              <p className="text-white text-sm font-medium">{t('stats.blockedRequests')}</p>
+              <p className="text-4xl font-bold mt-2 tabular-nums">{formatNumber(dashboard?.blocked_requests_24h || 0)}</p>
+              <p className="text-white text-xs mt-1">{t('stats.last24h')}</p>
             </div>
             <div className="bg-red-500/30 p-3 rounded-full">
               <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -176,12 +183,12 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-lg shadow p-6 text-white">
+        <div className="bg-gradient-to-br from-amber-700 to-amber-800 rounded-lg shadow p-6 text-white">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-amber-100 text-sm font-medium">{t('stats.blockedIps')}</p>
-              <p className="text-4xl font-bold mt-2">{dashboard?.blocked_unique_ips_24h || 0}</p>
-              <p className="text-amber-200 text-xs mt-1">{t('stats.last24h')}</p>
+              <p className="text-white text-sm font-medium">{t('stats.blockedIps')}</p>
+              <p className="text-4xl font-bold mt-2 tabular-nums">{dashboard?.blocked_unique_ips_24h || 0}</p>
+              <p className="text-white text-xs mt-1">{t('stats.last24h')}</p>
             </div>
             <div className="bg-amber-400/30 p-3 rounded-full">
               <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -194,24 +201,24 @@ export default function Dashboard() {
 
       {/* Traffic Stats (24h) */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow p-4 text-white">
-          <p className="text-blue-100 text-sm">{t('stats.requests')} (24h)</p>
-          <p className="text-3xl font-bold mt-1">{formatNumber(dashboard?.total_requests_24h || 0)}</p>
+        <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg shadow p-4 text-white">
+          <p className="text-white text-sm">{t('stats.requests')} (24h)</p>
+          <p className="text-3xl font-bold mt-1 tabular-nums">{formatNumber(dashboard?.total_requests_24h || 0)}</p>
         </div>
 
-        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-lg shadow p-4 text-white">
-          <p className="text-green-100 text-sm">{t('stats.bandwidth')} (24h)</p>
-          <p className="text-3xl font-bold mt-1">{formatBytes(dashboard?.total_bandwidth_24h || 0)}</p>
+        <div className="bg-gradient-to-br from-green-700 to-green-800 rounded-lg shadow p-4 text-white">
+          <p className="text-white text-sm">{t('stats.bandwidth')} (24h)</p>
+          <p className="text-3xl font-bold mt-1 tabular-nums">{formatBytes(dashboard?.total_bandwidth_24h || 0)}</p>
         </div>
 
-        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg shadow p-4 text-white">
-          <p className="text-purple-100 text-sm">{t('stats.avgResponseTime')}</p>
-          <p className="text-3xl font-bold mt-1">{(dashboard?.avg_response_time_24h || 0).toFixed(1)}ms</p>
+        <div className="bg-gradient-to-br from-purple-600 to-purple-700 rounded-lg shadow p-4 text-white">
+          <p className="text-white text-sm">{t('stats.avgResponseTime')}</p>
+          <p className="text-3xl font-bold mt-1 tabular-nums">{(dashboard?.avg_response_time_24h || 0).toFixed(1)}ms</p>
         </div>
 
-        <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg shadow p-4 text-white">
-          <p className="text-orange-100 text-sm">{t('stats.errorRate')} (24h)</p>
-          <p className="text-3xl font-bold mt-1">{(dashboard?.error_rate_24h || 0).toFixed(2)}%</p>
+        <div className="bg-gradient-to-br from-orange-700 to-orange-800 rounded-lg shadow p-4 text-white">
+          <p className="text-white text-sm">{t('stats.errorRate')} (24h)</p>
+          <p className="text-3xl font-bold mt-1 tabular-nums">{(dashboard?.error_rate_24h || 0).toFixed(2)}%</p>
         </div>
       </div>
 
@@ -222,19 +229,19 @@ export default function Dashboard() {
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 divide-x dark:divide-slate-700">
           <div className="p-4 text-center">
-            <p className="text-3xl font-bold text-red-600 dark:text-red-500">{formatNumber(dashboard?.waf_blocked_24h || 0)}</p>
+            <p className="text-3xl font-bold tabular-nums text-red-600 dark:text-red-500">{formatNumber(dashboard?.waf_blocked_24h || 0)}</p>
             <p className="text-gray-500 dark:text-gray-400 text-sm">{t('security.wafBlocked')}</p>
           </div>
           <div className="p-4 text-center">
-            <p className="text-3xl font-bold text-yellow-600 dark:text-yellow-500">{formatNumber(dashboard?.rate_limited_24h || 0)}</p>
+            <p className="text-3xl font-bold tabular-nums text-yellow-700 dark:text-yellow-500">{formatNumber(dashboard?.rate_limited_24h || 0)}</p>
             <p className="text-gray-500 dark:text-gray-400 text-sm">{t('security.rateLimited')}</p>
           </div>
           <div className="p-4 text-center">
-            <p className="text-3xl font-bold text-purple-600 dark:text-purple-500">{formatNumber(dashboard?.bot_blocked_24h || 0)}</p>
+            <p className="text-3xl font-bold tabular-nums text-purple-600 dark:text-purple-500">{formatNumber(dashboard?.bot_blocked_24h || 0)}</p>
             <p className="text-gray-500 dark:text-gray-400 text-sm">{t('security.botsBlocked')}</p>
           </div>
           <div className="p-4 text-center">
-            <p className="text-3xl font-bold text-gray-600 dark:text-gray-300">{dashboard?.banned_ips || 0}</p>
+            <p className="text-3xl font-bold tabular-nums text-gray-600 dark:text-gray-300">{dashboard?.banned_ips || 0}</p>
             <p className="text-gray-500 dark:text-gray-400 text-sm">{t('security.bannedIps')}</p>
           </div>
         </div>
@@ -249,15 +256,15 @@ export default function Dashboard() {
           <div className="p-4 space-y-3">
             <div className="flex justify-between items-center">
               <span className="text-gray-600 dark:text-gray-400">{t('hosts.proxyHosts')}</span>
-              <span className="font-semibold dark:text-gray-200">{dashboard?.active_proxy_hosts || 0} / {dashboard?.total_proxy_hosts || 0}</span>
+              <span className="font-semibold tabular-nums dark:text-gray-200">{dashboard?.active_proxy_hosts || 0} / {dashboard?.total_proxy_hosts || 0}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-gray-600 dark:text-gray-400">{t('hosts.redirectHosts')}</span>
-              <span className="font-semibold dark:text-gray-200">{dashboard?.total_redirect_hosts || 0}</span>
+              <span className="font-semibold tabular-nums dark:text-gray-200">{dashboard?.total_redirect_hosts || 0}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-gray-600 dark:text-gray-400">{t('hosts.certificates')}</span>
-              <span className="font-semibold dark:text-gray-200">{dashboard?.total_certificates || 0}</span>
+              <span className="font-semibold tabular-nums dark:text-gray-200">{dashboard?.total_certificates || 0}</span>
             </div>
             {(dashboard?.expiring_certificates || 0) > 0 && (
               <div className="flex justify-between items-center text-yellow-600 dark:text-yellow-500">
@@ -278,7 +285,7 @@ export default function Dashboard() {
               <div className="space-y-2">
                 {dashboard.top_hosts.slice(0, 5).map((host, i) => (
                   <div key={i} className="flex justify-between items-center">
-                    <span className="text-gray-600 dark:text-gray-300 truncate">{host.domain}</span>
+                    <span className="text-gray-600 dark:text-gray-300 min-w-0 break-all">{host.domain}</span>
                     <span className="font-mono text-sm dark:text-gray-400">{formatNumber(host.requests)}</span>
                   </div>
                 ))}
@@ -337,8 +344,8 @@ export default function Dashboard() {
                 {dashboard.top_user_agents.slice(0, 5).map((ua, i) => (
                   <div key={i} className="flex flex-col gap-0.5">
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-600 dark:text-gray-300 text-xs truncate max-w-[180px]" title={ua.user_agent}>
-                        {ua.user_agent.length > 30 ? ua.user_agent.substring(0, 30) + '...' : ua.user_agent}
+                      <span className="text-gray-600 dark:text-gray-300 text-xs min-w-0 break-all">
+                        {ua.user_agent}
                       </span>
                       <span className="font-mono text-sm dark:text-gray-400">{formatNumber(ua.count)}</span>
                     </div>
@@ -351,7 +358,7 @@ export default function Dashboard() {
                                 ua.category === 'mobile' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400' :
                                   'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
                       }`}>
-                      {ua.category}
+                      {t(`topLists.categories.${ua.category}`, { defaultValue: ua.category })}
                     </span>
                   </div>
                 ))}
@@ -407,7 +414,7 @@ export default function Dashboard() {
                       </div>
                       <div className="text-right">
                         <span className="font-mono text-sm dark:text-gray-400">{formatNumber(country.count)}</span>
-                        <span className="text-gray-400 text-xs ml-2">({country.percentage.toFixed(1)}%)</span>
+                        <span className="text-slate-500 dark:text-slate-400 text-xs ml-2">({country.percentage.toFixed(1)}%)</span>
                       </div>
                     </>
                   );
@@ -433,7 +440,7 @@ export default function Dashboard() {
                     </div>
                     <div className="text-right">
                       <span className="font-mono text-sm dark:text-gray-400">{formatNumber(unknownTraffic.count)}</span>
-                      <span className="text-gray-400 text-xs ml-2">({unknownTraffic.percentage.toFixed(1)}%)</span>
+                      <span className="text-slate-500 dark:text-slate-400 text-xs ml-2">({unknownTraffic.percentage.toFixed(1)}%)</span>
                     </div>
                   </div>
                 )}

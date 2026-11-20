@@ -68,7 +68,17 @@
     "showLocalIPs": "Show local",
     "localBadge": "local",
     "userAgentsTitle": "Top User Agents (24h)",
-    "noData": "No traffic data yet"
+    "noData": "No traffic data yet",
+    "categories": {
+      "search_engine": "Search engine",
+      "ai_bot": "AI bot",
+      "bad_bot": "Bad bot",
+      "monitoring": "Monitoring",
+      "cli_tool": "CLI tool",
+      "browser": "Browser",
+      "mobile": "Mobile",
+      "other": "Other"
+    }
   },
   "geo": {
     "title": "Global Traffic (24h)",
@@ -77,7 +87,11 @@
     "total": "Total: {{count}} requests",
     "totalRequests": "Total: {{count}} requests",
     "unknownTraffic": "LAN / Unknown",
-    "showLogs": "Show access logs from {{country}}"
+    "showLogs": "Show access logs from {{country}}",
+    "intensity": "Intensity",
+    "low": "Low",
+    "high": "High",
+    "legendTotal": "Total requests"
   },
   "storage": {
     "banner": {

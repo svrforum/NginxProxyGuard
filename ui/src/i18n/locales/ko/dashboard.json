@@ -68,7 +68,17 @@
     "showLocalIPs": "내부 IP 포함",
     "localBadge": "내부",
     "userAgentsTitle": "상위 사용자 에이전트 (24시간)",
-    "noData": "트래픽 데이터 없음"
+    "noData": "트래픽 데이터 없음",
+    "categories": {
+      "search_engine": "검색 엔진",
+      "ai_bot": "AI 봇",
+      "bad_bot": "악성 봇",
+      "monitoring": "모니터링",
+      "cli_tool": "CLI 도구",
+      "browser": "브라우저",
+      "mobile": "모바일",
+      "other": "기타"
+    }
   },
   "geo": {
     "title": "글로벌 트래픽 (24시간)",
@@ -77,7 +87,11 @@
     "total": "총: {{count}} 요청",
     "totalRequests": "총: {{count}} 요청",
     "unknownTraffic": "LAN / 미확인",
-    "showLogs": "{{country}} 접근 로그 보기"
+    "showLogs": "{{country}} 접근 로그 보기",
+    "intensity": "강도",
+    "low": "낮음",
+    "high": "높음",
+    "legendTotal": "총 요청"
   },
   "storage": {
     "banner": {

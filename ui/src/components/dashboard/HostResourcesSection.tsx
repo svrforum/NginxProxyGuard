@@ -36,8 +36,8 @@ function getUsageColor(percent: number): string {
 
 function getUsageTextColor(percent: number): string {
   if (percent >= 90) return 'text-red-600 dark:text-red-400';
-  if (percent >= 70) return 'text-yellow-600 dark:text-yellow-400';
-  return 'text-green-600 dark:text-green-400';
+  if (percent >= 70) return 'text-yellow-700 dark:text-yellow-400';
+  return 'text-green-700 dark:text-green-400';
 }
 
 // The disk bar follows the server's alert lines (85/90 by default), so its
@@ -55,7 +55,7 @@ function diskTextColor(percent: number, storage?: StorageStatus): string {
   const warn = storage?.thresholds.warn_percent ?? 85;
   const crit = storage?.thresholds.critical_percent ?? 90;
   if (percent >= crit) return 'text-red-600 dark:text-red-400';
-  if (percent >= warn) return 'text-amber-600 dark:text-amber-400';
+  if (percent >= warn) return 'text-amber-700 dark:text-amber-400';
   return getUsageTextColor(Math.min(percent, 89));
 }
 
@@ -191,7 +191,7 @@ export default function HostResourcesSection({ systemHealth, storage }: {
               </svg>
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">CPU</span>
             </div>
-            <span className={`text-lg font-bold ${getUsageTextColor(systemHealth.cpu_usage)}`}>
+            <span className={`text-lg font-bold tabular-nums ${getUsageTextColor(systemHealth.cpu_usage)}`}>
               {systemHealth.cpu_usage?.toFixed(1) || '0'}%
             </span>
           </div>
@@ -212,7 +212,7 @@ export default function HostResourcesSection({ systemHealth, storage }: {
               </svg>
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('hostResources.memory')}</span>
             </div>
-            <span className={`text-lg font-bold ${getUsageTextColor(systemHealth.memory_usage)}`}>
+            <span className={`text-lg font-bold tabular-nums ${getUsageTextColor(systemHealth.memory_usage)}`}>
               {systemHealth.memory_usage?.toFixed(1) || '0'}%
             </span>
           </div>
@@ -236,7 +236,7 @@ export default function HostResourcesSection({ systemHealth, storage }: {
               </svg>
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('hostResources.disk')}</span>
             </div>
-            <span className={`text-lg font-bold ${diskTextColor(systemHealth.disk_usage, storage)}`}>
+            <span className={`text-lg font-bold tabular-nums ${diskTextColor(systemHealth.disk_usage, storage)}`}>
               {systemHealth.disk_usage?.toFixed(1) || '0'}%
             </span>
           </div>
@@ -251,7 +251,7 @@ export default function HostResourcesSection({ systemHealth, storage }: {
             {formatBytes(systemHealth.disk_used || 0)} / {formatBytes(systemHealth.disk_total || 0)}
           </div>
           {systemHealth.disk_path && systemHealth.disk_path !== '/' && (
-            <div className="text-[11px] text-gray-400 dark:text-gray-500 truncate" title={systemHealth.disk_path}>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400 min-w-0 break-all">
               {systemHealth.disk_path}
             </div>
           )}
@@ -305,7 +305,7 @@ export default function HostResourcesSection({ systemHealth, storage }: {
                 </svg>
                 {t('hostResources.networkIn')}
               </span>
-              <span className="text-sm font-semibold text-green-600 dark:text-green-400">
+              <span className="text-sm font-semibold tabular-nums text-green-700 dark:text-green-400">
                 {formatBytes(systemHealth.network_in || 0)}
               </span>
             </div>
@@ -316,7 +316,7 @@ export default function HostResourcesSection({ systemHealth, storage }: {
                 </svg>
                 {t('hostResources.networkOut')}
               </span>
-              <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">
+              <span className="text-sm font-semibold tabular-nums text-blue-600 dark:text-blue-400">
                 {formatBytes(systemHealth.network_out || 0)}
               </span>
             </div>

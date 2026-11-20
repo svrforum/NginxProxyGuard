@@ -339,24 +339,24 @@ function WorldMapVisualization({
               )}
             </>
           ) : (
-            <div className="text-slate-500 text-xs text-center py-4">
-              No traffic data
+            <div className="text-slate-400 text-xs text-center py-4">
+              {t("topLists.noData")}
             </div>
           )}
         </div>
 
         {/* Legend */}
         <div className="border-t border-slate-700/50 pt-3 mt-3">
-          <div className="text-xs text-slate-500 mb-1.5">Intensity</div>
+          <div className="text-xs text-slate-400 mb-1.5">{t("geo.intensity")}</div>
           <div className="flex gap-0.5">
             <div className="flex-1 h-2 rounded-l bg-slate-700"></div>
             <div className="flex-1 h-2 bg-blue-400"></div>
             <div className="flex-1 h-2 bg-blue-500"></div>
             <div className="flex-1 h-2 rounded-r bg-blue-700"></div>
           </div>
-          <div className="flex justify-between text-[10px] text-slate-500 mt-1">
-            <span>Low</span>
-            <span>High</span>
+          <div className="flex justify-between text-[10px] text-slate-400 mt-1">
+            <span>{t("geo.low")}</span>
+            <span>{t("geo.high")}</span>
           </div>
         </div>
 
@@ -368,8 +368,8 @@ function WorldMapVisualization({
                 ? `${(totalRequests / 1000).toFixed(1)}K`
                 : totalRequests}
             </div>
-            <div className="text-[10px] text-slate-500 uppercase tracking-wide">
-              Total Requests
+            <div className="text-[10px] text-slate-400 uppercase tracking-wide">
+              {t("geo.legendTotal")}
             </div>
           </div>
         )}
