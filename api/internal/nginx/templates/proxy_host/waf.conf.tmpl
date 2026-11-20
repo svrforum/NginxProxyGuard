@@ -70,7 +70,9 @@
         {{if .Host.CacheStaticOnly}}
         # Static assets only - bypass cache for API and dynamic content
         set $cache_bypass 1;
-        if ($request_uri ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot|webp|avif|mp4|webm|pdf)$) {
+        # The extension ends the path; a query string may follow it
+        # (style.css?ver=3). Each query is its own cache entry.
+        if ($request_uri ~* ^[^?]*\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot|webp|avif|mp4|webm|pdf)(\?|$)) {
             set $cache_bypass 0;
         }
         proxy_no_cache $cache_bypass;
@@ -199,7 +201,9 @@
         {{if .Host.CacheStaticOnly}}
         # Static assets only - bypass cache for API and dynamic content
         set $cache_bypass 1;
-        if ($request_uri ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot|webp|avif|mp4|webm|pdf)$) {
+        # The extension ends the path; a query string may follow it
+        # (style.css?ver=3). Each query is its own cache entry.
+        if ($request_uri ~* ^[^?]*\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot|webp|avif|mp4|webm|pdf)(\?|$)) {
             set $cache_bypass 0;
         }
         proxy_no_cache $cache_bypass;
