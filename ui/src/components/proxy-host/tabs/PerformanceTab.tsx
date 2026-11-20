@@ -1,6 +1,9 @@
 import type { CreateProxyHostRequest } from '../../../types/proxy-host'
 import { useTranslation } from 'react-i18next'
+import { useQuery } from '@tanstack/react-query'
 import { HelpTip } from '../../common/HelpTip'
+import { getGlobalSettings } from '../../../api/settings'
+import { usePermissions } from '../../../hooks/usePermissions'
 
 interface PerformanceTabProps {
   formData: CreateProxyHostRequest
@@ -9,6 +12,24 @@ interface PerformanceTabProps {
 
 export function PerformanceTabContent({ formData, setFormData }: PerformanceTabProps) {
   const { t } = useTranslation('proxyHost')
+  const { can } = usePermissions()
+  // The global value decides when the host leaves buffering unset. Roles that
+  // cannot read settings just do not get the warning for that case.
+  const { data: globalSettings } = useQuery({
+    queryKey: ['globalSettings'],
+    queryFn: getGlobalSettings,
+    enabled: !!formData.cache_enabled && !formData.proxy_buffering && can('settings:read'),
+  })
+  // nginx stores nothing in the cache while buffering is off. The advanced
+  // config wins over the host field, the host field over the global one.
+  const advancedBuffering = formData.advanced_config?.match(/^\s*proxy_buffering\s+(on|off)\s*;/m)?.[1]
+  const cacheBlockedBy = !formData.cache_enabled
+    ? null
+    : advancedBuffering
+      ? (advancedBuffering === 'off' ? 'advanced' : null)
+      : formData.proxy_buffering
+        ? (formData.proxy_buffering === 'off' ? 'host' : null)
+        : (globalSettings?.proxy_buffering === 'off' ? 'global' : null)
   return (
     <div className="space-y-6">
       {/* Caching */}
@@ -89,6 +110,16 @@ export function PerformanceTabContent({ formData, setFormData }: PerformanceTabP
                 <option value="30d">{t('form.performance.cache.ttl30d', '30 days')}</option>
               </select>
             </div>
+
+            {cacheBlockedBy && (
+              <div
+                data-testid="cache-buffering-warning"
+                className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 p-3 rounded border border-amber-200 dark:border-amber-800"
+              >
+                <p className="font-medium mb-1">{t('form.performance.cache.bufferingOffTitle')}</p>
+                <p>{t(`form.performance.cache.bufferingOff_${cacheBlockedBy}`)}</p>
+              </div>
+            )}
 
             {/* Cache Info */}
             <div className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50 p-3 rounded border border-slate-200 dark:border-slate-700">

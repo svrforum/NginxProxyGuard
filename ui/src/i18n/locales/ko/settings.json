@@ -739,6 +739,7 @@
         "useNginxDefault": "nginx 기본값 사용 (on)",
         "bufferingOn": "켜기 (응답 버퍼링)",
         "bufferingOff": "끄기 (직접 스트리밍)",
+        "bufferingOffCacheNote": "이 값을 끄면 캐시를 켠 호스트도 응답이 캐시에 저장되지 않습니다. 그런 호스트는 호스트 설정에서 프록시 버퍼링을 \"켜기\"로 지정하세요.",
         "requestBufferingOn": "켜기 (전체 요청 버퍼링)",
         "requestBufferingOff": "끄기 (업스트림으로 스트리밍)"
       },

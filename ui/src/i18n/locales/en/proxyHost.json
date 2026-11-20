@@ -464,7 +464,11 @@
         "infoStaticOnly": "Only static assets (js, css, images, fonts) will be cached",
         "infoAll": "All responses except /api/* paths will be cached",
         "infoTTL": "Cache duration:",
-        "infoHeader": "X-Cache-Status header shows HIT/MISS"
+        "infoHeader": "X-Cache-Status header shows HIT/MISS",
+        "bufferingOffTitle": "Proxy buffering is off, so nothing is cached",
+        "bufferingOff_host": "While buffering is off, responses are not stored and X-Cache-Status stays MISS. To use the cache, set Proxy Buffering to \"On\" in the proxy settings below. If this host needs buffering off for streaming, it cannot use the cache.",
+        "bufferingOff_global": "Proxy buffering is off in the global settings. While it is off, responses are not stored. To use the cache on this host, set Proxy Buffering to \"On\" in the proxy settings below.",
+        "bufferingOff_advanced": "The advanced config contains proxy_buffering off. While buffering is off, responses are not stored. Remove that line to use the cache."
       },
       "compression": {
         "title": "Compression",

@@ -72,6 +72,11 @@ export default function PerformanceTab({ getStringValue, getNumberValue, getBool
               <option value="on">{t('global.performance.buffer.bufferingOn', 'On (buffer responses)')}</option>
               <option value="off">{t('global.performance.buffer.bufferingOff', 'Off (stream directly)')}</option>
             </select>
+            {getStringValue('proxy_buffering', '') === 'off' && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                {t('global.performance.buffer.bufferingOffCacheNote')}
+              </p>
+            )}
           </SettingField>
           <SettingField settingKey="proxy_request_buffering">
             <select

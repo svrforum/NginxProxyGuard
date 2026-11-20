@@ -739,6 +739,7 @@
         "useNginxDefault": "Use nginx default (on)",
         "bufferingOn": "On (buffer responses)",
         "bufferingOff": "Off (stream directly)",
+        "bufferingOffCacheNote": "With this off, hosts that have caching enabled store nothing. Set Proxy Buffering to \"On\" on those hosts.",
         "requestBufferingOn": "On (buffer entire request)",
         "requestBufferingOff": "Off (stream to upstream)"
       },

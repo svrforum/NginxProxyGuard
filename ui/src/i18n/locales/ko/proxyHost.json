@@ -464,7 +464,11 @@
         "infoStaticOnly": "정적 자원(js, css, 이미지, 폰트)만 캐시됩니다",
         "infoAll": "/api/* 경로를 제외한 모든 응답이 캐시됩니다",
         "infoTTL": "캐시 기간:",
-        "infoHeader": "X-Cache-Status 헤더로 HIT/MISS 확인 가능"
+        "infoHeader": "X-Cache-Status 헤더로 HIT/MISS 확인 가능",
+        "bufferingOffTitle": "프록시 버퍼링이 꺼져 있어 캐시가 저장되지 않습니다",
+        "bufferingOff_host": "버퍼링이 꺼진 동안에는 응답이 캐시에 남지 않아 X-Cache-Status가 계속 MISS로 나옵니다. 캐시를 쓰려면 아래 프록시 설정의 프록시 버퍼링을 \"켜기\"로 바꾸세요. 스트리밍 때문에 꺼야 한다면 이 호스트에서는 캐시를 쓸 수 없습니다.",
+        "bufferingOff_global": "전역 설정에서 프록시 버퍼링이 꺼져 있습니다. 버퍼링이 꺼진 동안에는 응답이 캐시에 남지 않습니다. 이 호스트에서 캐시를 쓰려면 아래 프록시 설정의 프록시 버퍼링을 \"켜기\"로 선택하세요.",
+        "bufferingOff_advanced": "고급 설정에 proxy_buffering off가 있습니다. 버퍼링이 꺼진 동안에는 응답이 캐시에 남지 않습니다. 캐시를 쓰려면 그 줄을 지우세요."
       },
       "compression": {
         "title": "압축",
