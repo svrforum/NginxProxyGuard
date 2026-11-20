@@ -58,12 +58,15 @@ export type { BannedIP, BannedIPListResponse, ProxyHostListResponse, LogEntry, L
 
 const API_BASE = '/api/v1'
 
-export async function fetchBannedIPs(page = 1, perPage = 50, proxyHostId?: string, filter?: string): Promise<BannedIPListResponse> {
+export async function fetchBannedIPs(page = 1, perPage = 50, proxyHostId?: string, filter?: string, type?: string): Promise<BannedIPListResponse> {
   const params = new URLSearchParams({
     page: page.toString(),
     per_page: perPage.toString(),
   })
   if (filter) params.set('filter', filter)
+  // The type filter runs on the server (#394), so the total and page count
+  // describe the filtered bans rather than every type.
+  if (type && type !== 'all') params.set('type', type)
   if (proxyHostId) params.set('proxy_host_id', proxyHostId)
   return apiGet<BannedIPListResponse>(`${API_BASE}/banned-ips?${params}`)
 }

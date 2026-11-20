@@ -363,7 +363,40 @@ func (r *RateLimitRepository) countBannedIPs(ctx context.Context, where string, 
 	return c, nil
 }
 
-func (r *RateLimitRepository) ListBannedIPs(ctx context.Context, proxyHostID *string, page, perPage int) (*model.BannedIPListResponse, error) {
+// bannedIPCategorySQL names the kind of ban a row's reason describes. It is
+// the rule the banned-IP screen used to apply in the browser (keywords in the
+// reason, checked in this order), moved here so the type filter covers every
+// page.
+const bannedIPCategorySQL = `CASE WHEN NULLIF(reason, '') IS NULL THEN 'manual' ` +
+	`WHEN lower(reason) LIKE '%waf%' OR lower(reason) LIKE '%modsec%' OR lower(reason) LIKE '%rule%' THEN 'waf' ` +
+	`WHEN lower(reason) LIKE '%fail2ban%' OR lower(reason) LIKE '%failed%' THEN 'fail2ban' ` +
+	`WHEN lower(reason) LIKE '%rate%' OR lower(reason) LIKE '%limit%' THEN 'rate_limit' ` +
+	`WHEN lower(reason) LIKE '%bot%' THEN 'bot' ` +
+	`WHEN lower(reason) LIKE '%auto%' THEN 'auto' ELSE 'manual' END`
+
+// bannedIPTypeCondition narrows a list to one type of ban (#394). It goes into
+// the list's WHERE, so the page, the total and the statistics cards all count
+// the same bans; the type filter used to run in the browser over one 50-row
+// page while the page count covered every type. Only the literals below are
+// written into the SQL; the handler refuses anything else
+// (model.IsValidBannedIPType), and a value that still got here would match no
+// ban rather than be spliced into the query.
+func bannedIPTypeCondition(banType string) string {
+	switch banType {
+	case "", "all":
+		return ""
+	case "auto":
+		return " AND COALESCE(is_auto_banned, false)"
+	case "manual":
+		return " AND NOT COALESCE(is_auto_banned, false)"
+	case "waf", "fail2ban", "rate_limit", "bot":
+		return " AND (" + bannedIPCategorySQL + ") = '" + banType + "'"
+	default:
+		return " AND FALSE"
+	}
+}
+
+func (r *RateLimitRepository) ListBannedIPs(ctx context.Context, proxyHostID *string, banType string, page, perPage int) (*model.BannedIPListResponse, error) {
 	var where, listQuery string
 	var whereArgs, args []interface{}
 
@@ -371,7 +404,7 @@ func (r *RateLimitRepository) ListBannedIPs(ctx context.Context, proxyHostID *st
 	activeCondition := "(is_permanent = TRUE OR expires_at > NOW())"
 
 	if proxyHostID != nil {
-		where = "proxy_host_id = $1 AND " + activeCondition
+		where = "proxy_host_id = $1 AND " + activeCondition + bannedIPTypeCondition(banType)
 		listQuery = `
 			SELECT id, proxy_host_id, ip_address, reason, fail_count, banned_at, expires_at, is_permanent, COALESCE(is_auto_banned, false), created_at
 			FROM banned_ips
@@ -382,7 +415,7 @@ func (r *RateLimitRepository) ListBannedIPs(ctx context.Context, proxyHostID *st
 		whereArgs = []interface{}{*proxyHostID}
 		args = []interface{}{*proxyHostID, perPage, (page - 1) * perPage}
 	} else {
-		where = activeCondition
+		where = activeCondition + bannedIPTypeCondition(banType)
 		listQuery = `
 			SELECT id, proxy_host_id, ip_address, reason, fail_count, banned_at, expires_at, is_permanent, COALESCE(is_auto_banned, false), created_at
 			FROM banned_ips
@@ -444,10 +477,10 @@ func (r *RateLimitRepository) ListBannedIPs(ctx context.Context, proxyHostID *st
 }
 
 // ListGlobalBannedIPs returns only banned IPs where proxy_host_id IS NULL (global bans)
-func (r *RateLimitRepository) ListGlobalBannedIPs(ctx context.Context, page, perPage int) (*model.BannedIPListResponse, error) {
+func (r *RateLimitRepository) ListGlobalBannedIPs(ctx context.Context, banType string, page, perPage int) (*model.BannedIPListResponse, error) {
 	activeCondition := "(is_permanent = TRUE OR expires_at > NOW())"
 
-	where := "proxy_host_id IS NULL AND " + activeCondition
+	where := "proxy_host_id IS NULL AND " + activeCondition + bannedIPTypeCondition(banType)
 	listQuery := `
 		SELECT id, proxy_host_id, ip_address, reason, fail_count, banned_at, expires_at, is_permanent, COALESCE(is_auto_banned, false), created_at
 		FROM banned_ips
@@ -507,10 +540,10 @@ func (r *RateLimitRepository) ListGlobalBannedIPs(ctx context.Context, page, per
 }
 
 // ListHostBannedIPs returns only banned IPs where proxy_host_id IS NOT NULL (per-host bans)
-func (r *RateLimitRepository) ListHostBannedIPs(ctx context.Context, page, perPage int) (*model.BannedIPListResponse, error) {
+func (r *RateLimitRepository) ListHostBannedIPs(ctx context.Context, banType string, page, perPage int) (*model.BannedIPListResponse, error) {
 	activeCondition := "(is_permanent = TRUE OR expires_at > NOW())"
 
-	where := "proxy_host_id IS NOT NULL AND " + activeCondition
+	where := "proxy_host_id IS NOT NULL AND " + activeCondition + bannedIPTypeCondition(banType)
 	listQuery := `
 		SELECT id, proxy_host_id, ip_address, reason, fail_count, banned_at, expires_at, is_permanent, COALESCE(is_auto_banned, false), created_at
 		FROM banned_ips

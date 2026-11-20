@@ -312,6 +312,24 @@ type BannedIP struct {
 	Country     string `json:"country,omitempty"`
 }
 
+// BannedIPTypes are the values GET /banned-ips accepts in ?type= (#394):
+// "auto" and "manual" by how the ban was made, the others by the kind of ban
+// its reason names. Empty or "all" lists every ban.
+var BannedIPTypes = []string{"auto", "manual", "waf", "fail2ban", "rate_limit", "bot"}
+
+// IsValidBannedIPType reports whether t is "", "all" or one of BannedIPTypes.
+func IsValidBannedIPType(t string) bool {
+	if t == "" || t == "all" {
+		return true
+	}
+	for _, v := range BannedIPTypes {
+		if t == v {
+			return true
+		}
+	}
+	return false
+}
+
 // BannedIPListResponse is the response for listing banned IPs
 type BannedIPListResponse struct {
 	Data       []BannedIP `json:"data"`

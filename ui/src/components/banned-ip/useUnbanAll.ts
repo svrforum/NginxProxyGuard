@@ -7,14 +7,13 @@ interface UseUnbanAllOptions {
   hostFilter: string
   typeFilter: string
   total: number
-  getReasonCategory: (reason?: string) => string
   onAfter?: () => void
 }
 
 // useUnbanAll iterates the filtered banned-IP result set across pages and
 // unbans in 100-ID batches (the server's per-request limit). The `total`
 // snapshot bounds the loop so concurrent ban inserts can't cause runaway.
-export function useUnbanAll({ activeTab, hostFilter, typeFilter, total, getReasonCategory, onAfter }: UseUnbanAllOptions) {
+export function useUnbanAll({ activeTab, hostFilter, typeFilter, total, onAfter }: UseUnbanAllOptions) {
   const queryClient = useQueryClient()
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
 
@@ -30,18 +29,8 @@ export function useUnbanAll({ activeTab, hostFilter, typeFilter, total, getReaso
       let done = 0
       // Re-fetch page=1 each loop because deleting drops the page below.
       while (done < total) {
-        const res = await fetchBannedIPs(1, perPage, proxyHostId, filter)
-        let pageIds = (res.data || []).map(b => b.id)
-        if (typeFilter !== 'all') {
-          pageIds = (res.data || [])
-            .filter(b => {
-              const category = getReasonCategory(b.reason)
-              if (typeFilter === 'auto') return b.is_auto_banned
-              if (typeFilter === 'manual') return !b.is_auto_banned
-              return category === typeFilter
-            })
-            .map(b => b.id)
-        }
+        const res = await fetchBannedIPs(1, perPage, proxyHostId, filter, typeFilter)
+        const pageIds = (res.data || []).map(b => b.id)
         if (pageIds.length === 0) break
         await unbanIPsBulk(pageIds)
         done += pageIds.length

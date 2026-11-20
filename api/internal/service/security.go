@@ -430,25 +430,25 @@ func (s *SecurityService) GetIPBanHistoryStats(ctx context.Context) (*model.IPBa
 
 // ---- Banned IPs ----
 
-func (s *SecurityService) ListBannedIPs(ctx context.Context, proxyHostID string, filterType string, page, perPage int) (*model.BannedIPListResponse, error) {
+func (s *SecurityService) ListBannedIPs(ctx context.Context, proxyHostID string, filterType string, banType string, page, perPage int) (*model.BannedIPListResponse, error) {
 	var result *model.BannedIPListResponse
 	var err error
 
 	switch filterType {
 	case "global":
-		result, err = s.rateLimitRepo.ListGlobalBannedIPs(ctx, page, perPage)
+		result, err = s.rateLimitRepo.ListGlobalBannedIPs(ctx, banType, page, perPage)
 	case "host":
 		if proxyHostID != "" {
-			result, err = s.rateLimitRepo.ListBannedIPs(ctx, &proxyHostID, page, perPage)
+			result, err = s.rateLimitRepo.ListBannedIPs(ctx, &proxyHostID, banType, page, perPage)
 		} else {
-			result, err = s.rateLimitRepo.ListHostBannedIPs(ctx, page, perPage)
+			result, err = s.rateLimitRepo.ListHostBannedIPs(ctx, banType, page, perPage)
 		}
 	default:
 		var proxyHostIDPtr *string
 		if proxyHostID != "" {
 			proxyHostIDPtr = &proxyHostID
 		}
-		result, err = s.rateLimitRepo.ListBannedIPs(ctx, proxyHostIDPtr, page, perPage)
+		result, err = s.rateLimitRepo.ListBannedIPs(ctx, proxyHostIDPtr, banType, page, perPage)
 	}
 
 	if err != nil {

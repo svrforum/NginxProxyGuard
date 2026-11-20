@@ -2181,6 +2181,16 @@ paths:
           schema:
             type: string
             format: uuid
+        - name: type
+          in: query
+          description: |
+            Narrows the list to one type of ban (#394). `auto` and `manual` follow how the
+            ban was made; `waf`, `fail2ban`, `rate_limit` and `bot` follow the reason, as
+            the banned-IP screen labels it. The total, page count and counts describe the
+            narrowed list. `all` or omitting it lists every type; any other value is a 400.
+          schema:
+            type: string
+            enum: [all, auto, manual, waf, fail2ban, rate_limit, bot]
         - name: page
           in: query
           schema:

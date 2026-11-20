@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -19,6 +20,10 @@ import (
 func (h *SecurityHandler) ListBannedIPs(c echo.Context) error {
 	proxyHostID := c.QueryParam("proxy_host_id")
 	filterType := c.QueryParam("filter")
+	banType := c.QueryParam("type")
+	if !model.IsValidBannedIPType(banType) {
+		return badRequestError(c, "type must be one of: all, "+strings.Join(model.BannedIPTypes, ", "))
+	}
 	page, _ := strconv.Atoi(c.QueryParam("page"))
 	perPage, _ := strconv.Atoi(c.QueryParam("per_page"))
 
@@ -29,7 +34,7 @@ func (h *SecurityHandler) ListBannedIPs(c echo.Context) error {
 		perPage = 20
 	}
 
-	result, err := h.securityService.ListBannedIPs(c.Request().Context(), proxyHostID, filterType, page, perPage)
+	result, err := h.securityService.ListBannedIPs(c.Request().Context(), proxyHostID, filterType, banType, page, perPage)
 	if err != nil {
 		return databaseError(c, "list banned IPs", err)
 	}

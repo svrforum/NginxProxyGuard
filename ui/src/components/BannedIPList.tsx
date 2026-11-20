@@ -66,18 +66,6 @@ function getTimeRemaining(expiresAt: string | undefined, t: TFn): { text: string
   return { text: t('bannedIp.status.expiringSoon'), color: 'text-red-600' }
 }
 
-// Parse reason to get category
-function getReasonCategory(reason?: string): string {
-  if (!reason) return 'manual'
-  const lowerReason = reason.toLowerCase()
-  if (lowerReason.includes('waf') || lowerReason.includes('modsec') || lowerReason.includes('rule')) return 'waf'
-  if (lowerReason.includes('fail2ban') || lowerReason.includes('failed')) return 'fail2ban'
-  if (lowerReason.includes('rate') || lowerReason.includes('limit')) return 'rate_limit'
-  if (lowerReason.includes('bot')) return 'bot'
-  if (lowerReason.includes('auto')) return 'auto'
-  return 'manual'
-}
-
 type TFn = TFunction<'waf'>
 
 interface BanCardProps {
@@ -199,28 +187,18 @@ export function BannedIPList() {
   }, [proxyHosts])
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['banned-ips', page, activeTab, hostFilter],
+    queryKey: ['banned-ips', page, activeTab, hostFilter, typeFilter],
     queryFn: () => {
       const filter = activeTab === 'global' ? 'global' : activeTab === 'hosts' ? 'host' : undefined
       const proxyHostId = activeTab === 'hosts' && hostFilter !== 'all' ? hostFilter : undefined
-      return fetchBannedIPs(page, 50, proxyHostId, filter)
+      return fetchBannedIPs(page, 50, proxyHostId, filter, typeFilter)
     },
     refetchInterval: 60000,
   })
 
-  // Client-side filtering for type filter only (global/hosts filtering is server-side)
-  const filteredBannedIPs = useMemo(() => {
-    if (!data?.data) return []
-
-    if (typeFilter === 'all') return data.data
-
-    return data.data.filter(ban => {
-      const category = getReasonCategory(ban.reason)
-      if (typeFilter === 'auto') return ban.is_auto_banned
-      if (typeFilter === 'manual') return !ban.is_auto_banned
-      return category === typeFilter
-    })
-  }, [data?.data, typeFilter])
+  // Every filter, the type included, runs on the server (#394): filtering one
+  // 50-row page here left the page count describing every type.
+  const filteredBannedIPs = useMemo(() => data?.data ?? [], [data?.data])
 
   const unbanMutation = useMutation({
     mutationFn: unbanIP,
@@ -267,7 +245,6 @@ export function BannedIPList() {
     hostFilter,
     typeFilter,
     total: data?.total || 0,
-    getReasonCategory,
     onAfter: () => setSelectedIds(new Set()),
   })
 
@@ -450,7 +427,11 @@ export function BannedIPList() {
             </label>
             <select
               value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
+              onChange={(e) => {
+                setTypeFilter(e.target.value)
+                setPage(1)
+                setSelectedIds(new Set())
+              }}
               className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm bg-white dark:bg-slate-700 dark:text-white"
             >
               <option value="all">{t('bannedIp.filter.allTypes', { defaultValue: '모든 유형' })}</option>

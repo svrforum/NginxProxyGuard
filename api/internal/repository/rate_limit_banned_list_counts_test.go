@@ -37,7 +37,7 @@ func TestBannedIPListCountsComeFromTheAggregateOverTheListPredicate(t *testing.T
 		{
 			name: "global tab",
 			list: func(r *RateLimitRepository) (*model.BannedIPListResponse, error) {
-				return r.ListGlobalBannedIPs(ctx, 1, 50)
+				return r.ListGlobalBannedIPs(ctx, "", 1, 50)
 			},
 			where:    "proxy_host_id IS NULL AND " + active,
 			listArgs: []driver.Value{50, 0},
@@ -47,7 +47,7 @@ func TestBannedIPListCountsComeFromTheAggregateOverTheListPredicate(t *testing.T
 		{
 			name: "hosts tab, every host",
 			list: func(r *RateLimitRepository) (*model.BannedIPListResponse, error) {
-				return r.ListHostBannedIPs(ctx, 1, 50)
+				return r.ListHostBannedIPs(ctx, "", 1, 50)
 			},
 			where:    "proxy_host_id IS NOT NULL AND " + active,
 			listArgs: []driver.Value{50, 0},
@@ -58,7 +58,7 @@ func TestBannedIPListCountsComeFromTheAggregateOverTheListPredicate(t *testing.T
 		{
 			name: "hosts tab, one host, second page",
 			list: func(r *RateLimitRepository) (*model.BannedIPListResponse, error) {
-				return r.ListBannedIPs(ctx, &hostA, 2, 50)
+				return r.ListBannedIPs(ctx, &hostA, "", 2, 50)
 			},
 			where:     "proxy_host_id = $1 AND " + active,
 			countArgs: []driver.Value{hostA},
@@ -70,13 +70,48 @@ func TestBannedIPListCountsComeFromTheAggregateOverTheListPredicate(t *testing.T
 		{
 			name: "no filter",
 			list: func(r *RateLimitRepository) (*model.BannedIPListResponse, error) {
-				return r.ListBannedIPs(ctx, nil, 1, 50)
+				return r.ListBannedIPs(ctx, nil, "", 1, 50)
 			},
 			where:    active,
 			listArgs: []driver.Value{50, 0},
 			// Global bans count towards the totals but have no host entry.
 			groups: [][]driver.Value{{nil, 3, 1, 0}, {hostA, 60, 2, 60}},
 			want:   model.BannedIPListResponse{Total: 63, TotalPages: 2, PermanentCount: 3, AutoCount: 60, HostCounts: map[string]int{hostA: 60}},
+		},
+		// A type filter (#394) narrows the same WHERE, so the page count and
+		// the cards describe the filtered bans instead of every type.
+		{
+			name: "global tab, manual bans",
+			list: func(r *RateLimitRepository) (*model.BannedIPListResponse, error) {
+				return r.ListGlobalBannedIPs(ctx, "manual", 1, 50)
+			},
+			where:    "proxy_host_id IS NULL AND " + active + " AND NOT COALESCE(is_auto_banned, false)",
+			listArgs: []driver.Value{50, 0},
+			groups:   [][]driver.Value{{nil, 7, 2, 0}},
+			want:     model.BannedIPListResponse{Total: 7, TotalPages: 1, PermanentCount: 2, AutoCount: 0, HostCounts: map[string]int{}},
+		},
+		{
+			name: "hosts tab, WAF bans",
+			list: func(r *RateLimitRepository) (*model.BannedIPListResponse, error) {
+				return r.ListHostBannedIPs(ctx, "waf", 1, 50)
+			},
+			where:    "proxy_host_id IS NOT NULL AND " + active + " AND (" + bannedIPCategorySQL + ") = 'waf'",
+			listArgs: []driver.Value{50, 0},
+			pageHost: hostA,
+			groups:   [][]driver.Value{{hostA, 51, 0, 51}},
+			want:     model.BannedIPListResponse{Total: 51, TotalPages: 2, PermanentCount: 0, AutoCount: 51, HostCounts: map[string]int{hostA: 51}},
+		},
+		{
+			name: "one host, auto bans",
+			list: func(r *RateLimitRepository) (*model.BannedIPListResponse, error) {
+				return r.ListBannedIPs(ctx, &hostA, "auto", 1, 50)
+			},
+			where:     "proxy_host_id = $1 AND " + active + " AND COALESCE(is_auto_banned, false)",
+			countArgs: []driver.Value{hostA},
+			listArgs:  []driver.Value{hostA, 50, 0},
+			pageHost:  hostA,
+			groups:    [][]driver.Value{{hostA, 3, 0, 3}},
+			want:      model.BannedIPListResponse{Total: 3, TotalPages: 1, PermanentCount: 0, AutoCount: 3, HostCounts: map[string]int{hostA: 3}},
 		},
 	}
 
@@ -134,5 +169,17 @@ func TestBannedIPListCountsComeFromTheAggregateOverTheListPredicate(t *testing.T
 				t.Errorf("host counts = %#v, want %#v", got.HostCounts, tc.want.HostCounts)
 			}
 		})
+	}
+}
+
+// Only known type literals reach the SQL; anything else matches nothing.
+func TestBannedIPTypeConditionOnlyWritesKnownLiterals(t *testing.T) {
+	for _, v := range []string{"waf'; DROP TABLE banned_ips; --", "geo", "WAF"} {
+		if got := bannedIPTypeCondition(v); got != " AND FALSE" {
+			t.Errorf("bannedIPTypeCondition(%q) = %q, want \" AND FALSE\"", v, got)
+		}
+	}
+	if got := bannedIPTypeCondition("bot"); got != " AND ("+bannedIPCategorySQL+") = 'bot'" {
+		t.Errorf("bot = %q", got)
 	}
 }
