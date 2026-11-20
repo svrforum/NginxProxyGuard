@@ -45,7 +45,8 @@
       "noMatchDescription": "태그를 빼거나 도메인·업스트림·상태 필터를 넓혀 보세요."
     },
     "tags": {
-      "filterBy": "{{tag}} 태그로 필터"
+      "filterBy": "{{tag}} 태그로 필터",
+      "more": "+{{count}}개 더보기"
     },
     "columns": {
       "domain": "도메인",
@@ -74,7 +75,8 @@
       "updatedDesc": "최근 수정순",
       "updatedAsc": "오래된 수정순",
       "createdDesc": "최근 등록순",
-      "createdAsc": "오래된 등록순"
+      "createdAsc": "오래된 등록순",
+      "label": "정렬"
     },
     "health": {
       "checking": "확인 중…",
@@ -85,7 +87,10 @@
     "refreshStatus": "상태 새로고침",
     "editStreamSettings": "스트림 설정 편집",
     "editStreamProtocol": "스트림 프로토콜 편집",
-    "editFeatureHint": "클릭하여 설정 편집"
+    "editFeatureHint": "클릭하여 설정 편집",
+    "loadFailed": "프록시 호스트 목록을 불러오지 못했습니다. 다시 시도하세요.",
+    "actionFailed": "변경 사항을 적용하지 못했습니다",
+    "editWaf": "WAF 설정 편집 ({{mode}})"
   },
   "form": {
     "addTitle": "프록시 호스트 추가",
@@ -677,7 +682,9 @@
     "favorite": "즐겨찾기 추가",
     "unfavorite": "즐겨찾기 해제",
     "deleteTitle": "프록시 호스트 삭제",
-    "deleteDdnsMessage": "'{{domain}}' 호스트를 삭제합니다. 이 호스트가 관리하던 DDNS 레코드도 함께 제거됩니다."
+    "deleteDdnsMessage": "'{{domain}}' 호스트를 삭제합니다. 이 호스트가 관리하던 DDNS 레코드도 함께 제거됩니다.",
+    "deleteConfirmNamed": "'{{domain}}' 프록시 호스트를 삭제할까요? 되돌릴 수 없습니다.",
+    "cloneCertTimeout": "인증서 발급 시간이 초과되었습니다. 인증서 목록에서 상태를 확인하세요."
   },
   "test": {
     "title": "설정 테스트",

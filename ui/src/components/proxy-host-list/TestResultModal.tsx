@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useDialogFocus } from '../../hooks/useDialogFocus';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
 import type { ProxyHost, ProxyHostTestResult } from '../../types/proxy-host';
 import { SummaryTab } from './TestResultSummary';
@@ -24,6 +25,8 @@ export function TestResultModal({
   onRetest,
 }: TestResultModalProps) {
   const { t } = useTranslation('proxyHost');
+  const titleId = useId();
+  const { panelRef, onKeyDown } = useDialogFocus();
   const [activeTab, setActiveTab] = useState<'summary' | 'ssl' | 'http' | 'cache' | 'security' | 'headers'>('summary');
   const isStream = host.proxy_type === 'stream';
   const tabs = isStream
@@ -40,12 +43,12 @@ export function TestResultModal({
   useEscapeKey(onClose);
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+    <div role="dialog" aria-modal="true" aria-labelledby={titleId} className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div ref={panelRef} tabIndex={-1} onKeyDown={onKeyDown} className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col outline-none">
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">{t('test.title')}</h2>
+            <h2 id={titleId} className="text-lg font-semibold text-slate-900 dark:text-white">{t('test.title')}</h2>
             <p className="text-sm text-slate-500 dark:text-slate-400">
               {isStream
                 ? `${(host.stream_protocol || 'tcp').toUpperCase()} :${host.stream_listen_port || '?'}`

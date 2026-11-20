@@ -53,6 +53,9 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
   const [searchInput, setSearchInput] = useState('')  // For controlled input
   const [searchQuery, setSearchQuery] = useState('')  // For actual query (debounced)
   const [currentPage, setCurrentPage] = useState(1)
+  // A failed delete, toggle or favorite used to leave the list unchanged with
+  // no word about why. The reason stays above the table until the next try.
+  const [actionError, setActionError] = useState<{ title: string; detail: string } | null>(null)
 
   // Debounce search input
   useEffect(() => {
@@ -123,7 +126,7 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
     staleTime: 30_000,
   })
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['proxy-hosts', currentPage, perPage, searchQuery, sortBy, sortOrder, filter],
     queryFn: () => fetchProxyHosts(currentPage, perPage, searchQuery, sortBy, sortOrder, filter),
   })
@@ -141,27 +144,33 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
   const deleteMutation = useMutation({
     mutationFn: ({ id, ddnsRemoveProvider }: { id: string; ddnsRemoveProvider: boolean }) =>
       deleteProxyHost(id, ddnsRemoveProvider),
+    onMutate: () => setActionError(null),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['proxy-hosts'] })
       queryClient.invalidateQueries({ queryKey: ['proxy-host-groups'] })
     },
+    onError: (err) => setActionError({ title: t('messages.deleteFailed'), detail: (err as Error).message }),
   })
 
   const toggleMutation = useMutation({
     mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
       updateProxyHost(id, { enabled }),
+    onMutate: () => setActionError(null),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['proxy-hosts'] })
       queryClient.invalidateQueries({ queryKey: ['proxy-host-groups'] })
     },
+    onError: (err) => setActionError({ title: t('list.actionFailed'), detail: (err as Error).message }),
   })
 
   const favoriteMutation = useMutation({
     mutationFn: toggleProxyHostFavorite,
+    onMutate: () => setActionError(null),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['proxy-hosts'] })
       queryClient.invalidateQueries({ queryKey: ['proxy-host-groups'] })
     },
+    onError: (err) => setActionError({ title: t('list.actionFailed'), detail: (err as Error).message }),
   })
 
   const cloneMutation = useMutation({
@@ -277,7 +286,10 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
       setDeletingHost(host)
       return
     }
-    if (confirm(t('actions.deleteConfirm'))) {
+    const confirmText = host?.domain_names?.[0]
+      ? t('actions.deleteConfirmNamed', { domain: host.domain_names[0] })
+      : t('actions.deleteConfirm')
+    if (confirm(confirmText)) {
       deleteMutation.mutate({ id, ddnsRemoveProvider: false })
     }
   }, [data?.data, deleteMutation, t])
@@ -326,7 +338,7 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
       await new Promise(resolve => setTimeout(resolve, pollInterval))
     }
 
-    setCloneCertError('Certificate issuance timed out')
+    setCloneCertError(t('actions.cloneCertTimeout'))
     return false
   }
 
@@ -417,8 +429,18 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
 
   if (error) {
     return (
-      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 text-red-700 dark:text-red-400">
-        Error loading proxy hosts: {(error as Error).message}
+      <div role="alert" className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 text-red-700 dark:text-red-400 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p>{t('list.loadFailed')}</p>
+          <p className="mt-1 text-xs break-all">{(error as Error).message}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="px-3 py-1.5 text-sm font-medium rounded-lg bg-white dark:bg-slate-800 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/40"
+        >
+          {t('common:buttons.retry')}
+        </button>
       </div>
     )
   }
@@ -437,6 +459,25 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
         filter={filter}
         onFilterChange={setFilter}
       />
+
+      {actionError && (
+        <div role="alert" className="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 text-sm text-red-700 dark:text-red-400 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-medium">{actionError.title}</p>
+            {actionError.detail && <p className="mt-1 text-xs break-all">{actionError.detail}</p>}
+          </div>
+          <button
+            type="button"
+            onClick={() => setActionError(null)}
+            aria-label={t('common:buttons.close')}
+            className="p-1 rounded text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
 
       {hosts.length === 0 ? (
         <EmptyState

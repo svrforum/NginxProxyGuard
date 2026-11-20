@@ -45,7 +45,8 @@
       "noMatchDescription": "Remove a tag or widen the domain, upstream or status filter."
     },
     "tags": {
-      "filterBy": "Filter by tag {{tag}}"
+      "filterBy": "Filter by tag {{tag}}",
+      "more": "+{{count}} more"
     },
     "columns": {
       "domain": "Domain",
@@ -74,7 +75,8 @@
       "updatedDesc": "Recently updated",
       "updatedAsc": "Oldest updated",
       "createdDesc": "Recently created",
-      "createdAsc": "Oldest created"
+      "createdAsc": "Oldest created",
+      "label": "Sort"
     },
     "health": {
       "checking": "Checking…",
@@ -85,7 +87,10 @@
     "refreshStatus": "Refresh status",
     "editStreamSettings": "Edit stream settings",
     "editStreamProtocol": "Edit stream protocol",
-    "editFeatureHint": "Click to edit settings"
+    "editFeatureHint": "Click to edit settings",
+    "loadFailed": "Couldn't load proxy hosts. Try again.",
+    "actionFailed": "Couldn't apply the change",
+    "editWaf": "Edit WAF settings ({{mode}})"
   },
   "form": {
     "addTitle": "Add Proxy Host",
@@ -677,7 +682,9 @@
     "favorite": "Add to favorites",
     "unfavorite": "Remove from favorites",
     "deleteTitle": "Delete proxy host",
-    "deleteDdnsMessage": "Delete the host '{{domain}}'. The DDNS records it managed are removed as well."
+    "deleteDdnsMessage": "Delete the host '{{domain}}'. The DDNS records it managed are removed as well.",
+    "deleteConfirmNamed": "Delete proxy host '{{domain}}'? This can't be undone.",
+    "cloneCertTimeout": "Certificate issuance timed out. Check its status in the certificate list."
   },
   "test": {
     "title": "Configuration Test",

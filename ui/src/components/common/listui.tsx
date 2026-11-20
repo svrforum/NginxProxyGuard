@@ -102,7 +102,7 @@ export function IconButton({ onClick, title, disabled, variant = 'default', chil
       title={title}
       aria-label={title}
       disabled={disabled}
-      className={`rounded-lg p-2 text-slate-400 transition-colors disabled:opacity-50 ${tint}`}
+      className={`rounded-lg p-2 text-slate-500 dark:text-slate-400 transition-colors disabled:opacity-50 ${tint}`}
     >
       {children}
     </button>

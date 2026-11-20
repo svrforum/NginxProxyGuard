@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useDialogFocus } from '../../hooks/useDialogFocus'
 import { useQuery } from '@tanstack/react-query'
 import { listCertificates } from '../../api/certificates'
 import { listDNSProviders } from '../../api/dns-providers'
@@ -49,6 +50,8 @@ export function CloneModal({
   certSuccess,
 }: CloneModalProps) {
   const { t } = useTranslation('proxyHost')
+  const titleId = useId()
+  const { panelRef, onKeyDown } = useDialogFocus()
   const [cloneDomains, setCloneDomains] = useState('')
   const [cloneCertMode, setCloneCertMode] = useState<'select' | 'create'>('select')
   const [cloneCertificateId, setCloneCertificateId] = useState<string>(host.certificate_id || '')
@@ -122,10 +125,10 @@ export function CloneModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden">
+    <div role="dialog" aria-modal="true" aria-labelledby={titleId} className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div ref={panelRef} tabIndex={-1} onKeyDown={onKeyDown} className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden outline-none">
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+          <h3 id={titleId} className="text-lg font-semibold text-slate-900 dark:text-white">
             {t('actions.cloneTitle')}
           </h3>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
@@ -404,7 +407,7 @@ export function CloneModal({
                   </div>
                   <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
                     <div
-                      className="h-2 bg-primary-600 rounded-full transition-all duration-1000 animate-pulse"
+                      className="h-2 bg-primary-600 rounded-full transition-all duration-1000 motion-safe:animate-pulse"
                       style={{ width: `${Math.min((certElapsedTime / 60) * 100, 95)}%` }}
                     />
                   </div>

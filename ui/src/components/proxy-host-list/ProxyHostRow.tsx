@@ -1,10 +1,12 @@
-import { memo, useState } from 'react';
+import { memo, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ProxyHost } from '../../types/proxy-host';
 import type { TabType } from '../proxy-host/types';
 import { IconButton, PencilIcon, TrashIcon } from '../common/listui';
 import { formatHostPort } from '../common/hostPort';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useDialogFocus } from '../../hooks/useDialogFocus';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
 
 // ProxyHostRow.tsx - houses the per-row toggle confirmation dialog and the
 // memoized table row body. Splitting the row out lets `React.memo` skip
@@ -57,17 +59,24 @@ function streamTarget(host: ProxyHost) {
   return `${protocol}://${formatHostPort(host.forward_host, host.forward_port)}`;
 }
 
+// The dot's colour is backed by a name for screen readers, and an unreachable
+// backend also says so in words, so the state never rests on colour alone.
 function renderHealthDot(status: HealthDot, t: (key: string) => string) {
   if (status === 'checking') {
-    return <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" title={t('list.health.checking')} />;
+    return <span role="img" aria-label={t('list.health.checking')} className="w-2 h-2 rounded-full bg-blue-400 motion-safe:animate-pulse" title={t('list.health.checking')} />;
   }
   if (status === 'online') {
-    return <span className="w-2 h-2 rounded-full bg-green-500" title={t('list.health.online')} />;
+    return <span role="img" aria-label={t('list.health.online')} className="w-2 h-2 rounded-full bg-green-500" title={t('list.health.online')} />;
   }
   if (status === 'offline') {
-    return <span className="w-2 h-2 rounded-full bg-red-500" title={t('list.health.offline')} />;
+    return (
+      <>
+        <span aria-hidden="true" className="w-2 h-2 rounded-full bg-red-500" />
+        <span className="text-xs text-red-600 dark:text-red-300 whitespace-nowrap">{t('list.health.offline')}</span>
+      </>
+    );
   }
-  return <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600" title={t('list.health.unknown')} />;
+  return <span role="img" aria-label={t('list.health.unknown')} className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600" title={t('list.health.unknown')} />;
 }
 
 function ProxyHostRowImpl({
@@ -93,7 +102,10 @@ function ProxyHostRowImpl({
   // The WAF badge shows what runs: an inheriting host runs the global
   // default, whatever its own columns still say (#369).
   const waf = host.waf_effective ?? { enabled: host.waf_enabled, mode: host.waf_mode };
+  // Blocking and detection-only used to differ only by badge colour.
+  const wafModeLabel = waf.mode === 'blocking' ? t('form.waf.modeBlocking') : t('form.waf.modeDetection');
   const [domainsExpanded, setDomainsExpanded] = useState(false);
+  const [tagsExpanded, setTagsExpanded] = useState(false);
 
   const visibleDomains = domainsExpanded
     ? host.domain_names
@@ -113,7 +125,7 @@ function ProxyHostRowImpl({
   const tags = host.tags ?? [];
   const tagChips = tags.length > 0 && (
     <div className="flex flex-wrap gap-1 mt-1" data-testid="row-tags">
-      {tags.slice(0, MAX_VISIBLE_TAGS).map((tag) => (
+      {(tagsExpanded ? tags : tags.slice(0, MAX_VISIBLE_TAGS)).map((tag) => (
         <button
           key={tag}
           type="button"
@@ -125,18 +137,20 @@ function ProxyHostRowImpl({
         </button>
       ))}
       {tags.length > MAX_VISIBLE_TAGS && (
-        <span
-          className="px-1 text-[11px] text-slate-500 dark:text-slate-400"
-          title={tags.slice(MAX_VISIBLE_TAGS).join(', ')}
+        <button
+          type="button"
+          onClick={() => setTagsExpanded((v) => !v)}
+          aria-expanded={tagsExpanded}
+          className="px-1 text-[11px] text-slate-500 dark:text-slate-400 hover:underline"
         >
-          +{tags.length - MAX_VISIBLE_TAGS}
-        </span>
+          {tagsExpanded ? t('list.domainsCollapse') : t('list.tags.more', { count: tags.length - MAX_VISIBLE_TAGS })}
+        </button>
       )}
     </div>
   );
 
   return (
-    <tr className={`hover:bg-slate-50 dark:hover:bg-slate-700/50 ${!host.enabled ? 'opacity-50' : ''}`}>
+    <tr className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
       {/* Source (Domains) */}
       <td className="px-4 py-3">
         <div className="flex items-start gap-1.5">
@@ -278,9 +292,9 @@ function ProxyHostRowImpl({
               onClick={() => onEdit(host, 'security')}
               className={`px-1.5 py-0.5 text-[10px] font-medium rounded hover:opacity-80 transition-opacity cursor-pointer ${waf.mode === 'blocking' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-900/50' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/50'
                   }`}
-              title={`Click to edit WAF settings (${waf.mode})`}
+              title={t('list.editWaf', { mode: wafModeLabel })}
             >
-              WAF
+              WAF · {wafModeLabel}
             </button>
           )}
           {!isStream && host.allow_websocket_upgrade && (
@@ -321,7 +335,7 @@ function ProxyHostRowImpl({
             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
             title={host.config_error ? t('list.status.errorTooltip', { error: host.config_error }) : t('list.status.error')}
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+            <span className="w-1.5 h-1.5 rounded-full bg-red-500 motion-safe:animate-pulse" />
             {t('list.status.error')}
           </button>
         ) : (
@@ -332,7 +346,7 @@ function ProxyHostRowImpl({
               ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50'
               : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'
               }`}
-            title={canWrite ? (host.enabled ? 'Click to disable' : 'Click to enable') : t('common:noPermission')}
+            title={canWrite ? (host.enabled ? t('actions.disable') : t('actions.enable')) : t('common:noPermission')}
           >
             <span className={`w-1.5 h-1.5 rounded-full ${host.enabled ? 'bg-green-500' : 'bg-slate-400'}`} />
             {host.enabled ? t('list.status.active') : t('list.status.disabled')}
@@ -391,12 +405,15 @@ interface ToggleConfirmDialogProps {
 
 export function ToggleConfirmDialog({ host, isPending, onConfirm, onCancel }: ToggleConfirmDialogProps) {
   const { t } = useTranslation('proxyHost');
+  const titleId = useId();
+  const { panelRef, onKeyDown } = useDialogFocus();
+  useEscapeKey(onCancel, !isPending);
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden">
+    <div role="dialog" aria-modal="true" aria-labelledby={titleId} className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div ref={panelRef} tabIndex={-1} onKeyDown={onKeyDown} className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden outline-none">
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+          <h3 id={titleId} className="text-lg font-semibold text-slate-900 dark:text-white">
             {host.enabled ? t('actions.disableConfirmTitle') : t('actions.enableConfirmTitle')}
           </h3>
         </div>

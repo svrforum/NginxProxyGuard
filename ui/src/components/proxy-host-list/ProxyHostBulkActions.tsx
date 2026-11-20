@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 
 const PER_PAGE_OPTIONS = [10, 20, 50] as const;
@@ -20,6 +21,7 @@ export function ProxyHostBulkActions({
   onPerPageChange,
 }: ProxyHostBulkActionsProps) {
   const { t } = useTranslation('proxyHost');
+  const perPageId = useId();
 
   if (total === 0) return null;
 
@@ -34,8 +36,9 @@ export function ProxyHostBulkActions({
           })}
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-sm text-slate-500 dark:text-slate-400">{t('list.perPage')}:</span>
+          <label htmlFor={perPageId} className="text-sm text-slate-500 dark:text-slate-400">{t('list.perPage')}:</label>
           <select
+            id={perPageId}
             value={perPage}
             onChange={(e) => onPerPageChange(Number(e.target.value))}
             className="px-2 py-1 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
@@ -52,7 +55,8 @@ export function ProxyHostBulkActions({
           onClick={() => onPageChange(1)}
           disabled={currentPage === 1}
           className="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-          title={t('list.pagination.first')}
+          title={t('common:pagination.first')}
+          aria-label={t('common:pagination.first')}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
@@ -63,7 +67,8 @@ export function ProxyHostBulkActions({
           onClick={() => onPageChange(Math.max(1, currentPage - 1))}
           disabled={currentPage === 1}
           className="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-          title={t('list.pagination.previous')}
+          title={t('common:buttons.previous')}
+          aria-label={t('common:buttons.previous')}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -104,7 +109,8 @@ export function ProxyHostBulkActions({
           onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
           disabled={currentPage === totalPages}
           className="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-          title={t('list.pagination.next')}
+          title={t('common:buttons.next')}
+          aria-label={t('common:buttons.next')}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -115,7 +121,8 @@ export function ProxyHostBulkActions({
           onClick={() => onPageChange(totalPages)}
           disabled={currentPage === totalPages}
           className="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-          title={t('list.pagination.last')}
+          title={t('common:pagination.last')}
+          aria-label={t('common:pagination.last')}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />

@@ -50,12 +50,14 @@ export function ProxyHostFilters({
             type="text"
             value={searchInput}
             onChange={(e) => onSearchChange(e.target.value)}
+            aria-label={t('list.search')}
             placeholder={t('list.search')}
             className="w-full sm:w-48 pl-9 pr-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           />
           {searchInput && (
             <button
               onClick={onClearSearch}
+              aria-label={t('list.clearSearch')}
               className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-400"
             >
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -68,6 +70,7 @@ export function ProxyHostFilters({
         {/* Sort */}
         <select
           value={`${sortBy}-${sortOrder}`}
+          aria-label={t('list.sort.label')}
           onChange={(e) => {
             const [by, order] = e.target.value.split('-') as [SortBy, SortOrder];
             onSortChange(by, order);
