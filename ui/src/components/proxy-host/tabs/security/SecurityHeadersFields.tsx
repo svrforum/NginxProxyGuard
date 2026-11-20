@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import type { CreateSecurityHeadersRequest } from '../../../../types/security'
 import { useTranslation } from 'react-i18next'
 import { HelpTip } from '../../../common/HelpTip'
@@ -19,6 +20,7 @@ export function SecurityHeadersFields<T extends CreateSecurityHeadersRequest>({
   setData,
 }: SecurityHeadersFieldsProps<T>) {
   const { t } = useTranslation(['proxyHost', 'common'])
+  const fid = useId()
 
   return (
     <div className="space-y-4">
@@ -54,14 +56,15 @@ export function SecurityHeadersFields<T extends CreateSecurityHeadersRequest>({
       {/* X-Frame-Options and Referrer Policy */}
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="flex items-center gap-1 text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+          <label htmlFor={`${fid}-headers-1`} className="flex items-center gap-1 text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
             {t('form.protection.securityHeaders.xFrameOptions')}
             <HelpTip contentKey="help.protection.securityHeadersDetail.xFrameOptions" />
           </label>
           <select
+            id={`${fid}-headers-1`}
             value={data.x_frame_options ?? 'SAMEORIGIN'}
             onChange={(e) => setData((prev) => ({ ...prev, x_frame_options: e.target.value }))}
-            className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white"
+            className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors bg-white dark:bg-slate-700 dark:text-white"
           >
             <option value="DENY">DENY</option>
             <option value="SAMEORIGIN">SAMEORIGIN</option>
@@ -69,14 +72,15 @@ export function SecurityHeadersFields<T extends CreateSecurityHeadersRequest>({
           </select>
         </div>
         <div>
-          <label className="flex items-center gap-1 text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+          <label htmlFor={`${fid}-headers-2`} className="flex items-center gap-1 text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
             {t('form.protection.securityHeaders.referrerPolicy')}
             <HelpTip contentKey="help.protection.securityHeadersDetail.referrerPolicy" />
           </label>
           <select
+            id={`${fid}-headers-2`}
             value={data.referrer_policy ?? 'strict-origin-when-cross-origin'}
             onChange={(e) => setData((prev) => ({ ...prev, referrer_policy: e.target.value }))}
-            className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white"
+            className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors bg-white dark:bg-slate-700 dark:text-white"
           >
             <option value="no-referrer">no-referrer</option>
             <option value="strict-origin">strict-origin</option>

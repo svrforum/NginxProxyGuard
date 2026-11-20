@@ -1,5 +1,6 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
+import { useDialogFocus } from '../../hooks/useDialogFocus';
 
 interface ModalShellProps {
   /** Whether the modal is open. Drives enter/leave animation. */
@@ -73,6 +74,9 @@ export function ModalShell({
   }, [isOpen]);
 
   useEscapeKey(onClose, isOpen);
+  // Focus moves into the panel, Tab stays inside it, and closing hands focus
+  // back to whatever opened the dialog.
+  const { panelRef, onKeyDown } = useDialogFocus(isOpen && mounted);
 
   if (!mounted) return null;
 
@@ -88,8 +92,11 @@ export function ModalShell({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
     >
       <div
+        ref={panelRef}
+        tabIndex={-1}
+        onKeyDown={onKeyDown}
         onMouseDown={(e) => e.stopPropagation()}
-        className={`m-4 w-full ${panelClassName} max-h-[90vh] ${
+        className={`m-4 w-full outline-none ${panelClassName} max-h-[90vh] ${
           bodyScroll ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'
         } rounded-lg border bg-white shadow-xl transition-[transform,opacity] duration-200 will-change-transform dark:border-slate-700 dark:bg-slate-800 motion-reduce:transition-none motion-reduce:transform-none ${
           visible ? 'scale-100 opacity-100' : 'scale-95 opacity-0'

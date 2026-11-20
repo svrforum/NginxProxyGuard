@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import type { CreateProxyHostRequest } from '../../../types/proxy-host'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
@@ -12,6 +13,7 @@ interface PerformanceTabProps {
 
 export function PerformanceTabContent({ formData, setFormData }: PerformanceTabProps) {
   const { t } = useTranslation('proxyHost')
+  const fid = useId()
   const { can } = usePermissions()
   // nginx stores nothing in the cache while buffering is off. A proxy_buffering
   // line anywhere in the advanced config makes the template leave the host
@@ -52,6 +54,7 @@ export function PerformanceTabContent({ formData, setFormData }: PerformanceTabP
             <div className="flex items-start gap-3">
               <div className="flex items-center h-5 mt-1">
                 <input
+                  id={`${fid}-cache`}
                   type="checkbox"
                   checked={formData.cache_enabled}
                   onChange={(e) =>
@@ -61,7 +64,7 @@ export function PerformanceTabContent({ formData, setFormData }: PerformanceTabP
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                <label htmlFor={`${fid}-cache`} className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
                   {t('form.performance.cache.enabled')}
                   <HelpTip contentKey="help.performance.cache" />
                 </label>
@@ -77,7 +80,7 @@ export function PerformanceTabContent({ formData, setFormData }: PerformanceTabP
             {/* Static Only Toggle */}
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <label className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                <label htmlFor={`${fid}-static-only`} className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
                   {t('form.performance.cache.staticOnly', 'Static Assets Only')}
                   <HelpTip contentKey="help.performance.cacheStaticOnly" />
                 </label>
@@ -86,6 +89,7 @@ export function PerformanceTabContent({ formData, setFormData }: PerformanceTabP
                 </p>
               </div>
               <input
+                id={`${fid}-static-only`}
                 type="checkbox"
                 checked={formData.cache_static_only ?? true}
                 onChange={(e) =>
@@ -97,16 +101,17 @@ export function PerformanceTabContent({ formData, setFormData }: PerformanceTabP
 
             {/* Cache TTL */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-2">
+              <label htmlFor={`${fid}-cache-ttl`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-2">
                 {t('form.performance.cache.ttl', 'Cache Duration')}
                 <HelpTip contentKey="help.performance.cacheTTL" />
               </label>
               <select
+                id={`${fid}-cache-ttl`}
                 value={formData.cache_ttl || '7d'}
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, cache_ttl: e.target.value }))
                 }
-                className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors"
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors"
               >
                 <option value="30m">{t('form.performance.cache.ttl30m', '30 minutes')}</option>
                 <option value="1h">{t('form.performance.cache.ttl1h', '1 hour')}</option>
@@ -145,7 +150,7 @@ export function PerformanceTabContent({ formData, setFormData }: PerformanceTabP
       {/* WebSocket */}
       <div className={`p-4 rounded-lg border-2 transition-colors ${formData.allow_websocket_upgrade ? 'bg-cyan-50 border-cyan-200 dark:bg-cyan-900/20 dark:border-cyan-800' : 'bg-slate-50 border-slate-200 dark:bg-slate-800/50 dark:border-slate-700'
         }`}>
-        <label className="flex items-center justify-between cursor-pointer">
+        <label htmlFor={`${fid}-websocket`} className="flex items-center justify-between cursor-pointer">
           <div className="flex items-center gap-3">
             <div className={`w-10 h-10 rounded-full flex items-center justify-center ${formData.allow_websocket_upgrade ? 'bg-cyan-100 dark:bg-cyan-900/40' : 'bg-slate-200 dark:bg-slate-700'
               }`}>
@@ -162,6 +167,7 @@ export function PerformanceTabContent({ formData, setFormData }: PerformanceTabP
             </div>
           </div>
           <input
+            id={`${fid}-websocket`}
             type="checkbox"
             checked={formData.allow_websocket_upgrade}
             onChange={(e) =>
@@ -198,19 +204,20 @@ export function PerformanceTabContent({ formData, setFormData }: PerformanceTabP
         <div className="space-y-4 bg-white dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
           {/* Client Max Body Size */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-2">
+            <label htmlFor={`${fid}-body-size`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-2">
               {t('form.performance.proxySettings.clientMaxBodySize', 'Client Max Body Size')}
               <HelpTip contentKey="help.performance.clientMaxBodySize" />
             </label>
             <div className="flex items-center gap-2">
               <input
+                id={`${fid}-body-size`}
                 type="text"
                 value={formData.client_max_body_size || ''}
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, client_max_body_size: e.target.value }))
                 }
                 placeholder={t('form.performance.proxySettings.useGlobal', 'Use global setting')}
-                className="flex-1 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors"
+                className="flex-1 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors"
               />
               <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
                 {t('form.performance.proxySettings.example', 'e.g.')} 100m, 1g, 0
@@ -223,19 +230,20 @@ export function PerformanceTabContent({ formData, setFormData }: PerformanceTabP
 
           {/* Proxy Max Temp File Size */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-2">
+            <label htmlFor={`${fid}-temp-file`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-2">
               {t('form.performance.proxySettings.proxyMaxTempFileSize', 'Proxy Max Temp File Size')}
               <HelpTip contentKey="help.performance.proxyMaxTempFileSize" />
             </label>
             <div className="flex items-center gap-2">
               <input
+                id={`${fid}-temp-file`}
                 type="text"
                 value={formData.proxy_max_temp_file_size || ''}
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, proxy_max_temp_file_size: e.target.value }))
                 }
                 placeholder={t('form.performance.proxySettings.useGlobal', 'Use global setting')}
-                className="flex-1 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors"
+                className="flex-1 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors"
               />
               <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
                 {t('form.performance.proxySettings.example', 'e.g.')} 1024m, 0
@@ -248,16 +256,17 @@ export function PerformanceTabContent({ formData, setFormData }: PerformanceTabP
 
           {/* Proxy Buffering */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-2">
+            <label htmlFor={`${fid}-buffering`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-2">
               {t('form.performance.proxySettings.proxyBuffering', 'Proxy Buffering')}
               <HelpTip contentKey="help.performance.proxyBuffering" />
             </label>
             <select
+              id={`${fid}-buffering`}
               value={formData.proxy_buffering || ''}
               onChange={(e) =>
                 setFormData((prev) => ({ ...prev, proxy_buffering: e.target.value }))
               }
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors"
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors"
             >
               <option value="">{t('form.performance.proxySettings.useGlobal', 'Use global setting')}</option>
               <option value="on">{t('form.performance.proxySettings.bufferingOn', 'On (buffer responses)')}</option>
@@ -270,16 +279,17 @@ export function PerformanceTabContent({ formData, setFormData }: PerformanceTabP
 
           {/* Proxy Request Buffering */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-2">
+            <label htmlFor={`${fid}-request-buffering`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-2">
               {t('form.performance.proxySettings.proxyRequestBuffering', 'Proxy Request Buffering')}
               <HelpTip contentKey="help.performance.proxyRequestBuffering" />
             </label>
             <select
+              id={`${fid}-request-buffering`}
               value={formData.proxy_request_buffering || ''}
               onChange={(e) =>
                 setFormData((prev) => ({ ...prev, proxy_request_buffering: e.target.value }))
               }
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors"
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors"
             >
               <option value="">{t('form.performance.proxySettings.useGlobal', 'Use global setting')}</option>
               <option value="on">{t('form.performance.proxySettings.requestBufferingOn', 'On (buffer entire request)')}</option>

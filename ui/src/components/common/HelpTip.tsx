@@ -15,6 +15,7 @@ interface HelpTipProps {
 
 export function HelpTip({ contentKey, content, ns = 'proxyHost', className = '' }: HelpTipProps) {
     const { t } = useTranslation(ns)
+    const { t: tc } = useTranslation('common')
     const [isOpen, setIsOpen] = useState(false)
     const [position, setPosition] = useState<{ top: number; left: number; placement: 'top' | 'bottom' } | null>(null)
     const tooltipRef = useRef<HTMLDivElement>(null)
@@ -107,8 +108,9 @@ export function HelpTip({ contentKey, content, ns = 'proxyHost', className = '' 
                 onClick={() => setIsOpen(!isOpen)}
                 onMouseEnter={handleMouseEnter}
                 onMouseLeave={handleMouseLeave}
-                className={`text-slate-400 hover:text-primary-500 transition-colors focus:outline-none ${className}`}
-                aria-label="Help"
+                className={`text-slate-500 dark:text-slate-400 hover:text-primary-500 transition-colors ${className}`}
+                aria-label={tc('labels.help')}
+                aria-expanded={isOpen}
             >
                 <svg
                     xmlns="http://www.w3.org/2000/svg"

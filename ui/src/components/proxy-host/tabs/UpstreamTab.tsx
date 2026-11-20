@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useId } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getUpstream, updateUpstream, deleteUpstream, getUpstreamHealth } from '../../../api/security'
 import type { CreateUpstreamRequest } from '../../../types/security'
+import { useDialogFocus } from '../../../hooks/useDialogFocus'
 
 interface ServerEntry {
   address: string
@@ -32,6 +33,8 @@ export function UpstreamTabContent({ hostId }: UpstreamTabProps) {
 
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const fid = useId()
+  const deleteDialog = useDialogFocus(showDeleteConfirm)
 
   // Fetch upstream config
   const { data: upstream, isLoading } = useQuery({
@@ -159,13 +162,14 @@ export function UpstreamTabContent({ hostId }: UpstreamTabProps) {
 
       {/* Upstream Scheme (http / https) */}
       <div>
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+        <label htmlFor={`${fid}-scheme`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
           {t('upstream.scheme')}
         </label>
         <select
+          id={`${fid}-scheme`}
           value={scheme}
           onChange={(e) => setScheme(e.target.value === 'https' ? 'https' : 'http')}
-          className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+          className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
         >
           <option value="http">HTTP</option>
           <option value="https">HTTPS</option>
@@ -177,13 +181,14 @@ export function UpstreamTabContent({ hostId }: UpstreamTabProps) {
 
       {/* Load Balance Method */}
       <div>
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+        <label htmlFor={`${fid}-loadBalance`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
           {t('upstream.loadBalance')}
         </label>
         <select
+          id={`${fid}-loadBalance`}
           value={loadBalance}
           onChange={(e) => setLoadBalance(e.target.value)}
-          className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+          className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
         >
           <option value="round_robin">{t('upstream.methods.roundRobin')}</option>
           <option value="least_conn">{t('upstream.methods.leastConn')}</option>
@@ -194,15 +199,16 @@ export function UpstreamTabContent({ hostId }: UpstreamTabProps) {
 
       {/* Keepalive */}
       <div>
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+        <label htmlFor={`${fid}-keepalive`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
           {t('upstream.keepalive')}
         </label>
         <input
+          id={`${fid}-keepalive`}
           type="number"
           min={0}
           value={keepalive}
           onChange={(e) => setKeepalive(parseInt(e.target.value) || 0)}
-          className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+          className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
         />
       </div>
 
@@ -233,9 +239,10 @@ export function UpstreamTabContent({ hostId }: UpstreamTabProps) {
                 <input
                   type="text"
                   value={server.address}
+                  aria-label={t('upstream.backendServers')}
                   onChange={(e) => updateServer(index, 'address', e.target.value)}
                   placeholder={t('upstream.addressPlaceholder')}
-                  className="flex-1 min-w-0 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
+                  className="flex-1 min-w-0 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
                 />
                 {/* Port */}
                 <div className="flex items-center gap-1">
@@ -245,8 +252,9 @@ export function UpstreamTabContent({ hostId }: UpstreamTabProps) {
                     min={1}
                     max={65535}
                     value={server.port}
+                    aria-label={t('upstream.port')}
                     onChange={(e) => updateServer(index, 'port', parseInt(e.target.value) || 80)}
-                    className="w-20 px-2 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
+                    className="w-20 px-2 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
                   />
                 </div>
                 {/* Weight */}
@@ -257,8 +265,9 @@ export function UpstreamTabContent({ hostId }: UpstreamTabProps) {
                     min={1}
                     max={100}
                     value={server.weight}
+                    aria-label={t('upstream.weight')}
                     onChange={(e) => updateServer(index, 'weight', parseInt(e.target.value) || 1)}
-                    className="w-16 px-2 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
+                    className="w-16 px-2 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
                   />
                 </div>
                 {/* Backup toggle */}
@@ -275,6 +284,7 @@ export function UpstreamTabContent({ hostId }: UpstreamTabProps) {
                 <button
                   type="button"
                   onClick={() => removeServer(index)}
+                  aria-label={t('common:buttons.remove')}
                   className="p-1.5 text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -323,53 +333,57 @@ export function UpstreamTabContent({ hostId }: UpstreamTabProps) {
           <div className="mt-4 space-y-4 bg-white dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                <label htmlFor={`${fid}-checkInterval`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                   {t('upstream.checkInterval')}
                 </label>
                 <input
+                  id={`${fid}-checkInterval`}
                   type="number"
                   min={5}
                   value={healthCheckInterval}
                   onChange={(e) => setHealthCheckInterval(parseInt(e.target.value) || 30)}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                <label htmlFor={`${fid}-checkTimeout`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                   {t('upstream.checkTimeout')}
                 </label>
                 <input
+                  id={`${fid}-checkTimeout`}
                   type="number"
                   min={1}
                   value={healthCheckTimeout}
                   onChange={(e) => setHealthCheckTimeout(parseInt(e.target.value) || 5)}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
                 />
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+              <label htmlFor={`${fid}-checkPath`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                 {t('upstream.checkPath')}
               </label>
               <input
+                id={`${fid}-checkPath`}
                 type="text"
                 value={healthCheckPath}
                 onChange={(e) => setHealthCheckPath(e.target.value)}
                 placeholder="/"
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+              <label htmlFor={`${fid}-expectedStatus`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                 {t('upstream.expectedStatus')}
               </label>
               <input
+                id={`${fid}-expectedStatus`}
                 type="number"
                 min={100}
                 max={599}
                 value={healthCheckExpectedStatus}
                 onChange={(e) => setHealthCheckExpectedStatus(parseInt(e.target.value) || 200)}
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
               />
             </div>
           </div>
@@ -435,9 +449,14 @@ export function UpstreamTabContent({ hostId }: UpstreamTabProps) {
 
       {/* Delete Confirm Dialog */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 max-w-sm mx-4">
-            <p className="text-sm text-slate-700 dark:text-slate-300 mb-4">
+        <div role="dialog" aria-modal="true" aria-labelledby={`${fid}-delete-msg`} className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div
+            ref={deleteDialog.panelRef}
+            tabIndex={-1}
+            onKeyDown={deleteDialog.onKeyDown}
+            className="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 max-w-sm mx-4 outline-none"
+          >
+            <p id={`${fid}-delete-msg`} className="text-sm text-slate-700 dark:text-slate-300 mb-4">
               {t('upstream.deleteConfirm')}
             </p>
             <div className="flex justify-end gap-3">

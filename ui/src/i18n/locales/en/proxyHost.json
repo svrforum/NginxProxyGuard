@@ -346,7 +346,8 @@
         "exceptionIPs": "Exception IPs",
         "exceptionIPsPlaceholder": "Enter IP addresses that bypass blocking\nOne per line",
         "allowPrivateIPs": "Allow Private IPs",
-        "allowPrivateIPsDescription": "Private IPs (10.x, 172.16-31.x, 192.168.x) bypass URI blocking"
+        "allowPrivateIPsDescription": "Private IPs (10.x, 172.16-31.x, 192.168.x) bypass URI blocking",
+        "matchType": "Match type"
       }
     },
     "protection": {
@@ -544,7 +545,8 @@
     "upstream": {
       "createFirstTitle": "Load balancing is configured after saving the host",
       "createFirstHint": "Create this proxy host first, then edit it from the list to add multiple backend servers, a distribution method (round robin / least_conn / IP hash / random), and health checks."
-    }
+    },
+    "discardConfirm": "Discard your unsaved changes and close?"
   },
   "dockerSelector": {
     "title": "Select Docker Container",

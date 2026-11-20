@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 
 // The WAF tuning fields shared by the per-host override (WAFSettings) and the
@@ -16,6 +17,7 @@ interface WAFFieldsProps {
 
 export function WAFFields({ values, onChange }: WAFFieldsProps) {
   const { t } = useTranslation('proxyHost')
+  const fid = useId()
 
   return (
     <div>
@@ -109,7 +111,7 @@ export function WAFFields({ values, onChange }: WAFFieldsProps) {
 
       {/* Anomaly Threshold */}
       <div className="mt-4">
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+        <label htmlFor={`${fid}-anomaly`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
           {t('form.waf.anomalyThreshold')}
           <span className="ml-2 text-xs text-slate-500 dark:text-slate-400 font-normal">
             ({t('form.waf.anomalyThresholdDescription')})
@@ -117,6 +119,7 @@ export function WAFFields({ values, onChange }: WAFFieldsProps) {
         </label>
         <div className="flex items-center gap-3">
           <input
+            id={`${fid}-anomaly`}
             type="range"
             min="1"
             max="20"

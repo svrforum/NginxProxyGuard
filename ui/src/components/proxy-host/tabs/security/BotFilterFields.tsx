@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import type { CreateBotFilterRequest } from '../../../../types/security'
 import { useTranslation } from 'react-i18next'
 import { describeAllowedAgentIssue, parseAllowedAgents } from './allowedAgents'
@@ -19,6 +20,7 @@ export function BotFilterFields<T extends CreateBotFilterRequest>({
   setData,
 }: BotFilterFieldsProps<T>) {
   const { t } = useTranslation('proxyHost')
+  const fid = useId()
   // Spell out what each allowed-agent line does once a line names paths (or
   // tries to); a plain list keeps looking exactly as it always did.
   const allowedLines = parseAllowedAgents(data.custom_allowed_agents || '')
@@ -84,32 +86,34 @@ export function BotFilterFields<T extends CreateBotFilterRequest>({
 
       {/* Custom blocked agents */}
       <div>
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+        <label htmlFor={`${fid}-bot-1`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
           {t('form.security.botFilter.customBlocked')}
         </label>
         <textarea
+          id={`${fid}-bot-1`}
           value={data.custom_blocked_agents || ''}
           onChange={(e) => setData((prev) => ({ ...prev, custom_blocked_agents: e.target.value }))}
           placeholder={t('form.security.botFilter.customBlockedPlaceholder')}
           rows={3}
-          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm font-mono focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors dark:bg-slate-700 dark:text-white"
+          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm font-mono focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors dark:bg-slate-700 dark:text-white"
         />
       </div>
 
       {/* Custom allowed agents */}
       <div>
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+        <label htmlFor={`${fid}-custom-allowed`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
           {t('form.security.botFilter.customAllowed')}
         </label>
         <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
           {t('form.security.botFilter.customAllowedDescription')}
         </p>
         <textarea
+          id={`${fid}-custom-allowed`}
           value={data.custom_allowed_agents || ''}
           onChange={(e) => setData((prev) => ({ ...prev, custom_allowed_agents: e.target.value }))}
           placeholder={t('form.security.botFilter.customAllowedPlaceholder')}
           rows={3}
-          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm font-mono focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors dark:bg-slate-700 dark:text-white"
+          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm font-mono focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors dark:bg-slate-700 dark:text-white"
         />
         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
           {t('form.security.botFilter.customAllowedScopeHint')}

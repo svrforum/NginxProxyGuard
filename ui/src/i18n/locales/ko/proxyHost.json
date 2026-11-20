@@ -346,7 +346,8 @@
         "exceptionIPs": "예외 IP",
         "exceptionIPsPlaceholder": "차단을 우회할 IP 주소 입력\n한 줄에 하나씩",
         "allowPrivateIPs": "사설 IP 허용",
-        "allowPrivateIPsDescription": "사설 IP(10.x, 172.16-31.x, 192.168.x)는 URI 차단을 우회합니다"
+        "allowPrivateIPsDescription": "사설 IP(10.x, 172.16-31.x, 192.168.x)는 URI 차단을 우회합니다",
+        "matchType": "일치 방식"
       }
     },
     "protection": {
@@ -544,7 +545,8 @@
     "upstream": {
       "createFirstTitle": "로드 밸런싱은 호스트 저장 후 설정할 수 있어요",
       "createFirstHint": "먼저 이 프록시 호스트를 생성한 다음, 목록에서 이 호스트를 수정하면 여러 백엔드 서버와 분배 방식(라운드 로빈/least_conn/IP 해시/랜덤), 헬스 체크를 설정할 수 있습니다."
-    }
+    },
+    "discardConfirm": "저장하지 않은 변경 사항을 버리고 닫을까요?"
   },
   "dockerSelector": {
     "title": "Docker 컨테이너 선택",

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { CreateProxyHostRequest, StreamProtocol } from '../../../types/proxy-host'
 import type { FormErrors } from '../types'
@@ -49,6 +49,8 @@ export function BasicTabContent({
   dnsProviders,
 }: BasicTabFullProps) {
   const { t } = useTranslation('proxyHost')
+  // Ids that tie each label to its field and each error to the field it is about.
+  const fid = useId()
   const [dockerSelectorOpen, setDockerSelectorOpen] = useState(false)
   // Tags already in use elsewhere, offered as datalist suggestions so the same
   // label is reused rather than re-spelled.
@@ -213,7 +215,7 @@ export function BasicTabContent({
       )}
 
       <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4 transition-colors">
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
+        <label htmlFor={`${fid}-domain-0`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
           <svg className="w-4 h-4 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
           </svg>
@@ -224,16 +226,21 @@ export function BasicTabContent({
           {formData.domain_names.map((domain, index) => (
             <div key={index} className="flex gap-2">
               <input
+                id={`${fid}-domain-${index}`}
                 type="text"
                 value={domain}
+                aria-label={index > 0 ? sourceLabel : undefined}
+                aria-invalid={index === 0 && !!errors.domain_names}
+                aria-describedby={index === 0 && errors.domain_names ? `${fid}-domain-err` : undefined}
                 onChange={(e) => updateDomain(index, e.target.value)}
                 placeholder={sourcePlaceholder}
-                className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
+                className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
               />
               {formData.domain_names.length > 1 && (
                 <button
                   type="button"
                   onClick={() => removeDomain(index)}
+                  aria-label={t('common:buttons.remove')}
                   className="p-2 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -255,18 +262,19 @@ export function BasicTabContent({
           {isStream ? t('form.basic.addStreamName') : t('form.basic.addDomain')}
         </button>
         {errors.domain_names && (
-          <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.domain_names}</p>
+          <p id={`${fid}-domain-err`} className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.domain_names}</p>
         )}
       </div>
 
       <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4 transition-colors">
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
+        <label htmlFor={`${fid}-tags`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
           <svg className="w-4 h-4 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
           </svg>
           {t('form.basic.tags')}
         </label>
         <TagInput
+          id={`${fid}-tags`}
           value={formData.tags ?? []}
           onChange={(tags) => setFormData((prev) => ({ ...prev, tags }))}
           suggestions={tagSuggestions}
@@ -294,58 +302,64 @@ export function BasicTabContent({
 
           <div className="grid grid-cols-12 gap-3">
             <div className="col-span-12 sm:col-span-3">
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
+              <label htmlFor={`${fid}-stream-protocol`} className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
                 {t('form.basic.streamProtocol')}
               </label>
               <select
+                id={`${fid}-stream-protocol`}
                 value={streamProtocol}
                 onChange={(e) => updateStreamProtocol(e.target.value as StreamProtocol)}
-                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white font-medium"
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors bg-white dark:bg-slate-700 dark:text-white font-medium"
               >
                 <option value="tcp">TCP</option>
                 <option value="udp">UDP</option>
               </select>
             </div>
             <div className="col-span-12 sm:col-span-6">
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
+              <label htmlFor={`${fid}-listen-host`} className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
                 {t('form.basic.streamListenHost')}
               </label>
               <input
+                id={`${fid}-listen-host`}
                 type="text"
                 value={formData.stream_listen_host || ''}
                 onChange={(e) => setFormData((prev) => ({ ...prev, stream_listen_host: e.target.value }))}
                 placeholder="0.0.0.0"
-                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
               />
             </div>
             <div className="col-span-12 sm:col-span-3">
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
+              <label htmlFor={`${fid}-listen-port`} className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
                 {t('form.basic.streamListenPort')}
               </label>
               <input
+                id={`${fid}-listen-port`}
                 type="text"
                 inputMode="numeric"
                 value={formData.stream_listen_port || ''}
+                aria-invalid={!!errors.stream_listen_port}
+                aria-describedby={errors.stream_listen_port ? `${fid}-listen-port-err` : undefined}
                 onChange={(e) => updateNumberField('stream_listen_port', e.target.value)}
                 onBlur={validateListenPort}
                 placeholder="5432"
-                className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400 text-center font-mono ${errors.stream_listen_port ? 'border-red-300 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'}`}
+                className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400 text-center font-mono ${errors.stream_listen_port ? 'border-red-300 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'}`}
               />
               {errors.stream_listen_port && (
-                <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.stream_listen_port}</p>
+                <p id={`${fid}-listen-port-err`} className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.stream_listen_port}</p>
               )}
             </div>
           </div>
 
           <div className="mt-4">
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
+            <label htmlFor={`${fid}-tls-mode`} className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
               {t('form.stream.tlsMode.label')}
             </label>
             <select
+              id={`${fid}-tls-mode`}
               value={streamTlsMode}
               disabled={streamProtocol === 'udp'}
               onChange={(e) => setStreamTlsMode(e.target.value as 'none' | 'passthrough' | 'terminate')}
-              className={`w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white font-medium ${streamProtocol === 'udp' ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors bg-white dark:bg-slate-700 dark:text-white font-medium ${streamProtocol === 'udp' ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               <option value="none">{t('form.stream.tlsMode.none')}</option>
               <option value="passthrough">{t('form.stream.tlsMode.passthrough')}</option>
@@ -355,18 +369,21 @@ export function BasicTabContent({
 
             {streamTlsMode === 'terminate' && (
               <div className="mt-3">
-                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
+                <label htmlFor={`${fid}-stream-cert`} className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
                   {t('form.stream.tlsMode.certLabel')}
                 </label>
                 <select
+                  id={`${fid}-stream-cert`}
                   value={formData.certificate_id || ''}
+                  aria-invalid={!!errors.certificate_id}
+                  aria-describedby={errors.certificate_id ? `${fid}-stream-cert-err` : undefined}
                   onChange={(e) =>
                     setFormData((prev) => ({
                       ...prev,
                       certificate_id: e.target.value || undefined,
                     }))
                   }
-                  className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white ${errors.certificate_id ? 'border-red-300 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'}`}
+                  className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors bg-white dark:bg-slate-700 dark:text-white ${errors.certificate_id ? 'border-red-300 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'}`}
                 >
                   <option value="">{t('form.ssl.selectCertificate')}...</option>
                   {availableCerts.map((cert) => (
@@ -376,7 +393,7 @@ export function BasicTabContent({
                   ))}
                 </select>
                 {errors.certificate_id && (
-                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.certificate_id}</p>
+                  <p id={`${fid}-stream-cert-err`} className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.certificate_id}</p>
                 )}
                 {availableCerts.length === 0 && (
                   <p className="mt-2 text-xs text-amber-600 bg-amber-50 p-2 rounded flex items-center gap-2 dark:text-amber-400 dark:bg-amber-900/20">
@@ -421,29 +438,31 @@ export function BasicTabContent({
 
           <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
+              <label htmlFor={`${fid}-connect-timeout`} className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
                 {t('form.basic.streamConnectTimeout')}
               </label>
               <input
+                id={`${fid}-connect-timeout`}
                 type="text"
                 inputMode="numeric"
                 value={formData.stream_proxy_connect_timeout || ''}
                 onChange={(e) => updateNumberField('stream_proxy_connect_timeout', e.target.value)}
                 placeholder="default"
-                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
+              <label htmlFor={`${fid}-proxy-timeout`} className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
                 {t('form.basic.streamProxyTimeout')}
               </label>
               <input
+                id={`${fid}-proxy-timeout`}
                 type="text"
                 inputMode="numeric"
                 value={formData.stream_proxy_timeout || ''}
                 onChange={(e) => updateNumberField('stream_proxy_timeout', e.target.value)}
                 placeholder="default"
-                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
               />
             </div>
           </div>
@@ -479,11 +498,12 @@ export function BasicTabContent({
         <div className="grid grid-cols-12 gap-3">
           {!isStream && (
             <div className="col-span-12 sm:col-span-3">
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 flex items-center gap-1">
+              <label htmlFor={`${fid}-scheme`} className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 flex items-center gap-1">
                 {t('form.basic.forwardScheme')}
                 <HelpTip contentKey="help.forwardScheme" />
               </label>
               <select
+                id={`${fid}-scheme`}
                 value={formData.forward_scheme}
                 onChange={(e) =>
                   setFormData((prev) => ({
@@ -491,7 +511,7 @@ export function BasicTabContent({
                     forward_scheme: e.target.value as 'http' | 'https',
                   }))
                 }
-                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white font-medium"
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors bg-white dark:bg-slate-700 dark:text-white font-medium"
               >
                 <option value="http">http://</option>
                 <option value="https">https://</option>
@@ -500,14 +520,17 @@ export function BasicTabContent({
           )}
 
           <div className={isStream ? 'col-span-12 sm:col-span-8' : 'col-span-12 sm:col-span-6'}>
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 flex items-center gap-1">
+            <label htmlFor={`${fid}-forward-host`} className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 flex items-center gap-1">
               {isStream ? t('form.basic.backendHost') : t('form.basic.forwardHost')}
               <HelpTip contentKey="help.forwardHost" />
             </label>
             <div className="flex gap-2">
               <input
+                id={`${fid}-forward-host`}
                 type="text"
                 value={formData.forward_host}
+                aria-invalid={!!errors.forward_host}
+                aria-describedby={errors.forward_host ? `${fid}-forward-host-err` : undefined}
                 onChange={(e) =>
                   // Manual edit of the target clears any Docker container binding so
                   // it is treated as a plain IP/FQDN target (non-regression). Both
@@ -521,7 +544,7 @@ export function BasicTabContent({
                   }))
                 }
                 placeholder={t('form.basic.forwardHostPlaceholder')}
-                className={`flex-1 rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400 ${errors.forward_host ? 'border-red-300 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'}`}
+                className={`min-w-0 flex-1 rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400 ${errors.forward_host ? 'border-red-300 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'}`}
               />
               <button
                 type="button"
@@ -536,7 +559,7 @@ export function BasicTabContent({
               </button>
             </div>
             {errors.forward_host && (
-              <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.forward_host}</p>
+              <p id={`${fid}-forward-host-err`} className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.forward_host}</p>
             )}
             {formData.forward_container_name && (
               <p className="mt-1.5 inline-flex items-center gap-1.5 text-xs text-blue-700 dark:text-blue-300">
@@ -551,14 +574,17 @@ export function BasicTabContent({
           </div>
 
           <div className={isStream ? 'col-span-12 sm:col-span-4' : 'col-span-12 sm:col-span-3'}>
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 flex items-center gap-1">
+            <label htmlFor={`${fid}-forward-port`} className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 flex items-center gap-1">
               {isStream ? t('form.basic.backendPort') : t('form.basic.forwardPort')}
               <HelpTip contentKey="help.forwardPort" />
             </label>
             <input
+              id={`${fid}-forward-port`}
               type="text"
               inputMode="numeric"
               value={portInput}
+              aria-invalid={!!errors.forward_port}
+              aria-describedby={errors.forward_port ? `${fid}-forward-port-err` : undefined}
               onChange={(e) => {
                 const value = e.target.value
                 if (value === '' || /^\d+$/.test(value)) {
@@ -574,10 +600,10 @@ export function BasicTabContent({
                 }
               }}
               placeholder="80"
-              className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400 text-center font-mono ${errors.forward_port ? 'border-red-300 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'}`}
+              className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400 text-center font-mono ${errors.forward_port ? 'border-red-300 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'}`}
             />
             {errors.forward_port && (
-              <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.forward_port}</p>
+              <p id={`${fid}-forward-port-err`} className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.forward_port}</p>
             )}
           </div>
         </div>
@@ -604,7 +630,7 @@ export function BasicTabContent({
       <div className={`p-4 rounded-lg border-2 transition-colors ${ddnsEnabled ? 'bg-cyan-50 border-cyan-200 dark:bg-cyan-900/20 dark:border-cyan-800' : 'bg-slate-50 border-slate-200 dark:bg-slate-800/50 dark:border-slate-700'}`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${ddnsEnabled ? 'bg-cyan-100 dark:bg-cyan-900/40' : 'bg-slate-200 dark:bg-slate-700'}`}>
+            <div className={`w-10 h-10 flex-shrink-0 rounded-full flex items-center justify-center ${ddnsEnabled ? 'bg-cyan-100 dark:bg-cyan-900/40' : 'bg-slate-200 dark:bg-slate-700'}`}>
               <svg className={`w-5 h-5 ${ddnsEnabled ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-400 dark:text-slate-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
@@ -619,6 +645,9 @@ export function BasicTabContent({
           </div>
           <button
             type="button"
+            role="switch"
+            aria-checked={ddnsEnabled}
+            aria-label={t('form.basic.ddnsAutoRegister')}
             onClick={() => {
               const enabled = !ddnsEnabled
               setFormData(prev => ({
@@ -632,7 +661,7 @@ export function BasicTabContent({
                 return rest
               })
             }}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${ddnsEnabled ? 'bg-cyan-500' : 'bg-slate-300 dark:bg-slate-600'}`}
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${ddnsEnabled ? 'bg-cyan-500' : 'bg-slate-300 dark:bg-slate-600'}`}
           >
             <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${ddnsEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
           </button>
@@ -640,11 +669,14 @@ export function BasicTabContent({
 
         {ddnsEnabled && (
           <div className="mt-4">
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
+            <label htmlFor={`${fid}-ddns-provider`} className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
               {t('form.basic.ddnsProvider')}
             </label>
             <select
+              id={`${fid}-ddns-provider`}
               value={formData.ddns_provider_id || ''}
+              aria-invalid={!!errors.ddns_provider_id}
+              aria-describedby={errors.ddns_provider_id ? `${fid}-ddns-provider-err` : undefined}
               onChange={(e) => {
                 const value = e.target.value || undefined
                 setFormData(prev => ({ ...prev, ddns_provider_id: value }))
@@ -656,7 +688,7 @@ export function BasicTabContent({
                 }
               }}
               disabled={ddnsProviders.length === 0}
-              className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white ${errors.ddns_provider_id ? 'border-red-300 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'} ${ddnsProviders.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors bg-white dark:bg-slate-700 dark:text-white ${errors.ddns_provider_id ? 'border-red-300 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'} ${ddnsProviders.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               <option value="">{t('form.basic.ddnsSelectProvider')}</option>
               {ddnsProviders.map((p) => (
@@ -666,7 +698,7 @@ export function BasicTabContent({
               ))}
             </select>
             {errors.ddns_provider_id && (
-              <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.ddns_provider_id}</p>
+              <p id={`${fid}-ddns-provider-err`} className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.ddns_provider_id}</p>
             )}
             {ddnsProviders.length === 0 ? (
               <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">{t('form.basic.ddnsNoProviders')}</p>
@@ -688,6 +720,9 @@ export function BasicTabContent({
                 </div>
                 <button
                   type="button"
+                  role="switch"
+                  aria-checked={ddnsProxied}
+                  aria-label={t('form.basic.ddnsProxied')}
                   onClick={() => setFormData(prev => ({ ...prev, ddns_proxied: !prev.ddns_proxied }))}
                   className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-slate-800 ${ddnsProxied ? 'bg-primary-600' : 'bg-slate-200 dark:bg-slate-600'}`}
                 >

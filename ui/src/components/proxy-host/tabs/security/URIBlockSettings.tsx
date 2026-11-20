@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import type { URIBlockState } from '../../types'
 import type { URIBlockRule, URIMatchType } from '../../../../types/security'
 import { useTranslation } from 'react-i18next'
@@ -21,6 +21,7 @@ const QUICK_PATTERNS = [
 
 export function URIBlockSettings({ uriBlockData, setURIBlockData }: URIBlockSettingsProps) {
   const { t } = useTranslation('proxyHost')
+  const fid = useId()
   const [newPattern, setNewPattern] = useState('')
   const [newMatchType, setNewMatchType] = useState<URIMatchType>('prefix')
   const [newDescription, setNewDescription] = useState('')
@@ -214,22 +215,24 @@ export function URIBlockSettings({ uriBlockData, setURIBlockData }: URIBlockSett
 
           {/* Add new rule */}
           <div className="bg-white dark:bg-slate-800 rounded-lg p-3 border border-slate-200 dark:border-slate-700">
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+            <label htmlFor={`${fid}-new-pattern`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
               {t('form.security.uriBlock.addRule')}
             </label>
             <div className="space-y-2">
               <div className="flex gap-2">
                 <input
+                  id={`${fid}-new-pattern`}
                   type="text"
                   value={newPattern}
                   onChange={(e) => setNewPattern(e.target.value)}
                   placeholder={t('form.security.uriBlock.patternPlaceholder')}
-                  className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm font-mono focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors dark:bg-slate-700 dark:text-white"
+                  className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm font-mono focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors dark:bg-slate-700 dark:text-white"
                 />
                 <select
                   value={newMatchType}
+                  aria-label={t('form.security.uriBlock.matchType')}
                   onChange={(e) => setNewMatchType(e.target.value as URIMatchType)}
-                  className="rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors dark:bg-slate-700 dark:text-white"
+                  className="rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors dark:bg-slate-700 dark:text-white"
                 >
                   <option value="exact">{t('form.security.uriBlock.matchTypes.exact')}</option>
                   <option value="prefix">{t('form.security.uriBlock.matchTypes.prefix')}</option>
@@ -242,7 +245,7 @@ export function URIBlockSettings({ uriBlockData, setURIBlockData }: URIBlockSett
                   value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
                   placeholder={t('form.security.uriBlock.descriptionPlaceholder')}
-                  className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors dark:bg-slate-700 dark:text-white"
+                  className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors dark:bg-slate-700 dark:text-white"
                 />
                 <button
                   type="button"
@@ -321,15 +324,16 @@ export function URIBlockSettings({ uriBlockData, setURIBlockData }: URIBlockSett
 
           {/* Exception IPs */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+            <label htmlFor={`${fid}-uri-1`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
               {t('form.security.uriBlock.exceptionIPs')}
             </label>
             <textarea
+              id={`${fid}-uri-1`}
               value={exceptionIPsInput}
               onChange={(e) => updateExceptionIPs(e.target.value)}
               placeholder={t('form.security.uriBlock.exceptionIPsPlaceholder')}
               rows={3}
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm font-mono focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors dark:bg-slate-700 dark:text-white"
+              className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm font-mono focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors dark:bg-slate-700 dark:text-white"
             />
           </div>
 

@@ -1,4 +1,4 @@
-import { Page, Locator, expect } from '@playwright/test';
+import { Page, Locator, Dialog, expect } from '@playwright/test';
 import { TIMEOUTS } from '../fixtures/test-data';
 
 /**
@@ -382,6 +382,10 @@ export class ProxyHostFormPage {
    * Cancel and close the form.
    */
   async cancel(): Promise<void> {
+    // A form with unsaved input asks before discarding it (native confirm).
+    // Accept that prompt here; an untouched form closes without one.
+    const acceptDiscard = (dialog: Dialog) => dialog.accept();
+    this.page.once('dialog', acceptDiscard);
     const cancelBtn = this.cancelButton;
     if (await cancelBtn.isVisible()) {
       await cancelBtn.click();
@@ -389,6 +393,7 @@ export class ProxyHostFormPage {
       await this.closeButton.click();
     }
     await this.modal.waitFor({ state: 'hidden', timeout: TIMEOUTS.short });
+    this.page.off('dialog', acceptDiscard);
   }
 
   /**

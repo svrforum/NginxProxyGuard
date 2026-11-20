@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import type { CreateProxyHostRequest } from '../../../types/proxy-host'
 import type { CreateCertificateRequest } from '../../../types/certificate'
 import type { CertificateState } from '../types'
@@ -45,6 +46,7 @@ export function SSLTabContent({
   dnsProviders,
 }: SSLTabProps) {
   const { t } = useTranslation('proxyHost')
+  const fid = useId()
   const { mode: certMode, data: newCertData, creating: certCreating, error: certError, success: certSuccess, progress: certProgress, elapsedTime: certElapsedTime } = certState
 
   return (
@@ -54,7 +56,7 @@ export function SSLTabContent({
         }`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${formData.ssl_enabled ? 'bg-green-100 dark:bg-green-900/40' : 'bg-slate-200 dark:bg-slate-700'
+            <div className={`w-10 h-10 flex-shrink-0 rounded-full flex items-center justify-center ${formData.ssl_enabled ? 'bg-green-100 dark:bg-green-900/40' : 'bg-slate-200 dark:bg-slate-700'
               }`}>
               <svg className={`w-5 h-5 ${formData.ssl_enabled ? 'text-green-600 dark:text-green-400' : 'text-slate-400 dark:text-slate-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -70,6 +72,9 @@ export function SSLTabContent({
           </div>
           <button
             type="button"
+            role="switch"
+            aria-checked={formData.ssl_enabled}
+            aria-label={t('form.ssl.enabled')}
             onClick={() => {
               const enabled = !formData.ssl_enabled
               setFormData(prev => ({
@@ -78,7 +83,7 @@ export function SSLTabContent({
                 ssl_http2: enabled ? true : prev.ssl_http2,
               }))
             }}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.ssl_enabled ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${formData.ssl_enabled ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'
               }`}
           >
             <span
@@ -94,7 +99,7 @@ export function SSLTabContent({
           {/* Certificate Selection/Creation */}
           <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4">
             <div className="flex items-center justify-between mb-3">
-              <label className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
+              <label htmlFor={`${fid}-certificate`} className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
                 {t('form.ssl.certificate')}
                 <HelpTip contentKey="help.ssl.certificate" />
               </label>
@@ -127,14 +132,17 @@ export function SSLTabContent({
             {certMode === 'select' ? (
               <>
                 <select
+                  id={`${fid}-certificate`}
                   value={formData.certificate_id || ''}
+                  aria-invalid={!!errors.certificate_id}
+                  aria-describedby={errors.certificate_id ? `${fid}-certificate-err` : undefined}
                   onChange={(e) =>
                     setFormData((prev) => ({
                       ...prev,
                       certificate_id: e.target.value || undefined,
                     }))
                   }
-                  className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white ${errors.certificate_id ? 'border-red-300 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'
+                  className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors bg-white dark:bg-slate-700 dark:text-white ${errors.certificate_id ? 'border-red-300 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'
                     }`}
                 >
                   <option value="">{t('form.ssl.selectCertificate')}...</option>
@@ -145,7 +153,7 @@ export function SSLTabContent({
                   ))}
                 </select>
                 {errors.certificate_id && (
-                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.certificate_id}</p>
+                  <p id={`${fid}-certificate-err`} className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.certificate_id}</p>
                 )}
                 {availableCerts.length === 0 && !pendingCerts.length && (
                   <p className="mt-2 text-xs text-amber-600 bg-amber-50 p-2 rounded flex items-center gap-2">
@@ -228,10 +236,11 @@ export function SSLTabContent({
                     {/* DNS Provider */}
                     {dnsProviders.some((p) => p.provider_type !== 'infomaniak') && (
                       <div>
-                        <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
+                        <label htmlFor={`${fid}-dns-provider`} className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
                           {t('form.ssl.dnsProvider')} ({t('form.ssl.dnsChallenge')})
                         </label>
                         <select
+                          id={`${fid}-dns-provider`}
                           value={newCertData.dns_provider_id || ''}
                           onChange={(e) =>
                             setNewCertData((prev) => ({
@@ -239,7 +248,7 @@ export function SSLTabContent({
                               dns_provider_id: e.target.value || undefined,
                             }))
                           }
-                          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white"
+                          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors bg-white dark:bg-slate-700 dark:text-white"
                         >
                           <option value="">{t('form.ssl.httpChallenge')}</option>
                           {dnsProviders.filter((p) => p.provider_type !== 'infomaniak').map((p) => (
@@ -281,10 +290,11 @@ export function SSLTabContent({
                 {/* Self-signed validity */}
                 {newCertData.provider === 'selfsigned' && (
                   <div>
-                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
+                    <label htmlFor={`${fid}-validity`} className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
                       Validity (days)
                     </label>
                     <input
+                      id={`${fid}-validity`}
                       type="number"
                       value={newCertData.validity_days || 365}
                       onChange={(e) =>
@@ -295,7 +305,7 @@ export function SSLTabContent({
                       }
                       min={1}
                       max={3650}
-                      className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white"
+                      className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors bg-white dark:bg-slate-700 dark:text-white"
                     />
                   </div>
                 )}
@@ -417,7 +427,7 @@ export function SSLTabContent({
           {/* HTTP/3 */}
           <div className={`p-4 rounded-lg border-2 transition-colors ${formData.ssl_http3 ? 'bg-emerald-50 border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-800' : 'bg-slate-50 border-slate-200 dark:bg-slate-800/50 dark:border-slate-700'
             }`}>
-            <label className="flex items-center justify-between cursor-pointer">
+            <label htmlFor={`${fid}-http3`} className="flex items-center justify-between cursor-pointer">
               <div className="flex items-center gap-3">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center ${formData.ssl_http3 ? 'bg-emerald-100 dark:bg-emerald-900/40' : 'bg-slate-200 dark:bg-slate-700'
                   }`}>
@@ -435,6 +445,7 @@ export function SSLTabContent({
                 </div>
               </div>
               <input
+                id={`${fid}-http3`}
                 type="checkbox"
                 checked={formData.ssl_http3}
                 onChange={(e) =>

@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useId } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useDialogFocus } from '../../hooks/useDialogFocus'
 import { fetchDockerContainers, type DockerContainerInfo } from '../../api/docker'
 
 interface DockerContainerSelectorProps {
@@ -34,6 +35,9 @@ export function DockerContainerSelector({ isOpen, onClose, onSelect }: DockerCon
     }
   }, [isOpen])
 
+  const titleId = useId()
+  const { panelRef, onKeyDown } = useDialogFocus(isOpen)
+
   if (!isOpen) return null
 
   const filtered = containers.filter(c =>
@@ -47,15 +51,18 @@ export function DockerContainerSelector({ isOpen, onClose, onSelect }: DockerCon
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+    <div role="dialog" aria-modal="true" aria-labelledby={titleId} className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div
-        className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col"
+        ref={panelRef}
+        tabIndex={-1}
+        onKeyDown={onKeyDown}
+        className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col outline-none"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700">
           <div>
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+            <h3 id={titleId} className="text-lg font-semibold text-slate-900 dark:text-white">
               {t('dockerSelector.title')}
             </h3>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">

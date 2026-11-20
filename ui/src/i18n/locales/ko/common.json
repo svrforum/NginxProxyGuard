@@ -157,7 +157,8 @@
     "createdAt": "생성일",
     "updatedAt": "수정일",
     "expiresAt": "만료일",
-    "lastActivity": "최근 활동"
+    "lastActivity": "최근 활동",
+    "help": "도움말"
   },
   "units": {
     "bytes": "B",

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useId } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { CreateProxyHostRequest } from '../../../types/proxy-host'
 import type { BotFilterState, GeoDataState } from '../types'
@@ -88,6 +88,7 @@ export function SecurityTabContent({
   priorityAllowErrors,
 }: SecurityTabProps) {
   const { t } = useTranslation('proxyHost')
+  const fid = useId()
   const queryClient = useQueryClient()
   const { can } = usePermissions()
 
@@ -200,6 +201,7 @@ export function SecurityTabContent({
         <div className="flex items-start gap-3">
           <div className="flex items-center h-5 mt-1">
             <input
+              id={`${fid}-block-exploits`}
               type="checkbox"
               checked={formData.block_exploits}
               onChange={(e) =>
@@ -209,7 +211,7 @@ export function SecurityTabContent({
             />
           </div>
           <div className="flex-1">
-            <label className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
+            <label htmlFor={`${fid}-block-exploits`} className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
               {t('form.security.blockExploits')}
               <HelpTip contentKey="help.security.blockExploits" />
             </label>
@@ -231,14 +233,14 @@ export function SecurityTabContent({
                   <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
                     {t('form.security.exploitRulesManagement', 'Exploit Rules Management')}
                   </p>
-                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                  <p className="text-xs text-amber-700 dark:text-amber-400">
                     {t('form.security.exploitRulesDescription', 'Manage exploit blocking rules and exceptions in the centralized WAF settings.')}
                   </p>
                 </div>
               </div>
               <Link
                 to="/waf/exploit-rules"
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600 rounded-lg transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-amber-700 hover:bg-amber-800 dark:bg-amber-500 dark:hover:bg-amber-600 rounded-lg transition-colors"
               >
                 {t('form.security.manageRules', 'Manage Rules')}
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -257,6 +259,7 @@ export function SecurityTabContent({
           <div className="flex items-start gap-3">
             <div className="flex items-center h-5 mt-1">
               <input
+                id={`${fid}-fail2ban`}
                 type="checkbox"
                 checked={fail2banEnabled}
                 onChange={(e) => handleFail2banToggle(e.target.checked)}
@@ -265,7 +268,7 @@ export function SecurityTabContent({
               />
             </div>
             <div className="flex-1">
-              <label className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
+              <label htmlFor={`${fid}-fail2ban`} className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
                 {t('form.security.fail2ban', 'Fail2ban (Auto IP Ban)')}
                 <HelpTip contentKey="help.security.fail2ban" />
                 {fail2banMutation.isPending && (
@@ -321,7 +324,7 @@ export function SecurityTabContent({
       {/* Access Control */}
       <CollapsibleSection title={t('form.security.accessList')}>
       <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4 transition-colors">
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-2">
+        <label htmlFor={`${fid}-access-list`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-2">
           <svg className="w-4 h-4 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
           </svg>
@@ -329,6 +332,7 @@ export function SecurityTabContent({
           <HelpTip contentKey="help.security.accessList" />
         </label>
         <select
+          id={`${fid}-access-list`}
           value={formData.access_list_id || ''}
           onChange={(e) =>
             setFormData((prev) => ({
@@ -336,7 +340,7 @@ export function SecurityTabContent({
               access_list_id: e.target.value || '',
             }))
           }
-          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
         >
           <option value="">{t('form.security.noAccessList')}</option>
           {availableAccessLists.map((list) => (

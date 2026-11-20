@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
+import { useDialogFocus } from '../../hooks/useDialogFocus'
 
 interface SaveProgressModalProps {
   isOpen: boolean
@@ -27,6 +28,8 @@ export function SaveProgressModal({ isOpen, isEditing, currentStep, error, error
 
   // Allow ESC to close only when there's an error or a warning and onClose is provided
   useEscapeKey(() => onClose?.(), isOpen && (!!error || !!warning) && !!onClose)
+  const titleId = useId()
+  const { panelRef, onKeyDown } = useDialogFocus(isOpen)
 
   // Simplified 3-step process
   const steps: Step[] = [
@@ -71,12 +74,12 @@ export function SaveProgressModal({ isOpen, isEditing, currentStep, error, error
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+    <div role="dialog" aria-modal="true" aria-labelledby={titleId} className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
+      <div ref={panelRef} tabIndex={-1} onKeyDown={onKeyDown} className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden outline-none">
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+            <h3 id={titleId} className="text-lg font-semibold text-slate-900 dark:text-white">
               {isEditing ? t('saveProgress.titleUpdate') : t('saveProgress.titleCreate')}
             </h3>
             <span className="text-sm text-slate-500 dark:text-slate-400">

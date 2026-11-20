@@ -69,10 +69,11 @@ export function PriorityAllowIPs({
           </p>
           <textarea
             value={allowedIPsInput}
+            aria-label={t('form.security.priorityAllowIPs.title')}
             onChange={(e) => setText(e.target.value)}
             placeholder={t('form.security.priorityAllowIPs.placeholder')}
             rows={3}
-            className="w-full rounded-lg border border-blue-300 dark:border-blue-700 px-3 py-2 text-sm font-mono focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
+            className="w-full rounded-lg border border-blue-300 dark:border-blue-700 px-3 py-2 text-sm font-mono focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-primary-500 transition-colors bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
           />
           {invalidEntries.length > 0 && (
             <p role="alert" className="mt-2 text-xs text-red-600 dark:text-red-400 break-all">

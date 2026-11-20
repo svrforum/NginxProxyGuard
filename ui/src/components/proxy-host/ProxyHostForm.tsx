@@ -11,9 +11,10 @@ import { SaveProgressModal } from './SaveProgressModal'
 import { DDNSRemovalConfirmModal } from './DDNSRemovalConfirmModal'
 import { CertificateLogModal } from '../CertificateLogModal'
 import type { TabType } from './types'
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, useId, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
+import { useDialogFocus } from '../../hooks/useDialogFocus'
 import { isNginxReloadRefusal } from '../../api/client'
 
 interface ProxyHostFormProps {
@@ -115,12 +116,35 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
       ]
   ), [isStream, t])
 
+  const titleId = useId()
+  const { panelRef, onKeyDown: onPanelKeyDown } = useDialogFocus()
+
+  // Escape, the × and Cancel used to drop every unsaved edit without a word.
+  // The baseline follows the form until the operator first touches it, so an
+  // edit form counts as clean once the host's own settings have loaded in.
+  const formSnapshot = JSON.stringify([
+    formData, portInput, certState.mode, certState.data, botFilterData, geoData, allowedIPsInput,
+    blockedCloudProviders, cloudProviderChallengeMode, cloudProviderAllowSearchBots, cloudDisableGlobal,
+  ])
+  const baselineRef = useRef<string | null>(null)
+  const touchedRef = useRef(false)
+  useEffect(() => {
+    if (!touchedRef.current) baselineRef.current = formSnapshot
+  }, [formSnapshot])
+  const markTouched = () => {
+    touchedRef.current = true
+  }
+  const requestClose = () => {
+    const dirty = touchedRef.current && baselineRef.current !== formSnapshot
+    if (!dirty || window.confirm(t('form.discardConfirm'))) onClose()
+  }
+
   // ESC to close (but not during save progress unless there's an error)
   // Both this and ModalShell listen for ESC on document, so while the DDNS
   // confirm modal is open ESC would dismiss the modal AND close the form,
   // discarding every unsaved edit. Let the modal own the key.
   useEscapeKey(
-    onClose,
+    requestClose,
     !ddnsConfirmOpen && (!saveProgress.isOpen || (saveProgress.isOpen && (!!saveProgress.error || !!saveProgress.warning)))
   )
 
@@ -143,14 +167,37 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
     }
   }, [errors, isStream])
 
+  // After a refused submit, put focus on the first field that needs fixing,
+  // once its tab is the one on screen. Blur validation never moves focus.
+  const focusErrorRef = useRef(false)
+  useEffect(() => {
+    if (!focusErrorRef.current) return
+    if (Object.keys(errors).length === 0) {
+      focusErrorRef.current = false
+      return
+    }
+    const invalid = panelRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')
+    if (invalid) {
+      focusErrorRef.current = false
+      invalid.focus()
+    }
+  }, [errors, activeTab, panelRef])
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-4xl min-h-[600px] max-h-[90vh] overflow-hidden flex flex-col transition-colors">
+    <div role="dialog" aria-modal="true" aria-labelledby={titleId} className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div
+        ref={panelRef}
+        tabIndex={-1}
+        onKeyDown={onPanelKeyDown}
+        onPointerDownCapture={markTouched}
+        onKeyDownCapture={markTouched}
+        className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-4xl min-h-[min(600px,90dvh)] max-h-[90dvh] overflow-hidden flex flex-col transition-colors outline-none"
+      >
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between bg-slate-50 dark:bg-slate-800/50">
           <div className="flex items-center gap-4">
             <div>
-              <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
+              <h2 id={titleId} className="text-xl font-semibold text-slate-900 dark:text-white">
                 {isEditing ? t('form.editTitle') : t('form.addTitle')}
               </h2>
               {isEditing && host && (
@@ -160,8 +207,11 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
             {/* Enable/Disable Toggle */}
             <button
               type="button"
+              role="switch"
+              aria-checked={formData.enabled}
+              aria-label={t('list.status.active')}
               onClick={() => setFormData(prev => ({ ...prev, enabled: !prev.enabled }))}
-              className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors ${formData.enabled ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'
+              className={`relative inline-flex h-7 w-14 flex-shrink-0 items-center rounded-full transition-colors ${formData.enabled ? 'bg-green-700' : 'bg-slate-300 dark:bg-slate-600'
                 }`}
               title={formData.enabled ? t('actions.disable') : t('actions.enable')}
             >
@@ -169,14 +219,15 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
                 className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${formData.enabled ? 'translate-x-8' : 'translate-x-1'
                   }`}
               />
-              <span className={`absolute text-[10px] font-bold ${formData.enabled ? 'left-1.5 text-white' : 'right-1.5 text-slate-500'}`}>
+              <span aria-hidden="true" className={`absolute text-[10px] font-bold ${formData.enabled ? 'left-1.5 text-white' : 'right-1.5 text-slate-500'}`}>
                 {formData.enabled ? 'ON' : 'OFF'}
               </span>
             </button>
           </div>
           <button
-            onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
+            onClick={requestClose}
+            aria-label={t('common:buttons.close')}
+            className="p-2 text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -186,7 +237,7 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
 
         {/* Tabs */}
         <div className="px-6 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
-          <nav className="flex gap-1 -mb-px overflow-x-auto scrollbar-hide">
+          <nav className="flex flex-wrap gap-1 -mb-px">
             {tabs.map(tab => (
               <button
                 key={tab.id}
@@ -205,7 +256,13 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
         </div>
 
         {/* Form Content */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
+        <form
+          onSubmit={(e) => {
+            focusErrorRef.current = true
+            void handleSubmit(e)
+          }}
+          className="flex-1 overflow-y-auto"
+        >
           {/* Config Error Banner */}
           {isEditing && host?.config_status === 'error' && host.config_error && (() => {
             const err = host.config_error.toLowerCase()
@@ -393,7 +450,7 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={requestClose}
                 disabled={certCreating || mutation.isPending}
                 className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
               >
