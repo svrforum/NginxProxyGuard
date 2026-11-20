@@ -37,6 +37,9 @@ load_module /usr/lib/nginx/modules/ngx_stream_geoip2_module.so;
 
 user nginx;
 worker_processes {{.WorkerProcessesStr}};
+# Each host's server block runs dozens of regex checks per request (bot and
+# scanner User-Agents, exploit patterns); compiled, they cost a fraction.
+pcre_jit on;
 {{if .WorkerRlimitNofileSet}}worker_rlimit_nofile {{.WorkerRlimitNofile}};
 {{else}}worker_rlimit_nofile 65535;
 {{end}}{{if .WorkerShutdownTimeout}}worker_shutdown_timeout {{.WorkerShutdownTimeout}}s;
@@ -71,8 +74,14 @@ http {
     # ==========================================================================
     # Proxy Cache
     # ==========================================================================
-    proxy_cache_path /var/cache/nginx/proxy levels=1:2 keys_zone=proxy_cache:100m max_size=10g inactive=60m use_temp_path=off;
-
+    # inactive is how long an entry nobody asks for is kept, whatever the
+    # host's cache TTL: at 60m a home server's cache was empty again by the
+    # next visit. min_free gives the space back when the disk runs low.
+    proxy_cache_path /var/cache/nginx/proxy levels=1:2 keys_zone=proxy_cache:100m max_size=10g min_free=1g inactive=7d use_temp_path=off;
+{{if .SetProxyCacheRevalidate}}    # An expired entry is refreshed with If-Modified-Since / If-None-Match,
+    # so an unchanged file is not downloaded from the backend again.
+    proxy_cache_revalidate on;
+{{end}}
     # ==========================================================================
     # Log variables and formats
     # block_reason_var / bot_category_var / exploit_rule_var are set by server
@@ -497,6 +506,9 @@ type MainConfigData struct {
 	// by about an eighth).
 	// Not when the custom HTTP config sets it: a second one fails nginx -t.
 	SetVariablesHashMaxSize bool
+	// SetProxyCacheRevalidate writes proxy_cache_revalidate, unless the
+	// custom HTTP config has its own.
+	SetProxyCacheRevalidate bool
 
 	CustomHTTPConfig   string
 	CustomStreamConfig string
@@ -659,6 +671,7 @@ func buildMainConfigData(s *model.GlobalSettings, trusted TrustedIPConfig, proxi
 	// The custom HTTP config sits at the http block's top level, as Advanced
 	// Config sits at the server block's.
 	d.SetVariablesHashMaxSize = !advancedConfigHasTopLevel(s.CustomHTTPConfig, "variables_hash_max_size")
+	d.SetProxyCacheRevalidate = !advancedConfigHasTopLevel(s.CustomHTTPConfig, "proxy_cache_revalidate")
 	if s.WorkerProcesses <= 0 {
 		d.WorkerProcessesStr = "auto"
 	} else {

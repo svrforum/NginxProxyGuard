@@ -601,6 +601,37 @@ func TestMainConfig_VariablesHashMaxSizeLeftToCustomHTTPConfig(t *testing.T) {
 	}
 }
 
+// A host's server block runs dozens of regex checks per request; without
+// pcre_jit nginx interprets every one. The directive belongs to the main
+// context, before events.
+func TestMainConfig_PcreJitOn(t *testing.T) {
+	out := renderOnly(t, baselineSettings())
+	jit, events := strings.Index(out, "\npcre_jit on;\n"), strings.Index(out, "\nevents {")
+	if jit < 0 || events < 0 || jit > events {
+		t.Errorf("want `pcre_jit on;` in the main context before events (jit=%d events=%d)", jit, events)
+	}
+}
+
+// inactive drops an entry nobody asked for in that time, whatever the host's
+// cache TTL, so it has to outlast the gap between visits. A second
+// proxy_cache_revalidate in the http block fails nginx -t, so one the custom
+// HTTP config sets is the only one.
+func TestMainConfig_ProxyCacheKeepsEntriesBetweenVisits(t *testing.T) {
+	s := baselineSettings()
+	out := renderOnly(t, s)
+	if !strings.Contains(out, " max_size=10g min_free=1g inactive=7d ") {
+		t.Error("proxy_cache_path: want max_size=10g min_free=1g inactive=7d")
+	}
+	if n := strings.Count(out, "proxy_cache_revalidate"); n != 1 || !strings.Contains(out, "    proxy_cache_revalidate on;\n") {
+		t.Errorf("want one `proxy_cache_revalidate on;` in the http block, got %d line(s)", n)
+	}
+	s.CustomHTTPConfig = "proxy_cache_revalidate off;"
+	out = renderOnly(t, s)
+	if n := strings.Count(out, "proxy_cache_revalidate"); n != 1 || !strings.Contains(out, "proxy_cache_revalidate off;") {
+		t.Errorf("want only the custom HTTP config's proxy_cache_revalidate, got %d line(s)", n)
+	}
+}
+
 // renderMainWithTrusted renders nginx.conf with the global trusted list
 // trusted and returns it.
 func renderMainWithTrusted(t *testing.T, s *model.GlobalSettings, trusted TrustedIPConfig) string {
