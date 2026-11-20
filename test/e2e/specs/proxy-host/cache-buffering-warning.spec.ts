@@ -65,6 +65,34 @@ test.describe('Cache with proxy buffering off', () => {
     await expect(page.getByTestId('cache-buffering-warning')).toHaveCount(0);
   });
 
+  test('reads the advanced config the way the template does', async ({ page }) => {
+    await pretendGlobalBuffering(page, '');
+
+    const listPage = new ProxyHostListPage(page);
+    const formPage = new ProxyHostFormPage(page);
+    await listPage.goto();
+    await listPage.clickAddHost();
+    await formPage.switchTab('performance');
+    await page.getByRole('checkbox').first().check();
+    const warning = page.getByTestId('cache-buffering-warning');
+    await expect(warning).toHaveCount(0);
+
+    const setAdvanced = async (config: string) => {
+      await formPage.switchTab('advanced');
+      await page.locator('textarea.font-mono').fill(config);
+      await formPage.switchTab('performance');
+    };
+
+    // nginx reads on/off in any case.
+    await setAdvanced('proxy_buffering Off;');
+    await expect(warning).toContainText('advanced config');
+
+    // Inside another location it does not reach "location /".
+    await setAdvanced('location /stream {\n    proxy_buffering off;\n}');
+    await expect(page.getByText('Cache behavior:')).toBeVisible();
+    await expect(warning).toHaveCount(0);
+  });
+
   test('the global setting says what turning it off costs', async ({ page }) => {
     await pretendGlobalBuffering(page, 'off');
 

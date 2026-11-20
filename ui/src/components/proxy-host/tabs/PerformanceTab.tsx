@@ -13,22 +13,28 @@ interface PerformanceTabProps {
 export function PerformanceTabContent({ formData, setFormData }: PerformanceTabProps) {
   const { t } = useTranslation('proxyHost')
   const { can } = usePermissions()
-  // The global value decides when the host leaves buffering unset. Roles that
-  // cannot read settings just do not get the warning for that case.
+  // nginx stores nothing in the cache while buffering is off. A proxy_buffering
+  // line anywhere in the advanced config makes the template leave the host
+  // value out; only a line outside every block reaches "location /", and
+  // without one the global value applies. nginx reads on/off in any case.
+  const advancedConfig = formData.advanced_config ?? ''
+  let advancedTopLevel = advancedConfig
+  while (/\{[^{}]*\}/.test(advancedTopLevel)) advancedTopLevel = advancedTopLevel.replace(/\{[^{}]*\}/g, '')
+  const advancedBuffering = advancedTopLevel.match(/^\s*proxy_buffering\s+(on|off)\s*;/im)?.[1].toLowerCase()
+  const hostBuffering = /^\s*proxy_buffering\s/m.test(advancedConfig) ? '' : formData.proxy_buffering
+  // Roles that cannot read settings just do not get the warning for the
+  // global case.
   const { data: globalSettings } = useQuery({
     queryKey: ['globalSettings'],
     queryFn: getGlobalSettings,
-    enabled: !!formData.cache_enabled && !formData.proxy_buffering && can('settings:read'),
+    enabled: !!formData.cache_enabled && !advancedBuffering && !hostBuffering && can('settings:read'),
   })
-  // nginx stores nothing in the cache while buffering is off. The advanced
-  // config wins over the host field, the host field over the global one.
-  const advancedBuffering = formData.advanced_config?.match(/^\s*proxy_buffering\s+(on|off)\s*;/m)?.[1]
   const cacheBlockedBy = !formData.cache_enabled
     ? null
     : advancedBuffering
       ? (advancedBuffering === 'off' ? 'advanced' : null)
-      : formData.proxy_buffering
-        ? (formData.proxy_buffering === 'off' ? 'host' : null)
+      : hostBuffering
+        ? (hostBuffering === 'off' ? 'host' : null)
         : (globalSettings?.proxy_buffering === 'off' ? 'global' : null)
   return (
     <div className="space-y-6">
