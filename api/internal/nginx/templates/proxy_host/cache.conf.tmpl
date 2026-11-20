@@ -215,12 +215,18 @@
         {{if .Host.CacheStaticOnly}}
         # Static assets only - bypass cache for API and dynamic content
         set $cache_bypass 1;
-        # The extension ends the path; a query string may follow it
-        # (style.css?ver=3). Each query is its own cache entry.
-        if ($request_uri ~* ^[^?]*\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot|webp|avif|mp4|webm|pdf)(\?|$)) {
+        # The path ($npg_request_path, not the query string) ends in the
+        # extension, so style.css?ver=3 is cached, one entry per query.
+        if ($npg_request_path ~* "^[^;]*\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot|webp|avif|mp4|webm|pdf)$") {
             set $cache_bypass 0;
         }
-        proxy_no_cache $cache_bypass;
+        # A script followed by more path is that script's page (PHP runs
+        # /account.php/x.css), and a path with ";" may be another one
+        # (Tomcat serves /account;.js as /account).
+        if ($npg_request_path ~* "\.(?:php\d?|phtml|aspx?|ashx|asmx|svc|jsp|cgi|pl)/") {
+            set $cache_bypass 1;
+        }
+        proxy_no_cache $cache_bypass $http_authorization;
         proxy_cache_bypass $cache_bypass $http_pragma $http_authorization;
         {{else}}
         # All content except API paths
@@ -228,7 +234,7 @@
         if ($request_uri ~* ^/api/) {
             set $cache_bypass 1;
         }
-        proxy_no_cache $cache_bypass;
+        proxy_no_cache $cache_bypass $http_authorization;
         proxy_cache_bypass $cache_bypass $http_pragma $http_authorization;
         {{end}}
         proxy_cache proxy_cache;
