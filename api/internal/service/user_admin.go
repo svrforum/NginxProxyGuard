@@ -7,9 +7,8 @@ import (
 	"fmt"
 	"strings"
 
-	"golang.org/x/crypto/bcrypt"
-
 	"nginx-proxy-guard/internal/model"
+	"nginx-proxy-guard/internal/password"
 )
 
 // Sentinel errors the handler maps to status codes. String matching is the
@@ -187,7 +186,7 @@ func (s *UserAdminService) CreateUser(ctx context.Context, req *model.CreateUser
 	if role == nil {
 		return nil, ErrUnknownRole
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	hash, err := password.Hash(req.Password)
 	if err != nil {
 		return nil, fmt.Errorf("failed to hash password: %w", err)
 	}
@@ -201,7 +200,7 @@ func (s *UserAdminService) CreateUser(ctx context.Context, req *model.CreateUser
 			return nil, err
 		}
 	}
-	id, err := s.users.Create(ctx, req.Username, email, string(hash), role.ID, role.IsSuperuser)
+	id, err := s.users.Create(ctx, req.Username, email, hash, role.ID, role.IsSuperuser)
 	if err != nil {
 		return nil, err
 	}
@@ -245,15 +244,15 @@ func (s *UserAdminService) AssignRole(ctx context.Context, actingUserID, targetU
 
 // SetPassword resets another account's password and ends its sessions, because
 // the point of an admin reset is that the current holder loses access.
-func (s *UserAdminService) SetPassword(ctx context.Context, targetUserID, password string) error {
-	if !isStrongPassword(password) {
+func (s *UserAdminService) SetPassword(ctx context.Context, targetUserID, newPassword string) error {
+	if !isStrongPassword(newPassword) {
 		return ErrWeakPassword
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hash, err := password.Hash(newPassword)
 	if err != nil {
 		return fmt.Errorf("failed to hash password: %w", err)
 	}
-	if err := s.users.SetPassword(ctx, targetUserID, string(hash)); err != nil {
+	if err := s.users.SetPassword(ctx, targetUserID, hash); err != nil {
 		return err
 	}
 	return s.users.DeleteSessions(ctx, targetUserID)

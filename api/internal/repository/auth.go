@@ -178,6 +178,19 @@ func (r *AuthRepository) UpdatePassword(ctx context.Context, userID, passwordHas
 	return err
 }
 
+// UpgradePasswordHash stores a re-encoding of the password a user just signed
+// in with (a plain bcrypt hash moving to the peppered form, or a hash moving to
+// a new pepper). Unlike UpdatePassword it is not a password change: it leaves
+// must_change_password, updated_at and sessions alone. The write only applies
+// while the row still holds oldHash, the hash that was verified, so a password
+// change landing in between is never overwritten with the old password.
+func (r *AuthRepository) UpgradePasswordHash(ctx context.Context, userID, oldHash, newHash string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE users SET password_hash = $3 WHERE id = $1 AND password_hash = $2`,
+		userID, oldHash, newHash)
+	return err
+}
+
 func (r *AuthRepository) UpdateLanguage(ctx context.Context, userID, language string) error {
 	query := `
 		UPDATE users
