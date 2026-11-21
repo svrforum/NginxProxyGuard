@@ -833,7 +833,7 @@ test.describe('Domains in the four exception lists (#320)', () => {
           await expect(chip(page, EXEMPT)).toBeVisible();
           await form.switchTab('protection');
           await expect(chip(page, EXEMPT)).toBeVisible();
-          await form.cancel();
+          await form.cancel({ expectDiscardPrompt: false });
         } else {
           await page.goto(ROUTES.proxyHosts);
         }

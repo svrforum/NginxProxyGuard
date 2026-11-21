@@ -80,6 +80,9 @@ export function useProxyHostFormState(host: ProxyHost | null | undefined) {
 
   // Errors state
   const [errors, setErrors] = useState<FormErrors>({})
+  // Bumped whenever the host's own settings are copied in after loading, so
+  // the form can treat that state, not the defaults, as unchanged.
+  const [hydrationVersion, setHydrationVersion] = useState(0)
 
   // Certificate state
   const [certMode, setCertMode] = useState<'select' | 'create'>('select')
@@ -216,6 +219,7 @@ export function useProxyHostFormState(host: ProxyHost | null | undefined) {
         challenge_suspicious: existingBotFilter.challenge_suspicious,
         disableGlobal: existingBotFilter.disable_global ?? false,
       })
+      setHydrationVersion((v) => v + 1)
     }
   }, [existingBotFilter])
 
@@ -245,6 +249,7 @@ export function useProxyHostFormState(host: ProxyHost | null | undefined) {
       allowed_hostnames: existingGeoRestriction.allowed_hostnames ?? [],
     })
     setAllowedIPsInput((existingGeoRestriction.allowed_ips || []).join('\n'))
+    setHydrationVersion((v) => v + 1)
   }, [existingGeoRestriction])
 
   useEffect(() => {
@@ -253,6 +258,7 @@ export function useProxyHostFormState(host: ProxyHost | null | undefined) {
       setCloudProviderChallengeMode(existingCloudProviderSettings.challenge_mode)
       setCloudProviderAllowSearchBots(existingCloudProviderSettings.allow_search_bots || false)
       setCloudDisableGlobal(existingCloudProviderSettings.cloud_disable_global || false)
+      setHydrationVersion((v) => v + 1)
     }
   }, [existingCloudProviderSettings])
 
@@ -323,6 +329,7 @@ export function useProxyHostFormState(host: ProxyHost | null | undefined) {
     setPortInput,
     errors,
     setErrors,
+    hydrationVersion,
 
     // Certificate form
     certMode,

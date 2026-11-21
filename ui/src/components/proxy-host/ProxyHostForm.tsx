@@ -90,6 +90,8 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
     pendingCertId,
     closeCertLogModal,
 
+    hydrationVersion,
+
     // Handlers
     handleSubmit,
     addDomain,
@@ -120,17 +122,22 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
   const { panelRef, onKeyDown: onPanelKeyDown } = useDialogFocus()
 
   // Escape, the × and Cancel used to drop every unsaved edit without a word.
-  // The baseline follows the form until the operator first touches it, so an
-  // edit form counts as clean once the host's own settings have loaded in.
+  // The baseline follows the form until the operator first touches it, and is
+  // taken again whenever the host's own settings arrive (they load after the
+  // form opens), so an untouched edit form never counts as changed.
   const formSnapshot = JSON.stringify([
     formData, portInput, certState.mode, certState.data, botFilterData, geoData, allowedIPsInput,
     blockedCloudProviders, cloudProviderChallengeMode, cloudProviderAllowSearchBots, cloudDisableGlobal,
   ])
   const baselineRef = useRef<string | null>(null)
   const touchedRef = useRef(false)
+  const baselineHydrationRef = useRef(hydrationVersion)
   useEffect(() => {
-    if (!touchedRef.current) baselineRef.current = formSnapshot
-  }, [formSnapshot])
+    if (!touchedRef.current || baselineHydrationRef.current !== hydrationVersion) {
+      baselineHydrationRef.current = hydrationVersion
+      baselineRef.current = formSnapshot
+    }
+  }, [formSnapshot, hydrationVersion])
   const markTouched = () => {
     touchedRef.current = true
   }
@@ -139,14 +146,12 @@ export function ProxyHostForm({ host, initialTab, onClose }: ProxyHostFormProps)
     if (!dirty || window.confirm(t('form.discardConfirm'))) onClose()
   }
 
-  // ESC to close (but not during save progress unless there's an error)
-  // Both this and ModalShell listen for ESC on document, so while the DDNS
-  // confirm modal is open ESC would dismiss the modal AND close the form,
-  // discarding every unsaved edit. Let the modal own the key.
-  useEscapeKey(
-    requestClose,
-    !ddnsConfirmOpen && (!saveProgress.isOpen || (saveProgress.isOpen && (!!saveProgress.error || !!saveProgress.warning)))
-  )
+  // ESC to close. Both this and ModalShell listen for ESC on document, so
+  // while the DDNS confirm or the save progress modal is open ESC would
+  // dismiss it AND close the form. Let the open modal own the key: the save
+  // progress modal closes the form itself once the host is saved, and on an
+  // error it returns to the form with the edits intact.
+  useEscapeKey(requestClose, !ddnsConfirmOpen && !saveProgress.isOpen)
 
   useEffect(() => {
     if (!tabs.some(tab => tab.id === activeTab)) {

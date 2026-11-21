@@ -381,10 +381,16 @@ export class ProxyHostFormPage {
   /**
    * Cancel and close the form.
    */
-  async cancel(): Promise<void> {
-    // A form with unsaved input asks before discarding it (native confirm).
-    // Accept that prompt here; an untouched form closes without one.
-    const acceptDiscard = (dialog: Dialog) => dialog.accept();
+  async cancel({ expectDiscardPrompt }: { expectDiscardPrompt?: boolean } = {}): Promise<void> {
+    // A form with unsaved input asks before discarding it (native confirm);
+    // an untouched form closes without one. The prompt is accepted either
+    // way, and checked when the caller says which to expect, so a prompt on
+    // an untouched form (or none on an edited one) fails the test.
+    let prompted = false;
+    const acceptDiscard = (dialog: Dialog) => {
+      prompted = true;
+      return dialog.accept();
+    };
     this.page.once('dialog', acceptDiscard);
     const cancelBtn = this.cancelButton;
     if (await cancelBtn.isVisible()) {
@@ -394,6 +400,9 @@ export class ProxyHostFormPage {
     }
     await this.modal.waitFor({ state: 'hidden', timeout: TIMEOUTS.short });
     this.page.off('dialog', acceptDiscard);
+    if (expectDiscardPrompt !== undefined) {
+      expect(prompted, 'discard prompt on cancel').toBe(expectDiscardPrompt);
+    }
   }
 
   /**

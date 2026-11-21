@@ -139,7 +139,7 @@ test.describe('Proxy Host CRUD', () => {
     await formPage.fillForwardHost('192.168.1.1');
 
     // Cancel
-    await formPage.cancel();
+    await formPage.cancel({ expectDiscardPrompt: true });
 
     // Form should close
     await formPage.expectClosed();

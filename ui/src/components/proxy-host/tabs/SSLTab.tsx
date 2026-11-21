@@ -99,7 +99,7 @@ export function SSLTabContent({
           {/* Certificate Selection/Creation */}
           <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4">
             <div className="flex items-center justify-between mb-3">
-              <label htmlFor={`${fid}-certificate`} className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
+              <label htmlFor={certMode === 'select' ? `${fid}-certificate` : undefined} className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
                 {t('form.ssl.certificate')}
                 <HelpTip contentKey="help.ssl.certificate" />
               </label>
