@@ -13,6 +13,7 @@ import { CloneModal } from './proxy-host-list/CloneModal'
 import { ProxyHostTable } from './proxy-host-list/ProxyHostTable'
 import { ProxyHostFilters, type SortBy, type SortOrder } from './proxy-host-list/ProxyHostFilters'
 import { ProxyHostBulkActions } from './proxy-host-list/ProxyHostBulkActions'
+import { ErrorBanner } from './proxy-host-list/ErrorBanner'
 import { ToggleConfirmDialog } from './proxy-host-list/ProxyHostRow'
 import { DDNSRemovalConfirmModal } from './proxy-host/DDNSRemovalConfirmModal'
 import { listDNSProviders } from '../api/dns-providers'
@@ -428,21 +429,7 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
   }
 
   if (error) {
-    return (
-      <div role="alert" className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 text-red-700 dark:text-red-400 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p>{t('list.loadFailed')}</p>
-          <p className="mt-1 text-xs break-all">{(error as Error).message}</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => refetch()}
-          className="px-3 py-1.5 text-sm font-medium rounded-lg bg-white dark:bg-slate-800 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/40"
-        >
-          {t('common:buttons.retry')}
-        </button>
-      </div>
-    )
+    return <ErrorBanner title={t('list.loadFailed')} detail={(error as Error).message} onRetry={() => refetch()} />
   }
 
   return (
@@ -461,22 +448,7 @@ export function ProxyHostList({ onEdit, onAdd }: ProxyHostListProps) {
       />
 
       {actionError && (
-        <div role="alert" className="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 text-sm text-red-700 dark:text-red-400 flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="font-medium">{actionError.title}</p>
-            {actionError.detail && <p className="mt-1 text-xs break-all">{actionError.detail}</p>}
-          </div>
-          <button
-            type="button"
-            onClick={() => setActionError(null)}
-            aria-label={t('common:buttons.close')}
-            className="p-1 rounded text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+        <ErrorBanner className="mb-4" title={actionError.title} detail={actionError.detail} onDismiss={() => setActionError(null)} />
       )}
 
       {hosts.length === 0 ? (
