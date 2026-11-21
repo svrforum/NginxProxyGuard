@@ -12,8 +12,8 @@ const CloudflareRangesUpdated = "2026-08-29"
 //
 // This list only decides whose forwarded-client-address header nginx believes.
 // It does not allow or block anything by itself, and it is additive: the
-// private/loopback ranges NPG has always trusted stay in place, so a host
-// behind Docker or a LAN proxy keeps working.
+// loopback addresses remain trusted; other private proxies require explicit
+// entries in Trusted Proxies.
 //
 // Not needed for Cloudflare Tunnel: cloudflared connects over loopback, which
 // is already trusted.

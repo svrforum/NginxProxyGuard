@@ -18,23 +18,15 @@ func extractFor(t *testing.T, remoteAddr, xff string) string {
 	return buildIPExtractor()(req)
 }
 
-// The default trust set must keep #254's behavior: npg-proxy runs in host
-// network mode, so proxied panel traffic reaches the API from the HOST's LAN
-// address. Skipping that hop and reading the appended client from XFF is what
-// keeps every panel user from sharing one login-lockout key.
-func TestBuildIPExtractor_DefaultTrustsPrivateHops(t *testing.T) {
+// A private peer is a client unless explicitly configured as a proxy.
+func TestBuildIPExtractor_DefaultRejectsPrivateHops(t *testing.T) {
 	t.Setenv("TRUSTED_PROXY_CIDR", "")
 
-	// host-network nginx (LAN address) forwarding an internet client; a forged
-	// entry sits further left and must never be reached.
-	if got := extractFor(t, "192.168.77.203:44444", "6.6.6.6, 203.0.113.50"); got != "203.0.113.50" {
-		t.Errorf("expected the appended client, got %s", got)
+	if got := extractFor(t, "192.168.77.203:44444", "6.6.6.6, 203.0.113.50"); got != "192.168.77.203" {
+		t.Errorf("expected the peer, got %s", got)
 	}
-	// docker-bridge UI nginx forwarding a LAN client: the client is private, so
-	// the walk trusts its hop too and reads what it supplied — the documented
-	// limit of the default. Pinned so a change here is a decision, not a drift.
-	if got := extractFor(t, "172.18.0.1:44444", "10.9.9.9, 192.168.77.50"); got != "10.9.9.9" {
-		t.Errorf("expected the documented spoofable-from-LAN behavior, got %s", got)
+	if got := extractFor(t, "172.18.0.1:44444", "10.9.9.9, 192.168.77.50"); got != "172.18.0.1" {
+		t.Errorf("expected the bridge peer, got %s", got)
 	}
 }
 
@@ -57,13 +49,10 @@ func TestBuildIPExtractor_CIDRRestrictsTrust(t *testing.T) {
 	}
 }
 
-// A malformed value must not fail closed into loopback-only: that would hand
-// the proxy's own address to every client and share one lockout key — the
-// exact #254 failure. Keep the default instead and say so in the log.
-func TestBuildIPExtractor_InvalidCIDRKeepsDefault(t *testing.T) {
+func TestBuildIPExtractor_InvalidCIDRKeepsSafeDefault(t *testing.T) {
 	t.Setenv("TRUSTED_PROXY_CIDR", "not-a-cidr")
 
-	if got := extractFor(t, "192.168.77.203:44444", "6.6.6.6, 203.0.113.50"); got != "203.0.113.50" {
+	if got := extractFor(t, "192.168.77.203:44444", "6.6.6.6, 203.0.113.50"); got != "192.168.77.203" {
 		t.Errorf("expected default behavior on unusable config, got %s", got)
 	}
 }

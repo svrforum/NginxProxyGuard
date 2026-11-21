@@ -50,19 +50,12 @@ const (
 	minIPv6TrustedPrefix = 29
 )
 
-// AlwaysTrustedProxyRanges are the private/loopback networks NPG has always
-// trusted and still does. They are emitted before any operator entry and are
-// not removable: Docker's own bridge, a LAN reverse proxy and the local
-// cloudflared connector all depend on them, and dropping them would strand
-// every containerised deployment.
+// AlwaysTrustedProxyRanges contains only local peers. Other proxies must be
+// explicitly configured so LAN clients cannot supply their own client IP.
 func AlwaysTrustedProxyRanges() []string {
 	return []string{
-		"10.0.0.0/8",
-		"172.16.0.0/12",
-		"192.168.0.0/16",
-		"127.0.0.0/8",
+		"127.0.0.1",
 		"::1",
-		"fc00::/7",
 	}
 }
 
@@ -297,8 +290,8 @@ func ipv6PrefixAtLeast(entry string, minPrefix int) bool {
 //
 //   - An address the operator declared as a proxy in Trusted Proxies. Those
 //     carry many clients; banning one bans everyone behind it. Note this does
-//     NOT cover the always-trusted private ranges: those are a default, not a
-//     statement that a LAN address is a proxy.
+//     NOT cover arbitrary private ranges: a LAN address is not a proxy unless
+//     the operator explicitly configures it as one.
 //
 // Deliberately NOT a guard against the CDN case. With no trusted proxy
 // configured, a CDN's edge address is not in this set at all — the protection

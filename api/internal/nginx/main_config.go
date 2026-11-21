@@ -471,7 +471,7 @@ type MainConfigData struct {
 	LegacyGlobalConnAlias bool
 	LegacyGlobalReqAlias  bool
 
-	// TrustedProxyBuiltins are the private/loopback ranges NPG has always
+	// TrustedProxyBuiltins are the loopback addresses NPG always
 	// trusted. Always emitted, always first — a containerised deployment
 	// depends on them and they are not operator-removable.
 	TrustedProxyBuiltins []string
@@ -540,8 +540,7 @@ type TrustedIPConfig struct {
 // way they bypass per-host rate limits and bot checks. Pass the zero value
 // when no trusted list applies.
 // TrustedProxyConfig carries the operator's real-IP settings into the render.
-// The zero value is meaningful and safe: it reproduces the behaviour NPG had
-// before the setting existed (private/loopback ranges only, X-Forwarded-For).
+// The zero value trusts loopback only with X-Forwarded-For.
 type TrustedProxyConfig struct {
 	// CIDRs are the operator's additions, already parsed and validated.
 	CIDRs []string
@@ -554,8 +553,7 @@ type TrustedProxyConfig struct {
 // with built-in duplicates removed, and a header that is never empty.
 //
 // The de-duplication matters because repeating a range in set_real_ip_from is
-// legal but confusing to read, and a fresh install must render exactly what it
-// rendered before this setting existed.
+// legal but confusing to read.
 func resolveTrustedProxies(cfg TrustedProxyConfig) (builtins, extra []string, header string) {
 	builtins = model.AlwaysTrustedProxyRanges()
 	seen := make(map[string]struct{}, len(builtins))
