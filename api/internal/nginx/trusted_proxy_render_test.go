@@ -28,20 +28,11 @@ func renderWithProxies(t *testing.T, cfg TrustedProxyConfig) string {
 	return string(b)
 }
 
-// The zero value must render exactly what NPG rendered before this setting
-// existed. Everything downstream of the real-IP block — GeoIP verdicts, banned
-// IPs, fail2ban attribution, rate-limit keys, ModSecurity's REMOTE_ADDR — moves
-// with $remote_addr, so an install that never touches the setting must not see
-// a single byte change.
-func TestTrustedProxyDefaultsUnchanged(t *testing.T) {
+func TestTrustedProxyDefaultsTrustOnlyLoopback(t *testing.T) {
 	got := renderWithProxies(t, TrustedProxyConfig{})
 
-	want := `    set_real_ip_from 10.0.0.0/8;
-    set_real_ip_from 172.16.0.0/12;
-    set_real_ip_from 192.168.0.0/16;
-    set_real_ip_from 127.0.0.0/8;
+	want := `    set_real_ip_from 127.0.0.1;
     set_real_ip_from ::1;
-    set_real_ip_from fc00::/7;
     real_ip_header X-Forwarded-For;
     real_ip_recursive on;`
 	if !strings.Contains(got, want) {
@@ -97,18 +88,16 @@ func TestTrustedProxyAdditiveAndOrdered(t *testing.T) {
 	if !strings.Contains(section, "real_ip_header CF-Connecting-IP;") {
 		t.Errorf("header override missing:\n%s", section)
 	}
-	// Built-ins first: a LAN/Docker peer must be resolved by the ranges that
-	// have always been there regardless of what the operator added.
-	if strings.Index(section, "10.0.0.0/8") > strings.Index(section, "104.16.0.0/13") {
+	if strings.Index(section, "127.0.0.1") > strings.Index(section, "104.16.0.0/13") {
 		t.Errorf("operator ranges were emitted before the built-ins:\n%s", section)
 	}
 }
 
 // A range that is already built in must not be emitted twice.
 func TestTrustedProxyDeduplicatesAgainstBuiltins(t *testing.T) {
-	got := renderWithProxies(t, TrustedProxyConfig{CIDRs: []string{"10.0.0.0/8"}})
-	if n := strings.Count(realIPSection(got), "set_real_ip_from 10.0.0.0/8;"); n != 1 {
-		t.Fatalf("10.0.0.0/8 emitted %d times, want 1", n)
+	got := renderWithProxies(t, TrustedProxyConfig{CIDRs: []string{"127.0.0.1"}})
+	if n := strings.Count(realIPSection(got), "set_real_ip_from 127.0.0.1;"); n != 1 {
+		t.Fatalf("127.0.0.1 emitted %d times, want 1", n)
 	}
 }
 

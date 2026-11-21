@@ -4,6 +4,7 @@ import (
 	"html"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -208,10 +209,7 @@ func (h *ChallengeHandler) VerifyAndRedirect(c echo.Context) error {
 	// Only allow relative paths (starting with /) or same-host URLs.
 	returnURL = sanitizeReturnURL(returnURL, c.Request().Host)
 
-	referer := c.Request().Referer()
-	if referer == "" {
-		referer = "/"
-	}
+	referer := sanitizeReturnURL(c.Request().Referer(), c.Request().Host)
 
 	if token == "" {
 		return c.Redirect(http.StatusFound, referer)
@@ -265,32 +263,20 @@ func (h *ChallengeHandler) VerifyAndRedirect(c echo.Context) error {
 // Only allows relative paths or URLs whose host matches the request host.
 // Falls back to "/" for any other value to prevent open redirect attacks.
 func sanitizeReturnURL(returnURL, requestHost string) string {
-	if returnURL == "" {
+	if returnURL == "" || strings.ContainsAny(returnURL, "\\\r\n") {
 		return "/"
 	}
-
-	// Allow relative paths
-	if strings.HasPrefix(returnURL, "/") && !strings.HasPrefix(returnURL, "//") {
+	parsed, err := url.Parse(returnURL)
+	if err != nil || strings.Contains(parsed.Path, "\\") || strings.HasPrefix(parsed.Path, "//") {
+		return "/"
+	}
+	if parsed.Scheme == "" && parsed.Host == "" && strings.HasPrefix(parsed.Path, "/") {
 		return returnURL
 	}
-
-	// Allow same-host absolute URLs
-	if strings.HasPrefix(returnURL, "http://") || strings.HasPrefix(returnURL, "https://") {
-		// Extract host from returnURL
-		afterScheme := returnURL[strings.Index(returnURL, "://")+3:]
-		slashIdx := strings.Index(afterScheme, "/")
-		var urlHost string
-		if slashIdx >= 0 {
-			urlHost = afterScheme[:slashIdx]
-		} else {
-			urlHost = afterScheme
-		}
-		// Strip port from both for comparison
-		urlHostNoPort := strings.Split(urlHost, ":")[0]
-		reqHostNoPort := strings.Split(requestHost, ":")[0]
-		if strings.EqualFold(urlHostNoPort, reqHostNoPort) {
-			return returnURL
-		}
+	requestURL, err := url.Parse("//" + requestHost)
+	if err == nil && parsed.User == nil && (parsed.Scheme == "http" || parsed.Scheme == "https") &&
+		strings.EqualFold(parsed.Hostname(), requestURL.Hostname()) {
+		return returnURL
 	}
 
 	return "/"

@@ -113,8 +113,8 @@ services:
       API_RATE_LIMIT_PER_MINUTE: ${API_RATE_LIMIT_PER_MINUTE:-}
       AUTH_RATE_LIMIT_PER_MINUTE: ${AUTH_RATE_LIMIT_PER_MINUTE:-}
       # Restrict which peers count as trusted proxy hops when resolving the
-      # client IP from X-Forwarded-For (comma-separated CIDRs). Unset = trust
-      # loopback/link-local/private ranges, which any stock install needs.
+      # client IP from X-Forwarded-For (comma-separated CIDRs). Unset trusts
+      # loopback only. Set this to exact proxy peer addresses when needed.
       TRUSTED_PROXY_CIDR: ${TRUSTED_PROXY_CIDR:-}
       # Domain entries in access lists. NPG_DNS_ENTRIES_DISABLED=1 is the
       # emergency switch: every domain entry stays closed, whatever the

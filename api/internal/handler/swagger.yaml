@@ -13151,7 +13151,7 @@ components:
           description: >-
             Newline-separated IP/CIDR entries for proxies in front of NPG whose
             forwarded client address should be believed. Additive to the
-            always-trusted private and loopback ranges. Rejected with 400 if an
+            always-trusted loopback addresses. Rejected with 400 if an
             entry is unparseable or the list covers too much of the internet.
         trusted_proxy_preset:
           type: string
@@ -13171,7 +13171,7 @@ components:
           items:
             type: string
           readOnly: true
-          description: Always-trusted private/loopback ranges. Not removable.
+          description: Always-trusted loopback addresses. Not removable.
         trusted_proxy_preset_ranges:
           type: array
           items:

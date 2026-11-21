@@ -101,9 +101,7 @@ type SystemSettings struct {
 	// believes (#278). Without them a CDN or reverse proxy in front of NPG
 	// leaves $remote_addr pointing at the proxy, so GeoIP, access lists,
 	// banned IPs, fail2ban and rate limiting all judge the proxy instead of
-	// the visitor. Defaults reproduce the previous hardcoded behaviour: an
-	// empty list plus X-Forwarded-For, additive to the private/loopback
-	// ranges that are always trusted.
+	// the visitor. The default list is empty, with loopback trusted locally.
 	TrustedProxyCIDRs  string `json:"trusted_proxy_cidrs" db:"trusted_proxy_cidrs"`   // Newline-separated IP/CIDR of proxies in front of NPG
 	TrustedProxyPreset string `json:"trusted_proxy_preset" db:"trusted_proxy_preset"` // none | cloudflare
 	RealIPHeader       string `json:"real_ip_header" db:"real_ip_header"`             // Header nginx reads the client address from
@@ -226,7 +224,7 @@ type SystemSettingsResponse struct {
 	TrustedProxyCIDRs        string   `json:"trusted_proxy_cidrs"`
 	TrustedProxyPreset       string   `json:"trusted_proxy_preset"`
 	RealIPHeader             string   `json:"real_ip_header"`
-	TrustedProxyBuiltins     []string `json:"trusted_proxy_builtins"`      // Always-trusted private/loopback ranges, read-only
+	TrustedProxyBuiltins     []string `json:"trusted_proxy_builtins"`      // Always-trusted loopback addresses, read-only
 	TrustedProxyPresetRanges []string `json:"trusted_proxy_preset_ranges"` // Ranges the selected preset contributes
 	CloudflareRangesUpdated  string   `json:"cloudflare_ranges_updated"`   // Date the shipped Cloudflare list was taken
 
