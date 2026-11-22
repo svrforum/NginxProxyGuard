@@ -4,6 +4,7 @@ import (
 	"html"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -262,38 +263,37 @@ func (h *ChallengeHandler) VerifyAndRedirect(c echo.Context) error {
 }
 
 // sanitizeReturnURL validates that returnURL is safe for redirection.
-// Only allows relative paths or URLs whose host matches the request host.
-// Falls back to "/" for any other value to prevent open redirect attacks.
+// Only allows relative paths or http(s) URLs whose host matches the request
+// host. Falls back to "/" for any other value to prevent open redirect attacks.
+//
+// Browsers are more forgiving than url.Parse: they read "\" as "/", drop tabs
+// and newlines, send "https://a@b/" to b, and treat "///b" or "https:b" as
+// host b. Anything a browser could read that way is refused, not repaired.
 func sanitizeReturnURL(returnURL, requestHost string) string {
-	if returnURL == "" {
+	if returnURL == "" || strings.ContainsFunc(returnURL, func(r rune) bool {
+		return r == '\\' || r < 0x20 || r == 0x7f
+	}) {
 		return "/"
 	}
 
-	// Allow relative paths
-	if strings.HasPrefix(returnURL, "/") && !strings.HasPrefix(returnURL, "//") {
+	// Relative path: exactly one leading slash.
+	if returnURL[0] == '/' {
+		if len(returnURL) > 1 && returnURL[1] == '/' {
+			return "/"
+		}
 		return returnURL
 	}
 
-	// Allow same-host absolute URLs
-	if strings.HasPrefix(returnURL, "http://") || strings.HasPrefix(returnURL, "https://") {
-		// Extract host from returnURL
-		afterScheme := returnURL[strings.Index(returnURL, "://")+3:]
-		slashIdx := strings.Index(afterScheme, "/")
-		var urlHost string
-		if slashIdx >= 0 {
-			urlHost = afterScheme[:slashIdx]
-		} else {
-			urlHost = afterScheme
-		}
-		// Strip port from both for comparison
-		urlHostNoPort := strings.Split(urlHost, ":")[0]
-		reqHostNoPort := strings.Split(requestHost, ":")[0]
-		if strings.EqualFold(urlHostNoPort, reqHostNoPort) {
-			return returnURL
-		}
+	// Same-host absolute URL, compared without the port.
+	u, err := url.Parse(returnURL)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil || u.Host == "" {
+		return "/"
 	}
-
-	return "/"
+	req, err := url.Parse("//" + requestHost)
+	if err != nil || req.Hostname() == "" || !strings.EqualFold(u.Hostname(), req.Hostname()) {
+		return "/"
+	}
+	return returnURL
 }
 
 // ValidateToken checks a challenge token for nginx's auth_request gate.
