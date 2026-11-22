@@ -266,13 +266,22 @@ func (h *ChallengeHandler) VerifyAndRedirect(c echo.Context) error {
 // Only allows relative paths or http(s) URLs whose host matches the request
 // host. Falls back to "/" for any other value to prevent open redirect attacks.
 //
-// Browsers are more forgiving than url.Parse: they read "\" as "/", drop tabs
-// and newlines, send "https://a@b/" to b, and treat "///b" or "https:b" as
-// host b. Anything a browser could read that way is refused, not repaired.
+// Browsers are more forgiving than url.Parse: they read "\" as "/" before the
+// query, drop tabs and newlines, send "https://a@b/" to b, and treat "///b" or
+// "https:b" as host b. Anything a browser could read that way is refused, not
+// repaired. A "\" after "?" or "#" stays, since the challenge page decodes the
+// original query and a search for C:\Users is a real return URL.
 func sanitizeReturnURL(returnURL, requestHost string) string {
 	if returnURL == "" || strings.ContainsFunc(returnURL, func(r rune) bool {
-		return r == '\\' || r < 0x20 || r == 0x7f
+		return r < 0x20 || r == 0x7f
 	}) {
+		return "/"
+	}
+	beforeQuery := returnURL
+	if i := strings.IndexAny(beforeQuery, "?#"); i >= 0 {
+		beforeQuery = beforeQuery[:i]
+	}
+	if strings.ContainsRune(beforeQuery, '\\') {
 		return "/"
 	}
 

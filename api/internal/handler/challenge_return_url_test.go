@@ -19,6 +19,9 @@ func TestSanitizeReturnURL(t *testing.T) {
 		{"", "/"},
 		{"/@evil.example", "/@evil.example"},
 		{"/%5Cevil.example", "/%5Cevil.example"},
+		// The page decodes the original query, so "\" can appear after "?".
+		{"/search?q=C:\\Users", "/search?q=C:\\Users"},
+		{"https://app.example.com/a?b=\\c#\\d", "https://app.example.com/a?b=\\c#\\d"},
 
 		// Userinfo: the browser goes to whatever follows the "@" (#398).
 		{"https://app.example.com:81@evil.example/", "/"},
