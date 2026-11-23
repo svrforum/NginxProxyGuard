@@ -6,6 +6,7 @@ import type { ProxyHost, ProxyHostTestResult } from '../../types/proxy-host';
 import { SummaryTab } from './TestResultSummary';
 import { SSLTab, HTTPTab, CacheTab } from './TestResultDetails';
 import { SecurityTab, HeadersTab } from './TestResultLogs';
+import { formatDateTime } from '../../utils/dateTime';
 
 interface TestResultModalProps {
   host: ProxyHost;
@@ -144,7 +145,7 @@ export function TestResultModal({
                     </div>
                     <div>
                       {t('test.ddns.lastSync')}: {result.ddns.last_synced_at
-                        ? `${new Date(result.ddns.last_synced_at).toLocaleString()} · ${result.ddns.last_ip || '-'} · ${result.ddns.last_status || '-'}`
+                        ? `${formatDateTime(result.ddns.last_synced_at)} · ${result.ddns.last_ip || '-'} · ${result.ddns.last_status || '-'}`
                         : t('test.ddns.never')}
                     </div>
                   </div>

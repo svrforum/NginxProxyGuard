@@ -13,6 +13,7 @@ import type {
   GlobalWAFPolicyHistory,
 } from '../../types/waf';
 import { CategoryIcon } from './CategoryIcon';
+import { formatDateTime } from '../../utils/dateTime';
 
 export function GlobalWAFSettings() {
   const { t, i18n } = useTranslation('waf');
@@ -124,10 +125,9 @@ export function GlobalWAFSettings() {
   const isPending = disableMutation.isPending || enableMutation.isPending;
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleString(i18n.language, {
+    return formatDateTime(dateStr, {
       year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
-    });
+    }, i18n.language);
   };
 
   return (
@@ -447,7 +447,7 @@ function GlobalPolicyHistoryPanel({ history, isLoading, error }: {
   }, [history, historySearch]);
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleString(i18n.language, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return formatDateTime(dateStr, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }, i18n.language);
   };
 
   if (isLoading) {

@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import type { URIMatchType } from '../../types/security';
+import { DATE_TIME, formatDateTime } from '../../utils/dateTime';
 
 function getMatchTypeColor(matchType: URIMatchType): string {
   switch (matchType) {
@@ -20,7 +21,7 @@ function getMatchTypeLabel(matchType: URIMatchType, t: (key: string) => string):
 }
 
 function formatDate(dateStr: string, locale?: string): string {
-  return new Date(dateStr).toLocaleString(locale || 'ko-KR')
+  return formatDateTime(dateStr, DATE_TIME, locale)
 }
 
 export interface URIBlockHistoryEntry {

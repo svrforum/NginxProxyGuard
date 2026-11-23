@@ -9,6 +9,7 @@ import {
   downloadTrafficCSV, getRealtimeTraffic, getTrafficSeries, getTrafficSummary,
 } from '../api/traffic'
 import { fillTrafficBuckets, formatBytes, type TrafficChartPoint } from '../utils/traffic'
+import { TIME, formatDateTime } from '../utils/dateTime'
 
 type Period = 'hour' | 'day' | 'week' | 'month' | 'custom'
 const PERIOD_HOURS: Record<Exclude<Period, 'custom'>, number> = {
@@ -85,9 +86,9 @@ export default function TrafficPage() {
 
   const locale = i18n.resolvedLanguage === 'en' ? 'en-US' : 'ko-KR'
   const timeLabel = (time: string | number, withDate = false) =>
-    new Date(time).toLocaleString(locale, withDate
+    formatDateTime(time, withDate
       ? { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }
-      : { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+      : TIME, locale)
 
   const labelFor = (value: string) => value.toLowerCase() === 'unclassified' ? t('unclassified') : value
   const hostOptions = summary.data?.hosts ?? []

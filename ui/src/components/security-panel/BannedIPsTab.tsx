@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { listBannedIPs, banIP, unbanIP } from '../../api/security';
 import type { BanIPRequest } from '../../types/security';
 import type { SecurityTabProps } from './types';
+import { formatDateTime } from '../../utils/dateTime';
 
 export default function BannedIPsTab({ proxyHostId }: SecurityTabProps) {
   const { t } = useTranslation('proxyHost');
@@ -113,13 +114,13 @@ export default function BannedIPsTab({ proxyHostId }: SecurityTabProps) {
                   <td className="px-4 py-2 text-sm font-mono">{ip.ip_address}</td>
                   <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">{ip.reason || '-'}</td>
                   <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
-                    {new Date(ip.banned_at).toLocaleString()}
+                    {formatDateTime(ip.banned_at)}
                   </td>
                   <td className="px-4 py-2 text-sm">
                     {ip.is_permanent ? (
                       <span className="text-red-600 font-medium">{t('form.protection.bannedIPs.permanent')}</span>
                     ) : ip.expires_at ? (
-                      new Date(ip.expires_at).toLocaleString()
+                      formatDateTime(ip.expires_at)
                     ) : '-'}
                   </td>
                   <td className="px-4 py-2">

@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { getIPBanHistory, getIPBanHistoryStats } from '../../api/security'
 import { IPLogsModal } from './IPLogsModal'
 import type { BanEventType, BanSource } from '../../types/security'
+import { DATE_TIME, formatDateTime } from '../../utils/dateTime'
 
 export function BanHistoryTab({ hostMap }: { hostMap: Record<string, string> }) {
   const { t, i18n } = useTranslation('waf')
@@ -139,7 +140,7 @@ export function BanHistoryTab({ hostMap }: { hostMap: Record<string, string> }) 
                 const hostName = item.proxy_host_id ? hostMap[item.proxy_host_id] : item.domain_name
                 return (
                   <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                    <td className="px-4 py-3"><span className="text-sm text-slate-600 dark:text-slate-300">{new Date(item.created_at).toLocaleString(i18n.language)}</span></td>
+                    <td className="px-4 py-3"><span className="text-sm text-slate-600 dark:text-slate-300">{formatDateTime(item.created_at, DATE_TIME, i18n.language)}</span></td>
                     <td className="px-4 py-3"><span className={`px-2 py-0.5 text-xs font-medium rounded ${getEventTypeColor(item.event_type)}`}>{item.event_type === 'ban' ? t('bannedIp.history.event.ban', { defaultValue: '차단' }) : t('bannedIp.history.event.unban', { defaultValue: '해제' })}</span></td>
                     <td className="px-4 py-3">
                       <button

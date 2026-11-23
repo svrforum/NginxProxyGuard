@@ -25,6 +25,18 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'warn',
       // General rules
       'no-console': ['warn', { allow: ['warn', 'error'] }],
+      // Times go through utils/dateTime so every screen keeps a 24-hour clock (#399).
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "CallExpression[callee.property.name='toLocaleTimeString']",
+          message: 'Use formatDateTime(value, TIME) from utils/dateTime: the UI shows a 24-hour clock (#399).',
+        },
+        {
+          selector: "CallExpression[callee.property.name='toLocaleString'][callee.object.type='NewExpression'][callee.object.callee.name='Date']",
+          message: 'Use formatDateTime from utils/dateTime: the UI shows a 24-hour clock (#399).',
+        },
+      ],
     },
   },
 )

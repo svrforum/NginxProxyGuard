@@ -8,6 +8,7 @@ import type { UpdateSystemSettingsRequest } from '../../types/settings';
 import { ModalShell } from '../common/ModalShell';
 import { usePermissions } from '../../hooks/usePermissions';
 import { RAW_LOG_ARCHIVE_RETENTION, formatFileSize, shownArchiveStatus, type RawLogMessage } from './shared';
+import { DATE_TIME, formatDateTime } from '../../utils/dateTime';
 
 interface RawLogArchiveCardProps {
   archive: RawLogArchiveStatus | undefined;
@@ -150,7 +151,7 @@ export default function RawLogArchiveCard({ archive, usage, onMessage }: RawLogA
           )}
           {shown.last_move_at && (
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              {t('rawFiles.archive.lastMove', { when: new Date(shown.last_move_at).toLocaleString(i18n.language), count: shown.last_moved })}
+              {t('rawFiles.archive.lastMove', { when: formatDateTime(shown.last_move_at, DATE_TIME, i18n.language), count: shown.last_moved })}
             </p>
           )}
           {shown.enabled && shown.pending_files > 0 && (

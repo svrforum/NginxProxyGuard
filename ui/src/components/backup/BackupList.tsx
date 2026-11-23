@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { downloadBackup } from '../../api/settings';
 import type { Backup } from '../../types/settings';
 import { ModalShell } from '../common/ModalShell';
+import { DATE_TIME, formatDateTime } from '../../utils/dateTime';
 
 export function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -12,7 +13,7 @@ export function formatBytes(bytes: number): string {
 }
 
 export function formatDate(dateStr: string, locale?: string): string {
-  return new Date(dateStr).toLocaleString(locale);
+  return formatDateTime(dateStr, DATE_TIME, locale);
 }
 
 function StatusBadge({ status }: { status: string }) {

@@ -14,6 +14,7 @@ import { usePermissions } from '../../hooks/usePermissions'
 import { AddButton, EmptyState, EntityCard, IconButton, TrashIcon } from '../common/listui'
 import { ModalShell } from '../common/ModalShell'
 import { UserDetailModal } from './UserDetailModal'
+import { formatDateTime } from '../../utils/dateTime'
 
 function roleLabel(name: string, t: (k: string, o?: Record<string, unknown>) => string): string {
   if (name.startsWith('builtin.')) {
@@ -133,7 +134,7 @@ export default function UserManager() {
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-slate-500 dark:text-slate-400">
                       <span>
                         {u.last_login_at
-                          ? t('users.lastLoginAt', { when: new Date(u.last_login_at).toLocaleString() })
+                          ? t('users.lastLoginAt', { when: formatDateTime(u.last_login_at) })
                           : t('users.neverLoggedIn')}
                       </span>
                       {!!u.api_token_count && (

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { getAuthHeaders } from '../api/auth'
+import { formatDateTime } from '../utils/dateTime'
 
 // Types
 interface AuditLog {
@@ -72,7 +73,7 @@ async function fetchAPITokenLogs(limit = 50, offset = 0): Promise<LogResponse<AP
 
 // Helper functions
 function formatTime(timestamp: string): string {
-  return new Date(timestamp).toLocaleString()
+  return formatDateTime(timestamp)
 }
 
 function ActionBadge({ action }: { action: string }) {

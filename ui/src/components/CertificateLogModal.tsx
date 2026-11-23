@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { getCertificateLogs } from '../api/certificates'
 import { ModalShell } from './common/ModalShell'
 import type { CertificateLog, CertificateLogResponse } from '../types/certificate'
+import { TIME, formatDateTime } from '../utils/dateTime'
 
 interface CertificateLogModalProps {
   isOpen?: boolean
@@ -208,7 +209,7 @@ export function CertificateLogModal({ isOpen = true, certificateId, onClose, onC
               <span className="flex-shrink-0 mt-0.5">{getLogLevelIcon(log.level)}</span>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mb-0.5">
-                  <span>{new Date(log.timestamp).toLocaleTimeString()}</span>
+                  <span>{formatDateTime(log.timestamp, TIME)}</span>
                   {log.step && (
                     <span className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
                       {log.step}

@@ -21,6 +21,7 @@ import { ProfileTab } from './account/ProfileTab'
 import { PasswordTab } from './account/PasswordTab'
 import { TwoFactorTab } from './account/TwoFactorTab'
 import { LanguageFontTab } from './account/LanguageFontTab'
+import { formatDateTime } from '../utils/dateTime'
 
 interface AccountSettingsProps {
   onClose: () => void
@@ -227,7 +228,7 @@ export default function AccountSettings({ onClose, onLogout }: AccountSettingsPr
 
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return t('account.info.never')
-    return new Date(dateStr).toLocaleString()
+    return formatDateTime(dateStr)
   }
 
   if (loading) {

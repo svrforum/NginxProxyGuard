@@ -17,6 +17,7 @@ import type {
 } from '../../types/waf';
 import { HelpTip } from '../common/HelpTip';
 import { CategoryIcon } from './CategoryIcon';
+import { formatDateTime } from '../../utils/dateTime';
 
 export function WAFRulesModal({
   host,
@@ -316,7 +317,7 @@ function CategoryRulesSection({ category, onToggleRule, onRemoveScope, onBulkDis
 function RuleRow({ rule, onToggle, onRemoveScope, isPending }: { rule: WAFRule; onToggle: () => void; onRemoveScope: (exclusion: WAFRuleExclusion) => void; isPending: boolean; }) {
   const { t, i18n } = useTranslation('waf');
   const [showDetails, setShowDetails] = useState(false);
-  const formatDate = (dateStr: string) => new Date(dateStr).toLocaleString(i18n.language, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+  const formatDate = (dateStr: string) => formatDateTime(dateStr, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }, i18n.language);
   // A uri/param exemption narrows the rule instead of switching it off, so it
   // gets its own list rather than being folded into the disabled state. (#286)
   // An empty scope_type is a legacy host-wide row, not a narrow exemption —
@@ -479,7 +480,7 @@ function PolicyHistoryPanel({ history, isLoading, error }: { history: WAFPolicyH
                     {item.rule_description && <p className="text-sm text-gray-700 dark:text-slate-300 mb-1">{item.rule_description}</p>}
                     {item.reason && <p className="text-sm text-gray-500 dark:text-slate-400"><span className="font-medium">{t('policyManager.history.reason')}:</span> {item.reason}</p>}
                     <div className="flex items-center gap-4 mt-2 text-xs text-gray-400 dark:text-slate-500">
-                      <span>{new Date(item.created_at).toLocaleString(i18n.language, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                      <span>{formatDateTime(item.created_at, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }, i18n.language)}</span>
                       {item.changed_by && <span>by {item.changed_by}</span>}
                     </div>
                   </div>

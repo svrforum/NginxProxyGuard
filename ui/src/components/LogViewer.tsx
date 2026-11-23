@@ -13,6 +13,7 @@ import {
 import { useLogQuery } from "./log-viewer/useLogQuery";
 import { LogToolbar } from "./log-viewer/LogToolbar";
 import { LogTable } from "./log-viewer/LogTable";
+import { TIME, formatDateTime } from '../utils/dateTime';
 
 interface LogViewerProps {
   logType?: "access" | "error" | "modsec" | "stream";
@@ -72,7 +73,7 @@ export function LogViewer({ logType, defaultBlockReason }: LogViewerProps) {
         countdownElRef={countdownElRef}
         handleManualRefresh={handleManualRefresh}
         logsFetching={logsQuery.isFetching}
-        lastRefreshLocaleTime={lastRefresh.toLocaleTimeString(i18n.language)}
+        lastRefreshLocaleTime={formatDateTime(lastRefresh, TIME, i18n.language)}
         visibleColumns={visibleColumns}
         toggleColumn={toggleColumn}
         resetColumns={resetColumns}

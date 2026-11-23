@@ -8,6 +8,7 @@ import { fetchProxyHosts } from '../api/proxy-hosts';
 import type { ProxyHost } from '../types/proxy-host';
 import { AuthProviderHosts } from './auth-provider/AuthProviderHosts';
 import { DockerContainerSelector } from './proxy-host/DockerContainerSelector';
+import { formatDateTime } from '../utils/dateTime';
 
 // Per-type accent classes. Full static strings (Tailwind JIT can't see interpolated names).
 const ACCENT: Record<string, { icon: string; chip: string }> = {
@@ -450,7 +451,7 @@ export default function AuthProviderManager() {
                       className={`hidden md:inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-medium ${provider.last_reconcile_status === 'failed' ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300' : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300'}`}
                       title={provider.last_reconcile_status === 'failed'
                         ? (provider.last_reconcile_error || t('reconcile.down'))
-                        : `${t('reconcile.syncedTitle')}${provider.last_resolved_ip ? ' · ' + provider.last_resolved_ip : ''}${provider.last_reconcile_at ? ' · ' + new Date(provider.last_reconcile_at).toLocaleString() : ''}`}
+                        : `${t('reconcile.syncedTitle')}${provider.last_resolved_ip ? ' · ' + provider.last_resolved_ip : ''}${provider.last_reconcile_at ? ' · ' + formatDateTime(provider.last_reconcile_at) : ''}`}
                     >
                       <span className={`h-1.5 w-1.5 rounded-full ${provider.last_reconcile_status === 'failed' ? 'bg-red-500' : 'bg-emerald-500'}`} />
                       {provider.last_reconcile_status === 'failed'

@@ -2,6 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { permissionGroupLabels, type APIToken } from '../../api/api-tokens';
 import type { TokenFormData } from './types';
+import { formatDateTime } from '../../utils/dateTime';
 
 interface PermissionsData {
   permissions: string[];
@@ -64,7 +65,7 @@ export function TokenList({
 
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return '-';
-    return new Date(dateStr).toLocaleString();
+    return formatDateTime(dateStr);
   };
 
   return (

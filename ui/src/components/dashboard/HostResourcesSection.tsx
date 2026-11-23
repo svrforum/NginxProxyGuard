@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getSystemHealthHistory } from '../../api/settings';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import type { StorageStatus } from '../../types/storage';
+import { DATE_TIME, HOUR_MINUTE, formatDateTime } from '../../utils/dateTime';
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -123,11 +124,10 @@ export default function HostResourcesSection({ systemHealth, storage }: {
       }
 
       const date = new Date(item.recorded_at);
-      const timeFormat = { hour: '2-digit', minute: '2-digit' } as const;
 
       return {
-        time: date.toLocaleTimeString(i18n.language, timeFormat),
-        fullTime: date.toLocaleString(i18n.language),
+        time: formatDateTime(date, HOUR_MINUTE, i18n.language),
+        fullTime: formatDateTime(date, DATE_TIME, i18n.language),
         cpu: item.cpu_usage,
         memory: item.memory_usage,
         disk: item.disk_usage,

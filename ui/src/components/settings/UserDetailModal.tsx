@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { UserEmailRow } from './UserEmailRow'
 import { getUserDetail } from '../../api/rbac'
 import { ModalShell } from '../common/ModalShell'
+import { formatDateTime } from '../../utils/dateTime'
 
 interface UserDetailModalProps {
   userId: string | null
@@ -12,7 +13,7 @@ interface UserDetailModalProps {
 function fmt(iso?: string): string {
   if (!iso) return '—'
   const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
+  return Number.isNaN(d.getTime()) ? '—' : formatDateTime(d)
 }
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {

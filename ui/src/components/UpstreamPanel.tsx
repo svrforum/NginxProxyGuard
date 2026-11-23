@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { getUpstream, updateUpstream, getUpstreamHealth } from '../api/security';
 import type { CreateUpstreamRequest } from '../types/security';
+import { formatDateTime } from '../utils/dateTime';
 
 interface UpstreamPanelProps {
   proxyHostId: string;
@@ -138,7 +139,7 @@ export default function UpstreamPanel({ proxyHostId, onClose }: UpstreamPanelPro
               </div>
               {health.last_check_at && (
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Last check: {new Date(health.last_check_at).toLocaleString()}
+                  Last check: {formatDateTime(health.last_check_at)}
                 </p>
               )}
             </div>

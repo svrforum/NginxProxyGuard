@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { HelpTip } from '../common/HelpTip';
 import type { ProxyHost, ProxyHostTestResult } from '../../types/proxy-host';
+import { formatDateTime } from '../../utils/dateTime';
 
 // Summary Tab
 export function SummaryTab({ result, host }: { result: ProxyHostTestResult; host: ProxyHost }) {
@@ -71,7 +72,7 @@ export function SummaryTab({ result, host }: { result: ProxyHostTestResult; host
         </div>
 
         <div className="text-xs text-slate-400 text-right">
-          {t('test.testedAt')}: {new Date(result.tested_at).toLocaleString()}
+          {t('test.testedAt')}: {formatDateTime(result.tested_at)}
         </div>
       </div>
     );
@@ -151,7 +152,7 @@ export function SummaryTab({ result, host }: { result: ProxyHostTestResult; host
 
       {/* Test Time */}
       <div className="text-xs text-slate-400 text-right">
-        {t('test.testedAt')}: {new Date(result.tested_at).toLocaleString()}
+        {t('test.testedAt')}: {formatDateTime(result.tested_at)}
       </div>
     </div>
   );

@@ -436,7 +436,7 @@
         },
         "schedule": {
           "label": "백업 일정 (Cron 형식)",
-          "help": "기본값: 0 2 * * * (매일 오전 2시). 형식: 분 시 일 월 요일"
+          "help": "기본값: 0 2 * * * (매일 02:00). 형식: 분 시 일 월 요일"
         }
       },
       "rawlogs": {
@@ -1211,7 +1211,7 @@
       "enable": "자동 백업 활성화",
       "enableDescription": "지정된 일정에 따라 자동으로 백업을 생성합니다",
       "schedule": "백업 일정 (Cron 형식)",
-      "scheduleHelp": "기본값: {{default}} (매일 오전 2시). 형식: 분 시 일 월 요일",
+      "scheduleHelp": "기본값: {{default}} (매일 02:00). 형식: 분 시 일 월 요일",
       "retentionCount": "백업 보관 개수",
       "retentionHelp": "이 개수를 초과하면 가장 오래된 백업이 자동으로 삭제됩니다",
       "count": "개"

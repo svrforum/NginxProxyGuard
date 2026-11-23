@@ -6,6 +6,7 @@ import type { LogFileInfo, LogFileLocation, LogFilesResponse } from '../../types
 import { ModalShell } from '../common/ModalShell';
 import { usePermissions } from '../../hooks/usePermissions';
 import { RAW_LOG_PAGE_SIZE, formatFileSize, type RawLogMessage } from './shared';
+import { DATE_TIME, formatDateTime } from '../../utils/dateTime';
 
 interface RawLogFileListProps {
   data: LogFilesResponse | undefined;
@@ -193,7 +194,7 @@ export default function RawLogFileList({ data, error, location, onLocationChange
                     <div className="text-xs text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-2 mt-0.5">
                       <span>{formatFileSize(file.size)}</span>
                       <span>•</span>
-                      <span>{new Date(file.modified_at).toLocaleString(i18n.language)}</span>
+                      <span>{formatDateTime(file.modified_at, DATE_TIME, i18n.language)}</span>
                       {file.is_compressed && (
                         <>
                           <span>•</span>

@@ -4,6 +4,7 @@ import { getCertificate } from '../api/certificates'
 import { ModalShell } from './common/ModalShell'
 import { CloudflareProxyBadge } from './common/listui'
 import type { Certificate } from '../types/certificate'
+import { DATE_TIME, formatDateTime } from '../utils/dateTime'
 
 interface CertificateDetailProps {
   certificateId: string
@@ -26,7 +27,7 @@ export function CertificateDetail({ certificateId, onClose }: CertificateDetailP
 
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return '-'
-    return new Date(dateStr).toLocaleString(i18n.language)
+    return formatDateTime(dateStr, DATE_TIME, i18n.language)
   }
 
   const getStatusColor = (status: Certificate['status']) => {

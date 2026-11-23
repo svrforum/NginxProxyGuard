@@ -5,6 +5,7 @@ import { getCertificateHistory } from '../api/certificates'
 import { ModalShell } from './common/ModalShell'
 import { EntityCard, EmptyState, IconButton, EyeIcon } from './common/listui'
 import type { CertificateHistory, CertificateLog } from '../types/certificate'
+import { DATE_TIME, TIME, formatDateTime } from '../utils/dateTime'
 
 interface CertificateHistoryLogModalProps {
   isOpen: boolean
@@ -124,7 +125,7 @@ function HistoryLogModal({ isOpen, history, onClose }: CertificateHistoryLogModa
                 <span className="flex-shrink-0 mt-0.5">{getLogLevelIcon(log.level)}</span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mb-0.5">
-                    <span>{new Date(log.timestamp).toLocaleTimeString()}</span>
+                    <span>{formatDateTime(log.timestamp, TIME)}</span>
                     {log.step && (
                       <span className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
                         {log.step}
@@ -142,7 +143,7 @@ function HistoryLogModal({ isOpen, history, onClose }: CertificateHistoryLogModa
         <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
           <div className="flex items-center justify-between">
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              {new Date(history.created_at).toLocaleString()}
+              {formatDateTime(history.created_at)}
             </p>
             <button
               onClick={onClose}
@@ -170,7 +171,7 @@ export default function CertificateHistoryList() {
 
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return '-'
-    return new Date(dateStr).toLocaleString(i18n.language)
+    return formatDateTime(dateStr, DATE_TIME, i18n.language)
   }
 
   const getActionBadge = (action: string, status: string) => {

@@ -1,5 +1,6 @@
 import type { DNSEntryStatus } from '../../../types/dnsEntries';
 import { isIPOrCIDR } from '../../proxy-host/tabs/security/priorityAllowEntries';
+import { formatDateTime } from '../../../utils/dateTime';
 
 // Domain names as the server takes them (#320; the server's copy
 // is model.ValidateDNSName). The form checks first so the reason shows next to
@@ -171,7 +172,7 @@ export function formatDnsTime(iso: string | null | undefined, lang: string): str
   if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString(lang, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return formatDateTime(d, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }, lang);
 }
 
 /** The i18n key suffix (familyState.<key>) of a family state; "unknown" when there is none. */

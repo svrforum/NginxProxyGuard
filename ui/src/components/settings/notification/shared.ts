@@ -1,4 +1,5 @@
 import type { NotificationChannel, NotificationChannelRequest } from '../../../types/notification'
+import { formatDateTime } from '../../../utils/dateTime'
 
 /**
  * Pieces shared by the notification channel list and its form. They live here
@@ -53,7 +54,7 @@ export const browserOffsetMinutes = -new Date().getTimezoneOffset()
 export const fmt = (iso?: string) => {
   if (!iso) return '—'
   const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
+  return Number.isNaN(d.getTime()) ? '—' : formatDateTime(d)
 }
 
 export const inputCls =

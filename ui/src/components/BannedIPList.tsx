@@ -11,9 +11,10 @@ import { BulkActionBar } from './banned-ip/BulkActionBar'
 import { AddBanModal } from './banned-ip/AddBanModal'
 import { useUnbanAll } from './banned-ip/useUnbanAll'
 import { IconButton, AddButton, EmptyState, EntityCard, TrashIcon, EyeIcon } from './common/listui'
+import { DATE_TIME, formatDateTime } from '../utils/dateTime'
 
 function formatDate(dateStr: string, locale?: string): string {
-  return new Date(dateStr).toLocaleString(locale || 'ko-KR')
+  return formatDateTime(dateStr, DATE_TIME, locale)
 }
 
 function formatRelativeTime(dateStr: string, t: TFn): string {

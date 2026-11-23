@@ -10,9 +10,10 @@ import {
 } from '../api/system-logs';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useDebounce } from './log-viewer/utils';
+import { formatDateTime } from '../utils/dateTime';
 
 function formatTime(timestamp: string): string {
-  return new Date(timestamp).toLocaleString();
+  return formatDateTime(timestamp);
 }
 
 function LevelBadge({ level }: { level: string }) {

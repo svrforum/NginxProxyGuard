@@ -3,6 +3,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import type { BannedIP } from '../../types/security';
 import { listBannedIPs, banIP, unbanIP } from '../../api/security';
 import type { SettingsTabProps } from './types';
+import { formatDateTime } from '../../utils/dateTime';
 
 export default function BannedIPsSettings({ hostId, queryClient }: SettingsTabProps) {
   const { data, isLoading, refetch } = useQuery({
@@ -129,7 +130,7 @@ export default function BannedIPsSettings({ hostId, queryClient }: SettingsTabPr
                       {ban.is_permanent ? (
                         <span className="text-red-600 font-medium">Permanent</span>
                       ) : ban.expires_at ? (
-                        new Date(ban.expires_at).toLocaleString()
+                        formatDateTime(ban.expires_at)
                       ) : '-'}
                     </td>
                     <td className="px-4 py-2 text-right">

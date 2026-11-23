@@ -12,6 +12,7 @@ import {
 } from '../api/settings';
 import type { SystemSettings, UpdateSystemSettingsRequest } from '../types/settings';
 import { usePageVisibility } from '../hooks/usePageVisibility';
+import { DATE_TIME, formatDateTime } from '../utils/dateTime';
 
 export default function GeoIPSettings() {
   const { t, i18n } = useTranslation('settings');
@@ -319,7 +320,7 @@ export default function GeoIPSettings() {
                 {historyData.data.map((item: GeoIPUpdateHistory) => (
                   <tr key={item.id} className="border-b border-slate-100 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700/30">
                     <td className="py-2.5 px-3 text-slate-700 dark:text-slate-300">
-                      {new Date(item.started_at).toLocaleString(i18n.language)}
+                      {formatDateTime(item.started_at, DATE_TIME, i18n.language)}
                     </td>
                     <td className="py-2.5 px-3">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${

@@ -6,6 +6,7 @@ import { ApiError } from '../../api/client';
 import type { LogRawReclaimStatus, RawLogReclaimJobStatus } from '../../types/rawLogReclaim';
 import { usePermissions } from '../../hooks/usePermissions';
 import { ModalShell } from '../common/ModalShell';
+import { HOUR_MINUTE, formatDateTime } from '../../utils/dateTime';
 
 const QUERY_KEY = ['rawLogReclaim'];
 
@@ -26,7 +27,7 @@ function dayOf(iso: string): string {
 
 // In the UI's language, not the browser's: the sentence around it is.
 function timeOf(iso: string, lang: string): string {
-  return new Date(iso).toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' });
+  return formatDateTime(iso, HOUR_MINUTE, lang);
 }
 
 const STATUS_TONE: Record<RawLogReclaimJobStatus, string> = {

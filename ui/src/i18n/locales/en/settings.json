@@ -436,7 +436,7 @@
         },
         "schedule": {
           "label": "Backup Schedule (Cron)",
-          "help": "Default: 0 2 * * * (Daily at 2 AM). Format: Minute Hour Day Month DayOfWeek"
+          "help": "Default: 0 2 * * * (Daily at 02:00). Format: Minute Hour Day Month DayOfWeek"
         }
       },
       "rawlogs": {
@@ -1211,7 +1211,7 @@
       "enable": "Enable Auto Backup",
       "enableDescription": "Automatically create backups according to the schedule",
       "schedule": "Backup Schedule (Cron)",
-      "scheduleHelp": "Default: {{default}} (Daily at 2 AM). Format: Minute Hour Day Month DayOfWeek",
+      "scheduleHelp": "Default: {{default}} (Daily at 02:00). Format: Minute Hour Day Month DayOfWeek",
       "retentionCount": "Backup Retention Count",
       "retentionHelp": "Oldest backups will be deleted when count is exceeded",
       "count": "files"
@@ -1462,7 +1462,7 @@
     },
     "backup": {
       "enable": "Automatically backup entire configuration at scheduled times.",
-      "schedule": "Backup schedule in Cron format (e.g., 0 2 * * * = Daily at 2 AM).",
+      "schedule": "Backup schedule in Cron format (e.g., 0 2 * * * = Daily at 02:00).",
       "retention": "Maximum number of backup files to keep. Oldest backups are deleted when exceeded."
     }
   },

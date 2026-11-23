@@ -9,6 +9,7 @@ import DDNSRecordForm from './DDNSRecordForm'
 import DDNSImportFromHostsModal from './DDNSImportFromHostsModal'
 import { AddButton, CloudflareProxyBadge, EmptyState, EntityCard, IconButton, PencilIcon, TrashIcon, RenewIcon } from '../common/listui'
 import { ModalShell } from '../common/ModalShell'
+import { formatDateTime } from '../../utils/dateTime'
 
 /** Rounded status pill with a leading dot. DDNS has 3 states (ok / error / never)
  *  so this stays local rather than using the 2-state shared StatusPill. */
@@ -221,7 +222,7 @@ export default function DDNSRecordList() {
     if (!iso) return '-'
     const d = new Date(iso)
     if (isNaN(d.getTime())) return '-'
-    return d.toLocaleString()
+    return formatDateTime(d)
   }
 
   if (isLoading) {

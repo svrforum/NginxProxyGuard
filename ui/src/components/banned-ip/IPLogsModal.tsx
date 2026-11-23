@@ -5,9 +5,10 @@ import { fetchIPLogs } from '../../api/banned-ips'
 import type { BannedIP } from '../../api/banned-ips'
 import { IPStatsBand } from './IPStatsBand'
 import { BanDurationEditor } from './BanDurationEditor'
+import { DATE_TIME, formatDateTime } from '../../utils/dateTime'
 
 function formatDate(dateStr: string, locale?: string): string {
-  return new Date(dateStr).toLocaleString(locale || 'ko-KR')
+  return formatDateTime(dateStr, DATE_TIME, locale)
 }
 
 function getStatusColor(statusCode?: number): string {

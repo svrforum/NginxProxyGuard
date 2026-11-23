@@ -17,6 +17,7 @@ import { ModalShell } from '../common/ModalShell'
 import { RuleExceptionIPs } from './RuleExceptionIPs'
 import { DnsHostnamesField } from '../common/dns/DnsHostnamesField'
 import { dnsNamesErrorsOf, type DnsNamesError } from '../common/dns/dnsListField'
+import { DATE_TIME, formatDateTime } from '../../utils/dateTime'
 
 function getMatchTypeLabel(matchType: URIMatchType, t: (key: string) => string): string {
   switch (matchType) {
@@ -37,7 +38,7 @@ function getMatchTypeColor(matchType: URIMatchType): string {
 }
 
 function formatDate(dateStr: string, locale?: string): string {
-  return new Date(dateStr).toLocaleString(locale || 'ko-KR')
+  return formatDateTime(dateStr, DATE_TIME, locale)
 }
 
 interface HostDetailModalProps {
