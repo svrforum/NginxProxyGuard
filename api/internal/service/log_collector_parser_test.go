@@ -85,6 +85,42 @@ func TestParseAccessLog_429FromUpstreamIsNotTaggedRateLimit(t *testing.T) {
 	}
 }
 
+// A 403 is labelled bot_filter only when nginx answered it itself. A site's
+// own 403s to the AdSense crawler carried an upstream and were shown as NPG
+// bot-filter blocks. The bot filter never blocks a search engine either, so a
+// search engine's 403 is never its doing.
+func TestApplyBlockReasonFallback_403BotLabel(t *testing.T) {
+	c := &LogCollector{botMatcher: NewBotMatcher()}
+	cases := []struct {
+		name, ua, upstream, wantReason, wantCategory string
+	}{
+		{"bad bot answered by nginx", "AhrefsBot/7.0", "-", "bot_filter", "bad_bot"},
+		{"ad crawler answered by the site", "Mediapartners-Google", "192.0.2.6:80", "", ""},
+		{"bad bot answered by the site", "AhrefsBot/7.0", "192.0.2.6:80", "", ""},
+		{"search engine answered by nginx", "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)", "-", "", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			us := "-"
+			if tc.upstream != "-" {
+				us = "403"
+			}
+			line := fmt.Sprintf(`192.0.2.10 - - [25/Nov/2026:00:00:00 +0900] "app.example.com" "GET /member HTTP/1.1" 403 0 "-" "%s" "-" rt=0.010 uct="-" uht="-" urt="-" ua="%s" us="%s" geo="-" asn="-" block="-" bot="-" exploit_rule="-"`, tc.ua, tc.upstream, us)
+			logReq, err := c.parseAccessLog(line)
+			if err != nil {
+				t.Fatalf("parseAccessLog: %v", err)
+			}
+			if (tc.upstream != "-") != (logReq.UpstreamAddr != "") {
+				t.Fatalf("test line's ua= did not parse as intended: %q", logReq.UpstreamAddr)
+			}
+			c.applyBlockReasonFallback(logReq)
+			if string(logReq.BlockReason) != tc.wantReason || logReq.BotCategory != tc.wantCategory {
+				t.Errorf("got reason %q category %q, want %q %q", logReq.BlockReason, logReq.BotCategory, tc.wantReason, tc.wantCategory)
+			}
+		})
+	}
+}
+
 // Sanity check: a normal 200 response with block="-" should also leave
 // BlockReason empty out of the parser. The DB INSERT path (log_insert.go)
 // uses COALESCE(NULLIF($30, '')::block_reason, 'none'), so an empty value

@@ -959,6 +959,11 @@ func (c *LogCollector) addLogToMemoryBuffer(logReq model.CreateLogRequest) {
 
 // applyBlockReasonFallback labels lines that nginx itself did not tag.
 //
+// The 403 branch only labels what nginx answered itself. A 403 that reached an
+// upstream is the application's answer, and the bot filter never blocks a
+// search engine: labelling either "bot_filter" made a site's own 403s to the
+// AdSense crawler look like NPG had blocked it.
+//
 // The 429 branch is deliberately narrow. nginx rejects at the PREACCESS phase,
 // so a request blocked by its own limit_req never reaches an upstream and logs
 // ua="-", which the parser turns into an empty UpstreamAddr. A 429 that DOES
@@ -969,8 +974,8 @@ func (c *LogCollector) applyBlockReasonFallback(logReq *model.CreateLogRequest) 
 	if logReq == nil || logReq.BlockReason != "" {
 		return
 	}
-	if logReq.StatusCode == 403 && logReq.HTTPUserAgent != "" {
-		if category, matched := c.botMatcher.MatchBot(logReq.HTTPUserAgent); matched {
+	if logReq.StatusCode == 403 && logReq.HTTPUserAgent != "" && logReq.UpstreamAddr == "" {
+		if category, matched := c.botMatcher.MatchBot(logReq.HTTPUserAgent); matched && category != "search_engine" {
 			logReq.BlockReason = model.BlockReasonBotFilter
 			logReq.BotCategory = category
 		}
