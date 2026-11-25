@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { HelpTip } from '../common/HelpTip';
 import type { ProxyHost, ProxyHostTestResult } from '../../types/proxy-host';
 import { DetailRow } from './TestResultSummary';
+import { DATE, formatDateTime } from '../../utils/dateTime';
 
 // SSL Tab
 export function SSLTab({ result }: { result: ProxyHostTestResult }) {
@@ -48,8 +49,8 @@ export function SSLTab({ result }: { result: ProxyHostTestResult }) {
             <DetailRow label={t('test.sslDetails.cipherSuite')} value={ssl.cipher} help={t('test.help.sslDetails.cipherSuite')} />
             <DetailRow label={t('test.sslDetails.subject')} value={ssl.subject} />
             <DetailRow label={t('test.sslDetails.issuer')} value={ssl.issuer} />
-            <DetailRow label={t('test.sslDetails.validFrom')} value={ssl.not_before ? new Date(ssl.not_before).toLocaleDateString() : undefined} help={t('test.help.sslDetails.validity')} />
-            <DetailRow label={t('test.sslDetails.validUntil')} value={ssl.not_after ? new Date(ssl.not_after).toLocaleDateString() : undefined} />
+            <DetailRow label={t('test.sslDetails.validFrom')} value={ssl.not_before ? formatDateTime(ssl.not_before, DATE) : undefined} help={t('test.help.sslDetails.validity')} />
+            <DetailRow label={t('test.sslDetails.validUntil')} value={ssl.not_after ? formatDateTime(ssl.not_after, DATE) : undefined} />
             <DetailRow
               label={t('test.sslDetails.daysRemaining')}
               value={ssl.days_remaining?.toString()}

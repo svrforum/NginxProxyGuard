@@ -245,7 +245,7 @@ export function BotFilterLogs() {
                 showTimeSelect
                 timeFormat="HH:mm"
                 timeIntervals={30}
-                dateFormat="MM/dd HH:mm"
+                dateFormat="MM-dd HH:mm"
                 locale={dateLocale}
                 className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm w-36"
               />
@@ -262,7 +262,7 @@ export function BotFilterLogs() {
                 showTimeSelect
                 timeFormat="HH:mm"
                 timeIntervals={30}
-                dateFormat="MM/dd HH:mm"
+                dateFormat="MM-dd HH:mm"
                 locale={dateLocale}
                 className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm w-36"
               />

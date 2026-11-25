@@ -12,6 +12,7 @@ import CertificateFilters from './certificate/CertificateFilters';
 import CertificatePagination from './certificate/CertificatePagination';
 import { StatusBadge, ProviderBadge, LinkedHostsCell, DomainCell } from './certificate/CertificateBadges';
 import { IconButton, AddButton, EmptyState, EntityCard, PencilIcon, TrashIcon, ChevronRightIcon, DownloadIcon, RenewIcon, EyeIcon } from './common/listui';
+import { DATE, formatDateTime } from '../utils/dateTime';
 
 type SortOption = 'created-desc' | 'created-asc' | 'expires-asc' | 'expires-desc' | 'domain-asc' | 'domain-desc';
 
@@ -296,7 +297,7 @@ export default function CertificateList() {
 
   const handleClearSearch = () => { setSearchInput(''); setSearchQuery(''); setCurrentPage(1); };
 
-  const formatDate = (d?: string) => d ? new Date(d).toLocaleDateString(i18n.language) : '-';
+  const formatDate = (d?: string) => d ? formatDateTime(d, DATE, i18n.language) : '-';
 
   if (isLoading && !data) {
     return (

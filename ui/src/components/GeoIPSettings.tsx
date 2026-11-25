@@ -12,7 +12,7 @@ import {
 } from '../api/settings';
 import type { SystemSettings, UpdateSystemSettingsRequest } from '../types/settings';
 import { usePageVisibility } from '../hooks/usePageVisibility';
-import { DATE_TIME, formatDateTime } from '../utils/dateTime';
+import { DATE, DATE_TIME, formatDateTime } from '../utils/dateTime';
 
 export default function GeoIPSettings() {
   const { t, i18n } = useTranslation('settings');
@@ -144,7 +144,7 @@ export default function GeoIPSettings() {
               {geoipStatus?.status === 'active' && (
                 <span className="text-emerald-700 dark:text-emerald-400">
                   {t('system.geoip.status.active')}
-                  {geoipStatus.last_updated && t('system.geoip.status.lastUpdated', { date: new Date(geoipStatus.last_updated).toLocaleDateString(i18n.language) })}
+                  {geoipStatus.last_updated && t('system.geoip.status.lastUpdated', { date: formatDateTime(geoipStatus.last_updated, DATE, i18n.language) })}
                 </span>
               )}
               {geoipStatus?.status === 'inactive' && (

@@ -33,6 +33,10 @@ export default tseslint.config(
           message: 'Use formatDateTime(value, TIME) from utils/dateTime: the UI shows a 24-hour clock (#399).',
         },
         {
+          selector: "CallExpression[callee.property.name='toLocaleDateString']",
+          message: 'Use formatDateTime(value, DATE) from utils/dateTime: English dates are written year first (#401).',
+        },
+        {
           selector: "CallExpression[callee.property.name='toLocaleString'][callee.object.type='NewExpression'][callee.object.callee.name='Date']",
           message: 'Use formatDateTime from utils/dateTime: the UI shows a 24-hour clock (#399).',
         },
