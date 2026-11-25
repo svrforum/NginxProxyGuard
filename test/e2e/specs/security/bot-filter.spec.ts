@@ -164,6 +164,57 @@ test.describe('Bot Filter path-limited allowed agent (#313)', () => {
   });
 });
 
+test.describe('Bot list changes reach nginx', () => {
+  let apiHelper: APIHelper;
+  let createdHostId: string | null;
+  let savedList: string | null;
+
+  test.beforeEach(async ({ request }) => {
+    apiHelper = new APIHelper(request);
+    await apiHelper.login();
+    createdHostId = null;
+    savedList = null;
+  });
+
+  test.afterEach(async () => {
+    if (savedList !== null) {
+      await apiHelper.updateSystemSettings({ bot_list_bad_bots: savedList }).catch(() => {});
+    }
+    if (createdHostId) {
+      await apiHelper.deleteProxyHost(createdHostId).catch(() => {});
+    }
+  });
+
+  test('should apply a saved bad-bot list without a manual sync', async () => {
+    // Saving a list used to write only the DB: every host config kept the old
+    // list until some unrelated sync rewrote it.
+    const host = await apiHelper.createProxyHost({
+      domain_names: [TestDataFactory.generateDomain('bf-list')],
+      forward_scheme: 'http',
+      forward_host: '127.0.0.1',
+      forward_port: 1,
+      enabled: true,
+    });
+    createdHostId = host.id;
+    const domain = host.domain_names[0];
+    await apiHelper.setBotFilter(host.id, { blockBadBots: true });
+
+    // Unreachable upstream: what the filter lets through answers 502.
+    const probe = `NpgListProbe${Date.now()}`;
+    await triggerUntil({ host: domain, path: '/', userAgent: probe }, r => r.status === 502, {
+      describe: 'the new host to pass an unlisted agent',
+    });
+
+    savedList = String((await apiHelper.getSystemSettings()).bot_list_bad_bots ?? '');
+    await apiHelper.updateSystemSettings({ bot_list_bad_bots: `${savedList}\n${probe}` });
+
+    const res = await triggerUntil({ host: domain, path: '/', userAgent: probe }, r => r.status === 403, {
+      describe: 'the saved list to block the new agent',
+    });
+    expect(res.status).toBe(403);
+  });
+});
+
 test.describe('Bot Filter Global Settings', () => {
   test('should navigate to Bot Filter settings page', async ({ page }) => {
     await page.goto(ROUTES.settingsBotfilter);

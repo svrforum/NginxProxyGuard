@@ -263,8 +263,14 @@ func (h *SystemSettingsHandler) UpdateSystemSettings(c echo.Context) error {
 	// with unchanged trusted-IP list must still re-render the main config.
 	// And when only the trusted domain names change (#320): nginx.conf and
 	// the hosts include their files only while a name is set.
-	if req.GlobalTrustedIPs != nil || req.GlobalTrustedIPsBypassWAF != nil || req.GlobalTrustedHostnames != nil ||
-		req.TrustedProxyCIDRs != nil || req.TrustedProxyPreset != nil || req.RealIPHeader != nil {
+	trustedChanged := req.GlobalTrustedIPs != nil || req.GlobalTrustedIPsBypassWAF != nil || req.GlobalTrustedHostnames != nil ||
+		req.TrustedProxyCIDRs != nil || req.TrustedProxyPreset != nil || req.RealIPHeader != nil
+	// The bot lists are rendered into every host config, so a saved list did
+	// nothing until some unrelated sync rewrote them. A trusted-IP change in
+	// the same request already syncs every host.
+	botListsChanged := req.BotListBadBots != nil || req.BotListAIBots != nil ||
+		req.BotListSearchEngines != nil || req.BotListSuspiciousClients != nil
+	if trustedChanged {
 		trusted := service.ResolveTrustedIPConfig(settings)
 		// Trusted proxies live in the same http-level block, so the same
 		// ordered worker applies them (#278).
@@ -302,6 +308,16 @@ func (h *SystemSettingsHandler) UpdateSystemSettings(c echo.Context) error {
 				}
 			}
 			log.Printf("[SystemSettings] Global trusted IPs change applied to nginx.conf and all host configs")
+		}()
+	} else if botListsChanged && h.proxyHostService != nil {
+		go func() {
+			bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+			if err := h.proxyHostService.SyncAllConfigs(bgCtx); err != nil {
+				log.Printf("[SystemSettings] ERROR: bot list change NOT applied — host config sync failed: %v (run Sync All to retry)", err)
+				return
+			}
+			log.Printf("[SystemSettings] Bot list change applied to all host configs")
 		}()
 	}
 
