@@ -375,6 +375,8 @@ export interface GlobalFail2ban {
   fail_codes: string
   action: string
   ignore_private_ips: boolean
+  /** Not stored: false means switching the jail on needs `confirm_no_proxy` (#400). */
+  trusted_proxies_configured: boolean
   created_at: string
   updated_at: string
 }
@@ -387,4 +389,6 @@ export interface UpdateGlobalFail2banRequest {
   fail_codes?: string
   action?: string
   ignore_private_ips?: boolean
+  /** Confirms no CDN or reverse proxy sits in front of NPG. Not stored. */
+  confirm_no_proxy?: boolean
 }

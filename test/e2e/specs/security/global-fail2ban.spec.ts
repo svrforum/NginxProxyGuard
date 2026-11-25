@@ -121,6 +121,29 @@ test.describe('Global fail2ban jail (#275)', () => {
       expect(res.status()).toBe(200);
     });
 
+    test('allows enabling without trusted proxies once nothing in front is confirmed (#400)', async ({ request }) => {
+      const auth = { Authorization: `Bearer ${token}` };
+      const before = await (await request.get(`${API}${GLOBAL}`, { headers: auth })).json();
+      expect(before.trusted_proxies_configured).toBe(false);
+
+      // A server the internet reaches directly has no proxy to trust.
+      const res = await request.put(`${API}${GLOBAL}`, {
+        headers: auth,
+        data: { enabled: true, confirm_no_proxy: true },
+      });
+      expect(res.status()).toBe(200);
+      expect((await res.json()).enabled).toBe(true);
+
+      // Only switching it on is checked: editing an enabled jail does not ask again.
+      const edit = await request.put(`${API}${GLOBAL}`, {
+        headers: auth,
+        data: { enabled: true, max_retries: 6 },
+      });
+      expect(edit.status()).toBe(200);
+
+      await request.put(`${API}${GLOBAL}`, { headers: auth, data: { enabled: false, max_retries: 5 } });
+    });
+
     test('allows enabling once trusted proxies are set', async ({ request }) => {
       await request.put(`${API}/api/v1/system-settings`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -131,7 +154,9 @@ test.describe('Global fail2ban jail (#275)', () => {
         data: { enabled: true },
       });
       expect(res.status()).toBe(200);
-      expect((await res.json()).enabled).toBe(true);
+      const body = await res.json();
+      expect(body.enabled).toBe(true);
+      expect(body.trusted_proxies_configured).toBe(true);
     });
   });
 

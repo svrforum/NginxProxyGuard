@@ -4500,12 +4500,15 @@ paths:
       description: |
         Partial update: only the fields present are applied.
 
-        **Enabling is refused with 400 while Trusted Proxies are
-        unconfigured.** Behind a CDN with no trusted proxy set, every request
-        carries the CDN edge address, and a ban here applies to every host — so
-        one false positive would block every visitor behind that edge on every
-        site. An address-based guard cannot substitute: with the preset off the
-        CDN ranges are not in the trusted set at all.
+        **Switching the jail on is refused with 400 while Trusted Proxies are
+        unconfigured**, unless `confirm_no_proxy` is true. Behind a CDN with no
+        trusted proxy set, every request carries the CDN edge address, and a ban
+        here applies to every host — so one false positive would block every
+        visitor behind that edge on every site. An address-based guard cannot
+        substitute: with the preset off the CDN ranges are not in the trusted
+        set at all. A server the internet reaches directly has no proxy to
+        trust, so it confirms that instead (#400). Edits to a jail that is
+        already on are not checked again.
       security:
         - BearerAuth: []
       requestBody:
@@ -4523,8 +4526,8 @@ paths:
                 $ref: '#/components/schemas/GlobalFail2ban'
         '400':
           description: >-
-            Invalid value, or an attempt to enable the jail while Trusted
-            Proxies are unconfigured.
+            Invalid value, or an attempt to switch the jail on while Trusted
+            Proxies are unconfigured and `confirm_no_proxy` is not true.
 
   /settings/global-rate-limit:
     get:
@@ -14090,6 +14093,13 @@ components:
           description: >-
             When true, no fail2ban jail, per-host or global, bans a private
             (10/8, 172.16/12, 192.168/16, fc00::/7) or link-local address.
+        trusted_proxies_configured:
+          type: boolean
+          readOnly: true
+          description: >-
+            Not stored. False when Settings → Trusted Proxies resolves to no
+            address, in which case switching the jail on needs
+            `confirm_no_proxy`.
         created_at:
           type: string
           format: date-time
@@ -14119,6 +14129,11 @@ components:
           enum: [block, log, notify]
         ignore_private_ips:
           type: boolean
+        confirm_no_proxy:
+          type: boolean
+          description: >-
+            Not stored. True confirms that no CDN or reverse proxy sits in front
+            of NPG, which lets the jail be switched on with no trusted proxy set.
 
     UpdateExploitRule:
       type: object

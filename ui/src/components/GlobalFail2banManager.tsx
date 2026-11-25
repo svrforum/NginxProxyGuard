@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useId, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getGlobalFail2ban, updateGlobalFail2ban } from '../api/global-fail2ban'
@@ -12,8 +12,9 @@ import { BAN_DURATIONS, CUSTOM_DURATION, isCustomDuration } from './banned-ip/ba
  *
  * Its bans apply to EVERY host, so the screen leads with that rather than
  * burying it: a false positive here is an instance-wide outage, not one site's
- * problem. The server enforces the same thing by refusing to enable the jail
- * until Trusted Proxies are configured.
+ * problem. The server enforces the same thing by refusing to switch the jail on
+ * while Trusted Proxies are empty, unless the operator confirms that nothing
+ * sits in front of NPG (#400).
  */
 export function GlobalFail2banManager() {
   const { t } = useTranslation(['fail2ban', 'common', 'waf'])
@@ -31,8 +32,16 @@ export function GlobalFail2banManager() {
   const [failCodes, setFailCodes] = useState('400,444')
   const [action, setAction] = useState('log')
   const [ignorePrivate, setIgnorePrivate] = useState(false)
+  const [confirmNoProxy, setConfirmNoProxy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
+  const confirmId = useId()
+  const errorId = useId()
+  const confirmRef = useRef<HTMLInputElement>(null)
+
+  // Only switching the jail on is checked, so an enabled jail never asks again.
+  const needsConfirm = !!data && !data.enabled && enabled && !data.trusted_proxies_configured
+  const confirmMissing = needsConfirm && !confirmNoProxy
 
   useEffect(() => {
     if (!data) return
@@ -55,9 +64,11 @@ export function GlobalFail2banManager() {
         fail_codes: failCodes,
         action,
         ignore_private_ips: ignorePrivate,
+        confirm_no_proxy: needsConfirm ? confirmNoProxy : undefined,
       }),
     onSuccess: () => {
       setError(null)
+      setConfirmNoProxy(false)
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
       queryClient.invalidateQueries({ queryKey: ['global-fail2ban'] })
@@ -67,6 +78,16 @@ export function GlobalFail2banManager() {
       setError(e instanceof Error ? e.message : String(e))
     },
   })
+
+  const save = () => {
+    if (confirmMissing) {
+      setSaved(false)
+      setError(t('global.confirmNoProxyRequired'))
+      confirmRef.current?.focus()
+      return
+    }
+    mutation.mutate()
+  }
 
   if (isLoading) {
     return <div className="text-slate-500 dark:text-slate-400">{t('common:status.loading')}</div>
@@ -99,7 +120,9 @@ export function GlobalFail2banManager() {
           <button
             type="button"
             onClick={() => setEnabled(!enabled)}
-            aria-pressed={enabled}
+            role="switch"
+            aria-checked={enabled}
+            aria-label={t('global.enable')}
             className={`relative w-12 h-6 rounded-full transition-colors shrink-0 ${enabled ? 'bg-primary-600' : 'bg-slate-300 dark:bg-slate-600'}`}
           >
             <span
@@ -107,6 +130,33 @@ export function GlobalFail2banManager() {
             />
           </button>
         </div>
+
+        {/* Trusted Proxies is empty: right for a server reached directly, wrong behind a CDN (#400) */}
+        {needsConfirm && (
+          <div className="p-4 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20">
+            <div className="flex items-start gap-3">
+              <input
+                ref={confirmRef}
+                id={confirmId}
+                type="checkbox"
+                checked={confirmNoProxy}
+                onChange={(e) => {
+                  setConfirmNoProxy(e.target.checked)
+                  if (e.target.checked) setError(null)
+                }}
+                aria-invalid={error !== null && confirmMissing}
+                aria-describedby={error !== null && confirmMissing ? errorId : undefined}
+                className="mt-0.5 w-4 h-4 flex-shrink-0 rounded border-slate-300 text-primary-600 focus:ring-2 focus:ring-primary-500"
+              />
+              <div>
+                <label htmlFor={confirmId} className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                  {t('global.confirmNoProxy')}
+                </label>
+                <p className="text-xs text-amber-800 dark:text-amber-200 mt-1">{t('global.confirmNoProxyHelp')}</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Leave LAN addresses alone — every jail, per-host ones included (#384) */}
         <div className="flex items-start justify-between gap-4">
@@ -117,7 +167,9 @@ export function GlobalFail2banManager() {
           <button
             type="button"
             onClick={() => setIgnorePrivate(!ignorePrivate)}
-            aria-pressed={ignorePrivate}
+            role="switch"
+            aria-checked={ignorePrivate}
+            aria-label={t('global.ignorePrivate')}
             className={`relative w-12 h-6 rounded-full transition-colors shrink-0 ${ignorePrivate ? 'bg-primary-600' : 'bg-slate-300 dark:bg-slate-600'}`}
           >
             <span
@@ -220,13 +272,13 @@ export function GlobalFail2banManager() {
 
         {error && (
           <div className="p-3 rounded-lg border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20">
-            <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+            <p id={errorId} role="alert" className="text-sm text-red-700 dark:text-red-300">{error}</p>
           </div>
         )}
 
         <div className="flex items-center gap-3">
           <button
-            onClick={() => mutation.mutate()}
+            onClick={save}
             disabled={mutation.isPending}
             className="px-4 py-2 rounded-lg font-medium bg-primary-600 hover:bg-primary-700 text-white transition-colors disabled:opacity-50"
           >

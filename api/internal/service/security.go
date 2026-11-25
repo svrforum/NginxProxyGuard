@@ -55,34 +55,73 @@ func (s *SecurityService) SetSystemSettingsRepo(repo *repository.SystemSettingsR
 
 // GetGlobalFail2ban returns the singleton jail for unmatched-host traffic (#275).
 func (s *SecurityService) GetGlobalFail2ban(ctx context.Context) (*model.GlobalFail2banConfig, error) {
-	return s.rateLimitRepo.GetGlobalFail2ban(ctx)
+	configured, err := s.trustedProxiesConfigured(ctx)
+	if err != nil {
+		return nil, err
+	}
+	g, err := s.rateLimitRepo.GetGlobalFail2ban(ctx)
+	if err != nil {
+		return nil, err
+	}
+	g.TrustedProxiesConfigured = configured
+	return g, nil
 }
 
-// UpdateGlobalFail2ban applies a partial update, refusing to ENABLE the jail
-// while trusted proxies are unconfigured.
+// UpdateGlobalFail2ban applies a partial update, refusing to switch the jail ON
+// while trusted proxies are unconfigured unless the operator confirms that
+// nothing sits in front of NPG.
 //
 // That precondition is the only real protection for a CDN deployment. With no
 // trusted proxy set, nginx cannot resolve the visitor's address, so every
 // request carries the CDN edge address — and a global ban on an edge address
 // blocks every visitor routed through it, on every host. An address-based
 // guard cannot help: with the preset off, the CDN's ranges are not in the
-// trusted set at all, so there is nothing to compare against.
+// trusted set at all, so there is nothing to compare against. That leaves the
+// operator's word: a server the internet reaches directly has no proxy to
+// trust, and refusing it outright kept those installs from the jail (#400).
+//
+// The check runs only when the jail is being switched on, so editing an
+// enabled jail does not ask for the confirmation again.
 func (s *SecurityService) UpdateGlobalFail2ban(ctx context.Context, req *model.UpdateGlobalFail2banRequest) (*model.GlobalFail2banConfig, error) {
 	if err := model.ValidateGlobalFail2banRequest(req); err != nil {
 		return nil, err
 	}
 
-	if req.Enabled != nil && *req.Enabled && s.systemSettingsRepo != nil {
-		sys, err := s.systemSettingsRepo.Get(ctx)
+	configured, err := s.trustedProxiesConfigured(ctx)
+	if err != nil {
+		return nil, err
+	}
+	confirmed := req.ConfirmNoProxy != nil && *req.ConfirmNoProxy
+	if req.Enabled != nil && *req.Enabled && !configured && !confirmed {
+		current, err := s.rateLimitRepo.GetGlobalFail2ban(ctx)
 		if err != nil {
 			return nil, err
 		}
-		if sys != nil && len(ResolveTrustedProxyConfig(sys).CIDRs) == 0 {
-			return nil, fmt.Errorf("%w: configure Settings → Trusted Proxies first. Without it every request appears to come from your CDN or reverse proxy, and one global ban would block every visitor behind it on every host", model.ErrInvalidInput)
+		if !current.Enabled {
+			return nil, fmt.Errorf("%w: configure Settings → Trusted Proxies first, or confirm that no CDN or reverse proxy sits in front of NPG (confirm_no_proxy). Behind a proxy with no trusted proxy set, every request appears to come from it, and one global ban would block every visitor behind it on every host", model.ErrInvalidInput)
 		}
 	}
 
-	return s.rateLimitRepo.UpdateGlobalFail2ban(ctx, req)
+	g, err := s.rateLimitRepo.UpdateGlobalFail2ban(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	g.TrustedProxiesConfigured = configured
+	return g, nil
+}
+
+// trustedProxiesConfigured reports whether nginx is told which proxies may
+// name the visitor. Without the settings repository there is nothing to check,
+// which counts as configured, as it always has.
+func (s *SecurityService) trustedProxiesConfigured(ctx context.Context) (bool, error) {
+	if s.systemSettingsRepo == nil {
+		return true, nil
+	}
+	sys, err := s.systemSettingsRepo.Get(ctx)
+	if err != nil {
+		return false, err
+	}
+	return sys == nil || len(ResolveTrustedProxyConfig(sys).CIDRs) > 0, nil
 }
 
 // SetBannedIPStatsRepo wires the per-banned-IP statistics repository (#242).

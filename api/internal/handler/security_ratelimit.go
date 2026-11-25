@@ -371,8 +371,9 @@ func (h *SecurityHandler) GetGlobalFail2ban(c echo.Context) error {
 }
 
 // UpdateGlobalFail2ban applies a partial update. Enabling it is refused while
-// trusted proxies are unconfigured — see the service for why that precondition
-// is load-bearing rather than advisory.
+// trusted proxies are unconfigured, unless the request confirms that no proxy
+// sits in front (#400) — see the service for why that precondition is
+// load-bearing rather than advisory.
 func (h *SecurityHandler) UpdateGlobalFail2ban(c echo.Context) error {
 	var req model.UpdateGlobalFail2banRequest
 	if err := c.Bind(&req); err != nil {

@@ -255,6 +255,9 @@ type GlobalFail2banConfig struct {
 	// IgnorePrivateIPs keeps every jail, the per-host ones too, from banning
 	// private and link-local addresses (#384).
 	IgnorePrivateIPs bool `json:"ignore_private_ips"`
+	// TrustedProxiesConfigured is not stored. It tells the screen whether
+	// switching the jail on needs ConfirmNoProxy (#400).
+	TrustedProxiesConfigured bool `json:"trusted_proxies_configured"`
 }
 
 // UpdateGlobalFail2banRequest is a partial update of the singleton.
@@ -267,6 +270,11 @@ type UpdateGlobalFail2banRequest struct {
 	Action     *string `json:"action,omitempty"`
 
 	IgnorePrivateIPs *bool `json:"ignore_private_ips,omitempty"`
+
+	// ConfirmNoProxy is the operator's word that no CDN or reverse proxy sits
+	// in front of NPG, which lets the jail be switched on with no trusted
+	// proxy set (#400). It is not stored.
+	ConfirmNoProxy *bool `json:"confirm_no_proxy,omitempty"`
 }
 
 // ValidateGlobalFail2banRequest applies the same rules as the per-host jail,
