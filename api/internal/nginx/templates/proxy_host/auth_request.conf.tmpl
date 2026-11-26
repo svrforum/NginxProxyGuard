@@ -16,6 +16,11 @@
 {{- if eq .AuthProvider.Type "authelia"}}
     location = /internal/forwardauth/verify {
         internal;
+        # The subrequest carries the visitor's Content-Length, and nginx checks
+        # it against this location's limit: the global one, not the host's, so
+        # an upload above it was refused here (#402, #404). The body is never
+        # passed on.
+        client_max_body_size 0;
         proxy_pass {{.AuthProvider.ProviderURL}}/api/authz/auth-request;
 {{- if hasPrefix .AuthProvider.ProviderURL "https"}}
         proxy_ssl_server_name on;
@@ -57,6 +62,11 @@
 {{- else}}
     location = /internal/forwardauth/verify {
         internal;
+        # The subrequest carries the visitor's Content-Length, and nginx checks
+        # it against this location's limit: the global one, not the host's, so
+        # an upload above it was refused here (#402, #404). The body is never
+        # passed on.
+        client_max_body_size 0;
         proxy_pass {{.AuthProvider.ProviderURL}}{{.AuthProvider.Config.VerifyPath}};
 {{- if hasPrefix .AuthProvider.ProviderURL "https"}}
         proxy_ssl_server_name on;
