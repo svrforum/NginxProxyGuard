@@ -8,7 +8,7 @@ require (
 	github.com/go-acme/lego/v4 v4.35.2
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
-	github.com/labstack/echo/v4 v4.16.5
+	github.com/labstack/echo/v4 v4.16.6
 	github.com/lib/pq v1.12.3
 	github.com/maypok86/otter/v2 v2.4.0
 	github.com/oschwald/geoip2-golang v1.13.0
