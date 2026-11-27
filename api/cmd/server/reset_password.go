@@ -11,15 +11,14 @@ import (
 	"os"
 	"strings"
 
-	"golang.org/x/crypto/bcrypt"
-
 	"nginx-proxy-guard/internal/config"
 	"nginx-proxy-guard/internal/database"
+	"nginx-proxy-guard/internal/password"
 )
 
 const (
 	resetPasswordMinLen      = 8
-	resetPasswordMaxBytes    = 72 // bcrypt input limit; longer inputs are silently truncated
+	resetPasswordMaxBytes    = 72 // bcrypt input limit without a pepper; the peppered path has none
 	resetPasswordRandomChars = 16
 )
 
@@ -36,7 +35,7 @@ func runResetPasswordCommand(args []string) int {
 	fs.SetOutput(os.Stderr)
 
 	username := fs.String("username", "", "Target username. If omitted and exactly one role=admin user exists, that one is used.")
-	password := fs.String("password", "", "New password. If omitted, a 16-character random password is generated.")
+	passwordFlag := fs.String("password", "", "New password. If omitted, a 16-character random password is generated.")
 	clear2FA := fs.Bool("clear-2fa", false, "Also clear the user's TOTP secret and disable 2FA. Default keeps 2FA settings.")
 
 	fs.Usage = func() {
@@ -46,7 +45,7 @@ func runResetPasswordCommand(args []string) int {
 		fmt.Fprintln(os.Stderr, "  docker compose exec api ./server reset-password --username admin")
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "Side effects on success:")
-		fmt.Fprintln(os.Stderr, "  - bcrypts and writes the new password_hash")
+		fmt.Fprintln(os.Stderr, "  - bcrypts and writes the new password_hash (peppered when NPG_PASSWORD_PEPPER is set)")
 		fmt.Fprintln(os.Stderr, "  - clears failed login_attempts for the target username")
 		fmt.Fprintln(os.Stderr, "  - invalidates every active auth_session for the target user")
 		fmt.Fprintln(os.Stderr, "  - records an entry in system_logs (source=audit)")
@@ -70,7 +69,14 @@ func runResetPasswordCommand(args []string) int {
 
 	cleanUsername := strings.TrimSpace(*username)
 
-	newPassword, err := resolvePassword(*password, passwordExplicit)
+	// The same pepper the server runs with, or the new hash would be one the
+	// server cannot check (or, with the pepper unset here, an unpeppered one).
+	if err := password.ConfigureFromEnv(); err != nil {
+		fmt.Fprintf(os.Stderr, "[reset-password] %v\n", err)
+		return 1
+	}
+
+	newPassword, err := resolvePassword(*passwordFlag, passwordExplicit)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[reset-password] %v\n", err)
 		return 1
@@ -90,13 +96,13 @@ func runResetPasswordCommand(args []string) int {
 		return 1
 	}
 
-	hashed, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	hashed, err := password.Hash(newPassword)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[reset-password] hash failed: %v\n", err)
 		return 1
 	}
 
-	result, err := applyReset(db, user, string(hashed), *clear2FA)
+	result, err := applyReset(db, user, hashed, *clear2FA)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[reset-password] update failed: %v\n", err)
 		return 1
@@ -125,10 +131,10 @@ func resolvePassword(raw string, explicit bool) (string, error) {
 	if raw == "" {
 		return "", errors.New("--password cannot be empty (omit the flag to auto-generate a random password)")
 	}
-	// bcrypt silently truncates inputs longer than 72 bytes; reject upfront so
-	// the operator never gets surprised by a password that "works" but only the
-	// first 72 bytes actually do.
-	if len(raw) > resetPasswordMaxBytes {
+	// bcrypt refuses inputs longer than 72 bytes; reject upfront with a clear
+	// message. A peppered hash feeds bcrypt a fixed-length HMAC instead, so the
+	// limit only applies while no pepper is configured.
+	if !password.Enabled() && len(raw) > resetPasswordMaxBytes {
 		return "", fmt.Errorf("--password is %d bytes; bcrypt only honours the first %d", len(raw), resetPasswordMaxBytes)
 	}
 	if len([]rune(raw)) < resetPasswordMinLen {

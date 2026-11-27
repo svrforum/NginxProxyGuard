@@ -7,14 +7,14 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
+	"log"
 	"os"
 	"strings"
 	"sync"
 	"time"
 
-	"golang.org/x/crypto/bcrypt"
-
 	"nginx-proxy-guard/internal/model"
+	"nginx-proxy-guard/internal/password"
 	"nginx-proxy-guard/internal/repository"
 	"nginx-proxy-guard/pkg/cache"
 )
@@ -164,9 +164,17 @@ func (s *AuthService) Login(ctx context.Context, req *model.LoginRequest, ip, us
 	}
 
 	// Verify password
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+	ok, needsRehash := password.Verify(user.PasswordHash, req.Password)
+	if !ok {
 		s.repo.RecordLoginAttempt(ctx, ip, req.Username, false)
 		return nil, ErrInvalidCredentials
+	}
+	// The password is known to be right, and this is the only point that sees
+	// it: Verify2FA gets a temp token, not the password. Re-encoding the stored
+	// hash here is safe before the second factor, because it stores the same
+	// password in another form and changes nothing about who can sign in.
+	if needsRehash {
+		s.upgradePasswordHash(ctx, user, req.Password)
 	}
 
 	// Check if 2FA is enabled
@@ -290,6 +298,23 @@ func (s *AuthService) createSession(ctx context.Context, user *model.User, ip, u
 		User:           user,
 		IsInitialSetup: user.IsInitialSetup,
 	}, nil
+}
+
+// upgradePasswordHash re-encodes a verified password in the form password.Hash
+// writes now: peppered when it was plain bcrypt, or under the current pepper
+// when it matched the previous one. Best effort — the sign-in that triggered it
+// succeeds either way, and the next one tries again.
+func (s *AuthService) upgradePasswordHash(ctx context.Context, user *model.User, plaintext string) {
+	newHash, err := password.Hash(plaintext)
+	if err != nil {
+		log.Printf("[Auth] could not re-encode the password hash of user %s: %v", user.ID, err)
+		return
+	}
+	if err := s.repo.UpgradePasswordHash(ctx, user.ID, user.PasswordHash, newHash); err != nil {
+		log.Printf("[Auth] could not store the re-encoded password hash of user %s: %v", user.ID, err)
+		return
+	}
+	user.PasswordHash = newHash
 }
 
 // CreateSessionForUser issues an ordinary session for an account whose identity
@@ -419,7 +444,7 @@ func (s *AuthService) Disable2FA(ctx context.Context, userID string, req *model.
 	}
 
 	// Verify password
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+	if ok, _ := password.Verify(user.PasswordHash, req.Password); !ok {
 		return ErrInvalidCredentials
 	}
 
@@ -500,7 +525,7 @@ func (s *AuthService) ChangeCredentials(ctx context.Context, userID string, req 
 	}
 
 	// Verify current password
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.CurrentPassword)); err != nil {
+	if ok, _ := password.Verify(user.PasswordHash, req.CurrentPassword); !ok {
 		return ErrInvalidCredentials
 	}
 
@@ -524,7 +549,7 @@ func (s *AuthService) ChangeCredentials(ctx context.Context, userID string, req 
 	}
 
 	// Hash new password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	hashedPassword, err := password.Hash(req.NewPassword)
 	if err != nil {
 		return err
 	}
@@ -547,7 +572,7 @@ func (s *AuthService) ChangeCredentials(ctx context.Context, userID string, req 
 	}
 
 	// Update credentials
-	if err := s.repo.UpdateUserCredentials(ctx, userID, newUsername, string(hashedPassword)); err != nil {
+	if err := s.repo.UpdateUserCredentials(ctx, userID, newUsername, hashedPassword); err != nil {
 		return err
 	}
 	if newEmail != "" {
@@ -571,7 +596,7 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID string, req *mo
 	}
 
 	// Verify current password
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.CurrentPassword)); err != nil {
+	if ok, _ := password.Verify(user.PasswordHash, req.CurrentPassword); !ok {
 		return ErrInvalidCredentials
 	}
 
@@ -584,12 +609,12 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID string, req *mo
 	}
 
 	// Hash new password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	hashedPassword, err := password.Hash(req.NewPassword)
 	if err != nil {
 		return err
 	}
 
-	return s.repo.UpdatePassword(ctx, userID, string(hashedPassword))
+	return s.repo.UpdatePassword(ctx, userID, hashedPassword)
 }
 
 // GetAuthStatus returns the current auth status
@@ -686,7 +711,7 @@ func (s *AuthService) ChangeUsername(ctx context.Context, userID string, req *mo
 	}
 
 	// Verify current password
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.CurrentPassword)); err != nil {
+	if ok, _ := password.Verify(user.PasswordHash, req.CurrentPassword); !ok {
 		return ErrInvalidCredentials
 	}
 
