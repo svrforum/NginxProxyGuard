@@ -3872,10 +3872,15 @@ paths:
             type: string
         - name: block_reason
           in: query
-          description: Which perimeter feature blocked the request.
+          description: >-
+            Which perimeter feature blocked the request. `blocked` matches every
+            blocked request, whatever the reason: a row with a reason, or a 403
+            that never reached an upstream (a WAF block leaves its access row at
+            `none`).
           schema:
             type: string
             enum:
+              - blocked
               - none
               - waf
               - bot_filter
@@ -4059,9 +4064,11 @@ paths:
             format: uuid
         - name: block_reason
           in: query
+          description: As on `GET /logs`; `blocked` matches every blocked request.
           schema:
             type: string
             enum:
+              - blocked
               - none
               - waf
               - bot_filter

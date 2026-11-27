@@ -268,6 +268,9 @@ func (r *LogRepository) GetStatsWithFilter(ctx context.Context, filter *model.Lo
 			args = append(args, *filter.BlockReason)
 			argIndex++
 		}
+		if filter.Blocked {
+			whereClause += " AND " + blockedLogCondition
+		}
 		if filter.BotCategory != nil && *filter.BotCategory != "" {
 			whereClause += fmt.Sprintf(" AND bot_category = $%d", argIndex)
 			args = append(args, *filter.BotCategory)

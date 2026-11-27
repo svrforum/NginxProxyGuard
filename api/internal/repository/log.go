@@ -405,6 +405,12 @@ func requestTimeOrder(where string, asc bool, reachArg int) (window, orderBy str
 		key + " DESC, created_at DESC, id DESC"
 }
 
+// blockedLogCondition matches the requests the dashboard counts as blocked
+// (dashboardBlocked24hSQL): a row with a block reason, or a 403 that never
+// reached an upstream. A WAF block leaves its access row at 'none', so the
+// reason alone misses it (#407).
+const blockedLogCondition = "(block_reason != 'none' OR (status_code = 403 AND (upstream_addr IS NULL OR upstream_addr IN ('', '-'))))"
+
 func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page, perPage int) (*ListResult, error) {
 	if page < 1 {
 		page = 1
@@ -565,6 +571,9 @@ func (r *LogRepository) List(ctx context.Context, filter *model.LogFilter, page,
 			conditions = append(conditions, fmt.Sprintf("block_reason = $%d", argIndex))
 			args = append(args, *filter.BlockReason)
 			argIndex++
+		}
+		if filter.Blocked {
+			conditions = append(conditions, blockedLogCondition)
 		}
 		if filter.BotCategory != nil && *filter.BotCategory != "" {
 			conditions = append(conditions, fmt.Sprintf("bot_category = $%d", argIndex))

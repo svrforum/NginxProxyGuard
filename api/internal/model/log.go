@@ -104,6 +104,11 @@ func IsValidSeverity(s string) bool { return validSeverities[s] }
 // IsValidBlockReason reports whether s is a valid block_reason enum value.
 func IsValidBlockReason(s string) bool { _, ok := validBlockReasons[s]; return ok }
 
+// BlockReasonFilterBlocked is the block_reason filter value that matches every
+// blocked request instead of one reason (LogFilter.Blocked). It is not an enum
+// value and is never stored.
+const BlockReasonFilterBlocked = "blocked"
+
 // LogTypes, LogSeverities and BlockReasons hold the values the maps above
 // accept, in the order the database enums declare them, so a rejection can
 // name the accepted set. log_create_test.go keeps each list equal to its map.
@@ -267,6 +272,7 @@ type LogFilter struct {
 
 	// Block reason filters
 	BlockReason *BlockReason `json:"block_reason,omitempty"`
+	Blocked     bool         `json:"blocked,omitempty"` // Any blocked request, whatever the reason (#407)
 	BotCategory *string      `json:"bot_category,omitempty"`
 	ExploitRule *string      `json:"exploit_rule,omitempty"` // Filter by specific exploit rule ID
 

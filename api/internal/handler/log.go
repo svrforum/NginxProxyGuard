@@ -139,7 +139,9 @@ func parseLogFilter(q url.Values) (*model.LogFilter, error) {
 	}
 
 	// Block reason filters
-	if blockReason := q.Get("block_reason"); blockReason != "" && model.IsValidBlockReason(blockReason) {
+	if blockReason := q.Get("block_reason"); blockReason == model.BlockReasonFilterBlocked {
+		filter.Blocked = true
+	} else if blockReason != "" && model.IsValidBlockReason(blockReason) {
 		br := model.BlockReason(blockReason)
 		filter.BlockReason = &br
 	}

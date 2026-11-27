@@ -385,12 +385,18 @@ export function AdvancedFilterPanel({ filter, onFilterChange, logType, onClose }
               className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 dark:text-white"
             >
               <option value="">{t('filters.allRequests')}</option>
+              <option value="blocked">{t('filters.blockedAny')}</option>
               <option value="none">{t('reasons.none')}</option>
               <option value="waf">{t('reasons.waf')}</option>
               <option value="bot_filter">{t('reasons.botFilter')}</option>
               <option value="rate_limit">{t('reasons.rateLimit')}</option>
               <option value="geo_block">{t('reasons.geoBlock')}</option>
               <option value="banned_ip">{t('reasons.bannedIp')}</option>
+              <option value="exploit_block">{t('reasons.exploitBlock')}</option>
+              <option value="uri_block">{t('reasons.uriBlock')}</option>
+              <option value="access_denied">{t('reasons.accessDenied')}</option>
+              <option value="cloud_provider_challenge">{t('filters.cloudChallengeReason')}</option>
+              <option value="cloud_provider_block">{t('filters.cloudBlockReason')}</option>
               <option value="filter_subscription">{t('reasons.filterSubscription')}</option>
             </select>
           </div>

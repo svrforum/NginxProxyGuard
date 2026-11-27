@@ -35,6 +35,7 @@ export function ActiveFilterTags({ filter, onRemove }: ActiveFilterTagsProps) {
   if (filter.upstream_status) tags.push({ key: 'upstream_status', label: t('filters.upstreamStatus'), value: filter.upstream_status });
   if (filter.block_reason) {
     const blockReasonLabels: Record<string, string> = {
+      'blocked': t('filters.blockedAny'),
       'none': t('reasons.none'),
       'waf': t('reasons.waf'),
       'bot_filter': t('reasons.botFilter'),
@@ -42,6 +43,10 @@ export function ActiveFilterTags({ filter, onRemove }: ActiveFilterTagsProps) {
       'geo_block': t('reasons.geoBlock'),
       'banned_ip': t('reasons.bannedIp'),
       'exploit_block': t('reasons.exploitBlock'),
+      'uri_block': t('reasons.uriBlock'),
+      'access_denied': t('reasons.accessDenied'),
+      'cloud_provider_challenge': t('filters.cloudChallengeReason'),
+      'cloud_provider_block': t('filters.cloudBlockReason'),
       'filter_subscription': t('reasons.filterSubscription'),
     };
     tags.push({ key: 'block_reason', label: t('filters.blockReason'), value: blockReasonLabels[filter.block_reason] || filter.block_reason });

@@ -126,8 +126,8 @@ export interface LogFilter {
   upstream_addr?: string;
   upstream_status?: string;
 
-  // Block reason filters
-  block_reason?: BlockReason;
+  // Block reason filters. 'blocked' matches every blocked request (#407).
+  block_reason?: BlockReason | 'blocked';
   bot_category?: BotCategory;
   exploit_rule?: string;
 
